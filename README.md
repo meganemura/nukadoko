@@ -114,17 +114,19 @@ export default defineStep({
 
 Scaffold the Then step from it. `--from run-greet.stdout` writes the
 import, an `args` field typed from the When step's `returns`, and the
-`from` entry that hands the Then step that value:
+`from` entry that hands the Then step that value. `--description` writes
+what the step checks; without it the description is a TODO that `nuka
+tend` reports:
 
 ```sh
-npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout
+npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
 ```
 
 ```text
 features/steps/output-says.ts
 ```
 
-Fill in its description and its body. The feature line supplies `text`:
+Fill in its body. The feature line supplies `text`:
 
 ```ts
 // features/steps/output-says.ts

@@ -182,6 +182,7 @@ interface ScaffoldArgs {
   /** `""` when the flag is given with no value, and `false` for yargs'
    * own `--no-command`, which means the flag is absent. */
   command?: string | false;
+  description?: string;
   from?: string[];
 }
 
@@ -843,13 +844,17 @@ export async function runCli(
           describe:
             "[entry point] a When step that runs a program in scratch.dir() and returns exitCode, stdout, and stderr; the entry point must be an existing file and is written into the file, or left as a TODO the step refuses to run with",
         })
+        .option("description", {
+          type: "string",
+          describe: "what the step does, written as its description; without it the description is a TODO nuka tend reports",
+        })
         .option("from", {
           type: "string",
           array: true,
           describe:
             "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable",
         })
-        .check(rejectRepeatedFlags(["pattern", "command"]))
+        .check(rejectRepeatedFlags(["pattern", "command", "description"]))
         // yargs has already reported the missing name by now; this adds why
         // it is missing when the name went to --command.
         .check((args) =>
@@ -869,6 +874,7 @@ export async function runCli(
         entryPoint: typeof args.command === "string" && args.command !== "" ? args.command : null,
         // `--command <value>` written before the name, rather than `--command=<value>` or after it.
         commandBeforeName: argv.indexOf("--command") !== -1 && argv.indexOf("--command") < argv.indexOf(args.name),
+        description: args.description ?? null,
         from: args.from ?? [],
         stdout,
         stderr,

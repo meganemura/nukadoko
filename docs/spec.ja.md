@@ -3249,6 +3249,13 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   `rationale` はなぜこう作られているのか、何が却下されたのかを述べます。
   それは、agent がその step を書き換えてよいと決める前に必要とする情報です。
   それが欠けていれば、あらゆる書き換えは根拠を欠いたまま行われます。
+- **description が scaffold の TODO のままの step**(`step-description-todo`)。
+  `--description` なしの `nuka scaffold` は `TODO: describe <name>` を書きます。
+  それは import でき、行に結び付き、実行もできるので、ほかに報告するものはありません。
+  一方で `nuka steps` と `nuka describe` は、step を選ぶ人にその TODO を見せます。
+  この注記はその文字どおりの接頭辞だけに一致します。
+  そのため、scaffold が書いて誰も置き換えていないものだけを主張します。
+  step はそのまま実行できるので、`check` の所見ではなく注記です。
 - **どの pattern からも使われていない設定済みの parameter type。**
   これは使われていない設定であり、他のものと同様に報告されます。
 - **support コード側にまだ登録されたままの `defineParameterType`。**
@@ -3618,7 +3625,7 @@ nuka describe <step>          full contract, schemas as JSON Schema, plus
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--from <step>.<key>]...
+nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--from <step>.<key>]... [--description <text>]
                               typed step template that fails until
                               implemented; the thrown message names the
                               args it was given, so the file compiles
@@ -3653,7 +3660,13 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               entry point: <file>:<line>" before it calls
                               runCommand, so do and run fail by name at
                               that step while check still passes.
-                              --command with --then is refused
+                              --command with --then is refused.
+                              --description writes the step's
+                              description; without it the description
+                              is "TODO: describe <name>" (with
+                              --command, a sentence about running the
+                              program), which tend reports as
+                              step-description-todo
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

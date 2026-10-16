@@ -84,6 +84,9 @@ export interface TendReport {
 // Which notes a run reports by default lives beside the codes it selects
 // from, so callers outside this module reach both through this file.
 export { DECLARATION_TEND_CODES, selectReportedNotes, type NoteSelection } from "./note-selection.js";
+// The placeholder scaffold writes is the one the note matches, so both
+// read it from here.
+export { DESCRIPTION_TODO_PREFIX } from "./description-todo.js";
 
 /** Every code a `nuka tend` finding can carry. `nuka tend --fail-on <code>`
  * refuses a code outside this set, so a typo cannot become a flag that
@@ -103,6 +106,7 @@ export const TEND_CODES: ReadonlySet<string> = new Set([
   "schema-field-undescribed",
   "secrets-public-key-unknown",
   "secrets-redact-key-unknown",
+  "step-description-todo",
   "step-rationale-missing",
 ]);
 

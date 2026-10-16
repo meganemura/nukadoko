@@ -1,7 +1,9 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import {
   createCaptureSink,
@@ -20,6 +22,27 @@ import {
 // init, then `nuka steps` seeing the new name — *is* the
 // required "init directly followed by scaffold, then steps" integration
 // walkthrough, not a separate fixture.
+
+async function initProject(): Promise<string> {
+  const rootDir = await createEmptyTempDir();
+  await ensureNukadokoShim();
+  const initExit = await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+  if (initExit !== 0) {
+    throw new Error("test setup: `nuka init` failed");
+  }
+  return rootDir;
+}
+
+async function cli(rootDir: string, argv: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const stdout = createCaptureSink();
+  const stderr = createCaptureSink();
+  const exitCode = await runCli(argv, { rootDir, stdout, stderr });
+  return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+}
+
+function stepPath(rootDir: string, name: string): string {
+  return path.join(rootDir, "features", "steps", `${name}.ts`);
+}
 
 describe("nuka scaffold", () => {
   let rootDir: string;
@@ -282,4 +305,101 @@ describe("nuka scaffold: an explicit ESM project (regression)", () => {
     expect(existsSync(path.join(rootDir, "features", "steps", "send-invite.ts"))).toBe(true);
     expect(existsSync(path.join(rootDir, "features", "steps", "send-invite.mts"))).toBe(false);
   });
+});
+
+// Responsibility: `nuka scaffold <name> --description <text>`. The text
+// replaces the TODO description (and `--command`'s own sentence) as a
+// JSON string literal, so whatever it holds reads back unchanged.
+describe("nuka scaffold --description", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await initProject();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("writes the text in place of the TODO", async () => {
+    const result = await cli(rootDir, ["scaffold", "send-invite", "--description", "Send an invitation email"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    const text = await readFile(stepPath(rootDir, "send-invite"), "utf8");
+    expect(text).toContain('  description: "Send an invitation email",\n');
+    expect(text).not.toContain("TODO: describe");
+  });
+
+  it("escapes a quote and a backslash in the text", async () => {
+    const result = await cli(rootDir, ["scaffold", "say", "--description", 'Says "hi" \\ there']);
+
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(stepPath(rootDir, "say"), "utf8")).toContain('  description: "Says \\"hi\\" \\\\ there",\n');
+  });
+
+  it("replaces --command's own sentence", async () => {
+    const result = await cli(rootDir, ["scaffold", "run-greet", "--command", "--description", "Run greet in a scratch directory"]);
+
+    expect(result.exitCode).toBe(0);
+    const text = await readFile(stepPath(rootDir, "run-greet"), "utf8");
+    expect(text).toContain('  description: "Run greet in a scratch directory",\n');
+    expect(text).not.toContain("Run the command under test");
+  });
+
+  it.each([
+    [["--description", "a", "--description", "b"], "--description was given more than once.\n"],
+    [
+      ["--description", ""],
+      "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports\n",
+    ],
+  ])("refuses %j and writes nothing", async (flags, message) => {
+    const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
+
+    expect(result.stderr).toBe(message);
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
+  });
+});
+
+// Property: for any description without a line break, the written file
+// imports and `nuka describe` reads the same text back.
+describe("nuka scaffold --description: any text", () => {
+  let rootDir: string;
+  let counter = 0;
+
+  beforeAll(async () => {
+    rootDir = await initProject();
+  });
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("round trips through nuka describe", () =>
+    hegel.testAsync(
+      async (tc) => {
+        const description = tc.draw(
+          gs.oneOf(
+            gs.text({ minSize: 1, maxSize: 30 }),
+            // The characters a string literal escapes or a template literal reads.
+            gs.text({ minSize: 1, maxSize: 12, alphabet: "a \\\"'`${}\u2028\u2029" }),
+          ),
+        );
+        tc.assume(!/[\n\r]/.test(description) && !description.startsWith("-"));
+        counter += 1;
+        const name = `described-${counter}`;
+        try {
+          const result = await cli(rootDir, ["scaffold", name, "--description", description]);
+          expect(result.stderr).toBe("");
+          expect(result.exitCode).toBe(0);
+          const described = await cli(rootDir, ["describe", name]);
+          expect(described.exitCode).toBe(0);
+          expect(JSON.parse(described.stdout).description).toBe(description);
+        } finally {
+          await rm(stepPath(rootDir, name), { force: true });
+        }
+      },
+      { testCases: 30, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+    ), 300_000);
 });

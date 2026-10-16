@@ -45,6 +45,13 @@ This part does not change release to release.
   script that reads either code from plain `nuka tend --json` adds
   `--all`. A placeholder `rationale: ""` written only to quiet the note
   can go.
+- **`nuka tend` reports `step-description-todo` by default.** A typed step
+  whose description still begins with `TODO: describe`, the placeholder
+  `nuka scaffold` writes without `--description`, gets one note naming
+  its file. The exit code does not change unless `--fail-on` names the
+  code. A job or script that treats any note from plain `nuka tend` as a
+  failure, or waits for `ok: nothing to tend`, sees one note per such
+  step: write what each step does in its `description`.
 - **`nuka mcp-tools` is now `nuka experimental mcp-tools`.** Same flags,
   same output. The old spelling exits 1 and names the new one, so a
   script that ran `nuka mcp-tools -- <command>` becomes

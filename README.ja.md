@@ -111,17 +111,19 @@ export default defineStep({
 ```
 
 それをもとに Then の step を scaffold します。
-`--from run-greet.stdout` は、import、When の step の `returns` から型を取った `args` のフィールド、そしてその値を Then の step に渡す `from` のエントリを書きます:
+`--from run-greet.stdout` は、import、When の step の `returns` から型を取った `args` のフィールド、そしてその値を Then の step に渡す `from` のエントリを書きます。
+`--description` は、その step が確かめる内容を書きます。
+省くと description は TODO になり、`nuka tend` がそれを報告します:
 
 ```sh
-npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout
+npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
 ```
 
 ```text
 features/steps/output-says.ts
 ```
 
-description と本体を埋めます。
+本体を埋めます。
 `text` は feature の行が与えます:
 
 ```ts

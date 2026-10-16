@@ -9,6 +9,19 @@ just until 0.1.
 
 ### Added
 
+- **`nuka scaffold <name> --description <text>` writes the step's description, and `nuka tend` notes one still at its TODO.**
+  The text is written as a JSON string literal in place of
+  `TODO: describe <name>`, and in place of `--command`'s own sentence
+  when both are given. The flag is refused when given twice or empty.
+  Without it, the TODO used to pass `nuka steps`, `nuka check`, `nuka
+  tend`, and a green run with no word. `nuka tend` now reports
+  `step-description-todo` in its default set, one note per typed step
+  whose `description` begins with `TODO: describe`, with the step's file;
+  `--fail-on step-description-todo` turns it into exit 1. It is a note,
+  not a `check` finding, because the step runs. The README walkthrough
+  passes `--description` to the Then step, and the acceptance skill says
+  the CLI is run as `npx nuka` from the project that installed it.
+
 - **`nuka check` reports a step that needs Playwright the project has not installed.**
   When a checked feature line binds a step whose fixtures build `page`,
   `context`, or `request`, directly or through `config.fixtures`, and

@@ -3786,6 +3786,13 @@ The following findings show what `tend` inspects and why each item is rot rather
   which is enough to call it. `rationale` says why it is built this way and
   what was rejected, which is what an agent needs before deciding it may
   rewrite the step. Without it, every rewrite is uninformed.
+- **A step whose description is still the scaffold's TODO**
+  (`step-description-todo`). `nuka scaffold` without `--description`
+  writes `TODO: describe <name>`, which imports, binds, and runs, so
+  nothing else reports it, while `nuka steps` and `nuka describe` show it
+  to whoever picks a step. The note matches that literal prefix only, so
+  it claims exactly what the scaffold wrote and nobody replaced. It is a
+  note and not a `check` finding, because the step runs as it is.
 - **A configured parameter type that no pattern uses.** This is dead
   configuration, reported like any other.
 - **A `defineParameterType` still registered in support code.** It continues
@@ -4186,7 +4193,7 @@ nuka describe <step>          full contract, schemas as JSON Schema, plus
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--from <step>.<key>]...
+nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--from <step>.<key>]... [--description <text>]
                               typed step template that fails until
                               implemented; the thrown message names the
                               args it was given, so the file compiles
@@ -4221,7 +4228,13 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               entry point: <file>:<line>" before it calls
                               runCommand, so do and run fail by name at
                               that step while check still passes.
-                              --command with --then is refused
+                              --command with --then is refused.
+                              --description writes the step's
+                              description; without it the description
+                              is "TODO: describe <name>" (with
+                              --command, a sentence about running the
+                              program), which tend reports as
+                              step-description-todo
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

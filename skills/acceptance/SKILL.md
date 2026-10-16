@@ -1,7 +1,7 @@
 ---
 name: acceptance
 description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka explore` should run.
-compatibility: Requires the nuka CLI from the nukadoko npm package on PATH; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka explore, nuka check, nuka run, nuka tend).
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka explore, nuka check, nuka run, nuka tend).
 license: MIT
 ---
 
@@ -108,7 +108,8 @@ those four; the rest carries the result to a person.
    operation is missing: `nuka scaffold <name> --pattern "<line>"`
    (`--then` for a Then step, `--command <entry point>` for a When step
    that runs a program, `--from <step>.<key>` for each value it reads from an earlier
-   step), implement it, exercise it alone with
+   step, `--description "<what it does>"` so no TODO is left for
+   `nuka tend`), implement it, exercise it alone with
    `nuka do`. `references/writing-steps.md` ("Reading the vocabulary",
    "When the vocabulary has no step for it"). The same file: chaining
    (`from`, "Chaining a value from an earlier step"), helper vs part vs

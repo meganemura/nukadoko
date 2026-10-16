@@ -4,6 +4,7 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import { findMissingAdditionalFeatureDirs } from "./additional-feature-dir-missing.js";
+import { findDescriptionTodos } from "./description-todo.js";
 import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
@@ -117,6 +118,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findImportFailuresUnseen(importFailures),
     ...findUnusedFromDeclarations(vocabulary, occurrences),
     ...findUnboundPatternedSteps(vocabulary, occurrences),
+    ...findDescriptionTodos(vocabulary, rootDir),
     ...fieldDescriptions.issues,
     ...rationaleIssues,
     ...findUnusedParameterTypes(vocabulary, config.parameterTypes),

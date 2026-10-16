@@ -38,6 +38,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `--fail-on` で code を名指すと、その code は報告されるからです。
   どちらかの code を素の `nuka tend --json` から読むジョブやスクリプトは、`--all` を足します。
   注記を黙らせるためだけに書いたプレースホルダーの `rationale: ""` は消してかまいません。
+- **`nuka tend` は既定で `step-description-todo` を報告します。**
+  description がまだ `TODO: describe` で始まる型付き step、つまり `--description` なしの `nuka scaffold` が書くプレースホルダーのままの step には、そのファイルを示す注記が 1 つ付きます。
+  `--fail-on` がこの code を名指さない限り、終了コードは変わりません。
+  素の `nuka tend` の注記を 1 つでも失敗とみなすジョブやスクリプト、または `ok: nothing to tend` を待つものには、そうした step ごとに注記が 1 つ現れます。
+  各 step の `description` に、その step が何をするかを書いてください。
 - **`nuka mcp-tools` は `nuka experimental mcp-tools` になりました。**
   フラグも出力も同じです。
   古い綴りは終了コード 1 で終わり、新しい綴りを示します。

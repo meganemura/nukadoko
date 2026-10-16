@@ -46,6 +46,12 @@ something that rots, so the `declared:` line only counts it
 (`rationale 2/9`). `nuka tend --all` names each one, and naming one of the
 two codes in `--fail-on` reports that code too.
 
+`step-description-todo` names a typed step whose description is still
+the `TODO: describe <name>` that `nuka scaffold` wrote without
+`--description`. The step runs, so nothing else says so, but `nuka steps`
+and `nuka describe` show that TODO to whoever picks a step. Write what the
+step does in its place.
+
 `repeated-scenario-prefix` shows which scenarios in the most recent run
 shared the same opening steps. It also shows the measured time for that
 opening and its share of the run's summed scenario time.

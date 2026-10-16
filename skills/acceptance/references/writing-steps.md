@@ -43,8 +43,10 @@ criterion's wording doesn't match a pattern verbatim.
    `scratch.dir()`, and `returns` of `exitCode`, `stdout`, and `stderr`, so
    a Then step can be scaffolded `--from` it at once. Without a value the
    `cli` line holds a TODO, and the step throws `fill in the entry point:
-   <file>:<line>` until it is filled in. Leave `--pattern` out for a step
-   reached by name only.
+   <file>:<line>` until it is filled in. Add `--description "<text>"` for
+   what the step does; without it the description is `TODO: describe
+   <name>`, which `nuka tend` reports as `step-description-todo`. Leave
+   `--pattern` out for a step reached by name only.
 2. Implement it. The shape of that file is the next section.
 3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
    record, before it ever touches a feature. Fix and re-run until it does

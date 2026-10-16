@@ -53,10 +53,15 @@ describe("nuka tend on a freshly scaffolded project", () => {
     const initExit = await runCli(["init"], { rootDir, stdout: sink, stderr: sink });
     expect(initExit, sink.text()).toBe(0);
     expect(
-      await runCli(["scaffold", "greet", "--pattern", "I greet {who:string}"], { rootDir, stdout: sink, stderr: sink }),
+      await runCli(["scaffold", "greet", "--pattern", "I greet {who:string}", "--description", "Greet someone by name"], {
+        rootDir,
+        stdout: sink,
+        stderr: sink,
+      }),
     ).toBe(0);
-    // A feature line binds the step, so pattern-unbound has nothing to say
-    // and only the two declaration codes are left to report.
+    // A feature line binds the step and the description is not the TODO, so
+    // pattern-unbound and step-description-todo have nothing to say and
+    // only the two declaration codes are left to report.
     await mkdir(path.join(rootDir, "features"), { recursive: true });
     await writeFile(
       path.join(rootDir, "features", "greet.feature"),

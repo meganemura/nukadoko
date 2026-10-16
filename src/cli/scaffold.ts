@@ -15,6 +15,7 @@ import type { PrimitiveClass } from "../binding/schema-shape.js";
 import { availableParameterTypeNames, CAPTURED_CLASS } from "../check/binding-check.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
+import { DESCRIPTION_TODO_PREFIX } from "../tend/types.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -34,6 +35,12 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // existing file at the target path is refused rather than overwritten: a
 // step that already has a real implementation must never be silently
 // replaced by this template.
+//
+// `--description` is written as the step's description, a JSON string
+// literal like the pattern. Without it the description is
+// `TODO: describe <name>`, which imports and runs, so `nuka tend` reports
+// it (`step-description-todo`) by the same prefix; `--command` has a real
+// sentence of its own instead, which `--description` replaces.
 //
 // The template keeps one comment line per lesson a first reader needs, not
 // the lesson itself: `returns` carries the values a failure is diagnosed
@@ -123,6 +130,9 @@ export interface RunScaffoldOptions {
   /** Whether `--command` came before the name on the command line, which
    * is how a name ends up as its value. */
   commandBeforeName: boolean;
+  /** `--description`, or `null` for the TODO `nuka tend` reports (or,
+   * with `--command`, the sentence that describes running the program). */
+  description: string | null;
   /** Each `--from` value as typed, `<step>.<key>`, in order. */
   from: readonly string[];
   stdout: WritableSink;
@@ -186,6 +196,7 @@ interface StepTemplate {
   readonly chained: readonly ChainedField[];
   readonly variant: Variant;
   readonly entryPoint: string | null;
+  readonly description: string | null;
   /** The written file, relative to the project root, as the guard names it. */
   readonly relativeFilePath: string;
 }
@@ -315,7 +326,7 @@ function commandArgv(fields: readonly Field[]): string {
   return ["cli", ...fields.map((field) => (field.valueClass === "string" ? field.key : `String(${field.key})`))].join(", ");
 }
 
-function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, relativeFilePath }: StepTemplate): string {
+function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, description, relativeFilePath }: StepTemplate): string {
   const fields = fieldsOf(captures, chained);
   const keys = fields.map((field) => field.key);
   const argsParameter = keys.length === 0 ? "" : `{ ${keys.join(", ")} }`;
@@ -342,7 +353,9 @@ function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, r
           )});`,
         ]
       : [];
-  const description = command ? "Run the command under test in an empty scratch directory" : `TODO: describe ${name}`;
+  const describedAs =
+    description ??
+    (command ? "Run the command under test in an empty scratch directory" : `${DESCRIPTION_TODO_PREFIX} ${name}`);
   const outcomeLines =
     variant === "then"
       ? ["  mutates: false,"]
@@ -370,7 +383,7 @@ function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, r
     ...headerLines,
     "",
     "export default defineStep({",
-    `  description: ${JSON.stringify(description)},`,
+    `  description: ${JSON.stringify(describedAs)},`,
     ...patternLine,
     "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
     ...argsLines(captures, chained),
@@ -539,7 +552,7 @@ async function entryPointRefusal(rootDir: string, entryPoint: string, commandBef
 }
 
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
-  const { rootDir, name, pattern, then, command, entryPoint, from, stdout, stderr } = options;
+  const { rootDir, name, pattern, then, command, entryPoint, description, from, stdout, stderr } = options;
 
   if (!VALID_STEP_NAME.test(name)) {
     stderr.write(
@@ -561,6 +574,13 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     command && entryPoint === null
       ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error"]) }
       : variantShape;
+
+  if (description === "") {
+    stderr.write(
+      "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports\n",
+    );
+    return 1;
+  }
 
   if (entryPoint !== null) {
     const refusal = await entryPointRefusal(rootDir, entryPoint, options.commandBeforeName);
@@ -652,6 +672,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       chained,
       variant,
       entryPoint,
+      description,
       relativeFilePath: relativeFilePath.split(path.sep).join("/"),
     }),
   );
