@@ -81,6 +81,10 @@ export interface TendReport {
   readonly summary: TendSummary;
 }
 
+// Which notes a run reports by default lives beside the codes it selects
+// from, so callers outside this module reach both through this file.
+export { DECLARATION_TEND_CODES, selectReportedNotes, type NoteSelection } from "./note-selection.js";
+
 /** Every code a `nuka tend` finding can carry. `nuka tend --fail-on <code>`
  * refuses a code outside this set, so a typo cannot become a flag that
  * never fires; tests/tend-fail-on.test.ts keeps this list equal to the

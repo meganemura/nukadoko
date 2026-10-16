@@ -13,7 +13,7 @@ describe("nuka tend: fixture-unused / fixture-touches-app", () => {
   it("reports both findings, by name, without judging them", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json"], {
+    const exitCode = await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("fixture-touches-browser-project"),
       stdout,
       stderr,
@@ -43,7 +43,7 @@ describe("nuka tend: fixture-unused / fixture-touches-app", () => {
 
   it("keeps a step and a fixture of the same name apart in --json", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json"], {
+    const exitCode = await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("fixture-touches-browser-project"),
       stdout,
       stderr: createCaptureSink(),

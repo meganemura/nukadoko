@@ -7,6 +7,26 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- **`nuka tend` reports only structural rot by default.** The two
+  declaration notes, `step-rationale-missing` and
+  `schema-field-undescribed`, are left out of text and `--json` output
+  unless `--all` is given or `--fail-on` names the code. A fresh project
+  got only these notes, one or two per step, and teams wrote placeholder
+  rationale strings to quiet them. The `declared:` summary line still
+  counts both and, when notes were left out, adds `(nuka tend --all names
+  each one)`. Unused declarations, unbound steps, stale fixtures, and every
+  other finding are reported as before. Breaking for a script that reads
+  either code from plain `nuka tend --json`: add `--all`
+  (`docs/upgrading.md`).
+- **`nuka scaffold` no longer writes a commented-out `rationale` line.**
+  The template's comment pointed at the note `nuka tend` no longer prints
+  by default.
+- **The acceptance skill drops `nuka tend` from the per-pull-request
+  loop.** It runs as the scheduled CI job (`docs/ci.md`); an agent runs it
+  when asked.
+
 ## 0.15.0 — 2026-10-16
 
 ### Added

@@ -28,6 +28,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.15.0 から次のリリースへ
+
+- **`nuka tend` は、求められない限り `step-rationale-missing` と `schema-field-undescribed` を外します。**
+  `rationale` や `.describe()` の欠けは、プロジェクトが抱えたままでいられるものです。
+  毎回の run で両方を報告すると、本当の腐敗についての所見が埋もれていました。
+  `nuka tend --all` はこの 2 つを、テキストでも `--json` でも再び報告します。
+  `nuka tend --fail-on step-rationale-missing`(または `schema-field-undescribed`)を実行するジョブは、そのまま動き続けます。
+  `--fail-on` で code を名指すと、その code は報告されるからです。
+  どちらかの code を素の `nuka tend --json` から読むジョブやスクリプトは、`--all` を足します。
+  注記を黙らせるためだけに書いたプレースホルダーの `rationale: ""` は消してかまいません。
+
 ## 0.14.1 から 0.15.0 へ
 
 `nuka accept` と sign-off の所見はすべて削除されました。

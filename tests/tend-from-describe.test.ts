@@ -5,7 +5,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 describe("nuka tend: schema-field-undescribed on args that from fills", () => {
   it("reads a from-filled arg's description from its producer's returns field", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-from-describe-project"),
       stdout,
       stderr: createCaptureSink(),

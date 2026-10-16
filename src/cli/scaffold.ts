@@ -117,8 +117,6 @@ function stepTemplate({ name, pattern, captures, then }: StepTemplate): string {
     "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
     ...argsLines(captures),
     ...outcomeLines,
-    "  // Why this shape, and what was rejected. `nuka tend` reports step-rationale-missing without it.",
-    '  // rationale: "",',
     `  run(${runParameters}) {`,
     `    throw new Error("not implemented: ${name}");`,
     "  },",

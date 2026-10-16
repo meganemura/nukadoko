@@ -1,5 +1,11 @@
 import { analyzeTend } from "../tend/analyze.js";
-import { REMOVED_TEND_CODES, TEND_CODES, type TendIssue, type TendSummary } from "../tend/types.js";
+import {
+  REMOVED_TEND_CODES,
+  selectReportedNotes,
+  TEND_CODES,
+  type TendIssue,
+  type TendSummary,
+} from "../tend/types.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -31,6 +37,11 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // of quietly wrong the moment a feature lives outside `featuresDir`. `read-only` joins the `bed:` line itself rather than a
 // fourth line, since it is counted in the exact same vocabulary walk as
 // `typed`/`compat` (src/tend/summary.ts).
+//
+// The two declaration codes (src/tend/note-selection.ts) are left out of
+// both text and `--json` unless `--all` is given or `--fail-on` names one.
+// The `declared:` line still counts them, and says `--all` names each one
+// when any was left out, so the gap stays visible without a note per step.
 
 export interface RunTendOptions {
   rootDir: string;
@@ -40,6 +51,9 @@ export interface RunTendOptions {
   /** `--fail-on`: codes whose presence turns this invocation's exit code
    * red. Empty by default, so a note stays a note (docs/spec.md "Tending"). */
   failOn: readonly string[];
+  /** `--all`: also report the declaration notes (missing `rationale`,
+   * missing `.describe()`), which are left out by default. */
+  all: boolean;
 }
 
 function formatLocation(issue: TendIssue): string {
@@ -72,16 +86,19 @@ function formatIssueLine(severity: "error" | "note", issue: TendIssue): string {
 // stays as counts; it is still on `report.summary` for `--json`, which
 // dumps the whole report as-is below, because naming the actual steps is
 // more useful than a count to whatever reads that machine-readable form.
-function formatSummaryLines(summary: TendSummary): string[] {
+function formatSummaryLines(summary: TendSummary, declarationNotesLeftOut: boolean): string[] {
+  const declared =
+    `declared: rationale ${summary.rationale.declared}/${summary.rationale.total}, ` +
+    `describe ${summary.describe.declared}/${summary.describe.total}`;
   return [
     `scanned: ${summary.scannedFeatureDirs.join(", ")}`,
     `bed: typed ${summary.typedSteps}, compat ${summary.compatSteps}, read-only ${summary.readOnlySteps}`,
-    `declared: rationale ${summary.rationale.declared}/${summary.rationale.total}, describe ${summary.describe.declared}/${summary.describe.total}`,
+    declarationNotesLeftOut ? `${declared} (nuka tend --all names each one)` : declared,
   ];
 }
 
 export async function runTend(options: RunTendOptions): Promise<number> {
-  const { rootDir, json, failOn, stdout, stderr } = options;
+  const { rootDir, json, failOn, all, stdout, stderr } = options;
 
   // Refused before anything is analyzed: a code tend never emits would
   // otherwise be a flag that never fires, and a team gating a PR on it
@@ -104,13 +121,15 @@ export async function runTend(options: RunTendOptions): Promise<number> {
     return 1;
   }
 
-  let report;
+  let analyzed;
   try {
-    report = await analyzeTend(rootDir);
+    analyzed = await analyzeTend(rootDir);
   } catch (error) {
     stderr.write(`${formatVocabularyError(error)}\n`);
     return 1;
   }
+  const notes = selectReportedNotes(analyzed.notes, { all, failOn });
+  const report = { ...analyzed, notes };
 
   if (json) {
     stdout.write(`${JSON.stringify(report, null, 2)}\n`);
@@ -120,7 +139,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
     // header), then notes — and `analyzeTend` already builds `notes` as consecutive
     // per-finding blocks, so printing it in order is grouping, with no sort
     // needed here.
-    for (const line of formatSummaryLines(report.summary)) {
+    for (const line of formatSummaryLines(report.summary, notes.length < analyzed.notes.length)) {
       stdout.write(`${line}\n`);
     }
     for (const issue of report.errors) {

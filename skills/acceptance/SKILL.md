@@ -143,9 +143,7 @@ proves the wrong thing.
    the feature and posts the run summary on it (`docs/ci.md` in the
    nukadoko package). A person reads the feature in the diff and the
    summary beside it; approving the pull request is the sign-off.
-7. Run `nuka tend` once while reporting the pull request, then stop.
-   `references/maintenance.md`.
-8. Decide where the feature belongs. See "What not to do".
+7. Decide where the feature belongs. See "What not to do".
 
 ## What not to do
 

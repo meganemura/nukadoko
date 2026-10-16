@@ -202,6 +202,7 @@ interface CheckArgs {
 
 interface TendArgs {
   json?: boolean;
+  all?: boolean;
   /** `--fail-on`; yargs collects a repeated flag into an array. */
   "fail-on"?: string[];
 }
@@ -894,13 +895,20 @@ export async function runCli(
 
   const tendCommand: CommandModule<Record<string, never>, TendArgs> = {
     command: "tend",
-    describe: "what is rotting rather than what is broken: unused declarations, undescribed fields, missing rationale",
+    describe: "what is rotting rather than what is broken: unused declarations, unbound steps, stale fixtures",
     builder: (y: Argv) =>
       y
         .option("json", {
           type: "boolean",
           default: false,
           describe: "machine-readable output",
+        })
+        .option("all", {
+          type: "boolean",
+          default: false,
+          describe:
+            "also report step-rationale-missing and schema-field-undescribed, which are left out by default " +
+            "(naming one in --fail-on reports it too)",
         })
         .option("fail-on", {
           type: "string",
@@ -915,6 +923,7 @@ export async function runCli(
       exitCode = await runTend({
         rootDir,
         json: args.json ?? false,
+        all: args.all ?? false,
         failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
         stdout,
         stderr,

@@ -3168,6 +3168,7 @@ nukadoko はすべての段階を記録します。
 - `bed:` は、語彙のうちどれだけが compat ではなく型付けされているかを示します。
   加えて、いくつの型付き step が `mutates: false`(読み取り専用)を宣言しているかも示します。
 - `declared:` は、型付き step が宣言できることのうち、実際にどれだけが宣言されているか(`rationale`、各スキーマフィールドの `.describe()`)を示します。
+  その件数の元になる注記を既定の報告が外したときは(下記を参照)、`nuka tend --all` がそれぞれを名指すことをこの行が告げます。
 
 このサマリーが存在するのは、この情報がすでにあったのに読まれていなかったからです。
 step record の `world` と `declared` の件数は、スイートが昇格するにつれて確かに縮みます。
@@ -3284,6 +3285,18 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 `tend` が報告しない code は最初に拒否されるので、打ち間違いが「決して発火しないフラグ」になることはありません。
 以前のリリースが報告していた code、たとえば `accept` コマンドとともに消えた sign-off の code は、名前を挙げて拒否され、何が置き換えたかが示されます(`docs/upgrading.ja.md` を参照)。
 これが、他の全員の `tend` を赤くせずに、PR のジョブが `pattern-unbound` でゲートを掛ける方法です。
+
+上の所見のうち 2 つは、求められたときだけ報告されます。
+`.describe()` を持たないスキーマフィールド(`schema-field-undescribed`)と、`rationale` を持たない step(`step-rationale-missing`)です。
+`nuka tend --all` はこの 2 つを報告します。
+`--fail-on` がどちらかの code を名指したときも、その code を報告します。
+自分の code を見られないゲートは、何も言わずに通ってしまうからです。
+どちらも宣言の欠けであって、宣言が記述対象からずれていく腐敗ではなく、プロジェクトはそれを抱えたままでいられます。
+毎回報告されていたころは、若いプロジェクトの `tend` が出力するもののほとんどがこの 2 つでした。
+チームはそれを黙らせるためにプレースホルダーの rationale を書き、それは rationale がないより悪い結果でした。
+`declared:` の行は引き続き両方を数えるので、step ごとの注記がなくても欠けは見えたままです。
+既定の報告は、構造的に腐っているものを名指す所見をすべて残します。
+使われていない宣言、束ねられていない step、古くなった fixture です。
 
 `tend` は報告するだけで、修復はしません。
 直すということは、description を書くこと、step を削除すること、feature を移すことを意味します。
@@ -3632,7 +3645,7 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               directory, including on --dry-run;
                               export/allure-history.jsonl is never
                               removed
-nuka tend [--json] [--fail-on <code>]
+nuka tend [--json] [--all] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
@@ -3645,8 +3658,7 @@ nuka tend [--json] [--fail-on <code>]
                               refused by name): a step file
                               that failed to import, a `from` nothing
                               exercises, a patterned step no
-                              feature binds, a schema field with no
-                              `.describe()`, a step with no `rationale`, a
+                              feature binds, a
                               configured parameter type no pattern uses, a
                               `defineParameterType` still registered from
                               support code, a secrets entry naming a key no
@@ -3655,7 +3667,10 @@ nuka tend [--json] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
-                              open with the same steps (measured, no advice)
+                              open with the same steps (measured, no advice);
+                              --all adds a schema field with no
+                              `.describe()` and a step with no `rationale`,
+                              and --fail-on naming either code adds that one
 nuka session list [--json]    list every session, across all environments;
                               --json names each one's environment
 nuka session clear [name] [--env <name>]

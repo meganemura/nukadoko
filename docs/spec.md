@@ -3695,7 +3695,8 @@ do need acting on):
   (read-only).
 - `declared:` shows how much of a typed step's available declaration
   (`rationale`, a `.describe()` on each schema field) is actually
-  declared.
+  declared. When the default report left the notes behind those counts
+  out (see below), the line says that `nuka tend --all` names each one.
 
 This summary exists because the information was already available but unread. A step
 record's `world` and `declared` counts do shrink as a suite promotes, which
@@ -3827,6 +3828,19 @@ reported, such as the sign-off codes that went away with the `accept`
 command, is refused by name, with what replaced it (see
 `docs/upgrading.md`). This is how a PR job gates on `pattern-unbound`
 without `tend` turning red for everyone else.
+
+Two of the findings above are reported only on request: a schema field
+with no `.describe()` (`schema-field-undescribed`) and a step with no
+`rationale` (`step-rationale-missing`). `nuka tend --all` reports them, and
+so does naming either code in `--fail-on`, since a gate that cannot see its
+own code would pass without saying so. Both are gaps in a declaration, not
+a declaration drifting away from what it describes, and a project may keep
+them. Reported on every run, they were most of what a young project's
+`tend` printed, and teams wrote placeholder rationale to make them stop,
+which is worse than none. The `declared:` line still counts both, so the
+gap stays in view without a note per step. The default report keeps every
+finding that names something structurally rotting: an unused declaration,
+an unbound step, a stale fixture.
 
 `tend` reports but does not repair. Repair means writing a description,
 deleting a step, or moving a feature: decisions with an author behind
@@ -4188,7 +4202,7 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               directory, including on --dry-run;
                               export/allure-history.jsonl is never
                               removed
-nuka tend [--json] [--fail-on <code>]
+nuka tend [--json] [--all] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
@@ -4201,8 +4215,7 @@ nuka tend [--json] [--fail-on <code>]
                               refused by name): a step file
                               that failed to import, a `from` nothing
                               exercises, a patterned step no
-                              feature binds, a schema field with no
-                              `.describe()`, a step with no `rationale`, a
+                              feature binds, a
                               configured parameter type no pattern uses, a
                               `defineParameterType` still registered from
                               support code, a secrets entry naming a key no
@@ -4211,7 +4224,10 @@ nuka tend [--json] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
-                              open with the same steps (measured, no advice)
+                              open with the same steps (measured, no advice);
+                              --all adds a schema field with no
+                              `.describe()` and a step with no `rationale`,
+                              and --fail-on naming either code adds that one
 nuka session list [--json]    list every session, across all environments;
                               --json names each one's environment
 nuka session clear [name] [--env <name>]

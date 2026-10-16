@@ -4,10 +4,10 @@
 
 `nuka check` answers whether the next run can proceed. `nuka tend` answers
 a different question: whether the vocabulary and the records behind it are
-rotting. A step nothing binds any more, a fixture nothing names, a field
-with no description, a read that follows a navigation too closely: none of
-that stops a run, so `nuka check` never mentions it. `nuka tend` is what
-finds it, and it never gates the acceptance loop.
+rotting. A step nothing binds any more, a fixture nothing names, a read
+that follows a navigation too closely: none of that stops a run, so
+`nuka check` never mentions it. `nuka tend` is what finds it, and it is
+not a step of the acceptance loop.
 
 A step file that failed to import is a different report. `nuka tend` adds
 the note `import-failures-unseen`, because that file's steps are missing
@@ -15,12 +15,10 @@ from every count and finding it prints. `nuka check` names the cause as
 `step-file-import-failed`. Fix that import first; the rest of the tend
 report is not complete until it is.
 
-Run `nuka tend` once after the pull request is open, when you report it.
-That is the moment where nothing depends on the answer: the work is done,
-the run summary is on the pull request, and the user is reading a result
-rather than waiting on one. "Periodically" names no moment an agent can
-recognize, so an instruction that says only that gets `nuka tend` run
-never.
+Do not run `nuka tend` on every pull request. It runs on a schedule, as
+its own CI job (`docs/ci.md` in the nukadoko package), so its notes reach
+the team on that schedule and not as part of each change. Run it yourself
+when the user asks, or when you are asked to act on what that job printed.
 
 Report what it found and stop there. Each finding is about something the
 user chose, so acting on one without being asked replaces their choice
@@ -40,6 +38,13 @@ block on one of them passes `--fail-on <code>` (for instance
 `pattern-unbound`); the finding stays a note in the output, and only that
 invocation's exit code turns red. The code to pass is the one printed
 beside each finding.
+
+By default it leaves out two declaration notes: `step-rationale-missing`
+(a typed step with no `rationale`) and `schema-field-undescribed` (a field
+with no `.describe()`). A gap there is a choice the project may keep, not
+something that rots, so the `declared:` line only counts it
+(`rationale 2/9`). `nuka tend --all` names each one, and naming one of the
+two codes in `--fail-on` reports that code too.
 
 `repeated-scenario-prefix` shows which scenarios in the most recent run
 shared the same opening steps. It also shows the measured time for that

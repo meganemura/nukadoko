@@ -382,11 +382,10 @@ execution.
 
 Write it wherever a rewrite could destroy something a reader cannot see:
 a workaround for the system under test, an approach that was tried and
-failed, a constraint that lives outside the code. `nuka tend` reports
-every typed step without one as a note and prints the ratio it is moving
-(`rationale 2/9`), so treat it as coverage to raise over time. It never
-fails a run, and a step with genuinely nothing to say is allowed to keep
-its note.
+failed, a constraint that lives outside the code. Leave it out when
+there is nothing to say: a placeholder is worse than none. `nuka tend`
+prints the ratio (`rationale 2/9`), and `nuka tend --all` names each typed
+step without one. It never fails a run.
 
 ## Chaining a value from an earlier step
 

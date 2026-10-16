@@ -33,6 +33,19 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.15.0 to the next release
+
+- **`nuka tend` leaves out `step-rationale-missing` and
+  `schema-field-undescribed` unless asked.** A missing `rationale` or
+  `.describe()` is a gap a project may keep, and reporting both on every
+  run buried the findings about real rot. `nuka tend --all` reports them
+  again, in text and in `--json`. A job that runs `nuka tend --fail-on
+  step-rationale-missing` (or `schema-field-undescribed`) keeps working
+  unchanged, since naming a code in `--fail-on` reports it. A job or
+  script that reads either code from plain `nuka tend --json` adds
+  `--all`. A placeholder `rationale: ""` written only to quiet the note
+  can go.
+
 ## 0.14.1 to 0.15.0
 
 `nuka accept` and every sign-off finding are removed, which a project that signs off features, or gates CI on a sign-off, has to act on.

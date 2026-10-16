@@ -6,7 +6,7 @@ describe("nuka tend", () => {
   it("reports zero errors and zero notes for a project whose vocabulary and bindings are clean", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json"], {
+    const exitCode = await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-clean-project"),
       stdout,
       stderr,
@@ -26,7 +26,7 @@ describe("nuka tend", () => {
 
   it("summary: a typed-only project reports compat 0, and every declared number fully satisfied", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json"], {
+    const exitCode = await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-clean-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -58,7 +58,7 @@ describe("nuka tend", () => {
 
   it("summary: a mid-migration project reports both typed and compat counts, and names each compat step", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -76,7 +76,7 @@ describe("nuka tend", () => {
 
   it("summary: rationale and describe coverage counts match this task's fixture exactly, not just non-zero", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -94,7 +94,7 @@ describe("nuka tend", () => {
 
   it("prints a human-readable ok line when there is nothing to tend", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["tend"], {
+    const exitCode = await runCli(["tend", "--all"], {
       rootDir: fixture("tend-clean-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -107,7 +107,7 @@ describe("nuka tend", () => {
   it("detects every finding this fixture holds, and exits 0 because errors stay empty (notes never fail the run)", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json"], {
+    const exitCode = await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr,
@@ -132,7 +132,7 @@ describe("nuka tend", () => {
 
   it("from-unused: fires only for the step whose pattern always captures the from key, not the step that genuinely relies on from", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -155,7 +155,7 @@ describe("nuka tend", () => {
 
   it("pattern-unbound: fires only for the unbound typed step, never for the compat step no feature binds either", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -173,7 +173,7 @@ describe("nuka tend", () => {
 
   it("schema-field-undescribed: names the missing field, not the described one", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -194,7 +194,7 @@ describe("nuka tend", () => {
 
   it("step-rationale-missing: fires only for the step with no rationale", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -212,7 +212,7 @@ describe("nuka tend", () => {
 
   it("parameter-type-unused: fires only for the entry no typed or compat pattern references", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -227,7 +227,7 @@ describe("nuka tend", () => {
 
   it("every note has a stable kebab-case code and a message", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json"], {
+    await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -243,7 +243,7 @@ describe("nuka tend", () => {
 
   it("prints one human-readable line per note, grouped by kind, when --json is omitted", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["tend"], {
+    const exitCode = await runCli(["tend", "--all"], {
       rootDir: fixture("tend-findings-project"),
       stdout,
       stderr: createCaptureSink(),
@@ -274,7 +274,7 @@ describe("nuka tend", () => {
 
   it("prints the summary before findings, and before the 'nothing to tend' line on a healthy project", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["tend"], {
+    const exitCode = await runCli(["tend", "--all"], {
       // tend-clean-project keeps a sign-off record from a release that
       // still had `nuka accept`; nothing here mentions it.
       rootDir: fixture("tend-clean-project"),
@@ -295,7 +295,7 @@ describe("nuka tend", () => {
   it("propagates a config error as stderr + exit 1, no report on stdout", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json"], {
+    const exitCode = await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("invalid-config-project"),
       stdout,
       stderr,

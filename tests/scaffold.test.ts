@@ -69,8 +69,6 @@ describe("nuka scaffold", () => {
         "  // Return what later steps cite and the values this step's correctness rests on;",
         '  // beside an absence (false, 0, ""), return proof the read was valid.',
         "  returns: z.object({}),",
-        "  // Why this shape, and what was rejected. `nuka tend` reports step-rationale-missing without it.",
-        '  // rationale: "",',
         "  run() {",
         '    throw new Error("not implemented: send-invite");',
         "  },",

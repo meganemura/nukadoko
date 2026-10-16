@@ -92,7 +92,9 @@ jobs:
       # (docs/spec.md "Tending"); it never gates a PR, which is why it
       # sits on its own schedule rather than beside `check`/`run` above.
       # Every finding is a note, so it exits 0; `--fail-on <code>` turns
-      # a chosen note red for a team that wants one to gate.
+      # a chosen note red for a team that wants one to gate. `--all`
+      # adds the missing-rationale and missing-.describe() notes, which
+      # are left out by default.
       - run: npx nuka tend
 ```
 
