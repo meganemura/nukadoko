@@ -84,9 +84,11 @@ those fixtures is first built. What to do:
 - **A project with a step or fixture that uses `page`, `context`, or
   `request` adds `playwright` to its own `devDependencies`,** at the exact
   version nukadoko is tested against:
-  `npm install -D -E playwright@1.61.1`. Without it, the first such step
-  fails with one line that names the step and this command, and the rest of
-  the run goes on. `nuka experimental webmcp-tools` needs it the same way.
+  `npm install -D -E playwright@1.61.1`. Without it, `nuka check` reports
+  `playwright-missing` with one line that names the step and this command,
+  and `nuka run` stops before any step runs, as it does for any `nuka check`
+  error. `nuka run --no-check` runs anyway, and the first such step fails
+  with the same line. `nuka experimental webmcp-tools` needs it the same way.
 - **CI changes only by that one line in `package.json`.** `npm ci` installs
   `playwright` once it is a devDependency of the project, and
   `npx playwright install --with-deps chromium` keeps downloading the

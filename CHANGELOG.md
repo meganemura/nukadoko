@@ -9,6 +9,21 @@ just until 0.1.
 
 ### Added
 
+- **`nuka check` reports a step that needs Playwright the project has not installed.**
+  When a checked feature line binds a step whose fixtures build `page`,
+  `context`, or `request`, directly or through `config.fixtures`, and
+  `playwright` does not resolve from the installed nukadoko, `check` reports
+  the error `playwright-missing` once per step, at the first line that binds
+  it, with the same text the run throws: `ctx.request() in "When ..." needs
+  "playwright", and this project has not installed it. Install the version
+  nukadoko is tested against: npm install -D -E playwright@<version>`. So
+  `nuka run` stops before any step runs, where it used to start and fail at
+  the first such step. The check resolves the package and does not load it,
+  and it resolves nothing when no bound step needs it. A `config.fixtures`
+  entry named `request` that does not destructure `request` replaces the
+  builtin and is not reported. A step that no checked line binds is not
+  reported, so a run of a command-line scenario is not stopped by a browser
+  step file beside it. `nuka run --no-check` keeps the run-time failure.
 - **`nuka scaffold <name> --command` writes the When step of a command-line program.**
   The step runs `runCommand(process.execPath, [cli, ...args], { cwd:
   scratch.dir() })` with the pattern's captures as argv (a capture that is

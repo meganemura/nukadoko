@@ -35,8 +35,8 @@ npm install -D -E playwright@1.61.1
 npx playwright install chromium
 ```
 
-Without it, that step fails with this install command, and every other
-command works.
+Without it, `nuka check` names that step and this install command before
+anything runs, and every other command works.
 
 ## Beside your unit tests
 

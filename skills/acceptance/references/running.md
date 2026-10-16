@@ -26,7 +26,9 @@ otherwise costs a whole browser session to discover, since the scenario
 looks correct until the consuming step actually runs. A default-exported
 `defineModel` or `defineRelation` is checked too. An unknown step name,
 and a step that needs a browser, are errors. Check does not run those
-steps. A line in a configured env file that is not a blank, a comment, or
+steps. A step whose fixtures build `page`, `context`, or `request` in a
+project that has not installed `playwright` is `playwright-missing`, with
+the install line, so the run stops before it starts. A line in a configured env file that is not a blank, a comment, or
 a binding is `env-file-skipped-line`. Compat glue that
 declares a done() callback is `done-callback-arity`. The finding covers a
 hook whose parameter count is past what the executor passes, and a matched

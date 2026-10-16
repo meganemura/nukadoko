@@ -30,6 +30,7 @@ jobs:
 
 ここではブラウザも Playwright 自体もインストールしません。
 `playwright` は nukadoko の optional な peer dependency なので、`npm ci` がそれを入れるのは、自分の `devDependencies` にそれを書いたプロジェクトだけです。
+それを書いていないプロジェクトにそれを必要とする step があれば、この job はどの scenario も実行する前に、check で `playwright-missing` として止まります。
 
 単独の `nuka check` には、まだ 2 つの使い道があります。
 1 つは `additionalFeatureDirs` で、これを辿るのは `nuka check` と `nuka tend` だけです。

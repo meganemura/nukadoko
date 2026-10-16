@@ -177,6 +177,11 @@ const CHECK_CODES = {
       "A pattern failed to build into a cucumber expression, for a reason cucumber-expressions itself reports (not an unknown parameter type).",
     severity: "error",
   },
+  "playwright-missing": {
+    description:
+      "A feature line binds a step whose fixtures build page, context, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs.",
+    severity: "error",
+  },
   "secrets-redact-key-too-short": {
     description:
       "A secrets.redact key's value is shorter than the minimum length build-secret-set.ts will actually redact, so it never gets redacted.",

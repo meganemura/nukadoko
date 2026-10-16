@@ -35,7 +35,9 @@ jobs:
 
 Nothing here installs a browser, or Playwright itself: `playwright` is an
 optional peer dependency of nukadoko, so `npm ci` brings it in only for a
-project that lists it in its own `devDependencies`.
+project that lists it in its own `devDependencies`. A step that needs it in
+a project that does not list it stops this job at the check, as
+`playwright-missing`, before any scenario runs.
 
 `nuka check` on its own still has two uses: `additionalFeatureDirs`, which
 only `nuka check` and `nuka tend` walk, and a gate that has to stay seconds

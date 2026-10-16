@@ -578,6 +578,10 @@ nukadoko は現在この shadowing 自体を検出しないため、上の説明
 プロジェクトがそれをインストールするのは、step か fixture がこの 3 つのどれかを使うときだけです。
 パッケージが読み込まれるのはそのどれかが初めて構築されるときで、コマンドの開始時ではないので、`nuka init`、`nuka check`、そうした step の無い run はそれ無しで動きます。
 それが無いときは、fixture の構築が step を失敗させ、その step とコマンド `npm install -D -E playwright@<version>` を名指す 1 行を出します。
+`nuka check` は同じ行を先に error `playwright-missing` として報告します。
+対象は、check する feature の行が束縛する step のうち、fixture が直接か `config.fixtures` を通して `page`、`context`、`request` を構築するもので、step ごとに 1 回です。
+check は run が読み込むのと同じ方法で `playwright` を解決し、何も構築しないので、`nuka run` はどの step も実行する前に止まります。
+step ファイルに定義されていても、check する行のどれも束縛しない step は報告しません。
 step は、テナント、シード済みデータベース、アップロード済み fixture ファイルなど、プロジェクトの資源も必要とする場合があります。
 以前は、その片付けコードを置く適切な場所が step にありませんでした。
 step 内の片付けは、受け入れ条件ではないものを feature ファイルに加えます。

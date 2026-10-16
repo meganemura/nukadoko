@@ -192,9 +192,22 @@ export function createStepTextMatcher(patterns: readonly CheckedPattern[]): Step
   };
 }
 
+/** The first feature line that binds a step, one entry per step name, in
+ * the order the lines were read. A check about what a step needs when it
+ * runs (src/check/playwright-check.ts) is a fact about the step, so it is
+ * reported once, at the first line that would run it. */
+export interface BoundStepLine {
+  readonly stepName: string;
+  readonly file: string;
+  readonly line: number | undefined;
+  /** The keyword and text, the way a run names the step it is in. */
+  readonly title: string;
+}
+
 export interface FeatureCheckResult {
   readonly errors: readonly CheckIssue[];
   readonly warnings: readonly CheckIssue[];
+  readonly boundSteps: readonly BoundStepLine[];
 }
 
 export function checkFeatures(
@@ -207,6 +220,7 @@ export function checkFeatures(
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
   const match = createStepTextMatcher(patterns);
+  const boundSteps = new Map<string, BoundStepLine>();
 
   for (const feature of features) {
     const reportedUndefinedText = new Set<string>();
@@ -272,6 +286,14 @@ export function checkFeatures(
           // Unreachable: stepNames only ever contains names binding-check
           // already resolved from this same vocabulary.
           continue;
+        }
+        if (!boundSteps.has(stepName)) {
+          boundSteps.set(stepName, {
+            stepName,
+            file: feature.relativePath,
+            line,
+            title: `${gherkinKeyword(step.type)} ${step.text}`,
+          });
         }
 
         if (step.type === PickleStepType.OUTCOME) {
@@ -392,7 +414,7 @@ export function checkFeatures(
     }
   }
 
-  return { errors: firstOfEach(errors), warnings: firstOfEach(warnings) };
+  return { errors: firstOfEach(errors), warnings: firstOfEach(warnings), boundSteps: [...boundSteps.values()] };
 }
 
 /** A Background or an outline repeats one source line across pickles, and

@@ -5,6 +5,7 @@ import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
 import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
+import { isPlaywrightInstalled } from "../context/load-playwright.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import {
   attachStepLines,
@@ -31,6 +32,7 @@ import {
 import { checkExploreDeclarations } from "./explore-check.js";
 import { checkFeatures } from "./feature-check.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
+import { findPlaywrightMissing } from "./playwright-check.js";
 import type { CheckIssue, CheckReport } from "./types.js";
 
 function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
@@ -545,6 +547,7 @@ async function reportFor(
     bindingResult.standIns,
   );
   warnings.push(...featureResult.warnings);
+  errors.push(...findPlaywrightMissing(featureResult.boundSteps, vocabulary, fixtureGraph, isPlaywrightInstalled));
 
   // A broken glue file's own missing steps otherwise resurface here as a
   // flood of `undefined-step` errors (empirically, a

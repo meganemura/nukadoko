@@ -51,6 +51,23 @@ export function isPlaywrightMissing(error: unknown): boolean {
   );
 }
 
+/**
+ * Whether `loadPlaywright` would find the package, answered without loading
+ * it. `import.meta.resolve` here resolves from this module, the same place
+ * the `import()` below resolves from, so `nuka check` and a run agree on
+ * whether a project has Playwright. Resolving reads `package.json` files
+ * only; importing Playwright would cost the check most of its time.
+ */
+export function isPlaywrightInstalled(): boolean {
+  try {
+    import.meta.resolve(SPECIFIER);
+    return true;
+  } catch (error) {
+    if (isPlaywrightMissing(error)) return false;
+    throw error;
+  }
+}
+
 /** Loads `playwright`, or throws `PlaywrightMissingError` naming `neededBy`
  * (a step's text, or the command or API that asked). */
 export async function loadPlaywright(neededBy: string): Promise<PlaywrightModule> {

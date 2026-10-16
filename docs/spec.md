@@ -747,6 +747,12 @@ The package is loaded when one of them is first built, never when a command
 starts, so `nuka init`, `nuka check`, and a run with no such step work without it.
 When it is missing, building the fixture fails the step with one line that
 names the step and the command `npm install -D -E playwright@<version>`.
+`nuka check` reports the same line first, as the error `playwright-missing`,
+once for each step that a checked feature line binds and whose fixtures build
+`page`, `context`, or `request`, directly or through `config.fixtures`.
+It resolves `playwright` the way the run loads it and builds nothing, so
+`nuka run` stops before any step runs.
+A step defined in a step file that no checked line binds is not reported.
 A step can also need a project resource, such as a tenant, a seeded database,
 or an uploaded fixture file.
 Previously, the step had no suitable place for the cleanup code.

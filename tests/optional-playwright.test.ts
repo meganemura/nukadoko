@@ -9,7 +9,9 @@ import { repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: `playwright` is an optional peer dependency, so a project
 // that never opens a browser runs every everyday command without it, and a
-// step that does need it fails with one line naming the install command.
+// step that does need it fails with one line naming the install command:
+// at `nuka check` (and so before `nuka run` starts), and at run time under
+// `--no-check`.
 //
 // The project lives under the OS temp directory, not under tests/: Node
 // resolves a bare specifier by walking up through every ancestor
@@ -150,8 +152,55 @@ describe("a project without playwright installed", () => {
     expect(run.stderr).toContain("1 scenario: 1 passed, 0 failed");
   }, 60_000);
 
-  it("fails a page step with one line naming the step and the install command", async () => {
-    const run = await nuka(["run", "features/browser.feature"]);
+  it("check reports a page step with the step, the line, and the install command", async () => {
+    const check = await nuka(["check", "features/browser.feature"]);
+    expect(check.code).toBe(1);
+    expect(check.stdout).toContain(
+      "error\tplaywright-missing\tfeatures/browser.feature:4\t" +
+        `ctx.page() in "Given a blank page is open" needs "playwright", and this project has not installed it. ` +
+        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+    );
+  }, 60_000);
+
+  it("check reports a request step, and --json carries the finding", async () => {
+    const check = await nuka(["check", "--json", "features/http.feature"]);
+    expect(check.code).toBe(1);
+    expect(JSON.parse(check.stdout)).toEqual({
+      errors: [
+        {
+          code: "playwright-missing",
+          message:
+            `ctx.request() in "When the URL "http://127.0.0.1:9/" is fetched" needs "playwright", and this project ` +
+            `has not installed it. Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+          file: "features/http.feature",
+          line: 4,
+          step: "fetch-url",
+        },
+      ],
+      warnings: [],
+    });
+  }, 60_000);
+
+  it("check with no target reports each Playwright step once and passes over the CLI step", async () => {
+    const check = await nuka(["check", "--json"]);
+    expect(check.code).toBe(1);
+    const report = JSON.parse(check.stdout) as { errors: { code: string; step?: string }[] };
+    expect(report.errors.map((issue) => [issue.code, issue.step])).toEqual([
+      ["playwright-missing", "open-page"],
+      ["playwright-missing", "fetch-url"],
+    ]);
+  }, 60_000);
+
+  it("run stops at the check before any step runs", async () => {
+    const run = await nuka(["run", "features/http.feature"]);
+    expect(run.code).not.toBe(0);
+    expect(run.stderr).toContain("error\tplaywright-missing\tfeatures/http.feature:4\t");
+    expect(run.stderr).toContain("nuka run did not start");
+    expect(run.stderr).not.toContain("step 1/1");
+  }, 60_000);
+
+  it("fails a page step at run time with one line naming the step and the install command", async () => {
+    const run = await nuka(["run", "--no-check", "features/browser.feature"]);
     expect(run.code).not.toBe(0);
     expect(run.stderr).toContain(
       `ctx.page() in "Given a blank page is open" needs "playwright", and this project has not installed it. ` +
@@ -159,8 +208,8 @@ describe("a project without playwright installed", () => {
     );
   }, 60_000);
 
-  it("fails a request step the same way", async () => {
-    const run = await nuka(["run", "features/http.feature"]);
+  it("fails a request step at run time the same way", async () => {
+    const run = await nuka(["run", "--no-check", "features/http.feature"]);
     expect(run.code).not.toBe(0);
     expect(run.stderr).toContain(`ctx.request() in "When the URL "http://127.0.0.1:9/" is fetched" needs "playwright"`);
   }, 60_000);

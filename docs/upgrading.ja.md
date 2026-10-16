@@ -76,7 +76,9 @@ nukadoko は今、`playwright` を optional な peer dependency として宣言�
 
 - **`page`、`context`、`request` を使う step か fixture を持つプロジェクトは、`playwright` を自分の `devDependencies` に追加します。**
   バージョンは nukadoko がテストしているものに正確に合わせます: `npm install -D -E playwright@1.61.1`。
-  入れていなければ、最初のそうした step が、その step とこのコマンドを名指す 1 行を出して失敗し、run の残りは続きます。
+  入れていなければ、`nuka check` が、その step とこのコマンドを名指す 1 行で `playwright-missing` を報告します。
+  ほかの `nuka check` の error と同じく、`nuka run` はどの step も実行する前に止まります。
+  `nuka run --no-check` なら実行し、最初のそうした step が同じ行を出して失敗します。
   `nuka experimental webmcp-tools` も同じく `playwright` を必要とします。
 - **CI の変更は `package.json` のその 1 行だけです。**
   `playwright` がプロジェクトの devDependency になれば `npm ci` がそれをインストールし、`npx playwright install --with-deps chromium` はブラウザの step を実行する job でこれまでどおりブラウザをダウンロードします([docs/ci.ja.md](ci.ja.md) のとおりです)。
