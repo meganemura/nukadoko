@@ -840,7 +840,9 @@ On the second, each worker and the parent exit at once.
 Each worker runs in its own process group, so a signal to the terminal's group reaches it only through the parent.
 When the parent ends without forwarding (a SIGKILL, or a killed process group), each worker treats that as its first signal and tears its fixtures down.
 When the parent ends after it forwarded a signal, each worker finishes the teardown that signal started.
-A worker learns that the parent ended from its IPC channel, not from stdin. A worker's stdin is empty, so a step that reads it gets end of file at once.
+A worker learns that the parent ended when its IPC channel closes.
+Project code that calls `process.disconnect()` in a worker closes that channel too, so the worker says so on stderr and stops as if it had received a signal.
+A worker's stdin is empty, so a step that reads it gets end of file at once.
 On Windows the parent does not forward, because every process on the console already receives Ctrl-C.
 This reverse order is correct because nukadoko builds and tears down fixtures
 *serially* within one process.

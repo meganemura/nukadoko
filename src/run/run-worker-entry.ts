@@ -114,6 +114,11 @@ const quiet = quietRawArg === "1";
 const repeat: number = Number(repeatRawArg);
 
 const envelopeStdout = divertProcessStdoutToStderr();
+const parentPid = process.ppid;
+const CHANNEL_CLOSED_FROM_INSIDE =
+  "Code in this worker closed its IPC channel to the parent while the parent was still running " +
+  "(process.disconnect()). nukadoko reads a closed channel as the parent ending, so this worker " +
+  "tears its fixtures down and stops.";
 
 function emit(envelope: WorkerEnvelope): void {
   envelopeStdout.write(serializeWorkerEnvelope(envelope));
@@ -244,8 +249,17 @@ async function main(): Promise<void> {
   // Nothing will forward a signal any more, so it counts as the first one.
   // After a forwarded signal it is no signal at all: the parent was killed
   // while this worker tore down, and that teardown must finish.
+  //
+  // Project code can close the channel too, with process.disconnect(). The
+  // parent is then still this worker's parent, so the line below says why
+  // the worker stops. The parent's death reparents this worker, and a write
+  // to its dead pipes would fail, so nothing is written then. The kernel
+  // can deliver the channel's end a moment before it reparents; in that
+  // window the line is written to a closed pipe.
   const onParentGone = (): void => {
-    if (processSignal?.interrupted === false) processSignal.trigger("SIGHUP");
+    if (processSignal?.interrupted !== false) return;
+    if (process.ppid === parentPid) noteSink.write(`${CHANNEL_CLOSED_FROM_INSIDE}\n`);
+    processSignal.trigger("SIGHUP");
   };
   try {
     const fixtureProcessCache = createFixtureCache();
@@ -403,6 +417,10 @@ async function main(): Promise<void> {
     await tearDownProcessFixtures();
   } finally {
     process.off("disconnect", onParentGone);
+    // Closed, not unref'd: a `message` listener that project code adds
+    // refs the channel again, and an open channel keeps this process alive
+    // after its last scenario, with the parent waiting on it.
+    if (process.connected) process.disconnect?.();
     processSignal?.stop();
     restoreAllureRuntime();
   }

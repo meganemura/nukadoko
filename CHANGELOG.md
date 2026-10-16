@@ -81,9 +81,9 @@ just until 0.1.
   Ctrl-C reaches them only through the parent. A worker whose parent ends
   without forwarding, from a SIGKILL or a killed process group, tears its
   fixtures down on its own, and one whose parent ends after forwarding
-  finishes the teardown it started. A worker learns this from its IPC
-  channel, and its stdin stays empty, so a step that reads stdin gets end
-  of file at once. On Windows the parent does not forward,
+  finishes the teardown it started. A worker learns this when its IPC
+  channel closes, and its stdin stays empty, so a step that reads stdin
+  gets end of file at once. On Windows the parent does not forward,
   because each worker already receives the console's Ctrl-C.
 - **SIGHUP tears fixtures down like SIGINT and SIGTERM.** Closing the
   terminal or losing an ssh connection during `nuka run`, `nuka do`, or
