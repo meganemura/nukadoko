@@ -47,6 +47,11 @@ async function readLog(rootDir: string): Promise<LogEntry[]> {
 
 const workerPids: number[] = [];
 
+const WORKER_DISCONNECTED_LINE =
+  "Code in this worker closed its IPC channel to the parent while the parent was still running " +
+  "(process.disconnect()). nukadoko reads a closed channel as the parent ending, so this worker " +
+  "tears its fixtures down and stops.";
+
 // No tsx wrapper process in between: that wrapper relays only SIGINT and
 // SIGTERM, and a SIGKILL to it would miss the process that spawned the
 // workers.
@@ -212,6 +217,40 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       .split("\n")
       .map((line) => JSON.parse(line) as { status: string });
     expect(records.map((record) => record.status)).toEqual(["passed", "passed"]);
+  }, 40_000);
+
+  it("exits nuka run --concurrency 2 when project code listens on the worker's IPC channel", async () => {
+    const child = spawnNuka(
+      rootDir,
+      ["run", "features/finish.feature", "features/finish-again.feature", "--quiet", "--concurrency", "2"],
+      { ...process.env, IPC_MESSAGE_LISTENER: "1" },
+    );
+    const stderr = collect(child.stderr);
+    const closed = await waitForClose(child, 20_000).finally(() => readFixturePids(rootDir));
+
+    expect(closed, stderr()).toEqual({ code: 0, signal: null });
+  }, 40_000);
+
+  it("names project code closing a worker's IPC channel, and tears that worker down", async () => {
+    const child = spawnNuka(
+      rootDir,
+      ["run", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+      { ...process.env, DISCONNECT_IPC: "1" },
+    );
+    const stderr = collect(child.stderr);
+    const closed = await waitForClose(child, 20_000);
+
+    expect(closed.code, stderr()).toBe(1);
+    expect(
+      stderr().split("\n").filter((line) => line === WORKER_DISCONNECTED_LINE),
+    ).toHaveLength(2);
+    const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
+    expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
+      "ledger:failed",
+      "ledger:failed",
+      "tenant:failed",
+      "tenant:failed",
+    ]);
   }, 40_000);
 
   it("finishes a forwarded signal's teardown in every worker when the parent is then killed with SIGKILL", async () => {

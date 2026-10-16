@@ -12,12 +12,19 @@ import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 // tenant's teardown open, for a test that needs a teardown still running
 // when the second signal arrives. LEDGER_TEARDOWN_HOLD_MS holds ledger's
 // teardown open, for a test that signals after every scenario has a record.
+// IPC_MESSAGE_LISTENER adds the listener a project's own IPC code would,
+// which keeps a worker's IPC channel referenced. DISCONNECT_IPC makes
+// tenant's setup close the worker's IPC channel from inside the worker.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const logPath = path.join(here, "fixture-log.jsonl");
 const pidsPath = path.join(here, "fixture-pids.txt");
 const teardownHoldMs = Number(process.env.SIGNAL_TEARDOWN_HOLD_MS ?? "0");
 const ledgerTeardownHoldMs = Number(process.env.LEDGER_TEARDOWN_HOLD_MS ?? "0");
+
+if (process.env.IPC_MESSAGE_LISTENER === "1") {
+  process.on("message", () => {});
+}
 
 function log(entry: Record<string, unknown>): void {
   appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
@@ -28,6 +35,7 @@ export default defineConfig({
     tenant: async ({}, use) => {
       log({ fixture: "tenant", phase: "setup" });
       appendFileSync(pidsPath, `${process.pid}\n`);
+      if (process.env.DISCONNECT_IPC === "1") process.disconnect?.();
       const outcome = await use({ id: "tenant" });
       log({ fixture: "tenant", phase: "teardown", outcome });
       if (teardownHoldMs > 0) {
