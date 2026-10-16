@@ -35,8 +35,9 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // mid-message chunking and would otherwise need its own terminator
 // convention. A worker's own *real* stderr is left for whatever Node itself
 // writes there on an uncaught, pre-try/catch crash (a stack trace this
-// process never got the chance to turn into a "note" line) — the parent
-// still relays that, raw, for diagnosis, but never parses it.
+// process never got the chance to turn into a "note" line), and for what
+// project code writes to `process.stdout` (src/run/step-stdout.ts). The
+// parent still relays that, raw, but never parses it.
 //
 // `"scenario"` bundles everything one finished pickle produced: the record
 // itself, the per-step progress lines src/run/progress-log.ts's

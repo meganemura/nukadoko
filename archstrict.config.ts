@@ -289,6 +289,7 @@ export default {
         "run-id.ts",
         "run-scenario.ts",
         "select-pickles.ts",
+        "step-stdout.ts",
       ],
     },
     { name: "accept", glob: "src/accept/**", surface: ["render-record.ts", "select-run.ts"] },

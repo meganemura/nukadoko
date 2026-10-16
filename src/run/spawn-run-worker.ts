@@ -19,9 +19,10 @@ import type { Readable } from "node:stream";
 //
 // `stdio: ["ignore", "pipe", "pipe"]`: stdin is unused, stdout carries this
 // worker's own envelope stream (src/run/worker-protocol.ts), stderr is kept
-// only for whatever Node itself writes there before this worker's own
-// try/catch exists to turn a failure into an envelope instead (that
-// module's own header explains the split).
+// for whatever Node itself writes there before this worker's own
+// try/catch exists to turn a failure into an envelope instead, and for
+// project code's own stdout writes (that module's own header explains the
+// split).
 
 export interface SpawnRunWorkerOptions {
   readonly rootDir: string;

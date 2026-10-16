@@ -307,9 +307,9 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         }
         handleEnvelope(envelope, filesWithRecords, worker);
       });
-      // Relayed raw, never parsed — this worker's own real stderr only ever
-      // carries a pre-try/catch Node crash (this module's own header, and
-      // src/run/worker-protocol.ts's).
+      // Relayed raw, never parsed: this worker's own real stderr carries a
+      // pre-try/catch Node crash and project code's own stdout writes
+      // (src/run/worker-protocol.ts's header).
       const stderrBuffer = createLineBuffer((line) => {
         if (line.length > 0) {
           stderr.write(`${line}\n`);

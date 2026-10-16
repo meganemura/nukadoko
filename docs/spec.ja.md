@@ -1772,7 +1772,8 @@ session は、ログイン状態を 1 つの scenario から次の scenario へ�
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
 stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJSON として出力します。
-step がプロセスの stdout に書いたテキスト (`console.log` や `process.stdout.write`) は、その step の実行中 stderr に渡されます。
+プロジェクトのコードがプロセスの stdout に書いたテキスト (`console.log` や `process.stdout.write`) は、stderr に渡されます。
+これは step、Before と After の hook、BeforeAll と AfterAll、fixture の setup と teardown、World のコンストラクタ、読み込み中の step ファイル、timeout の後も動き続ける step に当てはまります。
 `nuka do` でも同じであり、その stdout は 1 件の step record です。
 `--concurrency` の worker プロセスでも同じです。
 worker の stdout は、親プロセスが読む envelope の列です。
@@ -1840,7 +1841,7 @@ nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
 1 つの型付き step を実行し、その step record を stdout に出力します(ok なら exit 0、failed なら 1)。
-step がプロセスの stdout に書いたテキストは stderr に渡されるので、その record は 1 つの JSON 値のままです。
+step、その fixture、または step ファイルがプロセスの stdout に書いたテキストは stderr に渡されるので、その record は 1 つの JSON 値のままです。
 これが適応的なループです。
 agent はバリデーション済みの result を読み、次の呼び出しを決めます。
 agent が選べるのはどの step をどの args で呼ぶかだけで、何が記録されるかを選ぶことはできません。
@@ -3534,8 +3535,9 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               --quiet keeps it. --quiet drops the
                               progress lines only.
                               stdout stays NDJSON, one record per scenario,
-                              always. Text a step writes to the process stdout
-                              is delivered on stderr.
+                              always. Text project code writes to the process
+                              stdout (a step, a hook, a fixture) is delivered
+                              on stderr.
                               --concurrency <n> (default 1) hands whole feature
                               files to n worker processes while the parent
                               keeps one run_id, one summary, one exit code, one
@@ -3554,8 +3556,8 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--sess
                               --env and --session as on nuka run; against a
                               live session the step runs in that session's
                               own ctx.
-                              Text the step writes to the process stdout is
-                              delivered on stderr.
+                              Text the step or its fixtures write to the
+                              process stdout is delivered on stderr.
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result

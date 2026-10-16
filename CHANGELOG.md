@@ -70,6 +70,18 @@ just until 0.1.
 
 ### Fixed
 
+- **Only records reach stdout when a hook, a fixture, or a late step
+  writes there.** Text written to the process stdout went to stderr only
+  while a step body ran. A Before or After hook, a BeforeAll or AfterAll, a
+  fixture's setup or teardown, a World constructor, a step file while it
+  loaded, and a step still running after its timeout wrote into the record
+  stream. Under `nuka run` the text glued onto the next NDJSON record and
+  the run still exited 0. Under `--concurrency 2` the parent read every
+  worker line as unreadable and ended with no records and exit 1. `nuka
+  run`, `nuka do`, `nuka explore`, and each worker now send every write to
+  the process stdout to stderr for the whole invocation, and write their
+  records through the stream they saved before that.
+
 - **`nuka harvest` writes a docstring line that starts with three quotes
   so it reads back.** The line was written as a backslash and three
   quotes, which the Gherkin reader keeps as written, so the draft carried
@@ -81,10 +93,8 @@ just until 0.1.
   through `nuka do --session` against a live session that outlived its
   deadline was recorded with `error.kind: "step_error"`, and the message
   named the session instead of the step. It now records `"timeout"` and
-  names the step, as `nuka do` without a live session does. Text the step
-  writes to stdout now goes to stderr there too, as under `nuka do`. `nuka
-  do`, a live session, and `nuka explore` now run a step through one
-  function.
+  names the step, as `nuka do` without a live session does. `nuka do`, a
+  live session, and `nuka explore` now run a step through one function.
 - **A `{biginteger}` capture no longer aborts `nuka run`.** A typed step
   that bound a `{biginteger}` capture to `z.bigint()`, or a compat step with
   a `{biginteger}` capture, stopped the whole run with

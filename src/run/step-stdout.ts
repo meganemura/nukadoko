@@ -1,31 +1,28 @@
-// Responsibility: while one step function runs, send what it writes to
-// the process stdout over to stderr, then put the previous write back.
+import type { WritableSink } from "../sink/writable-sink.js";
+
+// Responsibility: keep the process stdout for records only, for a whole
+// invocation that runs project code.
 //
 // `nuka do` prints one JSON step record on stdout. `nuka run` prints one
 // NDJSON scenario record per line. A worker's own stdout is the envelope
-// stream the parent parses. Those writers and the step share
-// `process.stdout`. A `console.log` or `process.stdout.write` in the step
-// lands in the middle of that stream, and a parser fails on the first
-// non-JSON line (a write with no trailing newline is worse: it glues onto
-// the next record). stderr is already where a person watching the run
-// looks, so the text stays visible there and the record stream stays
-// parseable.
+// stream the parent parses. Project code shares that `process.stdout`: a
+// step body, a hook, a BeforeAll or AfterAll, a fixture, a World
+// constructor, a step file while it loads, and a step that keeps running
+// after its timeout. A write from any of them lands in the middle of the
+// stream, and a parser fails on the first non-JSON line (a write with no
+// trailing newline is worse: it glues onto the next record). stderr is
+// already where a person watching the run looks, so the text stays
+// visible there and the record stream stays parseable.
 //
-// The previous `write` is restored when this function settles, including
-// when the step throws or the wait around it loses to a timeout, and
-// before the caller writes the record. The caller looks `write` up at
-// that later moment, so the record reaches the original stdout. A nested
-// call saves whatever `write` it found and restores that, so a part
-// running inside an already-diverted step does not point stdout back at
-// the record stream early.
+// The diversion is never put back. A step that outlived its timeout can
+// still write after the run has printed its last record, and only the
+// process exit ends that. Records reach the real stdout through the sink
+// this function returns, which keeps the `write` found before the switch.
 
-/** Runs `fn` with `process.stdout.write` aimed at stderr. */
-export async function withStepStdoutOnStderr<T>(fn: () => T | Promise<T>): Promise<T> {
-  const previousWrite = process.stdout.write;
+/** Points `process.stdout.write` at stderr for the rest of the process and
+ * returns a sink that still writes to the real stdout. */
+export function divertProcessStdoutToStderr(): WritableSink {
+  const recordWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = process.stderr.write.bind(process.stderr) as typeof process.stdout.write;
-  try {
-    return await fn();
-  } finally {
-    process.stdout.write = previousWrite;
-  }
+  return { write: (chunk: string) => recordWrite(chunk) };
 }

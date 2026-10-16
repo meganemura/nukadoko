@@ -32,6 +32,7 @@ import {
 } from "./run-scenario.js";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "./process-signal.js";
 import { selectPickles } from "./select-pickles.js";
+import { divertProcessStdoutToStderr } from "./step-stdout.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -75,7 +76,9 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 //
 // Every line this worker writes to its own stdout is a `WorkerEnvelope`
 // (src/run/worker-protocol.ts's own header explains why, and why nothing
-// meaningful goes to this process's real stderr instead). `noteSink`, below,
+// meaningful goes to this process's real stderr instead). Project code
+// that writes to `process.stdout` reaches this process's stderr instead
+// (src/run/step-stdout.ts), which the parent relays raw. `noteSink`, below,
 // is the one `WritableSink` this file threads into every helper that would
 // otherwise write straight to stderr at `--concurrency 1` (a version-probe
 // warning, an Allure emitter setup failure, a BeforeAll/AfterAll failure, a
@@ -110,8 +113,10 @@ const env = envArg0 === "" ? null : envArg0;
 const quiet = quietRawArg === "1";
 const repeat: number = Number(repeatRawArg);
 
+const envelopeStdout = divertProcessStdoutToStderr();
+
 function emit(envelope: WorkerEnvelope): void {
-  process.stdout.write(serializeWorkerEnvelope(envelope));
+  envelopeStdout.write(serializeWorkerEnvelope(envelope));
 }
 
 const noteSink: WritableSink = {
