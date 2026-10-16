@@ -229,6 +229,16 @@ just until 0.1.
   acceptance skill follow: the skill's loop opens with its four everyday
   steps, and its browser and session warnings apply only when a step needs
   `page` or the loop reaches `session`.
+- **examples/todo/README.md matches 0.15.** Its prerequisites no longer
+  describe nukadoko as unpublished: from a checkout, `npm install` and
+  `npm run build` at the root, then `npx nuka` from the example. Part 1
+  now sets `features/explore` aside together with `complete-todo.ts`,
+  since the model imports that step and `nuka check` would otherwise
+  report the failed import instead of the missing step. Its scaffold step
+  is `nuka scaffold complete-todo --pattern "..."`, and the check output,
+  the scaffolded file, and the implemented step it shows are what the CLI
+  prints and the example ships today; `tests/examples-todo.test.ts` runs
+  the commands and compares.
 
 ## 0.15.0 — 2026-10-16
 

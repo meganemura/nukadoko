@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -10,6 +10,7 @@ import {
   createCaptureSink,
   ensureNukadokoShim,
   removeTempDir,
+  repoRoot,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -143,5 +144,54 @@ describe("examples/todo oath check", () => {
     expect(stderr.text()).toBe("");
     expect(stdout.text()).toContain("ok: no issues found");
     expect(exitCode).toBe(0);
+  });
+});
+
+// README.md's Part 1 shows two outputs a reader compares with their own
+// terminal: what `nuka check` prints once the step is set aside, and what
+// the scaffold command writes. Both come from running the commands here, so
+// neither can drift from what the CLI prints today. The implemented step it
+// then shows is the file the example ships.
+describe("examples/todo README, Part 1", () => {
+  let rootDir: string;
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  // The first fenced block of `lang` after `marker` in the README.
+  function blockAfter(readme: string, marker: string, lang: string): string {
+    const at = readme.indexOf(marker);
+    expect(at, marker).toBeGreaterThan(-1);
+    const open = readme.indexOf("```" + lang + "\n", at);
+    const start = open + lang.length + 4;
+    return readme.slice(start, readme.indexOf("```\n", start));
+  }
+
+  it("shows the check output, the scaffold output, and the shipped step as they are", async () => {
+    const readme = await readFile(path.join(repoRoot, "examples", "todo", "README.md"), "utf8");
+    expect(readme).toContain("mv features/steps/complete-todo.ts /tmp/complete-todo.ts.bak\nmv features/explore /tmp/explore.bak\n");
+    rootDir = await copyExampleToTempDir("todo");
+    await ensureNukadokoShim();
+    await rm(path.join(rootDir, "features", "steps", "complete-todo.ts"));
+    await rename(path.join(rootDir, "features", "explore"), path.join(rootDir, "explore.bak"));
+
+    const checkOut = createCaptureSink();
+    const checkCode = await runCli(["check"], { rootDir, stdout: checkOut, stderr: createCaptureSink() });
+    expect(checkOut.text()).toBe(blockAfter(readme, "**4.", "text"));
+    expect(checkCode).toBe(1);
+
+    const scaffold = blockAfter(readme, "**5. Scaffold it:**", "sh").trim();
+    expect(scaffold).toBe('nuka scaffold complete-todo --pattern "the todo titled {title:string} is completed"');
+    const scaffoldCode = await runCli(
+      ["scaffold", "complete-todo", "--pattern", "the todo titled {title:string} is completed"],
+      { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() },
+    );
+    expect(scaffoldCode).toBe(0);
+    const written = await readFile(path.join(rootDir, "features", "steps", "complete-todo.ts"), "utf8");
+    expect(written).toBe(blockAfter(readme, "**5. Scaffold it:**", "ts"));
+
+    const shipped = await readFile(path.join(repoRoot, "examples", "todo", "features", "steps", "complete-todo.ts"), "utf8");
+    expect(blockAfter(readme, "**6. Implement it.**", "ts")).toBe(shipped);
   });
 });

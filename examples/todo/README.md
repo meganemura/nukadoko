@@ -13,18 +13,11 @@ against the app below, and it fails the moment the app's field name changes.
 
 ## Prerequisites
 
-- From a checkout of this repository (not needed once nukadoko is
-  published): run `npm install` and `npm run build` once, from the repo
-  root. This is what lets the bare `"nukadoko"` specifier
-  `features/steps/*.ts` import from below actually resolve — Node resolves a
-  package's own name to itself via its `exports` field (which this repo's
-  `package.json` already has), but only once `dist/` exists to point at.
-  Once nukadoko is published, this step disappears; a real project just
-  `npm install`s it.
-- Every `nuka ...` command below is shorthand for `npx tsx
-  ../../src/cli.ts ...`, run from this directory (`examples/todo/`) — the
-  substitution this repository needs pre-publish. After publish, it's simply
-  `npx nuka ...`.
+Run `npm install` and `npm run build` once, from the repository root.
+`npx nuka` then runs this checkout's own CLI, and the `"nukadoko"` that
+`features/steps/*.ts` import resolves to this checkout through the
+`exports` field of its `package.json`. Every `nuka ...` command below is
+`npx nuka ...`, run from this directory (`examples/todo/`).
 
 ## The app
 
@@ -61,8 +54,8 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
 - `features/todo.md`: the same three scenarios as a Markdown oath, plus
   one outline row. `nuka check` and `nuka run features/todo.md` exercise
   it. See [Markdown oath](#markdown-oath) below.
-- `features/steps/*.ts` — 5 typed steps, each importing `defineStep` from
-  `"nukadoko"` and `z` from `"zod"`, each actually calling the app above
+- `features/steps/*.ts`: 5 typed steps, each importing `defineStep` and
+  `z` from `"nukadoko"`, each actually calling the app above
   (nothing here is a stub):
   - `add-todo.ts` — `POST /todos` (named capture: `{title:string}`)
   - `add-todos-from-table.ts` — `POST /todos` once per row of an attached
@@ -104,7 +97,12 @@ one step aside and rebuild it yourself:
 
 ```sh
 mv features/steps/complete-todo.ts /tmp/complete-todo.ts.bak
+mv features/explore /tmp/explore.bak
 ```
+
+The model in `features/explore/add-model.ts` imports `complete-todo`, so it
+goes aside too. Left in place, it makes `nuka check` report that failed
+import instead of the missing step.
 
 **1. Discover the vocabulary:**
 
@@ -156,8 +154,8 @@ statically, before you'd ever hit it at `nuka run` time:
 nuka check
 ```
 
-```
-error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
+```text
+error	undefined-step	features/todo.feature:9	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
 error	undefined-step	features/todo.md:14	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
 ```
 
@@ -166,43 +164,55 @@ The second line is the same step in the Markdown oath. Both files name it.
 **5. Scaffold it:**
 
 ```sh
-nuka scaffold complete-todo
+nuka scaffold complete-todo --pattern "the todo titled {title:string} is completed"
 ```
 
-writes `features/steps/complete-todo.ts` as a template that compiles and
-registers, but fails every time it runs, until you implement it:
+writes `features/steps/complete-todo.ts`. `--pattern` makes the step match
+the line `nuka check` reported, and its `{title:string}` becomes the
+`title` field of `args`. The file compiles and registers, but fails every
+time it runs, until you implement it:
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   description: "TODO: describe complete-todo",
-  args: z.object({}),
+  pattern: "the todo titled {title:string} is completed",
+  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.
+  args: z.object({
+    title: z.string(),
+  }),
+  // Return what later steps cite and the values this step's correctness rests on;
+  // beside an absence (false, 0, ""), return proof the read was valid.
   returns: z.object({}),
-  run() {
-    throw new Error("not implemented: complete-todo");
+  run({}, { title }) {
+    throw new Error(`not implemented: complete-todo; args ${JSON.stringify({ title })}`);
   },
 });
 ```
 
 **6. Implement it.** There's no endpoint for "complete a todo by title", so
-the step composes two calls itself — `GET /todos` to resolve the title to an
+the step composes two calls itself: `GET /todos` to resolve the title to an
 id, then `PATCH` that id's `done` to `true`:
 
 ```ts
-import { defineStep } from "nukadoko";
-import { z } from "zod";
+import { defineStep, z } from "nukadoko";
 
-// There is no "complete a todo by title" endpoint, so this step composes two
-// calls itself: GET /todos to resolve the title to an id, then PATCH that
-// id's `done` to true -- the same lookup-then-act shape any real client
-// needs when an API only exposes operations by id.
 export default defineStep({
   pattern: "the todo titled {title:string} is completed",
   description: "Find a todo by title and PATCH it to done: true",
-  args: z.object({ title: z.string() }),
-  returns: z.object({ id: z.string(), title: z.string(), done: z.boolean() }),
+  rationale:
+    "There is no \"complete a todo by title\" endpoint, so this step composes two calls itself: " +
+    "GET /todos to resolve the title to an id, then PATCH that id's `done` to true. The same " +
+    "lookup-then-act shape any real client needs when an API only exposes operations by id. A " +
+    "step taking the id instead would push the lookup into the feature file, where a reader " +
+    "has no id to write.",
+  args: z.object({ title: z.string().describe("The title of the todo to complete; must already exist") }),
+  returns: z.object({
+    id: z.string().describe("The id of the todo that was completed"),
+    title: z.string().describe("Its title, as the server returned it"),
+    done: z.boolean().describe("true after the PATCH"),
+  }),
   mutates: true,
   async run({ request }, args) {
     const listRes = await request.get("/todos");
@@ -218,12 +228,14 @@ export default defineStep({
 ```
 
 (This is exactly the file this repository ships at
-`features/steps/complete-todo.ts` — paste it in, or retype it; either way
+`features/steps/complete-todo.ts`. Paste it in, or retype it; either way
 you end up back at the committed version.)
 
-**7. Check, then run:**
+**7. Check, then run.** Bring the model back first, now that the step it
+imports exists again:
 
 ```sh
+mv /tmp/explore.bak features/explore
 nuka check
 ```
 
@@ -239,9 +251,9 @@ Three scenario records stream to stdout, one JSON line each, every one
 `"status":"passed"` — exit `0`. The vocabulary gap from step 1 is closed,
 reviewably: the diff is one new step file, and this green run is its proof.
 
-Nothing here left a lasting change (you either restored the exact file this
-repo ships, or moved your backup back) — the next reader starts from the
-same missing-step state you did.
+Nothing here left a lasting change: you either restored the exact file this
+repository ships, or moved your backup back. The next reader starts from
+the same committed state you did.
 
 ## Part 2 — self-healing
 
