@@ -64,19 +64,20 @@ package.json
 CommonJS の場合、`tsconfig.json`、`--allure` と `--env` のフラグは [Setup details](#setup-details) にあります。
 
 When の step を scaffold します。
-スタブは、実装するまで失敗します:
+`--command` は、プログラムを `scratch.dir()` で実行し、その `exitCode`、`stdout`、`stderr` を返す step を書きます。
+`scratch.dir()` は空のディレクトリで、scenario の後に削除されます。
+`runCommand` は、実行したプロセスを step record に入れます:
 
 ```sh
-npx nuka scaffold run-greet --pattern "I run greet with {name:string}"
+npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command
 ```
 
 ```text
 features/steps/run-greet.ts
 ```
 
-中身を埋めます。
-`scratch.dir()` は空のディレクトリで、scenario の後に削除されます。
-`runCommand` は、実行したプロセスを step record に入れます:
+埋めるのはエントリポイントの 1 行だけです。
+`resolve` は、`nuka` を実行したディレクトリから読みます:
 
 ```ts
 // features/steps/run-greet.ts
@@ -86,13 +87,19 @@ import { resolve } from "node:path";
 const cli = resolve("src/cli.ts");
 
 export default defineStep({
-  description: "Run the greet CLI in an empty scratch directory",
+  description: "Run the command under test in an empty scratch directory",
   pattern: "I run greet with {name:string}",
-  args: z.object({ name: z.string() }),
-  returns: z.object({ exitCode: z.number().nullable(), stdout: z.string() }),
+  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.
+  args: z.object({
+    name: z.string(),
+  }),
+  returns: z.object({
+    exitCode: z.number().nullable(),
+    stdout: z.string(),
+    stderr: z.string(),
+  }),
   async run({ scratch }, { name }) {
-    const { exitCode, stdout } = await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });
-    return { exitCode, stdout };
+    return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });
   },
 });
 ```

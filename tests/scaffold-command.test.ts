@@ -1,0 +1,387 @@
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { promisify } from "node:util";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { runCli } from "../src/cli/run-cli.js";
+import {
+  createCaptureSink,
+  createEmptyTempDir,
+  ensureNukadokoShim,
+  removeTempDir,
+  repoRoot,
+  testsDir,
+} from "./helpers/fixtures.js";
+
+// Responsibility: `nuka scaffold <name> --command`, the When step that runs
+// a program, and the stub every other scaffold writes. The command step has
+// to return the three keys a Then step chains with `--from` right after it,
+// run a real program once its one TODO is filled in, and every scaffolded
+// file has to compile under `noUnusedLocals` and `noUnusedParameters`.
+
+async function initProject(): Promise<string> {
+  const rootDir = await createEmptyTempDir();
+  await ensureNukadokoShim();
+  const initExit = await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+  if (initExit !== 0) {
+    throw new Error("test setup: `nuka init` failed");
+  }
+  return rootDir;
+}
+
+async function cli(rootDir: string, argv: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const stdout = createCaptureSink();
+  const stderr = createCaptureSink();
+  const exitCode = await runCli(argv, { rootDir, stdout, stderr });
+  return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+}
+
+function stepPath(rootDir: string, name: string): string {
+  return path.join(rootDir, "features", "steps", `${name}.ts`);
+}
+
+describe("nuka scaffold --command", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await initProject();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("writes the runCommand body, the three returns keys, and the entry point as the one TODO", async () => {
+    const result = await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.stdout).toBe("features/steps/run-greet.ts\n");
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(stepPath(rootDir, "run-greet"), "utf8")).toBe(
+      [
+        'import { defineStep, runCommand, z } from "nukadoko";',
+        'import { resolve } from "node:path";',
+        "",
+        'const cli = resolve("<TODO: the entry point>");',
+        "",
+        "export default defineStep({",
+        '  description: "Run the command under test in an empty scratch directory",',
+        '  pattern: "I run greet with {name:string}",',
+        "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+        "  args: z.object({",
+        "    name: z.string(),",
+        "  }),",
+        "  returns: z.object({",
+        "    exitCode: z.number().nullable(),",
+        "    stdout: z.string(),",
+        "    stderr: z.string(),",
+        "  }),",
+        "  async run({ scratch }, { name }) {",
+        "    return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("passes a capture that is not a string as its text, and takes no args parameter with no captures", async () => {
+    await cli(rootDir, ["scaffold", "run-repeat", "--pattern", "I repeat {word:word} {times:int} times", "--command"]);
+    await cli(rootDir, ["scaffold", "run-help", "--command"]);
+
+    expect(await readFile(stepPath(rootDir, "run-repeat"), "utf8")).toContain(
+      "    return await runCommand(process.execPath, [cli, word, String(times)], { cwd: scratch.dir() });",
+    );
+    expect(await readFile(stepPath(rootDir, "run-help"), "utf8")).toBe(
+      [
+        'import { defineStep, runCommand, z } from "nukadoko";',
+        'import { resolve } from "node:path";',
+        "",
+        'const cli = resolve("<TODO: the entry point>");',
+        "",
+        "export default defineStep({",
+        '  description: "Run the command under test in an empty scratch directory",',
+        '  // pattern: "the feature line this step matches", (without one, the step is called by name only)',
+        "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+        "  args: z.object({}),",
+        "  returns: z.object({",
+        "    exitCode: z.number().nullable(),",
+        "    stdout: z.string(),",
+        "    stderr: z.string(),",
+        "  }),",
+        "  async run({ scratch }) {",
+        "    return await runCommand(process.execPath, [cli], { cwd: scratch.dir() });",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it.each([
+    [
+      ["--command", "--then"],
+      "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false\n",
+    ],
+    [
+      ["--command", "--pattern", "run {cli:string}"],
+      'Refusing to scaffold: args key "cli" would hide a name the written step body reads (cli, runCommand, process, scratch, String); name the capture or the key something else\n',
+    ],
+    [
+      ["--pattern", "parse {JSON:string}"],
+      'Refusing to scaffold: args key "JSON" would hide a name the written step body reads (Error, JSON, String); name the capture or the key something else\n',
+    ],
+  ])("refuses %j and writes nothing", async (flags, message) => {
+    const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
+
+    expect(result.stderr).toBe(message);
+    expect(result.exitCode).toBe(1);
+    expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
+  });
+
+  it("chains --from at once, and runs a real program green once the entry point and the assertion are filled in", async () => {
+    await mkdir(path.join(rootDir, "src"));
+    await writeFile(
+      path.join(rootDir, "src", "greet.mjs"),
+      'process.stdout.write(`Hello, ${process.argv[2]}!\\n`);\nprocess.stderr.write("cwd " + process.cwd() + "\\n");\n',
+    );
+    await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command"]);
+    const then = await cli(rootDir, [
+      "scaffold",
+      "output-says",
+      "--pattern",
+      "the output says {text:string}",
+      "--then",
+      "--from",
+      "run-greet.stdout",
+    ]);
+    expect(then.stderr).toBe("");
+    expect(then.exitCode).toBe(0);
+    await writeFile(
+      path.join(rootDir, "features", "greet.feature"),
+      ["Feature: greet", "  Scenario: greet a name", '    When I run greet with "Ada"', '    Then the output says "Hello, Ada!"', ""].join(
+        "\n",
+      ),
+    );
+
+    const unimplemented = await cli(rootDir, ["run", "features/greet.feature"]);
+    expect(unimplemented.exitCode).toBe(1);
+
+    const runGreet = stepPath(rootDir, "run-greet");
+    // Absolute, because `resolve` reads a relative path from the directory
+    // nuka runs in, and this test runs nuka in-process from elsewhere.
+    await writeFile(
+      runGreet,
+      (await readFile(runGreet, "utf8")).replace("<TODO: the entry point>", path.join(rootDir, "src", "greet.mjs")),
+    );
+    const outputSays = stepPath(rootDir, "output-says");
+    const stub = 'throw new Error(`not implemented: output-says; args ${JSON.stringify({ text, stdout })}`);';
+    expect(await readFile(outputSays, "utf8")).toContain(stub);
+    await writeFile(
+      outputSays,
+      (await readFile(outputSays, "utf8")).replace(
+        stub,
+        "if (stdout.trim() !== text) throw new Error(`expected ${text}, got ${stdout}`);",
+      ),
+    );
+
+    // A stub's message names what the feature line bound.
+    const stubbed = await cli(rootDir, ["scaffold", "exit-is", "--pattern", "it exits {code:int}", "--then", "--from", "run-greet.exitCode"]);
+    expect(stubbed.exitCode).toBe(0);
+    await writeFile(
+      path.join(rootDir, "features", "exit.feature"),
+      ["Feature: exit", "  Scenario: exits zero", '    When I run greet with "Ada"', "    Then it exits 0", ""].join("\n"),
+    );
+    const exitRun = await cli(rootDir, ["run", "features/exit.feature"]);
+    expect(exitRun.stdout).toContain('"message":"not implemented: exit-is; args {\\"code\\":0,\\"exitCode\\":0}"');
+
+    const green = await cli(rootDir, ["run", "features/greet.feature"]);
+    expect(green.stderr).toContain("1 scenario: 1 passed, 0 failed");
+    expect(green.exitCode).toBe(0);
+  });
+});
+
+// Property: for any pattern built from literal words and typed captures,
+// the `--command` file imports and binds a feature line that fills it with
+// no `nuka check` finding, and a Then step can be scaffolded `--from` each
+// of its three returns keys immediately after, with no edit in between.
+describe("nuka scaffold --command: any pattern", () => {
+  let rootDir: string;
+  let counter = 0;
+
+  beforeAll(async () => {
+    rootDir = await initProject();
+  });
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  // Each capture type with a feature-line value it matches.
+  const CAPTURES: readonly (readonly [string, string])[] = [
+    ["int", "3"],
+    ["float", "1.5"],
+    ["word", "plain"],
+    ["string", '"two words"'],
+    ["", '"anon"'],
+    ["biginteger", "12345678901234567890"],
+    ["bigdecimal", "2.25"],
+  ];
+
+  it("binds a filled-in feature line with no finding, and chains every returns key at once", () =>
+    hegel.testAsync(
+      async (tc) => {
+        const pieces = tc.draw(
+          gs.arrays(gs.oneOf(gs.fromRegex("[a-z]{1,6}"), gs.sampledFrom(CAPTURES.map((_, index) => `#${index}`))), {
+            minSize: 1,
+            maxSize: 5,
+          }),
+        );
+        const pattern: string[] = [];
+        const line: string[] = [];
+        pieces.forEach((piece, index) => {
+          if (!piece.startsWith("#")) {
+            pattern.push(piece);
+            line.push(piece);
+          } else {
+            const [type, value] = CAPTURES[Number(piece.slice(1))]!;
+            pattern.push(`{k${index}:${type}}`);
+            line.push(value);
+          }
+        });
+        counter += 1;
+        // A literal word per case keeps each pattern distinct from every other case's.
+        const name = `run-case-${counter}`;
+        const patternText = [`case${counter}`, ...pattern].join(" ");
+        const lineText = [`case${counter}`, ...line].join(" ");
+        const featurePath = path.join(rootDir, "features", `${name}.feature`);
+        const written = [name];
+        try {
+          const scaffold = await cli(rootDir, ["scaffold", name, "--pattern", patternText, "--command"]);
+          expect(scaffold.stderr).toBe("");
+          expect(scaffold.exitCode).toBe(0);
+          await writeFile(featurePath, `Feature: f\n  Scenario: s\n    When ${lineText}\n`);
+          const check = await cli(rootDir, ["check"]);
+          expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+          for (const key of ["stdout", "exitCode", "stderr"]) {
+            const consumer = `${name}-${key.toLowerCase()}`;
+            written.push(consumer);
+            const chained = await cli(rootDir, ["scaffold", consumer, "--then", "--from", `${name}.${key}`]);
+            expect(chained.stderr).toBe("");
+            expect(chained.exitCode).toBe(0);
+          }
+        } finally {
+          await rm(featurePath, { force: true });
+          for (const step of written) await rm(stepPath(rootDir, step), { force: true });
+        }
+      },
+      // Each case runs scaffold four times and check once, and each of them
+      // loads every step file, so a case is slow by design and a loaded
+      // machine must not fail it on time alone.
+      { testCases: 15, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+    ), 300_000);
+});
+
+const execFileAsync = promisify(execFile);
+
+/** Compiles step files against the built package, as a project that sets
+ * `noUnusedLocals` and `noUnusedParameters` would. "nukadoko" is linked to
+ * this repository, so it resolves through package.json's own `exports` to
+ * the built declarations: the shim under tests/.tmp-fixtures points at
+ * `src/`, whose own files these flags would also check. */
+async function typecheckSteps(files: Record<string, string>): Promise<{ code: number; output: string }> {
+  // Under tests/ so "nukadoko" resolves to this package by its own name.
+  const parent = path.join(testsDir, ".tmp-fixtures");
+  await mkdir(parent, { recursive: true });
+  const dir = await mkdtemp(path.join(parent, "scaffold-command-types-"));
+  try {
+    await writeFile(path.join(dir, "package.json"), '{ "type": "module" }\n');
+    await mkdir(path.join(dir, "node_modules"));
+    await symlink(repoRoot, path.join(dir, "node_modules", "nukadoko"), "dir");
+    await writeFile(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          target: "ES2023",
+          lib: ["ESNext"],
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true,
+          noUnusedLocals: true,
+          noUnusedParameters: true,
+          skipLibCheck: true,
+          noEmit: true,
+          types: ["node"],
+        },
+        include: ["*.ts"],
+      }),
+    );
+    for (const [name, text] of Object.entries(files)) {
+      await writeFile(path.join(dir, name), text);
+    }
+    const { stdout } = await execFileAsync(path.join(repoRoot, "node_modules", ".bin", "tsc"), ["-p", dir]);
+    return { code: 0, output: stdout };
+  } catch (error) {
+    const failed = error as { code?: number; stdout?: string };
+    return { code: failed.code ?? 1, output: failed.stdout ?? "" };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+describe("every scaffolded variant", () => {
+  let rootDir: string;
+
+  beforeAll(async () => {
+    rootDir = await initProject();
+  });
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("type checks under noUnusedLocals and noUnusedParameters", async () => {
+    // A producer whose value may be absent: the command passes it through String().
+    const maybeName = [
+      'import { defineStep, z } from "nukadoko";',
+      "",
+      "export default defineStep({",
+      '  description: "may name someone",',
+      "  args: z.object({}),",
+      "  returns: z.object({ name: z.string().optional() }),",
+      "  run() {",
+      "    return {};",
+      "  },",
+      "});",
+      "",
+    ].join("\n");
+    await writeFile(stepPath(rootDir, "maybe-name"), maybeName);
+    const variants: readonly (readonly string[])[] = [
+      ["scaffold", "bare-when"],
+      ["scaffold", "bare-then", "--then"],
+      ["scaffold", "args-when", "--pattern", "set {n:int} {w:word} {b:biginteger} {c:colour}"],
+      ["scaffold", "args-then", "--pattern", "the total is {total:float}", "--then"],
+      ["scaffold", "run-bare", "--command"],
+      ["scaffold", "run-args", "--pattern", "run with {s:string} {n:int} {b:biginteger}", "--command"],
+      ["scaffold", "chained-then", "--pattern", "it printed {text:string}", "--then", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
+      ["scaffold", "chained-command", "--command", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
+      ["scaffold", "chained-optional", "--command", "--from", "maybe-name.name"],
+    ];
+    const files: Record<string, string> = { "maybe-name.ts": maybeName };
+    for (const argv of variants) {
+      const result = await cli(rootDir, [...argv]);
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(0);
+      files[`${argv[1]}.ts`] = await readFile(stepPath(rootDir, argv[1]!), "utf8");
+    }
+    expect(files["chained-command.ts"]).toContain("[cli, stdout, String(exitCode)]");
+    expect(files["chained-optional.ts"]).toContain("[cli, String(name)]");
+
+    const typecheck = await typecheckSteps(files);
+    expect(typecheck.output).toBe("");
+    expect(typecheck.code).toBe(0);
+  });
+});

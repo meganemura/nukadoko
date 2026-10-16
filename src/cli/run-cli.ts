@@ -196,6 +196,7 @@ interface ScaffoldArgs {
   name: string;
   pattern?: string;
   then?: boolean;
+  command?: boolean;
   from?: string[];
 }
 
@@ -811,6 +812,12 @@ export async function runCli(
           default: false,
           describe: "an assertion for a Then line: mutates: false and no returns",
         })
+        .option("command", {
+          type: "boolean",
+          default: false,
+          describe:
+            "a When step that runs a program in scratch.dir() and returns exitCode, stdout, and stderr; the entry point is the one TODO",
+        })
         .option("from", {
           type: "string",
           array: true,
@@ -825,6 +832,7 @@ export async function runCli(
         name: args.name,
         pattern: args.pattern ?? null,
         then: args.then ?? false,
+        command: args.command ?? false,
         from: args.from ?? [],
         stdout,
         stderr,

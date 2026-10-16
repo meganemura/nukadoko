@@ -104,8 +104,9 @@ those four; the rest carries the result to a person.
 1. **Steps.** Read the vocabulary: `nuka steps --json`, then
    `nuka describe <step>` for anything that looks relevant. When an
    operation is missing: `nuka scaffold <name> --pattern "<line>"`
-   (`--then` for a Then step, `--from <step>.<key>` for each value it
-   reads from an earlier step), implement it, exercise it alone with
+   (`--then` for a Then step, `--command` for a When step that runs a
+   program, `--from <step>.<key>` for each value it reads from an earlier
+   step), implement it, exercise it alone with
    `nuka do`. `references/writing-steps.md` ("Reading the vocabulary",
    "When the vocabulary has no step for it"). The same file: chaining
    (`from`, "Chaining a value from an earlier step"), helper vs part vs

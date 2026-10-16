@@ -66,19 +66,21 @@ package.json
 `tsconfig.json`, and the `--allure` and `--env` flags are in
 [Setup details](#setup-details).
 
-Scaffold the When step. The stub fails until it is implemented:
+Scaffold the When step. `--command` writes a step that runs a program
+in `scratch.dir()`, an empty directory that is removed after the scenario,
+and returns its `exitCode`, `stdout`, and `stderr`. `runCommand` puts the
+process it ran into the step record:
 
 ```sh
-npx nuka scaffold run-greet --pattern "I run greet with {name:string}"
+npx nuka scaffold run-greet --pattern "I run greet with {name:string}" --command
 ```
 
 ```text
 features/steps/run-greet.ts
 ```
 
-Fill it in. `scratch.dir()` is an empty directory that is removed after
-the scenario, and `runCommand` puts the process it ran into the step
-record:
+The entry point is the one line to fill in. `resolve` reads it from the
+directory `nuka` runs in:
 
 ```ts
 // features/steps/run-greet.ts
@@ -88,13 +90,19 @@ import { resolve } from "node:path";
 const cli = resolve("src/cli.ts");
 
 export default defineStep({
-  description: "Run the greet CLI in an empty scratch directory",
+  description: "Run the command under test in an empty scratch directory",
   pattern: "I run greet with {name:string}",
-  args: z.object({ name: z.string() }),
-  returns: z.object({ exitCode: z.number().nullable(), stdout: z.string() }),
+  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.
+  args: z.object({
+    name: z.string(),
+  }),
+  returns: z.object({
+    exitCode: z.number().nullable(),
+    stdout: z.string(),
+    stderr: z.string(),
+  }),
   async run({ scratch }, { name }) {
-    const { exitCode, stdout } = await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });
-    return { exitCode, stdout };
+    return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });
   },
 });
 ```

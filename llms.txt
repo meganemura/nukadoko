@@ -15,7 +15,7 @@ The everyday loop is four things: a `.feature` file, a `defineStep` per kind of 
 Everyday:
 
 - `nuka init`: project setup with self-check; adds `.nukadoko/` to `.gitignore` and a `test:scenarios` script
-- `nuka scaffold <name> [--pattern <text>] [--then] [--from <step>.<key>]`: a step stub that fails until implemented; `--from` writes the chain to an earlier step's returned value
+- `nuka scaffold <name> [--pattern <text>] [--then | --command] [--from <step>.<key>]`: a step stub that fails until implemented; `--from` writes the chain to an earlier step's returned value; `--command` writes a When step that runs a program and returns `exitCode`, `stdout`, and `stderr`, with the entry point as the one line to fill in
 - `nuka check [feature]`: static checks before run
 - `nuka run [feature..]`: execute scenarios, featuresDir with no target; first refuses what `check` refuses for its scenarios (`--no-check` skips that); records on stdout, progress and failures on stderr, a Markdown run summary (`--summary <path>` for a PR comment)
 - `nuka steps` / `nuka describe <name>`: the vocabulary and one step's contract

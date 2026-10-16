@@ -118,7 +118,7 @@ describe("nuka scaffold --from", () => {
         "  },",
         "  mutates: false,",
         "  run({}, { text, stdout }) {",
-        '    throw new Error("not implemented: output-says");',
+        "    throw new Error(`not implemented: output-says; args ${JSON.stringify({ text, stdout })}`);",
         "  },",
         "});",
         "",
@@ -162,7 +162,7 @@ describe("nuka scaffold --from", () => {
         "  },",
         "  mutates: false,",
         "  run({}, { stdout, cwd, exitCode }) {",
-        '    throw new Error("not implemented: greet-wrote");',
+        "    throw new Error(`not implemented: greet-wrote; args ${JSON.stringify({ stdout, cwd, exitCode })}`);",
         "  },",
         "});",
         "",
@@ -220,7 +220,7 @@ describe("nuka scaffold --from", () => {
     await writeFile(
       outputSays,
       (await readFile(outputSays, "utf8")).replace(
-        'throw new Error("not implemented: output-says");',
+        "throw new Error(`not implemented: output-says; args ${JSON.stringify({ text, stdout })}`);",
         "if (stdout !== text) throw new Error(`expected ${text}, got ${stdout}`);",
       ),
     );

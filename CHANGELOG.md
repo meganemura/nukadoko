@@ -9,6 +9,26 @@ just until 0.1.
 
 ### Added
 
+- **`nuka scaffold <name> --command` writes the When step of a command-line program.**
+  The step runs `runCommand(process.execPath, [cli, ...args], { cwd:
+  scratch.dir() })` with the pattern's captures as argv (a capture that is
+  not a string is passed as its text), and declares `returns` of
+  `exitCode`, `stdout`, and `stderr`. So `nuka scaffold <then-step> --then
+  --from <name>.stdout` (or `.exitCode`, `.stderr`) works right after it,
+  with no hand edit in between. The one line left to fill in is
+  `const cli = resolve("<TODO: the entry point>")`. `--command` with
+  `--then` is refused with no file written, because a step that runs a
+  program changes state. An args key that would hide a name the written
+  body reads (`cli`, `runCommand`, `process`, `scratch`, `String`) is
+  refused the same way.
+- **A scaffolded stub names its args in the error it throws.** `run({},
+  { name })` now throws `` `not implemented: run-greet; args
+  ${JSON.stringify({ name })}` ``, so a project that compiles with
+  `noUnusedParameters` accepts every scaffolded file as written, and the
+  first failed run shows what the feature line bound. A stub with no args
+  throws `not implemented: <name>` as before. An args key named `Error`,
+  `JSON`, or `String`, which the stub's body reads, is now refused.
+
 - **`nuka scaffold <name> --from <step>.<key>` writes the chain to an earlier step.**
   Repeat the flag for each key. For each one, the scaffolded file imports
   the producer step's file (`./run-greet.js` for `run-greet.ts`, `.mjs` for

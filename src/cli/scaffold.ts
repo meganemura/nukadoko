@@ -36,8 +36,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // the lesson itself: `returns` carries the values a failure is diagnosed
 // from, not only what later steps cite, and an absence (`false`, `0`) needs
 // proof the read was valid beside it (docs/spec.md "Typed steps" has the
-// reasoning). `run` always throws `not implemented: <name>`, so the step is
-// discoverable (`nuka steps`) the moment it is scaffolded but fails every
+// reasoning). `run` (outside `--command`) always throws
+// `not implemented: <name>`, so the step is discoverable (`nuka steps`) the moment it is scaffolded but fails every
 // `nuka do`/`nuka run` call until someone replaces the body: "fails until
 // implemented" (docs/spec.md "CLI summary"), enforced by the template
 // itself rather than by a separate check.
@@ -69,6 +69,24 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // discovery, the same as `nuka steps`, so a producer that does not return
 // the key is refused here with the keys it does return, not later as a
 // `from` finding in `nuka check`.
+//
+// `--command` is the When step of a command-line program, the step every
+// CLI project writes first: it runs `process.execPath` on one entry point
+// with the args as argv, in `scratch.dir()`, and returns `exitCode`,
+// `stdout`, and `stderr`. Those three keys are written into `returns` so a
+// Then step can be scaffolded `--from` it at once, with no hand edit in
+// between; the entry point is the one thing scaffold cannot know, so it is
+// the one TODO. Until it is filled in, the program Node is asked to run is
+// a path that does not exist, so the step returns a nonzero `exitCode`
+// with the TODO text in `stderr` rather than throwing. `--command` and `--then` are refused together, because a
+// step that runs a program changes state and a Then step declares that it
+// does not.
+//
+// A stub's thrown message names its args, so a project that compiles with
+// `noUnusedParameters` accepts the file as written, and the first failed
+// run shows what the feature line bound. An args key that would shadow a
+// name the body reads (`JSON`, `cli`, ...) is refused, because the file
+// would not compile.
 
 export interface RunScaffoldOptions {
   rootDir: string;
@@ -76,6 +94,8 @@ export interface RunScaffoldOptions {
   /** The `--pattern` text, or `null` for a step called by name only. */
   pattern: string | null;
   then: boolean;
+  /** `--command`: run a program and return its exit code and output. */
+  command: boolean;
   /** Each `--from` value as typed, `<step>.<key>`, in order. */
   from: readonly string[];
   stdout: WritableSink;
@@ -98,10 +118,40 @@ export interface FromRequest {
 }
 
 /** One `--from` resolved against the vocabulary: the identifier the
- * producer is imported as and the specifier it is imported from. */
+ * producer is imported as, the specifier it is imported from, and the
+ * class of the value the producer's schema holds. */
 interface ChainedField extends FromRequest {
   readonly identifier: string;
   readonly specifier: string;
+  readonly valueClass: PrimitiveClass;
+}
+
+/** What the step is for, which decides its outcome and its body. */
+type Variant = "when" | "then" | "command";
+
+interface VariantShape {
+  /** Names the written `run` reads, so no args key may take them. */
+  readonly bodyNames: ReadonlySet<string>;
+  /** Module-level bindings the template declares, beside `defineStep` and `z`. */
+  readonly moduleNames: ReadonlySet<string>;
+}
+
+const STUB_BODY_NAMES: ReadonlySet<string> = new Set(["Error", "JSON", "String"]);
+
+const VARIANTS: Readonly<Record<Variant, VariantShape>> = {
+  when: { bodyNames: STUB_BODY_NAMES, moduleNames: new Set() },
+  then: { bodyNames: STUB_BODY_NAMES, moduleNames: new Set() },
+  command: {
+    bodyNames: new Set(["cli", "runCommand", "process", "scratch", "String"]),
+    // `process` is a global the body reads, so an import may not shadow it either.
+    moduleNames: new Set(["cli", "runCommand", "resolve", "process"]),
+  },
+};
+
+/** One args field: its key and the class of the value it holds. */
+interface Field {
+  readonly key: string;
+  readonly valueClass: PrimitiveClass;
 }
 
 interface StepTemplate {
@@ -109,7 +159,7 @@ interface StepTemplate {
   readonly pattern: string | null;
   readonly captures: readonly Capture[];
   readonly chained: readonly ChainedField[];
-  readonly then: boolean;
+  readonly variant: Variant;
 }
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -145,15 +195,19 @@ export function parseFromFlag(text: string): FromRequest | { refusal: string } {
  * camelCase (`run-greet` is `runGreet`, as a person would write it), made
  * a legal identifier that does not shadow the template's own imports, and
  * distinct for distinct names. */
-export function importIdentifiers(stepNames: readonly string[]): ReadonlyMap<string, string> {
+export function importIdentifiers(
+  stepNames: readonly string[],
+  moduleNames: ReadonlySet<string> = new Set(),
+): ReadonlyMap<string, string> {
+  const taken = new Set<string>([...TAKEN_IDENTIFIERS, ...moduleNames]);
   const identifiers = new Map<string, string>();
-  const used = new Set<string>(TAKEN_IDENTIFIERS);
+  const used = new Set<string>(taken);
   for (const stepName of stepNames) {
     if (identifiers.has(stepName)) continue;
     const parts = stepName.split("-").filter((part) => part !== "");
     let base = parts.map((part, index) => (index === 0 ? part : part[0]!.toUpperCase() + part.slice(1))).join("");
     if (base === "" || /^[0-9]/.test(base)) base = `step${base[0]?.toUpperCase() ?? ""}${base.slice(1)}`;
-    let identifier = TAKEN_IDENTIFIERS.has(base) ? `${base}Step` : base;
+    let identifier = taken.has(base) ? `${base}Step` : base;
     for (let suffix = 2; used.has(identifier); suffix += 1) {
       identifier = `${base}${suffix}`;
     }
@@ -206,33 +260,82 @@ function importLines(chained: readonly ChainedField[]): string[] {
   return lines;
 }
 
-function stepTemplate({ name, pattern, captures, chained, then }: StepTemplate): string {
+function fieldsOf(captures: readonly Capture[], chained: readonly ChainedField[]): Field[] {
+  return [
+    ...captures.map((capture) => ({ key: capture.key, valueClass: CAPTURED_CLASS.get(capture.type) ?? "other" })),
+    ...chained.map(({ key, valueClass }) => ({ key, valueClass })),
+  ];
+}
+
+/** The stub's body: it throws, naming the step and the args it was given.
+ * A bigint (or a value of unknown class, which may be one) has no JSON
+ * form, so a replacer writes it as text only when a field may hold one. */
+function stubBody(name: string, fields: readonly Field[]): string {
+  if (fields.length === 0) return `    throw new Error(${JSON.stringify(`not implemented: ${name}`)});`;
+  const mayHoldBigint = fields.some((field) => field.valueClass === "bigint" || field.valueClass === "other");
+  const replacer = mayHoldBigint ? ', (_key, value) => (typeof value === "bigint" ? String(value) : value)' : "";
+  const keys = fields.map((field) => field.key).join(", ");
+  return `    throw new Error(\`not implemented: ${name}; args \${JSON.stringify({ ${keys} }${replacer})}\`);`;
+}
+
+/** One argv element per field, in order: a string as it is, anything else
+ * as its text. */
+function commandArgv(fields: readonly Field[]): string {
+  return ["cli", ...fields.map((field) => (field.valueClass === "string" ? field.key : `String(${field.key})`))].join(", ");
+}
+
+function stepTemplate({ name, pattern, captures, chained, variant }: StepTemplate): string {
+  const fields = fieldsOf(captures, chained);
+  const keys = fields.map((field) => field.key);
+  const argsParameter = keys.length === 0 ? "" : `{ ${keys.join(", ")} }`;
   const patternLine =
     pattern === null
       ? ['  // pattern: "the feature line this step matches", (without one, the step is called by name only)']
       : [`  pattern: ${JSON.stringify(pattern)},`];
-  const outcomeLines = then
-    ? ["  mutates: false,"]
-    : [
-        "  // Return what later steps cite and the values this step's correctness rests on;",
-        '  // beside an absence (false, 0, ""), return proof the read was valid.',
-        "  returns: z.object({}),",
-      ];
-  const keys = [...captures.map((capture) => capture.key), ...chained.map((field) => field.key)];
-  const runParameters = keys.length === 0 ? "" : `{}, { ${keys.join(", ")} }`;
+  const command = variant === "command";
+  const headerLines = command
+    ? [
+        'import { defineStep, runCommand, z } from "nukadoko";',
+        'import { resolve } from "node:path";',
+        ...importLines(chained),
+        "",
+        'const cli = resolve("<TODO: the entry point>");',
+      ]
+    : ['import { defineStep, z } from "nukadoko";', ...importLines(chained)];
+  const description = command ? "Run the command under test in an empty scratch directory" : `TODO: describe ${name}`;
+  const outcomeLines =
+    variant === "then"
+      ? ["  mutates: false,"]
+      : variant === "command"
+        ? [
+            "  returns: z.object({",
+            "    exitCode: z.number().nullable(),",
+            "    stdout: z.string(),",
+            "    stderr: z.string(),",
+            "  }),",
+          ]
+        : [
+            "  // Return what later steps cite and the values this step's correctness rests on;",
+            '  // beside an absence (false, 0, ""), return proof the read was valid.',
+            "  returns: z.object({}),",
+          ];
+  const runLines = command
+    ? [
+        `  async run({ scratch }${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
+        `    return await runCommand(process.execPath, [${commandArgv(fields)}], { cwd: scratch.dir() });`,
+      ]
+    : [`  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`, stubBody(name, fields)];
   return [
-    'import { defineStep, z } from "nukadoko";',
-    ...importLines(chained),
+    ...headerLines,
     "",
     "export default defineStep({",
-    `  description: "TODO: describe ${name}",`,
+    `  description: ${JSON.stringify(description)},`,
     ...patternLine,
     "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
     ...argsLines(captures, chained),
     ...fromLines(chained),
     ...outcomeLines,
-    `  run(${runParameters}) {`,
-    `    throw new Error("not implemented: ${name}");`,
+    ...runLines,
     "  },",
     "});",
     "",
@@ -264,10 +367,11 @@ function readPattern(pattern: string): { captures: readonly Capture[] } | { refu
 }
 
 /** The `--from` requests, or why they cannot all fill a distinct args key
- * beside the pattern's captures. */
+ * beside the pattern's captures, one the step body does not read. */
 function readFromFlags(
   texts: readonly string[],
   captures: readonly Capture[],
+  bodyNames: ReadonlySet<string>,
 ): { requests: readonly FromRequest[] } | { refusal: string } {
   const requests: FromRequest[] = [];
   const keys = new Set(captures.map((capture) => capture.key));
@@ -282,7 +386,21 @@ function readFromFlags(
     keys.add(request.key);
     requests.push(request);
   }
+  const shadowing = [...keys].filter((key) => bodyNames.has(key));
+  if (shadowing.length > 0) {
+    return {
+      refusal: `args key ${shadowing.map((key) => `"${key}"`).join(", ")} would hide a name the written step body reads (${[...bodyNames].join(", ")}); name the capture or the key something else`,
+    };
+  }
   return { requests };
+}
+
+/** The class of a chained value, read from the producer's schema itself:
+ * an optional or nullable string may hold no string at all, so only a bare
+ * `z.string()` or `z.number()` counts as one, and anything else is passed
+ * through `String()` and the stub's bigint replacer. */
+function chainedClass(schema: z.ZodTypeAny): PrimitiveClass {
+  return schema.type === "string" || schema.type === "number" ? schema.type : "other";
 }
 
 /** Resolves each request against the project's typed steps, or names the
@@ -293,8 +411,9 @@ function resolveChain(
   rootDir: string,
   stepDir: string,
   importFailureCount: number,
+  moduleNames: ReadonlySet<string>,
 ): { chained: readonly ChainedField[] } | { refusal: string } {
-  const identifiers = importIdentifiers(requests.map((request) => request.step));
+  const identifiers = importIdentifiers(requests.map((request) => request.step), moduleNames);
   const chained: ChainedField[] = [];
   for (const request of requests) {
     const producer = typedSteps.get(request.step);
@@ -307,7 +426,8 @@ function resolveChain(
     if (returns.type !== "object") {
       return { refusal: `${request.step}'s returns is not a z.object, so it has no key to chain` };
     }
-    const returnKeys = Object.keys((returns as z.ZodObject).shape);
+    const shape = (returns as z.ZodObject).shape;
+    const returnKeys = Object.keys(shape);
     if (!returnKeys.includes(request.key)) {
       const named = returnKeys.length === 0 ? "it returns no keys" : `its keys are ${returnKeys.join(", ")}`;
       return { refusal: `${request.step} does not return "${request.key}"; ${named}` };
@@ -316,13 +436,14 @@ function resolveChain(
       ...request,
       identifier: identifiers.get(request.step)!,
       specifier: importSpecifier(stepDir, path.resolve(rootDir, producer.filePath)),
+      valueClass: chainedClass(shape[request.key] as z.ZodTypeAny),
     });
   }
   return { chained };
 }
 
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
-  const { rootDir, name, pattern, then, from, stdout, stderr } = options;
+  const { rootDir, name, pattern, then, command, from, stdout, stderr } = options;
 
   if (!VALID_STEP_NAME.test(name)) {
     stderr.write(
@@ -331,12 +452,21 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     return 1;
   }
 
+  if (command && then) {
+    stderr.write(
+      "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false\n",
+    );
+    return 1;
+  }
+  const variant: Variant = command ? "command" : then ? "then" : "when";
+  const shape = VARIANTS[variant];
+
   const read = pattern === null ? { captures: [] } : readPattern(pattern);
   if ("refusal" in read) {
     stderr.write(`Refusing to scaffold: ${read.refusal}\n`);
     return 1;
   }
-  const fromFlags = readFromFlags(from, read.captures);
+  const fromFlags = readFromFlags(from, read.captures, shape.bodyNames);
   if ("refusal" in fromFlags) {
     stderr.write(`Refusing to scaffold: ${fromFlags.refusal}\n`);
     return 1;
@@ -382,6 +512,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       rootDir,
       path.dirname(filePath),
       importFailures.length,
+      shape.moduleNames,
     );
     if ("refusal" in resolved) {
       stderr.write(`Refusing to scaffold: ${resolved.refusal}\n`);
@@ -391,7 +522,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, stepTemplate({ name, pattern, captures: read.captures, chained, then }));
+  await writeFile(filePath, stepTemplate({ name, pattern, captures: read.captures, chained, variant }));
 
   stdout.write(`${relativeFilePath}\n`);
   return 0;

@@ -57,7 +57,7 @@ describe("nuka scaffold --pattern", () => {
         "  }),",
         "  mutates: false,",
         "  run({}, { sum }) {",
-        '    throw new Error("not implemented: sum-is");',
+        "    throw new Error(`not implemented: sum-is; args ${JSON.stringify({ sum })}`);",
         "  },",
         "});",
         "",
@@ -96,7 +96,7 @@ describe("nuka scaffold --pattern", () => {
         '  // beside an absence (false, 0, ""), return proof the read was valid.',
         "  returns: z.object({}),",
         "  run({}, { n, f, w, s, a, d, b, c }) {",
-        '    throw new Error("not implemented: set-values");',
+        '    throw new Error(`not implemented: set-values; args ${JSON.stringify({ n, f, w, s, a, d, b, c }, (_key, value) => (typeof value === "bigint" ? String(value) : value))}`);',
         "  },",
         "});",
         "",
@@ -138,13 +138,13 @@ describe("nuka scaffold --pattern", () => {
     const addNumbers = path.join(rootDir, "features", "steps", "add-numbers.ts");
     await writeFile(
       addNumbers,
-      (await readFile(addNumbers, "utf8")).replace('throw new Error("not implemented: add-numbers");', "return {};"),
+      (await readFile(addNumbers, "utf8")).replace("throw new Error(`not implemented: add-numbers; args ${JSON.stringify({ a, b })}`);", "return {};"),
     );
     const sumIs = path.join(rootDir, "features", "steps", "sum-is.ts");
     await writeFile(
       sumIs,
       (await readFile(sumIs, "utf8")).replace(
-        'throw new Error("not implemented: sum-is");',
+        "throw new Error(`not implemented: sum-is; args ${JSON.stringify({ sum })}`);",
         "if (sum !== 4) throw new Error(`expected 4, got ${sum}`);",
       ),
     );
