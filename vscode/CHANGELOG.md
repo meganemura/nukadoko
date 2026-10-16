@@ -7,9 +7,11 @@
   A `.mts`, `.js`, or `.mjs` step file was not read before. A `.tsx` file
   and a `.d.ts` or `.d.mts` declaration file are no longer read, because
   `nuka` never loads a step from one.
-- A file written under `node_modules`, `dist`, `out`, `.git`, or
-  `.nukadoko` no longer rebuilds the step index, so an `npm install` or a
-  bundler in watch mode does not start a re-index for each file it writes.
+- The step index skips `build`, `coverage`, and `.next` as well as
+  `node_modules`, `dist`, `out`, `.git`, and `.nukadoko`. A file written
+  under one of them no longer rebuilds the index, so an `npm install` or
+  a bundler in watch mode does not start a re-index for each file it
+  writes.
 - `nukadoko: Check` shows an error when the output of `nuka check --json`
   is not a report, and names its first line. A step file that prints
   when it is imported caused this. The command failed with no message

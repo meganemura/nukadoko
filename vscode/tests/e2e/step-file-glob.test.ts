@@ -1,6 +1,6 @@
 // Responsibility: prove the bundled extension indexes the same step files
 // `nuka` loads (`.ts`, `.mts`, `.js`, `.mjs`, never a `.d.ts`, `.d.mts`,
-// `.tsx`, or `.cjs`, and nothing under node_modules), by
+// `.tsx`, or `.cjs`, and nothing under node_modules or a build output), by
 // asking for completions in a fake workspace that holds one step per kind.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +32,9 @@ describe("dist/extension.js: the step files it indexes", () => {
     stub.files.set(`${steps}/view.tsx`, compatStep("a tsx step"));
     stub.files.set(`${steps}/legacy.cjs`, compatStep("a cjs step"));
     stub.files.set("/fake-workspace/node_modules/dep/steps.ts", compatStep("a node_modules step"));
+    stub.files.set("/fake-workspace/build/steps.js", compatStep("a build step"));
+    stub.files.set("/fake-workspace/coverage/lcov-report/steps.js", compatStep("a coverage step"));
+    stub.files.set("/fake-workspace/.next/server/steps.js", compatStep("a .next step"));
     restoreModuleLoad = installVscodeModule(stub);
     requireFreshExtension(distExtensionPath).activate({ subscriptions: [] });
   });
@@ -72,6 +75,9 @@ describe("dist/extension.js: the file events that rebuild the index", () => {
     stub.fireFileEvent("change", "/work/build/app/node_modules/dep/index.js");
     stub.fireFileEvent("create", "/work/build/app/dist/extension.js");
     stub.fireFileEvent("delete", "/work/build/app/packages/web/node_modules/x/a.mjs");
+    stub.fireFileEvent("change", "/work/build/app/build/steps.js");
+    stub.fireFileEvent("change", "/work/build/app/coverage/lcov-report/prettify.js");
+    stub.fireFileEvent("change", "/work/build/app/.next/server/page.js");
     expect(stub.findFilesCalls).toBe(1);
 
     stub.fireFileEvent("change", "/work/build/app/features/steps/todo.ts");

@@ -44,8 +44,9 @@ const STEP_FILE_GLOB = "**/*.{ts,mts,js,mjs}";
 const DECLARATION_FILE = /\.d\.m?ts$/;
 // Explicit, rather than relying on the user's own files.exclude: a
 // workspace that never configured that setting would otherwise have this
-// extension read every file under node_modules.
-const EXCLUDED_DIRECTORIES = ["node_modules", "dist", "out", ".git", ".nukadoko"];
+// extension read every file under node_modules. The build output folders
+// matter because .js and .mjs are step file extensions too.
+const EXCLUDED_DIRECTORIES = ["node_modules", "dist", "out", "build", "coverage", ".next", ".git", ".nukadoko"];
 const STEP_FILE_EXCLUDE = `**/{${EXCLUDED_DIRECTORIES.join(",")}}/**`;
 
 // The watcher takes no exclude glob, so without this an npm install or a
