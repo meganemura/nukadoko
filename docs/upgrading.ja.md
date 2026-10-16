@@ -28,6 +28,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
+## 0.15.0 から次のリリースへ
+
+- **`nuka mcp-tools` は `nuka experimental mcp-tools` になりました。**
+  フラグも出力も同じです。
+  古い綴りは終了コード 1 で終わり、新しい綴りを示します。
+  そのため、`nuka mcp-tools -- <command>` を実行していた script は `nuka experimental mcp-tools -- <command>` に変えてください。
+  `experimental` の下にあるため、その形は後のリリースで、非推奨の告知なしに変わることがあります。
+
 ## 0.14.1 から 0.15.0 へ
 
 `nuka accept` と sign-off の所見はすべて削除されました。

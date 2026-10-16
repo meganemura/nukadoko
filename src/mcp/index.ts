@@ -8,7 +8,7 @@
 // anywhere on that path would make loading nukadoko itself, or running
 // `nuka check` on a project with no MCP fixture at all, depend on a
 // package that project never installed. The one CLI command that does need
-// it, `nuka mcp-tools`, reaches src/mcp/list-tools.ts through a dynamic
+// it, `nuka experimental mcp-tools`, reaches src/mcp/list-tools.ts through a dynamic
 // `import()` inside its own handler instead (src/cli/mcp-tools.ts), for
 // exactly that reason.
 //

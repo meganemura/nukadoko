@@ -33,6 +33,14 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
+## 0.15.0 to the next release
+
+- **`nuka mcp-tools` is now `nuka experimental mcp-tools`.** Same flags,
+  same output. The old spelling exits 1 and names the new one, so a
+  script that ran `nuka mcp-tools -- <command>` becomes
+  `nuka experimental mcp-tools -- <command>`. Under `experimental`, its
+  shape may change in a later release without a deprecation notice.
+
 ## 0.14.1 to 0.15.0
 
 `nuka accept` and every sign-off finding are removed, which a project that signs off features, or gates CI on a sign-off, has to act on.

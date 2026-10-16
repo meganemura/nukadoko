@@ -9,7 +9,7 @@ import { copyFixtureToTempDir, createCaptureSink, createEmptyTempDir, fixture, r
 // what actually stops it" shape tests/run-cli-wiring-refusals.test.ts
 // already proves for harvest/session list/start/stop, extended
 // here to the nine remaining commands that guard reaches: steps, describe,
-// init, scaffold, check, tend, skill path, mcp-tools, and experimental
+// init, scaffold, check, tend, skill path, experimental mcp-tools, and experimental
 // webmcp-tools. Kept in its own file (a new file, not an edit to that one)
 // so the two never collide on the same lines.
 
@@ -122,10 +122,10 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
     expect(stdout.text()).toBe("");
   });
 
-  it("nuka mcp-tools: never connects to a server", async () => {
+  it("nuka experimental mcp-tools: never connects to a server", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["mcp-tools", "--unknown-flag"], {
+    const exitCode = await runCli(["experimental", "mcp-tools", "--unknown-flag"], {
       rootDir: fixture("basic-project"),
       stdout,
       stderr,

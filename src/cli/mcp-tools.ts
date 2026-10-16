@@ -1,6 +1,6 @@
 import type { WritableSink } from "../sink/writable-sink.js";
 
-// Responsibility: `nuka mcp-tools -- <command> [args...]`'s CLI-facing
+// Responsibility: `nuka experimental mcp-tools -- <command> [args...]`'s CLI-facing
 // wiring — connect to the given command as an MCP server over stdio, print
 // whatever tools it declares, and disconnect. Kept out of run-cli.ts so it
 // is unit-testable without going through yargs, the same split
@@ -37,7 +37,7 @@ export function formatClientMissingMessage(error: unknown): string | null {
     return null;
   }
   return (
-    `nuka mcp-tools needs "${CLIENT_SPECIFIER}" installed, and it is not: this package only lists it ` +
+    `nuka experimental mcp-tools needs "${CLIENT_SPECIFIER}" installed, and it is not: this package only lists it ` +
     `as an optional peer dependency, so a project that never uses this surface never pays for the ` +
     `packages it pulls in. Install the exact version this package was built against: ` +
     `npm install -D -E ${CLIENT_SPECIFIER}@${CLIENT_VERSION}`
@@ -60,8 +60,8 @@ export async function runMcpTools(options: RunMcpToolsOptions): Promise<number> 
   const { command, args, json, stdout, stderr } = options;
   if (command === undefined) {
     stderr.write(
-      "nuka mcp-tools needs the server's own command after --, " +
-        "e.g. `nuka mcp-tools -- node server.js`\n",
+      "nuka experimental mcp-tools needs the server's own command after --, " +
+        "e.g. `nuka experimental mcp-tools -- node server.js`\n",
     );
     return 1;
   }

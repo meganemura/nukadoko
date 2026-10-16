@@ -30,7 +30,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["mcp-tools", "--", tsxBin, serverScript], { stdout, stderr });
+      const exitCode = await runCli(["experimental", "mcp-tools", "--", tsxBin, serverScript], { stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
@@ -53,7 +53,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["mcp-tools", "--", tsxBin, newlineServerScript], {
+      const exitCode = await runCli(["experimental", "mcp-tools", "--", tsxBin, newlineServerScript], {
         stdout,
         stderr,
       });
@@ -77,7 +77,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["mcp-tools", "--json", "--", tsxBin, newlineServerScript], {
+      const exitCode = await runCli(["experimental", "mcp-tools", "--json", "--", tsxBin, newlineServerScript], {
         stdout,
         stderr,
       });
@@ -96,7 +96,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["mcp-tools", "--", "definitely-does-not-exist-nukadoko-mcp-tools-test"],
+      ["experimental", "mcp-tools", "--", "definitely-does-not-exist-nukadoko-mcp-tools-test"],
       { stdout, stderr },
     );
 
@@ -108,5 +108,20 @@ describe("nuka mcp-tools: CLI wiring", () => {
     // never be shown for it.
     expect(stderr.text()).toContain("definitely-does-not-exist-nukadoko-mcp-tools-test");
     expect(stderr.text()).not.toContain("npm install");
+  });
+
+  it("the old top-level spelling names the new one and connects to nothing", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["mcp-tools", "--json", "--", "definitely-does-not-exist-nukadoko-mcp-tools-test"], {
+      stdout,
+      stderr,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      "`nuka mcp-tools` moved to `nuka experimental mcp-tools`; run that instead, with the same arguments\n",
+    );
   });
 });
