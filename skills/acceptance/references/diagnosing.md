@@ -6,6 +6,11 @@
 `FAIL` line, the first line of its error and the path of its step record
 (`record  <stateDir>/records/steps/<id>`), and after the summary, a `rerun`
 line per failed scenario with the command that runs that scenario alone.
+When the failed step read from a step whose program exited nonzero, a
+`used    <step>  exit <code>  <first stderr line>` line sits between the
+two: a Then step that got an empty stdout usually failed there, because
+the program did not start (a missing build, a missing dependency, a `.js`
+import of a `.ts` file under `node`), and the step that ran it passed.
 `--quiet` keeps all of these. Open that path's `record.json` rather than
 searching the records directory.
 

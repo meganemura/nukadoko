@@ -124,6 +124,19 @@ just until 0.1.
   `writing-steps.md` now show `declare module "nukadoko" { interface
   StepFixtures { ... } }` and say that `tsc` needs it and `nuka check` does
   not. `docs/glossary.json` settles 拡張 for augmentation.
+- **A failed step's lines name the step it read from whose program exited nonzero, with the first line of that program's stderr.**
+  When a program under test fails to start (a missing build, a missing
+  dependency, a `.js` import of a `.ts` file under `node`), the When step
+  that ran it still passes, because an exit code is a result, and the Then
+  step fails on an empty stdout with no word about why. `nuka run` now
+  writes, between a failed step's error line and its `record` line, one
+  line per `used` entry whose `result` has a number `exitCode` other than
+  0 and a string `stderr` (the shape `runCommand` returns, checked
+  structurally): `used    run-greet  exit 1  Error [ERR_MODULE_NOT_FOUND]:
+  ...`, or `(no stderr)` when the program wrote nothing visible. The run
+  summary's failure cell carries the same fact after the error. The text
+  comes from the redacted step record. Nothing is written for an exit code
+  of 0 or `null`, or for a result that is not a process result.
 
 ### Changed
 

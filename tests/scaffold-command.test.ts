@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { runInNewContext } from "node:vm";
@@ -343,6 +343,62 @@ describe("nuka scaffold --command", () => {
     const green = await cli(rootDir, ["run", "features/greet.feature"]);
     expect(green.stderr).toContain("1 scenario: 1 passed, 0 failed");
     expect(green.exitCode).toBe(0);
+  });
+
+  it("names the producer that exited nonzero, and its first stderr line, when the Then step fails", async () => {
+    await mkdir(path.join(rootDir, "src"));
+    // What a NodeNext entry point does under `node` when it imports a
+    // `.js` specifier for a `.ts` file: nothing on stdout, exit 1.
+    await writeFile(
+      path.join(rootDir, "src", "greet.mjs"),
+      'process.stderr.write("\\nError [ERR_MODULE_NOT_FOUND]: Cannot find module greet.js, token tok-0123456789\\n    at x\\n");\nprocess.exit(1);\n',
+    );
+    // Outside a committed tracked file, every env file value is a secret.
+    await writeFile(path.join(rootDir, ".env.local"), "TOKEN=tok-0123456789\n");
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'import { defineConfig } from "nukadoko";\n\nexport default defineConfig({ envFiles: [".env.local"] });\n',
+    );
+    const entry = path.join(rootDir, "src", "greet.mjs");
+    await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", entry]);
+    await cli(rootDir, ["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
+    const outputSays = stepPath(rootDir, "output-says");
+    await writeFile(
+      outputSays,
+      (await readFile(outputSays, "utf8")).replace(
+        'throw new Error(`not implemented: output-says; args ${JSON.stringify({ text, stdout })}`);',
+        "if (stdout.trim() !== text) throw new Error(`expected ${JSON.stringify(text)}, got ${JSON.stringify(stdout)}`);",
+      ),
+    );
+    await writeFile(
+      path.join(rootDir, "features", "greet.feature"),
+      ["Feature: greet", "  Scenario: greet a name", '    When I run greet with "Ada"', '    Then the output says "Hello, Ada!"', ""].join(
+        "\n",
+      ),
+    );
+
+    const run = await cli(rootDir, ["run", "features/greet.feature"]);
+    expect(run.exitCode).toBe(1);
+    const failed = run.stderr.slice(run.stderr.indexOf("step 2/2"));
+    expect(failed).toMatch(
+      new RegExp(
+        [
+          "step 2/2  FAIL  \\d+\\.\\ds  the output says \"Hello, Ada!\"",
+          '      expected "Hello, Ada!", got ""',
+          "      used    run-greet  exit 1  Error \\[ERR_MODULE_NOT_FOUND\\]: Cannot find module greet\\.js, token \\{\\{secret\\.TOKEN\\}\\}",
+          "      record  \\.nukadoko/records/steps/step-",
+        ].join("\n"),
+      ),
+    );
+    expect(run.stderr).not.toContain("tok-0123456789");
+
+    const runsDir = path.join(rootDir, ".nukadoko", "records", "runs");
+    const [runId] = await readdir(runsDir);
+    const summary = await readFile(path.join(runsDir, runId!, "summary.md"), "utf8");
+    expect(summary).toContain(
+      'step "the output says "Hello, Ada!"": `expected "Hello, Ada!", got ""`<br>' +
+        "used run-greet exit 1: `Error [ERR_MODULE_NOT_FOUND]: Cannot find module greet.js, token {{secret.TOKEN}}`<br>record ",
+    );
   });
 
   it("runs a real program green with the entry point named on the command line, with no edit to the When step", async () => {

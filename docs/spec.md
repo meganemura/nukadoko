@@ -2174,8 +2174,17 @@ and summary still appear because the flag makes the terminal quieter, not
 silent. A failed step's line is followed by two indented lines: the first
 line of its error message, without terminal color codes, and the path of
 its step record (`<stateDir>/records/steps/<id>`). A step that never began
-has no step record and gets the error line only. `--quiet` keeps a failed
-step's line and these two lines, and drops every other step line. After the
+has no step record and gets the error line only. Between the two, one more
+line names each `used` entry whose `result` is a process that exited
+nonzero: an object with a number `exitCode` other than 0 and a string
+`stderr`, the shape `runCommand` returns. The line reads `used    <step>
+exit <code>  <first line of stderr>`, or `(no stderr)` when the process
+wrote nothing visible, in `used` order. It says why a Then step read an
+empty stdout: the program it ran did not start, or failed, and the step
+that ran it still passed, because an exit code is a result, not a failure.
+The text comes from the step record, so a secret in it is already
+redacted. `--quiet` keeps a failed step's line and these lines, and drops
+every other step line. After the
 summary line, stderr names each failed scenario with its feature path, line,
 and name, and follows each with a `rerun` line: `nuka run <feature>:<line>`,
 plus `--env <name>` when the run was given one, quoted for a POSIX shell
@@ -2870,8 +2879,10 @@ run gets one summary from the parent, not one per worker. It holds:
 - one table per feature file, by path, with a row per scenario record in line
   order: scenario, line, status, duration, and for a failed one where it
   failed (the first step that did not pass or skip, otherwise the first
-  failed hook), the first line of that error, the last command the step ran
-  through `runCommand` that did not exit 0, and the record's path. Under
+  failed hook), the first line of that error, each `used` step whose process
+  exited nonzero with its exit code and the first line of its stderr (as on
+  stderr), the last command the step ran through `runCommand` that did not
+  exit 0, and the record's path. Under
   `--repeat`, each execution is its own row;
 - "Declared vs observed", over every step that ran and has a step record:
   each step that declared `mutates: false` but made at least one measured
@@ -4103,7 +4114,10 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. A failed step's line is followed by its
-                              error's first line and its step record path.
+                              error's first line, a used line for each step
+                              it read from whose process exited nonzero
+                              (its exit code and first stderr line), and its
+                              step record path.
                               Each failed scenario follows the summary with
                               its feature, line, and name, then a rerun
                               line (nuka run <feature>:<line>). Then one retention

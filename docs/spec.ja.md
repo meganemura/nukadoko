@@ -1864,7 +1864,15 @@ run を見守る人向けの出力は stderr に置きます: 各 pickle の前�
 1 行目はエラーメッセージの最初の行で、端末の色コードを除いたものです。
 2 行目はその step record のパス(`<stateDir>/records/steps/<id>`)です。
 始まらなかった step には step record がないため、エラーの行だけが付きます。
-`--quiet` は、失敗した step の行とこの 2 行を残し、それ以外の step の行を落とします。
+この 2 行の間には、`result` が 0 以外で終わったプロセスである `used` のエントリごとに、もう 1 行が入ります。
+そのような `result` とは、0 以外の数値の `exitCode` と文字列の `stderr` を持つオブジェクトで、`runCommand` が返す形です。
+その行は `used    <step>  exit <code>  <stderr の最初の行>` で、プロセスが目に見える文字を何も書かなかったときは `(no stderr)` です。
+並びは `used` の順です。
+この行は、Then step が空の stdout を読んだ理由を示します。
+実行したプログラムが起動しなかったか失敗したのに、それを実行した step は passed のままです。
+exit code は結果であって、失敗ではないからです。
+文字列は step record から取るので、そこに含まれる secret はすでに redact されています。
+`--quiet` は、失敗した step の行とこれらの行を残し、それ以外の step の行を落とします。
 サマリ行の後では、失敗した各 scenario を feature のパス、行、名前とともに stderr に表示します。
 その各行に `rerun` 行が続きます。
 `rerun` 行は `nuka run <feature>:<line>` で、run に `--env <name>` が与えられていればそれも付きます。
@@ -2359,7 +2367,7 @@ run が計測したものだけから、すべての record と run scope の ho
   短いコミット sha と未コミットの変更があったかどうか(`git` から読み、無ければ unknown)、environment とその target version、scenario が起動したすべてのブラウザ(無ければ none launched)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - feature ファイルごとの表(パス順)。
   scenario record ごとに 1 行を行番号順に並べ、scenario、行、状態、所要時間を載せます。
-  失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
+  失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
   `--repeat` では、実行のそれぞれが 1 行になります。
 - 「Declared vs observed」。
   実行されて step record を持つすべての step が対象です。
@@ -3535,7 +3543,10 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. A failed step's line is followed by its
-                              error's first line and its step record path.
+                              error's first line, a used line for each step
+                              it read from whose process exited nonzero
+                              (its exit code and first stderr line), and its
+                              step record path.
                               Each failed scenario follows the summary with
                               its feature, line, and name, then a rerun
                               line (nuka run <feature>:<line>). Then one retention

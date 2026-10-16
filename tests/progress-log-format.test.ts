@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { firstErrorLine, formatRerunCommand, formatStepFailure } from "../src/run/progress-log.js";
+import { exitedProducers, firstErrorLine, formatRerunCommand, formatStepFailure } from "../src/run/progress-log.js";
 
 // Responsibility: the pure formatting `nuka run` uses to say why a step
 // failed and how to rerun its scenario. The properties are that the error
@@ -85,6 +85,109 @@ describe("formatStepFailure", () => {
       "No step definition matches",
     ]);
   });
+});
+
+describe("formatStepFailure: a used producer that exited nonzero", () => {
+  const record = ".nukadoko/records/steps/s-2";
+  const failed = (used: { step: string; result?: unknown }[]) =>
+    formatStepFailure({ errorMessage: 'expected "Hello, Ada!", got ""', recordPath: record, used });
+
+  it("names the producer, its exit code, and the first visible line of its stderr, before the record", () => {
+    expect(
+      failed([
+        {
+          step: "run-greet",
+          result: {
+            exitCode: 1,
+            stdout: "",
+            stderr: "\n  Error [ERR_MODULE_NOT_FOUND]: Cannot find module './greet.js'\n    at resolve (node:internal)\n",
+          },
+        },
+      ]),
+    ).toEqual([
+      'expected "Hello, Ada!", got ""',
+      "used    run-greet  exit 1  Error [ERR_MODULE_NOT_FOUND]: Cannot find module './greet.js'",
+      `record  ${record}`,
+    ]);
+  });
+
+  it("reads (no stderr) when the process wrote nothing visible", () => {
+    expect(failed([{ step: "run-greet", result: { exitCode: 2, stderr: " \n" } }])).toEqual([
+      'expected "Hello, Ada!", got ""',
+      "used    run-greet  exit 2  (no stderr)",
+      `record  ${record}`,
+    ]);
+  });
+
+  it("says nothing for exit 0, a signal, a result that is not a process, or no result", () => {
+    expect(
+      failed([
+        { step: "a", result: { exitCode: 0, stderr: "warning" } },
+        { step: "b", result: { exitCode: null, stderr: "killed" } },
+        { step: "c", result: "exit 1" },
+        { step: "d", result: null },
+        { step: "e", result: { exitCode: 1 } },
+        { step: "f" },
+      ]),
+    ).toEqual(['expected "Hello, Ada!", got ""', `record  ${record}`]);
+  });
+
+  it("writes one line per producer, in used order", () => {
+    expect(
+      failed([
+        { step: "build", result: { exitCode: 2, stderr: "tsc failed" } },
+        { step: "run-greet", result: { exitCode: 1, stderr: "no dist" } },
+      ]),
+    ).toEqual([
+      'expected "Hello, Ada!", got ""',
+      "used    build  exit 2  tsc failed",
+      "used    run-greet  exit 1  no dist",
+      `record  ${record}`,
+    ]);
+  });
+});
+
+describe("exitedProducers", () => {
+  // Fields drawn from a small pool, so the exact shape a process result has
+  // comes up often among results that only nearly have it.
+  const field = gs.oneOf<unknown>(
+    gs.integers({ minValue: -2, maxValue: 3 }),
+    gs.just(null),
+    gs.text({ maxSize: 12 }),
+    gs.booleans(),
+  );
+  const result = gs.oneOf<unknown>(
+    gs.record({ exitCode: field, stderr: field }),
+    gs.record({ exitCode: field }),
+    gs.record({ stderr: field }),
+    field,
+  );
+
+  it("keeps exactly the entries with a nonzero number exitCode and a string stderr, in order", () =>
+    hegel.test((tc) => {
+      const used = tc.draw(
+        gs.arrays(
+          gs.record({ step: gs.text({ minSize: 1, maxSize: 8, alphabet: "abc-" }), result }),
+          { maxSize: 6 },
+        ),
+      );
+      const expected = used.filter((entry) => {
+        const value = entry.result as { exitCode?: unknown; stderr?: unknown } | null;
+        return (
+          typeof value === "object" &&
+          value !== null &&
+          typeof value.exitCode === "number" &&
+          value.exitCode !== 0 &&
+          typeof value.stderr === "string"
+        );
+      });
+      const exited = exitedProducers(used);
+      expect(exited.map((producer) => producer.step)).toEqual(expected.map((entry) => entry.step));
+      for (const producer of exited) {
+        expect(producer.stderrLine.trim().length).toBeGreaterThan(0);
+        expect(producer.stderrLine).not.toMatch(/[\r\n\u2028\u2029]/);
+      }
+    }));
 });
 
 // Shell metacharacters drawn often, since a general text generator rarely

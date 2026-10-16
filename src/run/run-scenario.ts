@@ -1171,6 +1171,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // when it is written), and this message goes straight to stderr.
       errorMessage: record.error === undefined ? undefined : redactString(record.error.message, secrets),
       stepRecordId: record.step_record_id,
+      ...(stepRecord?.status === "failed" && stepRecord.used !== undefined ? { used: stepRecord.used } : {}),
     });
     onStepFinished?.({
       scenarioId,

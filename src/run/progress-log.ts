@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { UsedEntryWithResult } from "../record/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s own progress output — what src/step/context.ts
@@ -29,6 +30,8 @@ export interface StepProgressInfo {
   readonly errorMessage?: string;
   /** `null` for a step that never began, so it has no step record. */
   readonly stepRecordId: string | null;
+  /** The failed step record's `used`, already redacted with it. */
+  readonly used?: readonly UsedEntryWithResult[];
 }
 
 export interface StepProgressOptions {
@@ -50,26 +53,66 @@ const ANSI_ESCAPE = /\u001b\[[0-9;]*[A-Za-z]/g;
  * line, while the step record keeps the whole message. A message with no
  * visible text reads `(no message)` so the line is never blank. */
 export function firstErrorLine(message: string): string {
-  for (const line of message.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/)) {
+  return firstVisibleLine(message) ?? "(no message)";
+}
+
+function firstVisibleLine(text: string): string | undefined {
+  for (const line of text.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/)) {
     const trimmed = line.trim();
     if (trimmed.length > 0) return trimmed;
   }
-  return "(no message)";
+  return undefined;
+}
+
+/** A step the failed step read from, whose result was a process that
+ * exited nonzero. */
+export interface ExitedProducer {
+  readonly step: string;
+  readonly exitCode: number;
+  /** The first visible line of the process's stderr, or `(no stderr)`. */
+  readonly stderrLine: string;
+}
+
+/** The `used` entries whose result has the shape `runCommand` returns, a
+ * number `exitCode` other than 0 and a string `stderr`, in `used` order.
+ * The shape is checked, not the step's name or contract, so any step that
+ * returns a process result counts. A failed Then step that read an empty
+ * stdout says nothing about why; the producer's exit code and stderr do,
+ * and they are already on the step record. */
+export function exitedProducers(used: readonly { readonly step: string; readonly result?: unknown }[] | undefined): ExitedProducer[] {
+  const exited: ExitedProducer[] = [];
+  for (const entry of used ?? []) {
+    const result = entry.result;
+    if (typeof result !== "object" || result === null) continue;
+    const { exitCode, stderr } = result as { exitCode?: unknown; stderr?: unknown };
+    if (typeof exitCode !== "number" || exitCode === 0 || typeof stderr !== "string") continue;
+    exited.push({ step: entry.step, exitCode, stderrLine: firstVisibleLine(stderr) ?? "(no stderr)" });
+  }
+  return exited;
 }
 
 export interface StepFailure {
   readonly errorMessage: string | undefined;
   /** Root-relative path of the step record, or `null` when none was written. */
   readonly recordPath: string | null;
+  /** The failed step record's `used`, when it read from earlier steps. */
+  readonly used?: readonly { readonly step: string; readonly result?: unknown }[];
 }
 
 /** The lines that say why one step failed, unindented: the error's first
- * line, then where its step record is. Kept apart from the stderr writer so
- * a run summary in another format can say the same thing the same way. */
+ * line, then one line per producer that exited nonzero, then where its step
+ * record is. Kept apart from the stderr writer so a run summary in another
+ * format can say the same thing the same way. */
 export function formatStepFailure(failure: StepFailure): string[] {
   const lines = [firstErrorLine(failure.errorMessage ?? "")];
+  for (const producer of exitedProducers(failure.used)) lines.push(formatExitedProducer(producer));
   if (failure.recordPath !== null) lines.push(`record  ${failure.recordPath}`);
   return lines;
+}
+
+/** `used    <step>  exit <code>  <first stderr line>`. */
+export function formatExitedProducer(producer: ExitedProducer): string {
+  return `used    ${producer.step}  exit ${producer.exitCode}  ${producer.stderrLine}`;
 }
 
 /** `<stateDir>/records/steps/<id>`, the directory every step record is
@@ -121,6 +164,7 @@ export function createStepProgressLogger(
       const failure = formatStepFailure({
         errorMessage: info.errorMessage,
         recordPath: info.stepRecordId === null ? null : stepRecordPath(options.stateDir, info.stepRecordId),
+        ...(info.used === undefined ? {} : { used: info.used }),
       });
       text += failure.map((line) => `      ${line}\n`).join("");
     }

@@ -12,11 +12,13 @@ import {
 import { hookLabel } from "../report/summary/hook-label.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import {
+  exitedProducers,
   firstErrorLine,
   formatRerunCommand,
   formatStepDuration,
   formatSummaryDuration,
   stepRecordPath,
+  type ExitedProducer,
 } from "./progress-log.js";
 
 // Responsibility: the Markdown run summary one `nuka run` invocation leaves
@@ -53,6 +55,8 @@ export interface SummaryFailure {
   /** The last command the failed step ran that did not exit 0, as its
    * words joined by spaces. */
   readonly command?: string;
+  /** The steps the failed step read from whose process exited nonzero. */
+  readonly exited?: readonly ExitedProducer[];
 }
 
 export interface SummaryScenario {
@@ -149,6 +153,9 @@ function renderCondition(input: RunSummaryInput): string[] {
 function renderFailureCell(failure: SummaryFailure | undefined): string {
   if (failure === undefined) return "";
   const parts = [`${cellText(failure.where)}: ${cellCode(failure.errorLine)}`];
+  for (const producer of failure.exited ?? []) {
+    parts.push(`used ${cellText(producer.step)} exit ${producer.exitCode}: ${cellCode(producer.stderrLine)}`);
+  }
   if (failure.command !== undefined) parts.push(`ran ${cellCode(failure.command)}`);
   if (failure.recordPath !== null) parts.push(`record ${cellCode(failure.recordPath)}`);
   return parts.join("<br>");
@@ -222,10 +229,12 @@ function describeFailure(
   if (step !== undefined) {
     const stepRecord = step.step_record_id === null ? undefined : stepRecords.get(step.step_record_id);
     const command = failedProcess(stepRecord);
+    const exited = stepRecord?.status === "failed" ? exitedProducers(stepRecord.used) : [];
     return {
       where: `step "${step.text}"`,
       errorLine: firstErrorLine(step.error?.message ?? ""),
       recordPath: step.step_record_id === null ? null : stepRecordPath(stateDir, step.step_record_id),
+      ...(exited.length === 0 ? {} : { exited }),
       ...(command === undefined ? {} : { command }),
     };
   }

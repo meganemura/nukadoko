@@ -1006,7 +1006,10 @@ target leaves out.
 `nuka run` also prints its own progress and where it wrote to stderr as it
 goes (`--quiet` quiets the progress only); stdout stays NDJSON either way.
 A failed step prints the first line of its error and the path of its step
-record under its progress line, so a CI log says why it failed. After the
+record under its progress line, so a CI log says why it failed. When the
+failed step read from a step whose program exited nonzero, a `used` line
+between the two names that step, its exit code, and the first line of its
+stderr: a Then step that got an empty stdout usually failed there. After the
 summary, each failed scenario gets a `rerun` line with the command that runs
 it again. `--quiet` keeps all of these.
 
