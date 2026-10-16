@@ -33,7 +33,7 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## 0.15.0 to the next release
+## 0.15.0 to 0.16.0
 
 - **`nuka tend` leaves out `step-rationale-missing` and
   `schema-field-undescribed` unless asked.** A missing `rationale` or

@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.16.0 — 2026-10-17
+
 ### Added
 
 - **`undefined-step` names the patterned steps no scanned feature line binds, and `pattern-unbound` carries the step file.**

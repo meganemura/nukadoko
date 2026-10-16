@@ -28,7 +28,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
 
-## 0.15.0 から次のリリースへ
+## 0.15.0 から 0.16.0 へ
 
 - **`nuka tend` は、求められない限り `step-rationale-missing` と `schema-field-undescribed` を外します。**
   `rationale` や `.describe()` の欠けは、プロジェクトが抱えたままでいられるものです。
