@@ -90,10 +90,10 @@ just until 0.1.
   server with `fetch`. It says that `ctx.request()` needs `playwright` and
   is what counts calls in `observed.http_reads` and `observed.http_writes`,
   and that a `fetch` call leaves both at 0. `tests/readme-api.test.ts`
-  compiles the section's blocks under `tsc --strict` in a project without
-  Playwright, checks that the compile fails without the augmentation while
-  `nuka check` still passes, and runs the feature green. README.ja.md
-  carries the same section.
+  compiles the section's blocks under `tsc --strict` and `skipLibCheck:
+  false` in a project without Playwright, checks that the compile fails
+  without the augmentation while `nuka check` still passes, and runs the
+  feature green. README.ja.md carries the same section.
 - **The `StepFixtures` augmentation is written down.** "Declaring a
   fixture" in the acceptance skill's `fixtures.md`, "Fixtures" in
   docs/spec.md and docs/spec.ja.md, and the fixture paragraph of

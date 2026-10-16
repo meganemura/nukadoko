@@ -8,10 +8,10 @@ import { repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: README.md's "An HTTP API" section works as written. Its
 // config block (the process-scope server fixture and the `StepFixtures`
-// augmentation) and its When step compile under `tsc --strict` in a
-// project with no Playwright installed, the Then step comes from the
-// scaffold command the section names, and `nuka run` takes the feature it
-// shows to green. README.ja.md carries the same blocks.
+// augmentation) and its When step compile under `tsc --strict`, with
+// `skipLibCheck: false`, in a project with no Playwright installed. The
+// Then step comes from the scaffold command the section names, and
+// `nuka run` takes the feature it shows to green. README.ja.md carries the same blocks.
 //
 // `src/server.ts` is the one file the section describes without showing,
 // so this test writes its own. The project lives under the OS temp
@@ -76,9 +76,8 @@ export async function startServer(): Promise<{ url: string; close(): Promise<voi
 }
 `;
 
-// skipLibCheck stays on: the package's own declarations import Playwright's
-// types, which a project without Playwright cannot resolve. What this test
-// guards is the README's code, which is not a library file.
+// skipLibCheck off: the package's own declarations are compiled too, so a
+// declaration that only compiles with Playwright installed fails here.
 const TSCONFIG = `${JSON.stringify(
   {
     compilerOptions: {
@@ -87,7 +86,7 @@ const TSCONFIG = `${JSON.stringify(
       module: "NodeNext",
       moduleResolution: "NodeNext",
       strict: true,
-      skipLibCheck: true,
+      skipLibCheck: false,
       noEmit: true,
       types: ["node"],
     },
