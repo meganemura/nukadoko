@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
@@ -16,6 +16,7 @@ import {
   ensureNukadokoShim,
   removeTempDir,
   repoRoot,
+  testsDir,
 } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka init` — all
@@ -245,32 +246,84 @@ describe("nuka init", () => {
     );
   });
 
-  it("hints on stderr when tsconfig.json's include leaves out the steps and the config", async () => {
+  it("appends the steps glob and the config to a plain tsconfig.json include, and changes nothing else", async () => {
     await writeFile(
       path.join(rootDir, "tsconfig.json"),
-      '{\n  // the project\'s own sources\n  "include": ["src"],\n}\n',
+      '{\n    "compilerOptions": { "strict": true },\n    "include": ["src/**/*", "test/**/*"]\n}\n',
     );
+    const stdout = createCaptureSink();
     const stderr = createCaptureSink();
 
-    const exitCode = await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr });
-
-    expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe(
-      'tsconfig.json\'s include leaves out these paths, so tsc does not check them; add "features/**/*" and "nukadoko.config.ts" to it\n',
-    );
-  });
-
-  it("says nothing about tsconfig.json when its include already covers both", async () => {
-    await writeFile(
-      path.join(rootDir, "tsconfig.json"),
-      JSON.stringify({ include: ["src", "features/**/*.ts", "nukadoko.config.ts"] }),
-    );
-    const stderr = createCaptureSink();
-
-    const exitCode = await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr });
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
+    expect(stdout.text()).toBe(
+      "nukadoko.config.ts\nfeatures/steps\n.gitignore\npackage.json\ntsconfig.json\n".replace(/\//g, path.sep),
+    );
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(
+      '{\n    "compilerOptions": { "strict": true },\n    "include": ["src/**/*", "test/**/*", "features/**/*", "nukadoko.config.ts"]\n}\n',
+    );
+  });
+
+  it("adds one entry per line to a multi-line include, and leaves an entry that already covers the steps alone", async () => {
+    await writeFile(
+      path.join(rootDir, "tsconfig.json"),
+      '{\n\t"include": [\n\t\t"src",\n\t\t"features/**"\n\t]\n}',
+    );
+    const stdout = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr: createCaptureSink() });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).toContain("tsconfig.json\n");
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(
+      '{\n\t"include": [\n\t\t"src",\n\t\t"features/**",\n\t\t"nukadoko.config.ts"\n\t]\n}',
+    );
+  });
+
+  it("leaves a tsconfig.json with no include of its own alone, and says nothing about it", async () => {
+    const text = '{\n  "extends": "./tsconfig.base.json"\n}\n';
+    await writeFile(path.join(rootDir, "tsconfig.json"), text);
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("tsconfig.json");
+    expect(stderr.text()).toBe("");
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
+  });
+
+  it("hints on stderr, and leaves the file byte-identical, when tsconfig.json holds a comment", async () => {
+    const text = '{\n  // the project\'s own sources\n  "include": ["src"],\n}\n';
+    await writeFile(path.join(rootDir, "tsconfig.json"), text);
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("tsconfig.json");
+    expect(stderr.text()).toBe(
+      'tsconfig.json\'s include leaves out these paths, so tsc does not check them; nuka init left the file alone because it holds comments or trailing commas, so add "features/**/*" and "nukadoko.config.ts" to it\n',
+    );
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
+  });
+
+  it("says nothing about tsconfig.json, and writes nothing to it, when its include already covers both", async () => {
+    const text = JSON.stringify({ include: ["src", "features/**/*.ts", "nukadoko.config.ts"] });
+    await writeFile(path.join(rootDir, "tsconfig.json"), text);
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("tsconfig.json");
+    expect(stderr.text()).toBe("");
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
 
   it("reflects --base-url in the generated config", async () => {
@@ -745,4 +798,71 @@ describe("nuka init: allurerc.mjs is actually read by `allure generate`", () => 
     expect(categoryNames).toContain("Step error");
     expect(categoryNames).not.toContain("Product errors");
   }, 30_000);
+});
+
+// The walkthrough's own claim: a project whose tsconfig.json includes only
+// its sources needs no hand edit before `tsc` checks what `init` and
+// `scaffold` wrote. `--listFilesOnly` is what proves the step file and the
+// config are in the program; an exit code of 0 alone would also hold for a
+// tsconfig that never reached them.
+describe("nuka init: the project's own tsc checks the steps and the config with no hand edit", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    // Under tests/ so "nukadoko" resolves to this package by its own name,
+    // and its types to the built dist/.
+    const parent = path.join(testsDir, ".tmp-fixtures");
+    await mkdir(parent, { recursive: true });
+    rootDir = await mkdtemp(path.join(parent, "init-tsconfig-"));
+    await writeFile(path.join(rootDir, "package.json"), ESM_PACKAGE_JSON);
+    await writeFile(
+      path.join(rootDir, "tsconfig.json"),
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            target: "ES2023",
+            lib: ["ESNext"],
+            module: "NodeNext",
+            moduleResolution: "NodeNext",
+            strict: true,
+            skipLibCheck: true,
+            noEmit: true,
+            types: ["node"],
+          },
+          include: ["src/**/*"],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await mkdir(path.join(rootDir, "src"));
+    await writeFile(path.join(rootDir, "src", "greet.ts"), "export const greet = (name: string): string => `Hello, ${name}!`;\n");
+  });
+
+  afterEach(async () => {
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it("puts the scaffolded step and nukadoko.config.ts in the program, and tsc passes", async () => {
+    expect(await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
+    expect(
+      await runCli(["scaffold", "greet-someone", "--pattern", "I greet {name:string}"], {
+        rootDir,
+        stdout: createCaptureSink(),
+        stderr: createCaptureSink(),
+      }),
+    ).toBe(0);
+
+    const tsc = path.join(repoRoot, "node_modules", ".bin", "tsc");
+    const listed = await execFileAsync(tsc, ["-p", rootDir, "--listFilesOnly"]);
+    const programFiles = listed.stdout.split(/\r?\n/).map((file) => path.resolve(file));
+    expect(programFiles).toContain(path.join(rootDir, "features", "steps", "greet-someone.ts"));
+    expect(programFiles).toContain(path.join(rootDir, "nukadoko.config.ts"));
+
+    const checked = await execFileAsync(tsc, ["-p", rootDir]).then(
+      ({ stdout }) => ({ code: 0, output: stdout }),
+      (error: { code?: number; stdout?: string }) => ({ code: error.code ?? 1, output: error.stdout ?? "" }),
+    );
+    expect(checked).toEqual({ code: 0, output: "" });
+  });
 });

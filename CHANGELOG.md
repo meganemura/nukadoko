@@ -80,6 +80,20 @@ just until 0.1.
   steps adds `playwright` to its own devDependencies, and npm refuses to
   install nukadoko beside a different `playwright` version
   (docs/upgrading.md).
+- **`nuka init` adds the steps and the config to `tsconfig.json`'s `include` itself.**
+  It used to print a line naming the entries and leave the edit to a
+  person, the one hand edit of a config file left in the walkthrough. Now,
+  when `tsconfig.json` is plain JSON and its own `include` array leaves
+  out `<featuresDir>/**/*` or the config file, `init` appends the missing
+  entries in the array's own layout (one per line, or on the same line,
+  with the same indentation and line endings), changes no other byte, and
+  prints `tsconfig.json` on stdout with the other written paths. A file
+  with comments or trailing commas is left byte-identical and gets the
+  stderr line instead, now saying why, since rewriting it would drop the
+  comments. A tsconfig with no `include` of its own (TypeScript's default,
+  or one inherited through `extends`), one whose `include` already covers
+  both paths, and one that does not parse are left alone with nothing
+  printed, as before.
 - **`nuka run` performs the static check first, and runs `featuresDir` with no target.**
   Before it executes anything, `nuka run` now reports what `nuka check`
   reports for the scenarios it selected: every project-wide finding, plus

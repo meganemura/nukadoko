@@ -57,11 +57,13 @@ nukadoko.config.ts
 features/steps
 .gitignore
 package.json
+tsconfig.json
 ```
 
 `init` は `.gitignore` に `.nukadoko/` を追加し、`package.json` に `test:scenarios` script を追加します。
 人も CI も、この 1 つのコマンドを実行します。
-CommonJS の場合、`tsconfig.json`、`--allure` と `--env` のフラグは [Setup details](#setup-details) にあります。
+`tsconfig.json` の `include` には、steps と config を追加します。
+CommonJS の場合、コメントのある `tsconfig.json`、`--allure` と `--env` のフラグは [Setup details](#setup-details) にあります。
 
 When の step を scaffold します。
 `--command` は、プログラムを `scratch.dir()` で実行し、その `exitCode`、`stdout`、`stderr` を返す step を書きます。
@@ -449,7 +451,10 @@ agent にとっては、そのループが安価なコマンドでできてい�
 以後、人も CI も `npm run test:scenarios` の 1 つだけを実行すれば済みます。
 対象を渡さない `nuka run` は `featuresDir` を実行します。
 その scenario について `nuka check` が報告する内容を報告し、error が 1 つでもあれば何も実行せずに止まります。
-`tsconfig.json` の `include` が `features/` や config ファイルを外しているときは、追加すべきエントリを 1 行で伝えます。
+`tsconfig.json` の `include` が `features/` や config ファイルを外しているときは、足りないエントリを追加し、ファイルの残りはそのままにします。
+コメントや末尾のカンマがある `tsconfig.json` は、書き直すとそれらが消えるため、変更しません。
+代わりに、追加すべきエントリを 1 行で伝えます。
+`include` を持たない `tsconfig.json` は、もともとすべてのファイルを検査します。
 2 つのフラグで書くものを増やせます。
 `--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
 

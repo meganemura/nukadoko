@@ -6,7 +6,7 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { configSchema } from "../config/schema.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
-import { tsconfigIncludeHint } from "./tsconfig-include.js";
+import { ensureTsconfigInclude } from "./tsconfig-include.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -31,7 +31,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //     since a project that hits this without the notice would only see the
 //     step files it later writes fail to import, with no link back to why.
 //   - Otherwise, generate the config, the (empty) steps directory, the
-//     `.gitignore` entry, and the package.json `test:scenarios` script,
+//     `.gitignore` entry, the package.json `test:scenarios` script, and
+//     the tsconfig.json `include` entries (src/cli/tsconfig-include.ts),
 //     printing each path actually written to stdout as it happens
 //     (diagnostics go to stderr: an agent parses stdout, so it carries
 //     only paths). The default targets a CLI or API project: the Allure
@@ -443,9 +444,11 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     }
   }
 
-  const hint = await tsconfigIncludeHint(rootDir, featuresDirPosix, configFileName);
-  if (hint !== null) {
-    stderr.write(`${hint}\n`);
+  const tsconfig = await ensureTsconfigInclude(rootDir, featuresDirPosix, configFileName);
+  if (tsconfig.kind === "written") {
+    stdout.write("tsconfig.json\n");
+  } else if (tsconfig.kind === "hint") {
+    stderr.write(`${tsconfig.line}\n`);
   }
 
   try {

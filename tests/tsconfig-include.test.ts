@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { includeMayCover, missingIncludeEntries, parseJsonc } from "../src/cli/tsconfig-include.js";
+import {
+  appendIncludeEntries,
+  includeMayCover,
+  missingIncludeEntries,
+  parseJsonc,
+} from "../src/cli/tsconfig-include.js";
 
-// Responsibility: the pure half of `nuka init`'s tsconfig hint. The JSONC
-// reader must give back what JSON.parse gives for the same value with
-// comments and trailing commas around it, and the coverage rule must never
-// claim a path is left out when an entry could reach it.
+// Responsibility: the pure half of `nuka init`'s tsconfig.json edit and
+// hint. The JSONC reader must give back what JSON.parse gives for the same
+// value with comments and trailing commas around it, the coverage rule must
+// never claim a path is left out when an entry could reach it, and the
+// in-place append must leave every byte outside the include array alone.
 
 const segment = gs.fromRegex("[a-z]{1,6}", { fullmatch: true });
 const literalPaths = gs.arrays(segment, { minSize: 1, maxSize: 4 }).map((parts) => parts.join("/"));
@@ -74,5 +80,63 @@ describe("missingIncludeEntries", () => {
       const configFileName = tc.draw(gs.sampledFrom(["nukadoko.config.ts", "nukadoko.config.mts"]));
       const missing = missingIncludeEntries(include, featuresDir, configFileName);
       expect(missingIncludeEntries([...include, ...missing], featuresDir, configFileName)).toEqual([]);
+    }));
+});
+
+describe("appendIncludeEntries", () => {
+  it("follows a one-line array's separator", () => {
+    expect(appendIncludeEntries('{"include":["src","test"]}', ["features/**/*"])).toBe(
+      '{"include":["src","test","features/**/*"]}',
+    );
+    expect(appendIncludeEntries('{ "include": ["src"] }', ["a", "b"])).toBe('{ "include": ["src", "a", "b"] }');
+  });
+
+  it("fills an empty array on one line", () => {
+    expect(appendIncludeEntries('{\n  "include": [\n  ]\n}\n', ["a", "b"])).toBe('{\n  "include": ["a", "b"]\n}\n');
+  });
+
+  it("keeps CRLF line endings in a multi-line array", () => {
+    expect(appendIncludeEntries('{\r\n  "include": [\r\n    "src"\r\n  ]\r\n}\r\n', ["a"])).toBe(
+      '{\r\n  "include": [\r\n    "src",\r\n    "a"\r\n  ]\r\n}\r\n',
+    );
+  });
+
+  it("edits the top-level include, not a nested key of the same name", () => {
+    expect(appendIncludeEntries('{"watchOptions":{"include":["x"]},"include":["src"]}', ["a"])).toBe(
+      '{"watchOptions":{"include":["x"]},"include":["src", "a"]}',
+    );
+  });
+
+  // The property `nuka init` relies on: after the append, nothing is left
+  // to add, the original entries come first and in order, every other key
+  // is unchanged, and the text outside the array is the same bytes.
+  const includeEntries = gs.oneOf(
+    literalPaths,
+    literalPaths.map((entry) => `${entry}/**/*`),
+    gs.sampledFrom(["**/*", "*.ts", "features/**", "nukadoko.config.ts"]),
+  );
+  it("leaves no missing entry, keeps the original entries in order, and changes nothing outside the array", () =>
+    hegel.test((tc) => {
+      const include = tc.draw(gs.arrays(includeEntries, { maxSize: 5 }));
+      const featuresDir = tc.draw(literalPaths);
+      const configFileName = tc.draw(gs.sampledFrom(["nukadoko.config.ts", "nukadoko.config.mts"]));
+      const tsconfig = {
+        compilerOptions: { strict: true, paths: { "#x": ["./x/*"] } },
+        include,
+        exclude: ["dist"],
+      };
+      const indent = tc.draw(gs.sampledFrom<string | undefined>([undefined, "  ", "    ", "\t"]));
+      const text = `${JSON.stringify(tsconfig, null, indent)}${tc.draw(gs.sampledFrom(["", "\n"]))}`;
+      const missing = missingIncludeEntries(include, featuresDir, configFileName);
+
+      const edited = appendIncludeEntries(text, missing);
+
+      const parsed = JSON.parse(edited) as typeof tsconfig;
+      expect(missingIncludeEntries(parsed.include, featuresDir, configFileName)).toEqual([]);
+      expect(parsed).toEqual({ ...tsconfig, include: [...include, ...missing] });
+      const before = text.slice(0, text.indexOf('"include"'));
+      const after = text.slice(text.indexOf('"exclude"') - 1);
+      expect(edited.startsWith(before)).toBe(true);
+      expect(edited.endsWith(after)).toBe(true);
     }));
 });

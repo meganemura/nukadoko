@@ -59,8 +59,9 @@ before every command is its own way of being hard to follow.
 If the project is not initialized, run `nuka init` first. It writes the
 config, `features/steps/`, a `.gitignore` entry, and a `test:scenarios`
 script in `package.json`, so `npm run test:scenarios` runs `nuka run`,
-which checks `featuresDir` and then executes it. If it prints a `tsconfig.json` line, add the
-entries it names. Add `--allure` only when someone reads Allure reports,
+which checks `featuresDir` and then executes it. It also adds the steps and the config to
+`tsconfig.json`'s `include`; if the file has comments, it leaves it alone and prints a
+`tsconfig.json` line instead, so add the entries that line names. Add `--allure` only when someone reads Allure reports,
 and `--env` when the project keeps `.env` files; both report emitters are
 off until their config key (`allure: {}`, `messages: {}`) is present. A
 CommonJS project (no `"type": "module"` in `package.json`) gets

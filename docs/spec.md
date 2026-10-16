@@ -4296,9 +4296,10 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
                               Writes nukadoko.config.ts, <featuresDir>/steps/,
                               .nukadoko/ in .gitignore, and a package.json
                               "test:scenarios" script ("nuka run") unless one
-                              exists; prints one
-                              stderr line when tsconfig.json's include leaves
-                              out the steps or the config. --allure turns the
+                              exists; appends the steps and the config to
+                              tsconfig.json's include when it leaves them out,
+                              or prints one stderr line naming them when the
+                              file has comments. --allure turns the
                               Allure emitter on and writes allurerc.mjs;
                               --env adds .env, .env.*, !.env.example to
                               .gitignore
