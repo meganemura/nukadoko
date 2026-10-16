@@ -83,6 +83,17 @@ just until 0.1.
   lacks the key (the refusal names the keys it has), when the value is not
   `<step>.<key>` with an identifier key, or when two `--from` values or a
   capture fill the same args key.
+- **The README walks through an HTTP API project.** A new section, "An
+  HTTP API", shows the config of a project whose server a fixture starts
+  once per `nuka run` (`{ scope: "process" }`), the `StepFixtures`
+  augmentation `tsc` needs for that fixture, and a When step that calls the
+  server with `fetch`. It says that `ctx.request()` needs `playwright` and
+  is what counts calls in `observed.http_reads` and `observed.http_writes`,
+  and that a `fetch` call leaves both at 0. `tests/readme-api.test.ts`
+  compiles the section's blocks under `tsc --strict` in a project without
+  Playwright, checks that the compile fails without the augmentation while
+  `nuka check` still passes, and runs the feature green. README.ja.md
+  carries the same section.
 - **The `StepFixtures` augmentation is written down.** "Declaring a
   fixture" in the acceptance skill's `fixtures.md`, "Fixtures" in
   docs/spec.md and docs/spec.ja.md, and the fixture paragraph of

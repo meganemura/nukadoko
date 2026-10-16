@@ -236,6 +236,80 @@ the `package.json` change. Do not commit `.nukadoko/`: it holds the step
 records, the run summaries, and session state, may hold live credentials
 in plaintext, and `nuka init` already ignores it.
 
+## An HTTP API
+
+`nuka init` sets up an API project the same way. Two things differ from
+the CLI walkthrough above: a fixture starts the server, and the When step
+calls it with `fetch`. Here `src/server.ts` exports `startServer()`, which
+listens on a free port and resolves to `{ url, close() }`:
+
+```ts
+// nukadoko.config.ts
+import { defineConfig, defineFixtures } from "nukadoko";
+import { startServer } from "./src/server.js";
+
+export default defineConfig({
+  fixtures: defineFixtures({
+    server: [
+      async ({}, use) => {
+        const server = await startServer();
+        await use(server);
+        await server.close();
+      },
+      { scope: "process" },
+    ],
+  }),
+});
+
+declare module "nukadoko" {
+  interface StepFixtures {
+    server: Awaited<ReturnType<typeof startServer>>;
+  }
+}
+```
+
+`{ scope: "process" }` starts one server for the whole `nuka run`, not one
+per scenario. The server starts the first time a step destructures
+`server`, and the line after `use()` is its teardown. The `declare module`
+block gives `server` its type for `tsc`. `nuka check` reads fixture names
+from the source text, so it does not need the block.
+
+```ts
+// features/steps/get-greeting.ts
+import { defineStep, z } from "nukadoko";
+
+export default defineStep({
+  description: "GET /greet/<name> from the server under test",
+  pattern: "I request the greeting for {name:string}",
+  args: z.object({ name: z.string() }),
+  returns: z.object({ status: z.number(), message: z.string() }),
+  async run({ server }, { name }) {
+    const response = await fetch(`${server.url}/greet/${encodeURIComponent(name)}`);
+    const body = (await response.json()) as { message: string };
+    return { status: response.status, message: body.message };
+  },
+});
+```
+
+`fetch` needs nothing installed. `ctx.request()`, Playwright's
+`APIRequestContext`, is the other way to call the server: it needs
+`playwright` installed, and it is what counts the step's calls in the step
+record's `observed.http_reads` and `observed.http_writes`. A `fetch` call
+leaves both at 0.
+
+The Then step comes from `nuka scaffold message-is --pattern "the message
+is {text:string}" --then --from get-greeting.message`, the same way
+`output-says` came from `run-greet`. The feature:
+
+```gherkin
+# features/greet.feature
+Feature: greet API
+
+  Scenario: greets by name
+    When I request the greeting for "Ada"
+    Then the message is "Hello, Ada!"
+```
+
 ## More
 
 Everything past the loop above, one line each:
@@ -468,7 +542,8 @@ this README says so.
 
 ## Setup details
 
-`nuka init` sets up a CLI or API project. It adds `.nukadoko/` to
+`nuka init` sets up a CLI or API project ([An HTTP API](#an-http-api)
+shows the API shape). It adds `.nukadoko/` to
 `.gitignore` and `"test:scenarios": "nuka run"` to the `package.json`
 scripts, unless a script by that name already exists. `npm run
 test:scenarios` is then the one command a person or CI runs: `nuka run`

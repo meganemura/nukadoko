@@ -233,6 +233,83 @@ CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.j
 そこには step record、run サマリ、session の状態が入り、平文の生きた認証情報が入ることもあります。
 `nuka init` が既に無視の対象にしています。
 
+## An HTTP API
+
+**HTTP API**
+
+`nuka init` は API のプロジェクトも同じように準備します。
+上の CLI の手順と違うのは 2 点です。
+fixture がサーバを起動し、When の step は `fetch` でそのサーバを呼びます。
+ここでは `src/server.ts` が `startServer()` を export します。
+`startServer()` は空いているポートで待ち受け、`{ url, close() }` で resolve します:
+
+```ts
+// nukadoko.config.ts
+import { defineConfig, defineFixtures } from "nukadoko";
+import { startServer } from "./src/server.js";
+
+export default defineConfig({
+  fixtures: defineFixtures({
+    server: [
+      async ({}, use) => {
+        const server = await startServer();
+        await use(server);
+        await server.close();
+      },
+      { scope: "process" },
+    ],
+  }),
+});
+
+declare module "nukadoko" {
+  interface StepFixtures {
+    server: Awaited<ReturnType<typeof startServer>>;
+  }
+}
+```
+
+`{ scope: "process" }` は、scenario ごとではなく `nuka run` 全体で 1 つのサーバを起動します。
+サーバは、step が初めて `server` を分割代入したときに起動します。
+`use()` の次の行が teardown です。
+`declare module` のブロックは、`tsc` のために `server` に型を付けます。
+`nuka check` は fixture の名前をソーステキストから読むので、このブロックを必要としません。
+
+```ts
+// features/steps/get-greeting.ts
+import { defineStep, z } from "nukadoko";
+
+export default defineStep({
+  description: "GET /greet/<name> from the server under test",
+  pattern: "I request the greeting for {name:string}",
+  args: z.object({ name: z.string() }),
+  returns: z.object({ status: z.number(), message: z.string() }),
+  async run({ server }, { name }) {
+    const response = await fetch(`${server.url}/greet/${encodeURIComponent(name)}`);
+    const body = (await response.json()) as { message: string };
+    return { status: response.status, message: body.message };
+  },
+});
+```
+
+`fetch` には何もインストールする必要がありません。
+サーバを呼ぶもう 1 つの方法は、Playwright の `APIRequestContext` である `ctx.request()` です。
+こちらは `playwright` のインストールが必要です。
+step の呼び出しを step record の `observed.http_reads` と `observed.http_writes` に数えるのは `ctx.request()` だけです。
+`fetch` の呼び出しでは、どちらも 0 のままです。
+
+Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
+`output-says` を `run-greet` から作ったのと同じ方法です。
+feature は次のとおりです:
+
+```gherkin
+# features/greet.feature
+Feature: greet API
+
+  Scenario: greets by name
+    When I request the greeting for "Ada"
+    Then the message is "Hello, Ada!"
+```
+
 ## More
 
 **その他**
@@ -449,6 +526,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 **セットアップの詳細**
 
 `nuka init` は CLI や API のプロジェクトを前提に準備をします。
+API の形は [An HTTP API](#an-http-api) にあります。
 `.gitignore` に `.nukadoko/` を、`package.json` の scripts に `"test:scenarios": "nuka run"` を追加します。
 同じ名前の script が既にあれば、そのままにします。
 以後、人も CI も `npm run test:scenarios` の 1 つだけを実行すれば済みます。
