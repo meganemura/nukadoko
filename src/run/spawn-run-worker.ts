@@ -4,23 +4,33 @@ import { fileURLToPath } from "node:url";
 import type { Readable } from "node:stream";
 
 // Responsibility: turns "run run-worker-entry.ts against this argument
-// list" into an actual child process, attached (never `detached`, unlike
-// src/live/spawn-daemon.ts's own session daemon: `nuka run --concurrency
-// <n>` waits for every worker to finish before it can print its own
-// summary and exit, so the parent must keep each worker as a real child it
-// can await, not one it hands off and forgets).
+// list" into an actual child process the parent keeps (never unref'd,
+// unlike src/live/spawn-daemon.ts's own session daemon: `nuka run
+// --concurrency <n>` waits for every worker to finish before it can print
+// its own summary and exit, so the parent must keep each worker as a real
+// child it can await, not one it hands off and forgets).
 //
-// The interpreter choice mirrors src/live/spawn-daemon.ts's own
-// `spawnDaemon` exactly, for the same reason: run-worker-entry.ts's own
-// file extension, read off *this* module's own `import.meta.url`, is `.ts`
-// in this repository's own dev/test run and `.js` once tsconfig.build.json
-// has mirrored `src/` onto `dist/` — tsx (nukadoko's own direct dependency)
-// is what makes the `.ts` case runnable at all outside a build.
+// run-worker-entry.ts's own file extension, read off *this* module's own
+// `import.meta.url`, is `.ts` in this repository's own dev/test run and
+// `.js` once tsconfig.build.json has mirrored `src/` onto `dist/`. The
+// `.ts` case runs under Node with tsx's loader (nukadoko's own direct
+// dependency) given to `--import`, never through the `tsx` command: that
+// command is a second process between the parent and the worker, and it
+// relays only SIGINT and SIGTERM.
 //
-// `stdio: ["ignore", "pipe", "pipe"]`: stdin is unused, stdout carries this
-// worker's own envelope stream (src/run/worker-protocol.ts), stderr is kept
-// only for whatever Node itself writes there before this worker's own
-// try/catch exists to turn a failure into an envelope instead (that
+// `stdio: ["ignore", "pipe", "pipe", "ipc"]`. stdin is empty, so a step
+// that reads it gets end of file at once, as it would with no terminal.
+// The IPC channel carries no message; it closes when the parent is gone,
+// however it went (SIGKILL, a killed process group), and the worker treats
+// its `disconnect` as the parent's death (run-worker-entry.ts). It is the
+// IPC channel and not stdin because project code reads, pauses, and
+// destroys stdin, and any of those would hide the parent's death or hang a
+// step. It is not an extra pipe on fd 3 either: Node closes the IPC channel
+// the same way on every platform, and a worker would have to open fd 3 by
+// number. stdout carries this worker's own envelope stream
+// (src/run/worker-protocol.ts), stderr is kept for whatever Node itself
+// writes there before this worker's own try/catch exists to turn a failure
+// into an envelope instead, and for project code's own stdout writes (that
 // module's own header explains the split).
 
 export interface SpawnRunWorkerOptions {
@@ -41,9 +51,15 @@ export interface SpawnRunWorkerOptions {
   readonly repeat: number;
 }
 
-function packageRoot(here: string): string {
-  return path.resolve(path.dirname(here), "..", "..");
-}
+// `detached` on POSIX puts each worker in its own process group, so a
+// terminal's Ctrl-C or hangup reaches only the parent, which forwards it
+// once (src/run/run-concurrent.ts). A worker that also got the terminal's
+// copy would count the forwarded one as a second signal and exit without
+// teardown. On Windows `detached` opens a console window, and the parent
+// does not forward: every process on the console already gets Ctrl-C, and
+// `child.kill` there is TerminateProcess, which would end a worker in the
+// middle of its teardown.
+const detached = process.platform !== "win32";
 
 export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<null, Readable, Readable> {
   const { rootDir, runId, env, quiet, featureListPath, repeat } = options;
@@ -51,12 +67,12 @@ export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessBySt
   const ext = path.extname(here);
   const workerEntry = path.join(path.dirname(here), `run-worker-entry${ext}`);
   const args = [rootDir, runId, env ?? "", quiet ? "1" : "0", featureListPath, String(repeat)];
+  const nodeArgs = ext === ".ts" ? ["--import", import.meta.resolve("tsx"), workerEntry] : [workerEntry];
 
-  return ext === ".ts"
-    ? spawn(path.join(packageRoot(here), "node_modules", ".bin", "tsx"), [workerEntry, ...args], {
-        stdio: ["ignore", "pipe", "pipe"],
-      })
-    : spawn(process.execPath, [workerEntry, ...args], {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+  // `spawn`'s stdio-tuple overloads stop at three entries, so the fourth
+  // ("ipc") drops the return type to a plain ChildProcess.
+  return spawn(process.execPath, [...nodeArgs, ...args], {
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
+    detached,
+  }) as ChildProcessByStdio<null, Readable, Readable>;
 }

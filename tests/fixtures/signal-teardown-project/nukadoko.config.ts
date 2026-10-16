@@ -6,9 +6,34 @@ import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 // Both fixtures append one JSON line per lifecycle event to
 // fixture-log.jsonl beside this file. A test reads that file back: the
 // step module and the test do not share an import cache, so module state
-// would not be visible from outside this one invocation.
+// would not be visible from outside this one invocation. tenant's setup
+// also appends its process id to fixture-pids.txt, so a test can check
+// that every worker process is gone. SIGNAL_TEARDOWN_HOLD_MS holds
+// tenant's teardown open, for a test that needs a teardown still running
+// when the second signal arrives. LEDGER_TEARDOWN_HOLD_MS holds ledger's
+// teardown open, for a test that signals after every scenario has a record.
+// IPC_MESSAGE_LISTENER adds the listener a project's own IPC code would,
+// which keeps a worker's IPC channel referenced. DISCONNECT_IPC makes
+// tenant's setup close the worker's IPC channel from inside the worker.
+// TEARDOWN_WRITES makes each teardown write to stdout and stderr, and wait
+// a moment, before it logs.
 
-const logPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixture-log.jsonl");
+const here = path.dirname(fileURLToPath(import.meta.url));
+const logPath = path.join(here, "fixture-log.jsonl");
+const pidsPath = path.join(here, "fixture-pids.txt");
+const teardownHoldMs = Number(process.env.SIGNAL_TEARDOWN_HOLD_MS ?? "0");
+const ledgerTeardownHoldMs = Number(process.env.LEDGER_TEARDOWN_HOLD_MS ?? "0");
+
+if (process.env.IPC_MESSAGE_LISTENER === "1") {
+  process.on("message", () => {});
+}
+
+async function writeDuringTeardown(fixture: string): Promise<void> {
+  if (process.env.TEARDOWN_WRITES !== "1") return;
+  console.log(`${fixture} teardown on stdout`);
+  console.error(`${fixture} teardown on stderr`);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+}
 
 function log(entry: Record<string, unknown>): void {
   appendFileSync(logPath, `${JSON.stringify(entry)}\n`);
@@ -18,8 +43,14 @@ export default defineConfig({
   fixtures: defineFixtures({
     tenant: async ({}, use) => {
       log({ fixture: "tenant", phase: "setup" });
+      appendFileSync(pidsPath, `${process.pid}\n`);
+      if (process.env.DISCONNECT_IPC === "1") process.disconnect?.();
       const outcome = await use({ id: "tenant" });
+      await writeDuringTeardown("tenant");
       log({ fixture: "tenant", phase: "teardown", outcome });
+      if (teardownHoldMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, teardownHoldMs));
+      }
       if (outcome === "passed") {
         log({ fixture: "tenant", phase: "cleanup" });
       }
@@ -28,7 +59,11 @@ export default defineConfig({
       async ({}, use) => {
         log({ fixture: "ledger", phase: "setup" });
         const outcome = await use({ id: "ledger" });
+        await writeDuringTeardown("ledger");
         log({ fixture: "ledger", phase: "teardown", outcome });
+        if (ledgerTeardownHoldMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, ledgerTeardownHoldMs));
+        }
       },
       { scope: "process" },
     ],

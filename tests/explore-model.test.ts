@@ -271,3 +271,69 @@ describe("exploreModel", () => {
       }
     }));
 });
+
+// Two planted bugs that fail different posts: the third add stores
+// nothing, and a count read before any add reports one. A run that first
+// fails on the third add can shrink to a sequence that starts with the
+// count, which fails too, but on the other command.
+const twoBugModel = defineModel(() => ({ adds: 0 })).commands({
+  "add-number": modelCommand(addNumber)({
+    args: (_state, draw) => ({ n: draw.pick([1, 2]) }),
+    pre: () => true,
+    next: (state) => ({ adds: state.adds + 1 }),
+    post: (_state, _args, result) => Object.keys(result).length === 0,
+  }),
+  "count-numbers": modelCommand(countNumbers)({
+    args: () => ({}),
+    pre: () => true,
+    next: (state) => state,
+    post: (state, _args, result) => result.count === Math.min(state.adds, 2),
+  }),
+});
+
+function twoBugSystem(): OpenSequence {
+  return async () => {
+    let adds = 0;
+    return {
+      async run(name) {
+        if (name === "add-number") {
+          adds += 1;
+          return { ok: true, result: adds === 3 ? { lost: true } : {} };
+        }
+        return { ok: true, result: { count: adds === 0 ? 1 : Math.min(adds, 2) } };
+      },
+      async close() {},
+    };
+  };
+}
+
+describe("exploreModel with two failures on different commands", () => {
+  it("keeps the shrunk failure on the command the found sequence failed on", async () => {
+    const result = await exploreModel({ model: twoBugModel, seed: 4, runs: 20, length: 8, open: twoBugSystem() });
+    expect(result).toMatchObject({
+      status: "failed",
+      found: [
+        { name: "add-number", args: { n: 1 } },
+        { name: "count-numbers", args: {} },
+        { name: "add-number", args: { n: 2 } },
+        { name: "count-numbers", args: {} },
+        { name: "add-number", args: { n: 1 } },
+      ],
+      shrunk: [
+        { name: "add-number", args: { n: 1 } },
+        { name: "add-number", args: { n: 1 } },
+        { name: "add-number", args: { n: 1 } },
+      ],
+      failure: { index: 2, kind: "post-false", command: "add-number" },
+    });
+  });
+
+  it("names the found sequence's last command as the shrunk failure's command, for any seed", () =>
+    hegel.testAsync(async (tc) => {
+      const seed = tc.draw(gs.integers({ minValue: 0, maxValue: 2 ** 32 - 1 }));
+      const result = await exploreModel({ model: twoBugModel, seed, runs: 20, length: 8, open: twoBugSystem() });
+      if (result.status !== "failed") return;
+      expect(result.failure.command).toBe(result.found.at(-1)!.name);
+      expect(result.shrunk.at(-1)!.name).toBe(result.found.at(-1)!.name);
+    }));
+});

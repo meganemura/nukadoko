@@ -304,6 +304,7 @@ export default {
         "run-scenario.ts",
         "run-summary.ts",
         "select-pickles.ts",
+        "step-stdout.ts",
       ],
     },
     { name: "draft", glob: "src/draft/**", surface: ["index.ts"] },

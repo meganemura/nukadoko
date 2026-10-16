@@ -1,6 +1,6 @@
 import { constants } from "node:os";
 
-// Responsibility: SIGINT and SIGTERM handling for the process that owns
+// Responsibility: SIGINT, SIGTERM, and SIGHUP handling for the process that owns
 // fixture caches. Node's default action for those signals exits the
 // process at once, and the fixture teardown in `nuka run` and `nuka do`
 // runs only after the step returns, so a signal during a step skips every
@@ -28,10 +28,13 @@ export interface ProcessSignal {
    * The normal path already releases a session lock from `finally`, which
    * `process.exit` does not run. */
   setSignalFinalizer(cleanup: SignalCleanup | null): void;
+  /** Acts as if `signal` had arrived. A `nuka run --concurrency` worker
+   * calls it when its parent is gone. */
+  trigger(signal: NodeJS.Signals): void;
   stop(): void;
 }
 
-const HANDLED_SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+export const HANDLED_SIGNALS: readonly NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 
 export function exitCodeForSignal(signal: NodeJS.Signals): number {
   return 128 + (constants.signals[signal] ?? 0);
@@ -104,6 +107,7 @@ export function installProcessSignalHandlers(): ProcessSignal {
     setSignalFinalizer(cleanup) {
       signalFinalizer = cleanup;
     },
+    trigger: onSignal,
     stop() {
       // Leave the listener in place once a signal has started teardown.
       // Removing it would restore the default action and race the exit

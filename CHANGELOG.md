@@ -153,6 +153,39 @@ just until 0.1.
 
 ### Fixed
 
+- **A signal to `nuka run --concurrency` tears every worker down.** The
+  parent had no SIGINT or SIGTERM handler. It died at once, with no
+  summary, and its workers kept running with their fixtures open. The
+  parent now forwards the first signal to every worker, each worker tears
+  its fixtures down and exits, no further worker starts, and the parent
+  prints the summary and exits with 128 plus the signal number, as at
+  `--concurrency 1`. A second signal is forwarded too, and every process
+  exits at once. Workers run in their own process group, so a terminal's
+  Ctrl-C reaches them only through the parent. A worker whose parent ends
+  without forwarding, from a SIGKILL or a killed process group, tears its
+  fixtures down on its own, and one whose parent ends after forwarding
+  finishes the teardown it started. A worker learns this when its IPC
+  channel closes, and its stdin stays empty, so a step that reads stdin
+  gets end of file at once. On Windows the parent does not forward,
+  because each worker already receives the console's Ctrl-C.
+- **SIGHUP tears fixtures down like SIGINT and SIGTERM.** Closing the
+  terminal or losing an ssh connection during `nuka run`, `nuka do`, or
+  `nuka explore` ended the process with no fixture teardown.
+
+- **Only records reach stdout when a hook, a fixture, or a late step
+  writes there.** Text written to the process stdout went to stderr only
+  while a step body ran. A Before or After hook, a BeforeAll or AfterAll, a
+  fixture's setup or teardown, a World constructor, a step file while it
+  loaded, and a step still running after its timeout wrote into the record
+  stream. Under `nuka run` the text glued onto the next NDJSON record and
+  the run still exited 0. Under `--concurrency 2` the parent read every
+  worker line as unreadable and ended with no records and exit 1. `nuka
+  run`, `nuka do`, `nuka explore`, and each worker now send every
+  `console.log` and `process.stdout.write` to stderr for the whole
+  invocation, and write their records through the stream they saved before
+  that. A child process spawned with `stdio: "inherit"` still writes to
+  stdout directly.
+
 - **`nuka harvest` writes a docstring line that starts with three quotes
   so it reads back.** The line was written as a backslash and three
   quotes, which the Gherkin reader keeps as written, so the draft carried
@@ -164,10 +197,8 @@ just until 0.1.
   through `nuka do --session` against a live session that outlived its
   deadline was recorded with `error.kind: "step_error"`, and the message
   named the session instead of the step. It now records `"timeout"` and
-  names the step, as `nuka do` without a live session does. Text the step
-  writes to stdout now goes to stderr there too, as under `nuka do`. `nuka
-  do`, a live session, and `nuka explore` now run a step through one
-  function.
+  names the step, as `nuka do` without a live session does. `nuka do`, a
+  live session, and `nuka explore` now run a step through one function.
 - **A `{biginteger}` capture no longer aborts `nuka run`.** A typed step
   that bound a `{biginteger}` capture to `z.bigint()`, or a compat step with
   a `{biginteger}` capture, stopped the whole run with

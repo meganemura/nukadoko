@@ -190,6 +190,20 @@ describe("defineStep", () => {
     expect(error.message).toContain("returns must be a zod schema");
   });
 
+  it("refuses an object that only has a safeParse method, as args and as returns", () => {
+    const lookalike = {
+      safeParse() {
+        return { success: true, data: {} };
+      },
+    };
+    const forArgs = refusal({ ...validDefinition(), args: lookalike });
+    expect(forArgs.name).toBe("InvalidStepDefinitionError");
+    expect(forArgs.message).toContain("args must be a zod schema");
+    const forReturns = refusal({ ...validDefinition(), returns: lookalike });
+    expect(forReturns.name).toBe("InvalidStepDefinitionError");
+    expect(forReturns.message).toContain("returns must be a zod schema");
+  });
+
   it("refuses a run that is not a function", () => {
     const error = refusal({ ...validDefinition(), run: undefined });
     expect(error.name).toBe("InvalidStepDefinitionError");

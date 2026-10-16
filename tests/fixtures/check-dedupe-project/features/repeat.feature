@@ -18,3 +18,8 @@ Feature: a finding on a repeated line is reported once
       | n |
       | 1 |
       | 2 |
+
+  Scenario: the same text on other lines
+    Then the item is saved
+    Given nothing defines this step
+    And nothing defines this step

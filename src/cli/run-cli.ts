@@ -38,6 +38,7 @@ import {
   toImportFailureSummaries,
 } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { divertProcessStdoutToStderr } from "../run/step-stdout.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
@@ -259,6 +260,10 @@ export async function runCli(
   const rootDir = options.rootDir ?? process.cwd();
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
+  // Only a command that runs project code takes the process stdout over:
+  // yargs prints help and the version through console.log. An injected
+  // sink is not the process stream, so there is nothing to protect.
+  const recordStdout = (): WritableSink => options.stdout ?? divertProcessStdoutToStderr();
 
   let ownVersion: string;
   try {
@@ -491,7 +496,7 @@ export async function runCli(
         session: args.session ?? null,
         env: args.env ?? null,
         use: args.use ?? [],
-        stdout,
+        stdout: recordStdout(),
         stderr,
       });
     },
@@ -560,7 +565,7 @@ export async function runCli(
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
         stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,
-        stdout,
+        stdout: recordStdout(),
         stderr,
       });
     },
@@ -623,7 +628,7 @@ export async function runCli(
         length: args.length ?? DEFAULT_EXPLORE_LENGTH,
         env: args.env ?? null,
         json: args.json ?? false,
-        stdout,
+        stdout: recordStdout(),
         stderr,
       });
     },

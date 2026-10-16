@@ -315,6 +315,7 @@ describe("nuka do", () => {
       // A returns-schema failure classifies as "result_invalid", distinct
       // from "args_invalid"/"step_error".
       expect(stepRecord.error.kind).toBe("result_invalid");
+      expect(stepRecord.args).toEqual({ n: 3 });
     } finally {
       await removeTempDir(rootDir);
     }

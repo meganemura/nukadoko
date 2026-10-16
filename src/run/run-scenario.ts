@@ -61,14 +61,11 @@ import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
-import { withStepStdoutOnStderr } from "./step-stdout.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
 import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../record/scenario-record.js";
 import { generateScenarioId } from "./scenario-id.js";
 import { writeScenarioRecord } from "./write-record.js";
-
-export { withStepStdoutOnStderr };
 
 // Responsibility: execute one pickle end to end — the scenario-level
 // counterpart to cli/do.ts's execution
@@ -2129,14 +2126,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               // in the live report right up to that point.
               const runResult = await withStepHeartbeat(
                 () =>
-                  withStepStdoutOnStderr(() =>
-                    runWithTimeout(
-                      () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(fixtures, argsResult.data))),
-                      entry.step.timeout ?? config.stepTimeout,
-                      "Step",
-                      outcome.stepName,
-                      entry.step.timeout === undefined ? "config" : "step",
-                    ),
+                  runWithTimeout(
+                    () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(fixtures, argsResult.data))),
+                    entry.step.timeout ?? config.stepTimeout,
+                    "Step",
+                    outcome.stepName,
+                    entry.step.timeout === undefined ? "config" : "step",
                   ),
                 stepIndex,
                 stepStartedAt,
@@ -2263,13 +2258,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             // this step declared no `{ timeout }` of its own.
             const returnValue = await withStepHeartbeat(
               () =>
-                withStepStdoutOnStderr(() =>
-                  runWithTimeout(
-                    () => contextHandle.recordingProcesses(() => Promise.resolve(entry.compat.fn.apply(world, positionalArgs))),
-                    entry.compat.timeoutMs ?? defaultTimeoutMs,
-                    "Step",
-                    outcome.stepName,
-                  ),
+                runWithTimeout(
+                  () => contextHandle.recordingProcesses(() => Promise.resolve(entry.compat.fn.apply(world, positionalArgs))),
+                  entry.compat.timeoutMs ?? defaultTimeoutMs,
+                  "Step",
+                  outcome.stepName,
                 ),
               stepIndex,
               stepStartedAt,

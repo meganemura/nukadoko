@@ -7,11 +7,14 @@ import { createEmptyTempDir, removeTempDir, repoRoot } from "./helpers/fixtures.
 
 const execFileAsync = promisify(execFile);
 
-// Responsibility: the stdout contract of `nuka do` and `nuka run` when a
-// step writes to the process stdout. An in-process `runCli` call passes
-// its own sink, so a `console.log` in the step never shares a stream with
-// the record and the bug cannot show up. These tests spawn the CLI the
-// way a caller does, and parse what that process actually prints.
+// Responsibility: the stdout contract of `nuka do` and `nuka run` when
+// project code writes to the process stdout: a step body, a hook, a
+// BeforeAll or AfterAll, a fixture, a World constructor, a step file at
+// load time, and a step that keeps running after its timeout. An
+// in-process `runCli` call passes its own sink, so none of these writes
+// shares a stream with the record and the bug cannot show up. These tests
+// spawn the CLI the way a caller does, and parse what that process
+// actually prints.
 
 const TYPED_LINE = "debug line from the step";
 const TYPED_PARTIAL = "partial stdout write";
@@ -181,6 +184,203 @@ describe("step stdout stays off the record stream", () => {
       expect(stdout).not.toContain(COMPAT_LINE);
       expect(stderr).toContain(TYPED_LINE);
       expect(stderr).toContain(COMPAT_LINE);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+});
+
+const NOISE = [
+  "MODULE_LOAD",
+  "BEFORE_ALL",
+  "AFTER_ALL",
+  "WORLD_CTOR",
+  "BEFORE_HOOK",
+  "AFTER_HOOK",
+  "SCENARIO_FIXTURE_SETUP",
+  "SCENARIO_FIXTURE_TEARDOWN",
+  "PROCESS_FIXTURE_SETUP",
+  "PROCESS_FIXTURE_TEARDOWN",
+  "LATE_WRITE",
+] as const;
+
+// Every write is partial (no newline), so a leak glues onto the next record
+// and breaks the line it lands in. `late.feature` times its first step out
+// at 100ms; that step writes 250ms after it began, while the second
+// scenario waits in a 600ms fixture setup, after any per-step diversion has
+// been put back.
+async function writeNoisyProject(rootDir: string): Promise<void> {
+  await mkdir(path.join(rootDir, "features", "steps"), { recursive: true });
+  await mkdir(path.join(rootDir, "features", "support"), { recursive: true });
+  await writeFile(
+    path.join(rootDir, "package.json"),
+    `${JSON.stringify({ name: "noisy-stdout", private: true, type: "module" }, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "nukadoko-shim.ts"),
+    `export * from "../../../src/index.js";\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "nukadoko-compat-shim.ts"),
+    `export * from "../../../src/compat/index.js";\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "nukadoko.config.ts"),
+    `import { defineConfig, defineFixtures } from "./nukadoko-shim.js";\n\n` +
+      `export default defineConfig({\n` +
+      `  fixtures: defineFixtures({\n` +
+      `    noisyScenario: async ({}, use) => {\n` +
+      `      process.stdout.write("SCENARIO_FIXTURE_SETUP");\n` +
+      `      await use({});\n` +
+      `      process.stdout.write("SCENARIO_FIXTURE_TEARDOWN");\n` +
+      `    },\n` +
+      `    noisyProcess: [\n` +
+      `      async ({}, use) => {\n` +
+      `        process.stdout.write("PROCESS_FIXTURE_SETUP");\n` +
+      `        await use({});\n` +
+      `        process.stdout.write("PROCESS_FIXTURE_TEARDOWN");\n` +
+      `      },\n` +
+      `      { scope: "process" },\n` +
+      `    ],\n` +
+      `    slowSetup: async ({}, use) => {\n` +
+      `      await new Promise((resolve) => setTimeout(resolve, 600));\n` +
+      `      await use({});\n` +
+      `    },\n` +
+      `  }),\n` +
+      `});\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "features", "steps", "noisy.ts"),
+    `import { z } from "zod";\n` +
+      `import { defineStep } from "../../nukadoko-shim.js";\n\n` +
+      `process.stdout.write("MODULE_LOAD");\n\n` +
+      `export default defineStep({\n` +
+      `  pattern: "a step uses noisy fixtures",\n` +
+      `  description: "Names fixtures that write to the process stdout",\n` +
+      `  args: z.object({}),\n` +
+      `  returns: z.object({}),\n` +
+      `  mutates: false,\n` +
+      `  run({ noisyScenario, noisyProcess }: any) {\n` +
+      `    void noisyScenario;\n` +
+      `    void noisyProcess;\n` +
+      `    return {};\n` +
+      `  },\n` +
+      `});\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "features", "steps", "outlive.ts"),
+    `import { z } from "zod";\n` +
+      `import { defineStep } from "../../nukadoko-shim.js";\n\n` +
+      `export default defineStep({\n` +
+      `  pattern: "a step outlives its timeout",\n` +
+      `  description: "Writes to the process stdout after its deadline",\n` +
+      `  args: z.object({}),\n` +
+      `  returns: z.object({}),\n` +
+      `  mutates: false,\n` +
+      `  timeout: 100,\n` +
+      `  async run() {\n` +
+      `    await new Promise((resolve) => setTimeout(resolve, 250));\n` +
+      `    process.stdout.write("LATE_WRITE");\n` +
+      `    return {};\n` +
+      `  },\n` +
+      `});\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "features", "steps", "slow.ts"),
+    `import { z } from "zod";\n` +
+      `import { defineStep } from "../../nukadoko-shim.js";\n\n` +
+      `export default defineStep({\n` +
+      `  pattern: "a step waits on a slow fixture",\n` +
+      `  description: "Names a fixture whose setup takes 600ms",\n` +
+      `  args: z.object({}),\n` +
+      `  returns: z.object({}),\n` +
+      `  mutates: false,\n` +
+      `  run({ slowSetup }: any) {\n` +
+      `    void slowSetup;\n` +
+      `    return {};\n` +
+      `  },\n` +
+      `});\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "features", "support", "hooks.ts"),
+    `import { After, AfterAll, Before, BeforeAll, setWorldConstructor, World, type IWorldOptions } from "../../nukadoko-compat-shim.js";\n\n` +
+      `class NoisyWorld extends World {\n` +
+      `  constructor(options: IWorldOptions) {\n` +
+      `    super(options);\n` +
+      `    process.stdout.write("WORLD_CTOR");\n` +
+      `  }\n` +
+      `}\n\n` +
+      `setWorldConstructor(NoisyWorld);\n` +
+      `BeforeAll(function () { process.stdout.write("BEFORE_ALL"); });\n` +
+      `AfterAll(function () { process.stdout.write("AFTER_ALL"); });\n` +
+      `Before(function () { process.stdout.write("BEFORE_HOOK"); });\n` +
+      `After(function () { process.stdout.write("AFTER_HOOK"); });\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "features", "noisy.feature"),
+    `Feature: Project code writes to stdout\n\n` +
+      `  Scenario: fixtures and hooks write to stdout\n` +
+      `    When a step uses noisy fixtures\n`,
+  );
+  await writeFile(
+    path.join(rootDir, "features", "late.feature"),
+    `Feature: A timed-out step writes late\n\n` +
+      `  Scenario: a step outlives its timeout\n` +
+      `    When a step outlives its timeout\n\n` +
+      `  Scenario: the next scenario waits in fixture setup\n` +
+      `    When a step waits on a slow fixture\n`,
+  );
+}
+
+describe("project stdout outside step bodies stays off the record stream", () => {
+  for (const concurrency of ["1", "2"]) {
+    it(`nuka run --concurrency ${concurrency} prints only records when hooks, fixtures, and a late step write to stdout`, async () => {
+      const rootDir = await createEmptyTempDir();
+      try {
+        await writeNoisyProject(rootDir);
+        const { stdout, stderr, exitCode } = await runNuka(rootDir, [
+          "run",
+          "features/noisy.feature",
+          "features/late.feature",
+          "--quiet",
+          "--concurrency",
+          concurrency,
+        ]);
+
+        expect(exitCode, stderr).toBe(1);
+        expect(stderr).not.toContain("unreadable line");
+        const records = expectParseableNdjson(stdout) as { scenario: string; status: string }[];
+        expect(
+          records.map((record) => `${record.scenario}: ${record.status}`).sort(),
+        ).toEqual([
+          "a step outlives its timeout: failed",
+          "fixtures and hooks write to stdout: passed",
+          "the next scenario waits in fixture setup: passed",
+        ]);
+        for (const marker of NOISE) {
+          expect(stdout, marker).not.toContain(marker);
+          expect(stderr, marker).toContain(marker);
+        }
+      } finally {
+        await removeTempDir(rootDir);
+      }
+    }, 60_000);
+  }
+
+  it("nuka do prints one JSON step record when its fixtures write to stdout", async () => {
+    const rootDir = await createEmptyTempDir();
+    try {
+      await writeNoisyProject(rootDir);
+      const { stdout, stderr, exitCode } = await runNuka(rootDir, ["do", "noisy", "--args", "{}"]);
+
+      expect(exitCode, stderr).toBe(0);
+      const record = expectParseableJson(stdout) as { step: string; status: string };
+      expect(record.step).toBe("noisy");
+      expect(record.status).toBe("ok");
+      for (const marker of ["MODULE_LOAD", "SCENARIO_FIXTURE_SETUP", "SCENARIO_FIXTURE_TEARDOWN"]) {
+        expect(stdout, marker).not.toContain(marker);
+        expect(stderr, marker).toContain(marker);
+      }
     } finally {
       await removeTempDir(rootDir);
     }

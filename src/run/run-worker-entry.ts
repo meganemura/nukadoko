@@ -33,6 +33,7 @@ import {
 } from "./run-scenario.js";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "./process-signal.js";
 import { selectPickles } from "./select-pickles.js";
+import { divertProcessStdoutToStderr } from "./step-stdout.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -76,7 +77,9 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 //
 // Every line this worker writes to its own stdout is a `WorkerEnvelope`
 // (src/run/worker-protocol.ts's own header explains why, and why nothing
-// meaningful goes to this process's real stderr instead). `noteSink`, below,
+// meaningful goes to this process's real stderr instead). Project code
+// that writes to `process.stdout` reaches this process's stderr instead
+// (src/run/step-stdout.ts), which the parent relays raw. `noteSink`, below,
 // is the one `WritableSink` this file threads into every helper that would
 // otherwise write straight to stderr at `--concurrency 1` (a version-probe
 // warning, an Allure emitter setup failure, a BeforeAll/AfterAll failure, a
@@ -111,8 +114,16 @@ const env = envArg0 === "" ? null : envArg0;
 const quiet = quietRawArg === "1";
 const repeat: number = Number(repeatRawArg);
 
+const envelopeStdout = divertProcessStdoutToStderr();
+const parentPid = process.ppid;
+const ignoreStreamError = (): void => {};
+const CHANNEL_CLOSED_FROM_INSIDE =
+  "Code in this worker closed its IPC channel to the parent while the parent was still running " +
+  "(process.disconnect()). nukadoko reads a closed channel as the parent ending, so this worker " +
+  "tears its fixtures down and stops.";
+
 function emit(envelope: WorkerEnvelope): void {
-  process.stdout.write(serializeWorkerEnvelope(envelope));
+  envelopeStdout.write(serializeWorkerEnvelope(envelope));
 }
 
 const noteSink: WritableSink = {
@@ -236,10 +247,34 @@ async function main(): Promise<void> {
   const restoreAllureRuntime = registerAllureRuntime();
   let allPassed = true;
   let processSignal: ProcessSignal | undefined;
+  // The IPC channel closes when the parent is gone (spawn-run-worker.ts).
+  // Nothing will forward a signal any more, so it counts as the first one.
+  // After a forwarded signal it is no signal at all: the parent was killed
+  // while this worker tore down, and that teardown must finish.
+  //
+  // With the parent gone, every write to stdout or stderr fails with EPIPE,
+  // and an unhandled stream error would end this worker in the middle of
+  // its teardown. The listeners go on first, before any write below and on
+  // the forwarded-signal path too, since that teardown is still running.
+  //
+  // Project code can close the channel too, with process.disconnect(). The
+  // parent is then still this worker's parent, so the line below says why
+  // the worker stops. The parent's death reparents this worker, so nothing
+  // is written then. The kernel can deliver the channel's end a moment
+  // before it reparents; the listeners make that write harmless.
+  const onParentGone = (): void => {
+    process.stdout.on("error", ignoreStreamError);
+    process.stderr.on("error", ignoreStreamError);
+    if (processSignal?.interrupted !== false) return;
+    if (process.ppid === parentPid) noteSink.write(`${CHANNEL_CLOSED_FROM_INSIDE}\n`);
+    processSignal.trigger("SIGHUP");
+  };
   try {
     const fixtureProcessCache = createFixtureCache();
     let processOutcome: FixtureOutcome = "failed";
     processSignal = installProcessSignalHandlers();
+    process.once("disconnect", onParentGone);
+    if (!process.connected) onParentGone();
     const tearDownProcessFixtures = runOnce(async () => {
       const outcome = processSignal?.interrupted === true ? "failed" : processOutcome;
       const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
@@ -392,6 +427,11 @@ async function main(): Promise<void> {
     processOutcome = allPassed ? "passed" : "failed";
     await tearDownProcessFixtures();
   } finally {
+    process.off("disconnect", onParentGone);
+    // Closed, not unref'd: a `message` listener that project code adds
+    // refs the channel again, and an open channel keeps this process alive
+    // after its last scenario, with the parent waiting on it.
+    if (process.connected) process.disconnect?.();
     processSignal?.stop();
     restoreAllureRuntime();
   }

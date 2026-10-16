@@ -8,7 +8,6 @@ import type { Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { classifyCaughtError, runWithTimeout } from "./run-scenario.js";
-import { withStepStdoutOnStderr } from "./step-stdout.js";
 
 // Responsibility: one typed step, run once in a ctx the caller already
 // holds. Validate the args, open the fixture bag, call `run` under the
@@ -71,14 +70,12 @@ export async function executeTypedStep(input: ExecuteTypedStepInput): Promise<Ty
     });
     fixtureUsage = resolved.usage;
     handle.beginStepRun(step, resolved.fixtures);
-    const runResult = await withStepStdoutOnStderr(() =>
-      runWithTimeout(
-        () => handle.recordingProcesses(() => Promise.resolve(step.run(resolved.fixtures, argsResult.data))),
-        step.timeout ?? config.stepTimeout,
-        "Step",
-        name,
-        step.timeout === undefined ? "config" : "step",
-      ),
+    const runResult = await runWithTimeout(
+      () => handle.recordingProcesses(() => Promise.resolve(step.run(resolved.fixtures, argsResult.data))),
+      step.timeout ?? config.stepTimeout,
+      "Step",
+      name,
+      step.timeout === undefined ? "config" : "step",
     );
     const returnsResult = step.returns.safeParse(runResult);
     if (!returnsResult.success) {
