@@ -4,6 +4,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    // `nuka run` appends its run summary to $GITHUB_STEP_SUMMARY, which
+    // GitHub Actions sets for every step. Without this, every run a test
+    // starts in CI would land in this repository's own job summary. Empty
+    // means unset to the CLI; a test that wants the file stubs it.
+    env: { GITHUB_STEP_SUMMARY: "" },
     // depug: a failed test prints the path of a JSON holding the frames on
     // the stack when the assertion was built, and the exact command to rerun
     // that one test, so a runtime value gets read from evidence rather than

@@ -63,7 +63,11 @@ nothing.
    `--quiet` drops the other progress lines when the terminal gets noisy.
    stdout stays NDJSON, one scenario record per line, unaffected either
    way. Text a step writes to the process stdout is delivered on stderr,
-   so a `console.log` in a step does not break that stream. A compat World
+   so a `console.log` in a step does not break that stream. The run also
+   writes a Markdown run summary for the person reviewing it, to
+   `.nukadoko/records/runs/<run_id>/summary.md` (the `summary` line names
+   it), to `$GITHUB_STEP_SUMMARY` when that is set, and to
+   `--summary <path>` when a CI step posts it as a pull request comment. A compat World
    constructor that throws fails that scenario only: stderr gets one setup
    line, later scenarios still run, and the messages export is finalized.
    When a scenario fails, diagnose it before repeating the whole run

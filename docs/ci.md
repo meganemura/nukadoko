@@ -77,7 +77,9 @@ jobs:
             curl -sf http://localhost:3000/ && break
             sleep 1
           done
-      # Merge/deploy gate: executes, writes step records.
+      # Merge/deploy gate: executes, writes step records. Its Markdown
+      # run summary appears on this job's summary page by itself, since
+      # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
       - run: npx nuka run features/
 
   tend:
@@ -191,8 +193,37 @@ of the above; these four are what changes.
 
 ## What a team adds on top
 
-Three things the workflow above leaves to the team, each small.
+Four things the workflow above leaves to the team, each small.
 
+- **The run summary as a pull request comment.** The job summary page
+  already shows it, but a reviewer reads the pull request. `--summary
+  <path>` writes the same Markdown to a file, and one more step posts it:
+
+  ```yaml
+  # in the `run` job, which then needs `pull-requests: write` beside
+  # `contents: read`
+  - run: npx nuka run features/ --summary nukadoko-summary.md
+  - name: Comment the run summary on the pull request
+    if: always() && github.event_name == 'pull_request' && hashFiles('nukadoko-summary.md') != ''
+    env:
+      GH_TOKEN: ${{ github.token }}
+    run: >-
+      gh pr comment ${{ github.event.pull_request.number }}
+      --body-file nukadoko-summary.md --edit-last --create-if-none
+  ```
+
+  `if: always()` is there because a red run is the one a reviewer most
+  needs to read. `--edit-last` updates the comment an earlier push left
+  instead of adding one per push. Every summary starts with the line
+  `<!-- nukadoko:run -->`, so a step that posts other comments too can find
+  this one by that marker instead. The summary names what ran: the commit,
+  the environment, the browser, each scenario's status and duration, the
+  first line of a failed step's error (secrets already redacted), and the
+  command that reruns it (see "Records" in [docs/spec.md](spec.md#records)).
+  The `pull-requests: write` permission is the cost: the job that runs the
+  suite can then write to the pull request. A pull request from a fork gets
+  a read-only token, so the step fails there; a team that takes fork pull
+  requests moves it to a separate job.
 - **A PR check that every feature the PR touched has a sign-off.**
   `feature-never-signed` is a `nuka tend` note: weekly, and never a failing
   exit code, so a feature merged without `nuka accept` stays unsigned until
@@ -224,7 +255,10 @@ parses as valid YAML, and every `npx nuka ...` command in it (including
 `nuka run features/`, the directory form used above, not just a single
 feature file) was run against a real, freshly `npm install`ed copy of
 this package, including the live-session refusal on `nuka clean` and the
-`feature-never-signed` finding disappearing once `nuka accept` runs.
+`feature-never-signed` finding disappearing once `nuka accept` runs. The
+pull request comment step under "What a team adds on top" was not run
+either: its `gh pr comment` flags were read from `gh`'s own help, not
+exercised against a real pull request.
 `npx playwright install --with-deps chromium` was checked with its own
 `--dry-run`, not run to completion; `--with-deps` has no effect outside a
 Linux runner, which this repository has none of, so the download itself

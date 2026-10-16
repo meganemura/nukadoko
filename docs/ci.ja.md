@@ -72,7 +72,9 @@ jobs:
             curl -sf http://localhost:3000/ && break
             sleep 1
           done
-      # Merge/deploy gate: executes, writes step records.
+      # Merge/deploy gate: executes, writes step records. Its Markdown
+      # run summary appears on this job's summary page by itself, since
+      # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
       - run: npx nuka run features/
 
   tend:
@@ -161,9 +163,35 @@ jobs:
 
 ## チームがその上に足すもの
 
-上の workflow がチームに委ねているものが 3 つあります。
+上の workflow がチームに委ねているものが 4 つあります。
 どれも小さいものです。
 
+- **pull request のコメントとしての run サマリ。**
+  ジョブのサマリページにはすでに表示されますが、レビュアーが読むのは pull request です。
+  `--summary <path>` は同じ Markdown をファイルにも書き、もう 1 つの step がそれを投稿します。
+
+  ```yaml
+  # in the `run` job, which then needs `pull-requests: write` beside
+  # `contents: read`
+  - run: npx nuka run features/ --summary nukadoko-summary.md
+  - name: Comment the run summary on the pull request
+    if: always() && github.event_name == 'pull_request' && hashFiles('nukadoko-summary.md') != ''
+    env:
+      GH_TOKEN: ${{ github.token }}
+    run: >-
+      gh pr comment ${{ github.event.pull_request.number }}
+      --body-file nukadoko-summary.md --edit-last --create-if-none
+  ```
+
+  `if: always()` があるのは、レビュアーが最も読む必要があるのが赤い run だからです。
+  `--edit-last` は、push のたびにコメントを足すのではなく、前の push が残したコメントを更新します。
+  どのサマリも `<!-- nukadoko:run -->` という行で始まるので、ほかのコメントも投稿する step は、代わりにこの目印でこのコメントを見つけられます。
+  サマリは何が走ったかを名指しします。
+  コミット、environment、ブラウザ、各 scenario の状態と所要時間、失敗した step のエラーの 1 行目(secret はすでに伏せてあります)、そしてそれを再実行するコマンドです(docs/spec.ja.md の「Records」を参照)。
+  代償は `pull-requests: write` の権限です。
+  suite を走らせるジョブが pull request に書き込めるようになります。
+  fork からの pull request は読み取り専用のトークンを受け取るので、そこではこの step は失敗します。
+  fork からの pull request を受け付けるチームは、この step を別のジョブに移します。
 - **PR が触った feature すべてに sign-off が在ることを確かめる PR の検査。**
   `feature-never-signed` は `nuka tend` の note です。
   週次で、終了コードを赤にすることはありません。
@@ -193,6 +221,8 @@ jobs:
 このリポジトリの中では、それを実行する手段が無いからです。
 代わりに確かめたのは次のことです。
 この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したこと(`nuka clean` の live session 拒否や、`nuka accept` を実行した瞬間に `feature-never-signed` の finding が消えることも含めて)です。
+「チームがその上に足すもの」にある pull request のコメント step も実行していません。
+その `gh pr comment` のフラグは `gh` 自身のヘルプから読んだもので、実際の pull request に対して試してはいません。
 `npx playwright install --with-deps chromium` は自身の `--dry-run` で確かめただけで、最後まで実行してはいません。
 `--with-deps` は Linux ランナーの外では何もしないため(このリポジトリには Linux ランナーがありません)、ダウンロード自体はここでは試していません。
 上の `uses:` 行にある 2 つのコミット SHA は、GitHub 自身の API に照らして確かめました。

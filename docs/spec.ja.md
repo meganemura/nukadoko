@@ -105,7 +105,7 @@ nukadoko が扱うものはすべて、5 つの種類のどれかに属します
 | 目的 | 成果物 | 書く | コミット | 寿命 | 読む |
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
-| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
+| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧、その断定、その Markdown のサマリ) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | `nuka accept`、Allure emitter と messages emitter、`nuka do --use` |
 | Sign-off | `<feature のファイル名>.<date>-<sha>.<environment>.<browser>.md`、feature の隣 | ツール(`nuka accept`) | する | 永続 | 人、PR レビュー、`nuka tend` |
 | Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも) | ツール | しない | 書いた run と同じ | 他のツール |
 | Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
@@ -1698,7 +1698,7 @@ scenario は見出しか `---` で分け、narration は引用かフェンスに
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet]
+nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -2281,6 +2281,38 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   scenario record は `.nukadoko/records/scenarios/<id>/` の下に置かれます(「成果物」を参照)。
   どちらもローカルな作業上の計測であり、そこから組み立てられる耐久性のある成果物が sign-off です。
 
+**run サマリ。**
+record は機械とエージェントのために書かれます。
+pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまとめた Markdown のサマリも書きます。
+これは run をレビューする人のためのものです。
+run が計測したものだけから、すべての record と run scope の hook の後に組み立てられます。
+そのため `--concurrency` の run でも、worker ごとではなく親プロセスが 1 つのサマリを書きます。
+中身は次のとおりです。
+
+- 先頭の `<!-- nukadoko:run -->` という行。
+  CI の step は、これで前に投稿した pull request のコメントを見つけて更新できます。
+- run の断定と scenario の件数を載せた表題。
+  断定は終了コードのものです。
+  そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗がどの scenario の外で起きたかを述べる 1 文が付きます。
+- 条件。
+  短いコミット sha と未コミットの変更があったかどうか(`git` から読み、無ければ unknown)、environment とその target version、scenario が起動したすべてのブラウザ(無ければ none launched)、nukadoko のバージョン、run id、開始と終了の時刻です。
+- feature ファイルごとの表(パス順)。
+  scenario record ごとに 1 行を行番号順に並べ、scenario、行、状態、所要時間を載せます。
+  失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
+  `--repeat` では、実行のそれぞれが 1 行になります。
+- 「Declared vs observed」。
+  sign-off の末尾にあるのと同じ節です(「Sign-off」を参照)。
+  実行されて step record を持つすべての step が対象です。
+- 失敗した run では、失敗した各 scenario の `nuka run <feature>:<line>` コマンド。
+  run に `--env` があればそれも付きます。
+
+サマリは毎回 `.nukadoko/records/runs/<run_id>/summary.md` に書かれます。
+`$GITHUB_STEP_SUMMARY` が設定されていれば、それが指すファイルに追記されます(GitHub Actions はすべての step にこれを設定するので、設定なしでジョブのサマリページに run が載ります)。
+`--summary <path>` が与えられれば、そこにも書かれ、前の中身は置き換えられます。
+サマリの中のエラー文は scenario record のものなので、secret はすでに伏せてあります。
+書けなかったサマリは stderr の警告になり、終了コードを変えることはありません。
+record を何も書かない setup の失敗は、サマリも書きません。
+
 ## Session、environment、secret
 
 nukadoko は、Cucumber が提供しなかった実行インフラを提供します:
@@ -2539,6 +2571,7 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   これがあるので、run の export 出力は run と一緒に消えます(「成果物」を参照)。
   状態や時刻は持ちません。
   各 scenario record が自分の run の `run_id` と `started_at` を既に持っているからです。
+  同じディレクトリには、run の断定である `complete.json` と、run サマリである `summary.md` も置かれます(「Records」を参照)。
 - `cache/sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
 - `export/allure-results/`(emitter の出力。
   `records/` が持つのと同じ run を持ちます。
@@ -3457,7 +3490,11 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               scenario n times in this one invocation, each
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
-                              repeat line after the failed list
+                              repeat line after the failed list.
+                              Every run writes a Markdown run summary to
+                              records/runs/<run_id>/summary.md and appends it
+                              to $GITHUB_STEP_SUMMARY when set; --summary
+                              <path> writes one more copy there
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
                               execute one typed step; step record to stdout.
                               --env and --session as on nuka run; against a

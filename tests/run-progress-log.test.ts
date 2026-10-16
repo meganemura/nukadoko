@@ -160,7 +160,8 @@ describe("nuka run: progress output", () => {
       .replace(/\(\d+(h|m|s)[^)]*\)/g, "(<duration>)")
       .replaceAll(path.sep, "/")
       .replace(/records\/steps\/[a-z0-9-]+/g, "records/steps/<id>")
-      .replace(/messages\.run-[a-z0-9-]+\.ndjson/g, "messages.<run>.ndjson");
+      .replace(/messages\.run-[a-z0-9-]+\.ndjson/g, "messages.<run>.ndjson")
+      .replace(/records\/runs\/run-[a-z0-9-]+/g, "records/runs/<run>");
   }
 
   it("names a failed step's error and step record, and how to rerun the scenario", async () => {
@@ -181,6 +182,7 @@ describe("nuka run: progress output", () => {
         "scenarios .nukadoko/records/scenarios/  1",
         "allure    .nukadoko/export/allure-results/",
         "messages  .nukadoko/export/messages.<run>.ndjson",
+        "summary   .nukadoko/records/runs/<run>/summary.md",
         "1 scenario: 0 passed, 1 failed  (<duration>)",
         "failed  features/failing.feature:3  an operation fails partway through",
         "  rerun  nuka run features/failing.feature:3",

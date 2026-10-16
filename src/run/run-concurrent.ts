@@ -6,6 +6,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import type { SecretSet } from "../secrets/types.js";
 import {
@@ -105,6 +106,9 @@ export interface RunConcurrentOptions {
   readonly flatPickles: readonly { readonly feature: SelectedFeature; readonly pickle: Pickle }[];
   readonly allureResultsDirRel: string;
   readonly messagesOutputRel: string;
+  /** Hears every scenario record the parent forwards, so the parent writes
+   * one run summary for the whole run (src/run/run-summary.ts). */
+  readonly onRecord: (record: ScenarioRecord) => void;
   readonly stdout: WritableSink;
   readonly stderr: WritableSink;
 }
@@ -149,6 +153,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     flatPickles,
     allureResultsDirRel,
     messagesOutputRel,
+    onRecord,
     stdout,
     stderr,
   } = options;
@@ -248,6 +253,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     }
     if (repeat > 1) repeatTally.note(record);
     stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
+    onRecord(record);
 
     if (!quiet) {
       writeScenarioBoundary(stderr, {

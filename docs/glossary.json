@@ -287,6 +287,11 @@
       "en": ["JSON-escaped form", "JSON-escaped"],
       "ja": "JSON エスケープされた形",
       "note": "JSON.stringify が文字列の中に書く綴り。前後の引用符は含まない。redact が読み込んだ値と同じ {{secret.NAME}} で置き換える。コード上の JSON.stringify は識別子なので原文のまま"
+    },
+    {
+      "en": ["run summary"],
+      "ja": "run サマリ",
+      "note": "nuka run が書く Markdown(summary.md、$GITHUB_STEP_SUMMARY、--summary)。stderr に出る 1 行のサマリ(サマリ行)とは別物。run は英語のまま"
     }
   ],
   "keep_english": [

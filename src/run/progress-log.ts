@@ -78,7 +78,8 @@ export function stepRecordPath(stateDir: string, stepRecordId: string): string {
   return path.join(stateDir, "records", "steps", stepRecordId);
 }
 
-function formatStepDuration(durationMs: number): string {
+/** Seconds with one decimal, the unit a step or a scenario reads in. */
+export function formatStepDuration(durationMs: number): string {
   return `${(Math.max(0, durationMs) / 1000).toFixed(1)}s`;
 }
 
@@ -217,7 +218,8 @@ export interface FailedScenario {
   readonly scenario: string;
 }
 
-function formatSummaryDuration(durationMs: number): string {
+/** `1h 2m 3s`, the unit a whole run reads in. */
+export function formatSummaryDuration(durationMs: number): string {
   const totalSeconds = Math.round(Math.max(0, durationMs) / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);

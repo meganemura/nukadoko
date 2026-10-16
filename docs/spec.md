@@ -104,7 +104,7 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
+| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote, its verdict, its Markdown summary) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | `nuka accept`, the Allure and messages emitters, `nuka do --use` |
 | Sign-off | `<feature-filename>.<date>-<sha>.<environment>.<browser>.md`, beside the feature | the tool (`nuka accept`) | yes | permanent | humans, PR review, `nuka tend` |
 | Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter) | the tool | no | with the run that wrote it | other tools |
 | Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
@@ -1959,7 +1959,7 @@ blockquote or a fence.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet]
+nuka run <feature[:line]|dir>... [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2771,6 +2771,41 @@ array identifies each step record by id, so either record leads to the other.
   local working measurements; the durable artifacts built from them are
   sign-offs.
 
+**The run summary.** Records are written for a machine and an agent. Each
+`nuka run` that runs at least one pickle also writes one Markdown summary of
+the whole run, for the person who reviews it. It is built only from what the
+run measured, after every record and run-scope hook, so a `--concurrency`
+run gets one summary from the parent, not one per worker. It holds:
+
+- the line `<!-- nukadoko:run -->` first, so a CI step can find and update a
+  pull request comment it posted earlier;
+- a title with the run's verdict (the exit code's, so an AfterAll failure
+  with every scenario green still reads `failed`, with a sentence saying the
+  failure was outside every scenario) and its scenario counts;
+- the condition: the short commit sha and whether the tree had uncommitted
+  changes (from `git`, or "unknown" without one), the environment and its
+  target version, every browser a scenario launched or "none launched", the
+  nukadoko version, the run id, and the start and finish times;
+- one table per feature file, by path, with a row per scenario record in line
+  order: scenario, line, status, duration, and for a failed one where it
+  failed (the first step that did not pass or skip, otherwise the first
+  failed hook), the first line of that error, the last command the step ran
+  through `runCommand` that did not exit 0, and the record's path. Under
+  `--repeat`, each execution is its own row;
+- "Declared vs observed", the same section a sign-off ends with (see
+  "Sign-off"), over every step that ran and has a step record;
+- for a failed run, the `nuka run <feature>:<line>` command for each failed
+  scenario, with `--env` when the run had one.
+
+It is written to `.nukadoko/records/runs/<run_id>/summary.md` every time,
+appended to the file `$GITHUB_STEP_SUMMARY` names when that is set (GitHub
+Actions sets it for every step, so the job's summary page shows the run with
+no configuration), and written to `--summary <path>` when the flag is given,
+replacing what was there. Error text in it is the scenario record's, so
+secrets are already redacted. A summary that cannot be written is a warning
+on stderr; it never changes the exit code. A setup failure, which writes no
+record, writes no summary.
+
 ## Sessions, environments, secrets
 
 Nukadoko provides execution infrastructure that Cucumber did not provide:
@@ -3053,7 +3088,9 @@ for separate purposes (see "Artifacts"):
   whichever process wrote the file (under `--concurrency`, the worker
   processes do). It is what lets a run's export output leave with the run
   (see "Artifacts"). It carries no status or timing: every scenario record
-  already carries its run's `run_id` and `started_at`
+  already carries its run's `run_id` and `started_at`. The same directory
+  holds `complete.json`, the run's verdict, and `summary.md`, its run
+  summary (see "Records")
 - `cache/sessions/<env>/<name>.json`: storageState; live credentials in
   plaintext, created with restricted permissions
 - `export/allure-results/`: the emitter's output, holding the same runs
@@ -4051,7 +4088,11 @@ nuka run <feature[:line]|dir>... [--env <name>] [--session <name>]
                               scenario n times in this one invocation, each
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
-                              repeat line after the failed list
+                              repeat line after the failed list.
+                              Every run writes a Markdown run summary to
+                              records/runs/<run_id>/summary.md and appends it
+                              to $GITHUB_STEP_SUMMARY when set; --summary
+                              <path> writes one more copy there
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
                               execute one typed step; step record to stdout.
                               --env and --session as on nuka run; against a

@@ -610,6 +610,10 @@ failed  features/sum.feature:3  two and two
   rerun  nuka run features/sum.feature:3
 ```
 
+同じ事実は、ログではなく人のために書かれた Markdown の run サマリにも入ります。
+毎回の run で `.nukadoko/records/runs/<run_id>/summary.md` に書かれ、`$GITHUB_STEP_SUMMARY` が設定されていればそこに追記され、PR のコメント step 向けには `--summary <path>` にも書かれます。
+その 1 行目は `<!-- nukadoko:run -->` なので、CI の step は前の push で投稿したコメントを更新できます。
+
 **記録を置き換える retry は恒久的にスコープ外であり、「いまはまだ」ではありません。**
 green な scenario は、その待ちが正しい場所に置かれている証拠には一切なりません。
 scenario が必要としたあらゆる待ちは、もっと下流のどこかに偶然置かれていても供給され得たものであり、それらを一切通らない経路だけが、待ちが本来どこに属するかを示せます([Design](#design) を参照)。
@@ -699,12 +703,16 @@ description のないスキーマフィールドは、ファイルを見る人�
 
 ## 誰が何を読むか
 
-コードを書かずに承認する人が PR で開くのは 2 つのファイルです。
-`.feature` を開いて、チケットの意図どおりに書かれているかを確かめます。
-その隣の sign-off の `.md` を開いて、何がどの commit で走ったかを確かめます。
+コードを書かずに承認する人が PR で読むのは 2 つのものです。
+diff の中の `.feature` を読んで、チケットの意図どおりに書かれているかを確かめます。
+run サマリを読んで、何がどの commit で走ったかを確かめます。
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
-sign-off record はその最初の読み手のために書かれています。
-feature の本文、scenario ごとのサマリ表、そして `mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節です。
+`nuka run` は毎回そのサマリを Markdown で書きます。
+commit、environment、ブラウザ、feature ごとの表(各 scenario の状態、所要時間、失敗した step)、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
+GitHub Actions では設定なしでジョブのサマリページに載り、`--summary <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
+
+feature の隣に record をコミットしておきたいチームは、green の run の後で `nuka accept` を実行します。
+その sign-off の `.md` は、feature の本文、scenario ごとのサマリ表、そして同じ末尾の節を運びます。
 その step の件数は、冒頭の Condition 節に先に書かれています。
 
 ## Design

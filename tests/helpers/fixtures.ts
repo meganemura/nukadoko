@@ -190,7 +190,7 @@ export function createCaptureSink(): { write(chunk: string): boolean; text(): st
 // blanket swallow that could also hide a real warning.
 const SCENARIO_BOUNDARY_LINE = /^scenario \d+\/\d+  /;
 const STEP_PROGRESS_LINE = /^ {2}step \d+\/\d+  /;
-const OUTPUT_LOCATION_LINE = /^(?:steps|scenarios|allure|messages)\b/;
+const OUTPUT_LOCATION_LINE = /^(?:steps|scenarios|allure|messages|summary)\b/;
 const RUN_SUMMARY_LINE = /^\d+ scenarios?: \d+ passed, \d+ failed {2}\(/;
 // The per-failure lines the summary is followed by, one per scenario that
 // did not pass. Chrome of the same kind as the summary itself, so a test

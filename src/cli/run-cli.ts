@@ -136,6 +136,8 @@ interface RunArgs {
    * (that file's own header explains why the check lives there and not
    * here). */
   concurrency?: number;
+  /** `--summary <path>`: one more copy of the Markdown run summary. */
+  summary?: string;
 }
 
 interface HarvestArgs {
@@ -531,7 +533,13 @@ export async function runCli(
             "(default 1); for a failure that reproduces one time in several. Each execution is its own scenario " +
             "record under the one run_id, and a scenario that failed at least once gets a `repeat` line after the summary",
         })
-        .check(rejectRepeatedFlags(["session", "env", "concurrency", "repeat"])) as Argv<RunArgs>,
+        .option("summary", {
+          type: "string",
+          describe:
+            "also write the Markdown run summary to this path, for a CI step that posts it on a pull request " +
+            "(it is always written to the run's directory, and appended to $GITHUB_STEP_SUMMARY when that is set)",
+        })
+        .check(rejectRepeatedFlags(["session", "env", "concurrency", "repeat", "summary"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       exitCode = await runRun({
@@ -542,6 +550,10 @@ export async function runCli(
         quiet: args.quiet ?? false,
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
+        summaryPath: args.summary ?? null,
+        // GitHub Actions sets this for every step; an empty value means no
+        // file to append to.
+        stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,
         stdout,
         stderr,
       });

@@ -290,6 +290,7 @@ export default {
         "run-concurrent.ts",
         "run-id.ts",
         "run-scenario.ts",
+        "run-summary.ts",
         "select-pickles.ts",
       ],
     },

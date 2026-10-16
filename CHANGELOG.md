@@ -71,6 +71,28 @@ just until 0.1.
   replaceable builtin (`ReplaceableFixtures`) the project did not declare.
   `FixtureBag`, `ReplaceableFixtures`, and `Scratch` are exported types, and
   `InvalidScratchPrefixError` is exported for `instanceof`.
+- **`nuka run` writes a Markdown run summary for the person reviewing the run.**
+  Every run that runs at least one pickle writes
+  `<stateDir>/records/runs/<run_id>/summary.md`, appends the same Markdown
+  to the file `$GITHUB_STEP_SUMMARY` names when that is set (GitHub Actions
+  sets it, so the job summary shows the run with no configuration), and
+  writes it to `--summary <path>` when given, replacing that file. It
+  starts with `<!-- nukadoko:run -->` so a CI step can update a pull
+  request comment in place. It holds the run's verdict and counts; the
+  short commit sha and whether the tree had uncommitted changes; the
+  environment, target version, browsers, nukadoko version, run id, and
+  times; one table per feature with each scenario record's status,
+  duration, and, when it failed, the failing step or hook, the first line
+  of its error, the last command it ran through `runCommand` that did not
+  exit 0, and the record path; the "Declared vs observed" section a
+  sign-off ends with; and the `nuka run <feature>:<line>` rerun command
+  for each failed scenario. Under `--concurrency` the parent writes one
+  summary for the whole run. The output-location lines gain a `summary`
+  row. A summary that cannot be written is a stderr warning and never
+  changes the exit code; a setup failure writes none. `nuka accept` is
+  unchanged: its "Declared vs observed" rendering now lives in a module
+  both documents share, and its output is byte for byte the same. Before
+  this, nothing a person could read came out of CI except the stderr tail.
 - **A test checks the names the docs give for commands, flags, finding codes, and headings.**
   `tests/docs-cli-names.test.ts` reads README.md, README.ja.md, llms.txt,
   `docs/`, and `skills/`. Every `nuka ...` must name a command and flags the

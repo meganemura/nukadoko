@@ -40,6 +40,8 @@ import {
 } from "../run/progress-log.js";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
+import { createRunSummaryCollector, renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
+import { readOwnVersion } from "../version.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
 import { writeRunMarker } from "../record/run-marker.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
@@ -218,6 +220,14 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // is no TTY check. A CI log wants the same progress, and stderr staying
 // busy is invisible to stdout's NDJSON readers.
 //
+// The Markdown run summary (src/run/run-summary.ts) is the reader-facing
+// counterpart of those stderr lines. Every written record is noted as it is
+// written, by this file at concurrency 1 and through `onRecord` above it,
+// and the summary is written once, after AfterAll and process fixture
+// teardown, so its verdict is the exit code's. It is written before the
+// output locations so that list can name it, and before the run marker,
+// which stays the run's last write.
+//
 // `--concurrency` above 1 diverts to src/run/run-concurrent.ts, in one
 // branch after every setup-phase check (bindings, from, fixtures, tag
 // expressions) and before `registerAllureRuntime`. Those checks still run
@@ -269,6 +279,14 @@ export interface RunRunOptions {
    * Under `--concurrency`, each worker repeats its own files; a target
    * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
   repeat: number;
+  /** `--summary <path>`: one more copy of the run summary, resolved against
+   * `rootDir`, for a CI step that posts it as a pull request comment.
+   * `null` without the flag; the copy in the run directory is written
+   * either way. */
+  summaryPath: string | null;
+  /** `$GITHUB_STEP_SUMMARY` as the CLI read it, `undefined` when unset or
+   * empty. Passed in rather than read here so a test decides it. */
+  stepSummaryPath: string | undefined;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -283,7 +301,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 }
 
 async function runRunInner(options: RunRunOptions, unregisters: Array<() => Promise<void>>): Promise<number> {
-  const { rootDir, featureArgs, session, env, quiet, concurrency, repeat, stdout, stderr } = options;
+  const { rootDir, featureArgs, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stdout, stderr } =
+    options;
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a
@@ -566,6 +585,37 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
     const git = await probeGitState(rootDir);
     // A rerun line has to land in the same environment the failure came from.
     const rerunFlags = env === null ? [] : ["--env", env];
+    const summary = createRunSummaryCollector(rootDir, config.stateDir);
+    // Written after every record and hook of the run, before the output
+    // locations so that list can name it. A run with no pickle wrote no
+    // record and gets no summary, the same rule as the run marker. Returns
+    // the root-relative path of the run directory's copy, or `null`.
+    const emitRunSummary = (verdict: "passed" | "failed"): string | null => {
+      if (flatPickles.length === 0) return null;
+      const markdown = renderRunSummary({
+        ...summary.collected(),
+        runId,
+        verdict,
+        startedAt: invocationStartedAt,
+        finishedAt: new Date(),
+        nukadokoVersion: readOwnVersion(),
+        environment: resolvedEnv.name,
+        targetVersion,
+        git,
+        rerunFlags,
+      });
+      const result = writeRunSummaryFiles(markdown, {
+        rootDir,
+        stateDir: config.stateDir,
+        runId,
+        summaryPath: summaryPath ?? undefined,
+        stepSummaryPath,
+      });
+      for (const warning of result.warnings) stderr.write(`${warning}\n`);
+      return result.runSummaryPath;
+    };
+    const summaryLocation = (relativePath: string | null) =>
+      relativePath === null ? [] : [{ label: "summary", relativePath, kind: "file" as const }];
 
     // Retention (src/record/retention.ts) runs last in both branches
     // below, after this run's own records and export files are complete,
@@ -698,11 +748,13 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
           flatPickles,
           allureResultsDirRel,
           messagesOutputRel,
+          onRecord: (record) => summary.note(record),
           stdout,
           stderr,
         });
 
       messagesEmitter?.end(allPassed);
+      const runSummaryPath = emitRunSummary(allPassed ? "passed" : "failed");
 
       writeOutputLocations(stderr, [
         ...(scenariosWritten > 0
@@ -731,6 +783,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
               },
             ]
           : []),
+        ...summaryLocation(runSummaryPath),
       ]);
       writeRunSummary(stderr, {
         total: scenariosWritten,
@@ -1048,6 +1101,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
           // finishes; everything else about
           // this run goes to stderr, never stdout.
           stdout.write(`${JSON.stringify(record)}\n`);
+          summary.note(record);
           scenariosWritten += 1;
           if (record.status === "passed") {
             scenariosPassed += 1;
@@ -1125,6 +1179,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       // had their chance to flip `allPassed`, immediately before the
       // `return` below that turns it into this run's own exit code.
       messagesEmitter?.end(allPassed);
+      const runSummaryPath = emitRunSummary(allPassed ? "passed" : "failed");
 
       // Where this run actually
       // wrote, then a one-line summary — both unconditional, `--quiet`
@@ -1169,6 +1224,7 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
               },
             ]
           : []),
+        ...summaryLocation(runSummaryPath),
       ]);
       writeRunSummary(stderr, {
         total: scenariosWritten,

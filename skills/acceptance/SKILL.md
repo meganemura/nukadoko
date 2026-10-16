@@ -128,7 +128,9 @@ proves the wrong thing.
    throws while it is constructed fails that scenario only: stderr gets
    one setup line, later scenarios still run, and the messages export is
    finalized. There is no step record for that failure. `run` needs a
-   target; `check` walks the project when given none.
+   target; `check` walks the project when given none. Every run also
+   writes a Markdown run summary for the reviewer (`--summary <path>` for
+   a copy a CI step posts on the pull request).
 7. `nuka accept <feature>`, then commit the record it wrote.
    `references/running.md`. A refusal names the condition and the next
    command: `references/diagnosing.md` ("When accept refuses").

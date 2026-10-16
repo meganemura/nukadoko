@@ -665,6 +665,12 @@ failed  features/sum.feature:3  two and two
   rerun  nuka run features/sum.feature:3
 ```
 
+The same facts go into a Markdown run summary, written for a person rather
+than a log: `.nukadoko/records/runs/<run_id>/summary.md` on every run,
+appended to `$GITHUB_STEP_SUMMARY` when that is set, and to `--summary
+<path>` for a PR comment step. Its first line is `<!-- nukadoko:run -->`, so
+a CI step can update the comment it posted on an earlier push.
+
 **A retry that replaces the record is out of scope permanently, not "not
 yet".** A green scenario is no evidence that its waits are placed
 correctly: every wait a scenario needed could have been supplied by
@@ -770,14 +776,22 @@ reading a directory of step records, which nobody does.
 
 ## Who reads what
 
-A person who approves without writing code opens two files in a PR: the
-`.feature`, to check it says what the ticket meant, and the sign-off `.md`
-beside it, to check what ran and at which commit. Everything under
-`.nukadoko/` and every `nuka` verb belongs to the agent or to CI. The
-sign-off record is written for that first reader: the feature's own text,
-one summary table per scenario, and a closing section naming any step
-that declared `mutates: false` while measured making a write, with the
-count of those steps already stated in the Condition section at the top.
+A person who approves without writing code reads two things on a PR: the
+`.feature` in the diff, to check it says what the ticket meant, and the
+run summary, to check what ran and at which commit. Everything under
+`.nukadoko/` and every `nuka` verb belongs to the agent or to CI. Every
+`nuka run` writes that summary as Markdown: the commit, the environment,
+the browser, one table per feature with each scenario's status, duration,
+and failing step, a closing section naming any step that declared
+`mutates: false` while measured making a write, and the command that reruns
+each failed scenario. On GitHub Actions it lands on the job's summary page
+with no configuration, and `--summary <path>` writes a copy a CI step can
+post as a PR comment ([docs/ci.md](docs/ci.md)).
+
+A team that wants a record committed beside the feature runs `nuka accept`
+after a green run. That sign-off `.md` carries the feature's own text, one
+summary table per scenario, and the same closing section, with the count of
+those steps already stated in the Condition section at the top.
 
 ## Design
 
