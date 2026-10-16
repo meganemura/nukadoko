@@ -543,8 +543,11 @@ this README says so.
 
 `nuka init` sets up a CLI or API project ([An HTTP API](#an-http-api)
 shows the API shape). It adds `.nukadoko/` to
-`.gitignore` and `"test:scenarios": "nuka run"` to the `package.json`
-scripts, unless a script by that name already exists. `npm run
+`.gitignore` unless a line there already ignores that directory
+(`.nukadoko`, `/.nukadoko/`, and `.nukadoko/**` count), and
+`"test:scenarios": "nuka run"` to the `package.json` scripts, unless a
+script by that name already exists; when that script runs something else,
+`init` says so on stderr. `npm run
 test:scenarios` is then the one command a person or CI runs: `nuka run`
 with no target runs `featuresDir`, and it reports what `nuka check` reports
 for those scenarios and stops before executing anything when one is an

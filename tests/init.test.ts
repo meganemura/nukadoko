@@ -4,6 +4,8 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import path from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { loadConfig } from "../src/config/load-config.js";
@@ -185,15 +187,33 @@ describe("nuka init", () => {
     expect(config.messages).toBeUndefined();
   });
 
-  it("keeps an existing test:scenarios script and the file's own indentation", async () => {
-    const own = `${JSON.stringify({ type: "module", scripts: { "test:scenarios": "mine" } }, null, 4)}\n`;
+  it("keeps an existing test:scenarios script and the file's own indentation, and says it kept it", async () => {
+    const own = `${JSON.stringify({ type: "module", scripts: { "test:scenarios": "cucumber-js" } }, null, 4)}\n`;
     await writeFile(path.join(rootDir, "package.json"), own);
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init"], { rootDir, stdout, stderr: createCaptureSink() });
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("package.json");
+    expect(stderr.text()).toBe(
+      'package.json already has a test:scenarios script ("cucumber-js"); nuka init left it as it is, so run "nuka run" directly or point that script at it\n',
+    );
+    expect(await readFile(path.join(rootDir, "package.json"), "utf8")).toBe(own);
+  });
+
+  it("says nothing about a test:scenarios script that already runs nuka run", async () => {
+    const own = `${JSON.stringify({ type: "module", scripts: { "test:scenarios": "nuka run" } }, null, 2)}\n`;
+    await writeFile(path.join(rootDir, "package.json"), own);
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("package.json");
+    expect(stderr.text()).toBe("");
     expect(await readFile(path.join(rootDir, "package.json"), "utf8")).toBe(own);
   });
 
@@ -487,7 +507,65 @@ describe("nuka init", () => {
     }
   });
 
+  it.each([".nukadoko", "/.nukadoko/", ".nukadoko/**", "/.nukadoko"])(
+    "takes an existing %s line for the state directory and leaves .gitignore byte-identical",
+    async (line) => {
+      const text = `node_modules/\n${line}\n`;
+      await writeFile(path.join(rootDir, ".gitignore"), text);
+      const stdout = createCaptureSink();
+
+      const exitCode = await runCli(["init"], { rootDir, stdout, stderr: createCaptureSink() });
+
+      expect(exitCode).toBe(0);
+      expect(stdout.text()).not.toContain(".gitignore");
+      expect(await readFile(path.join(rootDir, ".gitignore"), "utf8")).toBe(text);
+    },
+  );
+
+  it.each([".nukadoko-old", "!.nukadoko/", ".nukadoko/*.json", "sub/.nukadoko/"])(
+    "does not take %s for the state directory, and appends .nukadoko/",
+    async (line) => {
+      await writeFile(path.join(rootDir, ".gitignore"), `${line}\n`);
+      const stdout = createCaptureSink();
+
+      const exitCode = await runCli(["init"], { rootDir, stdout, stderr: createCaptureSink() });
+
+      expect(exitCode).toBe(0);
+      expect(stdout.text()).toContain(".gitignore");
+      expect(await readFile(path.join(rootDir, ".gitignore"), "utf8")).toBe(`${line}\n.nukadoko/\n`);
+    },
+  );
+
+  // The claim init makes about .gitignore: with any accepted spelling of
+  // the state directory among unrelated lines, it writes nothing; without
+  // one, it appends exactly the one line.
+  it("writes .gitignore only when no line names the state directory, and then adds exactly one line", () =>
+    hegel.testAsync(
+      async (tc) => {
+        const accepted = [".nukadoko", "/.nukadoko", ".nukadoko/", "/.nukadoko/", ".nukadoko/**", "/.nukadoko/**"];
+        const other = gs
+          .fromRegex("[a-z*!/.-]{1,10}", { fullmatch: true })
+          .filter((line) => !accepted.includes(line));
+        const lines = tc.draw(gs.arrays(other, { maxSize: 5 }));
+        const spelling = tc.draw(gs.oneOf(gs.just(null), gs.sampledFrom(accepted)));
+        const at = tc.draw(gs.integers({ minValue: 0, maxValue: lines.length }));
+        const all = spelling === null ? lines : [...lines.slice(0, at), spelling, ...lines.slice(at)];
+        const text = all.map((line) => `${line}\n`).join("");
+        const dir = await mkdtemp(path.join(rootDir, "case-"));
+        await writeFile(path.join(dir, "package.json"), ESM_PACKAGE_JSON);
+        await writeFile(path.join(dir, ".gitignore"), text);
+
+        const exitCode = await runCli(["init"], { rootDir: dir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+
+        expect(exitCode).toBe(0);
+        const after = await readFile(path.join(dir, ".gitignore"), "utf8");
+        expect(after).toBe(spelling === null ? `${text}.nukadoko/\n` : text);
+      },
+      { testCases: 15, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
+    ), 120_000);
+
   it("appends .env, .env.*, and !.env.example (in that order) to a fresh .gitignore", async () => {
+
     const stdout = createCaptureSink();
     const exitCode = await runCli(["init", "--env"], {
       rootDir,

@@ -174,6 +174,17 @@ just until 0.1.
   inherited through `extends`), one whose `include` already covers both
   paths, and one that does not parse are left alone with nothing printed,
   as before.
+- **`nuka init` recognizes an existing ignore line for `.nukadoko`, and says when it keeps another `test:scenarios` script.**
+  `init` compared whole `.gitignore` lines, so a project that already
+  ignored `.nukadoko` (no slash) got a second line, `.nukadoko/`. A line
+  that names the state directory with or without a leading `/`, a trailing
+  `/`, or a trailing `/**` now counts, and `.gitignore` is left
+  byte-identical; a negated line or any other glob does not count. When
+  `package.json` already has a `test:scenarios` script that is not `nuka
+  run`, `init` still leaves it as it is and now prints one stderr line:
+  `package.json already has a test:scenarios script ("cucumber-js"); nuka
+  init left it as it is, so run "nuka run" directly or point that script
+  at it`. A script that already is `nuka run` gets no line.
 - **`nuka run` performs the static check first, and runs `featuresDir` with no target.**
   Before it executes anything, `nuka run` now reports what `nuka check`
   reports for the scenarios it selected: every project-wide finding, plus

@@ -528,7 +528,9 @@ agent にとっては、そのループが安価なコマンドでできてい�
 `nuka init` は CLI や API のプロジェクトを前提に準備をします。
 API の形は [An HTTP API](#an-http-api) にあります。
 `.gitignore` に `.nukadoko/` を、`package.json` の scripts に `"test:scenarios": "nuka run"` を追加します。
+`.gitignore` にそのディレクトリを無視する行(`.nukadoko`、`/.nukadoko/`、`.nukadoko/**` など)が既にあれば、行は追加しません。
 同じ名前の script が既にあれば、そのままにします。
+その script が別のものを実行するときは、そのことを stderr に出します。
 以後、人も CI も `npm run test:scenarios` の 1 つだけを実行すれば済みます。
 対象を渡さない `nuka run` は `featuresDir` を実行します。
 その scenario について `nuka check` が報告する内容を報告し、error が 1 つでもあれば何も実行せずに止まります。

@@ -144,8 +144,8 @@ function configTemplate({ baseUrl, featuresDir, allure }: ConfigFields): string 
 /**
  * Appends every one of `entries` not already present, as its own exact
  * line, to `<rootDir>/.gitignore` (creating the file if it doesn't exist).
- * An entry already present anywhere in the file is left where it is, never
- * duplicated. New entries are appended in `entries`' own order, which is
+ * An entry already present anywhere in the file (see `ignoreLineCovers`)
+ * is left where it is, never duplicated. New entries are appended in `entries`' own order, which is
  * why callers that need one entry to follow another (`!.env.example` must
  * come after `.env.*`, the pattern it re-includes from, or the exclusion
  * never takes effect) pass them in that order here rather than in two
@@ -160,8 +160,8 @@ async function ensureGitignoreEntries(rootDir: string, entries: readonly string[
   if (existsSync(gitignorePath)) {
     existing = await readFile(gitignorePath, "utf8");
   }
-  const existingLines = new Set(existing.split(/\r?\n/).map((line) => line.trim()));
-  const missing = entries.filter((entry) => !existingLines.has(entry));
+  const existingLines = existing.split(/\r?\n/);
+  const missing = entries.filter((entry) => !existingLines.some((line) => ignoreLineCovers(line, entry)));
   if (missing.length === 0) {
     return false;
   }
@@ -169,6 +169,23 @@ async function ensureGitignoreEntries(rootDir: string, entries: readonly string[
   const prefix = existing.length > 0 && !existing.endsWith("\n") ? `${existing}\n` : existing;
   await writeFile(gitignorePath, `${prefix}${missing.join("\n")}\n`);
   return true;
+}
+
+/**
+ * Whether an existing .gitignore line already ignores what `entry` would.
+ * A directory entry (one ending in `/`, which init writes only for a
+ * directory at the project root) is also covered by the same name with a
+ * leading `/`, without the trailing `/`, or with a trailing `/**`: at the
+ * root each of those ignores exactly that directory. Nothing wider counts,
+ * so a negated line or any other glob is never taken for coverage, and
+ * every other entry needs the exact line.
+ */
+function ignoreLineCovers(line: string, entry: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed === entry) return true;
+  if (!entry.endsWith("/")) return false;
+  const name = trimmed.replace(/^\//, "").replace(/\/(\*\*)?$/, "");
+  return name === entry.slice(0, -1);
 }
 
 // Allure 3 auto-detects a config under any of these names from the current
@@ -307,7 +324,9 @@ const SCENARIOS_SCRIPT = "test:scenarios";
  * run` with no target runs featuresDir, which the config this command
  * writes already names, and checks it before executing. A
  * script already under that name is the project's own choice and is left
- * alone. The file keeps its own indentation and trailing newline, since a
+ * alone, with a stderr line when it runs something else: the README calls
+ * that script the one command a person or CI runs, so keeping a different
+ * one without a word would leave nukadoko out of it unnoticed. The file keeps its own indentation and trailing newline, since a
  * reformatted package.json is a diff nobody asked for. Returns whether the
  * file was written; a missing or unparseable package.json gets a stderr
  * line instead, because the script is what the rest of the setup assumes.
@@ -338,6 +357,12 @@ async function ensureScenariosScript(rootDir: string, stderr: WritableSink): Pro
   }
   const scripts = scriptsValue as Record<string, unknown>;
   if (SCENARIOS_SCRIPT in scripts) {
+    const own = scripts[SCENARIOS_SCRIPT];
+    if (own !== command) {
+      stderr.write(
+        `package.json already has a ${SCENARIOS_SCRIPT} script (${JSON.stringify(own)}); nuka init left it as it is, so run "${command}" directly or point that script at it\n`,
+      );
+    }
     return false;
   }
   manifest.scripts = { ...scripts, [SCENARIOS_SCRIPT]: command };
