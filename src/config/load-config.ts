@@ -1,6 +1,8 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+// Before tsx: tsx-cache-off.ts says why the order matters.
+import "./tsx-cache-off.js";
 import { tsImport } from "tsx/esm/api";
 import { ZodArray, ZodDefault, ZodObject, ZodOptional, ZodRecord, type z } from "zod";
 import { ConfigError } from "./errors.js";

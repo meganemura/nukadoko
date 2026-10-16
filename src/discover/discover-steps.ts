@@ -3,6 +3,8 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
+// Before tsx: tsx-cache-off.ts says why the order matters.
+import "../config/tsx-cache-off.js";
 import { register } from "tsx/esm/api";
 import type { z } from "zod";
 import type { DeclaredCollector } from "../compat/declared.js";

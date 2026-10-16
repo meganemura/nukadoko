@@ -60,6 +60,19 @@ just until 0.1.
 
 ### Changed
 
+- **nukadoko runs tsx with its disk cache off.**
+  tsx reads the whole index of its cache directory under the OS temp
+  directory when it starts. That index is shared by every tsx user on the
+  machine and only grows, while nukadoko transforms only the config and the
+  step files. nukadoko now sets `TSX_DISABLE_CACHE=1` before it first loads
+  tsx, so `nuka check`, `nuka run`, the `--concurrency` workers, and the
+  `nuka session` daemon skip the read and write no cache entries. A value
+  you set yourself is kept; tsx treats any non-empty value as "off", so set
+  `TSX_DISABLE_CACHE=` (empty) to keep tsx's cache on. Measured on Node
+  24.22 with a cache directory of 261k entries, against a one-feature
+  project, 11 interleaved runs each, median wall clock before and after:
+  `check` 1513 ms to 1320 ms, `run` 1649 ms to 1486 ms. No command, flag,
+  or output changes.
 - **A command loads only its own modules, and `nuka run` imports each step file once.**
   Each command's module now loads when that command runs, so `nuka
   --version` and `nuka --help` no longer load the run engine, the report
