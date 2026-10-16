@@ -15,6 +15,8 @@ import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 // IPC_MESSAGE_LISTENER adds the listener a project's own IPC code would,
 // which keeps a worker's IPC channel referenced. DISCONNECT_IPC makes
 // tenant's setup close the worker's IPC channel from inside the worker.
+// TEARDOWN_WRITES makes each teardown write to stdout and stderr, and wait
+// a moment, before it logs.
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const logPath = path.join(here, "fixture-log.jsonl");
@@ -24,6 +26,13 @@ const ledgerTeardownHoldMs = Number(process.env.LEDGER_TEARDOWN_HOLD_MS ?? "0");
 
 if (process.env.IPC_MESSAGE_LISTENER === "1") {
   process.on("message", () => {});
+}
+
+async function writeDuringTeardown(fixture: string): Promise<void> {
+  if (process.env.TEARDOWN_WRITES !== "1") return;
+  console.log(`${fixture} teardown on stdout`);
+  console.error(`${fixture} teardown on stderr`);
+  await new Promise((resolve) => setTimeout(resolve, 200));
 }
 
 function log(entry: Record<string, unknown>): void {
@@ -37,6 +46,7 @@ export default defineConfig({
       appendFileSync(pidsPath, `${process.pid}\n`);
       if (process.env.DISCONNECT_IPC === "1") process.disconnect?.();
       const outcome = await use({ id: "tenant" });
+      await writeDuringTeardown("tenant");
       log({ fixture: "tenant", phase: "teardown", outcome });
       if (teardownHoldMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, teardownHoldMs));
@@ -49,6 +59,7 @@ export default defineConfig({
       async ({}, use) => {
         log({ fixture: "ledger", phase: "setup" });
         const outcome = await use({ id: "ledger" });
+        await writeDuringTeardown("ledger");
         log({ fixture: "ledger", phase: "teardown", outcome });
         if (ledgerTeardownHoldMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, ledgerTeardownHoldMs));

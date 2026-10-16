@@ -198,6 +198,27 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
     ]);
   }, 40_000);
 
+  it("tears every worker's fixtures down when they write to stdout and stderr after the parent is killed with SIGKILL", async () => {
+    const child = spawnNuka(
+      rootDir,
+      ["run", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+      { ...process.env, TEARDOWN_WRITES: "1" },
+    );
+    await waitForSetups(rootDir, 2);
+    const pids = await readFixturePids(rootDir);
+    child.kill("SIGKILL");
+    await waitForClose(child, 5_000);
+
+    expect(await waitForGone(pids, 10_000), "worker processes still alive").toEqual([]);
+    const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
+    expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
+      "ledger:failed",
+      "ledger:failed",
+      "tenant:failed",
+      "tenant:failed",
+    ]);
+  }, 40_000);
+
   it("gives a step under nuka run --concurrency 2 an empty stdin", async () => {
     const child = spawnNuka(rootDir, [
       "run",
