@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { constants } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import {
@@ -11,12 +12,14 @@ import {
   repoRoot,
 } from "./helpers/fixtures.js";
 
-// Responsibility: SIGINT and SIGTERM during `nuka run` or `nuka do` still
-// run fixture teardown, and a normal finish still does too.
+// Responsibility: SIGINT, SIGTERM, and SIGHUP during `nuka run` or `nuka
+// do` still run fixture teardown, in every worker under `--concurrency`
+// too, and so does a SIGKILL of the concurrent parent. A normal finish
+// still tears down as well.
 //
 // The signal cases spawn a real process. Delivering the signal to this
 // vitest process would tear the runner down, so the child is `src/cli.ts`
-// under tsx with the fixture project as its cwd. The child is killed if a
+// under tsx's loader with the fixture project as its cwd. The child is killed if a
 // case ends while it is still alive.
 
 interface LogEntry {
@@ -43,12 +46,16 @@ async function readLog(rootDir: string): Promise<LogEntry[]> {
 
 const workerPids: number[] = [];
 
+// No tsx wrapper process in between: that wrapper relays only SIGINT and
+// SIGTERM, and a SIGKILL to it would miss the process that spawned the
+// workers.
 function spawnNuka(rootDir: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): ChildProcess {
-  const child = spawn(
-    process.execPath,
-    [path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"), path.join(repoRoot, "src", "cli.ts"), ...args],
-    { cwd: rootDir, stdio: ["ignore", "pipe", "pipe"], env },
-  );
+  const loader = pathToFileURL(path.join(repoRoot, "node_modules", "tsx", "dist", "loader.mjs")).href;
+  const child = spawn(process.execPath, ["--import", loader, path.join(repoRoot, "src", "cli.ts"), ...args], {
+    cwd: rootDir,
+    stdio: ["ignore", "pipe", "pipe"],
+    env,
+  });
   children.push(child);
   return child;
 }
@@ -161,7 +168,31 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
     expect(teardowns.every((entry) => entry.outcome === "passed")).toBe(true);
   });
 
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  it("tears every worker's fixtures down when nuka run --concurrency 2 is killed with SIGKILL", async () => {
+    const child = spawnNuka(rootDir, [
+      "run",
+      "features/hold.feature",
+      "features/hold-again.feature",
+      "--quiet",
+      "--concurrency",
+      "2",
+    ]);
+    await waitForSetups(rootDir, 2);
+    const pids = await readFixturePids(rootDir);
+    child.kill("SIGKILL");
+    await waitForClose(child, 5_000);
+
+    expect(await waitForGone(pids, 10_000), "worker processes still alive").toEqual([]);
+    const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
+    expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
+      "ledger:failed",
+      "ledger:failed",
+      "tenant:failed",
+      "tenant:failed",
+    ]);
+  }, 40_000);
+
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     it(`tears both scopes down when nuka run receives ${signal}`, async () => {
       const child = spawnNuka(rootDir, ["run", "features/hold.feature", "--quiet"]);
       await waitForSetups(rootDir);
@@ -180,6 +211,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
         "run",
         "features/hold.feature",
         "features/hold-again.feature",
+        "features/serial-after.feature",
         "--quiet",
         "--concurrency",
         "2",
@@ -193,7 +225,12 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
 
       expect(stoppedBy(signal, closed.code, closed.signal), stderr()).toBe(true);
       expect(await waitForGone(pids, 5_000), "worker processes still alive").toEqual([]);
-      const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
+      const log = await readLog(rootDir);
+      expect(
+        log.filter((entry) => entry.phase === "setup").length,
+        "the queued @nukadoko:serial file started a worker",
+      ).toBe(4);
+      const teardowns = log.filter((entry) => entry.phase === "teardown");
       expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
         "ledger:failed",
         "ledger:failed",
@@ -201,6 +238,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
         "tenant:failed",
       ]);
       expect(stdout()).toBe("");
+      expect(stderr()).toContain(`${signal} stopped this run before every scenario had a record, so it is incomplete.\n`);
       expect(stderr()).toMatch(/^0 scenarios: 0 passed, 0 failed/m);
     }, 40_000);
 
