@@ -16,6 +16,7 @@ import { clearAllSessions, clearSession, listSessions } from "../session/manage.
 import { liveLockOwner, readLockInfo } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionCrashLogPath, sessionFilePath, sessionLockPath, sessionsDir } from "../session/paths.js";
+import { MAX_IDLE_TIMEOUT_SECONDS } from "./option-defaults.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -174,12 +175,8 @@ export interface RunSessionStartOptions {
  * itself hanging indefinitely. */
 const STARTUP_TIMEOUT_MS = 15_000;
 
-/** Largest whole number of seconds whose millisecond delay still fits in
- * Node's 32-bit signed timer. `setTimeout` clamps a delay above 2^31-1 ms
- * to 1 ms, so a value past this stops the session the moment it starts
- * listening. 2147483 * 1000 is 2147483000, which is still within
- * 2147483647; the next second is not. */
-export const MAX_IDLE_TIMEOUT_SECONDS = 2_147_483;
+
+export { MAX_IDLE_TIMEOUT_SECONDS };
 
 /** Refusal for `--idle-timeout`, or null when `seconds` is finite, greater
  * than 0, and at most `MAX_IDLE_TIMEOUT_SECONDS`. yargs' `type: "number"`

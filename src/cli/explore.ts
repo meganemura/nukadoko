@@ -49,8 +49,6 @@ import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js"
 // stdout only, never under the state directory, so the run summary and
 // `nuka tend` never read an explore run as the newest run.
 
-export const DEFAULT_EXPLORE_RUNS = 20;
-export const DEFAULT_EXPLORE_LENGTH = 10;
 
 export interface RunExploreOptions {
   readonly rootDir: string;

@@ -5,7 +5,7 @@ import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
 import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
-import { discoverSteps } from "../discover/discover-steps.js";
+import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import {
   attachStepLines,
   findOutlinesThatDoNotRun,
@@ -125,9 +125,12 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   // mistake in additionalFeatureDirs itself is config-check.ts's own
   // `additional-feature-dir-missing`, not repeated here;
   // `missingAdditionalDirs` is intentionally unread.
-  return analyze(rootDir, (config) =>
-    loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths),
+  const { report } = await analyze(
+    rootDir,
+    (config) => loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths),
+    false,
   );
+  return report;
 }
 
 /** One feature file as `nuka run` selected it: its document, and only the
@@ -158,7 +161,15 @@ export async function analyzeRunSelection(
   selected: readonly SelectedFeatureForCheck[],
   parseErrors: LoadFeaturesResult["parseErrors"] = [],
 ): Promise<CheckReport> {
-  return analyze(rootDir, () => ({
+  const { report } = await analyze(rootDir, runSelectionFeatures(selected, parseErrors), false);
+  return report;
+}
+
+function runSelectionFeatures(
+  selected: readonly SelectedFeatureForCheck[],
+  parseErrors: LoadFeaturesResult["parseErrors"],
+): () => LoadFeaturesResult {
+  return () => ({
     features: selected.map((feature) => ({
       relativePath: feature.relativePath,
       pickles: attachStepLines(feature.pickles, feature.gherkinDocument),
@@ -170,18 +181,62 @@ export async function analyzeRunSelection(
     outlinesThatDoNotRun: selected.flatMap((feature) =>
       findOutlinesThatDoNotRun(feature.gherkinDocument, feature.relativePath),
     ),
-  }));
+  });
 }
+
+/** A run-selection report, and the discovery it was built from with every
+ * step file still registered. */
+export interface RunSelectionAnalysis {
+  readonly report: CheckReport;
+  /** The caller owes `discovery.unregister()` once it is done with it. */
+  readonly discovery: DiscoveryResult;
+}
+
+/**
+ * `analyzeRunSelection` for `nuka run`, which executes the same step
+ * modules the check imported instead of importing every step file a second
+ * time: a step file's module-scope code runs once per run, and the
+ * import cost is paid once. The discovery is tolerant, so it holds every
+ * file that imported; `nuka run` executes only when the report has no
+ * error, and a file that failed to import is always an error
+ * (`step-file-import-failed`), so what it executes is what a strict
+ * discovery would have returned.
+ */
+export async function analyzeRunSelectionKeepingSteps(
+  rootDir: string,
+  selected: readonly SelectedFeatureForCheck[],
+): Promise<RunSelectionAnalysis> {
+  return analyze(rootDir, runSelectionFeatures(selected, []), true);
+}
+
+type Config = Awaited<ReturnType<typeof loadConfig>>;
 
 async function analyze(
   rootDir: string,
-  loadFeatures: (config: Awaited<ReturnType<typeof loadConfig>>) => LoadFeaturesResult,
-): Promise<CheckReport> {
+  loadFeatures: (config: Config) => LoadFeaturesResult,
+  keepRegistered: boolean,
+): Promise<RunSelectionAnalysis> {
   const config = await loadConfig(rootDir);
-  // Tolerant mode — a broken step file
+  // Tolerant mode: a broken step file
   // becomes a report entry (`importFailures`, handled below) instead of
-  // rejecting this whole call the way `run`/`do`/`steps`/`init` still do via
-  // their own plain `discoverSteps(rootDir, config.featuresDir)` calls.
+  // rejecting this whole call the way `run --no-check`/`do`/`steps`/`init`
+  // still do via their own plain `discoverSteps(rootDir, config.featuresDir)`
+  // calls.
+  const discovery = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true, keepRegistered });
+  try {
+    return { report: await reportFor(rootDir, config, discovery, loadFeatures), discovery };
+  } catch (error) {
+    await discovery.unregister();
+    throw error;
+  }
+}
+
+async function reportFor(
+  rootDir: string,
+  config: Config,
+  discovery: DiscoveryResult,
+  loadFeatures: (config: Config) => LoadFeaturesResult,
+): Promise<CheckReport> {
   const {
     vocabulary,
     models,
@@ -192,7 +247,7 @@ async function analyze(
     importFailures,
     unsupportedExtensionFiles,
     walkedFiles,
-  } = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true });
+  } = discovery;
 
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];

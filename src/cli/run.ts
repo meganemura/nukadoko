@@ -1,5 +1,5 @@
 import path from "node:path";
-import { analyzeRunSelection } from "../check/analyze.js";
+import { analyzeRunSelectionKeepingSteps } from "../check/analyze.js";
 import { checkBindings } from "../check/binding-check.js";
 import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback.js";
 import { matchPickleStepText } from "../check/feature-check.js";
@@ -9,7 +9,7 @@ import { emitterTargets, messagesOutputPath } from "../config/emitter-targets.js
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
-import { discoverSteps } from "../discover/discover-steps.js";
+import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
@@ -88,9 +88,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //      lock held by another live process. None of these write anything: the
 //      run never started, so there is nothing to attest to. An error
 //      `nuka check` reports for the selected scenarios is a setup failure
-//      too (src/check/analyze.ts's `analyzeRunSelection`), unless
-//      `--no-check` skips that check: a scenario that can only fail is not
-//      worth a browser and minutes, and the check costs one more discovery.
+//      too (src/check/analyze.ts's `analyzeRunSelectionKeepingSteps`),
+//      unless `--no-check` skips that check: a scenario that can only fail
+//      is not worth a browser and minutes. The check's discovery is the one
+//      the run executes, so a step file is imported once either way.
 //   2. Execution. From the first pickle onward, every pickle that begins
 //      executing gets a scenario record no matter what happens inside it
 //      (src/run/run-scenario.ts). A malformed session file discovered before
@@ -413,22 +414,26 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       }
     };
 
-    // The static check runs before this run's own discovery, so a step file
-    // that fails to import is reported the way `nuka check` reports it,
-    // grouped and with its line, rather than as the first import error
-    // discovery happens to throw. It needs the selection first. Under
+    // The static check runs before execution, so a step file that fails to
+    // import is reported the way `nuka check` reports it, grouped and with
+    // its line, rather than as the first import error discovery happens to
+    // throw. It needs the selection first, and its discovery is the one
+    // this run executes, so every step file is imported once. Under
     // `--no-check`, discovery keeps its place ahead of selection.
     let selected: ReturnType<typeof selectPickles> | null = null;
+    let discovery: DiscoveryResult;
     if (options.check) {
       selected = select();
       if (selected === null) return 1;
-      let report;
+      let analysis;
       try {
-        report = await analyzeRunSelection(rootDir, selected.features);
+        analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features);
       } catch (error) {
         stderr.write(`${formatVocabularyError(error)}\n`);
         return 1;
       }
+      unregisters.push(analysis.discovery.unregister);
+      const { report } = analysis;
       if (report.errors.length > 0) {
         writeCheckIssueLines(report.errors, [], stderr);
         const count = report.errors.length;
@@ -438,30 +443,18 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
         );
         return 1;
       }
+      discovery = analysis.discovery;
+    } else {
+      try {
+        discovery = await discoverSteps(rootDir, config.featuresDir, { keepRegistered: true });
+      } catch (error) {
+        stderr.write(`${formatVocabularyError(error)}\n`);
+        return 1;
+      }
+      unregisters.push(discovery.unregister);
     }
-
-    let vocabulary;
-    let compatParameterTypes;
-    let instantiateCompatWorld;
-    let compatHooks;
-    let compatRunHooks;
-    let defaultTimeoutMs;
-    try {
-      let unregister;
-      ({
-        vocabulary,
-        compatParameterTypes,
-        instantiateCompatWorld,
-        compatHooks,
-        compatRunHooks,
-        defaultTimeoutMs,
-        unregister,
-      } = await discoverSteps(rootDir, config.featuresDir, { keepRegistered: true }));
-      unregisters.push(unregister);
-    } catch (error) {
-      stderr.write(`${formatVocabularyError(error)}\n`);
-      return 1;
-    }
+    const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
+      discovery;
 
     // Every registered hook's own tag expression is validated here — a
     // setup failure, same family as the parameterTypes collision

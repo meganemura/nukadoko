@@ -5,41 +5,10 @@ import yargs from "yargs";
 // builders, .fail(), parseAsync()) is unchanged from 17, so this is a type
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
-import { buildFixtureGraph } from "../fixture/graph.js";
 import { readOwnVersion } from "../version.js";
-import { runCheck } from "./check.js";
-import { runClean } from "./clean.js";
-import { runDo } from "./do.js";
-import { DEFAULT_EXPLORE_LENGTH, DEFAULT_EXPLORE_RUNS, runExplore } from "./explore.js";
-import { runHarvest } from "./harvest.js";
 import { HELP_WIDTH, type HelpGroup, helpLines, renderCommandGroups, withoutFlatListing } from "./help-groups.js";
-import { runInit } from "./init.js";
-import { runMcpTools } from "./mcp-tools.js";
-import { runRun } from "./run.js";
-import { runScaffold } from "./scaffold.js";
-import {
-  MAX_IDLE_TIMEOUT_SECONDS,
-  runSessionClear,
-  runSessionList,
-  runSessionStart,
-  runSessionStop,
-} from "./session.js";
-import { runSkillPath } from "./skill.js";
-import { runTend } from "./tend.js";
-import { runWebmcpTools } from "./webmcp.js";
-import {
-  assertFeaturesDirExists,
-  buildStepNames,
-  describeContract,
-  formatImportFailuresStderr,
-  formatVocabulary,
-  formatVocabularyError,
-  loadVocabulary,
-  summarize,
-  toImportFailureSummaries,
-} from "./vocabulary.js";
+import { DEFAULT_EXPLORE_LENGTH, DEFAULT_EXPLORE_RUNS, MAX_IDLE_TIMEOUT_SECONDS } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
-import { divertProcessStdoutToStderr } from "../run/step-stdout.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
@@ -89,6 +58,14 @@ import { divertProcessStdoutToStderr } from "../run/step-stdout.js";
 // packaging bug (see readOwnVersion()'s own doc comment): the whole
 // invocation fails fast, before yargs even parses `argv`, rather than
 // falling through to a wrong or guessed version string.
+//
+// Each handler loads its own command's module with `import()` when it runs,
+// while every option table stays static here: yargs needs the tables to
+// parse and to print `--help`, and nothing else. A static import of every
+// command made `nuka --version` load the run engine, the report emitters,
+// the compat layer, and zod before it printed one line, and every command
+// paid for every other command's modules. tests/cli-lazy-load.test.ts holds
+// `--help` and `--version` to that.
 
 export type { WritableSink } from "../sink/writable-sink.js";
 
@@ -270,7 +247,8 @@ export async function runCli(
   // Only a command that runs project code takes the process stdout over:
   // yargs prints help and the version through console.log. An injected
   // sink is not the process stream, so there is nothing to protect.
-  const recordStdout = (): WritableSink => options.stdout ?? divertProcessStdoutToStderr();
+  const recordStdout = async (): Promise<WritableSink> =>
+    options.stdout ?? (await import("../run/step-stdout.js")).divertProcessStdoutToStderr();
 
   let ownVersion: string;
   try {
@@ -309,6 +287,22 @@ export async function runCli(
       }) as Argv<StepsArgs>,
     handler: async (args: Arguments<StepsArgs>) => {
       if (argsFailed) return;
+      const [
+        { buildFixtureGraph },
+        {
+          assertFeaturesDirExists,
+          buildStepNames,
+          formatImportFailuresStderr,
+          formatVocabulary,
+          formatVocabularyError,
+          loadVocabulary,
+          summarize,
+          toImportFailureSummaries,
+        },
+      ] = await Promise.all([
+        import("../fixture/graph.js"),
+        import("./vocabulary.js"),
+      ]);
       try {
         // Tolerant: `steps` is a reporting tool, not something about to
         // execute a step, so one broken glue file elsewhere must not empty
@@ -380,6 +374,21 @@ export async function runCli(
       }) as Argv<DescribeArgs>,
     handler: async (args: Arguments<DescribeArgs>) => {
       if (argsFailed) return;
+      const [
+        { buildFixtureGraph },
+        {
+          assertFeaturesDirExists,
+          buildStepNames,
+          describeContract,
+          formatImportFailuresStderr,
+          formatVocabularyError,
+          loadVocabulary,
+          toImportFailureSummaries,
+        },
+      ] = await Promise.all([
+        import("../fixture/graph.js"),
+        import("./vocabulary.js"),
+      ]);
       try {
         // Same tolerant mode as `steps` above, same reasoning — also the
         // one case where it matters most: the step this call is asking
@@ -492,6 +501,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["args", "session", "env"])) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       if (argsFailed) return;
+      const { runDo } = await import("./do.js");
       exitCode = await runDo({
         rootDir,
         name: args.name,
@@ -503,7 +513,7 @@ export async function runCli(
         session: args.session ?? null,
         env: args.env ?? null,
         use: args.use ?? [],
-        stdout: recordStdout(),
+        stdout: await recordStdout(),
         stderr,
       });
     },
@@ -567,6 +577,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["session", "env", "concurrency", "repeat", "summary"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
+      const { runRun } = await import("./run.js");
       exitCode = await runRun({
         rootDir,
         featureArgs: args.feature ?? [],
@@ -580,7 +591,7 @@ export async function runCli(
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
         stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,
-        stdout: recordStdout(),
+        stdout: await recordStdout(),
         stderr,
       });
     },
@@ -606,6 +617,7 @@ export async function runCli(
       }) as unknown as Argv<HarvestArgs>,
     handler: async (args: Arguments<HarvestArgs>) => {
       if (argsFailed) return;
+      const { runHarvest } = await import("./harvest.js");
       exitCode = await runHarvest({
         rootDir,
         stepRecordIds: args.stepRecordIds,
@@ -635,6 +647,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["seed", "runs", "length", "env"])) as Argv<ExploreArgs>,
     handler: async (args: Arguments<ExploreArgs>) => {
       if (argsFailed) return;
+      const { runExplore } = await import("./explore.js");
       exitCode = await runExplore({
         rootDir,
         file: args.file,
@@ -643,7 +656,7 @@ export async function runCli(
         length: args.length ?? DEFAULT_EXPLORE_LENGTH,
         env: args.env ?? null,
         json: args.json ?? false,
-        stdout: recordStdout(),
+        stdout: await recordStdout(),
         stderr,
       });
     },
@@ -660,6 +673,7 @@ export async function runCli(
       }) as Argv<SessionListArgs>,
     handler: async (args: Arguments<SessionListArgs>) => {
       if (argsFailed) return;
+      const { runSessionList } = await import("./session.js");
       exitCode = await runSessionList({
         rootDir,
         json: args.json ?? false,
@@ -685,6 +699,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["env"])) as Argv<SessionClearArgs>,
     handler: async (args: Arguments<SessionClearArgs>) => {
       if (argsFailed) return;
+      const { runSessionClear } = await import("./session.js");
       exitCode = await runSessionClear({
         rootDir,
         name: args.name ?? null,
@@ -719,6 +734,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["env", "idle-timeout"])) as Argv<SessionStartArgs>,
     handler: async (args: Arguments<SessionStartArgs>) => {
       if (argsFailed) return;
+      const { runSessionStart } = await import("./session.js");
       exitCode = await runSessionStart({
         rootDir,
         name: args.name,
@@ -747,6 +763,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["env"])) as Argv<SessionStopArgs>,
     handler: async (args: Arguments<SessionStopArgs>) => {
       if (argsFailed) return;
+      const { runSessionStop } = await import("./session.js");
       exitCode = await runSessionStop({
         rootDir,
         name: args.name,
@@ -781,6 +798,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["base-url", "features-dir"])) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
       if (argsFailed) return;
+      const { runInit } = await import("./init.js");
       exitCode = await runInit({
         rootDir,
         baseUrl: args.baseUrl ?? null,
@@ -827,6 +845,7 @@ export async function runCli(
         .check(rejectRepeatedFlags(["pattern"])) as Argv<ScaffoldArgs>,
     handler: async (args: Arguments<ScaffoldArgs>) => {
       if (argsFailed) return;
+      const { runScaffold } = await import("./scaffold.js");
       exitCode = await runScaffold({
         rootDir,
         name: args.name,
@@ -866,6 +885,7 @@ export async function runCli(
         }) as Argv<CheckArgs>,
     handler: async (args: Arguments<CheckArgs>) => {
       if (argsFailed) return;
+      const { runCheck } = await import("./check.js");
       exitCode = await runCheck({
         rootDir,
         json: args.json ?? false,
@@ -910,6 +930,7 @@ export async function runCli(
         }) as Argv<CleanArgs>,
     handler: async (args: Arguments<CleanArgs>) => {
       if (argsFailed) return;
+      const { runClean } = await import("./clean.js");
       exitCode = await runClean({
         rootDir,
         dryRun: args.dryRun ?? false,
@@ -950,6 +971,7 @@ export async function runCli(
         }) as Argv<TendArgs>,
     handler: async (args: Arguments<TendArgs>) => {
       if (argsFailed) return;
+      const { runTend } = await import("./tend.js");
       exitCode = await runTend({
         rootDir,
         json: args.json ?? false,
@@ -966,6 +988,7 @@ export async function runCli(
     describe: "print the directory holding this package's own skills, one absolute path",
     handler: async () => {
       if (argsFailed) return;
+      const { runSkillPath } = await import("./skill.js");
       exitCode = await runSkillPath({ stdout, stderr });
     },
   };
@@ -1003,6 +1026,7 @@ export async function runCli(
       if (argsFailed) return;
       const rest = args["--"] ?? [];
       const [command, ...serverArgs] = rest;
+      const { runMcpTools } = await import("./mcp-tools.js");
       exitCode = await runMcpTools({
         command,
         args: serverArgs,
@@ -1033,6 +1057,7 @@ export async function runCli(
         }) as Argv<WebmcpToolsArgs>,
     handler: async (args: Arguments<WebmcpToolsArgs>) => {
       if (argsFailed) return;
+      const { runWebmcpTools } = await import("./webmcp.js");
       exitCode = await runWebmcpTools({
         rootDir,
         url: args.url,

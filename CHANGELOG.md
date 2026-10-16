@@ -60,6 +60,23 @@ just until 0.1.
 
 ### Changed
 
+- **A command loads only its own modules, and `nuka run` imports each step file once.**
+  Each command's module now loads when that command runs, so `nuka
+  --version` and `nuka --help` no longer load the run engine, the report
+  emitters, the compat layer, or the MCP client: 51 modules instead of
+  459. `nuka run` used to import every step file twice, once for the check
+  and once to execute; it now executes the modules the check imported, so
+  a step file's module-scope code runs once per run (with or without
+  `--no-check`), and the second copy of nukadoko that each import pulled
+  in is gone. On a one-scenario project with two step files, `nuka run`
+  loads 832 modules instead of 1101 and imports a step file 2 times
+  instead of 4; `nuka check` loads 728 instead of 885. Measured on Node 24.22 against a
+  one-feature, two-step-file project, 15 interleaved runs each, median
+  wall clock before and after: `--version` 349 ms to 100 ms, `--help` 336
+  ms to 106 ms, `check` 1283 ms to 1221 ms, `run` 1687 ms to 1461 ms, `run
+  --no-check` 1448 ms to 1395 ms. What is left on `run` is module loading
+  and the TypeScript transform of the step files and the config. No
+  command, flag, or output changes.
 - **`playwright` is an optional peer dependency, so a project that never opens a browser installs no browser stack.**
   `playwright` moves from `dependencies` to `peerDependencies` at the same
   exact version (1.61.1), marked optional; `npm install -D nukadoko` no
