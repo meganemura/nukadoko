@@ -192,6 +192,7 @@ interface ScaffoldArgs {
   name: string;
   pattern?: string;
   then?: boolean;
+  from?: string[];
 }
 
 interface CheckArgs {
@@ -798,6 +799,12 @@ export async function runCli(
           default: false,
           describe: "an assertion for a Then line: mutates: false and no returns",
         })
+        .option("from", {
+          type: "string",
+          array: true,
+          describe:
+            "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable",
+        })
         .check(rejectRepeatedFlags(["pattern"])) as Argv<ScaffoldArgs>,
     handler: async (args: Arguments<ScaffoldArgs>) => {
       if (argsFailed) return;
@@ -806,6 +813,7 @@ export async function runCli(
         name: args.name,
         pattern: args.pattern ?? null,
         then: args.then ?? false,
+        from: args.from ?? [],
         stdout,
         stderr,
       });

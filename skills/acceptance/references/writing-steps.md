@@ -30,7 +30,10 @@ criterion's wording doesn't match a pattern verbatim.
    file per step. Each `{key:type}` capture becomes an args field, so the
    file passes `nuka check` against that line before `run` is written.
    Add `--then` for a step a Then line binds: it writes `mutates: false`
-   and no `returns`. Leave `--pattern` out for a step reached by name only.
+   and no `returns`. Add `--from <step>.<key>` for each value the step
+   reads from an earlier step's result: it writes the import, the args
+   field, and the `from` entry ("Chaining a value from an earlier step").
+   Leave `--pattern` out for a step reached by name only.
 2. Implement it. The shape of that file is the next section.
 3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
    record, before it ever touches a feature. Fix and re-run until it does
@@ -392,7 +395,12 @@ step without one. It never fails a run.
 When a step needs a value an earlier step produced, reach for `from` first:
 `from: { key: [otherStep, "resultKey"] }` declares it, and the value is
 filled in before the step runs (the argument stays required, and the
-scenario reads as what actually chains to what). Only fall back to the
+scenario reads as what actually chains to what). For a new step, `nuka
+scaffold <name> --from other-step.resultKey` writes it: the import, the
+args field typed by the producer's own schema
+(`resultKey: otherStep.returns.shape.resultKey`), and the `from` entry.
+It refuses a producer that does not return that key, and names the keys
+it does return. Only fall back to the
 `resultOf` fixture inside `run` for a read `from` cannot express: the value
 needs reshaping on the way, which upstream step to read is decided at run
 time, or the whole result is wanted rather than one key of it.

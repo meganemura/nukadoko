@@ -7,6 +7,23 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **`nuka scaffold <name> --from <step>.<key>` writes the chain to an earlier step.**
+  Repeat the flag for each key. For each one, the scaffolded file imports
+  the producer step's file (`./run-greet.js` for `run-greet.ts`, `.mjs` for
+  an `.mts` file), adds an args field typed by the producer's own schema
+  (`stdout: runGreet.returns.shape.stdout`, so the two cannot drift apart
+  and the producer's `.describe()` text shows in `nuka describe`), adds the
+  `from` entry, and names the key in `run`'s destructuring. This is the
+  part of a Then step a person wrote by hand before, and it combines with
+  `--pattern` and `--then`. Scaffold reads the producer through discovery,
+  like `nuka steps`, and refuses with no file written when no typed step
+  has that name, when the producer's `returns` is not a `z.object` or
+  lacks the key (the refusal names the keys it has), when the value is not
+  `<step>.<key>` with an identifier key, or when two `--from` values or a
+  capture fill the same args key.
+
 ### Changed
 
 - **`nuka tend` reports only structural rot by default.** The two

@@ -103,7 +103,8 @@ proves the wrong thing.
    for anything that looks relevant. `references/writing-steps.md`
    ("Reading the vocabulary").
 2. When an operation is missing: `nuka scaffold <name> --pattern "<line>"`
-   (`--then` for a Then step), implement it, exercise it alone with `nuka do`.
+   (`--then` for a Then step, `--from <step>.<key>` for each value it reads
+   from an earlier step), implement it, exercise it alone with `nuka do`.
    `references/writing-steps.md` ("When the vocabulary has no step for it"). The same file:
    chaining (`from`, "Chaining a value from an earlier step"),
    helper vs part vs step ("Helper, part, or step?"),

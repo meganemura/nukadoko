@@ -4132,13 +4132,20 @@ nuka describe <step>          full contract, schemas as JSON Schema, plus
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then]
+nuka scaffold <name> [--pattern <text>] [--then] [--from <step>.<key>]...
                               typed step template that fails until
                               implemented. --pattern writes the pattern and
                               one args field per {key:type} capture, and
                               refuses a pattern check would refuse in any
                               project. --then writes mutates: false and no
-                              returns, for a step a Then line binds
+                              returns, for a step a Then line binds.
+                              --from (repeatable) chains one key of an
+                              earlier step's returns: the import of that
+                              step's file, an args field typed by its
+                              schema (producer.returns.shape.key), the
+                              from entry, and the key in run. It refuses a
+                              producer that does not return the key and
+                              names the keys it does return
 nuka check [feature] [--json] static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature, ambiguous steps (one line two patterns
