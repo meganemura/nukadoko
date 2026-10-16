@@ -72,6 +72,18 @@ just until 0.1.
   another MCP server's tools is not part of the everyday loop, and the top
   level now shows only what a newcomer needs. The old spelling exits 1 and
   names the new one. `docs/upgrading.md` has the one-line change.
+- **The README starts with a CLI walkthrough.** After Install, "Beside your
+  unit tests" adds one scenario to a CLI project: `nuka init`, a When step
+  scaffolded and filled in with `runCommand` and `scratch`, a Then step
+  scaffolded with `--then --from run-greet.stdout`, a two-line feature,
+  `npm run test:scenarios`, what a failure prints on stderr and in the run
+  summary, the CI line, and what to commit. Every output block is from a
+  real run of the packed tarball, and a test runs the walkthrough's own
+  commands and files in a scratch project. "More" links the rest; the
+  install details moved to "Setup details". `README.ja.md` and the
+  acceptance skill follow: the skill's loop opens with its four everyday
+  steps, and its browser and session warnings apply only when a step needs
+  `page` or the loop reaches `session`.
 
 ## 0.15.0 — 2026-10-16
 

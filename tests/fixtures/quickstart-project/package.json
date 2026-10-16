@@ -1,0 +1,6 @@
+{
+  "name": "greet",
+  "private": true,
+  "type": "module",
+  "bin": { "greet": "./src/cli.ts" }
+}

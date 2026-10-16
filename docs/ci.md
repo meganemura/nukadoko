@@ -4,8 +4,9 @@ A recipe, not a requirement: `nuka check` and `nuka run` are ordinary CLI
 commands that exit `0` when everything holds and non-zero the moment
 something is wrong (see [README.md](../README.md#running-this-in-ci) and
 "CLI summary" in [docs/spec.md](spec.md#cli-summary)), so any CI system can
-run them. This page fills in what a two-line excerpt cannot: a whole
-workflow file, why three of its lines exist, and the four things a
+run them. This page fills in what a two-line excerpt cannot: two whole
+workflow files (one job for a CLI or API project, and a browser
+project's workflow), why three of their lines exist, and the four things a
 project coming from `npx playwright test` usually has to add by hand
 that `nuka run` never does on its own.
 
@@ -270,9 +271,11 @@ Three things the workflow above leaves to the team, each small.
 
 ## What this page does not claim
 
-The workflow above has not been run inside GitHub Actions itself; nothing
+Neither workflow above has been run inside GitHub Actions itself; nothing
 in this repository can execute one. What was verified instead: the YAML
-parses as valid YAML, and every `npx nuka ...` command in it (including
+parses as valid YAML, `npm run test:scenarios` was run green and red in a
+CLI project with a freshly installed tarball of this package, and every
+`npx nuka ...` command in it (including
 `nuka run features/`, the directory form used above, not just a single
 feature file) was run against a real, freshly `npm install`ed copy of
 this package, including the live-session refusal on `nuka clean`. The

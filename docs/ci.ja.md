@@ -3,7 +3,8 @@
 これはレシピであって要件ではありません。
 `nuka check` と `nuka run` は普通の CLI コマンドで、すべてが保たれていれば `0` で終了し、何かが壊れた瞬間に非ゼロで終了します([README.md](../README.ja.md#running-this-in-ci) と [docs/spec.ja.md](spec.ja.md#cli-summary) の「CLI summary」を参照)。
 だからどの CI システムからでも呼び出せます。
-このページが埋めるのは 2 行の抜粋には書けないもの、すなわち丸ごと 1 つの workflow ファイルと、そのうち 3 行が存在する理由と、`npx playwright test` から来たプロジェクトが自分の手で足す必要がある、そして `nuka run` が自分では決してやらない 4 つのことです。
+このページが埋めるのは 2 行の抜粋には書けないものです。
+すなわち、丸ごと 2 つの workflow ファイル(CLI や API のプロジェクトのための 1 つの job と、ブラウザのプロジェクトの workflow)、そのうち 3 行が存在する理由、そして `npx playwright test` から来たプロジェクトが自分の手で足す必要があり、`nuka run` が自分では決してやらない 4 つのことです。
 
 ## CLI や API のプロジェクト: job は 1 つ
 
@@ -235,9 +236,10 @@ jobs:
 
 ## このページが主張しないこと
 
-上の workflow は GitHub Actions の中で実際に実行してはいません。
+上のどちらの workflow も、GitHub Actions の中で実際に実行してはいません。
 このリポジトリの中では、それを実行する手段が無いからです。
 代わりに確かめたのは次のことです。
+`npm run test:scenarios` は、本パッケージの tarball を新しくインストールした CLI のプロジェクトで、green と red の両方を実行しました。
 この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したこと(`nuka clean` の live session 拒否も含めて)です。
 「チームがその上に足すもの」にある pull request のコメント step も実行していません。
 その `gh pr comment` のフラグは `gh` 自身のヘルプから読んだもので、実際の pull request に対して試してはいません。
