@@ -7,7 +7,8 @@
 // test.ts); what only an end-to-end run through the bundled dist/
 // extension.js can show is that the wiring between "a user runs this
 // command" and "a real `nuka` process starts" actually holds.
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -137,4 +138,32 @@ describe("nukadoko.check: a step file that prints on stdout when it is imported"
     },
     60_000,
   );
+});
+
+describe("nukadoko.check: a run that exits 0 and prints nothing", () => {
+  let workspaceDir: string;
+  let stub: VscodeStub;
+  let restoreModuleLoad: () => void;
+
+  beforeAll(() => {
+    workspaceDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-vscode-silent-check-"));
+    const binDir = path.join(workspaceDir, "node_modules", ".bin");
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(path.join(binDir, "nuka"), "#!/bin/sh\necho\nexit 0\n");
+    chmodSync(path.join(binDir, "nuka"), 0o755);
+    ({ stub, restoreModuleLoad } = activateIn(workspaceDir));
+  });
+
+  afterAll(() => {
+    restoreModuleLoad();
+    rmSync(workspaceDir, { recursive: true, force: true });
+  });
+
+  it("says nuka check printed nothing", async () => {
+    await stub.commands.get(CHECK_COMMAND)?.();
+
+    expect(stub.errorMessages).toEqual([
+      "nukadoko: Check got no output from nuka check --json, so there is no report to show.",
+    ]);
+  });
 });

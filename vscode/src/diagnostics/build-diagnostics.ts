@@ -51,6 +51,7 @@ function toEntry(issue: CheckIssue, severity: "error" | "warning"): DiagnosticsE
  * that output, so a user can find which file printed it. */
 export type CheckReportReading =
   | { readonly kind: "report"; readonly entries: readonly DiagnosticsEntry[] }
+  | { readonly kind: "empty" }
   | { readonly kind: "unreadable"; readonly firstLine: string };
 
 function isCheckReport(value: unknown): value is CheckReport {
@@ -68,6 +69,9 @@ function isCheckReport(value: unknown): value is CheckReport {
  * of running it at all.
  */
 export function readCheckReport(stdout: string): CheckReportReading {
+  if (stdout.trim().length === 0) {
+    return { kind: "empty" };
+  }
   let report: unknown;
   try {
     report = JSON.parse(stdout);
@@ -75,7 +79,7 @@ export function readCheckReport(stdout: string): CheckReportReading {
     report = undefined;
   }
   if (!isCheckReport(report)) {
-    const firstLine = stdout.split("\n").find((line) => line.trim().length > 0) ?? "";
+    const firstLine = stdout.split("\n").find((line) => line.trim().length > 0)!;
     return { kind: "unreadable", firstLine: firstLine.trim() };
   }
   const entries: DiagnosticsEntry[] = [];

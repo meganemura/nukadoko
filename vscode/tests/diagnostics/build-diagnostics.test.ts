@@ -73,4 +73,8 @@ describe("readCheckReport", () => {
   it("reads JSON without errors and warnings arrays as unreadable", () => {
     expect(readCheckReport('{"error":"no config"}')).toEqual({ kind: "unreadable", firstLine: '{"error":"no config"}' });
   });
+
+  it("reads output that is empty or only whitespace as empty", () => {
+    expect(readCheckReport(" \n\t\n")).toEqual({ kind: "empty" });
+  });
 });

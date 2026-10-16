@@ -182,6 +182,11 @@ async function runCheckCommand(collection: vscode.DiagnosticCollection): Promise
   }
 
   const reading = readCheckReport(stdout);
+  if (reading.kind === "empty") {
+    collection.clear();
+    vscode.window.showErrorMessage("nukadoko: Check got no output from nuka check --json, so there is no report to show.");
+    return;
+  }
   if (reading.kind === "unreadable") {
     collection.clear();
     vscode.window.showErrorMessage(
