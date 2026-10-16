@@ -9,6 +9,22 @@ just until 0.1.
 
 ### Added
 
+- **`undefined-step` names the patterned steps no scanned feature line binds, and `pattern-unbound` carries the step file.**
+  After a sentence or a pattern is renamed, one feature line is undefined
+  and one step is unbound at the same time. `nuka check` used to say only
+  "run `nuka scaffold <name>`", which writes a duplicate. Each
+  `undefined-step` message now ends with `; patterned steps no scanned
+  feature line binds:` and up to three steps in vocabulary order, each
+  with its patterns and its root-relative file, then `and N more`. The set is judged on the
+  directories `tend` scans (featuresDir, additionalFeatureDirs, oaths),
+  also when a target selects fewer files: a step bound in a file the target
+  left out is not unbound, and `nuka run`'s findings stay equal to `nuka
+  check`'s for the same target. A project with no unbound patterned step
+  keeps the message it had. `nuka tend`'s `pattern-unbound` note now sets
+  `file` to the root-relative step file, in `--json` and in the text
+  line's location column. Both commands read one list, so they name the same steps on the
+  same files. Finding codes are unchanged.
+
 - **`nuka scaffold <name> --description <text>` writes the step's description, and `nuka tend` notes one still at its TODO.**
   The text is written as a JSON string literal in place of
   `TODO: describe <name>`, and in place of `--command`'s own sentence

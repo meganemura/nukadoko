@@ -3783,7 +3783,14 @@ The following findings show what `tend` inspects and why each item is rot rather
   instruction to delete it.
 - **A step whose pattern no feature binds.** A step intended only for
   the CLI should have no pattern at all; one that has a pattern is
-  claiming a place in a scenario it does not occupy.
+  claiming a place in a scenario it does not occupy. The note's `file`
+  names the step file, relative to the project root. `nuka check` and
+  `nuka run` name the same steps at the end of an `undefined-step`
+  message, because a renamed sentence or pattern leaves one line undefined
+  and one step unbound at once. They judge it on the same scanned
+  directories `tend` reads, also when a target selects fewer files, so a
+  step bound in a file the target left out is never called unbound, and
+  the message for one line does not change with the target.
 - **A schema field with no `.describe()`.** This is the tending finding
   specifically for the agent: `nuka describe` is how an agent learns what
   a field means, and a field with no description tells it nothing a name
@@ -4257,7 +4264,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
-                              feature, ambiguous steps (one line two patterns
+                              feature (each naming the patterned steps no
+                              scanned feature line binds), ambiguous steps (one line two patterns
                               both match), duplicate patterns, a pattern
                               that captures the same key twice, a required
                               args key nothing on that line could fill, a

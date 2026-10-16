@@ -381,6 +381,10 @@ agent の探索ループも、この呼び出しから始まります。
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
 ```
 
+pattern を宣言した step のうち、走査する feature ディレクトリのどの行にも結び付けられていないものがあれば、同じメッセージの末尾に `patterned steps no scanned feature line binds:` が付き、その step と pattern とファイルを名指しします。
+文や pattern の名前を変えると、ちょうどこの組が残ります。
+そのため、2 つ目の step を scaffold する前にこの一覧を読んでください。
+
 `from` の束縛順序違反は、ふつうの glue には表現すらできない種類のケースです。
 型付きの契約がなければ、この概念がつなぎ留まる先自体がないからです。
 step B が `from` を宣言して step A の返り値を読むとして、この feature では A がその scenario のどこでもまだ実行されていないうちに B が束ねられており、どちらの step も実行されるより前に `check` がそれを検出します:

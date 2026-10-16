@@ -26,6 +26,11 @@ criterion's wording doesn't match a pattern verbatim.
 
 ## When the vocabulary has no step for it
 
+Read the `undefined-step` message first. When it ends with `patterned
+steps no scanned feature line binds:`, a step that already exists lost
+its line, usually through a renamed sentence or a renamed pattern. Fix
+the line or the pattern instead of scaffolding a second step.
+
 1. `nuka scaffold <name> --pattern "<feature line>"`, kebab-case, one
    file per step. Each `{key:type}` capture becomes an args field, so the
    file passes `nuka check` against that line before `run` is written. A

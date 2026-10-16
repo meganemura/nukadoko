@@ -34,6 +34,15 @@ import { checkFeatures } from "./feature-check.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing } from "./playwright-check.js";
 import type { CheckIssue, CheckReport } from "./types.js";
+import { boundStepNames, findUnboundPatternedEntries, unboundPatternedSuffix } from "./unbound-patterned.js";
+
+function withUnboundSuffix(issues: readonly CheckIssue[], suffix: () => string): CheckIssue[] {
+  if (!issues.some((issue) => issue.code === "undefined-step")) {
+    return [...issues];
+  }
+  const text = suffix();
+  return issues.map((issue) => (issue.code === "undefined-step" ? { ...issue, message: issue.message + text } : issue));
+}
 
 function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
   if (issue.reason === "no-examples") {
@@ -131,6 +140,7 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
     rootDir,
     (config) => loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths),
     false,
+    false,
   );
   return report;
 }
@@ -163,7 +173,7 @@ export async function analyzeRunSelection(
   selected: readonly SelectedFeatureForCheck[],
   parseErrors: LoadFeaturesResult["parseErrors"] = [],
 ): Promise<CheckReport> {
-  const { report } = await analyze(rootDir, runSelectionFeatures(selected, parseErrors), false);
+  const { report } = await analyze(rootDir, runSelectionFeatures(selected, parseErrors), false, true);
   return report;
 }
 
@@ -208,7 +218,7 @@ export async function analyzeRunSelectionKeepingSteps(
   rootDir: string,
   selected: readonly SelectedFeatureForCheck[],
 ): Promise<RunSelectionAnalysis> {
-  return analyze(rootDir, runSelectionFeatures(selected, []), true);
+  return analyze(rootDir, runSelectionFeatures(selected, []), true, true);
 }
 
 type Config = Awaited<ReturnType<typeof loadConfig>>;
@@ -217,6 +227,7 @@ async function analyze(
   rootDir: string,
   loadFeatures: (config: Config) => LoadFeaturesResult,
   keepRegistered: boolean,
+  selection: boolean,
 ): Promise<RunSelectionAnalysis> {
   const config = await loadConfig(rootDir);
   // Tolerant mode: a broken step file
@@ -226,7 +237,7 @@ async function analyze(
   // calls.
   const discovery = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true, keepRegistered });
   try {
-    return { report: await reportFor(rootDir, config, discovery, loadFeatures), discovery };
+    return { report: await reportFor(rootDir, config, discovery, loadFeatures, selection), discovery };
   } catch (error) {
     await discovery.unregister();
     throw error;
@@ -238,6 +249,7 @@ async function reportFor(
   config: Config,
   discovery: DiscoveryResult,
   loadFeatures: (config: Config) => LoadFeaturesResult,
+  selection: boolean,
 ): Promise<CheckReport> {
   const {
     vocabulary,
@@ -547,6 +559,22 @@ async function reportFor(
     bindingResult.standIns,
   );
   warnings.push(...featureResult.warnings);
+  // A renamed sentence or pattern leaves a line undefined and a step unbound
+  // in the same analysis; naming the unbound step beside the line keeps the
+  // scaffold hint from being the only lead. Bound is judged on every feature
+  // the project scans, even for a target (src/check/unbound-patterned.ts
+  // says why), so only an undefined line pays for the wider read.
+  const featureErrors = withUnboundSuffix(featureResult.errors, () => {
+    // A target outside every scanned directory is not counted, the same as
+    // for tend: the suffix's own wording says which lines were read.
+    const bound = selection
+      ? boundStepNames(
+          loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths).features,
+          bindingResult.patterns,
+        )
+      : new Set(featureResult.boundSteps.map((line) => line.stepName));
+    return unboundPatternedSuffix(findUnboundPatternedEntries(vocabulary, bound), rootDir);
+  });
   errors.push(...findPlaywrightMissing(featureResult.boundSteps, vocabulary, fixtureGraph, isPlaywrightInstalled));
 
   // A broken glue file's own missing steps otherwise resurface here as a
@@ -560,8 +588,8 @@ async function reportFor(
   // of a step that *did* match something, so it isn't contaminated by a
   // vocabulary that's missing entries.
   if (importFailures.length > 0) {
-    const suppressedCount = featureResult.errors.filter((issue) => issue.code === "undefined-step").length;
-    for (const issue of featureResult.errors) {
+    const suppressedCount = featureErrors.filter((issue) => issue.code === "undefined-step").length;
+    for (const issue of featureErrors) {
       if (issue.code !== "undefined-step") {
         errors.push(issue);
       }
@@ -573,7 +601,7 @@ async function reportFor(
       });
     }
   } else {
-    errors.push(...featureResult.errors);
+    errors.push(...featureErrors);
   }
 
   return { errors, warnings };

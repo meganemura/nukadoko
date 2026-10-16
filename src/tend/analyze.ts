@@ -117,7 +117,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const notes: TendIssue[] = [
     ...findImportFailuresUnseen(importFailures),
     ...findUnusedFromDeclarations(vocabulary, occurrences),
-    ...findUnboundPatternedSteps(vocabulary, occurrences),
+    ...findUnboundPatternedSteps(vocabulary, occurrences, rootDir),
     ...findDescriptionTodos(vocabulary, rootDir),
     ...fieldDescriptions.issues,
     ...rationaleIssues,

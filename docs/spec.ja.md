@@ -3241,6 +3241,11 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 - **どの feature からも束ねられていない pattern を持つ step。**
   CLI 専用のつもりの step は pattern を一切持つべきではありません。
   pattern を持っている場合、それは自分が占めていない scenario 上の場所を主張していることになります。
+  この所見の `file` は、プロジェクトのルートからの相対パスで step ファイルを名指しします。
+  `nuka check` と `nuka run` も、同じ step を `undefined-step` のメッセージの末尾で名指しします。
+  文や pattern の名前を変えると、1 つの行が未定義になり、1 つの step が結び付けられなくなることが同時に起きるからです。
+  対象がより少ないファイルを選んでいても、`tend` が読むのと同じ走査対象のディレクトリで判断します。
+  そのため、対象から外れたファイルで結び付けられている step を結び付けられていないと呼ぶことはなく、1 つの行のメッセージが対象によって変わることもありません。
 - **`.describe()` を持たないスキーマフィールド。**
   これは agent にまっすぐ狙いを定めた tending の所見です。
   agent がフィールドの意味を知る手段は `nuka describe` です。
@@ -3686,7 +3691,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
-                              feature, ambiguous steps (one line two patterns
+                              feature (each naming the patterned steps no
+                              scanned feature line binds), ambiguous steps (one line two patterns
                               both match), duplicate patterns, a pattern
                               that captures the same key twice, a required
                               args key nothing on that line could fill, a

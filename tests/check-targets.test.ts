@@ -9,18 +9,21 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // check-feature-arg-project has one project-wide finding (a step whose
 // pattern names an unknown parameter type), which every target reports
 // once, and one undefined step in each of acceptance/outside.feature and
-// features/inside.feature.
+// features/inside.feature. Each undefined-step message ends by naming
+// unknown-type-step, whose pattern never builds and so binds no line.
 
+const UNBOUND =
+  '; patterned steps no scanned feature line binds: unknown-type-step ("an unknown type {value:frobnicate} thing", features/steps/unknown-type-step.ts)';
 const PROJECT_WIDE = "error\tunknown-parameter-type\tunknown-type-step\t";
 const OUTSIDE =
   "error\tundefined-step\tacceptance/outside.feature:4\t" +
-  'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold <name>` to add one';
+  'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold <name>` to add one' + UNBOUND;
 const INSIDE =
   "error\tundefined-step\tfeatures/inside.feature:4\t" +
-  'No step definition matches "this step is undefined inside featuresDir"; run `nuka scaffold <name>` to add one';
+  'No step definition matches "this step is undefined inside featuresDir"; run `nuka scaffold <name>` to add one' + UNBOUND;
 const EXTRA =
   "error\tundefined-step\tacceptance/nested/extra.feature:4\t" +
-  'No step definition matches "this step is undefined in a nested file"; run `nuka scaffold <name>` to add one';
+  'No step definition matches "this step is undefined in a nested file"; run `nuka scaffold <name>` to add one' + UNBOUND;
 
 async function check(rootDir: string, argv: string[]) {
   const stdout = createCaptureSink();
@@ -117,7 +120,9 @@ describe("nuka check [target..]", () => {
     expect(Object.keys(targeted)).toEqual(Object.keys(whole));
     expect((targeted as { errors: { code: string; file?: string; line?: number }[] }).errors[2]).toEqual({
       code: "undefined-step",
-      message: 'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold <name>` to add one',
+      message:
+        'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold <name>` to add one' +
+        UNBOUND,
       file: "acceptance/outside.feature",
       line: 4,
     });

@@ -383,6 +383,12 @@ whole project.
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
 ```
 
+When a step that declares a pattern is bound by no line in the scanned
+feature directories, the same message ends with `patterned steps no scanned
+feature line binds:` and names that step, its pattern, and its file. A
+renamed sentence or a renamed pattern leaves exactly that pair, so read
+the list before you scaffold a second step.
+
 A from-order violation is the case plain glue cannot even represent,
 because without a typed contract there is nothing for the concept to
 attach to. Step B declares `from` to read a value step A returned; here the
