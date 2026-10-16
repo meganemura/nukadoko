@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -104,5 +104,24 @@ describe("nuka run --session", () => {
     );
     const secondStepRecord = JSON.parse(await readFile(secondStepRecordPath, "utf8"));
     expect(secondStepRecord.result.cookie).toContain("sid=abc123");
+  });
+  it("reports an unreadable session file once under --repeat, and runs no later pass", async () => {
+    const sessionsDir = path.join(rootDir, ".nukadoko", "cache", "sessions", "default");
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(path.join(sessionsDir, "bad.json"), "{ not json");
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(
+      ["run", "features/session-flow.feature", "--session", "bad", "--repeat", "3"],
+      { rootDir, stdout, stderr },
+    );
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    const errorLines = stderr
+      .text()
+      .split("\n")
+      .filter((line) => line.startsWith('Session "bad" file is not valid JSON'));
+    expect(errorLines).toHaveLength(1);
   });
 });
