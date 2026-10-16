@@ -33,7 +33,7 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## 0.14.1 to the next release
+## 0.14.1 to 0.15.0
 
 `nuka accept` and every sign-off finding are removed, which a project that signs off features, or gates CI on a sign-off, has to act on.
 Compat behaviour a project can notice, one redaction change, and one evidence-name change.

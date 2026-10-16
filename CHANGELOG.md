@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.15.0 — 2026-10-16
+
 ### Added
 
 - **`runCommand` runs a command-line program and records it on the step record.**
