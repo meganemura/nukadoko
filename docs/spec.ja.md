@@ -582,6 +582,9 @@ nukadoko は現在この shadowing 自体を検出しないため、上の説明
 対象は、check する feature の行が束縛する step のうち、fixture が直接か `config.fixtures` を通して `page`、`context`、`request` を構築するもので、step ごとに 1 回です。
 check は run が読み込むのと同じ方法で `playwright` を解決し、何も構築しないので、`nuka run` はどの step も実行する前に止まります。
 step ファイルに定義されていても、check する行のどれも束縛しない step は報告しません。
+型宣言も同じ規則に従います。
+この 3 つの型は、`playwright` がインストールされていれば Playwright 自身の型で、無ければ `any` です。
+そのため、プロジェクト自身の `tsc` は、`skipLibCheck: false` でもそれ無しで通ります。
 step は、テナント、シード済みデータベース、アップロード済み fixture ファイルなど、プロジェクトの資源も必要とする場合があります。
 以前は、その片付けコードを置く適切な場所が step にありませんでした。
 step 内の片付けは、受け入れ条件ではないものを feature ファイルに加えます。

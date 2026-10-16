@@ -31,10 +31,12 @@ export default {
     "*.spec.ts",
     "**/*.spec.ts",
     // Not the library this package publishes. vscode/ is its own package,
-    // selftest-suite/ is the harness, and a root *.ts file is tooling.
+    // selftest-suite/ is the harness, and a root *.ts file and scripts/
+    // are tooling.
     "selftest-suite/**",
     "vscode/**",
     "*.ts",
+    "scripts/**",
   ],
   mustBeEmpty: [
     {

@@ -95,11 +95,12 @@ those fixtures is first built. What to do:
   browser in the job that runs browser steps, as [docs/ci.md](ci.md) shows.
   A job that runs only `nuka check`, or a project with no browser step, can
   drop any browser install line.
-- **A project that typechecks with `skipLibCheck: false` adds `playwright`
-  even without a browser step.** nukadoko's own type declarations name
-  Playwright's `Page` and `APIRequestContext` for the `page` and `request`
-  fixtures. With `skipLibCheck: true` (the default most projects use) a
-  missing `playwright` leaves those types as `any` and nothing fails.
+- **A project without a browser or HTTP step typechecks without
+  `playwright`, with any `skipLibCheck`.** nukadoko's own type
+  declarations name Playwright's `Page` and `APIRequestContext` for the
+  `page` and `request` fixtures. When `playwright` is missing, those types
+  are `any` and `tsc` passes. When it is installed, they are Playwright's
+  own types.
 - **A project whose own `playwright` is at another version pins it to
   1.61.1.** npm refuses (`ERESOLVE`) to install nukadoko beside a
   different `playwright`, where it used to install a second copy.

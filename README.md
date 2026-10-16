@@ -36,7 +36,8 @@ npx playwright install chromium
 ```
 
 Without it, `nuka check` names that step and this install command before
-anything runs, and every other command works.
+anything runs, and every other command works, `tsc` included: nukadoko's
+types for `page` and `request` are `any` until Playwright is installed.
 
 ## Beside your unit tests
 

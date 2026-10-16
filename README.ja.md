@@ -34,7 +34,8 @@ npm install -D -E playwright@1.61.1
 npx playwright install chromium
 ```
 
-入れていなければ、何かが実行される前に `nuka check` がその step とこのインストールコマンドを示し、それ以外のコマンドはすべて動きます。
+入れていなければ、何かが実行される前に `nuka check` がその step とこのインストールコマンドを示し、それ以外のコマンドは `tsc` も含めてすべて動きます。
+nukadoko の `page` と `request` の型は、Playwright をインストールするまで `any` です。
 
 ## Beside your unit tests
 

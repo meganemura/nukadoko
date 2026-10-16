@@ -215,6 +215,142 @@ describe("a project without playwright installed", () => {
   }, 60_000);
 });
 
+// `nuka init` puts the step files into the project's own `tsc`, and they
+// import `nukadoko`, so the shipped declarations are checked there too. A
+// hand-written strict tsconfig does not set `skipLibCheck`, so every
+// declaration that names `playwright` has to compile without it, and still
+// carry Playwright's own types when it is installed.
+describe("the shipped declarations under the project's own tsc", () => {
+  let typesRoot: string;
+
+  async function makeProject(name: string, hidden: ReadonlySet<string>): Promise<string> {
+    const dir = path.join(typesRoot, name);
+    const modules = path.join(dir, "node_modules");
+    const installed = path.join(modules, "nukadoko");
+    await mkdir(installed, { recursive: true });
+    await cp(path.join(repoRoot, "package.json"), path.join(installed, "package.json"));
+    await cp(path.join(repoRoot, "dist"), path.join(installed, "dist"), { recursive: true });
+    for (const entry of await readdir(path.join(repoRoot, "node_modules"))) {
+      if (hidden.has(entry)) continue;
+      await symlink(path.join(repoRoot, "node_modules", entry), path.join(modules, entry), "dir");
+    }
+    await writeFile(path.join(dir, "package.json"), `${JSON.stringify({ name, private: true, type: "module" }, null, 2)}\n`);
+    await mkdir(path.join(dir, "src"));
+    await writeFile(path.join(dir, "src", "index.ts"), "export const greeting = \"hello\";\n");
+    await writeFile(
+      path.join(dir, "tsconfig.json"),
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            target: "ES2022",
+            module: "NodeNext",
+            moduleResolution: "NodeNext",
+            strict: true,
+            skipLibCheck: false,
+            noUnusedLocals: true,
+            noUnusedParameters: true,
+            noEmit: true,
+            types: ["node"],
+          },
+          include: ["src/**/*"],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const run = async (args: string[]) => {
+      const { GITHUB_STEP_SUMMARY: _summary, ...env } = process.env;
+      return execFileAsync(process.execPath, [path.join(installed, "dist", "cli.js"), ...args], { cwd: dir, env });
+    };
+    const init = await run(["init"]);
+    expect(init.stdout).toContain("tsconfig.json");
+    await run(["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command"]);
+    await run(["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
+    await writeFile(
+      path.join(dir, "features", "steps", "page-title.ts"),
+      [
+        'import { defineStep, z } from "nukadoko";',
+        "",
+        "export default defineStep({",
+        '  description: "Read the page title",',
+        '  pattern: "the page title is read",',
+        "  args: z.object({}),",
+        "  async run({ page, request }) {",
+        "    await request.get(page.url());",
+        "    const title: string = await page.title();",
+        '    if (title === "") throw new Error("the page has no title");',
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await mkdir(path.join(dir, "negative"));
+    await writeFile(
+      path.join(dir, "negative", "not-a-page-method.ts"),
+      [
+        'import { defineStep, z } from "nukadoko";',
+        "",
+        "export default defineStep({",
+        '  description: "Call a method a page does not have",',
+        '  pattern: "the page is misused",',
+        "  args: z.object({}),",
+        "  async run({ page }) {",
+        "    await page.notAPageMethod();",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(dir, "tsconfig.negative.json"),
+      `${JSON.stringify({ extends: "./tsconfig.json", include: ["negative/**/*"] }, null, 2)}\n`,
+    );
+    return dir;
+  }
+
+  async function tsc(dir: string, project: string): Promise<{ code: number; output: string }> {
+    const compiler = path.join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+    try {
+      const { stdout } = await execFileAsync(process.execPath, [compiler, "-p", project, "--pretty", "false"], { cwd: dir });
+      return { code: 0, output: stdout };
+    } catch (error) {
+      const { code, stdout } = error as { code?: number; stdout?: string };
+      return { code: code ?? 1, output: stdout ?? "" };
+    }
+  }
+
+  let withoutPlaywright: string;
+  let withPlaywright: string;
+
+  beforeAll(async () => {
+    typesRoot = await mkdtemp(path.join(os.tmpdir(), "nukadoko-declarations-"));
+    withoutPlaywright = await makeProject("without-playwright", HIDDEN);
+    withPlaywright = await makeProject("with-playwright", new Set([".bin", "nukadoko"]));
+  }, 60_000);
+
+  afterAll(async () => {
+    if (typesRoot) await rm(typesRoot, { recursive: true, force: true });
+  });
+
+  it("compiles init's config, a --command step, a --then --from step, and a page step without playwright", async () => {
+    const result = await tsc(withoutPlaywright, "tsconfig.json");
+    expect(result.output).toBe("");
+    expect(result.code).toBe(0);
+  }, 60_000);
+
+  it("compiles the same project with playwright installed", async () => {
+    const result = await tsc(withPlaywright, "tsconfig.json");
+    expect(result.output).toBe("");
+    expect(result.code).toBe(0);
+  }, 60_000);
+
+  it("types page as Playwright's Page when playwright is installed", async () => {
+    const result = await tsc(withPlaywright, "tsconfig.negative.json");
+    expect(result.code).not.toBe(0);
+    expect(result.output).toContain("Property 'notAPageMethod' does not exist on type 'Page'.");
+  }, 60_000);
+});
+
 describe("PLAYWRIGHT_VERSION", () => {
   it("is the exact version package.json pins as the peer and the devDependency", async () => {
     const pkg = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8")) as {

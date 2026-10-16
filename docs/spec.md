@@ -753,6 +753,10 @@ once for each step that a checked feature line binds and whose fixtures build
 It resolves `playwright` the way the run loads it and builds nothing, so
 `nuka run` stops before any step runs.
 A step defined in a step file that no checked line binds is not reported.
+The type declarations follow the same rule: the three are typed as
+Playwright's own types when `playwright` is installed and as `any` when it
+is not, so a project's own `tsc` passes without it, `skipLibCheck: false`
+included.
 A step can also need a project resource, such as a tenant, a seeded database,
 or an uploaded fixture file.
 Previously, the step had no suitable place for the cleanup code.

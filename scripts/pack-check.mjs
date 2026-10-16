@@ -141,9 +141,11 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
       ].join("\n"),
     },
     {
-      // With `skipLibCheck: false`, the same surfaces fail, and only because
-      // `playwright` is missing: docs/upgrading.md tells such a project to
-      // install it for its types.
+      // With `skipLibCheck: false`, a hand-written strict tsconfig's default,
+      // the same surfaces still compile: the build puts a `// @ts-ignore` on
+      // every declaration line that imports from `playwright`
+      // (scripts/guard-playwright-types.ts), so a missing peer is `any`
+      // instead of TS2307.
       name: "public-surfaces-checked-libs",
       source: [
         'import * as core from "nukadoko";',
@@ -190,17 +192,12 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
   log("public type surfaces passed without the optional peers");
 
   const checkedLibsResult = results.get("public-surfaces-checked-libs");
-  const checkedLibsDiagnostics = checkedLibsResult.output.split("\n").filter((line) => /\berror TS\d+:/.test(line));
-  if (
-    checkedLibsResult.code === 0 ||
-    checkedLibsDiagnostics.length === 0 ||
-    checkedLibsDiagnostics.some((line) => !line.includes("'playwright'"))
-  ) {
+  if (checkedLibsResult.code !== 0) {
     throw new Error(
-      `public type surfaces under skipLibCheck: false did not fail only for playwright:\n${checkedLibsResult.output}`,
+      `public type surfaces failed under skipLibCheck: false without the optional peers:\n${checkedLibsResult.output}`,
     );
   }
-  log("public type surfaces under skipLibCheck: false failed only for the missing playwright");
+  log("public type surfaces passed under skipLibCheck: false without the optional peers");
 
   const negativeResult = results.get("negative-control");
   if (negativeResult.code === 0) {

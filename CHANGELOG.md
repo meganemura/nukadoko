@@ -130,9 +130,13 @@ just until 0.1.
   (`ctx.request()` for a request step). Only Node's own
   `ERR_MODULE_NOT_FOUND` for `playwright` itself gets that message; any
   other load failure keeps its own error. Type declarations still name
-  Playwright's types through `import type`: with `skipLibCheck: true` they
-  become `any` without the package, and with `skipLibCheck: false` a
-  project needs it installed. Breaking: a project with browser or HTTP
+  Playwright's types through `import type`, and the build puts a `//
+  @ts-ignore` line before each of those imports in the shipped `.d.ts`
+  files, since declaration emit drops one written in the source. Without
+  the package those types become `any` whatever `skipLibCheck` says, so a
+  project's own `tsc` passes under a strict tsconfig with `skipLibCheck:
+  false`; with it installed, `page` is Playwright's `Page` as before.
+  Breaking: a project with browser or HTTP
   steps adds `playwright` to its own devDependencies, and npm refuses to
   install nukadoko beside a different `playwright` version
   (docs/upgrading.md).

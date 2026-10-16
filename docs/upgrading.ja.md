@@ -83,9 +83,10 @@ nukadoko は今、`playwright` を optional な peer dependency として宣言�
 - **CI の変更は `package.json` のその 1 行だけです。**
   `playwright` がプロジェクトの devDependency になれば `npm ci` がそれをインストールし、`npx playwright install --with-deps chromium` はブラウザの step を実行する job でこれまでどおりブラウザをダウンロードします([docs/ci.ja.md](ci.ja.md) のとおりです)。
   `nuka check` だけを実行する job や、ブラウザの step を持たないプロジェクトは、ブラウザのインストール行を消してかまいません。
-- **`skipLibCheck: false` で型チェックするプロジェクトは、ブラウザの step が無くても `playwright` を追加します。**
+- **ブラウザの step も HTTP の step も持たないプロジェクトは、`skipLibCheck` の値によらず `playwright` なしで型チェックが通ります。**
   nukadoko 自身の型宣言は、`page` と `request` の fixture のために Playwright の `Page` と `APIRequestContext` を名指しています。
-  `skipLibCheck: true`(多くのプロジェクトが使う既定)なら、`playwright` が無いときそれらの型は `any` になり、何も失敗しません。
+  `playwright` が無いとき、それらの型は `any` になり、`tsc` は通ります。
+  インストールされていれば、それらは Playwright 自身の型です。
 - **自分の `playwright` が別の版のプロジェクトは、それを 1.61.1 に固定します。**
   npm は別の版の `playwright` の横に nukadoko をインストールすることを拒否します(`ERESOLVE`)。
   以前は 2 つ目のコピーをインストールしていました。
