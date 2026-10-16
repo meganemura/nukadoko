@@ -73,6 +73,35 @@ writes no record, and exits 1. What to do:
   the refusal.** An undefined step used to fail its scenario with a record;
   now no scenario runs, and stderr carries the `nuka check` line instead.
 
+`playwright` is no longer installed with nukadoko, which a project with a browser or HTTP step has to act on.
+
+**Playwright is an optional peer dependency.** It and `playwright-core`
+were most of the install, and a project whose steps never use `page`,
+`context`, or `request` never needed them. nukadoko now declares
+`playwright` as an optional peer dependency and loads it only when one of
+those fixtures is first built. What to do:
+
+- **A project with a step or fixture that uses `page`, `context`, or
+  `request` adds `playwright` to its own `devDependencies`,** at the exact
+  version nukadoko is tested against:
+  `npm install -D -E playwright@1.61.1`. Without it, the first such step
+  fails with one line that names the step and this command, and the rest of
+  the run goes on. `nuka experimental webmcp-tools` needs it the same way.
+- **CI changes only by that one line in `package.json`.** `npm ci` installs
+  `playwright` once it is a devDependency of the project, and
+  `npx playwright install --with-deps chromium` keeps downloading the
+  browser in the job that runs browser steps, as [docs/ci.md](ci.md) shows.
+  A job that runs only `nuka check`, or a project with no browser step, can
+  drop any browser install line.
+- **A project that typechecks with `skipLibCheck: false` adds `playwright`
+  even without a browser step.** nukadoko's own type declarations name
+  Playwright's `Page` and `APIRequestContext` for the `page` and `request`
+  fixtures. With `skipLibCheck: true` (the default most projects use) a
+  missing `playwright` leaves those types as `any` and nothing fails.
+- **A project whose own `playwright` is at another version pins it to
+  1.61.1.** npm refuses (`ERESOLVE`) to install nukadoko beside a
+  different `playwright`, where it used to install a second copy.
+
 ## 0.14.1 to 0.15.0
 
 `nuka accept` and every sign-off finding are removed, which a project that signs off features, or gates CI on a sign-off, has to act on.

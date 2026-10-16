@@ -66,6 +66,28 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   未定義の step は以前は record 付きでその scenario を失敗させていました。
   今はどの scenario も実行されず、stderr には `nuka check` の行が出ます。
 
+`playwright` は nukadoko と一緒にはインストールされなくなりました。
+ブラウザや HTTP の step を持つプロジェクトは対応が必要です。
+
+**Playwright は optional な peer dependency になりました。**
+Playwright と `playwright-core` はインストールの大半を占めていて、`page`、`context`、`request` を一度も使わない step だけのプロジェクトには不要でした。
+nukadoko は今、`playwright` を optional な peer dependency として宣言し、そうした fixture のどれかが初めて構築されるときにだけ読み込みます。
+対応は次のとおりです。
+
+- **`page`、`context`、`request` を使う step か fixture を持つプロジェクトは、`playwright` を自分の `devDependencies` に追加します。**
+  バージョンは nukadoko がテストしているものに正確に合わせます: `npm install -D -E playwright@1.61.1`。
+  入れていなければ、最初のそうした step が、その step とこのコマンドを名指す 1 行を出して失敗し、run の残りは続きます。
+  `nuka experimental webmcp-tools` も同じく `playwright` を必要とします。
+- **CI の変更は `package.json` のその 1 行だけです。**
+  `playwright` がプロジェクトの devDependency になれば `npm ci` がそれをインストールし、`npx playwright install --with-deps chromium` はブラウザの step を実行する job でこれまでどおりブラウザをダウンロードします([docs/ci.ja.md](ci.ja.md) のとおりです)。
+  `nuka check` だけを実行する job や、ブラウザの step を持たないプロジェクトは、ブラウザのインストール行を消してかまいません。
+- **`skipLibCheck: false` で型チェックするプロジェクトは、ブラウザの step が無くても `playwright` を追加します。**
+  nukadoko 自身の型宣言は、`page` と `request` の fixture のために Playwright の `Page` と `APIRequestContext` を名指しています。
+  `skipLibCheck: true`(多くのプロジェクトが使う既定)なら、`playwright` が無いときそれらの型は `any` になり、何も失敗しません。
+- **自分の `playwright` が別の版のプロジェクトは、それを 1.61.1 に固定します。**
+  npm は別の版の `playwright` の横に nukadoko をインストールすることを拒否します(`ERESOLVE`)。
+  以前は 2 つ目のコピーをインストールしていました。
+
 ## 0.14.1 から 0.15.0 へ
 
 `nuka accept` と sign-off の所見はすべて削除されました。

@@ -33,6 +33,10 @@ jobs:
       - run: npm run test:scenarios
 ```
 
+Nothing here installs a browser, or Playwright itself: `playwright` is an
+optional peer dependency of nukadoko, so `npm ci` brings it in only for a
+project that lists it in its own `devDependencies`.
+
 `nuka check` on its own still has two uses: `additionalFeatureDirs`, which
 only `nuka check` and `nuka tend` walk, and a gate that has to stay seconds
 long when the run does not.
@@ -46,6 +50,12 @@ schedule, since nothing else here reminds anyone to run it. The two
 commands sit in two jobs so a failed check stops the work before a browser
 is installed. `nuka run` checks its own scenarios again before it executes,
 which costs one more step discovery and no browser.
+
+A browser project lists `playwright` in its own `devDependencies`, at the
+version nukadoko is tested against (`npm install -D -E playwright@1.61.1`):
+nukadoko declares it as an optional peer dependency and does not install it.
+The `npm ci` lines below then bring in the package in every job, and only
+the `run` job downloads a browser for it.
 
 ```yaml
 name: nukadoko

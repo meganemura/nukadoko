@@ -644,6 +644,7 @@ describe("launchBrowserWithTracing: browserType defaults to chromium when omitte
     "launches chromium when browserType itself is undefined",
     async () => {
       const handle = await launchBrowserWithTracing({
+        neededBy: "ctx.page()",
         evidenceDir,
         observed: createObservedCollector(),
         pageEvents: createPageEventsCollector(),
@@ -681,6 +682,7 @@ describe("launchBrowserWithTracing: a throw after launch closes the browser", ()
 
   function launchOptions(browserContext?: { viewport: { width: number; height: number } }) {
     return {
+      neededBy: "ctx.page()",
       evidenceDir,
       ...(browserContext ? { browserContext } : {}),
       observed: createObservedCollector(),

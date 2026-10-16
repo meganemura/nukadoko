@@ -94,17 +94,24 @@ async function runTypeScriptCapture(args, cwd, outputPath) {
   }
 }
 
+// Both optional peers are left out of the install (`--omit=peer`), so every
+// stage below runs the way a project that never opens a browser and never
+// talks to an MCP server would.
+const OPTIONAL_PEERS = ["@modelcontextprotocol/client", "playwright"];
+
 async function verifyOptionalPeerTypeIsolation(projectDir) {
   const checkDir = path.join(projectDir, "peer-isolation");
   await mkdir(checkDir, { recursive: true });
 
-  const peerDir = path.join(projectDir, "node_modules", "@modelcontextprotocol", "client");
-  try {
-    await access(peerDir);
-    throw new Error(`optional peer is present in the isolated project: ${peerDir}`);
-  } catch (error) {
-    if (error?.code !== "ENOENT") {
-      throw error;
+  for (const peer of OPTIONAL_PEERS) {
+    const peerDir = path.join(projectDir, "node_modules", ...peer.split("/"));
+    try {
+      await access(peerDir);
+      throw new Error(`optional peer is present in the isolated project: ${peerDir}`);
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
     }
   }
 
@@ -120,7 +127,24 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
   };
   const cases = [
     {
+      // The public surfaces name Playwright's types (`page`, `request`)
+      // through `import type`. With `skipLibCheck: true`, the setting most
+      // projects use, those resolve to `any` when `playwright` is absent and
+      // a project without it still compiles.
       name: "public-surfaces",
+      skipLibCheck: true,
+      source: [
+        'import * as core from "nukadoko";',
+        'import * as compat from "nukadoko/compat";',
+        'import * as matching from "nukadoko/matching";',
+        "void [core, compat, matching];",
+      ].join("\n"),
+    },
+    {
+      // With `skipLibCheck: false`, the same surfaces fail, and only because
+      // `playwright` is missing: docs/upgrading.md tells such a project to
+      // install it for its types.
+      name: "public-surfaces-checked-libs",
       source: [
         'import * as core from "nukadoko";',
         'import * as compat from "nukadoko/compat";',
@@ -146,7 +170,14 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
     await writeFile(sourcePath, `${checkCase.source}\n`);
     await writeFile(
       configPath,
-      `${JSON.stringify({ compilerOptions, files: [sourcePath] }, null, 2)}\n`,
+      `${JSON.stringify(
+        {
+          compilerOptions: { ...compilerOptions, skipLibCheck: checkCase.skipLibCheck ?? false },
+          files: [sourcePath],
+        },
+        null,
+        2,
+      )}\n`,
     );
     const code = await runTypeScriptCapture(["--pretty", "false", "-p", configPath], checkDir, outputPath);
     results.set(checkCase.name, { code, output: await readFile(outputPath, "utf8") });
@@ -154,9 +185,22 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
 
   const publicResult = results.get("public-surfaces");
   if (publicResult.code !== 0) {
-    throw new Error(`public type surfaces failed without the optional peer:\n${publicResult.output}`);
+    throw new Error(`public type surfaces failed without the optional peers:\n${publicResult.output}`);
   }
-  log("public type surfaces passed without the optional peer");
+  log("public type surfaces passed without the optional peers");
+
+  const checkedLibsResult = results.get("public-surfaces-checked-libs");
+  const checkedLibsDiagnostics = checkedLibsResult.output.split("\n").filter((line) => /\berror TS\d+:/.test(line));
+  if (
+    checkedLibsResult.code === 0 ||
+    checkedLibsDiagnostics.length === 0 ||
+    checkedLibsDiagnostics.some((line) => !line.includes("'playwright'"))
+  ) {
+    throw new Error(
+      `public type surfaces under skipLibCheck: false did not fail only for playwright:\n${checkedLibsResult.output}`,
+    );
+  }
+  log("public type surfaces under skipLibCheck: false failed only for the missing playwright");
 
   const negativeResult = results.get("negative-control");
   if (negativeResult.code === 0) {
@@ -176,6 +220,54 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
     );
   }
   log("nukadoko/mcp failed only for the missing optional peer");
+}
+
+async function writeNoBrowserProject(projectDir) {
+  const stepsDir = path.join(projectDir, "features", "steps");
+  await mkdir(stepsDir, { recursive: true });
+  await writeFile(
+    path.join(stepsDir, "run-node.ts"),
+    [
+      'import { defineStep, runCommand, z } from "nukadoko";',
+      "",
+      "export default defineStep({",
+      '  description: "Run node and print a word",',
+      '  pattern: "node prints {word:string}",',
+      "  args: z.object({ word: z.string() }),",
+      "  async run({ scratch }, { word }) {",
+      '    const { stdout } = await runCommand(process.execPath, ["-e", `console.log(${JSON.stringify(word)})`], {',
+      "      cwd: scratch.dir(),",
+      "    });",
+      '    if (stdout.trim() !== word) throw new Error(`printed "${stdout.trim()}"`);',
+      "  },",
+      "});",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(stepsDir, "open-page.ts"),
+    [
+      'import { defineStep, z } from "nukadoko";',
+      "",
+      "export default defineStep({",
+      '  description: "Open a blank page",',
+      '  pattern: "a blank page is open",',
+      "  args: z.object({}),",
+      "  async run({ page }) {",
+      '    await page.goto("about:blank");',
+      "  },",
+      "});",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(projectDir, "features", "cli.feature"),
+    'Feature: cli\n\n  Scenario: prints\n    When node prints "hello"\n',
+  );
+  await writeFile(
+    path.join(projectDir, "features", "browser.feature"),
+    "Feature: browser\n\n  Scenario: opens a page\n    Given a blank page is open\n",
+  );
 }
 
 async function main() {
@@ -229,6 +321,24 @@ async function main() {
     // was reachable only in that project's own checked-out tree and not
     // from an installed tarball.
     await runInherit(nukaBin, ["steps"], { cwd: projectDir });
+
+    stage = "nuka run without playwright";
+    // `playwright` is an optional peer, left out above: a scenario that never
+    // opens a browser runs green, and a step that asks for `page` fails with
+    // the install command rather than a module resolution stack.
+    await writeNoBrowserProject(projectDir);
+    await runInherit(nukaBin, ["run", "features/cli.feature"], { cwd: projectDir });
+    const browserRun = await new Promise((resolve, reject) => {
+      execFile(nukaBin, ["run", "features/browser.feature"], { cwd: projectDir }, (error, _stdout, stderr) => {
+        if (error && typeof error.code !== "number") reject(error);
+        else resolve({ code: error ? error.code : 0, stderr });
+      });
+    });
+    if (browserRun.code === 0 || !browserRun.stderr.includes('needs "playwright"') ||
+        !browserRun.stderr.includes("npm install -D -E playwright@")) {
+      throw new Error(`a page step without playwright did not fail with the install command:\n${browserRun.stderr}`);
+    }
+    log("a page step without playwright failed with the install command");
 
     stage = "verify shipped files";
     const installedPackageDir = path.join(projectDir, "node_modules", "nukadoko");

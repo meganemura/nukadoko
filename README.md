@@ -26,6 +26,18 @@ devDependency:
 npm install -D nukadoko
 ```
 
+It installs no browser. Playwright is an optional peer dependency, needed
+only by a step that uses `page` or `request`. Such a project adds it, at
+the version nukadoko is tested against, and the browser it launches:
+
+```sh
+npm install -D -E playwright@1.61.1
+npx playwright install chromium
+```
+
+Without it, that step fails with this install command, and every other
+command works.
+
 ## Beside your unit tests
 
 Unit tests (vitest, `node:test`) check functions from the inside. A
@@ -557,7 +569,9 @@ export default defineStep({
 - `request` above (and `page` for browser steps) is destructured straight
   out of `run`'s first argument, the fixture bag; only the names a step
   actually destructures ever get built, so a step that never names `page`
-  never launches a browser. Both hand back Playwright's own
+  never launches a browser (and a project with no such step does not
+  install Playwright at all; see [Install](#install)). Both hand back
+  Playwright's own
   `APIRequestContext` and `Page` objects, not a nukadoko wrapper, so
   existing Playwright knowledge and helpers carry over directly.
 - `request.post("/projects", ...)` above resolves that relative path

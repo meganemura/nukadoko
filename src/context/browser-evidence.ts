@@ -1,17 +1,14 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import {
-  chromium,
-  firefox,
-  webkit,
-  type Browser,
-  type BrowserContext,
-  type BrowserContextOptions,
-  type ConsoleMessage,
-  type LaunchOptions,
-  type Page,
-  type Request as PlaywrightRequest,
-  type WebError,
+import type {
+  Browser,
+  BrowserContext,
+  BrowserContextOptions,
+  ConsoleMessage,
+  LaunchOptions,
+  Page,
+  Request as PlaywrightRequest,
+  WebError,
 } from "playwright";
 import type { ScreenshotEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -19,6 +16,7 @@ import type { StorageState } from "../session/storage-state.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 import { instrumentApiRequestContext } from "./http-log.js";
+import { loadPlaywright } from "./load-playwright.js";
 import type { ObservedCollector } from "./observed.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
@@ -105,7 +103,7 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // each chunk names the step it came from without create-context.ts writing
 // that anywhere else.
 //
-// `BROWSER_ENGINES` and `LaunchBrowserOptions.browserType` are what let a
+// `LaunchBrowserOptions.browserType` is what lets a
 // project pick firefox or webkit instead of chromium: `chromium`/`firefox`/
 // `webkit` are three separate namespaces
 // Playwright exports, each with its own `launch`, so "which engine" is
@@ -140,9 +138,7 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // outlives this handle and keeps running whatever the caller does with it
 // next, so anything still subscribed after this handle is done would leak
 // into that.
-const BROWSER_ENGINES = { chromium, firefox, webkit } as const;
-
-export type BrowserEngineName = keyof typeof BROWSER_ENGINES;
+export type BrowserEngineName = "chromium" | "firefox" | "webkit";
 
 export interface LaunchBrowserOptions {
   /** `config.browserType` (config/schema.ts), naming which of `chromium`/
@@ -151,6 +147,10 @@ export interface LaunchBrowserOptions {
    * a caller that never wires this in (existing tests, `nuka do`'s own
    * defaults) keeps launching what it always has. */
   browserType?: BrowserEngineName;
+  /** What asked for the browser (a step's text, or `ctx.page()` when no step
+   * is named), for the one-line error a project without `playwright`
+   * installed sees (load-playwright.ts). */
+  neededBy: string;
   /** `config.browser` (config/schema.ts) as a config author wrote it,
    * passed straight through to the selected engine's own `launch`
    * (widened from always-chromium to whichever `browserType` above
@@ -272,7 +272,11 @@ export async function launchBrowserWithTracing(
   // `browserType ?? "chromium"` (this file's own header) is the whole
   // selection: every other caller keeps launching chromium exactly as
   // before, since `undefined` and `"chromium"` land on the same namespace.
-  const engine = BROWSER_ENGINES[options.browserType ?? "chromium"];
+  // Loaded here, not at module load: `playwright` is an optional peer
+  // (load-playwright.ts), and a project that never calls `ctx.page()` never
+  // reaches this line.
+  const playwright = await loadPlaywright(options.neededBy);
+  const engine = playwright[options.browserType ?? "chromium"];
   const browser: Browser = await engine.launch(options.browser);
   // The handle `dispose()` closes is assigned only after this function
   // returns. `newContext`, `tracing.start`, and `newPage` can all throw after

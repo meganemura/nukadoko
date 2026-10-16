@@ -740,6 +740,13 @@ be read as a claim that it does.
 The fixture bag in "Context API" is closed.
 It contains only `page`, `context`, `request`, `env`, `requireEnv`, `baseURL`,
 `resultOf`, `call`, `section`, `poll`, `evidence`, and `scratch`.
+`page`, `context`, and `request` are Playwright's own objects, and
+`playwright` is an optional peer dependency of this package.
+A project installs it only when a step or fixture uses one of the three.
+The package is loaded when one of them is first built, never when a command
+starts, so `nuka init`, `nuka check`, and a run with no such step work without it.
+When it is missing, building the fixture fails the step with one line that
+names the step and the command `npm install -D -E playwright@<version>`.
 A step can also need a project resource, such as a tenant, a seeded database,
 or an uploaded fixture file.
 Previously, the step had no suitable place for the cleanup code.

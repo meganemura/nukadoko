@@ -42,6 +42,10 @@ the error names the file. Both report emitters are off by default: a suite
 whose existing formatter or JUnit-based CI reads cucumber messages turns
 the stream on with `messages: {}` in the config, and `allure: {}` (or
 `nuka init --allure`) does the same for Allure results.
+nukadoko uses the project's own `playwright`, an optional peer dependency
+at an exact version (`npm view nukadoko peerDependencies`). A suite that
+drives a browser keeps `playwright` in its `devDependencies` at that
+version; npm refuses to install nukadoko beside a different one.
 
 A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use` and `--fail-on`

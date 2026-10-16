@@ -25,6 +25,17 @@ nukadoko は devDependency です:
 npm install -D nukadoko
 ```
 
+ブラウザはインストールされません。
+Playwright は optional な peer dependency で、`page` か `request` を使う step だけが必要とします。
+そうした step を持つプロジェクトは、nukadoko がテストしているバージョンの Playwright と、それが起動するブラウザを追加します:
+
+```sh
+npm install -D -E playwright@1.61.1
+npx playwright install chromium
+```
+
+入れていなければ、その step はこのインストールコマンドを示して失敗し、それ以外のコマンドはすべて動きます。
+
 ## Beside your unit tests
 
 **ユニットテストの横で**
@@ -537,7 +548,7 @@ export default defineStep({
   上の `z` は nukadoko 自身から来るので、zod を別途インストールする必要はありません。
   自分のプロジェクトですでに zod を使っていて、そちらのスキーマを渡す場合は、そのスキーマが zod 4 である必要があります。
 - 上の `request`(そして browser の step 向けの `page`)は、`run` の第一引数である fixture bag から直接分割代入されたものです。
-  step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません。
+  step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません(そうした step を持たないプロジェクトは、[Install](#install) のとおり Playwright そのものをインストールしません)。
   どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。
   そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
 - 上の `request.post("/projects", ...)` は、その相対パスを `nukadoko.config.ts` 自身の `baseURL` に対して解決します(`URL` が大文字である点は Playwright 自身のキーと同じです)。

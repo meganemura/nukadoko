@@ -36,6 +36,11 @@ state, or outlives the command, one line each:
 - **A step that needs `page`** makes `nuka run` open a browser and take
   minutes. Say so before the first run that includes one. Steps built on
   `runCommand` or `request` open no browser.
+- **A step that needs `page`, `context`, or `request`** needs the
+  project's own `playwright`, an optional peer of nukadoko that a CLI
+  project does not have. Without it, that step fails with the
+  `npm install -D -E playwright@<version>` line to run. Adding it is a
+  dependency change: ask first.
 - **`nuka session start`**, once the loop reaches it, leaves a process
   holding a browser and live credentials. Say `nuka session stop <name>`
   with it. `--idle-timeout` sets how long it waits, in seconds (900 when

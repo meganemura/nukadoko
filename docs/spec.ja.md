@@ -574,6 +574,10 @@ nukadoko は現在この shadowing 自体を検出しないため、上の説明
 
 「Context API」の fixture bag は閉じています。
 含まれるのは、`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scratch`だけです。
+`page`、`context`、`request` は Playwright 自身のオブジェクトであり、`playwright` はこのパッケージの optional な peer dependency です。
+プロジェクトがそれをインストールするのは、step か fixture がこの 3 つのどれかを使うときだけです。
+パッケージが読み込まれるのはそのどれかが初めて構築されるときで、コマンドの開始時ではないので、`nuka init`、`nuka check`、そうした step の無い run はそれ無しで動きます。
+それが無いときは、fixture の構築が step を失敗させ、その step とコマンド `npm install -D -E playwright@<version>` を名指す 1 行を出します。
 step は、テナント、シード済みデータベース、アップロード済み fixture ファイルなど、プロジェクトの資源も必要とする場合があります。
 以前は、その片付けコードを置く適切な場所が step にありませんでした。
 step 内の片付けは、受け入れ条件ではないものを feature ファイルに加えます。

@@ -1,5 +1,6 @@
-import { chromium, firefox, webkit, type Page } from "playwright";
+import type { Page } from "playwright";
 import type { NukadokoConfig } from "../config/schema.js";
+import { loadPlaywright } from "../context/load-playwright.js";
 import { assertWebmcpAvailable } from "./errors.js";
 
 // Responsibility: the "A" half of this experimental pair, `nuka experimental
@@ -22,8 +23,6 @@ import { assertWebmcpAvailable } from "./errors.js";
 // EXPERIMENTAL. See call-tool.ts's own header for the removal condition
 // this mark shares with `experimental_callWebmcpTool`: both are marked for
 // the same reason, since both call into the same still-evolving browser API.
-
-const BROWSER_ENGINES = { chromium, firefox, webkit } as const;
 
 export interface WebmcpToolDescriptor {
   readonly name: string;
@@ -130,7 +129,10 @@ export async function listWebmcpTools(
 ): Promise<WebmcpToolDescriptor[]> {
   const { url, config } = options;
   assertAbsoluteWebmcpUrl(url);
-  const engine = BROWSER_ENGINES[config.browserType];
+  // Loaded here, not at module load: `playwright` is an optional peer
+  // (context/load-playwright.ts), and `nuka experimental webmcp-tools` is
+  // the only command that reaches this line.
+  const engine = (await loadPlaywright("nuka experimental webmcp-tools"))[config.browserType];
   const browser = await engine.launch(config.browser);
   try {
     const context = await browser.newContext(config.browserContext);

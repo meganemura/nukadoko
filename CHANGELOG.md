@@ -26,6 +26,26 @@ just until 0.1.
 
 ### Changed
 
+- **`playwright` is an optional peer dependency, so a project that never opens a browser installs no browser stack.**
+  `playwright` moves from `dependencies` to `peerDependencies` at the same
+  exact version (1.61.1), marked optional; `npm install -D nukadoko` no
+  longer brings in `playwright` or `playwright-core`. nukadoko loads it
+  when a `page`, `context`, or `request` fixture is first built, and when
+  `nuka experimental webmcp-tools` launches its browser, never when a
+  command starts, so `nuka init`, `nuka scaffold`, `nuka check`, and a run
+  of steps that use none of them work without it. When it is missing, the
+  step that asked fails with one line: `ctx.page() in "<step>" needs
+  "playwright", and this project has not installed it. Install the version
+  nukadoko is tested against: npm install -D -E playwright@1.61.1`
+  (`ctx.request()` for a request step). Only Node's own
+  `ERR_MODULE_NOT_FOUND` for `playwright` itself gets that message; any
+  other load failure keeps its own error. Type declarations still name
+  Playwright's types through `import type`: with `skipLibCheck: true` they
+  become `any` without the package, and with `skipLibCheck: false` a
+  project needs it installed. Breaking: a project with browser or HTTP
+  steps adds `playwright` to its own devDependencies, and npm refuses to
+  install nukadoko beside a different `playwright` version
+  (docs/upgrading.md).
 - **`nuka run` performs the static check first, and runs `featuresDir` with no target.**
   Before it executes anything, `nuka run` now reports what `nuka check`
   reports for the scenarios it selected: every project-wide finding, plus

@@ -28,6 +28,9 @@ jobs:
       - run: npm run test:scenarios
 ```
 
+ここではブラウザも Playwright 自体もインストールしません。
+`playwright` は nukadoko の optional な peer dependency なので、`npm ci` がそれを入れるのは、自分の `devDependencies` にそれを書いたプロジェクトだけです。
+
 単独の `nuka check` には、まだ 2 つの使い道があります。
 1 つは `additionalFeatureDirs` で、これを辿るのは `nuka check` と `nuka tend` だけです。
 もう 1 つは、run が数秒で終わらないときにも数秒で終わらなければならないゲートです。
@@ -40,6 +43,10 @@ jobs:
 2 つのコマンドを 2 つの job に分けているので、check が失敗すればブラウザをインストールする前に止まります。
 `nuka run` も実行の前に自分の scenario を改めて check します。
 その費用は step の discovery 1 回分で、ブラウザは要りません。
+
+ブラウザのプロジェクトは、nukadoko がテストしているバージョンの `playwright` を自分の `devDependencies` に書きます(`npm install -D -E playwright@1.61.1`)。
+nukadoko はそれを optional な peer dependency として宣言しており、インストールはしません。
+すると下の `npm ci` の行がどの job でもそのパッケージを入れ、ブラウザをダウンロードするのは `run` job だけです。
 
 ```yaml
 name: nukadoko

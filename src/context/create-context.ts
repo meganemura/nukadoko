@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { request as playwrightRequest, type APIRequestContext, type Page } from "playwright";
+import type { APIRequestContext, Page } from "playwright";
 import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { NukadokoConfig } from "../config/schema.js";
@@ -28,6 +28,7 @@ import {
   type ExternalPageEvidenceHandle,
 } from "./browser-evidence.js";
 import { createCallsCollector } from "./calls.js";
+import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
 import { createEnvReadsCollector } from "./env-reads.js";
 import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
@@ -1062,9 +1063,17 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     scratch: scratch.scratch,
   };
 
+  // Names what asked for Playwright in the error a project without it sees:
+  // the current step's or hook's own title when a boundary has one, the bare
+  // API otherwise.
+  function neededBy(api: string): string {
+    return pendingChunkTitle === undefined ? api : `${api} in "${pendingChunkTitle}"`;
+  }
+
   async function setUpPage(): Promise<Page> {
     if (!browserHandle) {
       browserHandle = await launchBrowserWithTracing({
+        neededBy: neededBy("ctx.page()"),
         // `config.browserType` — which of
         // chromium/firefox/webkit to launch; `undefined` behaves like
         // `"chromium"` (browser-evidence.ts's own default).
@@ -1138,6 +1147,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // first, `baseURL`/`storageState` after: schema.ts already rejects
         // a `requestContext` that sets either key, so this ordering never
         // actually resolves a real collision, only guards the invariant.
+        // Loaded here, not at module load: `playwright` is an optional
+        // peer (load-playwright.ts), and a step that never calls
+        // `ctx.request()` never reaches this line.
+        const { request: playwrightRequest } = await loadPlaywright(neededBy("ctx.request()"));
         const raw = await playwrightRequest.newContext({
           ...(config.requestContext ?? {}),
           ...(config.baseURL ? { baseURL: config.baseURL } : {}),

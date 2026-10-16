@@ -202,6 +202,7 @@ export default {
         "env.ts",
         "errors.ts",
         "evidence.ts",
+        "load-playwright.ts",
         "poll.ts",
         "run-command.ts",
         "trace-actions.ts",
