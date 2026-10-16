@@ -1,5 +1,11 @@
 import type { StepRecord } from "../record/types.js";
-import { hookDisplayTitle, type ScenarioRecord } from "../record/scenario-record.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
+import {
+  collectDeclaredVsObserved,
+  renderDeclaredVsObserved,
+  type DeclaredVsObserved,
+} from "../report/summary/declared-vs-observed.js";
+import { hookLabel } from "../report/summary/hook-label.js";
 
 // Responsibility: render the acceptance record's markdown text (docs/spec.md
 // "Sign-off"). Pure string building only: every value this module needs
@@ -43,7 +49,8 @@ import { hookDisplayTitle, type ScenarioRecord } from "../record/scenario-record
 // anywhere of whether the two were ever even compared. It never changes
 // whether `nuka accept` refuses (that stays the refusals in cli/accept.ts)
 // and never asserts the step is wrong. See
-// renderDeclaredVsObserved's own comment for why.
+// src/report/summary/declared-vs-observed.ts for why; the run summary
+// renders the same section.
 //
 // A "Condition" section, and a frontmatter `browser:` line beside the
 // existing `environment:` one, are added now (docs/spec.md "Sign-off") —
@@ -244,29 +251,6 @@ function pickAllowed(
   return kept;
 }
 
-// A non-exhaustive ternary (`hook.type === "before" ? ... : ...`) is what
-// let `"after_step"` silently render as "After hook" in the first place —
-// `switch` + a `never`-typed default is the fix: if `ScenarioHookRecord["type"]` ever
-// grows a fourth value, this stops compiling instead of quietly mislabeling
-// it the way the ternary did. `step_index` is folded into the label itself,
-// not left to the JSON body below to explain, since a JSON body's own key
-// order is not something a reader scanning headings should have to open to
-// find "which step".
-function hookLabel(hook: ScenarioRecord["hooks"][number]): string {
-  switch (hook.type) {
-    case "before":
-      return hookDisplayTitle("Before hook", hook.name);
-    case "after":
-      return hookDisplayTitle("After hook", hook.name);
-    case "after_step":
-      return hookDisplayTitle(`AfterStep hook (step ${hook.step_index})`, hook.name);
-    default: {
-      const exhaustive: never = hook.type;
-      throw new Error(`nuka accept: unhandled hook type ${String(exhaustive)}`);
-    }
-  }
-}
-
 function renderHook(hook: ScenarioRecord["hooks"][number], strippedKeys: Set<string>): string[] {
   const kept = pickAllowed(hook as unknown as Record<string, unknown>, HOOK_RECORD_ALLOWLIST, strippedKeys);
   return ["", `#### ${hookLabel(hook)}`, "", "```json", JSON.stringify(kept, null, 2), "```"];
@@ -360,83 +344,19 @@ function renderScenarioSection(scenario: AcceptedScenario, strippedKeys: Set<str
   return lines;
 }
 
-/** One step whose own step record declared `mutates: false` but was
- * measured making at least one write. */
-interface DeclaredVsObservedMismatch {
-  readonly scenarioName: string;
-  readonly stepText: string;
-  readonly writes: number;
-}
-
-/** Walks every accepted scenario's own steps once, sorting each into one of
- * three buckets a step record's own `mutates` already answers: declared true
- * (never interesting here, matches its own claim), declared false and
- * observed writes (a mismatch), or `mutates: null` (a compat step, which has
- * no declaration to compare against at all, kept out of the mismatch count
- * rather than folded into "no mismatch" — "nothing to compare" and "compared
- * and matched" are different facts). */
-function collectDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): {
-  mismatches: DeclaredVsObservedMismatch[];
-  compatStepCount: number;
-} {
-  const mismatches: DeclaredVsObservedMismatch[] = [];
-  let compatStepCount = 0;
-  for (const { record, stepRecords } of scenarios) {
-    for (const step of record.steps) {
-      const stepRecord = resolveStepRecord(record, step, stepRecords);
-      if (stepRecord.mutates === null) {
-        compatStepCount += 1;
-        continue;
-      }
-      if (stepRecord.mutates === false && stepRecord.observed.http_writes > 0) {
-        mismatches.push({
-          scenarioName: record.scenario,
-          stepText: step.text,
-          writes: stepRecord.observed.http_writes,
-        });
-      }
-    }
-  }
-  return { mismatches, compatStepCount };
-}
-
-// The record's own tail: one roll-up section rather than a note per
-// scenario, since a per-scenario note is exactly what a reader scrolling
-// past scenario after scenario misses. Always present, even with zero
-// mismatches, so "compared, found nothing" stays distinguishable from
-// "never compared at all" — the same reason `compatStepCount` stays
-// distinguishable from a mismatch count of zero. Deliberately states only
-// the raw fact (declared value, observed count) and never a verdict — a step
-// reading over POST is expected to land here every time it is accepted, by
-// design, for the same reason run-time `mutates` enforcement was dropped:
-// the HTTP method is not a trustworthy signal of a write. So this section is
-// a record, not an accusation.
-function renderDeclaredVsObserved(scenarios: readonly AcceptedScenario[]): string[] {
-  const { mismatches, compatStepCount } = collectDeclaredVsObserved(scenarios);
-  const lines: string[] = ["", "## Declared vs observed", ""];
-
-  if (mismatches.length === 0) {
-    lines.push("No step declared `mutates: false` and was measured making a write.");
-  } else {
-    lines.push(
-      "Steps that declared `mutates: false` and were measured making writes. This is a comparison, not a verdict: a step that reads over POST records writes by design.",
-      "",
-    );
-    for (const mismatch of mismatches) {
-      const writeWord = mismatch.writes === 1 ? "write" : "writes";
-      lines.push(
-        `- "${mismatch.stepText}" (scenario "${mismatch.scenarioName}"): declared mutates: false, observed ${mismatch.writes} ${writeWord}`,
-      );
-    }
-  }
-
-  if (compatStepCount > 0) {
-    const stepWord = compatStepCount === 1 ? "step" : "steps";
-    const verb = compatStepCount === 1 ? "has" : "have";
-    lines.push("", `${compatStepCount} compat ${stepWord} ${verb} no \`mutates\` declaration to compare.`);
-  }
-
-  return lines;
+/** Every step of every accepted scenario, each resolved to its step record
+ * the same strict way the tables above resolve them: an accepted scenario
+ * passed, so a missing step record is corruption and throws. */
+function comparedSteps(scenarios: readonly AcceptedScenario[]): DeclaredVsObserved {
+  return collectDeclaredVsObserved(
+    scenarios.flatMap(({ record, stepRecords }) =>
+      record.steps.map((step) => ({
+        scenarioName: record.scenario,
+        stepText: step.text,
+        stepRecord: resolveStepRecord(record, step, stepRecords),
+      })),
+    ),
+  );
 }
 
 // Near the top, ahead of the scenario/step-record detail (docs/spec.md
@@ -466,7 +386,7 @@ function renderCondition(options: RenderAcceptanceRecordOptions): string[] {
   // section, and that section is the only place a step's declaration is
   // set against what was measured. The number here is what tells them
   // whether the tail is worth scrolling to.
-  const { mismatches } = collectDeclaredVsObserved(options.scenarios);
+  const { mismatches } = comparedSteps(options.scenarios);
   lines.push(
     mismatches.length === 0
       ? "- declared vs observed: no step declared `mutates: false` and was measured making a write"
@@ -531,7 +451,7 @@ export function renderAcceptanceRecord(options: RenderAcceptanceRecordOptions): 
     ...scenarioSections,
   ];
 
-  body.push(...renderDeclaredVsObserved(options.scenarios));
+  body.push(...renderDeclaredVsObserved(comparedSteps(options.scenarios)));
 
   return `${[...frontmatter, ...body].join("\n")}\n`;
 }

@@ -270,7 +270,14 @@ export default {
     {
       name: "report",
       glob: "src/report/**",
-      surface: ["allure/categories.ts", "allure/emitter.ts", "messages/emitter.ts", "step-records.ts"],
+      surface: [
+        "allure/categories.ts",
+        "allure/emitter.ts",
+        "messages/emitter.ts",
+        "step-records.ts",
+        "summary/declared-vs-observed.ts",
+        "summary/hook-label.ts",
+      ],
     },
     {
       name: "run",
