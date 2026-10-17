@@ -147,19 +147,15 @@ beforeAll(async () => {
     await writeFile(target, block.body);
   }
   // The Then step: the command the prose names (wrapped across lines there,
-  // as Markdown allows), with its TODO body filled in.
+  // as Markdown allows), run as it writes it: the prose promises no edit.
   expect(readme.replace(/\s+/g, " ")).toContain(THEN_SCAFFOLD);
   const args = [...THEN_SCAFFOLD.matchAll(/"([^"]*)"|(\S+)/g)].map((match) => match[1] ?? match[2]!).slice(1);
   const scaffold = await nuka(args);
   expect(scaffold.stdout, scaffold.stderr).toBe("features/steps/message-is.ts\n");
   const thenPath = path.join(projectDir, "features", "steps", "message-is.ts");
-  const scaffolded = await readFile(thenPath, "utf8");
-  const filled = scaffolded.replace(
-    /^ {4}throw new Error\(`not implemented: message-is.*$/m,
-    '    if (message !== text) throw new Error(`expected "${text}", got "${message}"`);',
+  expect(await readFile(thenPath, "utf8")).toContain(
+    "    const actual = message;\n    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);\n",
   );
-  expect(filled).not.toBe(scaffolded);
-  await writeFile(thenPath, filled);
 }, 120_000);
 
 afterAll(async () => {

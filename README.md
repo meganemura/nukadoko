@@ -139,11 +139,15 @@ npx nuka scaffold output-says --pattern "the output says {text:string}" --then -
 features/steps/output-says.ts
 ```
 
-Fill in its body. The feature line supplies `text`:
+The body it writes is already an assertion: `actual` is the `stdout` the
+When step returned, and `node:assert/strict` compares it with the `text`
+the feature line supplies, with a message that names both values. greet
+ends its line with a newline, so trim it, the one edit this file needs:
 
 ```ts
 // features/steps/output-says.ts
 import { defineStep, z } from "nukadoko";
+import assert from "node:assert/strict";
 import runGreet from "./run-greet.ts";
 
 export default defineStep({
@@ -159,7 +163,8 @@ export default defineStep({
   },
   mutates: false,
   run({}, { text, stdout }) {
-    if (stdout.trim() !== text) throw new Error(`expected "${text}", got "${stdout.trim()}"`);
+    const actual = stdout.trim();
+    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);
   },
 });
 ```
@@ -205,7 +210,7 @@ and the command that reruns it. Here the feature expects `"Hi, Ada!"`:
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  ok  0.1s  I run greet with "Ada"
   step 2/2  FAIL  0.0s  the output says "Hi, Ada!"
-      expected "Hi, Ada!", got "Hello, Ada!"
+      text: expected "Hi, Ada!", got "Hello, Ada!"
       record  .nukadoko/records/steps/step-20261016-123950-kjs1
 steps     .nukadoko/records/steps/      2
 scenarios .nukadoko/records/scenarios/  1
@@ -233,7 +238,7 @@ lands on the job's summary page by itself. Its first part:
 
 | scenario | line | status | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `expected "Hi, Ada!", got "Hello, Ada!"`<br>record `.nukadoko/records/steps/step-20261016-123950-kjs1` |
+| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `.nukadoko/records/steps/step-20261016-123950-kjs1` |
 ```
 
 In CI it is one more line beside the unit tests
@@ -311,7 +316,8 @@ leaves both at 0.
 
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way
-`output-says` came from `run-greet`. The feature:
+`output-says` came from `run-greet`. The message carries no newline, so
+its assertion runs as scaffolded, with no edit. The feature:
 
 ```gherkin
 # features/greet.feature

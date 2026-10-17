@@ -4342,6 +4342,14 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               included, with the registered type names.
                               --then writes mutates: false and no
                               returns, for a step a Then line binds.
+                              With exactly one capture and at most one
+                              --from, its body asserts instead of the
+                              stub: node:assert/strict compares actual
+                              (the --from value, or undefined under a
+                              TODO) with the capture, and the message
+                              is "<key>: expected <value>, got
+                              <actual>"; a custom type compares with
+                              deepEqual.
                               --from (repeatable) chains one key of an
                               earlier step's returns: the import of that
                               step's file, an args field typed by its
@@ -4387,7 +4395,8 @@ nuka scaffold --feature <path>
                               integer {value:int}, a decimal
                               {value:float}, keyed value, value2, ... A
                               Then line (and its And/But) gets --then's
-                              mutates: false. The name is the pattern's
+                              mutates: false, and with one capture
+                              --then's assertion body. The name is the pattern's
                               literal words in kebab-case, with -2, -3
                               added past a name the project already
                               holds; lines that read as one pattern share

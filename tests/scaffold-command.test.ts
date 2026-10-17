@@ -145,6 +145,10 @@ describe("nuka scaffold --command", () => {
       "--command was given more than once.\n",
     ],
     [
+      ["--then", "--pattern", "it is {actual:int}"],
+      'Refusing to scaffold: args key "actual" would hide a name the written step body reads (Error, JSON, String, assert, actual); name the capture or the key something else\n',
+    ],
+    [
       ["--pattern", "parse {JSON:string}"],
       'Refusing to scaffold: args key "JSON" would hide a name the written step body reads (Error, JSON, String); name the capture or the key something else\n',
     ],
@@ -283,7 +287,7 @@ describe("nuka scaffold --command", () => {
     expect(run.stdout).not.toContain("not implemented: output-says");
   });
 
-  it("chains --from at once, and runs a real program green once the entry point and the assertion are filled in", async () => {
+  it("chains --from at once, and runs a real program green once the entry point is filled in and the output trimmed", async () => {
     await mkdir(path.join(rootDir, "src"));
     await writeFile(
       path.join(rootDir, "src", "greet.mjs"),
@@ -319,25 +323,20 @@ describe("nuka scaffold --command", () => {
       (await readFile(runGreet, "utf8")).replace("<TODO: the entry point>", path.join(rootDir, "src", "greet.mjs")),
     );
     const outputSays = stepPath(rootDir, "output-says");
-    const stub = 'throw new Error(`not implemented: output-says; args ${JSON.stringify({ text, stdout })}`);';
-    expect(await readFile(outputSays, "utf8")).toContain(stub);
-    await writeFile(
-      outputSays,
-      (await readFile(outputSays, "utf8")).replace(
-        stub,
-        "if (stdout.trim() !== text) throw new Error(`expected ${text}, got ${stdout}`);",
-      ),
-    );
+    const unedited = "const actual = stdout;";
+    expect(await readFile(outputSays, "utf8")).toContain(unedited);
+    await writeFile(outputSays, (await readFile(outputSays, "utf8")).replace(unedited, "const actual = stdout.trim();"));
 
-    // A stub's message names what the feature line bound.
-    const stubbed = await cli(rootDir, ["scaffold", "exit-is", "--pattern", "it exits {code:int}", "--then", "--from", "run-greet.exitCode"]);
-    expect(stubbed.exitCode).toBe(0);
+    // The scaffolded assertion, unedited, names the expected and the actual value.
+    const asserted = await cli(rootDir, ["scaffold", "exit-is", "--pattern", "it exits {code:int}", "--then", "--from", "run-greet.exitCode"]);
+    expect(asserted.exitCode).toBe(0);
     await writeFile(
       path.join(rootDir, "features", "exit.feature"),
-      ["Feature: exit", "  Scenario: exits zero", '    When I run greet with "Ada"', "    Then it exits 0", ""].join("\n"),
+      ["Feature: exit", "  Scenario: exits three", '    When I run greet with "Ada"', "    Then it exits 3", ""].join("\n"),
     );
     const exitRun = await cli(rootDir, ["run", "features/exit.feature"]);
-    expect(exitRun.stdout).toContain('"message":"not implemented: exit-is; args {\\"code\\":0,\\"exitCode\\":0}"');
+    expect(exitRun.exitCode).toBe(1);
+    expect(exitRun.stderr).toContain("\n      code: expected 3, got 0\n");
 
     const green = await cli(rootDir, ["run", "features/greet.feature"]);
     expect(green.stderr).toContain("1 scenario: 1 passed, 0 failed");
@@ -364,10 +363,7 @@ describe("nuka scaffold --command", () => {
     const outputSays = stepPath(rootDir, "output-says");
     await writeFile(
       outputSays,
-      (await readFile(outputSays, "utf8")).replace(
-        'throw new Error(`not implemented: output-says; args ${JSON.stringify({ text, stdout })}`);',
-        "if (stdout.trim() !== text) throw new Error(`expected ${JSON.stringify(text)}, got ${JSON.stringify(stdout)}`);",
-      ),
+      (await readFile(outputSays, "utf8")).replace("const actual = stdout;", "const actual = stdout.trim();"),
     );
     await writeFile(
       path.join(rootDir, "features", "greet.feature"),
@@ -383,7 +379,7 @@ describe("nuka scaffold --command", () => {
       new RegExp(
         [
           "step 2/2  FAIL  \\d+\\.\\ds  the output says \"Hello, Ada!\"",
-          '      expected "Hello, Ada!", got ""',
+          '      text: expected "Hello, Ada!", got ""',
           "      used    run-greet  exit 1  Error \\[ERR_MODULE_NOT_FOUND\\]: Cannot find module greet\\.js, token \\{\\{secret\\.TOKEN\\}\\}",
           "      record  \\.nukadoko/records/steps/step-",
         ].join("\n"),
@@ -395,7 +391,7 @@ describe("nuka scaffold --command", () => {
     const [runId] = await readdir(runsDir);
     const summary = await readFile(path.join(runsDir, runId!, "summary.md"), "utf8");
     expect(summary).toContain(
-      'step "the output says "Hello, Ada!"": `expected "Hello, Ada!", got ""`<br>' +
+      'step "the output says "Hello, Ada!"": `text: expected "Hello, Ada!", got ""`<br>' +
         "used run-greet exit 1: `Error [ERR_MODULE_NOT_FOUND]: Cannot find module greet.js, token {{secret.TOKEN}}`<br>record ",
     );
   });
@@ -655,6 +651,10 @@ describe("every scaffolded variant", () => {
       ["scaffold", "run-bare", "--command"],
       ["scaffold", "run-args", "--pattern", "run with {s:string} {n:int} {b:biginteger}", "--command"],
       ["scaffold", "chained-then", "--pattern", "it printed {text:string}", "--then", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
+      ["scaffold", "asserted-then", "--pattern", "it said {text:string}", "--then", "--from", "run-args.stdout"],
+      ["scaffold", "exit-then", "--pattern", "it exited {code:int}", "--then", "--from", "run-args.exitCode"],
+      ["scaffold", "big-then", "--pattern", "the count is {n:biginteger}", "--then"],
+      ["scaffold", "colour-then", "--pattern", "the colour is {c:colour}", "--then"],
       ["scaffold", "chained-command", "--command", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
       ["scaffold", "chained-optional", "--command", "--from", "maybe-name.name"],
       ["scaffold", "run-named", "--pattern", "run named {s:string}", "--command", "src/cli.ts"],
@@ -670,6 +670,11 @@ describe("every scaffolded variant", () => {
     }
     expect(files["chained-command.ts"]).toContain("[cli, stdout, String(exitCode)]");
     expect(files["chained-optional.ts"]).toContain("[cli, String(name)]");
+    expect(files["chained-then.ts"]).toContain("throw new Error(`not implemented: chained-then;");
+    expect(files["big-then.ts"]).toContain("    assert.equal(actual, n, `n: expected ${n}, got ${actual}`);\n");
+    expect(files["colour-then.ts"]).toContain(
+      '    assert.deepEqual(actual, c, `c: expected ${JSON.stringify(c, (_key, value) => (typeof value === "bigint" ? String(value) : value))}, got ${JSON.stringify(actual, (_key, value) => (typeof value === "bigint" ? String(value) : value))}`);\n',
+    );
     // The guard names the line that holds the TODO, imports or not.
     for (const file of ["run-bare.ts", "run-args.ts", "chained-command.ts", "chained-optional.ts"]) {
       const text = files[file]!;

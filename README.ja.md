@@ -130,12 +130,15 @@ npx nuka scaffold output-says --pattern "the output says {text:string}" --then -
 features/steps/output-says.ts
 ```
 
-本体を埋めます。
-`text` は feature の行が与えます:
+書かれる本体は、すでに assertion になっています。
+`actual` は When の step が返した `stdout` で、`node:assert/strict` がそれを feature の行が与える `text` と比べ、メッセージには両方の値が入ります。
+greet は行を改行で終えるので、trim します。
+このファイルに要る編集はそれだけです:
 
 ```ts
 // features/steps/output-says.ts
 import { defineStep, z } from "nukadoko";
+import assert from "node:assert/strict";
 import runGreet from "./run-greet.ts";
 
 export default defineStep({
@@ -151,7 +154,8 @@ export default defineStep({
   },
   mutates: false,
   run({}, { text, stdout }) {
-    if (stdout.trim() !== text) throw new Error(`expected "${text}", got "${stdout.trim()}"`);
+    const actual = stdout.trim();
+    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);
   },
 });
 ```
@@ -197,7 +201,7 @@ scenario が失敗すると、stderr は step、そのエラー、その step re
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  ok  0.1s  I run greet with "Ada"
   step 2/2  FAIL  0.0s  the output says "Hi, Ada!"
-      expected "Hi, Ada!", got "Hello, Ada!"
+      text: expected "Hi, Ada!", got "Hello, Ada!"
       record  .nukadoko/records/steps/step-20261016-123950-kjs1
 steps     .nukadoko/records/steps/      2
 scenarios .nukadoko/records/scenarios/  1
@@ -226,7 +230,7 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 
 | scenario | line | status | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `expected "Hi, Ada!", got "Hello, Ada!"`<br>record `.nukadoko/records/steps/step-20261016-123950-kjs1` |
+| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `.nukadoko/records/steps/step-20261016-123950-kjs1` |
 ```
 
 CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.ja.md](docs/ci.ja.md) に workflow 全体があります):
@@ -306,6 +310,7 @@ step の呼び出しを step record の `observed.http_reads` と `observed.http
 
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。
+メッセージには改行がないので、その assertion は scaffold が書いたまま、編集なしで動きます。
 feature は次のとおりです:
 
 ```gherkin

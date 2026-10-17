@@ -35,7 +35,9 @@ When the feature already holds the lines, `nuka scaffold --feature
 <file>` writes one stub for each line `nuka check <file>` calls
 undefined, with the pattern read from the line: a quoted value is
 `{value:string}`, an integer `{value:int}`, a decimal `{value:float}`, and
-a Then line gets `mutates: false`. Rename `value`, `value2` to what the
+a Then line gets `mutates: false`. A Then line with one value also gets
+an assertion body, with `actual` left `undefined` under a TODO: read the
+observed value into it. Rename `value`, `value2` to what the
 values mean, in the pattern and in `args` together. A `note:` line on
 stderr names each line whose reading was not the only one, or would also
 match another line: that stub's pattern is the line as written, with no
@@ -49,7 +51,10 @@ capture, so put the captures in by hand. Steps that need `--command` or
    names listed: a number is `{key:int}` or `{key:float}`, not
    `{key:number}`.
    Add `--then` for a step a Then line binds: it writes `mutates: false`
-   and no `returns`. Add `--from <step>.<key>` for each value the step
+   and no `returns`. With one capture, the expected value, the body asserts
+   with `node:assert/strict`: `actual` is the one `--from` value (or
+   `undefined` under a TODO), and the message names the expected and the
+   actual value. Add `--from <step>.<key>` for each value the step
    reads from an earlier step's result: it writes the import, the args
    field, and the `from` entry ("Chaining a value from an earlier step").
    Add `--command <entry point>` for a When step that runs a program
@@ -63,7 +68,12 @@ capture, so put the captures in by hand. Steps that need `--command` or
    `"pretest:scenarios": "npm run build"`); scaffold refuses a `.ts` entry
    point whose `./x.js` import is absent beside an `x.ts`. Without a value the
    `cli` line holds a TODO, and the step throws `fill in the entry point:
-   <file>:<line>` until it is filled in. Add `--description "<text>"` for
+   <file>:<line>` until it is filled in. `--command` leaves `mutates` at
+   its default, `true`: the program can write past `scratch.dir()`, and
+   scaffold cannot know whether it does, so the declaration stays on the
+   safe side and the go-ahead rule below covers its first run. Change it
+   to `mutates: false` only when you know the program writes nothing
+   outside the scratch directory. Add `--description "<text>"` for
    what the step does; without it the description is `TODO: describe
    <name>`, which `nuka tend` reports as `step-description-todo`. Leave
    `--pattern` out for a step reached by name only.
@@ -194,8 +204,10 @@ navigation, never a bare leading slash.
 ## Writing a step that checks something
 
 A step fails when its `run` throws and passes when it does not. There is
-no assertion API of nukadoko's own and none is re-exported: `expect` comes
-from Playwright, imported directly. Most of what `expect` offers works
+no assertion API of nukadoko's own and none is re-exported. In a project
+with no browser (a CLI, an API), `node:assert/strict` is what `nuka
+scaffold --then` writes, and it needs nothing installed. In a browser
+project, `expect` comes from Playwright, imported directly. Most of what `expect` offers works
 the same as it would in a Playwright test; a few matchers need something a
 step does not have (see "What `expect` needs from the runner" below).
 
@@ -226,11 +238,14 @@ export default defineStep({
 Two habits make that record worth reading afterwards, and they cover
 opposite outcomes.
 
-**Assert with `expect` rather than a bare `throw`.** A step that failed
-has no `result` at all, only `error`, so its message is the one place the
-observed value can still survive. `expect` writes actual and expected into
-that message for you; `throw new Error("mismatch")` throws the evidence
-away at the exact moment someone needs it.
+**Assert with `expect` or `node:assert/strict` rather than a bare
+`throw`.** A step that failed has no `result` at all, only `error`, so its
+message is the one place the observed value can still survive. `expect`
+writes actual and expected into that message for you, and the scaffolded
+`assert.equal(actual, text, ...)` passes a message that starts with both
+(`text: expected "Hi, Ada!", got "Hello, Ada!"`), which is the line
+`nuka run` prints; `throw new Error("mismatch")` throws the evidence away
+at the exact moment someone needs it.
 
 **Return what you observed, never a verdict.** `{ matches: true }` tells a
 later reader nothing they did not already know from the step passing.

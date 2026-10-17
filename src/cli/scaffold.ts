@@ -47,7 +47,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // the lesson itself: `returns` carries the values a failure is diagnosed
 // from, not only what later steps cite, and an absence (`false`, `0`) needs
 // proof the read was valid beside it (docs/spec.md "Typed steps" has the
-// reasoning). `run` (outside `--command`) always throws
+// reasoning). `run` (outside `--command` and a one-capture `--then`) throws
 // `not implemented: <name>`, so the step is discoverable (`nuka steps`) the moment it is scaffolded but fails every
 // `nuka do`/`nuka run` call until someone replaces the body: "fails until
 // implemented" (docs/spec.md "CLI summary"), enforced by the template
@@ -75,6 +75,15 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // so the body can throw on a failed assertion and otherwise return nothing.
 // It is a flag rather than a default because whether a step changes state
 // is the author's declaration: nukadoko does not guess it.
+// With one capture, the expected value, the body is an assertion rather
+// than the stub: `node:assert/strict` (a CLI or API project has no
+// Playwright `expect` installed) compares `actual` against it, with a
+// message that names both, because a failed step keeps no `result` and
+// its message is where the observed value survives. `actual` is the one
+// `--from` value, or `undefined` under a TODO until someone reads it, so
+// the step still fails until it is implemented. More captures or more
+// chained values leave which one is expected to the author, so they keep
+// the stub.
 //
 // `--from <step>.<key>` writes the chain to an earlier step: the import of
 // the producer's file, an args field, the `from` entry, and the key in
@@ -183,6 +192,15 @@ const VARIANTS: Readonly<Record<Variant, VariantShape>> = {
     moduleNames: new Set(["cli", "runCommand", "resolve", "process"]),
   },
 };
+
+// The assertion body reads these, so no args key may take them and no
+// import may shadow `assert`.
+const ASSERT_BODY_NAMES: readonly string[] = ["assert", "actual"];
+
+/** Whether a Then step's body asserts, rather than throwing the stub. */
+function assertsInBody(variant: Variant, captureCount: number, chainedCount: number): boolean {
+  return variant === "then" && captureCount === 1 && chainedCount <= 1;
+}
 
 /** One args field: its key and the class of the value it holds. */
 interface Field {
@@ -310,15 +328,42 @@ function fieldsOf(captures: readonly Capture[], chained: readonly ChainedField[]
   ];
 }
 
+// A bigint has no JSON form, and a value of unknown class may hold one.
+const BIGINT_REPLACER = '(_key, value) => (typeof value === "bigint" ? String(value) : value)';
+
 /** The stub's body: it throws, naming the step and the args it was given.
  * A bigint (or a value of unknown class, which may be one) has no JSON
  * form, so a replacer writes it as text only when a field may hold one. */
 function stubBody(name: string, fields: readonly Field[]): string {
   if (fields.length === 0) return `    throw new Error(${JSON.stringify(`not implemented: ${name}`)});`;
   const mayHoldBigint = fields.some((field) => field.valueClass === "bigint" || field.valueClass === "other");
-  const replacer = mayHoldBigint ? ', (_key, value) => (typeof value === "bigint" ? String(value) : value)' : "";
+  const replacer = mayHoldBigint ? `, ${BIGINT_REPLACER}` : "";
   const keys = fields.map((field) => field.key).join(", ");
   return `    throw new Error(\`not implemented: ${name}; args \${JSON.stringify({ ${keys} }${replacer})}\`);`;
+}
+
+/** The expression that writes one compared value into the message. */
+function messageText(key: string, valueClass: PrimitiveClass): string {
+  if (valueClass === "bigint") return `\${${key}}`;
+  if (valueClass === "other") return `\${JSON.stringify(${key}, ${BIGINT_REPLACER})}`;
+  return `\${JSON.stringify(${key})}`;
+}
+
+/** The Then body that compares the one chained value, or a TODO
+ * placeholder, against the one captured value. A custom type may produce
+ * an object, so its value is compared by structure. */
+function assertBody(expected: Field, chained: Field | undefined): string[] {
+  const actualClass = chained?.valueClass ?? expected.valueClass;
+  const method = expected.valueClass === "other" ? "deepEqual" : "equal";
+  const message = `${expected.key}: expected ${messageText(expected.key, expected.valueClass)}, got ${messageText("actual", actualClass)}`;
+  const actualLines =
+    chained === undefined
+      ? [
+          "    // TODO: read the value this line checks, for example from an earlier step's returns through `from`.",
+          "    const actual: unknown = undefined;",
+        ]
+      : [`    const actual = ${chained.key};`];
+  return [...actualLines, `    assert.${method}(actual, ${expected.key}, \`${message}\`);`];
 }
 
 /** One argv element per field, in order: a string as it is, anything else
@@ -336,6 +381,7 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
       ? ['  // pattern: "the feature line this step matches", (without one, the step is called by name only)']
       : [`  pattern: ${JSON.stringify(pattern)},`];
   const command = variant === "command";
+  const asserts = assertsInBody(variant, captures.length, chained.length);
   const headerLines = command
     ? [
         'import { defineStep, runCommand, z } from "nukadoko";',
@@ -344,7 +390,11 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
         "",
         `const cli = resolve(${JSON.stringify(entryPoint ?? ENTRY_POINT_PLACEHOLDER)});`,
       ]
-    : ['import { defineStep, z } from "nukadoko";', ...importLines(chained)];
+    : [
+        'import { defineStep, z } from "nukadoko";',
+        ...(asserts ? ['import assert from "node:assert/strict";'] : []),
+        ...importLines(chained),
+      ];
   // The `cli` line is the last header line, so its 1-based number is the header's length.
   const placeholderGuard =
     command && entryPoint === null
@@ -379,7 +429,10 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
         ...placeholderGuard,
         `    return await runCommand(process.execPath, [${commandArgv(fields)}], { cwd: scratch.dir() });`,
       ]
-    : [`  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`, stubBody(name, fields)];
+    : [
+        `  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`,
+        ...(asserts ? assertBody(fields[0]!, fields[1]) : [stubBody(name, fields)]),
+      ];
   return [
     ...headerLines,
     "",
@@ -621,11 +674,6 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   }
   const variant: Variant = command ? "command" : then ? "then" : "when";
   const variantShape = VARIANTS[variant];
-  // The placeholder guard throws an `Error`, so an args key may not hide it.
-  const shape: VariantShape =
-    command && entryPoint === null
-      ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error"]) }
-      : variantShape;
 
   if (description === "") {
     stderr.write(
@@ -649,6 +697,16 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     stderr.write(`Refusing to scaffold: ${read.refusal}\n`);
     return 1;
   }
+  // The placeholder guard throws an `Error`, so an args key may not hide it.
+  const shape: VariantShape =
+    command && entryPoint === null
+      ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error"]) }
+      : assertsInBody(variant, read.captures.length, from.length)
+        ? {
+            bodyNames: new Set([...variantShape.bodyNames, ...ASSERT_BODY_NAMES]),
+            moduleNames: new Set([...variantShape.moduleNames, "assert"]),
+          }
+        : variantShape;
   const fromFlags = readFromFlags(from, read.captures, shape.bodyNames);
   if ("refusal" in fromFlags) {
     stderr.write(`Refusing to scaffold: ${fromFlags.refusal}\n`);

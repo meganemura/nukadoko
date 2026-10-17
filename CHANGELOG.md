@@ -124,6 +124,22 @@ just until 0.1.
   replaces `complete.json`, whose fields it carries, so there is one file
   that says a run ended rather than two that could disagree. Breaking for
   a reader of `complete.json`: see docs/upgrading.md.
+- **`nuka scaffold --then` writes an assertion when the step has one capture.**
+  The body used to throw `not implemented`, and the skill's model for an
+  assertion was Playwright's `expect`, which a CLI or API project does not
+  install. With exactly one capture (the expected value) and at most one
+  `--from`, the body is now `const actual = <the --from key>;` and
+  `assert.equal(actual, <capture>, ...)` from `node:assert/strict`, with
+  the message `<key>: expected <value>, got <actual>`, which is the line
+  `nuka run` prints when the step fails. Without `--from`, `actual` is
+  `undefined` under a TODO, so the step still fails until it reads the
+  observed value. A custom parameter type compares with `deepEqual`. The
+  Then stubs `nuka scaffold --feature` writes get the same body. More
+  captures or more `--from` values keep the stub. With the assertion body,
+  an args key named `assert` or `actual` is refused, and a `--from` step
+  named `assert` is imported as `assertStep`. The acceptance skill now
+  says why `--command` leaves `mutates` at `true`: scaffold cannot know
+  whether the program writes past the scratch directory.
 
 - **A command run where no config file exists says so on stderr, and names a config in a parent directory.**
   From a workspace root, every command used to answer for an empty default

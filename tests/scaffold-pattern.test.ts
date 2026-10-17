@@ -5,6 +5,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { stepTemplate } from "../src/cli/scaffold.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka scaffold <name> --pattern <text> [--then]`. The
@@ -58,6 +59,7 @@ describe("nuka scaffold --pattern", () => {
     expect(await readFile(path.join(rootDir, "features", "steps", "sum-is.ts"), "utf8")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
+        'import assert from "node:assert/strict";',
         "",
         "export default defineStep({",
         '  description: "TODO: describe sum-is",',
@@ -68,7 +70,9 @@ describe("nuka scaffold --pattern", () => {
         "  }),",
         "  mutates: false,",
         "  run({}, { sum }) {",
-        "    throw new Error(`not implemented: sum-is; args ${JSON.stringify({ sum })}`);",
+        "    // TODO: read the value this line checks, for example from an earlier step's returns through `from`.",
+        "    const actual: unknown = undefined;",
+        "    assert.equal(actual, sum, `sum: expected ${JSON.stringify(sum)}, got ${JSON.stringify(actual)}`);",
         "  },",
         "});",
         "",
@@ -217,8 +221,8 @@ describe("nuka scaffold --pattern", () => {
     await writeFile(
       sumIs,
       (await readFile(sumIs, "utf8")).replace(
-        "throw new Error(`not implemented: sum-is; args ${JSON.stringify({ sum })}`);",
-        "if (sum !== 4) throw new Error(`expected 4, got ${sum}`);",
+        "const actual: unknown = undefined;",
+        "const actual: unknown = 4;",
       ),
     );
 
@@ -362,4 +366,62 @@ describe("nuka scaffold --pattern: any text", () => {
       },
       { testCases: 40 },
     ));
+});
+
+// Property: the Then body that `--then` writes for one capture runs for any
+// value the capture and the chained value can hold, a bigint included, and
+// its message names both values; a custom type compares by structure.
+describe("nuka scaffold --then: the assertion body", () => {
+  const CLASS_OF_TYPE = { string: "string", int: "number", biginteger: "bigint", colour: "other" } as const;
+  type CaptureType = keyof typeof CLASS_OF_TYPE;
+  type ValueClass = (typeof CLASS_OF_TYPE)[CaptureType];
+
+  function valueOf(valueClass: ValueClass) {
+    if (valueClass === "string") return gs.text();
+    if (valueClass === "number") return gs.integers();
+    if (valueClass === "bigint") return gs.bigIntegers();
+    return gs.oneOf<unknown>(gs.text(), gs.integers(), gs.bigIntegers(), gs.arrays(gs.bigIntegers(), { maxSize: 3 }));
+  }
+
+  // A bigint capture reads as its digits; any other value as JSON, a bigint inside it as a string.
+  function rendered(value: unknown, valueClass: ValueClass): string {
+    if (valueClass === "bigint") return String(value);
+    return String(JSON.stringify(value, (_key, inner) => (typeof inner === "bigint" ? String(inner) : inner)));
+  }
+
+  it("calls assert once with the actual value, the expected value, and a message that names both", () =>
+    hegel.test((tc) => {
+      const type = tc.draw(gs.sampledFrom(Object.keys(CLASS_OF_TYPE) as CaptureType[]));
+      const chainedClass = tc.draw(gs.optional(gs.sampledFrom<ValueClass>(["string", "number", "bigint", "other"])));
+      const expected = tc.draw(valueOf(CLASS_OF_TYPE[type]));
+      const got = chainedClass === null ? undefined : tc.draw(valueOf(chainedClass));
+      const file = stepTemplate({
+        name: "it-is",
+        pattern: `it is {want:${type}}`,
+        captures: [{ key: "want", type }],
+        chained:
+          chainedClass === null
+            ? []
+            : [{ step: "producer", key: "got", identifier: "producer", specifier: "./producer.ts", valueClass: chainedClass }],
+        variant: "then",
+        entryPoint: null,
+        description: null,
+        relativeFilePath: "features/steps/it-is.ts",
+      });
+      expect(file).toContain('\nimport assert from "node:assert/strict";\n');
+      const lines = file.split("\n");
+      const body = lines
+        .slice(lines.findIndex((line) => line.startsWith("  run(")) + 1, lines.lastIndexOf("  },"))
+        .join("\n")
+        .replace("const actual: unknown =", "const actual =");
+      const calls: unknown[][] = [];
+      const recorder = {
+        equal: (...args: unknown[]) => calls.push(["equal", ...args]),
+        deepEqual: (...args: unknown[]) => calls.push(["deepEqual", ...args]),
+      };
+      new Function("assert", "want", "got", body)(recorder, expected, got);
+      expect(calls).toEqual([
+        [type === "colour" ? "deepEqual" : "equal", got, expected, `want: expected ${rendered(expected, CLASS_OF_TYPE[type])}, got ${rendered(got, chainedClass ?? CLASS_OF_TYPE[type])}`],
+      ]);
+    }));
 });

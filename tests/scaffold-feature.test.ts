@@ -81,7 +81,7 @@ describe("nuka scaffold --feature", () => {
     expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
   });
 
-  it("writes a When stub with its captures, and a Then stub with mutates: false", async () => {
+  it("writes a When stub with its captures, and a Then stub with mutates: false and an assertion", async () => {
     const feature = await writeFeature(rootDir, "greet.feature", GREET);
 
     await cli(rootDir, ["scaffold", "--feature", feature]);
@@ -111,6 +111,7 @@ describe("nuka scaffold --feature", () => {
     expect(await stepFile(rootDir, "the-exit-code-is")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
+        'import assert from "node:assert/strict";',
         "",
         "export default defineStep({",
         '  description: "TODO: describe the-exit-code-is",',
@@ -121,7 +122,9 @@ describe("nuka scaffold --feature", () => {
         "  }),",
         "  mutates: false,",
         "  run({}, { value }) {",
-        "    throw new Error(`not implemented: the-exit-code-is; args ${JSON.stringify({ value })}`);",
+        "    // TODO: read the value this line checks, for example from an earlier step's returns through `from`.",
+        "    const actual: unknown = undefined;",
+        "    assert.equal(actual, value, `value: expected ${JSON.stringify(value)}, got ${JSON.stringify(actual)}`);",
         "  },",
         "});",
         "",

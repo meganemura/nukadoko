@@ -103,6 +103,7 @@ describe("nuka scaffold --from", () => {
     expect(await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
+        'import assert from "node:assert/strict";',
         'import runGreet from "./run-greet.ts";',
         "",
         "export default defineStep({",
@@ -118,7 +119,8 @@ describe("nuka scaffold --from", () => {
         "  },",
         "  mutates: false,",
         "  run({}, { text, stdout }) {",
-        "    throw new Error(`not implemented: output-says; args ${JSON.stringify({ text, stdout })}`);",
+        "    const actual = stdout;",
+        "    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);",
         "  },",
         "});",
         "",
