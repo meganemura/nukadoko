@@ -53,7 +53,6 @@ function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "
     environment: "staging",
     session: null,
     index: 0,
-    finishedAt: new Date("2026-08-01T00:00:01.000Z"),
     gherkinDocument: overrides.gherkinDocument!,
     pickle: overrides.pickle!,
     relativeFeaturePath: "features/checkout.feature",

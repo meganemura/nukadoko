@@ -271,15 +271,12 @@ interface ChainEntry {
  * own 0-based position in `record.steps` (and, by construction, in
  * `pickle.steps` too) — `stepRecords.length - 1` right after `pushStepRecord`
  * appends, unlike `StepProgressInfo.stepIndex` above, which is 1-based and
- * counts lines for a person reading them. `finishedAt` is captured inside
- * `pushStepRecord` itself, the moment this step's own record is appended —
- * as close to "this step actually finished" as this file can observe. */
+ * counts lines for a person reading them. */
 export interface StepFinishedInfo {
   readonly scenarioId: string;
   readonly record: ScenarioStepEntry;
   readonly stepRecord: StepRecord | null;
   readonly index: number;
-  readonly finishedAt: Date;
 }
 
 /** One heartbeat tick fired while a step's own `run` is still pending (this
@@ -1156,14 +1153,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * in-memory object the two step-record-writing call sites already redacted
    * and wrote to disk, handed straight through to `onStepFinished` — `null`
    * for every other call site, none of which ever opened one at all.
-   * `finishedAt` is captured right here, on every call, the moment this
-   * step's own record is appended — this is what "the moment this step
-   * finished" means for
-   * every step, not only the ones with a step record.
    */
   function pushStepRecord(record: ScenarioStepEntry, durationMs: number, stepRecord: StepRecord | null = null): void {
     stepRecords.push(record);
-    const finishedAt = new Date();
     onStepEnd?.({
       stepIndex: stepRecords.length,
       totalSteps: pickle.steps.length,
@@ -1181,7 +1173,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       record,
       stepRecord,
       index: stepRecords.length - 1,
-      finishedAt,
     });
   }
 

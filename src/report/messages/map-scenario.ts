@@ -19,6 +19,7 @@ import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { StepRecord } from "../../record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry, ScenarioStepStatus } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
+import { ownStepSpan, placeSteps } from "../step-timeline.js";
 
 // Responsibility: the pure transform at the center of this module:
 // map-scenario.ts is a pure function that
@@ -138,10 +139,8 @@ function statusForHook(status: "passed" | "failed"): TestStepResultStatus {
   return status === "passed" ? TestStepResultStatus.PASSED : TestStepResultStatus.FAILED;
 }
 
-// Duration never negative (round to 0 when
-// duration would otherwise go negative) — a step with no step record pinned
-// to the previous step's
-// own stop is always zero-width by construction, but a real step record's own
+// Duration never negative: a step with no step record is zero-width by
+// construction (step-timeline.ts), but a real step record's own
 // started_at/finished_at pair is operator-authored input this module has no
 // way to fully trust.
 function buildResult(status: TestStepResultStatus, message: string | undefined, startMs: number, stopMs: number): TestStepResult {
@@ -172,24 +171,13 @@ function mapPickleSteps(
   testCaseStartedId: string,
   newId: () => string,
 ): MappedTestStep[] {
-  let previousStopMs = scenarioStartMs;
+  const resolved = record.steps.map((step) =>
+    step.step_record_id !== null ? (stepRecords.get(step.step_record_id) ?? undefined) : undefined,
+  );
+  const spans = placeSteps(scenarioStartMs, resolved.map(ownStepSpan));
   return record.steps.map((step, index): MappedTestStep => {
-    const stepRecord =
-      step.step_record_id !== null ? (stepRecords.get(step.step_record_id) ?? undefined) : undefined;
-
-    let startMs: number;
-    let stopMs: number;
-    if (stepRecord) {
-      startMs = Date.parse(stepRecord.started_at);
-      stopMs = Date.parse(stepRecord.finished_at);
-    } else {
-      // A step with no step record has no time of its own: it is
-      // zero-width at the previous step's stop, so the timeline stays in
-      // step order.
-      startMs = previousStopMs;
-      stopMs = previousStopMs;
-    }
-    previousStopMs = stopMs;
+    const stepRecord = resolved[index];
+    const { startMs, stopMs } = spans[index]!;
 
     const testStepId = newId();
     const pickleStepId = pickleSteps[index]?.id;

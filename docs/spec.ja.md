@@ -3229,6 +3229,12 @@ Allure と同様に、この emitter には CLI フラグがありません。
   ログの行は cucumber-js の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)を使います。
   trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。
   その計測の余剰にはすでに置き場所があり、ここで trace を base64 で埋め込んでも、それを望む消費者がいないままストリームを太らせるだけだからです。
+- step の開始と終了は、同じ scenario record から作る Allure のレポートと同じです。
+  step record のある step は、その record の `started_at` と `finished_at` を保ちます。
+  step record のない step(skipped、undefined、ambiguous、または始まる前に拒否されたもの)は自分の時刻を持ちません。
+  そのため両方の emitter が、その step を直前の step の終了時刻に幅ゼロで置きます。
+  最初の step なら scenario の `started_at` に置きます。
+  この基準点は `record.json` だけから読むので、run の後に record から作ったレポートも同じタイムラインになります。
 - `testRunFinished.success` は常に run の exit code と一致します。
   BeforeAll/AfterAll はこのストリームに書き込む場所を持ちません(emitter が汲み取れる run スコープの record が存在しないからです)。
   そのため run スコープのフックが失敗した run は、どの scenario の中にも現れず、ここにしか現れません。

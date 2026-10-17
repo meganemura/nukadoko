@@ -104,7 +104,7 @@ function callMapGwtStep(
 ): MappedGwtStepOutcome {
   return mapGwtStep({
     index: 0,
-    finishedAt: new Date("2026-08-01T00:00:03.000Z"),
+    previousStopMs: Date.parse("2026-08-01T00:00:00.000Z"),
     ...overrides,
   });
 }
@@ -258,8 +258,38 @@ describe("mapGwtStep: outcome.failure, bubbled up for mapScenario's own classifi
   });
 });
 
-describe("mapGwtStep: zero-width time for a step with no step record", () => {
-  it("pins to the caller's own finishedAt", () => {
+describe("mapScenario: a step with no step record sits at the previous step's stop", () => {
+  it("places it at the previous step's finished_at, whatever anchor mapGwtStep was given", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const stepRecord = baseStepRecord({
+      started_at: "2026-08-01T00:00:00.500Z",
+      finished_at: "2026-08-01T00:00:01.000Z",
+    });
+    const first: ScenarioStepEntry = { text: "the cart has items", status: "failed", step_record_id: "step-1" };
+    const second: ScenarioStepEntry = { text: "the customer pays", status: "skipped", step_record_id: null };
+    const record = baseRecord({ status: "failed", steps: [first, second] });
+
+    const steps = [
+      callMapGwtStep({ index: 0, record: first, stepRecord, gherkinDocument, pickle }),
+      callMapGwtStep({
+        index: 1,
+        record: second,
+        stepRecord: null,
+        gherkinDocument,
+        pickle,
+        previousStopMs: Date.parse("2026-08-01T00:00:09.000Z"),
+      }),
+    ];
+    const mapped = callMapScenario({ record, gherkinDocument, pickle, steps });
+
+    expect(mapped.steps.map((step) => [step.startMs, step.stopMs])).toEqual([
+      [Date.parse("2026-08-01T00:00:00.500Z"), Date.parse("2026-08-01T00:00:01.000Z")],
+      [Date.parse("2026-08-01T00:00:01.000Z"), Date.parse("2026-08-01T00:00:01.000Z")],
+    ]);
+  });
+
+  it("places a first step with no step record at the scenario's started_at", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepEntry = {
@@ -268,15 +298,18 @@ describe("mapGwtStep: zero-width time for a step with no step record", () => {
       step_record_id: null,
       error: { message: "no matching step definition" },
     };
-    const finishedAt = new Date("2026-08-01T00:00:02.345Z");
+    const record = baseRecord({ status: "failed", started_at: "2026-08-01T00:00:00.250Z", steps: [step] });
 
-    const { step: mapped } = callMapGwtStep({ record: step, stepRecord: null, gherkinDocument, pickle, finishedAt });
+    const steps = [
+      callMapGwtStep({ record: step, stepRecord: null, gherkinDocument, pickle, previousStopMs: Date.parse("2026-08-01T00:00:02.345Z") }),
+    ];
+    const mapped = callMapScenario({ record, gherkinDocument, pickle, steps });
 
-    expect(mapped.startMs).toBe(finishedAt.getTime());
-    expect(mapped.stopMs).toBe(finishedAt.getTime());
+    expect(mapped.steps[0]!.startMs).toBe(Date.parse("2026-08-01T00:00:00.250Z"));
+    expect(mapped.steps[0]!.stopMs).toBe(Date.parse("2026-08-01T00:00:00.250Z"));
   });
 
-  it("uses the step record's own started_at/finished_at instead, when there is one, ignoring finishedAt entirely", () => {
+  it("keeps a step record's own started_at/finished_at", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
@@ -292,7 +325,7 @@ describe("mapGwtStep: zero-width time for a step with no step record", () => {
       stepRecord,
       gherkinDocument,
       pickle,
-      finishedAt: new Date("2026-08-01T00:00:09.000Z"),
+      previousStopMs: Date.parse("2026-08-01T00:00:09.000Z"),
     });
 
     expect(mapped.startMs).toBe(Date.parse("2026-08-01T00:00:00.500Z"));

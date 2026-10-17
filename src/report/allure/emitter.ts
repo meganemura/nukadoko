@@ -40,6 +40,7 @@ import {
   type MappedStatus,
 } from "./map-scenario.js";
 import { createAtomicWriter } from "./writer.js";
+import { ownStepSpan } from "../step-timeline.js";
 import { createExportsManifest } from "../../record/run-exports.js";
 
 // Responsibility: the thin layer that turns map-scenario.ts's flat
@@ -322,7 +323,6 @@ export interface EmitStepInput {
    * stepRecord` for the full reasoning. */
   readonly stepRecord: StepRecord | null;
   readonly index: number;
-  readonly finishedAt: Date;
   readonly gherkinDocument: GherkinDocument;
   readonly pickle: Pickle;
   readonly relativeFeaturePath: string;
@@ -535,6 +535,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
   // delete.
   let currentScopeUuid: string | null = null;
   let bufferedSteps: MappedGwtStepOutcome[] = [];
+  let scenarioStartedAtMs = 0;
   let progressAnchorMs: number | null = null;
   let progressCeilingMs: number | null = null;
   let progressUuid: string | null = null;
@@ -803,6 +804,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
 
     beginScenario(input: BeginScenarioInput): void {
       bufferedSteps = [];
+      scenarioStartedAtMs = input.startedAt.getTime();
       progressSnapshotCount = 0;
       progressAnchorMs = null;
       progressCeilingMs = null;
@@ -854,12 +856,13 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
         // step.
         return;
       }
+      const previousStopMs = bufferedSteps.at(-1)?.step.stopMs ?? scenarioStartedAtMs;
       try {
         const outcome = mapGwtStep({
           index: input.index,
           record: input.record,
           stepRecord: input.stepRecord,
-          finishedAt: input.finishedAt,
+          previousStopMs,
           gherkinDocument: input.gherkinDocument,
           pickle: input.pickle,
         });
@@ -873,18 +876,18 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
         // `record.steps` needs exactly one `steps[]` entry, in order, or
         // every later step's own position silently shifts, misaligning the
         // report against the feature file that named them.
-        const t = input.finishedAt.getTime();
+        const ownSpan = ownStepSpan(input.stepRecord);
         bufferedSteps.push({
           step: {
             name: input.record.text,
             status: "broken",
             message,
-            startMs: t,
-            stopMs: t,
+            ...(ownSpan ?? { startMs: previousStopMs, stopMs: previousStopMs }),
             attachments: [],
             parameters: [],
             childSteps: [],
           },
+          ownSpan,
           declaredLabels: [],
           declaredLinks: [],
         });

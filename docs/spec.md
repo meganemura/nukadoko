@@ -3765,6 +3765,14 @@ zero pickles.
   Allure-only: that measurement surplus already has a home, and
   base64-embedding a trace here would bloat the stream for no consumer
   that wants it.
+- A step has the same start and stop here as in the Allure report of the
+  same scenario record. A step with a step record keeps that record's
+  `started_at` and `finished_at`. A step with no step record (skipped,
+  undefined, ambiguous, or refused before it began) has no time of its own,
+  so both emitters place it zero-width at the previous step's stop, or at
+  the scenario's `started_at` when it comes first. That anchor is read from
+  `record.json` alone, so a report built from the record after the run
+  gives the same timeline.
 - `testRunFinished.success` always matches the run's exit code.
   BeforeAll/AfterAll have no place to write into this stream (no
   run-scope record exists for the emitter to draw from), so a run whose

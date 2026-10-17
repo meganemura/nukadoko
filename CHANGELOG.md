@@ -234,6 +234,15 @@ just until 0.1.
   turned up as `undefined-step` with a scaffold hint. The finding message
   now names the file's own extension. Discovery also skips a `.d.cts` type
   declaration, as it already skips `.d.ts` and `.d.mts`.
+- **The Allure report places a step with no step record where the cucumber-messages stream does.**
+  A skipped, undefined, or ambiguous step, or one refused before it began,
+  has no time of its own. The Allure emitter put it at the wall-clock
+  moment the runner appended it, which record.json never stores, while the
+  messages emitter put it at the previous step's stop. One scenario record
+  gave two timelines. Both emitters now place such a step zero-width at the
+  previous step's stop, or at the scenario's `started_at` for the first
+  step, through one shared function, so either report can be rebuilt from
+  record.json alone.
 
 - **A drafted scenario whose docstring holds the text `\"\"\"` reads back as written.**
   `nuka explore` and `nuka harvest` write each docstring between `"""`

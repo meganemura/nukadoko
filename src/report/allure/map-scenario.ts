@@ -13,6 +13,7 @@ import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { ActionEntry, CallEntry, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
 import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
+import { ownStepSpan, placeSteps, type StepSpan } from "../step-timeline.js";
 
 // Responsibility: the pure transform at the center of this module, kept in
 // one identifiable place. One pickle becomes one Allure test result
@@ -182,6 +183,9 @@ export interface MappedGwtStep {
  * own to compute from. */
 export interface MappedGwtStepOutcome {
   readonly step: MappedGwtStep;
+  /** This step's step record span, or `null` without a step record.
+   * `mapScenario` places the step from this, not from `step.startMs`. */
+  readonly ownSpan: StepSpan | null;
   readonly declaredLabels: readonly MappedLabel[];
   readonly declaredLinks: readonly MappedLink[];
   /** `message` carries the `[nukadoko.failure=<kind>]` marker
@@ -210,10 +214,11 @@ export interface MapGwtStepInput {
    * could not be read back: `pushStepRecord`'s own seam hands the caller
    * the object it already has, so there is nothing to re-read. */
   readonly stepRecord: StepRecord | null;
-  /** The moment this step's own record was appended (run-scenario.ts's
-   * `pushStepRecord`) — the zero-width anchor for a step with no step
-   * record of its own. */
-  readonly finishedAt: Date;
+  /** The previous step's stop as far as the caller knows it, or the
+   * scenario's start for the first step: where a step with no step record
+   * sits until `mapScenario` places every step against `record.started_at`
+   * (step-timeline.ts). Only a progress snapshot ever shows this value. */
+  readonly previousStopMs: number;
   readonly gherkinDocument: GherkinDocument;
   readonly pickle: Pickle;
 }
@@ -887,24 +892,12 @@ function mapCalls(calls: readonly CallEntry[] | undefined): MappedChildStep[] {
 // --- one pickle step -> one steps[] entry ---
 
 export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
-  const { index, record, stepRecord, finishedAt, gherkinDocument, pickle } = input;
+  const { index, record, stepRecord, previousStopMs, gherkinDocument, pickle } = input;
 
   const outcome = resolveStepOutcome(record, stepRecord);
 
-  let startMs: number;
-  let stopMs: number;
-  if (stepRecord) {
-    startMs = Date.parse(stepRecord.started_at);
-    stopMs = Date.parse(stepRecord.finished_at);
-  } else {
-    // A step with no step record (skipped/undefined/ambiguous, or a
-    // never-began refusal) has no time of its own to report — zero-width,
-    // anchored to the moment this step's own record was appended
-    // (`MapGwtStepInput.finishedAt`'s own doc comment).
-    const t = finishedAt.getTime();
-    startMs = t;
-    stopMs = t;
-  }
+  const ownSpan = ownStepSpan(stepRecord);
+  const [{ startMs, stopMs }] = placeSteps(previousStopMs, [ownSpan]) as [StepSpan];
 
   const attachments: MappedAttachment[] = [];
   // This step's own `argument` (Gherkin's data table / doc string), first —
@@ -1067,6 +1060,7 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
 
   return {
     step,
+    ownSpan,
     declaredLabels: declared.labels,
     declaredLinks: declared.links,
     failure:
@@ -1243,8 +1237,17 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
     links: dedupeLinks(declaredLinks),
     parameters: [...buildExampleParameters(gherkinDocument, pickle), ...contextParameters, ...identityParameters],
     attachments,
-    steps: steps.map((outcome) => outcome.step),
+    steps: placedSteps(startMs, steps),
   };
+}
+
+// The final placement, against `record.started_at`: the emitter only had a
+// provisional anchor for a step with no step record while the scenario ran
+// (`MapGwtStepInput.previousStopMs`), and the cucumber-messages emitter
+// places the same record with the same rule.
+function placedSteps(scenarioStartMs: number, steps: readonly MappedGwtStepOutcome[]): MappedGwtStep[] {
+  const spans = placeSteps(scenarioStartMs, steps.map((outcome) => outcome.ownSpan));
+  return steps.map((outcome, index) => ({ ...outcome.step, ...spans[index]! }));
 }
 
 // --- hooks -> fixtures (unchanged: hooks stay fixtures, mapped once the
