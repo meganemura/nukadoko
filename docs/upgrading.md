@@ -33,7 +33,7 @@ This part does not change release to release.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
 
-## 0.16.0 to the next release
+## 0.16.1 to the next release
 
 - **`nuka run` writes no scenario record to stdout when stdout is a
   terminal.** A pipe, a file, a CI log, and a shell an agent drives through
@@ -95,7 +95,7 @@ This part does not change release to release.
   are unchanged. A script that matches the old sentence matches on the
   code instead.
 
-## 0.15.0 to 0.16.0
+## 0.15.0 to 0.16.1
 
 - **`nuka tend` leaves out `step-rationale-missing` and
   `schema-field-undescribed` unless asked.** A missing `rationale` or

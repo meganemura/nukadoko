@@ -140,6 +140,19 @@ just until 0.1.
   now names the file's own extension. Discovery also skips a `.d.cts` type
   declaration, as it already skips `.d.ts` and `.d.mts`.
 
+## 0.16.1 — 2026-10-17
+
+### Fixed
+
+- **A test helper no longer empties the shared `nukadoko` shim while another test imports it.**
+  The release checks for 0.16.0 failed on `nuka init`'s `.gitignore`
+  property test: the helper rewrote the shim's files in place, and a
+  test that loaded a generated config in that moment read an empty
+  module. The helper now leaves unchanged content alone and moves new
+  content into place by rename. 0.16.0 never reached npm, so 0.16.1 is
+  the first published version with the 0.16.0 changes below. The
+  package's own code is the same as 0.16.0.
+
 ## 0.16.0 — 2026-10-17
 
 ### Added
