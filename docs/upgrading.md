@@ -74,9 +74,13 @@ This part does not change release to release.
   `"verbatimModuleSyntax": true`, `tsc` requires that spelling. For a
   type that nukadoko exports, such as `IWorldOptions` from
   `nukadoko/compat`, `nuka check`'s finding says to write `import type`.
-- **`nuka scaffold` writes imports with the `.ts` name.** The `--command`
-  step imports `./run-greet.ts`, and `--then` imports its upstream step by
-  its `.ts` name. A step file that already imports by the `.js` name keeps
+- **`nuka scaffold` imports a `--from` producer by its `.ts` name when
+  `tsc` accepts one.** A step scaffolded with `--from run-greet.<key>`
+  imports `./run-greet.ts` when `tsconfig.json`, or a file it extends,
+  sets `rewriteRelativeImportExtensions` or `allowImportingTsExtensions`
+  to true, and when the project has no `tsconfig.json`. Otherwise it
+  imports `./run-greet.js` and prints a `note:` line on stderr that names
+  the option. A step file that already imports by the `.js` name keeps
   loading under nuka, which falls back to the `.ts` file when no `.js` file
   exists, so renaming is optional. A plain `node` run of that file does not
   fall back. For `tsc` to accept a `.ts` name, `tsconfig.json` needs

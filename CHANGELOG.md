@@ -60,9 +60,10 @@ just until 0.1.
   added only when `package.json` says `"type": "commonjs"`, and names that
   field; with no `"type"`, Node loads the file, so a failure there has
   another cause.
-- **`nuka scaffold` writes relative imports with the `.ts` name** (`--command`'s
-  run file, `--then`'s upstream step), the spelling Node resolves without
-  nuka's hook. **`nuka init` adds `"rewriteRelativeImportExtensions": true`**
+- **`nuka scaffold` imports a `--from` producer by its `.ts` name** (the
+  upstream step a `--then` or `--command` step reads), the spelling Node
+  resolves without nuka's hook, where the project's `tsc` accepts it (see
+  the `.js` name under Changed). **`nuka init` adds `"rewriteRelativeImportExtensions": true`**
   to a `tsconfig.json` that has `compilerOptions` of its own and names
   neither that option nor `allowImportingTsExtensions`, in place, with the
   same layout rules as the `include` edit, and prints `tsconfig.json` when
@@ -221,8 +222,8 @@ just until 0.1.
   step record's `used` had already changed shape with nothing an old
   reader could test. Step records, scenario records, and the output of
   `check --json`, `check --codes --json`, `steps --json`, `describe`,
-  `tend --json`, `tend --codes --json`, `clean --json`, `explore
-  --json`, and `session list --json` now begin with `"schema_version": 1`, one number per kind of
+  `tend --json`, `tend --codes --json`, `clean --json`, `experimental
+  explore --json`, and `session list --json` now begin with `"schema_version": 1`, one number per kind of
   document, kept in `src/record/schema-version.ts`. A number moves when a
   field changes meaning, type, or name, or is removed; an added field
   does not move it. The step and scenario records also carry
@@ -269,8 +270,8 @@ just until 0.1.
 - **A command run where no config file exists says so on stderr, and names a config in a parent directory.**
   From a workspace root, every command used to answer for an empty default
   project and name only `features`. Now `check`, `run`, `steps`,
-  `describe`, `do`, `harvest`, `explore`, `clean`, `tend`, each `session`
-  subcommand, `experimental webmcp-tools`, and `scaffold` write one line to
+  `describe`, `do`, `experimental explore`, `clean`, `tend`, each `session`
+  subcommand, and `scaffold` write one line to
   stderr when the directory they run in has neither `nukadoko.config.ts`
   nor `nukadoko.config.mts`: `no nukadoko.config.ts or nukadoko.config.mts
   in <dir>; nukadoko's defaults apply (featuresDir "features")`. When a
@@ -321,6 +322,40 @@ just until 0.1.
   `nuka mcp-tools` stub that named the `experimental` spelling goes with
   the command. `nukadoko/mcp` (`connectMcpServer`, `callMcpTool`) stays.
   `nuka experimental` now holds `explore` only.
+
+- **BREAKING: `nuka harvest` and the `recordStep` export are removed.**
+  `harvest` printed a draft whose keywords were `*`, whose names were
+  placeholders, and whose claims were blank. The agent that ran the `nuka
+  do` sequence already knows each step and its args, and the claims are
+  the part the draft could not supply. Write the scenario from the steps
+  that ran, then run `nuka check`. `nuka harvest` now exits 2 and names
+  docs/upgrading.md. `recordStep` existed so a Playwright Test spec could
+  write step records for `harvest`; it goes with it, together with its
+  `RecordStepOptions`, `StepExecution`, and `UnsupportedExternalFixtureError`
+  exports. A spec calls the shared function directly instead, as
+  docs/migration-playwright-test.md describes. `retention.adHocDays` stays,
+  since `nuka do --use` still reads ad-hoc records across days. A step
+  record that `recordStep` wrote keeps `kind: "external"` on disk until
+  retention removes it. Breaking: see docs/upgrading.md.
+- **BREAKING: live sessions are removed: `nuka session start`, `nuka session stop`, and `--idle-timeout`.**
+  A live session held one `ctx` open in a detached process so `nuka do
+  --session` could land on a world already partway through. A Playwright
+  MCP server on the agent's host keeps a browser open across calls the
+  same way, with no process, socket, or idle timeout of nukadoko's own, so
+  the acceptance skill and llms.txt now send an agent there to explore a
+  browser app whose state cannot be repeated: they say how to tell that
+  the server is connected (its `browser_*` tools are listed), that a
+  Claude Code host adds it with `claude mcp add playwright npx
+  @playwright/mcp@latest`, and to write what was found as a scenario and
+  run `nuka check`. `nuka session start` and `nuka session stop` exit 2
+  and name `nuka do --session` and docs/upgrading.md (`{ error, do }` under
+  `--json`). `nuka do --session <name>` and `nuka session list|clear` stay.
+  With the daemon gone, a step record no longer carries
+  `session_execution`, the session lock no longer has a `sock` field,
+  `nuka do --session` no longer prints its "is not live" line, `nuka run`
+  no longer reports a live session or skips retention for one, and `nuka
+  clean` no longer refuses while a session lock is held. Breaking: see
+  docs/upgrading.md.
 
 ### Packaging
 
@@ -487,7 +522,7 @@ just until 0.1.
   scenario record said `"passed"`, so an agent had to special-case one of
   them. Step records, scenario record hooks, and
   `nuka experimental explore --json`'s steps now say `"passed"`; a stored record that still says `"ok"` is read
-  as `"passed"` by `nuka do --use`, `nuka harvest`, and the emitters. The
+  as `"passed"` by `nuka do --use` and the emitters. The
   exported type `StepRecordOk` is renamed `StepRecordPassed`. `nuka tend
   --json`'s summary keys are snake_case (`typed_steps`, `compat_steps`,
   `compat_step_names`, `scanned_feature_dirs`, `read_only_steps`), like
@@ -528,7 +563,7 @@ just until 0.1.
 - **A command that refuses names the next command, and a `--json` command refuses in JSON.**
   A command that stopped before it had anything to report (an unknown
   flag, an invalid config, a missing target, an unknown step, a
-  `--fail-on` code `nuka tend` does not know, a live session in the way)
+  `--fail-on` code `nuka tend` does not know, a session another process holds)
   wrote prose on stderr and nothing on stdout, even under `--json`. Every
   such refusal now goes through one shape. Under `--json`, stdout carries
   one line, `{ "schema_version": 1, "error": "<message>", "do":
@@ -537,9 +572,8 @@ just until 0.1.
   same way, and so does `nuka describe`, which has no text form, so its
   refusal moves from stderr to stdout. Without `--json`, stderr keeps the
   message and adds a `do: <command>` line. `do` is the next command when one is known
-  (`nuka steps`, an `npm install -D -E` line, `nuka session stop <name>`,
-  `nuka check <file>`), and the command's own `--help` otherwise. Exit
-  codes are unchanged here. Breaking for a script that reads a `--json`
+  (`nuka steps`, an `npm install -D -E` line, `nuka check <file>`), and
+  the command's own `--help` otherwise. Exit codes are unchanged here. Breaking for a script that reads a `--json`
   refusal from stderr: see docs/upgrading.md.
 
 - **Exit 2 means the command refused and nothing ran; exit 1 means it ran and is red.**
@@ -548,8 +582,8 @@ just until 0.1.
   stderr. Exit 1 now means a `nuka check` error, a failed scenario, a
   failed `nuka do` step, `import_failures` on `nuka steps` or `nuka
   describe`, a `nuka tend --fail-on` hit, a failed `nuka experimental
-  explore` run, or a failure while the command ran (a session that did
-  not start, a session file that could not be removed). Exit 2 is every refusal: an
+  explore` run, or a failure while the command ran (a session file that
+  could not be removed). Exit 2 is every refusal: an
   unknown flag or command, a config that does not load, a missing
   target, a `:line` on `nuka check`, a bad numeric flag, a missing peer
   dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown
@@ -558,42 +592,6 @@ just until 0.1.
   each command writes to stdout and stderr, and the codes) and a table of
   a step record's `error.kind` values under "Records"; llms.txt gains the
   same section. Breaking for a script that tests `== 1`: see
-  docs/upgrading.md.
-
-### Removed
-
-- **BREAKING: `nuka harvest` and the `recordStep` export are removed.**
-  `harvest` printed a draft whose keywords were `*`, whose names were
-  placeholders, and whose claims were blank. The agent that ran the `nuka
-  do` sequence already knows each step and its args, and the claims are
-  the part the draft could not supply. Write the scenario from the steps
-  that ran, then run `nuka check`. `nuka harvest` now exits 2 and names
-  docs/upgrading.md. `recordStep` existed so a Playwright Test spec could
-  write step records for `harvest`; it goes with it, together with its
-  `RecordStepOptions`, `StepExecution`, and `UnsupportedExternalFixtureError`
-  exports. A spec calls the shared function directly instead, as
-  docs/migration-playwright-test.md describes. `retention.adHocDays` stays,
-  since `nuka do --use` still reads ad-hoc records across days. A step
-  record that `recordStep` wrote keeps `kind: "external"` on disk until
-  retention removes it. Breaking: see docs/upgrading.md.
-- **BREAKING: live sessions are removed: `nuka session start`, `nuka session stop`, and `--idle-timeout`.**
-  A live session held one `ctx` open in a detached process so `nuka do
-  --session` could land on a world already partway through. A Playwright
-  MCP server on the agent's host keeps a browser open across calls the
-  same way, with no process, socket, or idle timeout of nukadoko's own, so
-  the acceptance skill and llms.txt now send an agent there to explore a
-  browser app whose state cannot be repeated: they say how to tell that
-  the server is connected (its `browser_*` tools are listed), that a
-  Claude Code host adds it with `claude mcp add playwright npx
-  @playwright/mcp@latest`, and to write what was found as a scenario and
-  run `nuka check`. `nuka session start` and `nuka session stop` exit 2
-  and name `nuka do --session` and docs/upgrading.md (`{ error, do }` under
-  `--json`). `nuka do --session <name>` and `nuka session list|clear` stay.
-  With the daemon gone, a step record no longer carries
-  `session_execution`, the session lock no longer has a `sock` field,
-  `nuka do --session` no longer prints its "is not live" line, `nuka run`
-  no longer reports a live session or skips retention for one, and `nuka
-  clean` no longer refuses while a session lock is held. Breaking: see
   docs/upgrading.md.
 
 ### Fixed
@@ -648,9 +646,7 @@ just until 0.1.
   bounding how long the call took. `tests/run-fixture-bag.test.ts` and
   `tests/compat-parameter-type-transformer.test.ts` load the command module
   in a `beforeAll`, so the first test no longer pays for that import inside
-  its own timeout. The busy-session test in `tests/live-session.test.ts`
-  holds its first step until the second call has been refused, instead of
-  racing a 150ms sleep against a 600ms step.
+  its own timeout.
 
 - **Tests that a loaded machine failed now assert an ordering or an event instead of a duration.**
   This changes the test suite only. The compat timeout tests in
@@ -714,7 +710,7 @@ just until 0.1.
   record.json alone.
 
 - **A drafted scenario whose docstring holds the text `\"\"\"` reads back as written.**
-  `nuka explore` writes each docstring between `"""`
+  `nuka experimental explore` writes each docstring between `"""`
   fences, and @cucumber/gherkin turns the first `\"\"\"` on any line
   inside those fences into `"""`. A docstring value that held that text
   read back different, and its line was written with a comment saying

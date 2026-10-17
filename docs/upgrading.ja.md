@@ -63,8 +63,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `import type { Options }` か `import { type Options }` と書いてください。
   `"verbatimModuleSyntax": true` を設定すると、`tsc` がこの書き方を求めます。
   `nukadoko/compat` の `IWorldOptions` のように nukadoko が export する型については、`nuka check` の finding が `import type` と書くよう伝えます。
-- **`nuka scaffold` は `.ts` の名前で import を書きます。**
-  `--command` の step は `./run-greet.ts` を import し、`--then` は上流の step を `.ts` の名前で import します。
+- **`nuka scaffold` は、`tsc` が `.ts` の名前を受け入れるとき、`--from` の producer をその名前で import します。**
+  `--from run-greet.<key>` で scaffold した step は、`tsconfig.json` かそれが extends するファイルが `rewriteRelativeImportExtensions` か `allowImportingTsExtensions` を true にしているとき、`./run-greet.ts` を import します。
+  プロジェクトに `tsconfig.json` がないときも同じです。
+  それ以外のときは `./run-greet.js` を import し、そのオプションを名指す `note:` 行を stderr に書きます。
   すでに `.js` の名前で import している step ファイルは、nuka のもとでは読み込まれ続けます。
   `.js` ファイルがなければ、nuka は `.ts` ファイルにフォールバックするからです。
   そのため、名前の書き換えは任意です。
