@@ -424,7 +424,7 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
   "kind": "do",
   "args": { "title": "Buy milk" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
-  "status": "ok",
+  "status": "passed",
   "observed": { "http_reads": 0, "http_writes": 1 }
 }
 ```
@@ -609,7 +609,7 @@ nukadoko は ESM だけをサポートします。
 代わりに `nuka init` は `nukadoko.config.mts` を書きます。
 `.nukadoko/` を自分で `.gitignore` に追加する必要はありません。
 `nuka init` が追加します。
-`nuka init --env` は `.env` と `.env.*` も追加し、`.env.example` は追跡されたままにします。
+`nuka init --env-files` は `.env` と `.env.*` も追加し、`.env.example` は追跡されたままにします。
 state directory の中の trace とスクリーンショットは redact されないため、state directory には機密データが含まれます。
 
 </details>

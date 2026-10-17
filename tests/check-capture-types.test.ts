@@ -106,7 +106,7 @@ describe("nuka check: capture type against args schema", () => {
     const stepRecord = JSON.parse(await readFile(recordPath, "utf8")) as { status: string; args: unknown };
 
     expect(exitCode).toBe(1);
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.args).toEqual({ v: "123456789012345678901234567890" });
   });
 });

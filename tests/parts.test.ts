@@ -91,7 +91,7 @@ describe("call / parts", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.result).toEqual({ memberId: "m_a@example.com" });
   });
 
@@ -151,7 +151,7 @@ describe("call / parts", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.calls).toBeUndefined();
   });
 
@@ -267,7 +267,7 @@ describe("call / parts", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     // The slow part started first and finished last; the tree follows start order.
     expect(stepRecord.result).toEqual({ orders: ["slow", "fast"] });
     expect(shape(stepRecord.calls)).toEqual([{ step: "slow-part" }, { step: "fast-part" }]);
@@ -283,7 +283,7 @@ describe("call / parts", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(shape(stepRecord.calls)).toEqual([
       { step: "concurrent-wrapper-part", calls: [{ step: "slow-part" }, { step: "fast-part" }] },
       { step: "fast-part" },

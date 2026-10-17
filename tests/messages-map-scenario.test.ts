@@ -52,7 +52,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     kind: "run",
     args: {},
     result: null,
-    status: "ok",
+    status: "passed",
     environment: "default",
     session: null,
     scenario_record_id: "scn-1",
@@ -97,8 +97,8 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
-    const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
-    const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
+    const beforeHook: ScenarioHookRecord = { type: "before", status: "passed" };
+    const afterHook: ScenarioHookRecord = { type: "after", status: "passed" };
     const record = baseRecord({ steps: [step], hooks: [beforeHook, afterHook] });
 
     const mapped = mapScenario({
@@ -134,8 +134,8 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
     const record = baseRecord({
       steps: [],
       hooks: [
-        { type: "before", status: "ok", name: "seed the database" } as ScenarioHookRecord,
-        { type: "before", status: "ok", name: "open the browser" } as ScenarioHookRecord,
+        { type: "before", status: "passed", name: "seed the database" } as ScenarioHookRecord,
+        { type: "before", status: "passed", name: "open the browser" } as ScenarioHookRecord,
       ],
     });
 
@@ -155,7 +155,7 @@ describe("mapScenario (messages): testSteps order and hookId absence", () => {
   it("reuses an already-assigned hookId and emits no new Hook envelope for it", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
-    const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
+    const beforeHook: ScenarioHookRecord = { type: "before", status: "passed" };
     const record = baseRecord({ steps: [], hooks: [beforeHook] });
 
     const mapped = mapScenario({
@@ -195,7 +195,7 @@ describe("mapScenario (messages): after_step hooks", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
-    const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
+    const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "passed", step_index: 0 };
     const record = baseRecord({ steps: [step], hooks: [afterStepHook] });
 
     const mapped = mapScenario({
@@ -225,9 +225,9 @@ describe("mapScenario (messages): after_step hooks", () => {
     const { pickles } = parse();
     const pickle = pickles[0]!;
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
-    const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
-    const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "ok", step_index: 0 };
-    const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
+    const beforeHook: ScenarioHookRecord = { type: "before", status: "passed" };
+    const afterStepHook: ScenarioHookRecord = { type: "after_step", status: "passed", step_index: 0 };
+    const afterHook: ScenarioHookRecord = { type: "after", status: "passed" };
     const record = baseRecord({ steps: [step], hooks: [beforeHook, afterStepHook, afterHook] });
 
     const mapped = mapScenario({
@@ -255,8 +255,8 @@ describe("mapScenario (messages): after_step hooks", () => {
       { text: "the customer pays", status: "passed", step_record_id: null },
     ];
     const hooks: ScenarioHookRecord[] = [
-      { type: "after_step", status: "ok", step_index: 0 },
-      { type: "after_step", status: "ok", step_index: 1 },
+      { type: "after_step", status: "passed", step_index: 0 },
+      { type: "after_step", status: "passed", step_index: 1 },
     ];
     const record = baseRecord({ steps, hooks });
 
@@ -282,8 +282,8 @@ describe("mapScenario (messages): after_step hooks", () => {
       { text: "the customer pays", status: "passed", step_record_id: null },
     ];
     const hooks: ScenarioHookRecord[] = [
-      { type: "after_step", status: "ok", step_index: 0 },
-      { type: "after_step", status: "ok", step_index: 1 },
+      { type: "after_step", status: "passed", step_index: 0 },
+      { type: "after_step", status: "passed", step_index: 1 },
     ];
     const record = baseRecord({ steps, hooks });
 
@@ -305,7 +305,7 @@ describe("mapScenario (messages): after_step hooks", () => {
     const pickle = pickles[0]!;
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const hooks: ScenarioHookRecord[] = [
-      { type: "after_step", status: "ok", step_index: 0 },
+      { type: "after_step", status: "passed", step_index: 0 },
       { type: "after_step", status: "failed", step_index: 0, error: { message: "boom", kind: "step_error" } },
     ];
     const record = baseRecord({ steps: [step], hooks });

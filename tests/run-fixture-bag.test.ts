@@ -100,7 +100,7 @@ describe("nuka do: fixture bag's structural refusal", () => {
     expect(stderr.text()).toBe("");
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.result).toEqual({ ok: true });
   });
 });

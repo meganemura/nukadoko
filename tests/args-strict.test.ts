@@ -144,7 +144,7 @@ describe("nuka do: strict args validation", () => {
 
       expect(exitCode).toBe(0);
       const stepRecord = JSON.parse(stdout.text());
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       expect(stepRecord.args).toEqual({ value: "hi" });
     } finally {
       await removeTempDir(rootDir);
@@ -205,7 +205,7 @@ describe("nuka do: strict args validation", () => {
 
       expect(exitCode).toBe(0);
       const stepRecord = JSON.parse(stdout.text());
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       // `tag` was never given on the command line: this is the schema's own
       // default, present only if the record holds the validated value.
       expect(stepRecord.args).toEqual({ name: "ada", tag: "guest" });

@@ -32,9 +32,9 @@ import type { UsedEntry, UsedEntryWithResult } from "../record/types.js";
 // had — added so a *failed* step's step record can be read alone instead of
 // requiring a second record.json to be opened just to see what it read.
 // Recorded here unconditionally (every `record()` call gets one; this
-// collector has no idea yet whether the step reading it will end up "ok" or
+// collector has no idea yet whether the step reading it will end up "passed" or
 // "failed") — it is the step-record-construction site (run-scenario.ts's
-// `finishExecutedStep`, cli/do.ts) that strips it back off for an "ok"
+// `finishExecutedStep`, cli/do.ts) that strips it back off for a "passed"
 // step record (success is redundant — the value is already sitting
 // on that step's own `args`/upstream step record). The full result, not the
 // one key a `from` injection happened to read: a diagnosis needs
@@ -85,7 +85,7 @@ export interface UsedCollector {
   record(recordId: string, stepName: string, result: unknown): void;
   /** The reads recorded since the last `reset()` (or since creation),
    * deduplicated by step record id, in the order first read. Every entry
-   * carries `result` unconditionally — a caller building an "ok" step
+   * carries `result` unconditionally — a caller building a "passed" step
    * record must strip it itself. */
   snapshot(): UsedEntryWithResult[];
   /** Executor-only: zeroes the tally at a step boundary. */
@@ -94,7 +94,7 @@ export interface UsedCollector {
 
 /** Strips `result` from every entry
  * — the shared helper both `nuka run` (run-scenario.ts) and `nuka do`
- * (cli/do.ts) call when building an "ok" step record, so a successful
+ * (cli/do.ts) call when building a "passed" step record, so a successful
  * execution's `used` keeps the `{ step_record_id, step }` shape it always
  * has and never carries the redundant upstream value success doesn't need. */
 export function omitUsedResults(entries: readonly UsedEntryWithResult[]): UsedEntry[] {

@@ -118,7 +118,7 @@ describe("actions on the step record: a real expect() wait", () => {
       "record.json",
     );
     const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8")) as StoredStepRecord;
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
 
     const expectAction = (stepRecord.actions ?? []).find((action) => action.method === "expect");
     expect(expectAction).toBeDefined();

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -30,6 +30,29 @@ describe("nuka do --use", () => {
     await removeTempDir(rootDir);
   });
 
+  it("reads a step record that still says status ok, as nukadoko 0.16.1 wrote it", async () => {
+    const createStdout = createCaptureSink();
+    await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {
+      rootDir,
+      stdout: createStdout,
+      stderr: createCaptureSink(),
+    });
+    const { step_record_id: recordId } = JSON.parse(createStdout.text());
+    const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+    const stored = JSON.parse(await readFile(recordPath, "utf8"));
+    await writeFile(recordPath, `${JSON.stringify({ ...stored, status: "ok" }, null, 2)}\n`);
+
+    const archiveStdout = createCaptureSink();
+    const archiveExit = await runCli(["do", "archive-project", "--args", "{}", "--use", recordId], {
+      rootDir,
+      stdout: archiveStdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(archiveExit).toBe(0);
+    expect(JSON.parse(archiveStdout.text()).args).toEqual({ projectId: "p_acme" });
+  });
+
   it("fills a required from key from an earlier step record and records it in used", async () => {
     const createStdout = createCaptureSink();
     const createExit = await runCli(["do", "create-project", "--args", '{"name":"acme"}'], {
@@ -39,7 +62,7 @@ describe("nuka do --use", () => {
     });
     expect(createExit).toBe(0);
     const createStepRecord = JSON.parse(createStdout.text());
-    expect(createStepRecord.status).toBe("ok");
+    expect(createStepRecord.status).toBe("passed");
 
     const archiveStdout = createCaptureSink();
     const archiveExit = await runCli(
@@ -49,7 +72,7 @@ describe("nuka do --use", () => {
 
     expect(archiveExit).toBe(0);
     const archiveStepRecord = JSON.parse(archiveStdout.text());
-    expect(archiveStepRecord.status).toBe("ok");
+    expect(archiveStepRecord.status).toBe("passed");
     // The value `--use` drew lands on the step record's own `args`, same as a
     // scenario-path `from` injection does (tests/from-chain.test.ts) — a
     // reader must be able to tell it apart from a value never validated.
@@ -99,7 +122,7 @@ describe("nuka do --use", () => {
 
     expect(exitCode).toBe(0);
     const archiveStepRecord = JSON.parse(archiveStdout.text());
-    expect(archiveStepRecord.status).toBe("ok");
+    expect(archiveStepRecord.status).toBe("passed");
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme", ownerId: "o_jane" });
     expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "p_acme", ownerId: "o_jane" });
     expect(archiveStepRecord.used).toEqual([
@@ -200,7 +223,7 @@ describe("nuka do --use", () => {
     // step record is ever printed to stdout.
     expect(archiveStdout.text()).toBe("");
     expect(archiveStderr.text()).toContain(failedStepRecord.step_record_id);
-    expect(archiveStderr.text()).toContain('not "ok"');
+    expect(archiveStderr.text()).toContain('not "passed"');
   });
 
   it("a step record whose step is not named by any from entry fails setup", async () => {
@@ -245,7 +268,7 @@ describe("nuka do --use", () => {
     expect(exitCode).toBe(0);
     expect(archiveStderr.text()).toBe("");
     const archiveStepRecord = JSON.parse(archiveStdout.text());
-    expect(archiveStepRecord.status).toBe("ok");
+    expect(archiveStepRecord.status).toBe("passed");
     // No --args at all means the default is `{}`, so every key on this
     // step record's own `args` came from `--use`'s `from` injection alone.
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
@@ -300,7 +323,7 @@ describe("nuka do --use", () => {
     });
     expect(doubleExit).toBe(0);
     const doubleStepRecord = JSON.parse(doubleStdout.text());
-    expect(doubleStepRecord.status).toBe("ok");
+    expect(doubleStepRecord.status).toBe("passed");
     expect(doubleStepRecord.args).toEqual({ total: "123456789012345678901234567890" });
     expect(doubleStepRecord.result).toEqual({ doubled: "246913578024691357802469135780" });
   });

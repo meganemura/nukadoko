@@ -174,7 +174,7 @@ interface InitArgs {
   baseUrl?: string;
   featuresDir?: string;
   allure?: boolean;
-  env?: boolean;
+  envFiles?: boolean;
 }
 
 interface ScaffoldArgs {
@@ -829,9 +829,19 @@ export async function runCli(
           type: "boolean",
           describe: "turn the Allure emitter on in the generated config and write allurerc.mjs",
         })
-        .option("env", {
+        .option("env-files", {
           type: "boolean",
           describe: "add .env, .env.*, and !.env.example to .gitignore, for a project that keeps env files",
+        })
+        // `--env` names an environment on every other command, so init's
+        // boolean moved to `--env-files`; the old spelling is refused by
+        // name rather than read as an unknown flag.
+        .option("env", { hidden: true })
+        .check((argv) => {
+          if (argv.env !== undefined) {
+            throw new Error("nuka init --env is now --env-files; --env names an environment on the other commands");
+          }
+          return true;
         })
         .check(rejectRepeatedFlags(["base-url", "features-dir"])) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
@@ -842,7 +852,7 @@ export async function runCli(
         baseUrl: args.baseUrl ?? null,
         featuresDir: args.featuresDir ?? null,
         allure: args.allure ?? false,
-        env: args.env ?? false,
+        envFiles: args.envFiles ?? false,
         stdout,
         stderr,
       });

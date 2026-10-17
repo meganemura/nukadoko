@@ -369,7 +369,7 @@ function stepResults(steps: readonly PlannedStep[], outcomes: readonly StepOutco
     const outcome = outcomes[index];
     if (outcome === undefined) return { ...head, status: "not-run" };
     return outcome.ok
-      ? { ...head, status: "ok", result: toStoredForm(outcome.result) }
+      ? { ...head, status: "passed", result: toStoredForm(outcome.result) }
       : { ...head, status: "failed", message: outcome.message };
   });
 }

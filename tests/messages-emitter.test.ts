@@ -102,7 +102,7 @@ describe("createMessagesEmitter", () => {
         kind: "run",
         args: {},
         result: { ok: true },
-        status: "ok",
+        status: "passed",
         environment: "staging",
         session: null,
         scenario_record_id: "scn-1",
@@ -121,8 +121,8 @@ describe("createMessagesEmitter", () => {
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
 
       const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
-      const beforeHook: ScenarioHookRecord = { type: "before", status: "ok" };
-      const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
+      const beforeHook: ScenarioHookRecord = { type: "before", status: "passed" };
+      const afterHook: ScenarioHookRecord = { type: "after", status: "passed" };
       const record: ScenarioRecord = {
         scenario_record_id: "scn-1",
         run_id: "run-1",
@@ -399,7 +399,7 @@ describe("createMessagesEmitter", () => {
       kind: "run",
       args: {},
       result: null,
-      status: "ok",
+      status: "passed",
       environment: "staging",
       session: null,
       scenario_record_id: "scn-missing-file",

@@ -1295,7 +1295,7 @@ If two producers run in one scenario, one consumer key cannot represent both val
 The consumer must declare two keys for the two values.
 
 `from` uses a key name instead of a selector function because a name is data.
-`nuka steps --json` and `nuka describe` retain it as "`projectId` ← `createProject.id`".
+`nuka steps --json` and `nuka describe` both show it as `{ "projectId": { "step": "create-project", "key": "id" } }`.
 An agent can use that data to assemble an order that it did not receive.
 `nuka check` also uses the data to evaluate a scenario before execution.
 A function could express more behavior, but the tool could report only the source step.
@@ -2489,7 +2489,7 @@ array identifies each step record by id, so either record leads to the other.
   "kind": "do",
   "args": { "name": "acme" },
   "result": { "id": "p_0001", "name": "acme" },
-  "status": "ok",
+  "status": "passed",
   "mutates": true,
   "observed": { "http_reads": 2, "http_writes": 1 },
   "environment": "dev",
@@ -2512,7 +2512,7 @@ array identifies each step record by id, so either record leads to the other.
   (not the caller) produced it. On failure, `error: { kind, message }`
   replaces it. Compat steps record `result: null`.
 - `args` uses the same distinction (see "Typed steps" for the refusal this
-  backs). On an `ok` record it is the schema-validated value `run`
+  backs). On a `passed` record it is the schema-validated value `run`
   actually received, a schema's own `.default(...)` included even where
   the caller never typed the key; on a `failed` one it is exactly what was
   given, since a value the schema already rejected cannot be reconstructed
@@ -2698,7 +2698,7 @@ array identifies each step record by id, so either record leads to the other.
   the upstream step record's full validated result,
   sitting right beside the id/step pointer. This is what lets one failed
   step record be read alone instead of opening a second `record.json` just
-  to see what the step actually saw. An `ok` step's `used` entries never
+  to see what the step actually saw. A `passed` step's `used` entries never
   carry `result`: the value that mattered is already sitting on that
   step's own `result` (or on its `args`, if it came in through `from`), so
   repeating the upstream one there would only be redundant. The whole
@@ -2791,7 +2791,7 @@ array identifies each step record by id, so either record leads to the other.
   `close` and `console`, no request or error event to listen for, so what
   a service worker's console emits and any background fetch failure inside
   it go unrecorded. cucumber-js has no browser context of its own to hold
-  any of this: a step can pass (`status: "ok"`)
+  any of this: a step can pass (`status: "passed"`)
   while the page underneath it was throwing the whole time, and before this
   field nothing on the record said so. Each category is present only when
   it recorded at least one entry, and is always a bare array, never
@@ -3804,6 +3804,11 @@ do need acting on):
   declared. When the default report left the notes behind those counts
   out (see below), the line says that `nuka tend --all` names each one.
 
+Under `--json`, the same summary is the `summary` object, in snake_case
+like every other document nukadoko prints: `typed_steps`, `compat_steps`,
+`compat_step_names`, `read_only_steps`, `scanned_feature_dirs`, and
+`rationale` and `describe`, each `{ declared, total }`.
+
 This summary exists because the information was already available but unread. A step
 record's `world` and `declared` counts do shrink as a suite promotes, which
 is accurate but useless for showing progress: nobody reads a directory of
@@ -4123,7 +4128,7 @@ the shrunk sequence. A relation adds `name`, and a failing one adds
 `steps` and `scenario`. A relation with a generated source also adds
 `seed`, `runs`, and `length`, and on a failure `run`, `found_steps`,
 `shrunk_steps`, and `shrink_attempts`, counted in source steps.
-Each entry of `steps` has `step`, `args`, and `status`: `"ok"` with
+Each entry of `steps` has `step`, `args`, and `status`: `"passed"` with
 `result`, `"failed"` with `message`, or `"not-run"` for a step after the
 failed step in the same sequence. `scenario` is the text the plain output prints, without
 the two leading comments. An `error` carries `message`, and `run` for a
@@ -4445,7 +4450,7 @@ nuka session start <name> [--env <name>] [--idle-timeout <seconds>]
 nuka session stop <name> [--env <name>]
                               persist the session's storageState, then end
                               its process
-nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
+nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, <featuresDir>/steps/,
                               .nukadoko/ in .gitignore, and a package.json
@@ -4455,7 +4460,7 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
                               or prints one stderr line naming them when the
                               file has comments. --allure turns the
                               Allure emitter on and writes allurerc.mjs;
-                              --env adds .env, .env.*, !.env.example to
+                              --env-files adds .env, .env.*, !.env.example to
                               .gitignore
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko

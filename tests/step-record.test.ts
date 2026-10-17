@@ -39,7 +39,7 @@ describe("writeStepRecord", () => {
       kind: "do",
       args: {},
       result: {},
-      status: "ok",
+      status: "passed",
       environment: "default",
       session: null,
       scenario_record_id: null,

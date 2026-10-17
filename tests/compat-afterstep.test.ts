@@ -52,7 +52,7 @@ describe("nuka run: AfterStep hook execution", () => {
     expect(afterStepHooks).toHaveLength(2);
     expect(afterStepHooks.map((h) => h.step_index)).toEqual([0, 1]);
     for (const hook of afterStepHooks) {
-      expect(hook.status).toBe("ok");
+      expect(hook.status).toBe("passed");
       expect(hook.declared?.logs).toContain("afterstep:status=PASSED");
       expect(hook.declared?.logs).toContain("afterstep:statusFailedMatches=false");
     }

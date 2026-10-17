@@ -174,7 +174,7 @@ describe("nuka run: compat step execution", () => {
     expect(record.steps[0].status).toBe("passed");
 
     const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     // The measured tally is unchanged by this task (this file's own header)
     // — only whether it fails the step changed.
     expect((stepRecord as { observed: { http_writes: number } }).observed.http_writes).toBe(1);

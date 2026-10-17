@@ -39,7 +39,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //     only paths). The default targets a CLI or API project: the Allure
 //     and messages emitters are off, so nothing Allure-shaped is written
 //     unless `--allure` asks for it, and the `.env*` ignore lines are
-//     written only under `--env`. Every adopter of the earlier
+//     written only under `--env-files`. Every adopter of the earlier
 //     always-written set deleted those files by hand.
 //   - Finish with a self-check: load the config just written and discover
 //     its vocabulary for real, the same two calls `nuka steps`/`nuka do`
@@ -74,8 +74,8 @@ export interface RunInitOptions {
   featuresDir: string | null;
   /** `--allure`: write `allurerc.mjs` and turn the Allure emitter on. */
   allure: boolean;
-  /** `--env`: ignore `.env` files, for a project that keeps one. */
-  env: boolean;
+  /** `--env-files`: ignore `.env` files, for a project that keeps one. */
+  envFiles: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -374,7 +374,7 @@ async function ensureScenariosScript(rootDir: string, stderr: WritableSink): Pro
 }
 
 export async function runInit(options: RunInitOptions): Promise<number> {
-  const { rootDir, baseUrl, featuresDir, allure, env, stdout, stderr } = options;
+  const { rootDir, baseUrl, featuresDir, allure, envFiles, stdout, stderr } = options;
 
   const existingConfigPaths = CONFIG_FILE_NAMES.map((fileName) => path.join(rootDir, fileName)).filter(
     (candidate) => existsSync(candidate),
@@ -417,7 +417,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   await mkdir(path.join(rootDir, stepsDirRelative), { recursive: true });
   stdout.write(`${stepsDirRelative}\n`);
 
-  // `.env` files are ignored only under `--env`: three of eight early
+  // `.env` files are ignored only under `--env-files`: three of eight early
   // adopters removed these lines, since a CLI or API project often keeps no
   // env file at all. A project that does keep one asks for them. They are
   // ignored because a tracked env file that matches HEAD is plain
@@ -431,7 +431,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   // only re-includes a path an earlier pattern already excluded.
   const gitignoreWritten = await ensureGitignoreEntries(rootDir, [
     `${defaults.stateDir}/`,
-    ...(env ? [".env", ".env.*", "!.env.example"] : []),
+    ...(envFiles ? [".env", ".env.*", "!.env.example"] : []),
   ]);
   if (gitignoreWritten) {
     stdout.write(".gitignore\n");

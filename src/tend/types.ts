@@ -47,7 +47,7 @@ export interface TendDeclarationCoverage {
  * typed vs. compat, and the two declaration-coverage ratios — on purpose:
  * every additional number here dilutes the ones that matter.
  *
- * `compatStepNames` names every counted entity for `--json`'s reader: an
+ * `compat_step_names` names every counted entity for `--json`'s reader: an
  * agent finds "these 8" more actionable than "compat is 8".
  * `rationale`/`describe` do *not* get an equivalent name list —
  * `missing-rationale.ts`/`missing-describe.ts`'s own notes already name
@@ -56,25 +56,25 @@ export interface TendDeclarationCoverage {
  * new, because nothing else in this report currently names a compat step at
  * all.
  *
- * `scannedFeatureDirs` and `readOnlySteps` are the two exceptions to the
+ * `scanned_feature_dirs` and `read_only_steps` are the two exceptions to the
  * "cap at three numbers"
  * rule just above, added deliberately rather than by drift: `pattern-unbound`
  * had gone quietly wrong for any project that placed a feature outside
  * `featuresDir`, because nothing
  * in `tend`'s own output said which directories it had actually looked at —
- * `scannedFeatureDirs` is what makes that fixable by reading the output
- * rather than the source. `readOnlySteps` is counted in the same loop as
+ * `scanned_feature_dirs` is what makes that fixable by reading the output
+ * rather than the source. `read_only_steps` is counted in the same loop as
  * the typed/compat counts (src/tend/summary.ts's own counting loop,
  * `entry.step.mutates === false`), belonging beside them rather than a
  * separate pass. */
 export interface TendSummary {
-  readonly typedSteps: number;
-  readonly compatSteps: number;
-  readonly compatStepNames: readonly string[];
+  readonly typed_steps: number;
+  readonly compat_steps: number;
+  readonly compat_step_names: readonly string[];
   readonly rationale: TendDeclarationCoverage;
   readonly describe: TendDeclarationCoverage;
-  readonly scannedFeatureDirs: readonly string[];
-  readonly readOnlySteps: number;
+  readonly scanned_feature_dirs: readonly string[];
+  readonly read_only_steps: number;
 }
 
 export interface TendReport {

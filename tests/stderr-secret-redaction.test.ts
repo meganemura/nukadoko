@@ -31,7 +31,7 @@ describe("stderr redacts a suite secret in teardown and version-probe failures",
       });
 
       expect(exitCode).toBe(0);
-      expect(JSON.parse(stdout.text()).status).toBe("ok");
+      expect(JSON.parse(stdout.text()).status).toBe("passed");
       expectSecretRedacted(stderr.text());
     } finally {
       await removeTempDir(rootDir);

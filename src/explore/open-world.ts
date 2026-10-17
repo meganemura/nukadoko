@@ -121,7 +121,7 @@ export function openWorld(options: WorldOptions): World {
         config,
       });
       await handle.endStep();
-      if (outcome.status === "ok") return { ok: true, result: outcome.result };
+      if (outcome.status === "passed") return { ok: true, result: outcome.result };
       return { ok: false, message: redact(outcome.error.message, secrets) as string };
     }
 

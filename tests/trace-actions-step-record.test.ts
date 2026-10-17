@@ -77,7 +77,7 @@ describe("actions on the step record: secret redaction", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const stepRecord = JSON.parse(stdout.text()) as StoredStepRecord & { evidence: { dir: string } };
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
 
     const gotoAction = (stepRecord.actions ?? []).find((action) => action.method === "goto");
     expect(gotoAction).toBeDefined();
@@ -119,7 +119,7 @@ describe("actions on the step record: secret redaction", () => {
     );
     const stepRecordText = await readFile(recordPath, "utf8");
     const stepRecord = JSON.parse(stepRecordText) as StoredStepRecord;
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
 
     const gotoAction = (stepRecord.actions ?? []).find((action) => action.method === "goto");
     expect(gotoAction).toBeDefined();

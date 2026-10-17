@@ -121,7 +121,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     expect(record.status).toBe("passed");
 
     const beforeHook = record.hooks.find((h: { type: string }) => h.type === "before");
-    expect(beforeHook.status).toBe("ok");
+    expect(beforeHook.status).toBe("passed");
     expect(beforeHook.declared).toEqual({
       // ".txt": same `extensionForMediaType` fallback as the compat-declared
       // fixture above (M3-C spec item 2) — this hook's own glue also

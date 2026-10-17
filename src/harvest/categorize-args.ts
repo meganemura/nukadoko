@@ -100,7 +100,7 @@ function confirmedChainSource(
     return false;
   }
   const producerRecord = recordsById.get(stepRecordId);
-  if (producerRecord === undefined || producerRecord.status !== "ok") {
+  if (producerRecord === undefined || producerRecord.status !== "passed") {
     return false;
   }
   if (!isPlainRecord(producerRecord.result)) {

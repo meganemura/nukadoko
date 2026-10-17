@@ -53,7 +53,7 @@ describe("nuka run: After hook failure", () => {
     // one both ran: the throwing one does not stop its sibling.
     expect(afterHooks).toHaveLength(2);
     const failed = afterHooks.find((h) => h.status === "failed");
-    const ok = afterHooks.find((h) => h.status === "ok");
+    const ok = afterHooks.find((h) => h.status === "passed");
     expect(failed).toBeDefined();
     expect(failed!.error?.message).toContain("after hook exploded on purpose");
     expect(failed!.error?.kind).toBe("step_error");

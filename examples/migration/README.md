@@ -218,7 +218,7 @@ own run):
     { "text": "the todo list has 2 todos", "status": "passed", "step_record_id": "step-...-i8jo" },
     { "text": "the stashed note reads \"seed run\"", "status": "passed", "step_record_id": "step-...-zpj1" }
   ],
-  "hooks": [{ "type": "before", "status": "ok" }]
+  "hooks": [{ "type": "before", "status": "passed" }]
 }
 {
   "scenario": "a promoted producer feeds a typed consumer via resultOf",
@@ -227,12 +227,12 @@ own run):
     { "text": "a todo titled \"Read a book\" is created", "status": "passed", "step_record_id": "step-...-4kfn" },
     { "text": "the created todo id is read back via resultOf", "status": "passed", "step_record_id": "step-...-9x9l" }
   ],
-  "hooks": [{ "type": "before", "status": "ok" }]
+  "hooks": [{ "type": "before", "status": "passed" }]
 }
 ```
 
 Green -- exit `0` -- with nothing rewritten but the import and one hook
-body. `hooks: [{ "type": "before", "status": "ok" }]` on both records is
+body. `hooks: [{ "type": "before", "status": "passed" }]` on both records is
 this suite's one Before hook, reported once per scenario; a hook never gets
 a step record of its own (docs/spec.md "Running": it runs against the pickle's
 shared World, outside any step's own boundary).
@@ -249,7 +249,7 @@ output (`evidence`/`environment`/`session`/timestamps trimmed for space):
   "step": "compat: the following legacy todos are seeded:",
   "kind": "run",
   "result": null,
-  "status": "ok",
+  "status": "passed",
   "observed": { "http_reads": 0, "http_writes": 2 },
   "world": { "reads": [], "writes": ["seededCount"] }
 }
@@ -361,7 +361,7 @@ and `step-...-9x9l`), trimmed the same way:
   "step_record_id": "step-20260802-141751-4kfn",
   "step": "create-todo",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90", "title": "Read a book", "done": false },
-  "status": "ok",
+  "status": "passed",
   "observed": { "http_reads": 0, "http_writes": 1 }
 }
 ```
@@ -371,7 +371,7 @@ and `step-...-9x9l`), trimmed the same way:
   "step_record_id": "step-20260802-141751-9x9l",
   "step": "read-created-todo-id",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90" },
-  "status": "ok",
+  "status": "passed",
   "observed": { "http_reads": 0, "http_writes": 0 },
   "used": [{ "step_record_id": "step-20260802-141751-4kfn", "step": "create-todo" }]
 }

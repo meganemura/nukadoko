@@ -214,7 +214,7 @@ describe("ctx.poll step records", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.polls).toEqual([
       { at: expect.any(String), attempts: 1, waited_ms: expect.any(Number), outcome: "resolved" },
     ]);
@@ -231,7 +231,7 @@ describe("ctx.poll step records", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.polls).toBeUndefined();
   });
 });

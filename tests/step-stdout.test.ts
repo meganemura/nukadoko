@@ -124,7 +124,7 @@ describe("step stdout stays off the record stream", () => {
       expect(exitCode, stderr).toBe(0);
       const record = expectParseableJson(stdout) as { step: string; status: string };
       expect(record.step).toBe("chatty");
-      expect(record.status).toBe("ok");
+      expect(record.status).toBe("passed");
       expect(stdout).not.toContain(TYPED_LINE);
       expect(stdout).not.toContain(TYPED_PARTIAL);
       expect(stderr).toContain(TYPED_LINE);
@@ -376,7 +376,7 @@ describe("project stdout outside step bodies stays off the record stream", () =>
       expect(exitCode, stderr).toBe(0);
       const record = expectParseableJson(stdout) as { step: string; status: string };
       expect(record.step).toBe("noisy");
-      expect(record.status).toBe("ok");
+      expect(record.status).toBe("passed");
       for (const marker of ["MODULE_LOAD", "SCENARIO_FIXTURE_SETUP", "SCENARIO_FIXTURE_TEARDOWN"]) {
         expect(stdout, marker).not.toContain(marker);
         expect(stderr, marker).toContain(marker);

@@ -48,7 +48,7 @@ describe("nuka run: the builtin scratch fixture", () => {
     for (const scenario of scenarios) {
       const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", scenario.steps[0]!.step_record_id, "record.json");
       const record = JSON.parse(await readFile(recordPath, "utf8")) as CopyStepRecord;
-      expect(record.status).toBe("ok");
+      expect(record.status).toBe("passed");
       expect(record.result.copied).toBe(true);
       expect(record.evidence.scratch).toEqual([record.result.copy, record.result.empty]);
       expect(path.basename(record.result.empty)).toMatch(/^empty-/);

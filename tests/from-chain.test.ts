@@ -51,7 +51,7 @@ describe("from: scenario-path injection", () => {
     const createRecordId = record.steps[0].step_record_id as string;
     const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
 
-    expect(archiveStepRecord.status).toBe("ok");
+    expect(archiveStepRecord.status).toBe("passed");
     // The injected value lands on the step record's own `args` — the step
     // actually ran with it, so the step record should say so (a reader must
     // be able to tell an injected value apart from one that
@@ -259,7 +259,7 @@ describe("nuka steps --json: from is exposed", () => {
     expect(create).not.toHaveProperty("from");
   });
 
-  it("nuka describe shows from in a human-readable 'step.key' form", async () => {
+  it("nuka describe shows from in the { step, key } form nuka steps --json uses", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["describe", "archive-project"], {
       rootDir,
@@ -269,6 +269,6 @@ describe("nuka steps --json: from is exposed", () => {
 
     expect(exitCode).toBe(0);
     const contract = JSON.parse(stdout.text());
-    expect(contract.from).toEqual({ projectId: "create-project.id" });
+    expect(contract.from).toEqual({ projectId: { step: "create-project", key: "id" } });
   });
 });

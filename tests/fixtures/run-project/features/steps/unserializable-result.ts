@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // Returns a value whose toJSON throws. Zod passes it through (`z.any()`),
-// so this step's own status is "ok" all the way through `run()`. The
+// so this step's own status is "passed" all the way through `run()`. The
 // failure this exists to exercise happens one layer further out, once the
 // executor itself turns that validated result into a step record: `nuka
 // run`'s own general backstop (src/run/run-scenario.ts) still has to leave a

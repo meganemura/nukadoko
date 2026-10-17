@@ -4,7 +4,7 @@ import { buildDraft, type DraftInput } from "../src/harvest/build-draft.js";
 import type { Vocabulary, VocabularyEntry } from "../src/discover/discover-steps.js";
 import { defineStep } from "../src/step/define-step.js";
 import { buildStepBindings } from "../src/run/match-step.js";
-import type { StepRecordFailed, StepRecordOk } from "../src/record/types.js";
+import type { StepRecordFailed, StepRecordPassed } from "../src/record/types.js";
 
 // Responsibility: unit tests for src/harvest/build-draft.ts's branches that
 // harvest.test.ts's own fixture-driven cases (tests/fixtures/harvest-project)
@@ -18,7 +18,7 @@ import type { StepRecordFailed, StepRecordOk } from "../src/record/types.js";
 // each case can force an exact vocabulary/record mismatch that a real
 // project on disk would take extra files and steps to reproduce.
 
-function makeRecord(id: string, step: string, args: unknown, overrides: Partial<StepRecordOk> = {}): StepRecordOk {
+function makeRecord(id: string, step: string, args: unknown, overrides: Partial<StepRecordPassed> = {}): StepRecordPassed {
   return {
     step_record_id: id,
     step,
@@ -33,7 +33,7 @@ function makeRecord(id: string, step: string, args: unknown, overrides: Partial<
     evidence: { dir: `.nukadoko/records/steps/${id}`, screenshots: [] },
     observed: { http_reads: 0, http_writes: 0 },
     mutates: true,
-    status: "ok",
+    status: "passed",
     result: {},
     ...overrides,
   };

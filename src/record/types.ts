@@ -1,5 +1,5 @@
 // Responsibility: the step record shape from docs/spec.md "Records", typed as
-// the discriminated union `status` actually implies — `StepRecordOk` carries
+// the discriminated union `status` actually implies — `StepRecordPassed` carries
 // `result`, `StepRecordFailed` carries `error`, never both. `session` is
 // `string | null` (null when the invocation named no session) and
 // `environment` is the environment's own name, plus the optional
@@ -28,13 +28,13 @@
 // meaning on its own: a receipt, in the everyday sense, is proof a
 // transaction happened, not a record of what happened during one. What the
 // old name actually carried was never the name itself: it was the fact that
-// `StepRecordOk.result` had passed the step's own `returns` schema. That
+// `StepRecordPassed.result` had passed the step's own `returns` schema. That
 // fact does not move when the name does, so this rename costs a reader
 // nothing they depended on.
 //
 // `observed` is added now: the
 // network calls the tool itself measured this execution making, never what
-// a step declared. It is required on both `StepRecordOk` and
+// a step declared. It is required on both `StepRecordPassed` and
 // `StepRecordFailed` — unlike `target_version`, there is no "not applicable"
 // case for it, only "zero calls happened" (`{ http_reads: 0, http_writes:
 // 0 }`).
@@ -152,14 +152,14 @@
 // uncaught page errors, and failed requests the harness itself saw a
 // browser context produce, which cucumber-js has no way to hold at all — it
 // has no browser context of its own to measure from. A step can pass
-// (`status: "ok"`) while the page underneath it was throwing the whole time,
+// (`status: "passed"`) while the page underneath it was throwing the whole time,
 // and before this field that fact left no trace on the step record at all.
 // Measured by `PageEventsCollector` (src/context/page-events.ts), which also
 // documents *why* each category is shaped the way it is (console limited to
 // `error`, `weberror` never carrying `Error#stack`, the 100-entries-per-
 // category cap reported through the sibling `truncated` field rather than by
 // changing a category's own type). Present on both
-// `StepRecordOk` and `StepRecordFailed` alike, and independent of `status`:
+// `StepRecordPassed` and `StepRecordFailed` alike, and independent of `status`:
 // a page error is evidence about the page, not a verdict on the step. The
 // whole field, and each of its three categories individually, is omitted
 // when empty — `sections`/`used`/`declared`'s own convention — so a step
@@ -382,7 +382,7 @@ export interface UsedEntry {
    * result-bearing `UsedEntryWithResult` fail to structurally satisfy
    * `UsedEntry` wherever an array of it is expected, so a step-record-
    * construction site that forgets to call `omitUsedResults` before handing
-   * an "ok" step record its `used` array gets a compile error instead of a
+   * a "passed" step record its `used` array gets a compile error instead of a
    * silent leak. */
   readonly result?: never;
 }
@@ -610,7 +610,7 @@ export interface EvidenceMeta {
   scratch?: readonly string[];
 }
 
-// Exported by name: `StepRecordOk` and `StepRecordFailed` extend it, and a
+// Exported by name: `StepRecordPassed` and `StepRecordFailed` extend it, and a
 // surface that publishes those two without publishing this name leaks the
 // shared fields as an anonymous type.
 export interface StepRecordBase {
@@ -756,7 +756,7 @@ export interface StepRecordBase {
    * `mutates` declaration to
    * report (`then-compat-step`'s own warning exists for exactly this gap), so
    * `null` is a third value, never coerced to `false`. Present on both
-   * `StepRecordOk` and `StepRecordFailed` — the declared/observed comparison
+   * `StepRecordPassed` and `StepRecordFailed` — the declared/observed comparison
    * matters most for a run that actually finished. */
   mutates: boolean | null;
   /** The environment's `version` probe result (docs/spec.md "Records":
@@ -783,8 +783,8 @@ export interface StepRecordBase {
   fixtures?: FixtureUsageEntry[];
 }
 
-export interface StepRecordOk extends StepRecordBase {
-  status: "ok";
+export interface StepRecordPassed extends StepRecordBase {
+  status: "passed";
   /** Passed the step's `returns` schema; this is the trust anchor
    * (docs/spec.md "Records"). */
   result: unknown;
@@ -792,7 +792,7 @@ export interface StepRecordOk extends StepRecordBase {
    * read from — through a `from` injection or a `ctx.resultOf` call alike
    * (docs/spec.md "Records"). Present only when non-empty;
    * deduplicated by step record id, in read order. `UsedEntry`, not
-   * `UsedEntryWithResult`: an "ok" step record's own `used` can never carry
+   * `UsedEntryWithResult`: a "passed" step record's own `used` can never carry
    * the upstream's `result` — the value is already sitting on this step's
    * own `args`/upstream step record, and a construction site that tries to
    * hand a result-bearing entry here fails to compile instead of silently
@@ -806,11 +806,11 @@ export interface StepRecordFailed extends StepRecordBase {
    * always had. `kind` is new: a machine-readable
    * classification alongside it, never a replacement for it. */
   error: { message: string; kind: ErrorKind };
-  /** Same field as `StepRecordOk.used`, but `UsedEntryWithResult`: a failed
+  /** Same field as `StepRecordPassed.used`, but `UsedEntryWithResult`: a failed
    * step's step record is exactly where a reader most needs "what upstream
    * value did this read", without opening a second record.json — so
    * `result` is required here, not merely allowed. */
   used?: UsedEntryWithResult[];
 }
 
-export type StepRecord = StepRecordOk | StepRecordFailed;
+export type StepRecord = StepRecordPassed | StepRecordFailed;

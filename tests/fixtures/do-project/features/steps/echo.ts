@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Pure step (no HTTP, no browser): exercises `nuka do`'s "ok" and "args
+// Pure step (no HTTP, no browser): exercises `nuka do`'s "passed" and "args
 // validation failed" step record paths (the latter by calling it with args
 // missing `value`).
 export default defineStep({

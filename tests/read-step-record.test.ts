@@ -23,7 +23,7 @@ describe("readStepRecord", () => {
       kind: "do",
       args: {},
       result: { ok: true },
-      status: "ok",
+      status: "passed",
       environment: "default",
       session: null,
       scenario_record_id: null,
@@ -37,6 +37,29 @@ describe("readStepRecord", () => {
     await writeFile(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}\n`);
 
     expect(readStepRecord(dir)).toEqual(stepRecord);
+  });
+
+  it("reads a record written with the earlier status word ok as passed", async () => {
+    const written = {
+      step_record_id: "step-20260801-143022-a1b2",
+      step: "noop",
+      kind: "do",
+      args: {},
+      result: { id: 7 },
+      status: "ok",
+      environment: "default",
+      session: null,
+      scenario_record_id: null,
+      run_id: null,
+      started_at: "2026-08-01T14:30:22.000Z",
+      finished_at: "2026-08-01T14:30:23.000Z",
+      evidence: { dir: ".nukadoko/records/steps/step-20260801-143022-a1b2", screenshots: [] },
+      observed: { http_reads: 0, http_writes: 0 },
+      mutates: true,
+    };
+    await writeFile(path.join(dir, "record.json"), `${JSON.stringify(written, null, 2)}\n`);
+
+    expect(readStepRecord(dir)).toEqual({ ...written, status: "passed" });
   });
 
   it("returns null when record.json doesn't exist", () => {

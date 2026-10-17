@@ -33,7 +33,7 @@ export interface ExecuteTypedStepInput {
  * default it filled in silently. */
 export type TypedStepOutcome =
   | {
-      readonly status: "ok";
+      readonly status: "passed";
       readonly args: unknown;
       readonly result: unknown;
       readonly fixtureUsage: FixtureUsageEntry[];
@@ -89,7 +89,7 @@ export async function executeTypedStep(input: ExecuteTypedStepInput): Promise<Ty
         fixtureUsage,
       };
     }
-    return { status: "ok", args: argsResult.data, result: returnsResult.data, fixtureUsage };
+    return { status: "passed", args: argsResult.data, result: returnsResult.data, fixtureUsage };
   } catch (error) {
     return {
       status: "failed",

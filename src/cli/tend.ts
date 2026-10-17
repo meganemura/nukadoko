@@ -85,7 +85,7 @@ function formatIssueLine(severity: "error" | "note", issue: TendIssue): string {
 
 // Two lines, matching docs/spec.md's own CLI summary phrasing for `nuka
 // tend` ("how much of the vocabulary is typed rather than compat and how
-// much of it declares what it could"). `compatStepNames` is left out of
+// much of it declares what it could"). `compat_step_names` is left out of
 // text on purpose: text output is what a human takes in at a glance, so it
 // stays as counts; it is still on `report.summary` for `--json`, which
 // dumps the whole report as-is below, because naming the actual steps is
@@ -95,8 +95,8 @@ function formatSummaryLines(summary: TendSummary, declarationNotesLeftOut: boole
     `declared: rationale ${summary.rationale.declared}/${summary.rationale.total}, ` +
     `describe ${summary.describe.declared}/${summary.describe.total}`;
   return [
-    `scanned: ${summary.scannedFeatureDirs.join(", ")}`,
-    `bed: typed ${summary.typedSteps}, compat ${summary.compatSteps}, read-only ${summary.readOnlySteps}`,
+    `scanned: ${summary.scanned_feature_dirs.join(", ")}`,
+    `bed: typed ${summary.typed_steps}, compat ${summary.compat_steps}, read-only ${summary.read_only_steps}`,
     declarationNotesLeftOut ? `${declared} (nuka tend --all names each one)` : declared,
   ];
 }

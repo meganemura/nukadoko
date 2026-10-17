@@ -645,7 +645,7 @@ function resolveStepOutcome(step: ScenarioStepEntry, stepRecord: StepRecord | nu
 }
 
 function resolveHookOutcome(hook: ScenarioHookRecord): Outcome {
-  if (hook.status === "ok") {
+  if (hook.status === "passed") {
     return { status: "passed" };
   }
   if (!hook.error) {
@@ -984,7 +984,7 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
 
     // `returns: z.void()` leaves `result` undefined, and JSON.stringify(undefined)
     // is not a string, so only a step that returned a value gets a result.
-    if (stepRecord.status === "ok" && stepRecord.result !== null && stepRecord.result !== undefined) {
+    if (stepRecord.status === "passed" && stepRecord.result !== null && stepRecord.result !== undefined) {
       attachments.push({
         kind: "buffer",
         name: "result",

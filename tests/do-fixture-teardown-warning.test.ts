@@ -26,7 +26,7 @@ describe("nuka do: a fixture whose own teardown fails", () => {
 
       expect(exitCode).toBe(0);
       const record = JSON.parse(stdout.text());
-      expect(record.status).toBe("ok");
+      expect(record.status).toBe("passed");
 
       expect(stderr.text()).toContain('Warning: fixture "brokenTeardown" teardown failed');
       expect(stderr.text()).toContain("brokenTeardown's own teardown exploded on purpose");

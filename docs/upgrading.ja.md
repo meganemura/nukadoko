@@ -82,6 +82,21 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   今は、その行がある feature ファイルを名指すので、そのコマンドはそのファイルの未定義の行すべてに stub を書きます。
   code と、その `file` と `line` は変わりません。
   古い文に一致させているスクリプトは、代わりに code に一致させます。
+- **成功した step record は `"status": "ok"` ではなく `"status": "passed"` と書きます。**
+  step record、scenario record の `steps[]` と `hooks[]`、`nuka explore --json` の `steps[]` で、成功を表す語が同じになりました。
+  `.status == "ok"` を調べるスクリプトや jq のフィルタは、`"passed"` を調べるようにします。
+  nukadoko 0.16.1 以前が書いた record は、ディスク上では `"ok"` のままです。
+  `nuka do --use`、`nuka harvest`、各 emitter はそれを `"passed"` として読むので、retention が削除するまで残しておけます。
+  export されている TypeScript の型 `StepRecordOk` は `StepRecordPassed` になりました。
+- **`nuka tend --json` の summary のキーは snake_case になりました。**
+  `typedSteps`、`compatSteps`、`compatStepNames`、`scannedFeatureDirs`、`readOnlySteps` は、`typed_steps`、`compat_steps`、`compat_step_names`、`scanned_feature_dirs`、`read_only_steps` になります。
+  `rationale` と `describe` の名前は変わりません。
+- **`nuka describe` は `from` を `nuka steps --json` と同じ形で示します。**
+  producer が 1 つのキーは、文字列 `"create-project.id"` ではなく `{ "step": "create-project", "key": "id" }` になります。
+  producer が複数のキーは、`"either of A or B"` ではなく、そのオブジェクトの配列になります。
+- **`nuka init --env` は `nuka init --env-files` になりました。**
+  `--env` は、ほかのすべてのコマンドで environment の名前を表します。
+  `nuka init --env` は新しいフラグを名指して終了コード 1 で終わり、何も書きません。
 
 ## 0.15.0 から 0.16.1 へ
 

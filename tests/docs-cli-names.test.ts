@@ -304,13 +304,17 @@ function commandOmissions(tree: CommandNode, file: DocFile): string[] {
   return [...tree.subcommands.keys()].filter((name) => !named.has(name)).map((name) => `nuka ${name}`);
 }
 
-// A command a release removed is still named by the upgrade notes that say
-// what replaced it, and by their history. Only those two files may cite one.
+// A command or flag a release removed is still named by the upgrade notes
+// that say what replaced it, and by their history. Only those two files may
+// cite one.
 const REMOVED_COMMANDS = new Set(["accept", "mcp-tools"]);
+const REMOVED_FLAGS = new Set(["init --env"]);
 const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
 
 function citesRemovedCommand(file: DocFile, invocation: string): boolean {
-  return UPGRADE_NOTES.has(file.relativePath) && REMOVED_COMMANDS.has(invocation.trim().split(/\s+/)[0]!);
+  if (!UPGRADE_NOTES.has(file.relativePath)) return false;
+  const words = invocation.trim().split(/\s+/);
+  return REMOVED_COMMANDS.has(words[0]!) || REMOVED_FLAGS.has(words.slice(0, 2).join(" "));
 }
 
 describe("names in README.md, llms.txt, docs/, and skills/", () => {
@@ -354,6 +358,9 @@ describe("the extraction itself", () => {
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.ja.md", text: "" }, "accept")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "accept features/a.feature")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "acceptx")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "init --env")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env-files")).toBe(false);
   });
 
   // Positive controls: each drift named in this file's header, written as

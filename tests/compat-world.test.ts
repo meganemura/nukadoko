@@ -64,7 +64,7 @@ describe("nuka run: World + Before/After hooks", () => {
     // (After always attempts to run).
     for (const record of [untagged, tagged, excluded]) {
       expect(record.hooks.filter((h: { type: string }) => h.type === "after")).toEqual([
-        { type: "after", status: "ok" },
+        { type: "after", status: "passed" },
       ]);
     }
   });
@@ -92,7 +92,7 @@ describe("nuka run: World + Before/After hooks", () => {
     expect(failedBeforeHook.error.message).toBe("before hook exploded");
 
     // After still ran despite the Before failure.
-    expect(record.hooks).toContainEqual({ type: "after", status: "ok" });
+    expect(record.hooks).toContainEqual({ type: "after", status: "passed" });
   });
 
   it("accessing this.page before openPage() resolves fails clearly (WorldNotOpenedError), and attach/log/link are held without crashing", async () => {

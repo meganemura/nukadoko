@@ -53,7 +53,7 @@ describe("from: injection picks whichever candidate actually ran", () => {
 
     const createRecordId = record.steps[0].step_record_id as string;
     const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
-    expect(archiveStepRecord.status).toBe("ok");
+    expect(archiveStepRecord.status).toBe("passed");
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
     expect(archiveStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-project" }]);
   });
@@ -72,7 +72,7 @@ describe("from: injection picks whichever candidate actually ran", () => {
 
     const importRecordId = record.steps[0].step_record_id as string;
     const archiveStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id as string);
-    expect(archiveStepRecord.status).toBe("ok");
+    expect(archiveStepRecord.status).toBe("passed");
     // import-project's own returns key is "projectId", not "id" — proving
     // the injected value came from the *other* candidate's own key name.
     expect(archiveStepRecord.args).toEqual({ projectId: "p_beta" });
@@ -292,7 +292,7 @@ describe("nuka steps --json: more than one candidate is exposed as an array", ()
     ]);
   });
 
-  it("nuka describe shows both candidates in one 'either of' string", async () => {
+  it("nuka describe shows both candidates in the same shape nuka steps --json uses", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["describe", "archive-project"], {
       rootDir,
@@ -302,9 +302,12 @@ describe("nuka steps --json: more than one candidate is exposed as an array", ()
 
     expect(exitCode).toBe(0);
     const contract = JSON.parse(stdout.text());
-    expect(contract.from.projectId).toContain("create-project.id");
-    expect(contract.from.projectId).toContain("import-project.projectId");
-    expect(contract.from.projectId).toContain("either of");
+    expect(contract.from).toEqual({
+      projectId: [
+        { step: "create-project", key: "id" },
+        { step: "import-project", key: "projectId" },
+      ],
+    });
   });
 });
 

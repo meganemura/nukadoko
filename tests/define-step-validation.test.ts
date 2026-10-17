@@ -164,6 +164,6 @@ describe("defineStep validation reaches nuka check and nuka do", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "valid", "--args", "{}"], { rootDir, stdout, stderr });
     expect(exitCode, `${stdout.text()}\n${stderr.text()}`).toBe(0);
-    expect(stdout.text()).toContain('"status": "ok"');
+    expect(stdout.text()).toContain('"status": "passed"');
   });
 });

@@ -230,7 +230,7 @@ describe("nuka tend: post-navigation-read", () => {
           stepText: "a step whose committed record still carries actions",
           stepRecord: {
             step: "a step whose committed record still carries actions",
-            status: "ok",
+            status: "passed",
             actions: [
               { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
               { method: "click", at: "2026-01-01T00:00:00.100Z", ms: 5 },
@@ -246,7 +246,7 @@ describe("nuka tend: post-navigation-read", () => {
     it("reports nothing when the next call is far enough from the navigation's own end", async () => {
       await writeStepRecordFile(rootDir, "far-apart", {
         step: "a step with a wide gap",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
           // 2026-01-01T00:00:20.050Z minus (00:00.000Z + 50ms) = 20000ms,
@@ -262,7 +262,7 @@ describe("nuka tend: post-navigation-read", () => {
     it("reports nothing when the gap is negative, an overlapping trace entry rather than a delayed read", async () => {
       await writeStepRecordFile(rootDir, "negative-gap", {
         step: "a step whose next call appears to start before the navigation ended",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.100Z", ms: 50 },
           // Starts at 00:00:00.120Z, before the navigation above is
@@ -278,7 +278,7 @@ describe("nuka tend: post-navigation-read", () => {
     it("reports nothing, and does not throw, for a step record with no actions field at all", async () => {
       await writeStepRecordFile(rootDir, "no-actions", {
         step: "a step accepted before actions existed",
-        status: "ok",
+        status: "passed",
       });
 
       const { report } = await runTendJson(rootDir);
@@ -288,7 +288,7 @@ describe("nuka tend: post-navigation-read", () => {
     it("reports nothing for a step whose actions never include a navigation call", async () => {
       await writeStepRecordFile(rootDir, "no-navigation", {
         step: "a step that never navigates",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "click", at: "2026-01-01T00:00:00.000Z", ms: 5 },
           { method: "click", at: "2026-01-01T00:00:00.010Z", ms: 5 },
@@ -302,7 +302,7 @@ describe("nuka tend: post-navigation-read", () => {
     it("reports a note right at the cutoff, and none just past it (the boundary is inclusive on the near side only)", async () => {
       await writeStepRecordFile(rootDir, "at-cutoff", {
         step: "a step at the cutoff",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 0 },
           // Exactly 10,000ms after the navigation's own end.
@@ -311,7 +311,7 @@ describe("nuka tend: post-navigation-read", () => {
       });
       await writeStepRecordFile(rootDir, "past-cutoff", {
         step: "a step past the cutoff",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 0 },
           // 10,001ms after the navigation's own end.
@@ -331,7 +331,7 @@ describe("nuka tend: post-navigation-read", () => {
       // no way of writing the step can ever silence it.
       await writeStepRecordFile(rootDir, "bare-read", {
         step: "a step that reads right after navigating",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
           { method: "click", at: "2026-01-01T00:00:00.060Z", ms: 5 },
@@ -347,7 +347,7 @@ describe("nuka tend: post-navigation-read", () => {
     it("reports a note for a kind: \"do\" step record, even though it was never accepted, and names its record.json", async () => {
       const recordPath = await writeStepRecordFile(rootDir, "do-kind", {
         step: "a step run only through nuka do",
-        status: "ok",
+        status: "passed",
         kind: "do",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
@@ -365,7 +365,7 @@ describe("nuka tend: post-navigation-read", () => {
     it("excludes a read inside a ctx.poll window, but still reports one outside it on the same step record", async () => {
       await writeStepRecordFile(rootDir, "poll-covered", {
         step: "a step with one poll-covered read and one bare read",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
           // Starts at 00:00:00.100Z, inside the poll window below
@@ -396,7 +396,7 @@ describe("nuka tend: post-navigation-read", () => {
 
       await writeStepRecordFile(rootDir, "poll-edge-start", {
         step: "a step whose read starts exactly on the poll window's near edge",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 0 },
           // Starts exactly at the window's own start - included in the
@@ -407,7 +407,7 @@ describe("nuka tend: post-navigation-read", () => {
       });
       await writeStepRecordFile(rootDir, "poll-edge-end", {
         step: "a step whose read starts exactly on the poll window's far edge",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 0 },
           // Starts exactly at the window's own end - included in the
@@ -418,7 +418,7 @@ describe("nuka tend: post-navigation-read", () => {
       });
       await writeStepRecordFile(rootDir, "poll-edge-just-before", {
         step: "a step whose read starts 1ms before the poll window",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 0 },
           // Starts 1ms before the window opens - outside it, so reported.
@@ -428,7 +428,7 @@ describe("nuka tend: post-navigation-read", () => {
       });
       await writeStepRecordFile(rootDir, "poll-edge-just-after", {
         step: "a step whose read starts 1ms after the poll window",
-        status: "ok",
+        status: "passed",
         actions: [
           { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 0 },
           // Starts 1ms after the window closes - outside it, so reported.
@@ -459,7 +459,7 @@ describe("nuka tend: post-navigation-read", () => {
         const nextStartsAt = new Date(gapMs).toISOString();
         await writeStepRecordFile(rootDir, `background-${index}`, {
           step: "open-todo-app",
-          status: "ok",
+          status: "passed",
           actions: [
             { method: "goto", at: navigationEndsAt, ms: 0 },
             { method: "waitForSelector", at: nextStartsAt, ms: 5 },

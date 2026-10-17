@@ -213,7 +213,7 @@ describe("nuka scaffold --from", () => {
     expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
 
     const described = await cli(rootDir, ["describe", "output-says"]);
-    expect(JSON.parse(described.stdout).from).toEqual({ stdout: "run-greet.stdout" });
+    expect(JSON.parse(described.stdout).from).toEqual({ stdout: { step: "run-greet", key: "stdout" } });
     expect(JSON.stringify(JSON.parse(described.stdout).args)).toContain("what greet printed");
 
     const outputSays = path.join(rootDir, "features", "steps", "output-says.ts");
@@ -318,7 +318,7 @@ describe("nuka scaffold --from: any producer key", () => {
           const check = await cli(rootDir, ["check"]);
           expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
           const described = await cli(rootDir, ["describe", consumer]);
-          expect(JSON.parse(described.stdout).from).toEqual({ [key]: `${producer}.${key}` });
+          expect(JSON.parse(described.stdout).from).toEqual({ [key]: { step: producer, key } });
         } finally {
           await rm(path.join(stepsDir, `${producer}.ts`), { force: true });
           await rm(path.join(stepsDir, `${consumer}.ts`), { force: true });

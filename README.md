@@ -436,7 +436,7 @@ afterward. The result is a step record, not a pass/fail line.
   "kind": "do",
   "args": { "title": "Buy milk" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
-  "status": "ok",
+  "status": "passed",
   "observed": { "http_reads": 0, "http_writes": 1 }
 }
 ```
@@ -646,7 +646,7 @@ project loads with a warning, and fails to import under
 `"type": "commonjs"`. That error names the file and the cause, and says to
 rename it to `nukadoko.config.mts`. `nuka init` writes
 `nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
-`.gitignore` yourself because `nuka init` does that. `nuka init --env` also
+`.gitignore` yourself because `nuka init` does that. `nuka init --env-files` also
 adds `.env` and `.env.*`, and leaves `.env.example` tracked. Traces and
 screenshots inside the state directory are not redacted, so it contains
 sensitive data.

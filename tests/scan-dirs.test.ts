@@ -16,7 +16,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 interface TendReport {
   errors: { code: string; message: string; file?: string; step?: string }[];
   notes: { code: string; message: string; file?: string; step?: string }[];
-  summary: { scannedFeatureDirs: string[]; readOnlySteps: number; typedSteps: number; compatSteps: number };
+  summary: { scanned_feature_dirs: string[]; read_only_steps: number; typed_steps: number; compat_steps: number };
 }
 
 interface CheckReport {
@@ -83,8 +83,8 @@ describe("additionalFeatureDirs", () => {
       expect(lines[1]).toBe("bed: typed 2, compat 0, read-only 1");
 
       const { report } = await runTend(fixture("tend-additional-dirs-project"));
-      expect(report.summary.scannedFeatureDirs).toEqual(["features", "extra", "ghost-dir"]);
-      expect(report.summary.readOnlySteps).toBe(1);
+      expect(report.summary.scanned_feature_dirs).toEqual(["features", "extra", "ghost-dir"]);
+      expect(report.summary.read_only_steps).toBe(1);
     });
   });
 

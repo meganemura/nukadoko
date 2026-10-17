@@ -57,7 +57,7 @@ describe("nuka run: AfterStep hook failure", () => {
     // ran for step 0: the throwing one does not stop its sibling.
     expect(afterStepHooks).toHaveLength(2);
     const failed = afterStepHooks.find((h) => h.status === "failed");
-    const ok = afterStepHooks.find((h) => h.status === "ok");
+    const ok = afterStepHooks.find((h) => h.status === "passed");
     expect(failed).toBeDefined();
     expect(failed!.step_index).toBe(0);
     expect(failed!.error?.message).toContain("afterstep hook exploded on purpose");

@@ -81,7 +81,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     kind: "run",
     args: {},
     result: null,
-    status: "ok",
+    status: "passed",
     environment: "default",
     session: null,
     scenario_record_id: "scn-1",
@@ -232,7 +232,7 @@ describe("mapGwtStep: outcome.failure, bubbled up for mapScenario's own classifi
   it("is undefined for a passed step", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null });
+    const stepRecord = baseStepRecord({ status: "passed", result: null });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const outcome = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -278,7 +278,7 @@ describe("mapGwtStep: zero-width time for a step with no step record", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       started_at: "2026-08-01T00:00:00.500Z",
       finished_at: "2026-08-01T00:00:01.000Z",
@@ -317,7 +317,7 @@ describe("mapGwtStep: step parameters", () => {
   it("reports mutates: null as 'not declared', not 'false'", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null, mutates: null });
+    const stepRecord = baseStepRecord({ status: "passed", result: null, mutates: null });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -329,7 +329,7 @@ describe("mapGwtStep: step parameters", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       mutates: false,
       observed: { http_reads: 2, http_writes: 1 },
@@ -353,7 +353,7 @@ describe("mapGwtStep: step parameters", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       declared: { parameters: [{ name: "declared-only", value: "x" }] },
     });
@@ -375,7 +375,7 @@ describe("mapGwtStep: declared attachments/logs; links/labels bubble up separate
   it("prefixes a declared attachment's name with 'declared: ' and points at evidence.dir", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { attachments: ["screenshot.png"] } });
+    const stepRecord = baseStepRecord({ status: "passed", result: null, declared: { attachments: ["screenshot.png"] } });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -392,7 +392,7 @@ describe("mapGwtStep: declared attachments/logs; links/labels bubble up separate
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       declared: { links: [{ url: "https://issues.example/1", name: "issue-1" }] },
     });
@@ -407,7 +407,7 @@ describe("mapGwtStep: declared attachments/logs; links/labels bubble up separate
   it("returns a step's own declared.labels as declaredLabels, not on the steps[] entry (which has no labels field)", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { labels: [{ name: "custom", value: "v" }] } });
+    const stepRecord = baseStepRecord({ status: "passed", result: null, declared: { labels: [{ name: "custom", value: "v" }] } });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const outcome = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -419,7 +419,7 @@ describe("mapGwtStep: declared attachments/logs; links/labels bubble up separate
   it("turns declared.logs into zero-width, passed child steps", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { logs: ["hello from glue"] } });
+    const stepRecord = baseStepRecord({ status: "passed", result: null, declared: { logs: ["hello from glue"] } });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -517,7 +517,7 @@ describe("mapHooks: declared attachments/logs land on the hook's own fixture; li
   it("prefixes a hook's own declared attachment and sources it from the scenario's own evidence.dir", () => {
     const hook: ScenarioHookRecord = {
       type: "before",
-      status: "ok",
+      status: "passed",
       declared: { attachments: ["hook-file.txt"], links: [{ url: "https://x/1" }], logs: ["hook log"] },
     };
     const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] } });
@@ -539,7 +539,7 @@ describe("mapHooks: declared attachments/logs land on the hook's own fixture; li
   it("carries a hook's own declared parameter as declaredParameters, for the caller to put on that hook's own fixture", () => {
     const hook: ScenarioHookRecord = {
       type: "before",
-      status: "ok",
+      status: "passed",
       declared: { parameters: [{ name: "hook-param", value: "y" }] },
     };
     const record = baseRecord({ hooks: [hook] });
@@ -552,7 +552,7 @@ describe("mapHooks: declared attachments/logs land on the hook's own fixture; li
   it("has no home for a hook's own declared link or label (a fixture has neither in the Allure model)", () => {
     const hook: ScenarioHookRecord = {
       type: "before",
-      status: "ok",
+      status: "passed",
       declared: { links: [{ url: "https://x/1" }], labels: [{ name: "custom", value: "v" }] },
     };
     const record = baseRecord({ hooks: [hook] });
@@ -568,7 +568,7 @@ describe("mapHooks: declared attachments/logs land on the hook's own fixture; li
 
 describe("mapHooks: status/message mapping", () => {
   it("maps an ok hook to passed, no message", () => {
-    const hook: ScenarioHookRecord = { type: "after", status: "ok" };
+    const hook: ScenarioHookRecord = { type: "after", status: "passed" };
     const record = baseRecord({ hooks: [hook] });
 
     const mapped = callMapHooks(record);
@@ -594,11 +594,11 @@ describe("mapHooks: status/message mapping", () => {
   it("uses a stored name as the fixture title and keeps the keyword when the name is absent or empty", () => {
     const record = baseRecord({
       hooks: [
-        { type: "before", status: "ok", name: "seed the database" } as ScenarioHookRecord,
-        { type: "before", status: "ok" },
-        { type: "before", status: "ok", name: "" } as ScenarioHookRecord,
-        { type: "after", status: "ok", name: "close the database" } as ScenarioHookRecord,
-        { type: "after_step", status: "ok", step_index: 0 },
+        { type: "before", status: "passed", name: "seed the database" } as ScenarioHookRecord,
+        { type: "before", status: "passed" },
+        { type: "before", status: "passed", name: "" } as ScenarioHookRecord,
+        { type: "after", status: "passed", name: "close the database" } as ScenarioHookRecord,
+        { type: "after_step", status: "passed", step_index: 0 },
       ],
     });
 
@@ -741,7 +741,7 @@ describe("mapScenario: declared labels/links hoisted from every step (no other t
   it("folds a step's own declared label onto the result's own labels", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null, declared: { labels: [{ name: "custom", value: "v" }] } });
+    const stepRecord = baseStepRecord({ status: "passed", result: null, declared: { labels: [{ name: "custom", value: "v" }] } });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
     const outcome = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
     const record = baseRecord({ steps: [step] });
@@ -755,7 +755,7 @@ describe("mapScenario: declared labels/links hoisted from every step (no other t
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       declared: { links: [{ url: "https://issues.example/1", name: "issue-1" }] },
     });
@@ -1123,7 +1123,7 @@ describe("mapGwtStep: sections + polls merged into one child-step timeline", () 
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       sections: [
         { label: "C", at: "2026-08-01T00:00:00.300Z" },
@@ -1145,7 +1145,7 @@ describe("mapGwtStep: sections + polls merged into one child-step timeline", () 
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       declared: { logs: ["from glue"] },
       sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
@@ -1161,7 +1161,7 @@ describe("mapGwtStep: sections + polls merged into one child-step timeline", () 
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       sections: [{ label: "reached checkout", at: "2026-08-01T00:00:00.100Z" }],
     });
@@ -1179,7 +1179,7 @@ describe("mapGwtStep: poll outcome -> status/startMs/stopMs, all three outcomes"
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       polls: [
         { description: "r", at: "2026-08-01T00:00:00.000Z", attempts: 3, waited_ms: 120, outcome: "resolved" },
@@ -1210,7 +1210,7 @@ describe("mapGwtStep: poll outcome -> status/startMs/stopMs, all three outcomes"
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       polls: [{ at: "2026-08-01T00:00:00.000Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
     });
@@ -1225,7 +1225,7 @@ describe("mapGwtStep: poll outcome -> status/startMs/stopMs, all three outcomes"
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       started_at: "2026-08-01T00:00:01.000Z",
       finished_at: "2026-08-01T00:00:01.500Z",
@@ -1247,7 +1247,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       sections: [{ label: "A", at: "2026-08-01T00:00:00.100Z" }],
       polls: [{ description: "B", at: "2026-08-01T00:00:00.200Z", attempts: 1, waited_ms: 0, outcome: "resolved" }],
@@ -1264,7 +1264,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       actions: [
         {
@@ -1295,7 +1295,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       actions: [
         {
@@ -1320,7 +1320,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       actions: [{ method: "goto", url: "/orders", ms: 50, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     });
@@ -1335,7 +1335,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       actions: [{ method: "click", selector: "#submit", ms: 10, outcome: "failed", at: "2026-08-01T00:00:00.100Z" }],
     });
@@ -1351,7 +1351,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
     const pickle = pickles[0]!;
     const sameInstant = "2026-08-01T00:00:00.100Z";
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       sections: [{ label: "section", at: sameInstant }],
       polls: [{ description: "poll", at: sameInstant, attempts: 1, waited_ms: 0, outcome: "resolved" }],
@@ -1374,7 +1374,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
       outcome: "passed" as const,
       at: `2026-08-01T00:00:00.${String(100 + index).padStart(3, "0")}Z`,
     }));
-    const stepRecord = baseStepRecord({ status: "ok", result: null, actions, truncated: { actions: 103 } });
+    const stepRecord = baseStepRecord({ status: "passed", result: null, actions, truncated: { actions: 103 } });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -1391,7 +1391,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       actions: [{ method: "click", selector: "#go", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     });
@@ -1405,7 +1405,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
 
 describe("mapHooks: hook trace/actions", () => {
   it("attaches a hook's own trace with the playwright-trace contentType, relative to the scenario's evidence dir", () => {
-    const hook: ScenarioHookRecord = { type: "before", status: "ok", trace: "hook-before-0.zip" };
+    const hook: ScenarioHookRecord = { type: "before", status: "passed", trace: "hook-before-0.zip" };
     const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] } });
 
     const mapped = callMapHooks(record);
@@ -1419,7 +1419,7 @@ describe("mapHooks: hook trace/actions", () => {
   });
 
   it("omits any trace attachment when the hook never opened a chunk", () => {
-    const hook: ScenarioHookRecord = { type: "after", status: "ok" };
+    const hook: ScenarioHookRecord = { type: "after", status: "passed" };
     const record = baseRecord({ hooks: [hook] });
 
     const mapped = callMapHooks(record);
@@ -1430,7 +1430,7 @@ describe("mapHooks: hook trace/actions", () => {
   it("maps a hook's own actions into child steps via the same mapTimelineChildSteps merge a step's step record uses", () => {
     const hook: ScenarioHookRecord = {
       type: "before",
-      status: "ok",
+      status: "passed",
       actions: [{ method: "goto", url: "data:text/html,before-hook", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     };
     const record = baseRecord({ hooks: [hook], started_at: "2026-08-01T00:00:00.000Z" });
@@ -1441,7 +1441,7 @@ describe("mapHooks: hook trace/actions", () => {
   });
 
   it("anchors a hook's own truncation marker to its collapsed timestamp, the same fallback a step anchors to its step record's started_at", () => {
-    const hook: ScenarioHookRecord = { type: "before", status: "ok", truncated: { actions: 5 } };
+    const hook: ScenarioHookRecord = { type: "before", status: "passed", truncated: { actions: 5 } };
     const record = baseRecord({ hooks: [hook], started_at: "2026-08-01T00:00:00.000Z" });
 
     const mapped = callMapHooks(record);
@@ -1455,7 +1455,7 @@ describe("mapHooks: hook trace/actions", () => {
   it("keeps a hook's own declared child steps ahead of its actions timeline, same order as a step's", () => {
     const hook: ScenarioHookRecord = {
       type: "before",
-      status: "ok",
+      status: "passed",
       declared: { logs: ["did the thing"] },
       actions: [{ method: "goto", url: "/x", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" }],
     };
@@ -1479,7 +1479,7 @@ describe("mapGwtStep: page_events as step parameters", () => {
   it("shows only the non-empty categories, each as an (observed) parameter", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null, page_events: { console_errors: [consoleErrorEntry(1)] } });
+    const stepRecord = baseStepRecord({ status: "passed", result: null, page_events: { console_errors: [consoleErrorEntry(1)] } });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -1494,7 +1494,7 @@ describe("mapGwtStep: page_events as step parameters", () => {
     const pickle = pickles[0]!;
     const shown = Array.from({ length: 100 }, (_, i) => consoleErrorEntry(i));
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       page_events: { console_errors: shown, truncated: { console_errors: 4213 } },
     });
@@ -1511,7 +1511,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       evidence: {
         dir: ".nukadoko/records/steps/step-1",
@@ -1535,7 +1535,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       evidence: {
         dir: ".nukadoko/records/steps/step-1",
@@ -1559,7 +1559,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       evidence: {
         dir: ".nukadoko/records/steps/step-1",
@@ -1591,7 +1591,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
   it("adds no attachments at all when evidence.attachments is absent", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null });
+    const stepRecord = baseStepRecord({ status: "passed", result: null });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -1604,7 +1604,7 @@ describe("mapGwtStep: the whole step record as a record.json attachment", () => 
   it("attaches it to a passed step, verbatim", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: { ok: true } });
+    const stepRecord = baseStepRecord({ status: "passed", result: { ok: true } });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
@@ -1724,7 +1724,7 @@ describe("mapGwtStep: declared parameters", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: null,
       declared: { parameters: [{ name: "cart_id", value: "abc-123" }] },
     });
@@ -1743,7 +1743,7 @@ describe("mapGwtStep: calls -> nested child steps (docs/spec.md 'Parts')", () =>
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: { memberId: "m_1" },
       sections: [{ label: "before the call", at: "2026-08-01T00:00:00.100Z" }],
       calls: [
@@ -1801,7 +1801,7 @@ describe("mapGwtStep: calls -> nested child steps (docs/spec.md 'Parts')", () =>
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
-      status: "ok",
+      status: "passed",
       result: { memberId: "m_1" },
       calls: [
         {
@@ -1846,7 +1846,7 @@ describe("mapGwtStep: calls -> nested child steps (docs/spec.md 'Parts')", () =>
   it("adds no call-derived child step at all when the step record carries no calls", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const stepRecord = baseStepRecord({ status: "ok", result: null });
+    const stepRecord = baseStepRecord({ status: "passed", result: null });
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
 
     const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });

@@ -36,9 +36,18 @@ describe("nuka tend", () => {
     // "typed 12, compat 0" is itself useful — migration is done — so the
     // migration line is present even though this fixture has no compat step
     // at all.
-    expect(report.summary.typedSteps).toBe(2);
-    expect(report.summary.compatSteps).toBe(0);
-    expect(report.summary.compatStepNames).toEqual([]);
+    expect(Object.keys(report.summary)).toEqual([
+      "typed_steps",
+      "compat_steps",
+      "compat_step_names",
+      "rationale",
+      "describe",
+      "scanned_feature_dirs",
+      "read_only_steps",
+    ]);
+    expect(report.summary.typed_steps).toBe(2);
+    expect(report.summary.compat_steps).toBe(0);
+    expect(report.summary.compat_step_names).toEqual([]);
     // Every typed step in this fixture carries a rationale, and every
     // args/returns field carries a .describe() (tests/fixtures/tend-clean-
     // project's own step files) — declared === total on both.
@@ -47,8 +56,8 @@ describe("nuka tend", () => {
     // featuresDir alone, since this fixture sets no additionalFeatureDirs
     // (schema default `[]`), and every step here defaults to
     // `mutates: true` (define-step.ts's own `?? true`).
-    expect(report.summary.scannedFeatureDirs).toEqual(["features"]);
-    expect(report.summary.readOnlySteps).toBe(0);
+    expect(report.summary.scanned_feature_dirs).toEqual(["features"]);
+    expect(report.summary.read_only_steps).toBe(0);
     // A summary-only report still exits 0 — the summary itself never
     // touches the exit code.
     expect(report.errors).toEqual([]);
@@ -67,9 +76,9 @@ describe("nuka tend", () => {
 
     // tests/fixtures/tend-findings-project has 7 typed step files and
     // features/steps/compat-glue.ts's 2 Given() registrations.
-    expect(report.summary.typedSteps).toBe(7);
-    expect(report.summary.compatSteps).toBe(2);
-    expect(report.summary.compatStepNames.slice().sort()).toEqual(
+    expect(report.summary.typed_steps).toBe(7);
+    expect(report.summary.compat_steps).toBe(2);
+    expect(report.summary.compat_step_names.slice().sort()).toEqual(
       ["compat: a compat thing that nobody calls happens", "compat: a shout {used-type} is heard"].sort(),
     );
   });

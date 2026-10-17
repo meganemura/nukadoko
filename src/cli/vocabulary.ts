@@ -220,8 +220,8 @@ export interface FromKeyError {
   readonly message: string;
 }
 
-/** `fromSummary`/`fromHumanReadable` share this shape: the entries they
- * could render, and, separately, the keys they could not — so one step
+/** `fromSummary` returns this shape: the entries it
+ * could render, and, separately, the keys it could not — so one step
  * with one broken `from` key still shows every other key it declares
  * (and every other step in the vocabulary), rather than the whole call
  * throwing and taking the rest of `nuka steps`/`nuka describe`'s output
@@ -231,7 +231,7 @@ interface FromRendering<TRendered> {
   readonly errors: readonly FromKeyError[] | undefined;
 }
 
-/** `nuka steps --json`'s own rendering of a step's `from` — one entry per
+/** `nuka steps --json`'s and `nuka describe`'s rendering of a step's `from` — one entry per
  * key, `undefined` (hence omitted, `rationale`'s own convention) when the
  * step declares no `from` at all, or when every key it declares turned out
  * to be unreadable (`errors` on the same `FromRendering` is where that
@@ -289,44 +289,9 @@ function partsSummary(step: Step, stepNames: StepNames): readonly string[] | und
   return step.parts.map((part) => upstreamStepName(part, stepNames));
 }
 
-/** `nuka describe`'s own rendering of a step's `from` — one human-readable
- * "step.key" string per key, the same "arrow" shape docs/spec.md "Chaining
- * steps" itself uses in prose ("`projectId` ← `createProject.id`"),
- * deliberately different from `fromSummary`'s more structured shape above:
- * `nuka describe` is the one command meant for a person to read directly,
- * `nuka steps --json` the one meant for a program to parse. `undefined`
- * (hence omitted) under the same condition as `fromSummary`. A key with
- * more than one candidate reads as "either of A or B" — spelled out so a
- * person skimming `nuka describe` sees the "exactly one of these, never
- * both" relationship the JSON form only implies through array length. */
-function fromHumanReadable(from: StepFromMap, stepNames: StepNames): FromRendering<Record<string, string>> {
-  const entries = Object.entries(from);
-  if (entries.length === 0) {
-    return { rendered: undefined, errors: undefined };
-  }
-  const result: Record<string, string> = {};
-  const errors: FromKeyError[] = [];
-  for (const [key, entry] of entries) {
-    const candidates = tryFromCandidates(entry);
-    if (candidates === null) {
-      errors.push({ key, message: malformedFromEntryMessage(key, entry) });
-      continue;
-    }
-    const rendered = candidates.map(
-      ([upstream, upstreamKey]) => `${upstreamStepName(upstream, stepNames)}.${upstreamKey}`,
-    );
-    result[key] = rendered.length === 1 ? rendered[0]! : `either of ${rendered.join(" or ")}`;
-  }
-  return {
-    rendered: Object.keys(result).length > 0 ? result : undefined,
-    errors: errors.length > 0 ? errors : undefined,
-  };
-}
-
 /** `nuka describe`'s own rendering of a step's `parts` — one
- * `{ name, description }` pair per part, `from`'s own "step.key" arrow
- * shape has no equivalent here (a part is named and described, not tied
- * to one args key), so this stays a plain list. Deliberately no reverse
+ * `{ name, description }` pair per part (a part is named and described,
+ * not tied to one args key), so this stays a plain list. Deliberately no reverse
  * index (which steps call this one as a part): that answer needs the
  * whole vocabulary scanned, and `nuka describe` looks at one step's own
  * contract only (docs/spec.md "Parts": "An unused part is not decidable
@@ -657,12 +622,10 @@ export interface TypedStepContract {
    * step record). Deliberately absent from `StepSummary`/`summarize` below —
    * `nuka steps` stays one line per step. */
   readonly rationale?: string;
-  /** Human-readable rendering of `from` —
-   * `fromHumanReadable`'s own doc comment explains the "step.key" shape and
-   * why it differs from `StepSummary.from`'s more structured one. Omitted,
-   * not `{}`, when the step declares no `from` at all — same convention as
-   * `rationale` just above. */
-  readonly from?: Record<string, string>;
+  /** The same shape as `StepSummary.from`, so a reader of `nuka steps
+   * --json` and of `nuka describe` parses one form. Omitted, not `{}`, when
+   * the step declares no `from` at all. */
+  readonly from?: StepSummary["from"];
   /** Every `from` key this step declares whose own entry could not be read
    * at all — same condition and same shape as `StepSummary.from_errors`
    * (see that field's own doc comment), rendered here instead of there
@@ -765,7 +728,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
         'compat steps have no type contract; promote this pattern to defineStep to add one (docs/spec.md "Compat steps (the migration door)")',
     };
   }
-  const fromResult = fromHumanReadable(entry.step.from, stepNames);
+  const fromResult = fromSummary(entry.step.from, stepNames);
   const argsSide = schemaSide(entry.name, "args", strictArgsSchema(entry.step.args), { io: "input" });
   const returnsSide = schemaSide(entry.name, "returns", entry.step.returns);
   return {

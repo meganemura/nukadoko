@@ -380,7 +380,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // — the same ordering do.ts's own execution phase already documents,
     // for the same reason (a fixture holding `page`/`context`/`request`
     // needs them still open during its own teardown code). Outcome is
-    // always `"passed"`: several executions, possibly a mix of `"ok"` and
+    // always `"passed"`: several executions, possibly a mix of `"passed"` and
     // `"failed"`, shared this cache, so there is no single execution's own
     // outcome left to report by the time the session as a whole ends.
     const teardownErrors = [
@@ -540,7 +540,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     });
     const { status, fixtureUsage } = outcome;
     const recordedArgs = outcome.args;
-    const result = outcome.status === "ok" ? outcome.result : undefined;
+    const result = outcome.status === "passed" ? outcome.result : undefined;
     const errorMessage = outcome.status === "failed" ? outcome.error.message : "";
     const errorKind: ErrorKind | undefined = outcome.status === "failed" ? outcome.error.kind : undefined;
 
@@ -582,14 +582,14 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     };
 
     const stepRecord: StepRecord =
-      status === "ok"
+      status === "passed"
         ? {
             step_record_id: recordId,
             step: request.step,
             kind: "do",
             args: recordedArgs,
             result,
-            status: "ok",
+            status: "passed",
             environment: resolvedEnv.name,
             target_version: targetVersion,
             session: name,

@@ -470,11 +470,24 @@ describe("nuka init", () => {
     expect(existsSync(path.join(rootDir, ".gitignore"))).toBe(false);
   });
 
-  it("with --env, appends .nukadoko/, .env, .env.*, and !.env.example to an existing .gitignore", async () => {
+  it("refuses --env by name, says --env-files replaced it, and writes nothing", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["init", "--env"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(1);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toContain(
+      "nuka init --env is now --env-files; --env names an environment on the other commands",
+    );
+    expect(await fileSet(rootDir)).toEqual(["package.json"]);
+  });
+
+  it("with --env-files, appends .nukadoko/, .env, .env.*, and !.env.example to an existing .gitignore", async () => {
     await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n");
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init", "--env"], {
+    const exitCode = await runCli(["init", "--env-files"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -493,7 +506,7 @@ describe("nuka init", () => {
     );
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init", "--env"], {
+    const exitCode = await runCli(["init", "--env-files"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -567,7 +580,7 @@ describe("nuka init", () => {
   it("appends .env, .env.*, and !.env.example (in that order) to a fresh .gitignore", async () => {
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init", "--env"], {
+    const exitCode = await runCli(["init", "--env-files"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -588,7 +601,7 @@ describe("nuka init", () => {
   it("does not duplicate an already-present .env line, and still adds the other two", async () => {
     await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n.env\n");
 
-    const exitCode = await runCli(["init", "--env"], {
+    const exitCode = await runCli(["init", "--env-files"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),

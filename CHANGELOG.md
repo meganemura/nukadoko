@@ -115,6 +115,21 @@ just until 0.1.
   `--concurrency`; worker processes are always piped. `nuka do`'s step
   record on stdout is unchanged. Breaking for a pseudo-terminal driver
   that parses stdout: see docs/upgrading.md.
+- **One word for each concept across the JSON nukadoko writes.**
+  A step record that passed said `"status": "ok"` while its entry in the
+  scenario record said `"passed"`, so an agent had to special-case one of
+  them. Step records, scenario record hooks, and `nuka explore --json`'s
+  steps now say `"passed"`; a stored record that still says `"ok"` is read
+  as `"passed"` by `nuka do --use`, `nuka harvest`, and the emitters. The
+  exported type `StepRecordOk` is renamed `StepRecordPassed`. `nuka tend
+  --json`'s summary keys are snake_case (`typed_steps`, `compat_steps`,
+  `compat_step_names`, `scanned_feature_dirs`, `read_only_steps`), like
+  every other document. `nuka describe` shows `from` as `{ step, key }`
+  (or an array of them), the shape `nuka steps --json` already used,
+  instead of a `"step.key"` string. `nuka init --env` is renamed
+  `--env-files`, since `--env` names an environment on every other
+  command; the old spelling exits 1 and names the new one. Breaking: see
+  docs/upgrading.md.
 
 - **`undefined-step` names `nuka scaffold --feature <file>`.** The message
   ends with "run `nuka scaffold --feature <the line's feature file>` to

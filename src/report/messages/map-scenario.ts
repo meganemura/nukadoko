@@ -134,8 +134,8 @@ function statusForStep(status: ScenarioStepStatus): TestStepResultStatus {
   }
 }
 
-function statusForHook(status: "ok" | "failed"): TestStepResultStatus {
-  return status === "ok" ? TestStepResultStatus.PASSED : TestStepResultStatus.FAILED;
+function statusForHook(status: "passed" | "failed"): TestStepResultStatus {
+  return status === "passed" ? TestStepResultStatus.PASSED : TestStepResultStatus.FAILED;
 }
 
 // Duration never negative (round to 0 when

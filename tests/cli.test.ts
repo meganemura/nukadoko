@@ -190,7 +190,7 @@ describe("nuka do", () => {
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
       const stepRecord = JSON.parse(stdout.text());
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       expect(stepRecord.step).toBe("echo");
       expect(stepRecord.kind).toBe("do");
       expect(stepRecord.args).toEqual({ value: "hi" });
@@ -371,7 +371,7 @@ describe("nuka do", () => {
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
       const stepRecord = JSON.parse(stdout.text());
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
 
       const recordPath = path.join(
@@ -419,7 +419,7 @@ describe("nuka (process)", () => {
 
       expect(stderr).toBe("");
       const stepRecord = JSON.parse(stdout);
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
 
       const recordPath = path.join(

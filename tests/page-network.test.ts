@@ -137,7 +137,7 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const stepRecord = JSON.parse(stdout.text()) as StoredStepRecord;
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.evidence.http).toBe("http.jsonl");
 
     const lines = await readHttpJsonl(rootDir, stepRecord.evidence.dir);
@@ -211,7 +211,7 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     expect(record.status).toBe("passed");
 
     const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.evidence.http).toBe("http.jsonl");
 
     const httpLines = await readHttpJsonl(rootDir, stepRecord.evidence.dir);
@@ -231,7 +231,7 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text()) as StoredStepRecord;
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.http_omitted).toBeUndefined();
     expect(Object.keys(stepRecord)).not.toContain("http_omitted");
 

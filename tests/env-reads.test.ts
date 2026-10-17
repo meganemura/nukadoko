@@ -111,7 +111,7 @@ describe("ctx.requireEnv / required_env", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.required_env).toEqual(["API_TOKEN", "SECOND_KEY"]);
   });
 
@@ -125,7 +125,7 @@ describe("ctx.requireEnv / required_env", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.required_env).toBeUndefined();
   });
 });

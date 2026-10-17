@@ -94,6 +94,26 @@ This part does not change release to release.
   every undefined line of that file. The code and its `file` and `line`
   are unchanged. A script that matches the old sentence matches on the
   code instead.
+- **A step record that passed says `"status": "passed"`, not `"ok"`.** The
+  same word now means success in a step record, in a scenario record's
+  `steps[]` and `hooks[]`, and in `nuka explore --json`'s `steps[]`. A
+  script or a jq filter that tests `.status == "ok"` tests `"passed"`. A
+  record that nukadoko 0.16.1 or earlier wrote still says `"ok"` on disk; `nuka do
+  --use`, `nuka harvest`, and the emitters read it as `"passed"`, so it can
+  stay until retention removes it. The exported TypeScript type
+  `StepRecordOk` is now `StepRecordPassed`.
+- **`nuka tend --json` names its summary keys in snake_case.**
+  `typedSteps`, `compatSteps`, `compatStepNames`, `scannedFeatureDirs`, and
+  `readOnlySteps` become `typed_steps`, `compat_steps`,
+  `compat_step_names`, `scanned_feature_dirs`, and `read_only_steps`.
+  `rationale` and `describe` keep their names.
+- **`nuka describe` shows `from` in the shape `nuka steps --json` uses.**
+  A key with one producer is `{ "step": "create-project", "key": "id" }`
+  instead of the string `"create-project.id"`, and a key with several is
+  an array of those objects instead of `"either of A or B"`.
+- **`nuka init --env` is now `nuka init --env-files`.** `--env` names an
+  environment on every other command. `nuka init --env` exits 1 and names
+  the new flag, and writes nothing.
 
 ## 0.15.0 to 0.16.1
 

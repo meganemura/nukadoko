@@ -245,7 +245,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(exitCode).toBe(0);
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       const before = record.hooks.find((h: { type: string }) => h.type === "before");
-      expect(before.status).toBe("ok");
+      expect(before.status).toBe("passed");
       expect(before.declared.logs).toContain("before:feature=hook parameter coverage");
       expect(before.declared.logs).toContain("before:pickle=a passing scenario");
       // nukadoko's own scenario id, not a cucumber message id — just a
@@ -265,7 +265,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       expect(exitCode).toBe(0);
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       const after = record.hooks.find((h: { type: string }) => h.type === "after");
-      expect(after.status).toBe("ok");
+      expect(after.status).toBe("passed");
       expect(after.declared.logs).toContain("after:result=PASSED");
     });
 
@@ -281,7 +281,7 @@ describe("nuka run: compat step/hook execution honesty", () => {
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.status).toBe("failed");
       const after = record.hooks.find((h: { type: string }) => h.type === "after");
-      expect(after.status).toBe("ok");
+      expect(after.status).toBe("passed");
       expect(after.declared.logs).toContain("after:result=FAILED");
     });
   });

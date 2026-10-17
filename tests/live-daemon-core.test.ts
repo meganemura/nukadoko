@@ -197,8 +197,8 @@ describe("createSessionCore: request dispatch", () => {
   it("the ok path returns a passing step record", async () => {
     const { core } = await newCore();
     const record = expectRecord(await core.dispatchRequest({ kind: "do", step: "echo", args: { value: "hi" } }));
-    expect(record.status).toBe("ok");
-    expect(record.status === "ok" && record.result).toEqual({ value: "hi" });
+    expect(record.status).toBe("passed");
+    expect(record.status === "passed" && record.result).toEqual({ value: "hi" });
   });
 
   // Pairs with the test right below it (tests/args-strict.test.ts's own
@@ -225,7 +225,7 @@ describe("createSessionCore: request dispatch", () => {
   it("still accepts the same call with only the declared key, and records the schema-validated args", async () => {
     const { core } = await newCore();
     const record = expectRecord(await core.dispatchRequest({ kind: "do", step: "echo", args: { value: "hi" } }));
-    expect(record.status).toBe("ok");
+    expect(record.status).toBe("passed");
     // The same `args` shape `nuka do`/`nuka run`/`recordStep`
     // record on a passing step (tests/args-strict.test.ts): the schema-
     // validated value, not whatever `--use` merging left `parsedArgs`
@@ -245,7 +245,7 @@ describe("createSessionCore: request dispatch", () => {
     const record = expectRecord(
       await core.dispatchRequest({ kind: "do", step: "greet-default", args: { name: "ada" } }),
     );
-    expect(record.status).toBe("ok");
+    expect(record.status).toBe("passed");
     // `tag` was never given: this is the schema's own default, present
     // only if the record holds the validated value.
     expect(record.args).toEqual({ name: "ada", tag: "guest" });
@@ -262,8 +262,8 @@ describe("createSessionCore: request dispatch", () => {
     const created = expectRecord(
       await core.dispatchRequest({ kind: "do", step: "create-thing", args: { name: "widget" } }),
     );
-    expect(created.status).toBe("ok");
-    const createdId = created.status === "ok" ? (created.result as { id: string }).id : undefined;
+    expect(created.status).toBe("passed");
+    const createdId = created.status === "passed" ? (created.result as { id: string }).id : undefined;
 
     const used = expectRecord(
       await core.dispatchRequest({
@@ -273,8 +273,8 @@ describe("createSessionCore: request dispatch", () => {
         use: [created.step_record_id],
       }),
     );
-    expect(used.status).toBe("ok");
-    expect(used.status === "ok" && used.result).toEqual({ id: createdId });
+    expect(used.status).toBe("passed");
+    expect(used.status === "passed" && used.result).toEqual({ id: createdId });
     expect(used.used?.[0]?.step).toBe("create-thing");
   });
 
@@ -283,12 +283,12 @@ describe("createSessionCore: request dispatch", () => {
     const counted = expectRecord(
       await core.dispatchRequest({ kind: "do", step: "count-atoms", args: { count: "123456789012345678901234567890" } }),
     );
-    expect(counted.status === "ok" && counted.result).toEqual({ total: "123456789012345678901234567890" });
+    expect(counted.status === "passed" && counted.result).toEqual({ total: "123456789012345678901234567890" });
 
     const doubled = expectRecord(
       await core.dispatchRequest({ kind: "do", step: "double-atoms", args: {}, use: [counted.step_record_id] }),
     );
-    expect(doubled.status === "ok" && doubled.result).toEqual({ doubled: "246913578024691357802469135780" });
+    expect(doubled.status === "passed" && doubled.result).toEqual({ doubled: "246913578024691357802469135780" });
   });
 
   it("--args and --use hand a pipe, a codec, and a transform the input side of their schema", async () => {
@@ -302,7 +302,7 @@ describe("createSessionCore: request dispatch", () => {
         use: [counted.step_record_id],
       }),
     );
-    expect(shaped.status === "ok" && shaped.result).toEqual({
+    expect(shaped.status === "passed" && shaped.result).toEqual({
       piped: "5",
       coded: "6",
       stamped: "2024-01-01T00:00:00.000Z",
@@ -316,7 +316,7 @@ describe("createSessionCore: request dispatch", () => {
     const sorted = expectRecord(
       await core.dispatchRequest({ kind: "do", step: "sort-atoms", args: { first: "5", second: "5" } }),
     );
-    expect(sorted.status === "ok" && sorted.result).toEqual({ first: "string", second: "string" });
+    expect(sorted.status === "passed" && sorted.result).toEqual({ first: "string", second: "string" });
   });
 
   it("does not treat a --use-filled key as extra, but still rejects a genuinely extra key given alongside it", async () => {
@@ -324,7 +324,7 @@ describe("createSessionCore: request dispatch", () => {
     const created = expectRecord(
       await core.dispatchRequest({ kind: "do", step: "create-thing", args: { name: "widget" } }),
     );
-    expect(created.status).toBe("ok");
+    expect(created.status).toBe("passed");
 
     // use-thing's own args schema is `{ id: string }` (tests/fixtures/
     // live-daemon-project/features/steps/use-thing.ts); `--use` fills `id`,
@@ -351,7 +351,7 @@ describe("createSessionCore: request dispatch", () => {
     expectRejected(rejected, "only one execution runs at a time");
 
     const slowRecord = expectRecord(await slow);
-    expect(slowRecord.status).toBe("ok");
+    expect(slowRecord.status).toBe("passed");
   });
 
   it("a stop against a busy session is refused, not queued", async () => {
@@ -376,7 +376,7 @@ describe("createSessionCore: request dispatch", () => {
     const { core } = await newCore({ name });
 
     const touched = expectRecord(await core.dispatchRequest({ kind: "do", step: "touch-request", args: {} }));
-    expect(touched.status).toBe("ok");
+    expect(touched.status).toBe("passed");
 
     const sessionFile = sessionFilePath(rootDir, "s", "default", name);
     expect(existsSync(sessionFile)).toBe(false);
@@ -609,7 +609,7 @@ describe("runSessionDaemon: a real unix socket, in-process (no subprocess)", () 
     if (!doResult.ok || doResult.response.status !== "record") {
       throw new Error(`unexpected do response: ${JSON.stringify(doResult)}`);
     }
-    expect(doResult.response.record.status === "ok" && doResult.response.record.result).toEqual({ value: "ok" });
+    expect(doResult.response.record.status === "passed" && doResult.response.record.result).toEqual({ value: "ok" });
 
     const malformedLine = await new Promise<string>((resolve, reject) => {
       const socket = createConnection(sockPath);

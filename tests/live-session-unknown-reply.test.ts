@@ -82,7 +82,7 @@ describe("nuka do --session: live session reply", () => {
 
   it("still prints a record reply and exits 0", async () => {
     const rootDir = await copyFixtureToTempDir("basic-project");
-    const record = { status: "ok", session_execution: 4, step: "list-projects" };
+    const record = { status: "passed", session_execution: 4, step: "list-projects" };
     const standIn = await listenOnce({ status: "record", record });
     try {
       await writeLiveLock(rootDir, "gale", standIn.sockPath);

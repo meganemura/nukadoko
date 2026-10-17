@@ -89,7 +89,7 @@ import { writeScenarioRecord } from "./write-record.js";
 //
 // A Then-position (`PickleStepType.OUTCOME`) step's own execution is never
 // judged by what it observed on the wire: this file used to demote an
-// otherwise-"ok" status when a Then-bound step's
+// otherwise-"passed" status when a Then-bound step's
 // execution measured a network write, but the write/read-method proxy that
 // measurement rests on is not the semantics itself — GraphQL, RPC-over-POST,
 // and many vendor query APIs run a semantically pure read through POST, and
@@ -116,7 +116,7 @@ import { writeScenarioRecord } from "./write-record.js";
 // `ctx.resultOf`: this file is the
 // one place a pickle's result chain is held — a `Map` keyed by the Step
 // object itself (not by name), updated only when a step's own status is
-// `"ok"`. The chain is created fresh per scenario and never escapes this
+// `"passed"`. The chain is created fresh per scenario and never escapes this
 // function, so it cannot leak between
 // pickles; a step's own reader is wired into createStepContext's `resultOf`
 // option as a plain closure over this map, and every value-returning read is
@@ -248,7 +248,7 @@ import { writeScenarioRecord } from "./write-record.js";
 // only content is proof that the run is alive.
 
 /** One pickle's own result chain: which Step object most recently finished
- * with `status: "ok"`, and what its validated result, step record id, and
+ * with `status: "passed"`, and what its validated result, step record id, and
  * own step name were. `stepName` is carried alongside `recordId` so a `used`
  * entry built from this chain — whether through `ctx.resultOf` or a `from`
  * injection — can cite the step name docs/spec.md "Records" asks for
@@ -1242,7 +1242,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   /**
    * Shared by the typed and compat branches below: records this
-   * step in `chain` when `chainKey` is given and the final status is `"ok"`
+   * step in `chain` when `chainKey` is given and the final status is `"passed"`
    * (typed only — `undefined` for a compat step, since
    * a World is shared compat-to-compat only), then builds, redacts, and writes the
    * step record
@@ -1263,9 +1263,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     begun: { readonly recordId: string; readonly recordDir: string; readonly relativeRecordDir: string },
     stepStartedAt: Date,
     outcomeStepName: string,
-    initialStatus: "ok" | "failed",
+    initialStatus: "passed" | "failed",
     initialErrorMessage: string,
-    // `undefined` exactly when `initialStatus` is `"ok"` — a real `ErrorKind`
+    // `undefined` exactly when `initialStatus` is `"passed"` — a real `ErrorKind`
     // is required whenever the caller already knows this step failed for its
     // own reason (args/binding/returns/its own throw).
     initialErrorKind: ErrorKind | undefined,
@@ -1374,9 +1374,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // than two independent spreads.
     const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
 
-    // Only a step whose *final* status is "ok" ever becomes readable via
+    // Only a step whose *final* status is "passed" ever becomes readable via
     // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
-    if (status === "ok" && chainKey !== undefined) {
+    if (status === "passed" && chainKey !== undefined) {
       chain.set(chainKey, { result, recordId: begun.recordId, stepName: outcomeStepName });
     }
 
@@ -1384,14 +1384,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const httpLogExists = existsSync(path.join(begun.recordDir, "http.jsonl"));
 
     const stepRecord: StepRecord =
-      status === "ok"
+      status === "passed"
         ? {
             step_record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
             args: recordedArgs,
             result,
-            status: "ok",
+            status: "passed",
             environment,
             target_version: targetVersion,
             session,
@@ -1409,7 +1409,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             observed,
             mutates,
             // `omitUsedResults`: an
-            // "ok" step record keeps `used`'s original `{ step_record_id, step }`
+            // "passed" step record keeps `used`'s original `{ step_record_id, step }`
             // shape — the upstream's own result is only worth a second look
             // on a *failed* step record, the failed branch just below.
             ...(usedEntries.length > 0 ? { used: omitUsedResults(usedEntries) } : {}),
@@ -1435,7 +1435,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             args: recordedArgs,
             // `errorKind` is guaranteed set by this point: the caller always
             // passes one alongside `initialStatus === "failed"`, and this
-            // function no longer demotes an "ok" status to "failed" itself.
+            // function no longer demotes a "passed" status to "failed" itself.
             // The `?? "step_error"`
             // fallback is a belt-and-braces default only, matching the
             // general principle of defaulting to step_error whenever
@@ -1458,7 +1458,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             },
             observed,
             mutates,
-            // Unstripped here, unlike the "ok" branch above: a failed
+            // Unstripped here, unlike the "passed" branch above: a failed
             // step's step record is exactly
             // where a reader most needs "what upstream value did this read",
             // without opening a second record.json to find out.
@@ -1492,7 +1492,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     pushStepRecord(
       {
         text: pickleStep.text,
-        status: status === "ok" ? "passed" : "failed",
+        status,
         step_record_id: begun.recordId,
         ...(status === "failed" ? { error: { message: errorMessage } } : {}),
       },
@@ -1642,7 +1642,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // mirrors the compat step branch's own arity/pending-skipped checks
     // further down in this file, which already work the same non-throwing
     // way.
-    let hookStatus: "ok" | "failed" = "ok";
+    let hookStatus: "passed" | "failed" = "passed";
     let hookErrorMessage = "";
     let hookErrorKind: ErrorKind = "step_error";
     let thrown: unknown;
@@ -1680,10 +1680,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     await contextHandle.endStep();
     const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
     const declared = declaredCollector.snapshot();
-    if (hookStatus === "ok") {
+    if (hookStatus === "passed") {
       hookRecords.push({
         type: "before",
-        status: "ok",
+        status: "passed",
         ...recordedHookName(hook.name),
         ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
@@ -1717,7 +1717,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * Runs every applicable AfterStep hook for one pickle step that actually
    * executed — the three
    * call sites below are exactly the three places a step's own execution
-   * reaches a final `"ok"`/`"failed"` status: the typed branch, the compat
+   * reaches a final `"passed"`/`"failed"` status: the typed branch, the compat
    * branch, and the general per-step backstop catch's `began !== null` arm.
    * A step that never began at all (undefined, ambiguous, the read-only
    * declared-mutates refusal, or the backstop's own `began === null` arm)
@@ -1746,7 +1746,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     step: {
       readonly pickleStep: PickleStep;
       readonly testStepId: string;
-      readonly status: "ok" | "failed";
+      readonly status: "passed" | "failed";
       readonly durationMs: number;
       readonly errorMessage: string;
       readonly thrown: unknown;
@@ -1755,7 +1755,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Noted even when no AfterStep hook is registered: After still has to
     // see this step's duration, and its message and thrown value if it
     // failed. The early return below used to skip the whole function.
-    if (step.status === "ok") {
+    if (step.status === "passed") {
       passedDurationMs = step.durationMs;
     } else {
       noteFailure(step.errorMessage, step.durationMs, step.thrown);
@@ -1767,7 +1767,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       gherkinDocument,
       pickle,
       scenarioId,
-      step.status === "ok" ? "PASSED" : "FAILED",
+      step.status === "passed" ? "PASSED" : "FAILED",
       {
         includeError: true,
         durationMs: step.durationMs,
@@ -1799,7 +1799,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // after, so one AfterStep hook's own declared data never bleeds into a
       // sibling's.
       declaredCollector.beginStep(scenarioDir);
-      let hookStatus: "ok" | "failed" = "ok";
+      let hookStatus: "passed" | "failed" = "passed";
       let hookErrorMessage = "";
       let hookErrorKind: ErrorKind = "step_error";
       let thrown: unknown;
@@ -1831,11 +1831,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       await contextHandle.endStep();
       const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
       const declared = declaredCollector.snapshot();
-      if (hookStatus === "ok") {
+      if (hookStatus === "passed") {
         hookRecords.push({
           type: "after_step",
           step_index: stepIndex,
-          status: "ok",
+          status: "passed",
           ...recordedHookName(hook.name),
           ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
           ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
@@ -2035,7 +2035,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         );
 
         const stepStartedAt = new Date();
-        let status: "ok" | "failed";
+        let status: "passed" | "failed";
         let result: unknown;
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
@@ -2142,7 +2142,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
                 errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
                 errorKind = "result_invalid";
               } else {
-                status = "ok";
+                status = "passed";
                 result = returnsResult.data;
               }
             } catch (error) {
@@ -2235,7 +2235,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         began.rawArgs = rawArgsList;
 
         const stepStartedAt = new Date();
-        let status: "ok" | "failed" = "ok";
+        let status: "passed" | "failed" = "passed";
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
         let thrown: unknown;
@@ -2498,7 +2498,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Same non-throwing arity/pending-skipped classification as the Before
     // loop above — see that loop's own
     // comment for why.
-    let hookStatus: "ok" | "failed" = "ok";
+    let hookStatus: "passed" | "failed" = "passed";
     let hookErrorMessage = "";
     let hookErrorKind: ErrorKind = "step_error";
     let thrown: unknown;
@@ -2533,10 +2533,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     await contextHandle.endStep();
     const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
     const declared = declaredCollector.snapshot();
-    if (hookStatus === "ok") {
+    if (hookStatus === "passed") {
       hookRecords.push({
         type: "after",
-        status: "ok",
+        status: "passed",
         ...recordedHookName(hook.name),
         ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),

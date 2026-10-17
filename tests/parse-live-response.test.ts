@@ -54,7 +54,7 @@ describe("parseLiveResponse", () => {
     hegel.test((tc) => {
       const step = tc.draw(gs.text({ alphabet: "abc", minSize: 1, maxSize: 8 }));
       const sessionExecution = tc.draw(gs.integers({ minValue: 0, maxValue: 20 }));
-      const record = { status: "ok", step, session_execution: sessionExecution };
+      const record = { status: "passed", step, session_execution: sessionExecution };
       const parsed = parseLiveResponse({ status: "record", record });
       if (!parsed.ok || parsed.response.status !== "record") {
         throw new Error("expected a record reply");

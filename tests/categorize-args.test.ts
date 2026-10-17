@@ -5,7 +5,7 @@ import { z } from "zod";
 import { deepEqual } from "../src/draft/index.js";
 import { categorizeArgs } from "../src/harvest/categorize-args.js";
 import { defineStep, type Step } from "../src/step/define-step.js";
-import type { StepRecordOk } from "../src/record/types.js";
+import type { StepRecordPassed } from "../src/record/types.js";
 
 // Responsibility: unit tests for src/harvest/categorize-args.ts's own
 // branches that harvest.test.ts's fixture-driven cases never reach — every
@@ -14,7 +14,7 @@ import type { StepRecordOk } from "../src/record/types.js";
 // at a producer record that is missing, failed, or returned something that
 // isn't even an object, without a real `nuka do` run to manufacture one.
 
-function makeRecord(id: string, step: string, args: unknown, overrides: Partial<StepRecordOk> = {}): StepRecordOk {
+function makeRecord(id: string, step: string, args: unknown, overrides: Partial<StepRecordPassed> = {}): StepRecordPassed {
   return {
     step_record_id: id,
     step,
@@ -29,7 +29,7 @@ function makeRecord(id: string, step: string, args: unknown, overrides: Partial<
     evidence: { dir: `.nukadoko/records/steps/${id}`, screenshots: [] },
     observed: { http_reads: 0, http_writes: 0 },
     mutates: true,
-    status: "ok",
+    status: "passed",
     result: {},
     ...overrides,
   };
@@ -90,7 +90,7 @@ describe("categorizeArgs: a chain candidate that used cites but cannot confirm",
       used: [{ step_record_id: "missing-1", step: "producer" }],
     });
     const harvestedIds = new Set(["missing-1"]);
-    const recordsById = new Map<string, StepRecordOk>();
+    const recordsById = new Map<string, StepRecordPassed>();
     const stepNameOf = new Map<Step, string>([[upstream, "producer"]]);
 
     const result = categorizeArgs(consumer, record, new Set(), harvestedIds, recordsById, stepNameOf);
@@ -122,7 +122,7 @@ describe("categorizeArgs: a chain candidate that used cites but cannot confirm",
       used: [{ step_record_id: "prod-1", step: "producer" }],
     });
     const harvestedIds = new Set(["prod-1"]);
-    const recordsById = new Map<string, StepRecordOk>([["prod-1", producerRecord]]);
+    const recordsById = new Map<string, StepRecordPassed>([["prod-1", producerRecord]]);
     const stepNameOf = new Map<Step, string>([[upstream, "producer"]]);
 
     const result = categorizeArgs(consumer, record, new Set(), harvestedIds, recordsById, stepNameOf);
@@ -158,7 +158,7 @@ describe("categorizeArgs: a key with several candidate producers", () => {
       used: [{ step_record_id: "prod-b", step: "producer-b" }],
     });
     const harvestedIds = new Set(["prod-b"]);
-    const recordsById = new Map<string, StepRecordOk>([["prod-b", producerRecord]]);
+    const recordsById = new Map<string, StepRecordPassed>([["prod-b", producerRecord]]);
     const stepNameOf = new Map<Step, string>([
       [stepA, "producer-a"],
       [stepB, "producer-b"],
@@ -199,7 +199,7 @@ describe("categorizeArgs: a used entry unrelated to the key being categorized", 
       ],
     });
     const harvestedIds = new Set(["unrelated-1", "prod-1"]);
-    const recordsById = new Map<string, StepRecordOk>([["prod-1", producerRecord]]);
+    const recordsById = new Map<string, StepRecordPassed>([["prod-1", producerRecord]]);
     const stepNameOf = new Map<Step, string>([[upstream, "producer"]]);
 
     const result = categorizeArgs(consumer, record, new Set(), harvestedIds, recordsById, stepNameOf);

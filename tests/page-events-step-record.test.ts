@@ -51,7 +51,7 @@ describe("page_events on the step record", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
 
     // At least the explicit console.error() call this step made — Chromium
     // also auto-logs an uncaught exception as a console error of its own, so
@@ -111,7 +111,7 @@ describe("page_events on the step record", () => {
     expect(record.status).toBe("passed");
 
     const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id as string);
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     const pageEvents = stepRecord.page_events as {
       console_errors?: unknown[];
       page_errors?: unknown[];
@@ -135,7 +135,7 @@ describe("page_events on the step record", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.page_events).toBeUndefined();
     expect(Object.keys(stepRecord)).not.toContain("page_events");
   });

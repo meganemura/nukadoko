@@ -217,7 +217,7 @@ describe("nuka session start/stop (live sessions)", () => {
     ]);
 
     expect(slow.exitCode).toBe(0);
-    expect(slow.record?.status).toBe("ok");
+    expect(slow.record?.status).toBe("passed");
     expect(fast.exitCode).toBe(1);
     expect(fast.record).toBeUndefined();
     expect(fast.stderr).toContain("busy");

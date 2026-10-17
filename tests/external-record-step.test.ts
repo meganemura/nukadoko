@@ -137,7 +137,7 @@ describe("recordStep", () => {
     expect(record).not.toBeNull();
     expect(record.kind).toBe("external");
     expect(record.step).toBe("open-cart");
-    expect(record.status).toBe("ok");
+    expect(record.status).toBe("passed");
     expect(record.scenario_record_id).toBeNull();
     expect(record.run_id).toBeNull();
     // No trace/screenshot: this surface never opens a browser of its own,
@@ -551,7 +551,7 @@ describe("recordStep: page", () => {
         // is already settled) — only the evidence this backstop provides
         // defaults, per create-context.ts's own "no evidence file is known
         // to exist in that case" fallback.
-        expect(record.status).toBe("ok");
+        expect(record.status).toBe("passed");
         expect(record.evidence.screenshots).toEqual([]);
         expect(record.evidence.trace).toBeUndefined();
       } finally {
@@ -783,7 +783,7 @@ describe("recordStep: use", () => {
     expect(record.status).toBe("failed");
     expect(record.status === "failed" && record.error.kind).toBe("result_invalid");
     expect(record.args).toEqual({ cartId: opened.result.id });
-    // Unlike an "ok" record's own `used` (stripped of `result` by
+    // Unlike a "passed" record's own `used` (stripped of `result` by
     // `omitUsedResults`, tested above), a failed record's `used` keeps the
     // full upstream result — `src/context/used.ts`'s own documented reason:
     // a failed step record can be read alone, with no second record.json
@@ -1093,7 +1093,7 @@ describe("recordStep: a failed run still records what it measured before failing
     });
 
     const record = readStepRecord(stepRecordDir(stepRecordId)) as StepRecord;
-    expect(record.status).toBe("ok");
+    expect(record.status).toBe("passed");
     expect(record.sections?.[0]?.label).toBe("setup");
     expect(record.calls).toHaveLength(1);
     expect(record.polls).toHaveLength(1);
@@ -1141,6 +1141,6 @@ describe("recordStep: a project with no envFiles at all", () => {
     const record = readStepRecord(
       path.join(rootDir, ".nukadoko", "records", "steps", stepRecordId),
     ) as StepRecord;
-    expect(record.status).toBe("ok");
+    expect(record.status).toBe("passed");
   });
 });

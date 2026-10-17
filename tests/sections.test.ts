@@ -135,7 +135,7 @@ describe("ctx.section", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expectSectionLabels(stepRecord, ["one", "two", "three"]);
   });
 
@@ -149,7 +149,7 @@ describe("ctx.section", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.sections).toBeUndefined();
   });
 });

@@ -143,7 +143,7 @@ describe("createAllureEmitter", () => {
         kind: "run",
         args: {},
         result: { ok: true },
-        status: "ok",
+        status: "passed",
         environment: "staging",
         session: "sess-1",
         target_version: "9.9.9",
@@ -169,7 +169,7 @@ describe("createAllureEmitter", () => {
         kind: "run",
         args: {},
         result: null,
-        status: "ok",
+        status: "passed",
         environment: "staging",
         session: "sess-1",
         scenario_record_id: "scn-1",
@@ -191,10 +191,10 @@ describe("createAllureEmitter", () => {
       const step2: ScenarioStepEntry = { text: "the total is correct", status: "passed", step_record_id: "step-2" };
       const beforeHook: ScenarioHookRecord = {
         type: "before",
-        status: "ok",
+        status: "passed",
         declared: { attachments: ["hook-note.txt"], logs: ["hook did something"], parameters: [{ name: "hook-param", value: "y" }] },
       };
-      const afterHook: ScenarioHookRecord = { type: "after", status: "ok" };
+      const afterHook: ScenarioHookRecord = { type: "after", status: "passed" };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
       emitter.emitStep(
@@ -390,7 +390,7 @@ describe("createAllureEmitter", () => {
 
     const beforeHook: ScenarioHookRecord = {
       type: "before",
-      status: "ok",
+      status: "passed",
       trace: "hook-before-0.zip",
       actions: [
         { method: "goto", url: "data:text/html,before-hook", ms: 5, outcome: "passed", at: "2026-08-01T00:00:00.100Z" },
@@ -797,7 +797,7 @@ describe("createAllureEmitter", () => {
         kind: "run",
         args: {},
         result: null,
-        status: "ok",
+        status: "passed",
         environment: "staging",
         session: null,
         scenario_record_id: "scn-broken",
@@ -855,7 +855,7 @@ describe("createAllureEmitter", () => {
         kind: "run",
         args: { email: "a@example.com" },
         result: { memberId: "m_1" },
-        status: "ok",
+        status: "passed",
         environment: "staging",
         session: null,
         scenario_record_id: "scn-parts",

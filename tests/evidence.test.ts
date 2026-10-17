@@ -53,7 +53,7 @@ describe("evidence.attach / evidence.path: nuka do", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
 
     const attachments = stepRecord.evidence.attachments as Array<{ name: string; file: string; at: string }>;
     expect(attachments).toHaveLength(1);

@@ -63,7 +63,7 @@ describe("nuka tend: post-navigation-read, malformed record.json", () => {
 
     await writeStepRecordFile(rootDir, "well-formed", {
       step: "a step whose record.json parses fine",
-      status: "ok",
+      status: "passed",
       actions: [
         { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
         { method: "click", at: "2026-01-01T00:00:00.100Z", ms: 5 },
@@ -79,7 +79,7 @@ describe("nuka tend: post-navigation-read, malformed record.json", () => {
   it("skips a non-object entry mixed into actions, without throwing, and still reports the valid pair beside it", async () => {
     await writeStepRecordFile(rootDir, "stray-entry", {
       step: "a step whose actions carry one stray, non-object entry",
-      status: "ok",
+      status: "passed",
       actions: [
         "not an action object",
         { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
@@ -96,7 +96,7 @@ describe("nuka tend: post-navigation-read, malformed record.json", () => {
   it("ignores a non-object entry mixed into polls, and a well-formed poll on the same step still excludes its read", async () => {
     await writeStepRecordFile(rootDir, "stray-poll", {
       step: "a step whose polls carry one stray, non-object entry",
-      status: "ok",
+      status: "passed",
       actions: [
         { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
         // Starts at 00:00:00.100Z, inside the well-formed poll window
@@ -113,7 +113,7 @@ describe("nuka tend: post-navigation-read, malformed record.json", () => {
   it("does not exclude, and does not throw, when a poll's own `at` cannot be parsed as a date", async () => {
     await writeStepRecordFile(rootDir, "unparsable-poll-at", {
       step: "a step whose one poll has an unparsable at",
-      status: "ok",
+      status: "passed",
       actions: [
         { method: "goto", at: "2026-01-01T00:00:00.000Z", ms: 50 },
         { method: "expect", at: "2026-01-01T00:00:00.100Z", ms: 5 },
@@ -131,7 +131,7 @@ describe("nuka tend: post-navigation-read, malformed record.json", () => {
   it("skips an action pair when one side's own `at` cannot be parsed, and still reports a well-formed pair on the same step", async () => {
     await writeStepRecordFile(rootDir, "unparsable-action-at", {
       step: "a step whose first navigation has an unparsable at",
-      status: "ok",
+      status: "passed",
       actions: [
         // Type-shaped (isActionLike passes), but `at` is not a real
         // timestamp, so the gap from it can never be computed.

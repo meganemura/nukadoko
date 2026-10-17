@@ -76,7 +76,7 @@ describe("measured mutates: request-side observed counts", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.observed).toEqual({ http_reads: 1, http_writes: 1 });
   });
 
@@ -136,7 +136,7 @@ describe("measured mutates: request-side observed counts", () => {
         "utf8",
       ),
     );
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 
@@ -155,7 +155,7 @@ describe("measured mutates: request-side observed counts", () => {
 
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 
@@ -213,7 +213,7 @@ describe("measured mutates: request-side observed counts", () => {
         "utf8",
       ),
     );
-    expect(stepRecord.status).toBe("ok");
+    expect(stepRecord.status).toBe("passed");
     expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
   });
 });

@@ -1069,7 +1069,7 @@ from: {
 消費側は、2 つの値に 2 つのキーを宣言する必要があります。
 
 `from` が selector 関数ではなくキー名を使うのは、名前がデータだからです。
-`nuka steps --json` と `nuka describe` は、それを「`projectId` ← `createProject.id`」として保持します。
+`nuka steps --json` と `nuka describe` は、どちらもそれを `{ "projectId": { "step": "create-project", "key": "id" } }` として示します。
 agent はそのデータを使い、教えられていない順序を組み立てられます。
 `nuka check` も、そのデータを使って実行前に scenario を評価します。
 関数はより多くの動作を表せますが、ツールは供給元の step だけしか報告できません。
@@ -2107,7 +2107,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   "kind": "do",
   "args": { "name": "acme" },
   "result": { "id": "p_0001", "name": "acme" },
-  "status": "ok",
+  "status": "passed",
   "mutates": true,
   "observed": { "http_reads": 2, "http_writes": 1 },
   "environment": "dev",
@@ -2131,7 +2131,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   失敗時には `error: { kind, message }` がそれに置き換わります。
   compat の step は `result: null` を記録します。
 - `args` も同じ分かれ方をします(この背後にある拒否については「型付き step」を参照)。
-  `ok` な record では `run` が実際に受け取った、スキーマで検証済みの値です。
+  `passed` な record では `run` が実際に受け取った、スキーマで検証済みの値です。
   呼び出し側が書かなかったキーにスキーマ自身の `.default(...)` が入った場合も含みます。
   `failed` な record では与えられたものをそのまま保持します。
   スキーマがすでに拒否した値を、検証済みの形に組み立て直すことはできないからです。
@@ -2260,7 +2260,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 - **失敗した** step record だけが、各 `used` エントリに `result` を追加します。
   id/step のすぐ隣に置かれる、上流の step record のバリデーション済みの result 全体です。
   これにより、step が実際に何を見たかを確かめるためだけに 2 つ目の `record.json` を開かなくても、失敗した step record 単体を読むだけで済みます。
-  `ok` な step の `used` エントリが `result` を持つことは決してありません。
+  `passed` な step の `used` エントリが `result` を持つことは決してありません。
   重要だった値はすでにその step 自身の `result`(`from` 経由で入ってきた場合は `args`)に載っているため、そこで上流の値を繰り返しても冗長になるだけだからです。
   運ぶのは result 全体であり、`from` の注入や `resultOf` の呼び出しがたまたま読んだ 1 つのキーに絞り込まれることはありません。
   失敗を診断するのに必要なのは、どのキーが参照されたかではなく、上流の値が *なぜ* そうなったかだからです。
@@ -2321,7 +2321,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `BrowserContext` のイベントが対象とするのは context 内の page であって worker ではなく、また Playwright の `Worker` 型が持つのは `close` と `console` だけで、耳を傾けられる request や error のイベントはありません。
   そのため service worker が出す console と、その中で起きるバックグラウンドの fetch 失敗は、どちらも記録されません。
   cucumber-js には、これらを保持する browser context がそもそも存在しません。
-  step は(`status: "ok"` のまま)裏で page がずっとエラーを投げていても pass することがあり、このフィールドが無かった頃は record にはそれを言うものが何もありませんでした。
+  step は(`status: "passed"` のまま)裏で page がずっとエラーを投げていても pass することがあり、このフィールドが無かった頃は record にはそれを言うものが何もありませんでした。
   各種類は、少なくとも 1 件記録されたときだけ現れます。
   常に素の配列であり、件数によって種類自身の型が変わることはありません。
   `console_errors` は各エントリが `{ "text", "location": { "url", "lineNumber", "columnNumber" }, "at" }`、`page_errors` は各エントリが `{ "message", "at" }`(エラー自身の stack は決して含みません。
@@ -3257,6 +3257,9 @@ nukadoko はすべての段階を記録します。
 - `declared:` は、型付き step が宣言できることのうち、実際にどれだけが宣言されているか(`rationale`、各スキーマフィールドの `.describe()`)を示します。
   その件数の元になる注記を既定の報告が外したときは(下記を参照)、`nuka tend --all` がそれぞれを名指すことをこの行が告げます。
 
+`--json` では、同じサマリーが `summary` オブジェクトになり、nukadoko が出力するほかの文書と同じく snake_case です。
+キーは `typed_steps`、`compat_steps`、`compat_step_names`、`read_only_steps`、`scanned_feature_dirs` と、それぞれ `{ declared, total }` の `rationale` と `describe` です。
+
 このサマリーが存在するのは、この情報がすでにあったのに読まれていなかったからです。
 step record の `world` と `declared` の件数は、スイートが昇格するにつれて確かに縮みます。
 それは正確ですが、進捗を示す手段としては無意味です。
@@ -3547,7 +3550,7 @@ capture も `from` も受け持たない必須の args のキーが 1 つだけ�
 source を生成する関係は、さらに `seed`、`runs`、`length` を加え、失敗すると `run`、`found_steps`、`shrunk_steps`、`shrink_attempts` を加えます。
 step 数は source の step で数えます。
 `steps` の各要素には `step`、`args`、`status` があります。
-`status` は、`result` を伴う `"ok"`、`message` を伴う `"failed"`、同じ列の中で失敗した step のあとにある step を表す `"not-run"` のいずれかです。
+`status` は、`result` を伴う `"passed"`、`message` を伴う `"failed"`、同じ列の中で失敗した step のあとにある step を表す `"not-run"` のいずれかです。
 `scenario` は、通常の出力が表示するテキストから先頭の 2 行のコメントを除いたものです。
 `error` は `message` を持ち、モデルと source を生成する関係では `run` も持ちます。
 step を実行する前の拒否では、`--json` がないときと同じく stdout には何も出ません。
@@ -3867,7 +3870,7 @@ nuka session start <name> [--env <name>] [--idle-timeout <seconds>]
 nuka session stop <name> [--env <name>]
                               persist the session's storageState, then end
                               its process
-nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
+nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, <featuresDir>/steps/,
                               .nukadoko/ in .gitignore, and a package.json
@@ -3877,7 +3880,7 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env]
                               or prints one stderr line naming them when the
                               file has comments. --allure turns the
                               Allure emitter on and writes allurerc.mjs;
-                              --env adds .env, .env.*, !.env.example to
+                              --env-files adds .env, .env.*, !.env.example to
                               .gitignore
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko

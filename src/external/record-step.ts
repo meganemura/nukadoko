@@ -236,7 +236,7 @@ export interface StepExecution<TReturns extends z.ZodTypeAny> {
  * any of its `parts`') name `page`/`context` on a call that passed no
  * `options.page`, or name a `config.fixtures` entry — before any step
  * record is written.
- * @throws {Error} an `options.use` id is unknown, names a non-`"ok"` step
+ * @throws {Error} an `options.use` id is unknown, names a non-`"passed"` step
  * record, names a step that is not registered here (this file's own
  * header) or is not among `step.from`'s upstreams, is missing the result
  * key `from` names, or two `use` ids disagree about which producer fills
@@ -427,7 +427,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
     effectiveArgs = argsObject;
   }
 
-  let status: "ok" | "failed";
+  let status: "passed" | "failed";
   let result: unknown;
   let errorMessage = "";
   let errorKind: ErrorKind | undefined;
@@ -467,7 +467,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
         errorKind = "result_invalid";
         thrown = new Error(errorMessage);
       } else {
-        status = "ok";
+        status = "passed";
         result = returnsResult.data;
       }
     } catch (error) {
@@ -506,7 +506,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
   const truncated = mergeTruncated(undefined, evidenceSnapshot.truncatedCount);
 
   const stepRecord: StepRecord =
-    status === "ok"
+    status === "passed"
       ? {
           step_record_id: recordId,
           step: name,
@@ -520,7 +520,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
           // literal.
           args: recordedArgs,
           result,
-          status: "ok",
+          status: "passed",
           environment: DEFAULT_ENVIRONMENT_NAME,
           session: null,
           scenario_record_id: null,
@@ -548,7 +548,7 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
           step_record_id: recordId,
           step: name,
           kind: "external",
-          // Same reasoning as the `status === "ok"` branch above.
+          // Same reasoning as the `status === "passed"` branch above.
           args: recordedArgs,
           error: { message: errorMessage, kind: errorKind ?? "step_error" },
           status: "failed",

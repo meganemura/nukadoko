@@ -430,7 +430,7 @@ describe("createAllureEmitter: progress snapshots", () => {
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:01.000Z",
       steps: [step],
-      hooks: [{ type: "before", status: "ok" }],
+      hooks: [{ type: "before", status: "passed" }],
       evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });

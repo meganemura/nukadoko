@@ -172,7 +172,7 @@ describe("nuka do --env: version probe", () => {
       expect(exitCode).toBe(0);
       const stepRecord = JSON.parse(stdout.text());
       expect(stepRecord.target_version).toBeUndefined();
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       expect(stderr.text()).toContain("probe boom");
       expect(stderr.text()).toContain("probe-throws");
     } finally {

@@ -75,7 +75,7 @@ describe("nuka run", () => {
 
     for (const step of record.steps) {
       const stepRecord = await readStepRecord(rootDir, step.step_record_id);
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       expect(stepRecord.kind).toBe("run");
       expect(stepRecord.scenario_record_id).toBe(record.scenario_record_id);
       expect(stepRecord.environment).toBe("default");

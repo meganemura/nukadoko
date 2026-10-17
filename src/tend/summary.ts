@@ -48,12 +48,12 @@ export function buildTendSummary(
   }
 
   return {
-    typedSteps,
-    compatSteps: compatStepNames.length,
-    compatStepNames,
+    typed_steps: typedSteps,
+    compat_steps: compatStepNames.length,
+    compat_step_names: compatStepNames,
     rationale: { declared: typedSteps - rationaleMissingCount, total: typedSteps },
     describe: { declared: fieldDescriptions.describedFields, total: fieldDescriptions.totalFields },
-    scannedFeatureDirs,
-    readOnlySteps,
+    scanned_feature_dirs: scannedFeatureDirs,
+    read_only_steps: readOnlySteps,
   };
 }

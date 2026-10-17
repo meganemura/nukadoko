@@ -48,8 +48,8 @@ export interface ResolveUseSuccess {
    * the caller decides at least one of `filled`'s keys actually landed.
    * `result` is this upstream step record's own full validated result,
    * always populated here (this function only ever reaches this point for a
-   * step record whose `status` is already checked `"ok"`, above); the
-   * caller strips it back off for an "ok" step record of its own the same
+   * step record whose `status` is already checked `"passed"`, above); the
+   * caller strips it back off for a "passed" step record of its own the same
    * way run-scenario.ts's `finishExecutedStep` does. */
   readonly used: UsedEntryWithResult;
 }
@@ -62,7 +62,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Resolves one `--use <recordId>` against `step`'s own `from` declaration.
- * Checked in this order: unknown id, a non-`"ok"` step record, the first
+ * Checked in this order: unknown id, a non-`"passed"` step record, the first
  * structurally malformed `from` entry this step declares (walked in key
  * order, so this can surface before the "no matching upstream" verdict
  * below even runs), a step record whose step names none of `step.from`'s
@@ -90,10 +90,10 @@ export function resolveUse(
     };
   }
 
-  if (stepRecord.status !== "ok") {
+  if (stepRecord.status !== "passed") {
     return {
       ok: false,
-      message: `--use ${recordId}: this step record's status is "${stepRecord.status}", not "ok". A failed execution has no validated result to read`,
+      message: `--use ${recordId}: this step record's status is "${stepRecord.status}", not "passed". A failed execution has no validated result to read`,
     };
   }
 

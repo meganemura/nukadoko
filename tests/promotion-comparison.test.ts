@@ -198,7 +198,7 @@ describe("README claim 3: `nuka do` runs the typed step standalone and refuses t
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
       const stepRecord = JSON.parse(stdout.text());
-      expect(stepRecord.status).toBe("ok");
+      expect(stepRecord.status).toBe("passed");
       expect(stepRecord.result).toEqual({ id: "p-1", name: "acme" });
     } finally {
       await removeTempDir(rootDir);

@@ -55,7 +55,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //      discovery error, an unknown `--env` name, a mutating step against a
 //      `policy: "read-only"` environment, an invalid `--session` name, a
 //      lock held by another live process, a malformed session file, a bad
-//      `--use <record-id>` (unknown id, a non-`"ok"` step record, a step
+//      `--use <record-id>` (unknown id, a non-`"passed"` step record, a step
 //      record whose step names none of this step's `from` entries, or a
 //      missing
 //      result key), or two `--use` values filling the
@@ -71,9 +71,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //      happens: args schema failure, the step's own throw, and returns
 //      schema failure are all `status: "failed"` with `error.message`; only
 //      a step whose args and returns both validate and whose `run` doesn't
-//      throw is `status: "ok"`. The setup phase's read-only refusal above
+//      throw is `status: "passed"`. The setup phase's read-only refusal above
 //      only ever sees the step's *declared* `mutates`, and that declaration
-//      is trusted — an otherwise-"ok" run
+//      is trusted — an otherwise-"passed" run
 //      that observed a network write in a read-only environment is no
 //      longer demoted for it; `record.observed` still records what
 //      happened, it just doesn't decide `status` any more. `--use`'s own
@@ -174,7 +174,7 @@ async function delegateToLiveSession(
         `Session "${sessionName}" is live (pid ${sessionPid}); this step ran against it as execution #${response.record.session_execution}\n`,
       );
       stdout.write(`${JSON.stringify(response.record, null, 2)}\n`);
-      return response.record.status === "ok" ? 0 : 1;
+      return response.record.status === "passed" ? 0 : 1;
     case "rejected":
       stderr.write(
         `Session "${sessionName}" is live (pid ${sessionPid}) but refused this request: ${response.message}\n`,
@@ -427,7 +427,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
     // `--use <record-id>` (docs/spec.md "Single steps
     // (the agent path)") — resolved fully here, in setup: an unknown id, a
-    // non-`"ok"` step record, a step record whose step names none of this
+    // non-`"passed"` step record, a step record whose step names none of this
     // step's
     // `from` entries, or a missing result key are each a setup failure, the
     // same family as the `from` structural check just above. Only
@@ -683,7 +683,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     });
     const { status, fixtureUsage } = outcome;
     const recordedArgs = outcome.args;
-    const result = outcome.status === "ok" ? outcome.result : undefined;
+    const result = outcome.status === "passed" ? outcome.result : undefined;
     const errorMessage = outcome.status === "failed" ? outcome.error.message : "";
     const errorKind: ErrorKind | undefined = outcome.status === "failed" ? outcome.error.kind : undefined;
 
@@ -745,7 +745,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // Same function the signal handler runs. `runOnce` makes a second call,
     // from whichever path loses the race, share that run. A teardown
     // failure never changes `status`.
-    fixtureOutcome = status === "ok" ? "passed" : "failed";
+    fixtureOutcome = status;
     await tearDownFixtures();
     const { evidence, storageState: storageStateToPersist } = disposeResult;
     // `dispose()` above is what closes this execution's own (only) trace
@@ -780,14 +780,14 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     }
 
     const stepRecord: StepRecord =
-      status === "ok"
+      status === "passed"
         ? {
             step_record_id: recordId,
             step: name,
             kind: "do",
             args: recordedArgs,
             result,
-            status: "ok",
+            status: "passed",
             environment: resolvedEnv.name,
             target_version: targetVersion,
             session,
@@ -803,7 +803,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             observed,
             mutates: entry.step.mutates,
             // `omitUsedResults`: an
-            // "ok" step record keeps `used`'s original `{ step_record_id, step }`
+            // "passed" step record keeps `used`'s original `{ step_record_id, step }`
             // shape — see the failed branch just below for the case that keeps
             // the upstream's own result.
             ...(used.length > 0 ? { used: omitUsedResults(used) } : {}),
@@ -845,7 +845,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
               ...evidenceMetaFields(evidenceSnapshot),
             },
             observed,
-            // Unstripped here, unlike the "ok" branch above: a failed
+            // Unstripped here, unlike the "passed" branch above: a failed
             // step's step record is
             // exactly where a reader most needs "what upstream value did
             // this `--use` draw on", without opening a second record.json.
@@ -873,7 +873,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     await writeStepRecord(evidenceDir, redactedStepRecord);
 
     stdout.write(`${JSON.stringify(redactedStepRecord, null, 2)}\n`);
-    return status === "ok" ? 0 : 1;
+    return status === "passed" ? 0 : 1;
   } finally {
     processSignal?.stop();
     // Released regardless of which path above returned: setup failure,

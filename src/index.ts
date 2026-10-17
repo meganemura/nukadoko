@@ -51,7 +51,7 @@ export type {
   StepRecord,
   StepRecordBase,
   StepRecordFailed,
-  StepRecordOk,
+  StepRecordPassed,
 } from "./record/types.js";
 export type {
   DefaultReturns,

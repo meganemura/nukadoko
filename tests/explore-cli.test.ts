@@ -232,8 +232,8 @@ describe("nuka explore", () => {
           message: 'post of command "complete-todo" returned false for result {"id":"<id>","title":"bread","done":true}',
         },
         steps: [
-          { step: "add-todo", args: { title: "bread" }, status: "ok", result: { id: "<id>", title: "bread", done: false } },
-          { step: "complete-todo", args: { title: "bread" }, status: "ok", result: { id: "<id>", title: "bread", done: true } },
+          { step: "add-todo", args: { title: "bread" }, status: "passed", result: { id: "<id>", title: "bread", done: false } },
+          { step: "complete-todo", args: { title: "bread" }, status: "passed", result: { id: "<id>", title: "bread", done: true } },
         ],
         scenario: [
           "  Scenario: (name me)",

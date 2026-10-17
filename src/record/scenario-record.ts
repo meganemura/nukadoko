@@ -115,7 +115,7 @@ export interface ScenarioStepEntry {
  * either. */
 export interface ScenarioHookRecord {
   readonly type: "before" | "after" | "after_step";
-  readonly status: "ok" | "failed";
+  readonly status: "passed" | "failed";
   /** Present only when `status` is `"failed"`. `kind` is the same closed
    * enum a step's own step record `error.kind` uses (this file's own
    * header). */

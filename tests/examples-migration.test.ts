@@ -108,7 +108,7 @@ describe("examples/migration", () => {
       // The one Before hook this suite keeps (features/steps/hooks.ts) ran
       // for every pickle, and reported ok -- no step record of its own, per
       // docs/spec.md "Compat steps"/"Running".
-      expect(record.hooks).toEqual([{ type: "before", status: "ok" }]);
+      expect(record.hooks).toEqual([{ type: "before", status: "passed" }]);
     }
 
     // Scenario 1 (still-compat glue): the stash write, the table+hashes
