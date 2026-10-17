@@ -5,7 +5,7 @@ nukadoko はすでに npm にあります。
 `package.json` を変える `main` への push が [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) を走らせます。
 その `check` ジョブは `package.json` の version を読み、tag `v<version>` を探します。
 依存の更新のあとのように、その tag が既にあれば、その実行は何もリリースしません。
-無ければ publish ジョブが push された commit をインストールし、`dist/` をビルドし、このリポジトリ自身の CI と同じチェック(`npm run archstrict` を含む)を実行し、`npm run pack-check` を実行してから `npm publish` します。
+無ければ publish ジョブが push された commit をインストールし、`dist/` をビルドし、このリポジトリ自身の CI と同じチェック(`npm run archstrict` を含む)を実行し、`npm run pack-check` と skill の作業例を実行してから `npm publish` します。
 npm は GitHub Actions の OIDC で認証します。
 リポジトリとパッケージがどちらも公開されているので、npm の provenance は自動で付きます。
 GitHub の Environment `publish` が人のゲートです。
@@ -88,11 +88,22 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    `docs/upgrading.md` と `docs/upgrading.ja.md` では、「to the next release」(日本語では「から次のリリースへ」)で終わる見出しを、このバージョンを名指すように書き換えます。
    たとえば `0.14.1 to 0.15.0` です。
 
-2. `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check` を実行します。
+2. `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check && npm run skill-examples` を実行します。
    `pack-check` は本物の tarball を、このリポジトリの外の捨てプロジェクトへインストールし、そこで CLI を動かします。
    これが捕まえるのは、このリポジトリが devDependency にしか挙げていないパッケージへ `bin` が依存していることと、`dist/` が `src/` と一致していないことです。
+   `skill-examples` は同じ tarball を `examples/acceptance/` の各プロジェクトのコピーへインストールし、そこで `nuka check`、`nuka run`、`nuka tend` を実行して、出力を `skills/acceptance/references/examples/` にある実行記録と比べます。
 
-3. version の更新、changelog、upgrading の見出しを 1 つにまとめ、`chore: release <version>` として commit します。
+3. 前回の tag から `skills/` が変わっているとき(`git diff --stat v<previous>..HEAD -- skills/` が行を出すとき)は、skill の評価を手で 1 回行います。
+   `skills/acceptance/references/examples/` の作業例を 1 つ選びます。
+   捨てプロジェクトに、その例のプログラム(`examples/acceptance/` にあるそのプロジェクトの `src/`)を置き、この checkout の tarball をインストールします。
+   インストールされた skill から、その例の Markdown ファイルを `node_modules/nukadoko/skills/acceptance/references/examples/` で削除し、エージェントにはほかの写しも渡しません。
+   エージェントにその例の「The ticket」の節を渡し、scenario を書いて実行するよう頼みます。
+   エージェントが書いた feature を、`skills/acceptance/references/scenario-rules.md` の各ルール S1 から S12 について、満たす、満たさない、該当しない、で採点します。
+   その表と、例の名前と、モデルを `CHANGELOG.md` のこのバージョンの見出しの下に書き、release notes に載るようにします。
+   満たさないルールは skill への指摘であって、このリリースを止める条件ではありません。
+   この評価は 1 つのモデルの 1 回の実行で、もう 1 回実行すれば採点は変わりえます。
+
+4. version の更新、changelog、upgrading の見出しを 1 つにまとめ、`chore: release <version>` として commit します。
    その commit を `queue` ブランチ経由で `main` に入れます。
    それが `main` に届くと workflow が始まります。
    `v*` の tag を手で push しません。
@@ -100,13 +111,13 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    この publish は `publish.yml` だけです。
    checkout から `npm publish` を実行しません。
 
-4. その Actions の実行で Environment `publish` を承認します。
+5. その Actions の実行で Environment `publish` を承認します。
    承認待ちは、その実行が Environment に入ったことです。
    workflow は `ubuntu-latest` の Node 24 を使い、npm の registry URL を設定します。
    npm 11.5.1 以上を要求します。
    その版が、GitHub の OIDC トークンを publish 用の資格情報に交換できる版だからです。
    `npm ci --ignore-scripts` と `npm run archstrict` を実行します(そのチェックはソースを読むので、ビルドもブラウザも要りません)。
-   Playwright の Chromium をインストールし(`npm ci` はブラウザを入れず、スイートはそれを起動します)、`npm run build`、`npm run typecheck`、`npm test`、`npm run selftest`、`npm run pack-check` を実行し、追跡されているファイルが変わっていれば拒否します。
+   Playwright の Chromium をインストールし(`npm ci` はブラウザを入れず、スイートはそれを起動します)、`npm run build`、`npm run typecheck`、`npm test`、`npm run selftest`、`npm run pack-check`、`node scripts/skill-examples.ts` を実行し、追跡されているファイルが変わっていれば拒否します。
    `dist/` は `.gitignore` に入っているので、新しいビルド出力は想定どおりであり、pack されるのもそれです。
    そのあと `npm publish` を実行します。
    action は commit id にピンされ、`ci.yml` と同じです。
@@ -114,7 +125,7 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    パッケージの `engines` は `^22.18.0 || >=23.6.0` のままです。
    Node 24 は publish ジョブであって、`nuka` を動かす人への新しい要件ではありません。
 
-5. workflow の `release` ジョブが、`npm publish` のあとに GitHub release を作ります。
+6. workflow の `release` ジョブが、`npm publish` のあとに GitHub release を作ります。
    `CHANGELOG.md` は、publish ジョブが checkout した commit から読みます。
    `--notes-file CHANGELOG.md` はすべてのバージョンのノートを貼るので、ジョブは見出しが `##` とそのバージョンと空白で始まる節だけを取り出してから、publish した commit を `--target` に指定して `gh release create` を実行します。
    その呼び出しが tag `v<version>` と release を作ります。

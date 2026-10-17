@@ -9,7 +9,7 @@ changes `package.json` runs
 dependency bump, the run releases nothing. Otherwise the publish job
 installs the pushed commit, builds `dist/`, runs the same checks this
 repository's own CI runs (including `npm run archstrict`), runs
-`npm run pack-check`, and runs `npm publish`. npm authenticates with
+`npm run pack-check` and the skill examples, and runs `npm publish`. npm authenticates with
 GitHub Actions OIDC. Provenance is attached automatically because the repository and the
 package are public. The GitHub Environment `publish` is the human
 gate: the publish job waits there until it is approved.
@@ -100,20 +100,42 @@ registers the trusted publisher.
    the heading that ends in "to the next release" (`から次のリリースへ`
    in Japanese) so it names this version, for example `0.14.1 to 0.15.0`.
 
-2. Run `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check`.
+2. Run `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check && npm run skill-examples`.
    `pack-check` installs the real tarball into a throwaway project
    outside this repository and drives the CLI there. That is what catches
    a `bin` that depends on a package this repository only lists as a
    devDependency, and a `dist/` that does not match `src/`.
+   `skill-examples` installs the same tarball into a copy of each project
+   under `examples/acceptance/`, runs `nuka check`, `nuka run`, and
+   `nuka tend` there, and compares the output with the transcripts in
+   `skills/acceptance/references/examples/`.
 
-3. Commit the version bump, the changelog, and the upgrading headings
+3. When `skills/` changed since the previous tag
+   (`git diff --stat v<previous>..HEAD -- skills/` prints a line), run one
+   skill eval by hand. Pick one worked example under
+   `skills/acceptance/references/examples/`. In a scratch project, put
+   that example's program (`src/` of its project under
+   `examples/acceptance/`) and install this checkout's tarball. Delete
+   that example's Markdown file from the installed skill, under
+   `node_modules/nukadoko/skills/acceptance/references/examples/`, and
+   give the agent no other copy of it. Give the agent the
+   example's "The ticket" section and ask it to write and run the
+   scenarios. Score the feature it writes against each rule, S1 to S12, of
+   `skills/acceptance/references/scenario-rules.md`: met, not met, or
+   not applicable. Put the table, the example's name, and the model
+   under this version's heading in `CHANGELOG.md`, so the release notes
+   carry it. A rule that is not met is a finding for the skill, not a
+   gate on this release: the eval is one run of one model, and a second
+   run can score differently.
+
+4. Commit the version bump, the changelog, and the upgrading headings
    together as `chore: release <version>`. Land that commit on `main`
    through the `queue` branch. Its arrival on `main` starts the
    workflow. Do not push a `v*` tag by hand: the workflow creates it.
    This publish is `publish.yml` only. Do not run `npm publish` from a
    checkout.
 
-4. Approve the `publish` Environment when that Actions run asks for it.
+5. Approve the `publish` Environment when that Actions run asks for it.
    The pending approval is that run entering the Environment. The
    workflow uses Node 24 on `ubuntu-latest` with the npm registry URL
    set. It requires npm 11.5.1 or newer, the release that can exchange a
@@ -121,8 +143,8 @@ registers the trusted publisher.
    and `npm run archstrict` (that check reads source, so it needs
    neither the build nor a browser), installs Playwright's Chromium
    (the suite launches it, and `npm ci` never does), `npm run build`,
-   `npm run typecheck`, `npm test`, `npm run selftest`, and
-   `npm run pack-check`, then refuses the run if any tracked file
+   `npm run typecheck`, `npm test`, `npm run selftest`,
+   `npm run pack-check`, and `node scripts/skill-examples.ts`, then refuses the run if any tracked file
    changed. `dist/` is gitignored, so the new build
    output is expected and is what gets packed. Then it runs
    `npm publish`. Actions are pinned to a full-length commit SHA, written
@@ -132,7 +154,7 @@ registers the trusted publisher.
    `^22.18.0 || >=23.6.0`. Node 24 is the publish job, not a new
    requirement for people running `nuka`.
 
-5. The workflow's `release` job creates the GitHub release after
+6. The workflow's `release` job creates the GitHub release after
    `npm publish`. It reads `CHANGELOG.md` from the commit the publish
    job checked out. `--notes-file CHANGELOG.md` would paste every
    version's notes, so the job extracts only the section whose heading
