@@ -611,7 +611,11 @@ already checks every file. When its `compilerOptions` names neither
 adds `"rewriteRelativeImportExtensions": true` (TypeScript 5.7 or later),
 so `tsc` accepts the `./run-greet.ts` import that `nuka scaffold --from`
 writes. That option is valid whether the project emits or not, and it
-changes only the output of an import that names a `.ts` file. Two flags
+changes only the output of an import that names a `.ts` file. A file
+that `tsconfig.json` extends can name the option instead, and then `init`
+leaves it alone. When the options come only through `extends` and no
+file there names it, or `init` cannot read one, `init` says so on
+stderr. Two flags
 add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
 (see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
 `!.env.example` to `.gitignore` for a project that keeps env files.
@@ -625,7 +629,9 @@ TypeScript do not load. Syntax with run-time behavior (an `enum`, a
 `namespace`, a constructor parameter property) is refused, and `nuka check`
 reports `step-file-import-failed` at its line with the rewrite to make. A
 name imported without `type` that is only a type stays an import and fails
-with Node's "does not provide an export named" error. Setting
+with Node's "does not provide an export named" error. For a type that
+nukadoko itself exports, such as `IWorldOptions`, the finding says to
+write `import type`. Setting
 `"erasableSyntaxOnly": true` and `"verbatimModuleSyntax": true` in
 `compilerOptions` makes `tsc` report both before `nuka` runs. An import
 that names a `.js` file next to a `.ts` file (`./run-greet.js` for

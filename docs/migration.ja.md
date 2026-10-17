@@ -138,6 +138,7 @@ glue はテキストとして読むだけで、実行はしていません。
   `type` を付けて書けば、その名前は実行時には import されません。
   `nuka check` も `nuka run` も何も問題を見つけず、文句を言うのは `tsc` だけで、それは `tsc` の仕事です。
   `type` なしで書くと import が残り、そのファイルは Node の "does not provide an export named" エラーで失敗し、`nuka check` はそれを `step-file-import-failed` として報告します。
+  `nukadoko/compat` が export する型なら、finding はそのことを伝えます。
   そのような import には `type` を付けてください。
   `"verbatimModuleSyntax": true` にすると、`tsc` がすべての該当箇所を見つけます。
   cucumber-js の glue は `IWorldOptions` を `World` と並べて `type` なしで import していることが多いので、最初の実行の前に検索しておく価値があります。

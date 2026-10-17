@@ -33,7 +33,9 @@ just until 0.1.
   (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`) gets a sentence that says what to
   write instead and to set `"erasableSyntaxOnly": true`; on Node 23.x,
   whose report frames the message and names no file, the message line and
-  the sentence are kept and no line is claimed. The code is
+  the sentence are kept, the line comes from the frame when the step file
+  itself fails to strip (`module.stripTypeScriptTypes` on its source), and
+  otherwise the message says the error is in a module the file imports. The code is
   unchanged. A config that fails to import gets the same location and
   sentence. The sentence that says to rename a `.ts` file to `.mts` is now
   added only when `package.json` says `"type": "commonjs"`, and names that
@@ -76,6 +78,32 @@ just until 0.1.
   and `nuka describe` add `file`, the step file. A compat hook finding has
   no `file`, because discovery does not record the file that registered a
   hook. docs/upgrading.md says what a script reading text output does.
+
+- **`step-file-import-failed` says to write `import type` for a nukadoko type imported without `type`.**
+  Node's "does not provide an export named" message for a name such as
+  `IWorldOptions` from `nukadoko/compat` now ends with a sentence that
+  names the type and the `import type` spelling. It is added only for a
+  name one of the four entry points (`nukadoko`, `nukadoko/compat`,
+  `nukadoko/matching`, `nukadoko/mcp`) exports as a type only; a test
+  keeps that list equal to the built declaration files. `nuka run` and
+  `nuka do` carry the same sentence in their import error.
+- **`nuka tend` reports `package-type-missing`.** A note for a
+  `package.json` with no `"type"` that is the nearest one above the config
+  or a `.ts` or `.js` step file, the case where Node prints
+  `MODULE_TYPELESS_PACKAGE_JSON` on every load. It names that
+  `package.json`, counts the files, and says to add `"type": "module"`, or
+  to use `.mts` names when the project's own `.js` files are CommonJS.
+  Reported by default; `--fail-on package-type-missing` gates on it.
+- **`nuka init` follows `extends` in `tsconfig.json` for `rewriteRelativeImportExtensions`.**
+  A base file that names `rewriteRelativeImportExtensions` or
+  `allowImportingTsExtensions` counts as the project's choice, so `init`
+  no longer adds the option to `compilerOptions` over it. A path or a
+  package specifier is resolved the way TypeScript reads it (as written,
+  with `.json`, or a package's `tsconfig.json`), an array `extends` is read
+  in order, and a cycle ends. When the options come only through `extends`,
+  `init` writes no new `compilerOptions`, and prints one stderr line: that
+  no file in the chain sets either option and what to add, or that it
+  could not read the named file and so did not check.
 
 - **`nuka scaffold --feature <path>` writes a stub for each undefined line of a feature.**
   A sentence used to be typed twice, once in the feature and once in

@@ -58,13 +58,16 @@ This part does not change release to release.
   property becomes a field assigned in the constructor. Set
   `"erasableSyntaxOnly": true` (TypeScript 5.8 and later) in
   `tsconfig.json`, and `tsc` reports each one before nuka does. On Node
-  23.x the finding names no line, because Node's report there names no
-  file.
+  23.x, Node's report names no file. The finding still names the line
+  when the step file itself holds the syntax; when an imported module
+  holds it, the finding has no line and says so.
 - **A type imported without `type` fails to load.** Node cannot tell that
   `import { Options } from "./options.ts"` names only a type, so the import
   fails with "does not provide an export named 'Options'". Write
   `import type { Options }` or `import { type Options }`. With
-  `"verbatimModuleSyntax": true`, `tsc` requires that spelling.
+  `"verbatimModuleSyntax": true`, `tsc` requires that spelling. For a
+  type that nukadoko exports, such as `IWorldOptions` from
+  `nukadoko/compat`, `nuka check`'s finding says to write `import type`.
 - **`nuka scaffold` writes imports with the `.ts` name.** The `--command`
   step imports `./run-greet.ts`, and `--then` imports its upstream step by
   its `.ts` name. A step file that already imports by the `.js` name keeps
@@ -74,8 +77,10 @@ This part does not change release to release.
   `"rewriteRelativeImportExtensions": true` (TypeScript 5.7 and later) or
   `"allowImportingTsExtensions": true` (which `tsc` accepts only with
   `noEmit`). `nuka init` now adds the first one to a `tsconfig.json` that
-  has `compilerOptions` of its own and names neither option. A project
-  initialized before this release adds it by hand.
+  has `compilerOptions` of its own and names neither option, unless a
+  file it `extends` names one. A `tsconfig.json` whose options come only
+  through `extends` gets a line on stderr instead. A project initialized
+  before this release adds it by hand.
 - **`paths` and `baseUrl` in `tsconfig.json` no longer resolve at run
   time.** tsx read them; Node does not. A step file that imports
   `@app/server` through `paths` fails to import. Use a relative path, or a
@@ -86,7 +91,7 @@ This part does not change release to release.
   warning for each such file. `nuka init` still writes
   `nukadoko.config.mts` there, and `.mts` step files load with no warning.
   Add `"type": "module"` to `package.json` to keep `.ts` names with no
-  warning. With `"type": "commonjs"`, a `.ts` file still fails to import,
+  warning. `nuka tend` reports this as `package-type-missing`. With `"type": "commonjs"`, a `.ts` file still fails to import,
   and the error says to rename it to `.mts`.
 - **`undefined-step`'s message names `nuka scaffold --feature <file>`.**
   It used to end with "run `nuka scaffold <name>` to add one"; it now

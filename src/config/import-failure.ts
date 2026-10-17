@@ -1,7 +1,10 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loaderUrl, withoutNamespace } from "./ts-loader.js";
+import { typeOnlyImportSentence } from "./type-only-export.js";
 
 // Responsibility: the text and the line a failed import of a step file or
 // of the config is reported with, built from the error Node threw.
@@ -30,11 +33,27 @@ export const STRIP_ONLY_SENTENCE =
 const LOCATION_HEAD = /^(file:\/\/[^\r\n]*?|\/[^\r\n]*?):(\d+)\r?\n/;
 
 // Node 23.x's stripper reports in its own frame (`  x <message>`, then a
-// `,-[line:col]` code frame) under ERR_INVALID_TYPESCRIPT_SYNTAX, for
-// erasure failures too, and names no file anywhere, so only the message
-// line is kept and no location is claimed. Later releases report the
-// one-line message with the file at the stack's head.
-const FRAMED_MESSAGE = /^\s*x (.+?)\r?\n\s*,-\[\d+:\d+\]/s;
+// `,-[line:col]` code frame), and names no file anywhere. Later releases
+// report the one-line message with the file at the stack's head. The frame's
+// line belongs to the step file exactly when the step file itself fails to
+// strip: Node strips a module before it links the module's imports, so a
+// step file that strips cleanly reached the error through a module it
+// imports, and Node does not say which.
+const FRAMED_MESSAGE = /^\s*x (.+?)\r?\n\s*,-\[(\d+):\d+\]/s;
+const STRIPPED_EXTENSIONS = new Set([".ts", ".mts"]);
+
+export const FRAMED_ELSEWHERE_SENTENCE =
+  "; Node 23 does not name the file this error is in, and this step file strips cleanly, so it is in a module this file imports";
+
+function stripFails(filePath: string): boolean {
+  if (!STRIPPED_EXTENSIONS.has(path.extname(filePath))) return false;
+  try {
+    stripTypeScriptTypes(readFileSync(filePath, "utf8"));
+    return false;
+  } catch {
+    return true;
+  }
+}
 const STRIP_ONLY_REFUSAL = /not supported in strip-only mode/;
 
 /** The file and line at the head of a stack or of Node's uncaught-error
@@ -69,16 +88,25 @@ export function describeImportFailure(
   filePath: string,
   rootDir: string,
   locate: (filePath: string) => { readonly path: string; readonly line: number } | undefined = locateInChild,
+  ownStripFails: (filePath: string) => boolean = stripFails,
 ): ImportFailureDetail {
   const raw = withoutNamespace(error instanceof Error ? error.message : String(error));
-  const message = FRAMED_MESSAGE.exec(raw)?.[1] ?? raw;
+  const framed = FRAMED_MESSAGE.exec(raw);
+  const message = framed?.[1] ?? raw;
   const code = (error as { code?: unknown } | null)?.code;
   const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : "";
+  const framedLocation =
+    framed === null ? undefined : ownStripFails(filePath) ? { path: filePath, line: Number(framed[2]) } : null;
   const location =
     headLocation(stack) ??
-    (error instanceof Error && error.name === "SyntaxError" && code === undefined ? locate(filePath) : undefined);
+    framedLocation ??
+    (error instanceof Error && error.name === "SyntaxError" && code === undefined && framed === null
+      ? locate(filePath)
+      : undefined);
   const sentence =
-    code === UNSUPPORTED_TYPESCRIPT_SYNTAX || (message !== raw && STRIP_ONLY_REFUSAL.test(message)) ? STRIP_ONLY_SENTENCE : "";
+    (code === UNSUPPORTED_TYPESCRIPT_SYNTAX || (framed !== null && STRIP_ONLY_REFUSAL.test(message)) ? STRIP_ONLY_SENTENCE : "") +
+    (framedLocation === null ? FRAMED_ELSEWHERE_SENTENCE : "") +
+    typeOnlyImportSentence(message);
   if (location === undefined) return { message: message + sentence };
   // In the message even when it is this file: two step files that import
   // one broken module get the same error, and check groups them by text.

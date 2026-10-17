@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { checkBindings } from "../check/binding-check.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
 import { rootRelativeStepFile } from "../check/unbound-patterned.js";
@@ -8,6 +10,7 @@ import { findDescriptionTodos } from "./description-todo.js";
 import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
+import { findTypelessPackageJsons } from "./package-type-missing.js";
 import { analyzeFieldDescriptions } from "./missing-describe.js";
 import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
@@ -87,14 +90,22 @@ const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
 // `config.stateDir` is passed through to it rather than a
 // `featuresDir`-shaped path. Every step record counts.
 //
+// `findTypelessPackageJsons` reads the config file and the step files the
+// walk found, the files whose loads print Node's reparse warning.
+//
 // `findRepeatedScenarioPrefixes` also reads live records, but starts from
 // `<stateDir>/records/scenarios/`. It limits its timing groups to the latest
 // run before it reads the cited step records, so two runs never count the
 // same scenario work twice.
 
+function loadedConfigFile(rootDir: string): string[] {
+  const fileName = resolveConfigFileName(rootDir);
+  return existsSync(path.join(rootDir, fileName)) ? [fileName] : [];
+}
+
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
-  const { vocabulary, compatParameterTypes } = await discoverSteps(
+  const { vocabulary, compatParameterTypes, walkedFiles } = await discoverSteps(
     rootDir,
     config.featuresDir,
     { tolerateImportFailures: true },
@@ -130,6 +141,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findFixturesTouchingApp(fixtureGraph),
     ...findPostNavigationReads(rootDir, config.stateDir),
     ...findRepeatedScenarioPrefixes(rootDir, config.stateDir, features),
+    ...findTypelessPackageJsons(rootDir, [...loadedConfigFile(rootDir), ...walkedFiles]),
   ];
 
   const summary = buildTendSummary(vocabulary, fieldDescriptions, scannedFeatureDirs);

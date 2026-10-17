@@ -50,13 +50,15 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka check` は `step-file-import-failed` を、ファイル、行、代わりに書くものと一緒に報告します。
   enum は `as const` を付けたオブジェクトに、パラメータプロパティはコンストラクタで代入するフィールドになります。
   `tsconfig.json` に `"erasableSyntaxOnly": true`(TypeScript 5.8 以降)を設定すると、nuka より先に `tsc` がそれぞれを報告します。
-  Node 23.x では、この finding は行を示しません。
-  そこでの Node の報告がファイルを示さないからです。
+  Node 23.x では、Node の報告はファイルを示しません。
+  step ファイル自身がその構文を含むときは、finding は引き続き行を示します。
+  import したモジュールが含むときは、finding は行を持たず、そのことを伝えます。
 - **`type` を付けずに import した型は読み込みに失敗します。**
   Node は `import { Options } from "./options.ts"` が型だけを指していると判断できません。
   そのため import は "does not provide an export named 'Options'" で失敗します。
   `import type { Options }` か `import { type Options }` と書いてください。
   `"verbatimModuleSyntax": true` を設定すると、`tsc` がこの書き方を求めます。
+  `nukadoko/compat` の `IWorldOptions` のように nukadoko が export する型については、`nuka check` の finding が `import type` と書くよう伝えます。
 - **`nuka scaffold` は `.ts` の名前で import を書きます。**
   `--command` の step は `./run-greet.ts` を import し、`--then` は上流の step を `.ts` の名前で import します。
   すでに `.js` の名前で import している step ファイルは、nuka のもとでは読み込まれ続けます。
@@ -66,6 +68,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `tsc` が `.ts` の名前を受け入れるには、`tsconfig.json` に `"rewriteRelativeImportExtensions": true`(TypeScript 5.7 以降)か `"allowImportingTsExtensions": true` が必要です。
   後者を `tsc` が受け入れるのは `noEmit` のときだけです。
   `nuka init` は、自身の `compilerOptions` を持ち、どちらのオプションも名指していない `tsconfig.json` に、前者を追加するようになりました。
+  ただし、それが `extends` するファイルがどちらかを名指していれば追加しません。
+  オプションが `extends` を通してだけ届く `tsconfig.json` には、代わりに stderr に 1 行を書きます。
   このリリースより前に init したプロジェクトは、手で追加してください。
 - **`tsconfig.json` の `paths` と `baseUrl` は、実行時にはもう解決されません。**
   tsx はそれを読みましたが、Node は読みません。
@@ -76,6 +80,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   Node はそのファイルを解析し直し、そうしたファイルごとに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
   `nuka init` はそこでは引き続き `nukadoko.config.mts` を書き、`.mts` の step ファイルは警告なしで読み込まれます。
   `.ts` の名前のまま警告をなくすには、`package.json` に `"type": "module"` を追加してください。
+  `nuka tend` はこれを `package-type-missing` として報告します。
   `"type": "commonjs"` のもとでは、`.ts` ファイルは引き続き import に失敗し、エラーは `.mts` に名前を変えるよう伝えます。
 - **`undefined-step` のメッセージは `nuka scaffold --feature <file>` を名指します。**
   以前は「run `nuka scaffold <name>` to add one」で終わっていました。

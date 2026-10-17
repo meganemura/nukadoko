@@ -1,4 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 // Responsibility: the two tsconfig.json edits `nuka init` makes so the
@@ -23,11 +25,18 @@ import path from "node:path";
 // rewrite through a JSON value keeps a comment. The parser and the edit
 // read the text through one scanner, so they agree on what is a comment.
 //
+// `extends` is followed, because a base file can make the choice for the
+// project: when any file in the chain names either option, `init` adds
+// nothing. When the project's own file has no `compilerOptions`, its options
+// come only from the chain, and `init` writes no new object into it; it says
+// on stderr what the chain lacks, or that it could not read the chain, so
+// the setting is never skipped without a word.
+//
 // Every other case stays silent, because each is a claim that can end only
 // one way: an `include` entry with a wildcard in it counts as covering, a
-// tsconfig with no `include` or no `compilerOptions` of its own
-// (TypeScript's default, or one inherited through `extends`) is left
-// alone, and so is a file that does not parse. An edit nobody needed would teach people to distrust the
+// tsconfig with no `include`, or with neither `compilerOptions` nor
+// `extends` (TypeScript's default), is left alone, and so is a file that
+// does not parse. An edit nobody needed would teach people to distrust the
 // ones they did.
 
 /** One span of JSONC text. Whitespace between spans is not a token;
@@ -164,16 +173,95 @@ export function appendCompilerOption(text: string, key: string): string {
   return appendItems(text, tokens, open, close, [`${JSON.stringify(key)}: true`]);
 }
 
+function ownCompilerOptions(tsconfig: unknown): object | undefined {
+  if (typeof tsconfig !== "object" || tsconfig === null) return undefined;
+  const options = (tsconfig as { compilerOptions?: unknown }).compilerOptions;
+  if (typeof options !== "object" || options === null || Array.isArray(options)) return undefined;
+  return options;
+}
+
+function namesTsExtensionOption(tsconfig: unknown): boolean {
+  const options = ownCompilerOptions(tsconfig);
+  return options !== undefined && ("allowImportingTsExtensions" in options || "rewriteRelativeImportExtensions" in options);
+}
+
 /** Whether `init` adds `TS_EXTENSION_OPTION` to this parsed tsconfig: it
  * has a `compilerOptions` object of its own that names neither option. */
 export function needsTsExtensionOption(tsconfig: unknown): boolean {
-  if (typeof tsconfig !== "object" || tsconfig === null) return false;
-  const options = (tsconfig as { compilerOptions?: unknown }).compilerOptions;
-  if (typeof options !== "object" || options === null || Array.isArray(options)) return false;
-  return !("allowImportingTsExtensions" in options) && !("rewriteRelativeImportExtensions" in options);
+  return ownCompilerOptions(tsconfig) !== undefined && !namesTsExtensionOption(tsconfig);
 }
 
 export const TS_EXTENSION_OPTION = "rewriteRelativeImportExtensions";
+
+/** What the files a tsconfig extends say about the option: one of them names
+ * it, none does, or one of them could not be read (the specifier as the file
+ * wrote it). */
+export type ExtendsChain = { kind: "names-option" } | { kind: "lacks-option" } | { kind: "unread"; specifier: string };
+
+function extendsSpecifiers(tsconfig: unknown): string[] | undefined {
+  if (typeof tsconfig !== "object" || tsconfig === null || !("extends" in tsconfig)) return [];
+  const value = (tsconfig as { extends?: unknown }).extends;
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value) && value.every((entry): entry is string => typeof entry === "string")) return value;
+  return undefined;
+}
+
+/** The file TypeScript reads for an `extends` specifier: a path, with
+ * `.json` added when the path as written does not exist, or a package
+ * specifier resolved from the extending file's directory, as written, with
+ * `.json`, or as a package's `tsconfig.json`. A package specifier that
+ * resolves to anything but a JSON file is a package's code, not its
+ * tsconfig, so the next spelling is tried. */
+export function resolveExtends(specifier: string, fromDir: string): string | undefined {
+  if (specifier.startsWith(".") || path.isAbsolute(specifier)) {
+    const target = path.resolve(fromDir, specifier);
+    if (existsSync(target)) return target;
+    return existsSync(`${target}.json`) ? `${target}.json` : undefined;
+  }
+  const require = createRequire(path.join(fromDir, "tsconfig.json"));
+  for (const candidate of [specifier, `${specifier}.json`, `${specifier}/tsconfig.json`]) {
+    try {
+      const resolved = require.resolve(candidate);
+      if (resolved.endsWith(".json")) return resolved;
+    } catch {
+      // The next spelling, as TypeScript tries them.
+    }
+  }
+  return undefined;
+}
+
+/** Follows every `extends` of a parsed tsconfig at `fromDir`, depth first.
+ * A file already seen on the way counts as read, so a cycle ends. */
+export function readExtendsChain(tsconfig: unknown, fromDir: string, seen: Set<string> = new Set()): ExtendsChain {
+  const specifiers = extendsSpecifiers(tsconfig);
+  if (specifiers === undefined) return { kind: "unread", specifier: JSON.stringify((tsconfig as { extends?: unknown }).extends) };
+  for (const specifier of specifiers) {
+    const file = resolveExtends(specifier, fromDir);
+    if (file === undefined) return { kind: "unread", specifier };
+    if (seen.has(file)) continue;
+    seen.add(file);
+    let base: unknown;
+    try {
+      base = parseJsonc(readFileSync(file, "utf8"));
+    } catch {
+      return { kind: "unread", specifier };
+    }
+    if (namesTsExtensionOption(base)) return { kind: "names-option" };
+    const inherited = readExtendsChain(base, path.dirname(file), seen);
+    if (inherited.kind !== "lacks-option") return inherited;
+  }
+  return { kind: "lacks-option" };
+}
+
+/** The stderr line for a tsconfig whose compilerOptions come only through
+ * `extends`, when no file in the chain is known to name the option. */
+export function extendsNotice(chain: Exclude<ExtendsChain, { kind: "names-option" }>): string {
+  const why = "tsc refuses the .ts imports nuka scaffold writes unless one of them is set";
+  if (chain.kind === "unread") {
+    return `tsconfig.json extends ${JSON.stringify(chain.specifier)}, which nuka init could not read, so it did not check whether ${TS_EXTENSION_OPTION} or allowImportingTsExtensions is set; ${why}`;
+  }
+  return `tsconfig.json has no compilerOptions of its own, and no file it extends sets ${TS_EXTENSION_OPTION} or allowImportingTsExtensions; ${why}, so add "${TS_EXTENSION_OPTION}": true to compilerOptions`;
+}
 
 function appendItems(text: string, tokens: readonly Token[], open: number, close: number, quoted: readonly string[]): string {
   const openAt = tokens[open]?.end ?? 0;
@@ -271,9 +359,10 @@ function matchingBracket(text: string, tokens: readonly Token[], open: number, k
   throw new Error(`tsconfig.json's ${key} value is not closed`);
 }
 
-/** What `init` did about tsconfig.json: wrote one or both edits, or
- * nothing to say (see this file's header for each silent case). */
-export type TsconfigEditOutcome = { kind: "written" } | { kind: "silent" };
+/** What `init` did about tsconfig.json: whether it wrote one or both edits,
+ * and the stderr line about the option when `extends` alone supplies
+ * compilerOptions (see this file's header for each silent case). */
+export type TsconfigEditOutcome = { readonly written: boolean; readonly notice?: string };
 
 /** Adds the missing `include` entries and the `.ts` import option to
  * tsconfig.json in place. */
@@ -289,16 +378,26 @@ export async function ensureTsconfig(
     text = await readFile(tsconfigPath, "utf8");
     parsed = parseJsonc(text);
   } catch {
-    return { kind: "silent" };
+    return { written: false };
   }
-  if (typeof parsed !== "object" || parsed === null) return { kind: "silent" };
+  if (typeof parsed !== "object" || parsed === null) return { written: false };
   let edited = text;
   const include = (parsed as { include?: unknown }).include;
   if (Array.isArray(include) && include.every((entry): entry is string => typeof entry === "string")) {
     edited = appendIncludeEntries(edited, missingIncludeEntries(include, featuresDir, configFileName));
   }
-  if (needsTsExtensionOption(parsed)) edited = appendCompilerOption(edited, TS_EXTENSION_OPTION);
-  if (edited === text) return { kind: "silent" };
-  await writeFile(tsconfigPath, edited);
-  return { kind: "written" };
+  let notice: string | undefined;
+  if (!namesTsExtensionOption(parsed)) {
+    const chain = "extends" in parsed ? readExtendsChain(parsed, rootDir, new Set([tsconfigPath])) : undefined;
+    if (chain?.kind === "names-option") {
+      // A base file made the choice.
+    } else if (needsTsExtensionOption(parsed)) {
+      edited = appendCompilerOption(edited, TS_EXTENSION_OPTION);
+    } else if (chain !== undefined) {
+      notice = extendsNotice(chain);
+    }
+  }
+  const written = edited !== text;
+  if (written) await writeFile(tsconfigPath, edited);
+  return notice === undefined ? { written } : { written, notice };
 }

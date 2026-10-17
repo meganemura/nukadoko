@@ -36,6 +36,12 @@ const TEND_CODE_INFO = {
     reportedByDefault: true,
     do: "Remove the from entry for the key, or keep it for nuka do --use.",
   },
+  "package-type-missing": {
+    description:
+      'A package.json with no "type" field governs a .ts or .js file nukadoko loads, so Node parses the file twice and prints a MODULE_TYPELESS_PACKAGE_JSON warning on every load.',
+    reportedByDefault: true,
+    do: 'Add "type": "module" to the package.json, or rename the files to .mts if the project\'s own .js files are CommonJS.',
+  },
   "parameter-type-support-origin": {
     description:
       "A compat defineParameterType call in support code still registers a parameter type; config.parameterTypes is where a typed project declares it.",

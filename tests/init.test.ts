@@ -302,7 +302,7 @@ describe("nuka init", () => {
     );
   });
 
-  it("leaves a tsconfig.json with no include of its own alone, and says nothing about it", async () => {
+  it("leaves a tsconfig.json that extends a missing file alone, and says it did not check the option", async () => {
     const text = '{\n  "extends": "./tsconfig.base.json"\n}\n';
     await writeFile(path.join(rootDir, "tsconfig.json"), text);
     const stdout = createCaptureSink();
@@ -312,6 +312,60 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("tsconfig.json");
+    expect(stderr.text()).toBe(
+      'tsconfig.json extends "./tsconfig.base.json", which nuka init could not read, so it did not check whether rewriteRelativeImportExtensions or allowImportingTsExtensions is set; tsc refuses the .ts imports nuka scaffold writes unless one of them is set\n',
+    );
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
+  });
+
+  it("says nothing when a package tsconfig.json extends sets the option", async () => {
+    const text = '{\n  "extends": "@acme/tsconfig"\n}\n';
+    await writeFile(path.join(rootDir, "tsconfig.json"), text);
+    await mkdir(path.join(rootDir, "node_modules", "@acme", "tsconfig"), { recursive: true });
+    await writeFile(path.join(rootDir, "node_modules", "@acme", "tsconfig", "package.json"), '{ "name": "@acme/tsconfig" }\n');
+    await writeFile(
+      path.join(rootDir, "node_modules", "@acme", "tsconfig", "tsconfig.json"),
+      '{ "compilerOptions": { "allowImportingTsExtensions": true, "noEmit": true } }\n',
+    );
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("tsconfig.json");
+    expect(stderr.text()).toBe("");
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
+  });
+
+  it("names the missing option when no file in the extends chain sets it", async () => {
+    const text = '{\n  "extends": "./tsconfig.base"\n}\n';
+    await writeFile(path.join(rootDir, "tsconfig.json"), text);
+    await writeFile(path.join(rootDir, "tsconfig.base.json"), '{ "extends": "./tsconfig.strict.json", "compilerOptions": { "module": "nodenext" } }\n');
+    await writeFile(path.join(rootDir, "tsconfig.strict.json"), '{ "compilerOptions": { "strict": true } }\n');
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).not.toContain("tsconfig.json");
+    expect(stderr.text()).toBe(
+      'tsconfig.json has no compilerOptions of its own, and no file it extends sets rewriteRelativeImportExtensions or allowImportingTsExtensions; tsc refuses the .ts imports nuka scaffold writes unless one of them is set, so add "rewriteRelativeImportExtensions": true to compilerOptions\n',
+    );
+    expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
+  });
+
+  it("does not add the option to compilerOptions when a file it extends already sets it", async () => {
+    const text = '{\n  "extends": "./tsconfig.base.json",\n  "compilerOptions": { "strict": true }\n}\n';
+    await writeFile(path.join(rootDir, "tsconfig.json"), text);
+    await writeFile(path.join(rootDir, "tsconfig.base.json"), '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }\n');
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });

@@ -65,12 +65,15 @@ which checks `featuresDir` and then executes it. A `test:scenarios` script the
 project already has stays, and `init` says so on stderr; run `nuka run` directly then. It also adds the steps and the config to
 `tsconfig.json`'s `include`, and `"rewriteRelativeImportExtensions": true`
 to its `compilerOptions` so `tsc` accepts the `.ts` import names
-`nuka scaffold` writes, keeping its comments and trailing commas. Add `--allure` only when someone reads Allure reports,
+`nuka scaffold` writes, keeping its comments and trailing commas. When
+`compilerOptions` comes only through `extends`, `init` says on stderr
+what to add instead of editing. Add `--allure` only when someone reads Allure reports,
 and `--env` when the project keeps `.env` files; both report emitters are
 off until their config key (`allure: {}`, `messages: {}`) is present. A
 CommonJS project (no `"type": "module"` in `package.json`) gets
 `nukadoko.config.mts`, and step files need `.mts` too. A hand-written
-`nukadoko.config.ts` there loads with a Node warning on every run, and
+`nukadoko.config.ts` there loads with a Node warning on every run (`nuka
+tend` reports it as `package-type-missing`), and
 fails to import under `"type": "commonjs"`, with an error that names the
 file.
 

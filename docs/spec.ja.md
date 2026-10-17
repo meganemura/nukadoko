@@ -207,12 +207,16 @@ discovery は `.cjs` と `.cts` のファイルを特定しますが、インポ
 config と step ファイルは、Node 自身が型の除去で読み込みます。
 Node は型注釈を空白に置き換え、残りを実行します。
 そのため Node の下限は、これをフラグなしで行う最初のリリースです(22 系は 22.18、それ以外は 23.6)。
-ここから 3 つの規則が出てきます。
+ここから 4 つの規則が出てきます。
 
 - step ファイルは、別の step ファイルを `.ts` まで含めたファイル名で import します(`import createProject from "./create-project.ts"`)。
   `nuka scaffold --from` が書くのはこの綴りで、素の `node` が解決できるのもこの綴りです。
   `tsc` は `rewriteRelativeImportExtensions` か `allowImportingTsExtensions` があれば受け付けます。
   `tsconfig.json` がどちらも指定していないとき、`nuka init` は前者を追加します。
+  そのとき `init` は `extends` をたどります。
+  継承元のファイルがどちらかのオプションを名指していれば、それがプロジェクトの選択です。
+  オプションが `extends` を通してだけ届くとき、`init` は新しい `compilerOptions` を書きません。
+  代わりに、継承の連鎖のどのファイルもどちらのオプションも設定していないこと、またはそのどれかを読めなかったことを stderr に書きます。
   `"module": "nodenext"` で TypeScript が書く `.js` の綴り(`create-project.ts` に対する `./create-project.js`)も、`nuka` の下では引き続き読み込めます。
   `.js` ファイルが無いときに `nuka` が `.ts` ファイルを試すからです。
   ただし素の `node` で実行するプログラムでは読み込めません。
@@ -220,9 +224,17 @@ Node は型注釈を空白に置き換え、残りを実行します。
   `enum`、`namespace`、コンストラクタのパラメータプロパティです。
   `nuka check` はそのファイルを、Node が示す行で `step-file-import-failed` として報告し、書き換え方を示します。
   `"erasableSyntaxOnly": true` を設定すると、`tsc` が同じ構文を報告します。
+  Node 23.x のこの報告はファイルを示しません。
+  step ファイル自身の型の除去が失敗するときは、行は Node が示すものです。
+  Node はファイルの型を、それが import するファイルより先に除去するからです。
+  そうでないとき、finding は行を持たず、エラーは step ファイルが import するモジュールの中にあると伝えます。
 - `type` なしで import した名前は、型の除去の後も import として残ります。
   そのため型をこの形で import すると、Node の "does not provide an export named" エラーで失敗します。
   `import type` を使えば避けられます(`"verbatimModuleSyntax": true` にすると `tsc` がそれを求めます)。
+  その名前が `nukadoko`、`nukadoko/compat`、`nukadoko/matching`、`nukadoko/mcp` が export する型(`IWorldOptions` など)のとき、finding は `import type` と書くよう伝えます。
+  それ以外のモジュールについては型と書き間違いを区別できないので、何も足しません。
+- `"type"` のない `package.json` のもとでは、Node は `.ts` や `.js` のファイルを 2 回解析し、読み込むたびに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
+  ファイルは読み込めるので、これを報告するのは `nuka tend` で、`package-type-missing` として、`"type": "module"` を追加すべき `package.json` を名指します。
 
 discovery は 1 回ごとに、それ自身のモジュールグラフでファイルを読み込みます。
 そのため 2 回 discovery を行うプロセス(live session、MCP サーバー、テスト)では、各ファイルのトップレベルのコードが再び実行され、2 回の discovery がモジュールを共有することはありません。
@@ -3161,6 +3173,13 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   その隣にある所見は `check` に残っており、対比する価値があります。
   値が短すぎて redact されない `redact` エントリと、secret らしいキーを持つ追跡済みの env file は、どちらも run が始まった瞬間に平文がログに届くことを意味します。
   それはまさに事前に知っておくべきことだからです。
+- **nukadoko が読み込む `.ts` や `.js` のファイルを支配する、`"type"` のない `package.json`**(`package-type-missing`)。
+  Node はそのようなファイルを CommonJS として読み、ES module の構文を見つけると解析し直し、`MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
+  これは、そうしたファイルを読み込むたびに起きます。
+  支配する `package.json` は Node 自身が使うもの、つまりそのファイルから見て最も近い `package.json` です。
+  note はそれを名指し、直し方を示します。
+  `"type": "module"` を追加するか、プロジェクト自身の `.js` ファイルが CommonJS なら `.mts` の名前にすることです。
+  run は動くので、これは note です。
 - **設定された `additionalFeatureDirs` エントリがディスク上に存在しないもの。**
   これは `nuka check`/`nuka tend` がスキャンする範囲を広げるためだけに存在します。
   そのため、存在しないディレクトリは報告すべき config の誤りであり、それは `featuresDir` が欠けている場合と同じです。

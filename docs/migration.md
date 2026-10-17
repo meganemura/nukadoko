@@ -168,7 +168,8 @@ lists the measured ones.
   check` nor `nuka run` sees anything wrong, and only `tsc` complains,
   which is `tsc`'s job. Written without `type`, the import stays, and the
   file fails with Node's "does not provide an export named" error, which
-  `nuka check` reports as `step-file-import-failed`. Add `type` to such an
+  `nuka check` reports as `step-file-import-failed`; for a type that
+  `nukadoko/compat` exports, the finding says so. Add `type` to such an
   import; `"verbatimModuleSyntax": true` makes `tsc` find every one.
   cucumber-js glue often imports `IWorldOptions` beside `World` without
   `type`, so this is worth a search before the first run. (`IWorldOptions` and

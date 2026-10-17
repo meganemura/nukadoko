@@ -5,7 +5,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { describeImportFailure, headLocation, STRIP_ONLY_SENTENCE } from "../src/config/import-failure.js";
+import { describeImportFailure, FRAMED_ELSEWHERE_SENTENCE, headLocation, STRIP_ONLY_SENTENCE } from "../src/config/import-failure.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
 describe("headLocation", () => {
@@ -50,13 +50,21 @@ describe("describeImportFailure", () => {
     });
   });
 
-  it("keeps the message line of Node 23's framed report and claims no location", () => {
-    const error = Object.assign(
-      new SyntaxError("  x TypeScript enum is not supported in strip-only mode\n   ,-[3:1]\n 3 | export enum Color { Red }\n   `----\n"),
-      { code: "ERR_INVALID_TYPESCRIPT_SYNTAX", stack: "SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]:   x TypeScript enum" },
-    );
-    expect(describeImportFailure(error, stepFile, rootDir, nowhere)).toEqual({
-      message: `TypeScript enum is not supported in strip-only mode${STRIP_ONLY_SENTENCE}`,
+  const framed = Object.assign(
+    new SyntaxError("  x TypeScript enum is not supported in strip-only mode\n   ,-[3:1]\n 3 | export enum Color { Red }\n   `----\n"),
+    { code: "ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX", stack: "SyntaxError [ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX]:   x TypeScript enum" },
+  );
+
+  it("takes the line from Node 23's framed report when the step file itself fails to strip", () => {
+    expect(describeImportFailure(framed, stepFile, rootDir, nowhere, () => true)).toEqual({
+      message: `TypeScript enum is not supported in strip-only mode (features/steps/paint.ts:3)${STRIP_ONLY_SENTENCE}`,
+      line: 3,
+    });
+  });
+
+  it("says the framed error is in an imported module when the step file strips cleanly", () => {
+    expect(describeImportFailure(framed, stepFile, rootDir, nowhere, () => false)).toEqual({
+      message: `TypeScript enum is not supported in strip-only mode${STRIP_ONLY_SENTENCE}${FRAMED_ELSEWHERE_SENTENCE}`,
     });
   });
 

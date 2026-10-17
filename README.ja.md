@@ -578,6 +578,8 @@ API の形は [An HTTP API](#an-http-api) にあります。
 `compilerOptions` に `allowImportingTsExtensions` も `rewriteRelativeImportExtensions` も無いときは、`"rewriteRelativeImportExtensions": true` を追加します(TypeScript 5.7 以降)。
 これで `nuka scaffold --from` が書く `./run-greet.ts` の import を `tsc` が受け付けます。
 このオプションは出力するプロジェクトでもしないプロジェクトでも有効で、変わるのは `.ts` ファイルを名指しする import の出力だけです。
+`tsconfig.json` が extends するファイルがこのオプションを名指していれば、`init` はそのままにします。
+オプションが `extends` を通してだけ届き、そこのどのファイルも名指していないとき、または `init` がそのどれかを読めないときは、`init` はそのことを stderr に書きます。
 2 つのフラグで書くものを増やせます。
 `--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
 `nuka` は config があるディレクトリ、workspace ならそのパッケージで実行します。
@@ -586,6 +588,7 @@ config が無い場所で実行したコマンドはそのことを stderr に�
 Node は step ファイルの型を除去して実行するので、2 種類の TypeScript は読み込めません。
 実行時の振る舞いを持つ構文(`enum`、`namespace`、コンストラクタのパラメータプロパティ)は拒否され、`nuka check` はその行に `step-file-import-failed` を報告し、書き換え方を示します。
 型でしかない名前を `type` なしで import すると import として残り、Node の "does not provide an export named" エラーで失敗します。
+`IWorldOptions` のように nukadoko 自身が export する型なら、finding は `import type` と書くよう伝えます。
 `compilerOptions` に `"erasableSyntaxOnly": true` と `"verbatimModuleSyntax": true` を設定すると、`nuka` を実行する前に `tsc` が両方を報告します。
 `.ts` ファイルの隣の `.js` ファイルを名指しする import(`run-greet.ts` に対する `./run-greet.js`)は、`nuka` の下では引き続き読み込めます。
 `nuka` が一方を他方に対応付けるからです。

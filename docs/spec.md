@@ -222,14 +222,18 @@ definitions from resurfacing as unexplained `undefined-step` findings.
 Node loads the config and the step files itself, by type stripping: it
 replaces each type annotation with spaces and runs what is left, so the
 Node floor is the first release that does that without a flag (22.18 on the
-22 line, 23.6 otherwise). Three rules follow from it.
+22 line, 23.6 otherwise). Four rules follow from it.
 
 - A step file imports another by its own file name, `.ts` included
   (`import createProject from "./create-project.ts"`). That is the spelling
   `nuka scaffold --from` writes and the one plain `node` resolves. `tsc`
   accepts it with `rewriteRelativeImportExtensions` or
   `allowImportingTsExtensions`; `nuka init` adds the first when
-  `tsconfig.json` names neither. The `.js` spelling TypeScript writes under
+  `tsconfig.json` names neither. It follows `extends` to ask: a base
+  file that names either option is the project's choice. When the
+  options come only through `extends`, `init` writes no new
+  `compilerOptions` and says on stderr that no file in the chain sets
+  either option, or that it could not read one of them. The `.js` spelling TypeScript writes under
   `"module": "nodenext"` (`./create-project.js` for `create-project.ts`)
   still loads under `nuka`, which tries the `.ts` file when the `.js` one
   is absent, but a program run with plain `node` does not.
@@ -237,10 +241,23 @@ Node floor is the first release that does that without a flag (22.18 on the
   and a constructor parameter property. `nuka check` reports the file as
   `step-file-import-failed` at the line Node names, with the rewrite to
   make. `"erasableSyntaxOnly": true` makes `tsc` report the same syntax.
+  Node 23.x names no file in that report. When the step file itself fails
+  to strip, the line is the one Node names, since Node strips a file
+  before the files it imports. Otherwise the finding has no line and
+  says the error is in a module the step file imports.
 - A name imported without `type` stays an import after stripping, so
   importing a type that way fails with Node's "does not provide an export
   named" error. `import type` (or `"verbatimModuleSyntax": true`, which
-  makes `tsc` require it) avoids that.
+  makes `tsc` require it) avoids that. When the name is a type that
+  `nukadoko`, `nukadoko/compat`, `nukadoko/matching`, or `nukadoko/mcp`
+  exports, such as `IWorldOptions`, the finding says to write
+  `import type`. For any other module it cannot tell a type from a typo,
+  so it adds nothing.
+- A `package.json` with no `"type"` makes Node parse each `.ts` or `.js`
+  file twice and print a `MODULE_TYPELESS_PACKAGE_JSON` warning on every
+  load. The files still load, so `nuka tend` reports it, as
+  `package-type-missing`, and names the `package.json` to add
+  `"type": "module"` to.
 
 Each discovery run loads its files in a module graph of its own, so a
 process that discovers twice (a live session, the MCP server, a test) runs
@@ -3695,6 +3712,14 @@ The following findings show what `tend` inspects and why each item is rot rather
   whose value is too short to be redacted, and a tracked env file with a
   secret-looking key, both mean plaintext reaches a log the moment the run
   starts, which is exactly something to know beforehand.
+- **A `package.json` with no `"type"` that governs a `.ts` or `.js`
+  file nukadoko loads** (`package-type-missing`). Node reads such a file
+  as CommonJS, finds ES module syntax, parses it again, and prints a
+  `MODULE_TYPELESS_PACKAGE_JSON` warning, on every load of every such
+  file. The governing file is the one Node uses, the nearest `package.json`
+  above the file. The note names it and the fix: `"type": "module"`, or
+  `.mts` names when the project's own `.js` files are CommonJS. It is a
+  note, because the run works.
 - **A configured `additionalFeatureDirs` entry that is absent from
   disk.** It exists specifically to widen what `nuka check`/`nuka tend`
   scan, so an absent directory is a config mistake to report, the same way
