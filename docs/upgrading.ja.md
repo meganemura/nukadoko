@@ -81,7 +81,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   以前は「run `nuka scaffold <name>` to add one」で終わっていました。
   今は、その行がある feature ファイルを名指すので、そのコマンドはそのファイルの未定義の行すべてに stub を書きます。
   code と、その `file` と `line` は変わりません。
-  古い文に一致させているスクリプトは、代わりに code に一致させます。
+  `nuka run --no-check` のもとでは、scenario record にある未定義の step の `error.message` も同じように変わります。
+  古い文に一致させているスクリプトは、代わりに code に一致させるか、scenario record にある step の `status: "undefined"` に一致させます。
 - **成功した step record は `"status": "ok"` ではなく `"status": "passed"` と書きます。**
   step record、scenario record の `steps[]` と `hooks[]`、`nuka explore --json` の `steps[]` で、成功を表す語が同じになりました。
   `.status == "ok"` を調べるスクリプトや jq のフィルタは、`"passed"` を調べるようにします。

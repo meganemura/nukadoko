@@ -147,10 +147,9 @@ describe("nuka run", () => {
     expect(record.steps[0].status).toBe("passed");
     expect(record.steps[1].status).toBe("undefined");
     expect(record.steps[1].step_record_id).toBeNull();
-    expect(record.steps[1].error.message).toContain(
-      'No step definition matches "this text matches no step definition at all"',
+    expect(record.steps[1].error.message).toBe(
+      'No step definition matches "this text matches no step definition at all"; run `nuka scaffold --feature features/undefined.feature` to add one',
     );
-    expect(record.steps[1].error.message).toContain("nuka scaffold");
   });
 
   it("an ambiguous step gets no step record and names every step that matched", async () => {

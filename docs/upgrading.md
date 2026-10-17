@@ -92,8 +92,10 @@ This part does not change release to release.
   It used to end with "run `nuka scaffold <name>` to add one"; it now
   names the feature file the line is in, so the command writes a stub for
   every undefined line of that file. The code and its `file` and `line`
-  are unchanged. A script that matches the old sentence matches on the
-  code instead.
+  are unchanged. Under `nuka run --no-check`, an undefined step's
+  `error.message` in the scenario record changes the same way. A script
+  that matches the old sentence matches on the code instead, or on the
+  step's `status: "undefined"` in a scenario record.
 - **A step record that passed says `"status": "passed"`, not `"ok"`.** The
   same word now means success in a step record, in a scenario record's
   `steps[]` and `hooks[]`, and in `nuka explore --json`'s `steps[]`. A

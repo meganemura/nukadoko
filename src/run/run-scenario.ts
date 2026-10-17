@@ -453,8 +453,8 @@ export interface RunScenarioOptions {
   readonly processSignal?: ProcessSignal;
 }
 
-function undefinedStepMessage(text: string): string {
-  return `No step definition matches "${text}"; run \`nuka scaffold <name>\` to add one`;
+function undefinedStepMessage(text: string, relativeFeaturePath: string): string {
+  return `No step definition matches "${text}"; run \`nuka scaffold --feature ${relativeFeaturePath}\` to add one`;
 }
 
 function ambiguousStepMessage(text: string, stepNames: readonly string[]): string {
@@ -1944,7 +1944,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
       if (outcome.kind === "undefined") {
         scenarioFailed = true;
-        const message = undefinedStepMessage(pickleStep.text);
+        const message = undefinedStepMessage(pickleStep.text, relativeFeaturePath);
         noteFailure(message, 0, undefined);
         pushStepRecord(
           {

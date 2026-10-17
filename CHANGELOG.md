@@ -183,6 +183,8 @@ just until 0.1.
   ends with "run `nuka scaffold --feature <the line's feature file>` to
   add one" instead of "run `nuka scaffold <name>` to add one". The code,
   `file`, `line`, and the hint and unbound-step suffixes are unchanged.
+  The `error.message` of an undefined step in a `nuka run --no-check`
+  scenario record names the same command with the scenario's feature file.
 
 - **The `playwright` peer range is `^1.61.1`, not the exact `1.61.1`.**
   npm refused (`ERESOLVE`) to install nukadoko beside any other Playwright,
