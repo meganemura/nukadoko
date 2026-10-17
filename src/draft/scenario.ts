@@ -5,8 +5,8 @@ import { bindStepArgs, matchPickleStep, type StepBinding } from "../run/match-st
 import { toStoredForm } from "../stored-form/stored-form.js";
 import { renderAttachmentBlock, type Attachment } from "./render-line.js";
 
-// Responsibility: one scenario draft, the shape `nuka harvest` and
-// `nuka explore` both print. A caller turns each step into a `DraftEntry`:
+// Responsibility: one scenario draft, the shape `nuka explore` prints.
+// A caller turns each step into a `DraftEntry`:
 // a rendered line with its table or docstring and the args it must read
 // back to, or a comment when no line can be written. `readBack` then
 // parses the whole draft once, through the same @cucumber/gherkin entry
@@ -18,8 +18,8 @@ import { renderAttachmentBlock, type Attachment } from "./render-line.js";
 // parser that could catch it otherwise.
 //
 // This file does not decide which args key becomes a capture, a chain, or
-// the attachment. That depends on where the args came from: step records
-// for harvest, a model's draw for explore.
+// the attachment. That depends on where the args came from, which only
+// the caller knows: for explore, a model's draw.
 
 const STEP_INDENT = "    ";
 const ATTACHMENT_INDENT = "      ";

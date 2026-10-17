@@ -282,13 +282,18 @@ just until 0.1.
   record.json alone.
 
 - **A drafted scenario whose docstring holds the text `\"\"\"` reads back as written.**
-  `nuka explore` and `nuka harvest` write each docstring between `"""`
+  `nuka explore` writes each docstring between `"""`
   fences, and @cucumber/gherkin turns the first `\"\"\"` on any line
   inside those fences into `"""`. A docstring value that held that text
   read back different, and its line was written with a comment saying
   so. The draft now fences such a docstring with backticks. A
   value that holds both `\"\"\"` and `` \`\`\` `` fits neither fence, and
   its line still gets the read-back comment.
+- **The Playwright migration guide describes the peer range as it is.**
+  docs/migration-playwright-test.md said nukadoko names one exact
+  Playwright version, so a project on a later 1.x would read that it had
+  to downgrade. The peer is the range `^1.61.1`, and the guide now says
+  that npm refuses only a Playwright outside it.
 
 ## 0.16.1 — 2026-10-17
 

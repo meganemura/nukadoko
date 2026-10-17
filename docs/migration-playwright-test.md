@@ -152,12 +152,12 @@ smaller ask of a team whose Playwright suite is the asset: put
 `featuresDir` inside the directory their specs already live in.
 
 One thing to check first: nukadoko declares `playwright` as an optional
-peer dependency at an exact version (`npm view nukadoko peerDependencies`
+peer dependency with a caret range (`npm view nukadoko peerDependencies`
 shows which). It uses the project's own Playwright, so there is one copy,
 one browser download, and one `Page` type. npm refuses to install nukadoko
-(`ERESOLVE`) while the project's own `playwright` is at a different version.
-Pin the project's Playwright to the version nukadoko names, or upgrade
-nukadoko to one that names the version the project is on.
+(`ERESOLVE`) while the project's own `playwright` is outside that range.
+Upgrade the project's Playwright into the range, or upgrade nukadoko to
+one whose range includes the version the project is on.
 
 ```
 e2e/

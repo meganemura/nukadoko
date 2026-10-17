@@ -168,10 +168,10 @@ step を 1 つも定義しないモジュールは単に語彙ではないから
 それでも配置は誰がそれを所有するかを語っており、所有するのは既存のスイートです。
 
 最初に 1 つ確かめることがあります。
-nukadoko は `playwright` を、正確な版の optional な peer dependency として宣言しています(`npm view nukadoko peerDependencies` でどの版かが分かります)。
+nukadoko は `playwright` を、キャレットの範囲を持つ optional な peer dependency として宣言しています(`npm view nukadoko peerDependencies` でどの範囲かが分かります)。
 nukadoko はプロジェクト自身の Playwright を使うので、コピーも、ブラウザのダウンロードも、`Page` の型も 1 つです。
-プロジェクト自身の `playwright` が別の版のあいだは、npm は nukadoko のインストールを拒否します(`ERESOLVE`)。
-プロジェクトの Playwright を nukadoko が示す版に固定するか、プロジェクトの版を示す nukadoko に上げてください。
+プロジェクト自身の `playwright` がその範囲の外にあるあいだは、npm は nukadoko のインストールを拒否します(`ERESOLVE`)。
+プロジェクトの Playwright をその範囲まで上げるか、範囲がプロジェクトの版を含む nukadoko に上げてください。
 
 ## 戻り道
 

@@ -1,13 +1,12 @@
 import { parseCaptureToken, type Capture } from "../binding/capture.js";
 
 // Responsibility: turn one step's pattern plus a `used`/`from`-independent
-// value bag into the literal Gherkin text `nuka harvest` and `nuka explore`
-// write for a line, and the table/docstring block that follows it when one
-// is needed
-// (docs/spec.md "Harvesting"). This module only renders text — it never
-// judges whether the result is right, that is what the round trip in
-// src/draft/scenario.ts is for (docs/spec.md: "Rather than pick
-// quietly, harvest reads every line it wrote back").
+// value bag into the literal Gherkin text `nuka explore` writes for a line,
+// and the table/docstring block that follows it when one is needed
+// (docs/spec.md "Exploring a model or a relation"). This module only
+// renders text — it never judges whether the result is right, that is
+// what the round trip in src/draft/scenario.ts is for: every line is read
+// back the way `nuka run` reads it.
 //
 // `renderPatternLine` walks the pattern text itself rather than reusing
 // src/binding/pattern.ts's `stripCaptureNames`: that function strips a
@@ -37,8 +36,8 @@ export interface RenderLineError {
  * for (`{string}` matches a quoted string); every other type — `int`,
  * `float`, a compat `word`, the anonymous type, or a custom parameter type
  * — is written bare via `String(value)`. Getting a custom type's own
- * textual form wrong is not this function's problem to solve: docs/spec.md
- * "Harvesting" puts that judgment on the round trip in scenario.ts,
+ * textual form wrong is not this function's problem to solve: the
+ * judgment belongs to the round trip in scenario.ts,
  * which reads every line back and names the ones that do not return the
  * args they came from. A per-type reverse table here would be a second
  * answer to a question that already has one.
@@ -57,7 +56,7 @@ function formatCaptureValue(type: string, value: unknown): string {
  * `\(`/`\)`/`\/` mean a literal character, not cucumber-expressions
  * syntax). Optional groups (`item(s)`) and alternation (`is/are`) are left
  * untouched in the output exactly as written — reversing either has no
- * single answer (docs/spec.md "Harvesting"), so this function never tries;
+ * single answer, so this function never tries;
  * the round trip names a line that this choice broke.
  */
 export function renderPatternLine(pattern: string, args: PrimitiveArgs): RenderedLine | RenderLineError {

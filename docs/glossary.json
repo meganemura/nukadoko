@@ -28,12 +28,12 @@
     {
       "en": ["harvest", "harvesting"],
       "ja": "収穫する / 収穫",
-      "note": "tending → 手入れ と対の比喩。ぬか床は手入れをして、そこから収穫する。見出しは `Harvesting(収穫)` と書く(`Tending(手入れ)` と同じ形)。コマンド名 nuka harvest と、そのコマンドが計算するものを技術的な主語として指すときは英語のまま"
+      "note": "tending → 手入れ と対の比喩。ぬか床は手入れをして、そこから収穫する。nuka harvest は削除済みで、残るのは spec の M10 のような履歴の記述だけ。そこではコマンド名とマイルストーン名 harvesting を英語のまま書く"
     },
     {
       "en": ["draft"],
       "ja": "下書き",
-      "note": "`nuka harvest` が出す未完成の feature。既に地の文で「AI が下書きした型付き step」として使われていた語を流用した。同じ doc に「起草した」もあるが、あちらは gate のより形式的な意味なので使い分ける"
+      "note": "`nuka explore` が出す未完成の scenario。既に地の文で「AI が下書きした型付き step」として使われていた語を流用した。同じ doc に「起草した」もあるが、あちらは gate のより形式的な意味なので使い分ける"
     },
     { "en": ["provenance"], "ja": "由来", "context": "どの実行がその値を供給したか" },
     {
@@ -73,7 +73,7 @@
     },
     { "en": ["verdict"], "ja": "断定", "context": "事実の報告と対にして使う。judgement の意味の 判定 とは別語" },
     { "en": ["stale"], "ja": "古びた / 古びている" },
-    { "en": ["round trip"], "ja": "往復", "context": "harvest が出した行を読み戻して同じ args に戻るか確かめること" },
+    { "en": ["round trip"], "ja": "往復", "context": "nuka explore が書いた行を読み戻して同じ step と args に戻るか確かめること" },
     { "en": ["placeholder"], "ja": "プレースホルダー" },
     {
       "en": ["composite", "composite step"],
