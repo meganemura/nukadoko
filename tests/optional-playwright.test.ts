@@ -228,7 +228,7 @@ describe("a project without playwright installed", () => {
     expect(run.stderr).toContain(`ctx.request() in "When the URL "http://127.0.0.1:9/" is fetched" needs "playwright"`);
   }, 60_000);
 
-  it("check names step files that import playwright themselves once, with one install line", async () => {
+  it("check, steps, do, and run --no-check name step files that import playwright themselves with one install line", async () => {
     const steps = path.join(projectDir, "features", "steps");
     const importing = (name: string) =>
       [
@@ -267,6 +267,26 @@ describe("a project without playwright installed", () => {
         { code: "playwright-missing", message, file: "features/steps/expect-a.ts", do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}` },
         { code: "playwright-missing", message, file: "features/steps/expect-b.ts", do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}` },
       ]);
+
+      const install = `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`;
+      const steps = await nuka(["steps"]);
+      expect(steps.code).toBe(1);
+      expect(steps.stderr).toBe(
+        "2 step files could not be imported:\n" +
+          `  features/steps/expect-a.ts: ${message}\n` +
+          `  features/steps/expect-b.ts: ${message}\n`,
+      );
+      const stepsJson = await nuka(["steps", "--json"]);
+      expect((JSON.parse(stepsJson.stdout) as { import_failures: unknown }).import_failures).toEqual([
+        { file: "features/steps/expect-a.ts", message },
+        { file: "features/steps/expect-b.ts", message },
+      ]);
+      const done = await nuka(["do", "node prints {word:string}", "--args", '{"word":"hi"}']);
+      expect(done.code).toBe(2);
+      expect(done.stderr).toBe(`features/steps/expect-a.ts: ${message}\ndo: ${install}\n`);
+      const run = await nuka(["run", "--no-check", "features/cli.feature"]);
+      expect(run.code).toBe(2);
+      expect(run.stderr).toBe(`features/steps/expect-a.ts: ${message}\ndo: ${install}\n`);
     } finally {
       await rm(path.join(steps, "expect-a.ts"), { force: true });
       await rm(path.join(steps, "expect-b.ts"), { force: true });

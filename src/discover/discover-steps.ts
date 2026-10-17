@@ -21,8 +21,10 @@ import {
   DuplicateCompatStepError,
   DuplicateStepError,
   DuplicateWorldDefinitionError,
+  StepFileImportError,
 } from "./errors.js";
 import { describeImportFailure } from "../config/import-failure.js";
+import { playwrightPackageMissing } from "../context/load-playwright.js";
 
 // Responsibility: walk `featuresDir`, import every `.ts`/`.mts`/`.js`/`.mjs`
 // file found -- skipping `node_modules` at any depth, any dot-directory
@@ -373,8 +375,12 @@ export async function discoverSteps(
         // part of the message, and that sentence has to travel with it:
         // those commands never see `importFailures`. The sentence is empty
         // unless package.json says "type": "commonjs" and the file is `.ts`.
-        const { message, line } = describeImportFailure(error, filePath, rootDir);
+        const { message, line, missingPackage } = describeImportFailure(error, filePath, rootDir);
         const relativePath = path.relative(rootDir, filePath) + (line === undefined ? "" : `:${line}`);
+        const playwright = playwrightPackageMissing(missingPackage);
+        if (playwright !== undefined) {
+          throw new StepFileImportError(`${relativePath}: ${playwright.message}`, playwright.do, error);
+        }
         const explanation = cjsTsMismatchExplanation(refusesEsmTs(rootDir), filePath);
         throw new Error(`${relativePath}: ${message}${explanation}`, { cause: error });
       }
@@ -390,12 +396,15 @@ export async function discoverSteps(
       compatRegistry.drainCompatSteps();
       compatRegistry.drainCompatParameterTypes();
       defineWorldModule.drainWorldSchemaRegistrations();
+      const detail = describeImportFailure(error, filePath, rootDir);
       importFailures.push({
         filePath: path.relative(rootDir, filePath),
         // Not re-classified into a nukadoko code: Node's own message
         // already names the missing export/subpath/package, and
-        // describeImportFailure only adds to it.
-        ...describeImportFailure(error, filePath, rootDir),
+        // describeImportFailure only adds to it. A missing Playwright
+        // package is the exception, for the reason on playwrightPackageMissing.
+        ...detail,
+        message: playwrightPackageMissing(detail.missingPackage)?.message ?? detail.message,
       });
       continue;
     }

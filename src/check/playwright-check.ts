@@ -1,4 +1,4 @@
-import { PLAYWRIGHT_VERSION, PlaywrightMissingError } from "../context/load-playwright.js";
+import { PlaywrightMissingError, playwrightPackageMissing } from "../context/load-playwright.js";
 import { closeFixtureNames, type FixtureGraph } from "../fixture/graph.js";
 import { BROWSER_FIXTURE_NAMES } from "../step/context.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
@@ -109,21 +109,18 @@ export function findPlaywrightMissing(
     if (installed) return [];
     reported.add(bound.stepName);
     const calls = [...new Set(builtins.map((name) => PLAYWRIGHT_BUILTINS.get(name)!))].join(" and ");
+    const missing = new PlaywrightMissingError(`${calls} in "${bound.title}"`);
     issues.push({
       code: "playwright-missing",
-      message: new PlaywrightMissingError(`${calls} in "${bound.title}"`).message,
+      message: missing.message,
       file: bound.file,
       ...(bound.line !== undefined ? { line: bound.line } : {}),
       step: bound.stepName,
-      do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+      do: missing.do,
     });
   }
   return issues;
 }
-
-/** The packages a step file may import Playwright through. Each publishes
- * the same version numbers, so the install line names the tested one. */
-const PLAYWRIGHT_PACKAGES: ReadonlySet<string> = new Set(["playwright", "playwright-core", "@playwright/test"]);
 
 /** The `playwright-missing` finding for a step file that did not import
  * because it imports a Playwright package the project has not installed,
@@ -133,14 +130,13 @@ export function playwrightImportMissing(failure: {
   readonly line?: number;
   readonly missingPackage?: string;
 }): CheckIssue | undefined {
-  const name = failure.missingPackage;
-  if (name === undefined || !PLAYWRIGHT_PACKAGES.has(name)) return undefined;
-  const install = `npm install -D -E ${name}@${PLAYWRIGHT_VERSION}`;
+  const missing = playwrightPackageMissing(failure.missingPackage);
+  if (missing === undefined) return undefined;
   return {
     code: "playwright-missing",
-    message: `the step file imports "${name}", and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`,
+    message: missing.message,
     file: failure.filePath,
     ...(failure.line !== undefined ? { line: failure.line } : {}),
-    do: install,
+    do: missing.do,
   };
 }

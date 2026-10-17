@@ -683,6 +683,8 @@ step ファイルに定義されていても、check する行のどれも束縛
 `playwright`、`playwright-core`、`@playwright/test` を自分で import する step ファイルは、そのパッケージが無いと import そのものに失敗します。
 `nuka check` はそのファイルも `step-file-import-failed` ではなく `playwright-missing` として報告します。
 インストール行はそのファイルが import するパッケージのもので、メッセージはどのファイルでも同じなので、テキスト出力ではそれらを 1 つのグループと 1 つのインストール行にまとめて出します。
+check を実行せずに step ファイルを import するコマンド(`nuka run --no-check`、`nuka do`、`nuka steps`、`nuka describe`)も、そのファイルを同じメッセージで報告します。
+`nuka run --no-check` と `nuka do` は、インストール行を `do:` 行に出します。
 型宣言も同じ規則に従います。
 この 3 つの型は、`playwright` がインストールされていれば Playwright 自身の型で、無ければ `any` です。
 そのため、プロジェクト自身の `tsc` は、`skipLibCheck: false` でもそれ無しで通ります。

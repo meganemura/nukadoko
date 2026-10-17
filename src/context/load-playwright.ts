@@ -40,6 +40,28 @@ export class PlaywrightMissingError extends Error {
   }
 }
 
+/** The packages a step file may import Playwright through. Each publishes
+ * the same version numbers, so the install line names the tested one. */
+const PLAYWRIGHT_PACKAGES: ReadonlySet<string> = new Set([SPECIFIER, "playwright-core", "@playwright/test"]);
+
+/**
+ * The text and the next command for a step file that did not import because
+ * it imports `missingPackage` itself and the project has not installed it,
+ * or `undefined` when that package is not a Playwright one. Every command
+ * that imports step files reports this case through here: Node's own
+ * message ends in a "Did you mean" hint that points at the wrong fix.
+ */
+export function playwrightPackageMissing(
+  missingPackage: string | undefined,
+): { readonly message: string; readonly do: string } | undefined {
+  if (missingPackage === undefined || !PLAYWRIGHT_PACKAGES.has(missingPackage)) return undefined;
+  const install = `npm install -D -E ${missingPackage}@${PLAYWRIGHT_VERSION}`;
+  return {
+    message: `the step file imports "${missingPackage}", and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`,
+    do: install,
+  };
+}
+
 /**
  * True only when `error` is Node's own `ERR_MODULE_NOT_FOUND` for the
  * `playwright` package itself. Checked this narrowly so that a missing

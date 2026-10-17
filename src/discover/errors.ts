@@ -60,3 +60,16 @@ export class DuplicateWorldDefinitionError extends Error {
     this.duplicateFilePath = duplicateFilePath;
   }
 }
+
+/** A step file that did not import, carrying the next command a CLI
+ * refusal names (src/cli/refusal.ts reads `do` from any error) when the
+ * cause has one fix that is known for certain. */
+export class StepFileImportError extends Error {
+  readonly do: string;
+
+  constructor(message: string, next: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "StepFileImportError";
+    this.do = next;
+  }
+}

@@ -56,6 +56,14 @@ just until 0.1.
   `rewriteRelativeImportExtensions` nor `allowImportingTsExtensions`. The
   note now names the file and the reason the chain stops there, so a broken
   `extends` is not mistaken for a missing option.
+- **`nuka run --no-check`, `nuka do`, `nuka steps`, and `nuka describe` name a missing Playwright package the way `nuka check` does.**
+  A step file with `import { expect } from "playwright/test"` in a
+  project without `playwright` was `playwright-missing` in `nuka check`,
+  but the commands that import step files without the check still
+  printed Node's own error, whose "Did you mean to import
+  playwright/test.js?" hint points at the wrong fix. They now print the
+  same message as the finding, and `nuka run --no-check` and `nuka do`
+  name the install line as their `do:` line. Exit codes are unchanged.
 
 ## 0.17.0 — 2026-10-17
 

@@ -882,6 +882,10 @@ missing. `nuka check` reports that file as `playwright-missing` too, in
 place of `step-file-import-failed`, with the install line for the package
 it imports and one message for every such file, so the text output prints
 them as one group with one install line.
+The commands that import step files without running the check
+(`nuka run --no-check`, `nuka do`, `nuka steps`, and `nuka describe`)
+report such a file with the same message, and `nuka run --no-check` and
+`nuka do` name the install line as their `do:` line.
 The type declarations follow the same rule: the three are typed as
 Playwright's own types when `playwright` is installed and as `any` when it
 is not, so a project's own `tsc` passes without it, `skipLibCheck: false`
