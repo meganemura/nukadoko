@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
-import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -95,6 +96,25 @@ export async function createEmptyTempDir(): Promise<string> {
 const nukadokoShimDir = path.join(tempFixturesRoot, "node_modules", "nukadoko");
 
 /**
+ * Every test file calls `ensureNukadokoShim` from its own Vitest worker,
+ * while other workers import the shim: each config load and discovery run
+ * is a fresh module graph (src/config/ts-loader.ts), so it reads the file
+ * from disk again. `writeFile` truncates before it writes, and a reader in
+ * that window gets an empty module, so `import { defineConfig } from
+ * "nukadoko"` fails in whichever test was loading at that moment. Unchanged
+ * content is left alone, and new content lands by rename, which replaces
+ * the file in one step.
+ */
+async function writeShimFile(name: string, text: string): Promise<void> {
+  const target = path.join(nukadokoShimDir, name);
+  const current = await readFile(target, "utf8").catch(() => null);
+  if (current === text) return;
+  const staging = `${target}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(staging, text);
+  await rename(staging, target);
+}
+
+/**
  * Makes the bare specifier `"nukadoko"` resolve, for any file created under
  * `tempFixturesRoot`, to this repo's own `src/index.ts` — Node's module
  * resolution walks up *every* ancestor directory's `node_modules`, so one
@@ -114,8 +134,8 @@ const nukadokoShimDir = path.join(tempFixturesRoot, "node_modules", "nukadoko");
  */
 export async function ensureNukadokoShim(): Promise<void> {
   await mkdir(nukadokoShimDir, { recursive: true });
-  await writeFile(
-    path.join(nukadokoShimDir, "package.json"),
+  await writeShimFile(
+    "package.json",
     `${JSON.stringify(
       {
         name: "nukadoko",
@@ -133,8 +153,8 @@ export async function ensureNukadokoShim(): Promise<void> {
   // A `.js` file, because the loader maps `.js` to `.ts` only for a path
   // specifier and the package entry is reached by name; the `.d.ts` beside
   // it gives tsc the same types through `src/`.
-  await writeFile(path.join(nukadokoShimDir, "index.js"), `export * from "${specifier}";\n`);
-  await writeFile(path.join(nukadokoShimDir, "index.d.ts"), `export * from "${specifier}";\n`);
+  await writeShimFile("index.js", `export * from "${specifier}";\n`);
+  await writeShimFile("index.d.ts", `export * from "${specifier}";\n`);
 
   // "./compat" subpath (extending this
   // mechanism for it is explicitly permitted) — same re-export trick as the
@@ -146,8 +166,8 @@ export async function ensureNukadokoShim(): Promise<void> {
   const compatTarget = path.join(repoRoot, "src", "compat", "index.js");
   const compatRelative = path.relative(nukadokoShimDir, compatTarget).split(path.sep).join("/");
   const compatSpecifier = compatRelative.startsWith(".") ? compatRelative : `./${compatRelative}`;
-  await writeFile(path.join(nukadokoShimDir, "compat.js"), `export * from "${compatSpecifier}";\n`);
-  await writeFile(path.join(nukadokoShimDir, "compat.d.ts"), `export * from "${compatSpecifier}";\n`);
+  await writeShimFile("compat.js", `export * from "${compatSpecifier}";\n`);
+  await writeShimFile("compat.d.ts", `export * from "${compatSpecifier}";\n`);
 }
 
 const execFileAsync = promisify(execFile);
