@@ -115,6 +115,19 @@ just until 0.1.
   `nukadoko/matching`, `nukadoko/mcp`) exports as a type only; a test
   keeps that list equal to the built declaration files. `nuka run` and
   `nuka do` carry the same sentence in their import error.
+- **`nuka tend` reports `fixture-replaces-builtin`, and docs/upgrading.md lists what a 0.14.x project may drop.**
+  Projects wrote their own `scratch` fixture, a `spawnSync` wrapper, and
+  `returns: z.object({})` before 0.15.0 built each of them in, and an
+  upgrade leaves all three working, so `nuka check` and `nuka tend` said
+  nothing. `nuka tend` now names a `config.fixtures` entry called
+  `scratch`, since it replaces the builtin, with what the builtin gives.
+  docs/upgrading.md's 0.14.1 to 0.15.0 section gains an "Optional after
+  upgrading" list: the `scratch` builtin, `runCommand` (its callers need
+  `await`, and its `exitCode` is `number | null`), and dropping an empty
+  `returns` (an early `return {}` inside an `if` becomes `return;`, or the
+  step falls through). llms.txt names all three under the step-file
+  bullet.
+
 - **`nuka tend` reports `package-type-missing`.** A note for a
   `package.json` with no `"type"` that is the nearest one above the config
   or a `.ts` or `.js` step file, the case where Node prints

@@ -81,6 +81,7 @@ ends, pass or fail, and the step record lists each path under
 `evidence.scratch`. A project that already declares its own `scratch`
 fixture keeps it: its fixture and its `StepFixtures` declaration both win
 over the builtin, so delete them only when the builtin's shape is enough.
+`nuka tend` names such a fixture as `fixture-replaces-builtin`.
 
 ## Waiting for an external effect
 

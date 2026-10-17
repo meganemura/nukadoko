@@ -63,8 +63,11 @@ describe("nuka tend --codes", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const lines = stdout.text().trimEnd().split("\n");
-    expect(lines).toHaveLength(13);
+    expect(lines).toHaveLength(14);
     expect(lines[0]).toBe(
+      "fixture-replaces-builtin\tdefault\tA config.fixtures definition has the name of a builtin fixture that a project may replace (scratch), so it replaces the builtin.\tDelete the fixture and its StepFixtures declaration if the builtin covers what it does; keep both if the project needs its own shape.",
+    );
+    expect(lines[1]).toBe(
       "fixture-touches-app\tdefault\tA config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.\tIf a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary.",
     );
     expect(lines.find((line) => line.startsWith("schema-field-undescribed\t"))).toBe(
@@ -83,7 +86,7 @@ describe("nuka tend --codes", () => {
     const document = JSON.parse(stdout.text()) as { schema_version: number; codes: Array<{ code: string }> };
     expect(Object.keys(document)).toEqual(["schema_version", "codes"]);
     const entries = document.codes;
-    expect(entries).toHaveLength(13);
+    expect(entries).toHaveLength(14);
     expect(entries.find((entry) => entry.code === "pattern-unbound")).toEqual({
       code: "pattern-unbound",
       description: "A typed step has a pattern, and no feature line resolves to that step alone.",

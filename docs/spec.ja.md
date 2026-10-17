@@ -852,7 +852,7 @@ scenario record はすでに閉じている場合があり、stderr がその失
 所見はその fixture を名指し、fixture についての文言で述べます。
 既定値の変換後のソースは引用しません。
 
-`tend` は 2 つの事実を追加で報告します。
+`tend` は 3 つの事実を追加で報告します。
 `fixture-unused` は、直接にも別の fixture 経由でも、どの typed step も要求しない `config.fixtures` エントリを特定します。
 そのエントリには `nuka do` から引き続き到達できます。
 `fixture-touches-app` は、直接または別の fixture 経由で `page` か `context` に到達する fixture を特定します。
@@ -861,7 +861,12 @@ scenario record はすでに閉じている場合があり、stderr がその失
 これは、step の Given が説明しない作業と同じ効果を持ちます。
 この報告は、fixture からのブラウザアクセスを禁止しません。
 たとえば、fixture は正当な目的で `storageState` を生成できます。
-`--json` では、この 2 つの所見は fixture の名前を `fixture` フィールドに入れ、`step` は設定しません。
+`fixture-replaces-builtin` は、置き換え可能な builtin(`scratch`)の名前を持つ `config.fixtures` エントリを特定します。
+そのエントリは builtin を置き換えます。
+`nuka check` も run もそうしたエントリを受け付けるので、builtin ができる前に自分の `scratch` を書いたプロジェクトに、builtin があると伝えるものは他にありません。
+note は builtin が何を与えるかを名指します。
+それでプロジェクト自身の形が足りるかは、読み手が判断します。
+`--json` では、この 3 つの所見は fixture の名前を `fixture` フィールドに入れ、`step` は設定しません。
 同じ名前の fixture と step を区別するためです。
 `tend` は fixture を特定するだけであり、各 fixture がそこに属するかは読み手が判断します。
 

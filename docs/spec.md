@@ -1075,7 +1075,7 @@ or that names `call`.
 The finding names that fixture and uses fixture wording. It does not quote
 the transformed source of a default value.
 
-`tend` adds two factual reports.
+`tend` adds three factual reports.
 `fixture-unused` identifies a `config.fixtures` entry that no typed step requires,
 directly or through another fixture.
 The entry can still be reached through `nuka do`.
@@ -1086,7 +1086,13 @@ For example, it can log in a user before any step requests a login.
 This has the same effect as work that a step's Given does not describe.
 The report does not prohibit browser access from a fixture.
 For example, a fixture can legitimately generate `storageState`.
-In `--json`, both findings name the fixture in a `fixture` field and leave `step` unset,
+`fixture-replaces-builtin` identifies a `config.fixtures` entry named
+after a replaceable builtin (`scratch`), which replaces that builtin.
+`nuka check` and the run accept such an entry, so nothing else tells a
+project that wrote its own `scratch` before the builtin existed that the
+builtin is there. The note names what the builtin gives; whether that
+covers the project's own shape is the reader's call.
+In `--json`, all three findings name the fixture in a `fixture` field and leave `step` unset,
 so a fixture and a step of the same name stay apart.
 `tend` only identifies the fixtures, so a reader decides whether each one belongs.
 

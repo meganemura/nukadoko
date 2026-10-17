@@ -13,6 +13,9 @@ Declaration is separate from observation. A step declares `mutates`, its `args` 
 - Run `nuka` from the directory that holds the config. Elsewhere every command says on stderr that no config was found, names one in a parent directory if there is one, and runs on the defaults; `nuka scaffold` refuses there.
 - Commit `features/` and the config. `.nukadoko/` is the state directory (records, sessions, cache) and stays out of git. Never edit a record by hand, and never delete one to get a cleaner run.
 - A step is a file under `features/steps/` that starts with `import { defineStep, z } from "nukadoko"`. An existing cucumber-js suite comes in through `nukadoko/compat`.
+  - `returns` can be left out, and `run` then returns nothing: a step whose `returns` is `z.object({})` may drop it and its final `return {}`, but an early `return {}` inside an `if` becomes `return;`, or the step falls through.
+  - `scratch` is a builtin fixture: `scratch.dir(prefix)` and `scratch.copy(source)` give temporary directories removed when the scenario ends. A `scratch` entry in `config.fixtures` replaces it, and `nuka tend` reports that as `fixture-replaces-builtin`.
+  - `await runCommand(command, args, { cwd, env, input, timeout })`, imported from `nukadoko`, runs a program and records it in the step record's `observed.processes`. It returns a Promise, and its `exitCode` is `number | null` (`null` after a signal).
 - Skills, for any Agent Skills host: `gh skill install meganemura/nukadoko --all`. The copy that matches the installed version is in `node_modules/nukadoko/skills/`, and `nuka skill path` prints that directory. This file is `node_modules/nukadoko/llms.txt`.
 
 ## The loop
@@ -124,6 +127,7 @@ Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` pri
 <!-- generated: nuka tend --codes --json -->
 | Code | Reported | Meaning | Do |
 | --- | --- | --- | --- |
+| `fixture-replaces-builtin` | default | A config.fixtures definition has the name of a builtin fixture that a project may replace (scratch), so it replaces the builtin. | Delete the fixture and its StepFixtures declaration if the builtin covers what it does; keep both if the project needs its own shape. |
 | `fixture-touches-app` | default | A config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names. | If a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary. |
 | `fixture-unused` | default | No typed step requires a config.fixtures definition, directly or through another fixture. | Remove the fixture from config.fixtures, or keep it for nuka do. |
 | `from-unused` | default | A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture. | Remove the from entry for the key, or keep it for nuka do --use. |

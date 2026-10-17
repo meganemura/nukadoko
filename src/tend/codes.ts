@@ -19,6 +19,12 @@ export interface TendCodeInfo {
 }
 
 const TEND_CODE_INFO = {
+  "fixture-replaces-builtin": {
+    description:
+      "A config.fixtures definition has the name of a builtin fixture that a project may replace (scratch), so it replaces the builtin.",
+    reportedByDefault: true,
+    do: "Delete the fixture and its StepFixtures declaration if the builtin covers what it does; keep both if the project needs its own shape.",
+  },
   "fixture-touches-app": {
     description:
       "A config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.",

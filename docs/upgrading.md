@@ -481,7 +481,8 @@ has to look at those values before the next run.
   declares `returns` still has to return the value it validates, and a
   one-parameter `run({ page })` still names a fixture. A step whose
   `returns` is `z.object({})` may drop that line and its `return {}`, and
-  does not have to.
+  does not have to. An early `return {}` inside an `if` becomes `return;`,
+  or the step falls through to the code after it.
 - **The Allure and messages emitters are off until their config key is
   present.** `nuka run` used to write `.nukadoko/export/allure-results/`
   and `.nukadoko/export/messages.ndjson` with no configuration. A project
@@ -499,6 +500,37 @@ has to look at those values before the next run.
   `.gitignore` unless `--allure` or `--env` asks for them, and it adds a
   `test:scenarios` script to `package.json`. This changes only what a new
   `init` writes; a project already initialized needs nothing.
+
+**Optional after upgrading from 0.14.x or earlier.** Three things a
+project often wrote by hand are built in since 0.15.0. `nuka check` and
+`nuka run` accept the hand-written copies, so nothing fails until they go.
+From the release after 0.16.1 on, `nuka tend` reports the first one as
+`fixture-replaces-builtin`.
+
+- **`scratch` is a builtin fixture.** A `scratch` entry in
+  `config.fixtures` and its `StepFixtures` declaration can go when
+  `scratch.dir(prefix)` and `scratch.copy(source)` cover what they did.
+  Each returns a new temporary directory, which is removed when the
+  scenario ends, pass or fail, and is listed in the step record's
+  `evidence.scratch`. While the project's own entry exists, it replaces
+  the builtin.
+- **`runCommand` replaces a `spawnSync` wrapper.** `import { runCommand }
+  from "nukadoko"`, then `await runCommand(command, args, { cwd, env,
+  input, timeout })`. Each call inside a step adds an entry to the step
+  record's `observed.processes`. Two differences from `spawnSync` cost a
+  run if they are missed. It returns a Promise, so each caller gains
+  `await` and becomes `async`: a caller without `await` passes
+  `nuka check` and fails at run time with `returns validation failed`
+  (`tsc` reports it first). And `exitCode` is `number | null`, `null`
+  when a signal ended the process, so a step whose `returns` declares
+  `exitCode: z.number()` returns `exitCode ?? 1`, or declares
+  `z.number().nullable()`. A failed run prints the `used <step> exit
+  <code> <first stderr line>` line only when the step that ran the
+  program returns both `exitCode` and `stderr`.
+- **An empty `returns` can go.** A step whose `returns` is
+  `z.object({})` may drop that line and its final `return {}`. An early
+  `return {}` inside an `if` becomes `return;`: deleting it makes the step
+  fall through to the code after it, such as the next assertion.
 
 ## 0.12.0 to 0.13.0
 

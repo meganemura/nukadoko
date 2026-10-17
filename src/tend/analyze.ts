@@ -7,6 +7,7 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import { findDescriptionTodos } from "./description-todo.js";
+import { findFixturesReplacingBuiltins } from "./fixture-replaces-builtin.js";
 import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
@@ -24,6 +25,7 @@ import { tendCodeDo, type TendCode, type TendFinding, type TendIssue, type TendR
 
 // Findings about a config entry, which name the config file.
 const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
+  "fixture-replaces-builtin",
   "fixture-touches-app",
   "fixture-unused",
   "parameter-type-unused",
@@ -139,6 +141,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findUnknownSecretsKeys(rootDir, config),
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
+    ...findFixturesReplacingBuiltins(Object.keys(config.fixtures)),
     ...findPostNavigationReads(rootDir, config.stateDir),
     ...findRepeatedScenarioPrefixes(rootDir, config.stateDir, features),
     ...findTypelessPackageJsons(rootDir, [...loadedConfigFile(rootDir), ...walkedFiles]),

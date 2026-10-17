@@ -423,6 +423,8 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
   `returns` を宣言した step は、今までどおりその schema が検証する値を返す必要があります。
   引数 1 つの `run({ page })` は、今までどおり fixture を名指します。
   `returns` が `z.object({})` の step は、その行と `return {}` を消せますが、消す必要はありません。
+  `if` の中の早期の `return {}` は `return;` にします。
+  消すと、step はその後のコードへ進みます。
 - **Allure と messages の emitter は、config にそのキーがあるまで無効です。**
   以前の `nuka run` は、設定なしで `.nukadoko/export/allure-results/` と `.nukadoko/export/messages.ndjson` を書いていました。
   Allure の result を読むプロジェクトは、`nukadoko.config.ts` に `allure: {}` を追加します。
@@ -435,6 +437,30 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
   `--allure` や `--env` で求めない限り、`allurerc.mjs`、result のディレクトリ、`.gitignore` の `.env` の行を書かなくなりました。
   また、`package.json` に `test:scenarios` script を追加します。
   変わるのは新しく `init` したときに書かれるものだけで、すでに初期化したプロジェクトは何もする必要がありません。
+
+**0.14.x 以前から上げたあとの任意の作業。**
+プロジェクトが手で書くことの多かった 3 つのものが、0.15.0 から組み込まれています。
+`nuka check` と `nuka run` は手書きのものを受け付けるので、消すまで何も失敗しません。
+0.16.1 の次のリリースからは、`nuka tend` が 1 つ目を `fixture-replaces-builtin` として報告します。
+
+- **`scratch` は builtin の fixture です。**
+  `scratch.dir(prefix)` と `scratch.copy(source)` でやっていたことが足りるなら、`config.fixtures` の `scratch` エントリとその `StepFixtures` の宣言は消せます。
+  どちらも新しい一時ディレクトリを返します。
+  そのディレクトリは scenario が終わると成否にかかわらず消え、step record の `evidence.scratch` に載ります。
+  プロジェクト自身のエントリがある間は、それが builtin を置き換えます。
+- **`runCommand` が `spawnSync` のラッパーを置き換えます。**
+  `import { runCommand } from "nukadoko"` として、`await runCommand(command, args, { cwd, env, input, timeout })` と呼びます。
+  step の中の呼び出しは、それぞれ step record の `observed.processes` にエントリを足します。
+  `spawnSync` との違いが 2 つあり、見落とすと run が失敗します。
+  1 つ目に、Promise を返すので、呼び出し側はそれぞれ `await` を足し、`async` になります。
+  `await` のない呼び出し側は `nuka check` を通り、実行時に `returns validation failed` で失敗します(`tsc` が先に報告します)。
+  2 つ目に、`exitCode` は `number | null` で、signal がプロセスを終わらせたときは `null` です。
+  そのため `returns` に `exitCode: z.number()` を宣言する step は、`exitCode ?? 1` を返すか、`z.number().nullable()` と宣言します。
+  失敗した run が `used <step> exit <code> <first stderr line>` の行を出すのは、プログラムを動かした step が `exitCode` と `stderr` の両方を返すときだけです。
+- **空の `returns` は消せます。**
+  `returns` が `z.object({})` の step は、その行と最後の `return {}` を消して構いません。
+  `if` の中の早期の `return {}` は `return;` にします。
+  消すと、step はその後のコード(たとえば次の assertion)へ進みます。
 
 ## 0.12.0 から 0.13.0 へ
 
