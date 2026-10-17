@@ -87,6 +87,8 @@ design (an export, a batch job) declares its own `timeout` in milliseconds
 on `defineStep`, which overrides `stepTimeout` for that step only. There is
 no value meaning "no limit". `nuka steps` and `nuka describe` show a
 declared `timeout`; a step that shows none runs under `stepTimeout`.
+Any other key on `defineStep` (a leftover `rationale`, a misspelling)
+does nothing, and `nuka check` warns `step-option-ignored` for it.
 
 ## Return more than what a later step cites
 

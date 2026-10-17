@@ -153,7 +153,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   nukadoko がテストしている版は 1.61.1 のままで、`playwright-missing` のインストール行もその版を示します。
 - **`defineStep` は `rationale` を受け取らなくなりました。**
   step ファイルから `rationale:` の行を消してください。
-  消すまでは、`tsc` がそれぞれを余分なプロパティとして報告します。
+  消すまでは、`nuka check` がそれぞれについて step ファイルを挙げて `step-option-ignored` を 1 回ずつ警告します。
+  `tsconfig.json` が step ファイルを含むなら、`tsc` もそれぞれを余分なプロパティとして報告します。
   `nuka` は実行時にその値を無視するので、run は変わりません。
   残す価値のある理由は、`defineStep` の上のコメントへ移せます。
   `nuka describe` は `rationale` のキーを出力せず、`nuka tend --json` には `summary.rationale` がありません。

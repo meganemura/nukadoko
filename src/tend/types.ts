@@ -114,7 +114,7 @@ export const TEND_CODES: ReadonlySet<string> = new Set(listTendCodes().map((entr
 export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map([
   [
     "step-rationale-missing",
-    "was removed with defineStep's `rationale` option. Delete the `rationale:` lines from your step files (docs/upgrading.md)",
+    "was removed with defineStep's `rationale` option. Delete the `rationale:` lines from your step files; `nuka check` names each one as step-option-ignored (docs/upgrading.md)",
   ],
   [
     "additional-feature-dir-missing",

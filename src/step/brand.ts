@@ -15,3 +15,8 @@
 // this: a plain Symbol failed the cross-realm equality check, Symbol.for did
 // not.
 export const STEP_BRAND: unique symbol = Symbol.for("nukadoko.step");
+
+/** Where a Step keeps what `defineStep` saw in its definition beyond the
+ * Step's own fields. A symbol key, so `nuka describe` and anything else that
+ * walks a Step's own keys never prints it; `Symbol.for` for the reason above. */
+export const STEP_DECLARATION: unique symbol = Symbol.for("nukadoko.step.declaration");

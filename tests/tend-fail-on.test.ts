@@ -70,7 +70,7 @@ describe("nuka tend --fail-on", () => {
     const expected: Record<string, string> = {
       "step-rationale-missing":
         '--fail-on: "step-rationale-missing" was removed with defineStep\'s `rationale` option. ' +
-        "Delete the `rationale:` lines from your step files (docs/upgrading.md).\n",
+        "Delete the `rationale:` lines from your step files; `nuka check` names each one as step-option-ignored (docs/upgrading.md).\n",
       "additional-feature-dir-missing":
         '--fail-on: "additional-feature-dir-missing" is reported only by `nuka check` now, as an error, ' +
         "so a failing `nuka check` is the gate (docs/upgrading.md).\n",

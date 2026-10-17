@@ -1042,6 +1042,12 @@ strings, and every `parts` entry must be a step. A `.js` step file is not
 type-checked. The throw happens while discovery imports the file, and
 `nuka check` reports it as `step-file-import-failed`.
 
+A key that is none of these options, such as `rationale`, which an earlier
+release read, is not refused, because it changes nothing at run time.
+`defineStep` keeps its name, and `nuka check` warns `step-option-ignored`
+with the step file. `tsc` reports the same key as an excess property, but
+only in a project whose `tsconfig.json` includes its step files.
+
 The default is not a guess about how long a step should take. It is the
 horizon this tool already had: the Allure emitter draws a running step for
 at most 120 heartbeat ticks of ten seconds (see "Allure emitter"), which is

@@ -184,8 +184,10 @@ This part does not change release to release.
   still tested against 1.61.1, and the `playwright-missing` install line
   still names that version.
 - **`defineStep` no longer takes `rationale`.** Delete the `rationale:`
-  lines from your step files. Until you do, `tsc` reports each one as an
-  excess property, and `nuka` ignores the value at run time, so runs do
+  lines from your step files. Until you do, `nuka check` warns
+  `step-option-ignored` once for each, naming the step file, and `tsc`
+  reports each one as an excess property where `tsconfig.json` includes
+  the step files. `nuka` ignores the value at run time, so runs do
   not change. A reason worth keeping can move into a comment above
   `defineStep`. `nuka describe` prints no `rationale` key, and `nuka
   tend --json` has no `summary.rationale`.

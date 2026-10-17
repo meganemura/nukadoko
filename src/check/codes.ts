@@ -252,6 +252,12 @@ const CHECK_CODES = {
     severity: "error",
     do: "Write the file as an ES module with a .ts, .mts, .js, or .mjs extension.",
   },
+  "step-option-ignored": {
+    description:
+      "A defineStep call passes a key that defineStep does not read, such as rationale, which was removed, so the key has no effect and its value is shown nowhere.",
+    severity: "warning",
+    do: "Delete the key from the defineStep call. Move rationale text into a comment above defineStep first.",
+  },
   "table-docstring-key-mismatch": {
     description:
       "A step's table or docstring is attached to a line, but zero, or more than one, of its args keys is left unconsumed by pattern captures (exactly one must be left for the attachment to fill), or the one key it fills is of a type the attachment can never satisfy (a table is string[][], a docstring is a string).",

@@ -20,6 +20,7 @@ import {
 import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../fixture/validate-fixtures.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
+import { ignoredStepOptions, STEP_OPTION_NAMES } from "../step/define-step.js";
 import { registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { validateStepParts } from "../step/validate-parts.js";
 import { hookDisplayTitle } from "../record/scenario-record.js";
@@ -75,6 +76,25 @@ function scenarioShapeWarning(finding: ScenarioShapeFinding): CheckIssue {
     ...(finding.columns[0] !== undefined
       ? { do: `Add a column to the name, such as: ${finding.name} <${finding.columns[0]}>` }
       : {}),
+  };
+}
+
+function ignoredOptionWarning(stepName: string, key: string, file: string): CheckIssue {
+  if (key === "rationale") {
+    return {
+      code: "step-option-ignored",
+      message: `Step "${stepName}" passes rationale, which defineStep no longer reads, so its text is shown nowhere`,
+      file,
+      step: stepName,
+      do: `Move the rationale text into a comment above defineStep in ${file}, then delete the rationale: line.`,
+    };
+  }
+  return {
+    code: "step-option-ignored",
+    message: `Step "${stepName}" passes ${key}, which is not a defineStep option, so it has no effect`,
+    file,
+    step: stepName,
+    do: `Delete ${key} from the defineStep call in ${file}, or rename it to an option defineStep reads: ${STEP_OPTION_NAMES.join(", ")}.`,
   };
 }
 
@@ -414,6 +434,18 @@ async function reportFor(
         file: path.relative(rootDir, entry.filePath),
         step: issue.step,
       });
+    }
+  }
+
+  // A warning, not an error: an ignored key changes nothing at run time.
+  // It is still a fact, not a guess, because defineStep saw the object.
+  for (const entry of vocabulary.values()) {
+    if (entry.kind !== "typed") {
+      continue;
+    }
+    const file = path.relative(rootDir, entry.filePath);
+    for (const key of ignoredStepOptions(entry.step)) {
+      warnings.push(ignoredOptionWarning(entry.name, key, file));
     }
   }
 

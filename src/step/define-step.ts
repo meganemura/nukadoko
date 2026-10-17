@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FixtureBag } from "./context.js";
-import { STEP_BRAND } from "./brand.js";
+import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
@@ -387,6 +387,45 @@ export interface Step<
     args: z.infer<TArgs>,
   ) => Promise<StepRunResult<TReturns>> | StepRunResult<TReturns>;
   readonly [STEP_BRAND]: true;
+  /** Optional because a Step built by hand, not by `defineStep`, has none. */
+  readonly [STEP_DECLARATION]?: StepDeclaration;
+}
+
+/** What `defineStep` saw in a definition that the Step's own fields do not
+ * show. `nuka check` reads it, because only `defineStep` receives the
+ * object a step file wrote. */
+export interface StepDeclaration {
+  /** Keys of the definition that `defineStep` does not read, in the order
+   * written. Excess-property checking is a `tsc` error only, and some
+   * projects never typecheck their step files, so without this a leftover
+   * or misspelled option would do nothing and nothing would say so. */
+  readonly ignoredOptions: readonly string[];
+}
+
+// A Record over the interface's own keys, so adding an option to
+// `StepDefinitionInput` without listing it here fails to compile.
+const STEP_OPTIONS: Record<keyof StepDefinitionInput, true> = {
+  pattern: true,
+  patterns: true,
+  description: true,
+  args: true,
+  returns: true,
+  mutates: true,
+  from: true,
+  timeout: true,
+  parts: true,
+  run: true,
+};
+
+/** The options `defineStep` reads, in the order its reference lists them. */
+export const STEP_OPTION_NAMES: readonly string[] = Object.keys(STEP_OPTIONS);
+
+function ignoredOptions(definition: object): string[] {
+  return Object.keys(definition).filter((key) => !Object.hasOwn(STEP_OPTIONS, key));
+}
+
+export function ignoredStepOptions(step: Step): readonly string[] {
+  return step[STEP_DECLARATION]?.ignoredOptions ?? [];
 }
 
 /**
@@ -522,6 +561,7 @@ export function defineStep<
     parts: definition.parts ?? [],
     run: definition.run,
     [STEP_BRAND]: true,
+    [STEP_DECLARATION]: { ignoredOptions: ignoredOptions(definition) },
   };
 }
 

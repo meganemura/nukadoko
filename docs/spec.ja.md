@@ -821,6 +821,11 @@ Node のタイマーは、その範囲の外にある遅延を 1ms に切り詰�
 `.js` の step ファイルは型チェックされません。
 例外は discovery がファイルを import するときに投げられ、`nuka check` はそれを `step-file-import-failed` として報告します。
 
+以前のリリースが読んでいた `rationale` のように、これらのどのオプションでもないキーは拒否されません。
+実行時には何も変えないからです。
+`defineStep` はそのキーの名前を残し、`nuka check` は step ファイルを添えて `step-option-ignored` を警告します。
+`tsc` も同じキーを余分なプロパティとして報告しますが、それは `tsconfig.json` が step ファイルを含むプロジェクトだけです。
+
 既定値は「step はこれくらいで終わるはずだ」という見積もりではありません。
 この道具が既に持っていた地平です。
 Allure emitter は走っている step を 10 秒の heartbeat 120 回ぶんまで描き(「Allure emitter」を参照)、そこが step を見続ける価値の切れる場所です。

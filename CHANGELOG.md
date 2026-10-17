@@ -57,6 +57,16 @@ just until 0.1.
 
 ### Added
 
+- **`nuka check` warns `step-option-ignored` for a `defineStep` key it does not read.**
+  A leftover `rationale:` from the release that removed it, or a
+  misspelled option such as `timeOut`, did nothing and was reported by
+  nothing but `tsc`, and only in a project whose `tsconfig.json` includes
+  its step files. `defineStep` now keeps the names of the keys it was
+  given and does not read, and `nuka check` warns once for each, naming
+  the step and its file. For `rationale` the `do:` line says to move the
+  text into a comment above `defineStep` and delete the line. A warning,
+  so `nuka check`'s exit code and runs do not change. `nuka tend
+  --fail-on step-rationale-missing` now points at the warning.
 - **`nuka scaffold` writes a CLI When step that reads a Given's directory with no hand edit.**
   `--from` given the same key for several steps (`--from a-csv-file-with.dir
   --from an-empty-directory.dir`) writes one `from` entry that lists each
