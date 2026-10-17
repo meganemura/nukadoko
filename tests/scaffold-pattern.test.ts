@@ -343,7 +343,10 @@ describe("nuka scaffold --pattern: any text", () => {
 
   // Each of the 40 cases runs up to three commands, and a failing case is
   // shrunk through many more, so the suite's one-test budget is too small.
-  // It gets the budget the property above has for the same commands.
+  // It gets the budget the property above has for the same commands. Hegel's
+  // TooSlow health check fails a property with few valid inputs after 30
+  // seconds, and a loaded machine had produced only 4 by then, so it is off
+  // here as it is above.
   it("refuses with no file, or writes a step that imports with the exact pattern and passes nuka check", () =>
     hegel.testAsync(
       async (tc) => {
@@ -367,7 +370,7 @@ describe("nuka scaffold --pattern: any text", () => {
           await rm(filePath, { force: true });
         }
       },
-      { testCases: 40 },
+      { testCases: 40, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },
     ), 300_000);
 });
 

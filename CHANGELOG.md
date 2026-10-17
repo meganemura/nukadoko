@@ -270,7 +270,9 @@ just until 0.1.
   deadlines: each waits for its event, fails at once if the child exits
   first, and leaves a hang to the test's timeout. The `nuka scaffold
   --pattern` text property gets the five-minute budget its sibling
-  property already had.
+  property already had, and, like it, turns off Hegel's TooSlow health
+  check, which a loaded machine failed with only 4 cases done in its 30
+  seconds.
 
 - **Discovery, the `.feature` walk, and the oath walk follow symbolic links.**
   A step file, a feature, or a directory linked into `featuresDir` (a
