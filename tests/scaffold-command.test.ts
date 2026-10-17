@@ -411,6 +411,145 @@ describe("nuka scaffold --command", () => {
   });
 });
 
+const WRITE_FILE = [
+  'import { defineStep, z } from "nukadoko";',
+  'import { writeFileSync } from "node:fs";',
+  'import { join } from "node:path";',
+  "",
+  "export default defineStep({",
+  '  description: "writes a file in a fresh scratch directory",',
+  '  pattern: "a file {name:string} holding {text:string}",',
+  "  args: z.object({ name: z.string(), text: z.string() }),",
+  '  returns: z.object({ dir: z.string().describe("where the file is") }),',
+  "  run({ scratch }, { name, text }) {",
+  "    const dir = scratch.dir();",
+  "    writeFileSync(join(dir, name), text);",
+  "    return { dir };",
+  "  },",
+  "});",
+  "",
+].join("\n");
+
+const EMPTY_DIR = [
+  'import { defineStep, z } from "nukadoko";',
+  "",
+  "export default defineStep({",
+  '  description: "a fresh, empty scratch directory",',
+  '  pattern: "an empty directory",',
+  "  args: z.object({}),",
+  '  returns: z.object({ dir: z.string().describe("the directory") }),',
+  "  run({ scratch }) {",
+  "    return { dir: scratch.dir() };",
+  "  },",
+  "});",
+  "",
+].join("\n");
+
+describe("nuka scaffold --command --cwd", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await initProject();
+    await writeFile(stepPath(rootDir, "write-file"), WRITE_FILE);
+    await writeFile(stepPath(rootDir, "empty-dir"), EMPTY_DIR);
+    await mkdir(path.join(rootDir, "src"));
+    await writeFile(
+      path.join(rootDir, "src", "show.mjs"),
+      'import { readFileSync } from "node:fs";\ntry { process.stdout.write(readFileSync(process.argv[2], "utf8")); } catch { process.exit(2); }\n',
+    );
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("runs the program in the directory either producer returned, with no hand edit to any scaffolded step", async () => {
+    // Absolute, because `resolve` reads a relative path from the directory
+    // nuka runs in, and this test runs nuka in-process from elsewhere.
+    const entry = path.join(rootDir, "src", "show.mjs");
+    const scaffolds = [
+      ["scaffold", "run-show", "--pattern", "I show {file:string}", "--command", entry, "--from", "write-file.dir", "--from", "empty-dir.dir", "--cwd", "dir"],
+      ["scaffold", "output-is", "--pattern", "the output is {text:string}", "--then", "--from", "run-show.stdout"],
+      ["scaffold", "exits-with", "--pattern", "it exits with {code:int}", "--then", "--from", "run-show.exitCode"],
+    ];
+    for (const argv of scaffolds) {
+      const result = await cli(rootDir, argv);
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(0);
+    }
+    expect(await readFile(stepPath(rootDir, "run-show"), "utf8")).toBe(
+      [
+        'import { defineStep, runCommand, z } from "nukadoko";',
+        'import { resolve } from "node:path";',
+        'import writeFile from "./write-file.ts";',
+        'import emptyDir from "./empty-dir.ts";',
+        "",
+        `const cli = resolve(${JSON.stringify(entry)});`,
+        "",
+        "export default defineStep({",
+        '  description: "Run the command under test in the directory dir names",',
+        '  pattern: "I show {file:string}",',
+        "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+        "  args: z.object({",
+        "    file: z.string(),",
+        "    dir: writeFile.returns.shape.dir,",
+        "  }),",
+        "  from: {",
+        '    dir: [[writeFile, "dir"], [emptyDir, "dir"]],',
+        "  },",
+        "  returns: z.object({",
+        "    exitCode: z.number().nullable(),",
+        "    stdout: z.string(),",
+        "    stderr: z.string(),",
+        "  }),",
+        "  async run({}, { file, dir }) {",
+        "    return await runCommand(process.execPath, [cli, file], { cwd: dir });",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(rootDir, "features", "show.feature"),
+      [
+        "Feature: show",
+        "  Scenario: a file a Given wrote",
+        '    Given a file "a.txt" holding "hi"',
+        '    When I show "a.txt"',
+        '    Then the output is "hi"',
+        "  Scenario: an empty directory",
+        "    Given an empty directory",
+        '    When I show "a.txt"',
+        "    Then it exits with 2",
+        "",
+      ].join("\n"),
+    );
+
+    const check = await cli(rootDir, ["check"]);
+    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    const run = await cli(rootDir, ["run", "features/show.feature"]);
+    expect(run.stderr).toContain("2 scenarios: 2 passed, 0 failed");
+    expect(run.exitCode).toBe(0);
+  });
+
+  it.each([
+    [["--pattern", "show {file:string}", "--cwd", "file"], "--cwd names the directory the program runs in, and only a --command step runs one"],
+    [["--command", "--pattern", "show {file:string}", "--cwd", "dir"], "--cwd dir names no args key of this step (its keys are file); pass the key a --from or a capture fills"],
+    [["--command", "--cwd", "dir"], "--cwd dir names no args key of this step (it has none); pass the key a --from or a capture fills"],
+    [
+      ["--command", "--pattern", "show in {n:int}", "--cwd", "n"],
+      "--cwd n may hold a value that is not a string, and runCommand takes cwd as a string; chain a key whose schema is a bare z.string(), or capture it as {n:string}",
+    ],
+    [["--command", "--cwd", "a", "--cwd", "b"], "--cwd was given more than once."],
+  ])("refuses %j and writes nothing", async (flags, message) => {
+    const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
+
+    expect(result.stderr).toContain(message);
+    expect(result.exitCode).toBe(2);
+    expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
+  });
+});
+
 // Property: scaffold writes a file for an entry point exactly when a
 // regular file exists at that path under the directory it runs in, and the
 // `resolve(...)` literal it writes evaluates back to that same string, so a
@@ -662,6 +801,8 @@ describe("every scaffolded variant", () => {
       ["scaffold", "chained-command", "--command", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
       ["scaffold", "chained-optional", "--command", "--from", "maybe-name.name"],
       ["scaffold", "run-named", "--pattern", "run named {s:string}", "--command", "src/cli.ts"],
+      ["scaffold", "run-in-capture", "--pattern", "run {s:string} in {where:string}", "--command", "src/cli.ts", "--cwd", "where"],
+      ["scaffold", "run-in-chained", "--command", "--from", "run-args.stdout", "--from", "run-named.stdout", "--cwd", "stdout"],
     ];
     await mkdir(path.join(rootDir, "src"));
     await writeFile(path.join(rootDir, "src", "cli.ts"), "");
@@ -674,13 +815,15 @@ describe("every scaffolded variant", () => {
     }
     expect(files["chained-command.ts"]).toContain("[cli, stdout, String(exitCode)]");
     expect(files["chained-optional.ts"]).toContain("[cli, String(name)]");
+    expect(files["run-in-capture.ts"]).toContain("[cli, s], { cwd: where });");
+    expect(files["run-in-chained.ts"]).toContain("[cli], { cwd: stdout });");
     expect(files["chained-then.ts"]).toContain("throw new Error(`not implemented: chained-then;");
     expect(files["big-then.ts"]).toContain("    assert.equal(actual, n, `n: expected ${n}, got ${actual}`);\n");
     expect(files["colour-then.ts"]).toContain(
       '    assert.deepEqual(actual, c, `c: expected ${JSON.stringify(c, (_key, value) => (typeof value === "bigint" ? String(value) : value))}, got ${JSON.stringify(actual, (_key, value) => (typeof value === "bigint" ? String(value) : value))}`);\n',
     );
     // The guard names the line that holds the TODO, imports or not.
-    for (const file of ["run-bare.ts", "run-args.ts", "chained-command.ts", "chained-optional.ts"]) {
+    for (const file of ["run-bare.ts", "run-args.ts", "chained-command.ts", "chained-optional.ts", "run-in-chained.ts"]) {
       const text = files[file]!;
       const named = new RegExp(`fill in the entry point: features/steps/${file.replace(".", "\\.")}:(\\d+)`).exec(text);
       expect(named).not.toBeNull();

@@ -127,9 +127,9 @@ Checked by: review.
 
 - **A program's input file.** The Given writes it under `scratch.dir()`
   and returns the directory; the When runs the program with that
-  directory as `cwd`, read through `from`. Each `scratch.dir()` call is a
-  new directory, so the scaffolded `--command` step's own `scratch.dir()`
-  never sees a file a Given wrote.
+  directory as `cwd`, read through `from` (`nuka scaffold --command
+  --from <given>.dir --cwd dir`). Each `scratch.dir()` call is a new
+  directory, so a step that makes its own never sees a file a Given wrote.
 - **Arguments.** One `{argv:string}` capture split on spaces keeps one
   When step for every flag; one capture per argument keeps the sentence
   closer to prose. Pick one per project and keep it.

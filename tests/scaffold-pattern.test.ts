@@ -434,9 +434,10 @@ describe("nuka scaffold --then: the assertion body", () => {
         chained:
           chainedClass === null
             ? []
-            : [{ step: "producer", key: "got", identifier: "producer", specifier: "./producer.ts", valueClass: chainedClass }],
+            : [{ key: "got", producers: [{ step: "producer", identifier: "producer", specifier: "./producer.ts" }], valueClass: chainedClass }],
         variant: "then",
         entryPoint: null,
+        cwd: null,
         description: null,
         relativeFilePath: "features/steps/it-is.ts",
       });

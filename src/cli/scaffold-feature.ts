@@ -332,6 +332,7 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
         chained: [],
         variant: then ? "then" : "when",
         entryPoint: null,
+        cwd: null,
         description: null,
         relativeFilePath: relativeFilePath.split(path.sep).join("/"),
       }),

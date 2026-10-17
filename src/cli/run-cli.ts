@@ -150,6 +150,7 @@ interface ScaffoldArgs {
   command?: string | false;
   description?: string;
   from?: string[];
+  cwd?: string;
 }
 
 interface CheckArgs {
@@ -184,6 +185,7 @@ function featureScaffoldConflict(args: ScaffoldArgs): string | null {
     typeof args.command === "string" ? "--command" : null,
     args.description !== undefined ? "--description" : null,
     (args.from ?? []).length > 0 ? "--from" : null,
+    args.cwd !== undefined ? "--cwd" : null,
   ].filter((option): option is string => option !== null);
   if (given.length === 0) return null;
   return `--feature names each stub and reads its pattern and outcome from its own line; leave out ${given.join(", ")}, or scaffold that step on its own with nuka scaffold <name>`;
@@ -785,7 +787,7 @@ export async function runCli(
         .option("command", {
           type: "string",
           describe:
-            "[entry point] a When step that runs a program in scratch.dir() and returns exitCode, stdout, and stderr; the entry point must be an existing file and is written into the file, or left as a TODO the step refuses to run with",
+            "[entry point] a When step that runs a program in scratch.dir() (or in --cwd's directory) and returns exitCode, stdout, and stderr; the entry point must be an existing file and is written into the file, or left as a TODO the step refuses to run with",
         })
         .option("description", {
           type: "string",
@@ -796,13 +798,18 @@ export async function runCli(
           type: "string",
           array: true,
           describe:
-            "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable",
+            "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable, and one key given for several steps lists each as a candidate producer",
+        })
+        .option("cwd", {
+          type: "string",
+          nargs: 1,
+          describe: "<key> with --command: run the program in the directory this args key holds (a --from key or a capture) instead of an empty scratch.dir()",
         })
         // A pattern or a description is free text a feature line may start
         // with a dash, so each takes the next word whatever it starts with,
         // as getopt_long does for a required value, and keeps its quotes.
         .parserConfiguration({ "nargs-eats-options": true })
-        .check(rejectRepeatedFlags(["pattern", "command", "description", "feature"]))
+        .check(rejectRepeatedFlags(["pattern", "command", "description", "feature", "cwd"]))
         .check((args) => {
           if (args.feature !== undefined) return featureScaffoldConflict(args as unknown as ScaffoldArgs) ?? true;
           if (args.name !== undefined) return true;
@@ -838,6 +845,7 @@ export async function runCli(
         commandBeforeName: argv.indexOf("--command") !== -1 && argv.indexOf("--command") < argv.indexOf(name),
         description: args.description ?? null,
         from: args.from ?? [],
+        cwd: args.cwd ?? null,
         stdout,
         stderr,
       });

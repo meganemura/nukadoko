@@ -1,9 +1,10 @@
 # Worked example: a command-line program
 
 A finished project for a program run from the command line, built with
-nukadoko 0.16.1 on Node 24.22.0. Every output block below is copied from
-a real run of that project, which is `examples/acceptance/cli/` in the
-nukadoko repository; CI runs it. The rules it follows are in
+nukadoko 0.16.1 and rescaffolded with the release after it (which added
+`nuka scaffold --cwd`) on Node 24.22.0. Every output block below is copied
+from a real run of that project, which is `examples/acceptance/cli/` in
+the nukadoko repository; CI runs it. The rules it follows are in
 `../scenario-rules.md`.
 
 ## The ticket
@@ -80,15 +81,16 @@ Feature: tally sums amounts per category
 - `an-empty-directory` (Given): returns a new `scratch.dir()` as `dir`.
 - `run-tally` (When): `I run tally with {argv:string}`; reads `dir` from
   either Given through `from` and runs `src/cli.ts` there with
-  `runCommand`.
+  `runCommand`. The scaffold wrote both `from` candidates and `cwd: dir`.
 - `exits-with`, `output-is`, `error-says` (Then): each reads one key of
   `run-tally` through `from` and compares it with `node:assert/strict`.
 
 Every step is `mutates: false`: the Givens write only inside the
 scenario's scratch directory, and `tally` writes nothing.
 
-`features/steps/run-tally.ts`, after the hand edits described under
-"Decisions":
+`features/steps/run-tally.ts`. The scaffold wrote the imports, the `from`
+entry, `cwd: dir`, and `returns`; the descriptions, `mutates: false`, and
+splitting `argv` are by hand (see "Decisions"):
 
 ```ts
 import { defineStep, runCommand, z } from "nukadoko";
@@ -103,7 +105,7 @@ export default defineStep({
   pattern: "I run tally with {argv:string}",
   args: z.object({
     argv: z.string().describe("Arguments after `tally`, separated by spaces"),
-    dir: z.string().describe("Working directory, from the Given step"),
+    dir: aCsvFileWith.returns.shape.dir,
   }),
   from: {
     dir: [[aCsvFileWith, "dir"], [anEmptyDirectory, "dir"]],
@@ -160,12 +162,13 @@ Refusing to scaffold: a-csv-file-with does not return "dir"; it returns no keys
 do: nuka scaffold --help
 ```
 
-`--from` takes one producer per key. Two producers for `dir` were refused,
-so the second one went into `from` by hand:
+Once both Givens returned `dir`, one command wrote the When step: each
+`--from` for `dir` is one candidate producer, and `--cwd dir` runs the
+program in that directory instead of a new, empty one:
 
 ```
-$ npx nuka scaffold run-tally ... --from a-csv-file-with.dir --from an-empty-directory.dir
-Refusing to scaffold: args key "dir" is filled twice (a capture or another --from), and one args field holds one value
+$ npx nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir --from an-empty-directory.dir --cwd dir
+features/steps/run-tally.ts
 ```
 
 `nuka scaffold output-is --pattern 'the output is' --then --from
@@ -218,7 +221,7 @@ error	from-order-violation	probe/given-run.feature:4	Step "run-tally"'s from.dir
 
 | Date | Decision | Chosen | Why | Became |
 | --- | --- | --- | --- | --- |
-| 2026-10-16 | How the input file reaches the program's working directory | the Given returns `dir`, the When reads it through `from` and runs there | each `scratch.dir()` call is a new directory, and the scaffolded `--command` step runs in its own | Shapes: a program's input file |
+| 2026-10-16 | How the input file reaches the program's working directory | the Given returns `dir`, the When reads it through `from` and runs there (`--cwd dir`) | each `scratch.dir()` call is a new directory, so the program has to run in the one the Given wrote to | Shapes: a program's input file |
 | 2026-10-16 | One capture per argument, or one for all | `{argv:string}`, split on spaces | one When step serves every flag and the missing-file path | Shapes: arguments |
 | 2026-10-16 | `mutates` on the `--command` step | `false`, with a comment | the scaffold writes the default `true`; `tally` writes nothing and runs in a scratch directory | SKILL.md "Before the first command" |
 | 2026-10-16 | Which assertion, with no Playwright installed | `node:assert/strict`, with both values in the message | `playwright/test` does not resolve in this project | S11 |

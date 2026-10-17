@@ -7,7 +7,8 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { importIdentifiers, importSpecifier, parseFromFlag } from "../src/cli/scaffold.js";
+import { z } from "zod";
+import { declaredType, importIdentifiers, importSpecifier, parseFromFlag } from "../src/cli/scaffold.js";
 import {
   createCaptureSink,
   createEmptyTempDir,
@@ -70,6 +71,23 @@ const MAKE_DIR = [
   "",
 ].join("\n");
 
+// The same `stdout` type as run-greet's, described differently, and an
+// `exitCode` of another type.
+const RUN_SHOUT = [
+  'import { defineStep, z } from "nukadoko";',
+  "",
+  "export default defineStep({",
+  '  description: "runs shout",',
+  '  pattern: "I shout {name:string}",',
+  "  args: z.object({ name: z.string() }),",
+  '  returns: z.object({ exitCode: z.string(), stdout: z.string().describe("what shout printed") }),',
+  "  run({}, { name }) {",
+  '    return { exitCode: "0", stdout: `HELLO, ${name.toUpperCase()}!` };',
+  "  },",
+  "});",
+  "",
+].join("\n");
+
 describe("nuka scaffold --from", () => {
   let rootDir: string;
 
@@ -77,6 +95,7 @@ describe("nuka scaffold --from", () => {
     rootDir = await initProject();
     await writeFile(path.join(rootDir, "features", "steps", "run-greet.ts"), RUN_GREET);
     await writeFile(path.join(rootDir, "features", "steps", "make-dir.ts"), MAKE_DIR);
+    await writeFile(path.join(rootDir, "features", "steps", "run-shout.ts"), RUN_SHOUT);
     await writeFile(
       path.join(rootDir, "features", "steps", "list-names.ts"),
       'import { defineStep, z } from "nukadoko";\nexport default defineStep({ description: "lists", args: z.object({}), returns: z.array(z.string()), run() { return []; } });\n',
@@ -172,6 +191,69 @@ describe("nuka scaffold --from", () => {
     );
   });
 
+  it("lists each producer of one key as a candidate, and either one binds it in a run", async () => {
+    const result = await cli(rootDir, [
+      "scaffold",
+      "output-says",
+      "--pattern",
+      "the output says {text:string}",
+      "--then",
+      "--from",
+      "run-greet.stdout",
+      "--from",
+      "run-shout.stdout",
+    ]);
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8")).toBe(
+      [
+        'import { defineStep, z } from "nukadoko";',
+        'import assert from "node:assert/strict";',
+        'import runGreet from "./run-greet.ts";',
+        'import runShout from "./run-shout.ts";',
+        "",
+        "export default defineStep({",
+        '  description: "TODO: describe output-says",',
+        '  pattern: "the output says {text:string}",',
+        "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+        "  args: z.object({",
+        "    text: z.string(),",
+        "    stdout: runGreet.returns.shape.stdout,",
+        "  }),",
+        "  from: {",
+        '    stdout: [[runGreet, "stdout"], [runShout, "stdout"]],',
+        "  },",
+        "  mutates: false,",
+        "  run({}, { text, stdout }) {",
+        "    const actual = stdout;",
+        "    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    await writeFile(
+      path.join(rootDir, "features", "greet.feature"),
+      [
+        "Feature: greet",
+        "  Scenario: greet",
+        '    When I run greet with "Ada"',
+        '    Then the output says "Hello, Ada!"',
+        "  Scenario: shout",
+        '    When I shout "Ada"',
+        '    Then the output says "HELLO, ADA!"',
+        "",
+      ].join("\n"),
+    );
+    const check = await cli(rootDir, ["check"]);
+    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    const run = await cli(rootDir, ["run", "features/greet.feature"]);
+    expect(run.stderr).toContain("2 scenarios: 2 passed, 0 failed");
+    expect(run.exitCode).toBe(0);
+  });
+
   it.each([
     [["--from", "run-greet.stdot"], 'run-greet does not return "stdot"; its keys are exitCode, stdout'],
     [["--from", "make-dir.stdout"], 'make-dir does not return "stdout"; its keys are cwd'],
@@ -180,8 +262,12 @@ describe("nuka scaffold --from", () => {
     [["--from", "run-greet"], '--from takes <step>.<key>, a step name and one identifier that is not a reserved word, and got "run-greet"'],
     [["--from", "run-greet.std-out"], '--from takes <step>.<key>, a step name and one identifier that is not a reserved word, and got "run-greet.std-out"'],
     [["--from", "run-greet.delete"], '--from takes <step>.<key>, a step name and one identifier that is not a reserved word, and got "run-greet.delete"'],
-    [["--pattern", "says {stdout:string}", "--from", "run-greet.stdout"], 'args key "stdout" is filled twice'],
-    [["--from", "run-greet.stdout", "--from", "run-greet.stdout"], 'args key "stdout" is filled twice'],
+    [["--pattern", "says {stdout:string}", "--from", "run-greet.stdout"], 'args key "stdout" is filled by a capture and by --from'],
+    [["--from", "run-greet.stdout", "--from", "run-greet.stdout"], "--from run-greet.stdout is given twice"],
+    [
+      ["--from", "run-greet.stdout", "--from", "run-shout.stdout", "--from", "run-greet.exitCode", "--from", "run-shout.exitCode"],
+      '--from run-greet.exitCode and --from run-shout.exitCode fill one args field, which holds one type, and their schemas differ ({"type":"number"} and {"type":"string"}); give both producers the same schema for "exitCode", or chain them into different keys',
+    ],
   ])("refuses %j and writes nothing", async (flags, message) => {
     const result = await cli(rootDir, ["scaffold", "broken", "--then", ...flags]);
 
@@ -369,6 +455,23 @@ describe("scaffold --from helpers", () => {
         expect(["z", "defineStep"]).not.toContain(identifier);
       }
     }));
+
+  it("reads one declared type whatever a schema's descriptions say, and tells two primitive types apart", () =>
+    hegel.test((tc) => {
+      const primitives = [() => z.string(), () => z.number(), () => z.boolean(), () => z.string().nullable(), () => z.array(z.string())];
+      const first = tc.draw(gs.integers({ minValue: 0, maxValue: primitives.length - 1 }));
+      const second = tc.draw(gs.integers({ minValue: 0, maxValue: primitives.length - 1 }));
+      const text = tc.draw(gs.text());
+      const a = primitives[first]!();
+      const b = primitives[second]!();
+      expect(declaredType(z.object({ k: a.describe(text) }).shape.k)).toBe(declaredType(a));
+      expect(declaredType(a) === declaredType(b)).toBe(first === second);
+    }));
+
+  it("reads no declared type for a schema JSON Schema cannot represent", () => {
+    expect(declaredType(z.string())).toBe('{"type":"string"}');
+    expect(declaredType(z.bigint())).toBeNull();
+  });
 
   it("camel-cases a kebab name as a person would write it", () => {
     expect([...importIdentifiers(["run-greet", "z", "2fa-login", "delete"]).values()]).toEqual([

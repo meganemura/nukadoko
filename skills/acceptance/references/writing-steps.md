@@ -72,17 +72,17 @@ capture, so put the captures in by hand. Steps that need `--command` or
    `table-docstring-key-mismatch`.
    Add `--from <step>.<key>` for each value the step reads from an
    earlier step's result: it writes the import, the args field, and the
-   `from` entry ("Chaining a value from an earlier step"). One `--from`
-   per key: a key that two producers can fill is refused, so write the
-   second producer into `from` by hand.
+   `from` entry ("Chaining a value from an earlier step"). Repeat it with
+   the same key for a key that either of two producers fills
+   (`--from a.dir --from b.dir`); their schemas for the key must match.
    Add `--command <entry point>` for a When step that runs a program
    (`--command src/cli.ts`, relative to the directory `nuka` runs in, and
    refused unless a file is there): it writes `const cli = resolve("<entry
-   point>")`, the `runCommand` call in its own `scratch.dir()`, and
+   point>")`, the `runCommand` call in an empty `scratch.dir()`, and
    `returns` of `exitCode`, `stdout`, and `stderr`, so a Then step can be
-   scaffolded `--from` it at once. A file a Given wrote is in another
-   scratch directory, so read the Given's directory through `from` and
-   pass it as `cwd` (`examples/cli.md`). The step runs the entry point
+   scaffolded `--from` it at once. A file a Given wrote is in the
+   directory that Given returned: `--from <given>.dir --cwd dir` runs the
+   program there instead (`examples/cli.md`). The step runs the entry point
    with `node` itself, so when the project's `.ts` files import each
    other as `./x.js`, name the built program (`dist/cli.js`, with
    `"pretest:scenarios": "npm run build"`); scaffold refuses a `.ts`

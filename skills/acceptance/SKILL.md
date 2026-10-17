@@ -77,10 +77,10 @@ If none is true, ask what this is supposed to do before writing anything.
    writes a stub for each undefined line, or one at a time: `nuka scaffold
    <name> --pattern "<line>" --description "<what it does>"`, with
    `--then` for a Then, `--command <entry point>` for a When that runs a
-   program, and `--from <step>.<key>` for each value read from an earlier
-   step. `--from` needs the producer to return that key already, so
-   implement producers first. Run each step alone with `nuka do <step>
-   --args '<json>'` (`references/writing-steps.md`, which names the
+   program (`--cwd <key>` runs it in a directory a Given returned), and
+   `--from <step>.<key>` for each value read from an earlier step, whose
+   producer has to return that key already. Run each step alone with `nuka
+   do <step> --args '<json>'` (`references/writing-steps.md`, which names the
    references for the file, assertions, parts, and fixtures). Finished
    projects: `references/examples/` (`cli.md`, `http-api.md`,
    `workflow.md`).

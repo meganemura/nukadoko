@@ -10,7 +10,7 @@ export default defineStep({
   pattern: "I run tally with {argv:string}",
   args: z.object({
     argv: z.string().describe("Arguments after `tally`, separated by spaces"),
-    dir: z.string().describe("Working directory, from the Given step"),
+    dir: aCsvFileWith.returns.shape.dir,
   }),
   from: {
     dir: [[aCsvFileWith, "dir"], [anEmptyDirectory, "dir"]],

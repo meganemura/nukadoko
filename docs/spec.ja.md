@@ -3454,7 +3454,7 @@ nuka describe <step>          full contract, the step file as file,
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--from <step>.<key>]... [--description <text>]
+nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>]] [--from <step>.<key>]... [--description <text>]
                               typed step template that fails until
                               implemented; the thrown message names the
                               args it was given, so the file compiles
@@ -3480,7 +3480,12 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               schema (producer.returns.shape.key), the
                               from entry, and the key in run. It refuses a
                               producer that does not return the key and
-                              names the keys it does return. --command
+                              names the keys it does return. The same key
+                              given for several steps writes one from
+                              entry listing each as a candidate producer;
+                              their schemas for the key must have the same
+                              JSON Schema, descriptions aside, and the
+                              args field reads the first one's. --command
                               writes a When step that runs a program
                               instead of the stub:
                               runCommand(process.execPath, [cli, ...args],
@@ -3503,6 +3508,12 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               runCommand, so do and run fail by name at
                               that step while check still passes.
                               --command with --then is refused.
+                              --cwd <key> (with --command) runs the
+                              program in the directory that args key
+                              holds, { cwd: <key> }, instead of
+                              scratch.dir(), and leaves the key out of
+                              argv; the key must be a capture or a --from
+                              key whose schema is a bare z.string().
                               --description writes the step's
                               description; without it the description
                               is "TODO: describe <name>" (with
@@ -3535,7 +3546,7 @@ nuka scaffold --feature <path>
                               each written path on stdout. Refuses while
                               a step file does not import, and takes no
                               name, --pattern, --then, --command, --from,
-                              or --description
+                              --cwd, or --description
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

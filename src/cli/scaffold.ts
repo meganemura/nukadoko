@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { z } from "zod";
+import { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
 import { locateConfig, noConfigLine, scaffoldParentRefusal } from "../config/config-presence.js";
 import { isCommonJsProject } from "../config/module-kind.js";
@@ -93,7 +93,11 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // `nuka describe` for this step too. Scaffold reads the producer through
 // discovery, the same as `nuka steps`, so a producer that does not return
 // the key is refused here with the keys it does return, not later as a
-// `from` finding in `nuka check`.
+// `from` finding in `nuka check`. Several `--from` for one key write one
+// `from` entry with every producer as a candidate, since the binding-order
+// check already decides, per scenario, which one ran. The args field holds
+// one type, so the producers have to declare the same JSON Schema for the
+// key (descriptions aside); the field reads the first one's schema.
 //
 // `--command` is the When step of a command-line program, the step every
 // CLI project writes first: it runs `process.execPath` on one entry point
@@ -120,6 +124,12 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // `--then` are refused together, because a step that runs a program
 // changes state and a Then step declares that it does not.
 //
+// `--cwd <key>` runs the program in the directory an args key holds rather
+// than in a new `scratch.dir()`, which is empty by construction: a file a
+// Given step wrote lives in the directory that Given returned, so the
+// program never saw it. The key leaves argv, and its value has to be a
+// bare string, the one type `runCommand`'s `cwd` takes.
+//
 // A stub's thrown message names its args, so a project that compiles with
 // `noUnusedParameters` accepts the file as written, and the first failed
 // run shows what the feature line bound. An args key that would shadow a
@@ -145,6 +155,9 @@ export interface RunScaffoldOptions {
   description: string | null;
   /** Each `--from` value as typed, `<step>.<key>`, in order. */
   from: readonly string[];
+  /** `--cwd`: the args key whose value is `--command`'s working
+   * directory, or `null` for a new `scratch.dir()`. */
+  cwd: string | null;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -162,12 +175,19 @@ export interface FromRequest {
   readonly key: string;
 }
 
-/** One `--from` resolved against the vocabulary: the identifier the
- * producer is imported as, the specifier it is imported from, and the
- * class of the value the producer's schema holds. */
-export interface ChainedField extends FromRequest {
+/** One producer of a chained key: the identifier it is imported as and
+ * the specifier it is imported from. */
+export interface Producer {
+  readonly step: string;
   readonly identifier: string;
   readonly specifier: string;
+}
+
+/** One args key filled through `from`: every `--from` that names it, in
+ * the order given, and the class of the value their schemas hold. */
+export interface ChainedField {
+  readonly key: string;
+  readonly producers: readonly [Producer, ...Producer[]];
   readonly valueClass: PrimitiveClass;
 }
 
@@ -215,6 +235,7 @@ export interface StepTemplate {
   readonly chained: readonly ChainedField[];
   readonly variant: Variant;
   readonly entryPoint: string | null;
+  readonly cwd: string | null;
   readonly description: string | null;
   /** The written file, relative to the project root, as the guard names it. */
   readonly relativeFilePath: string;
@@ -297,7 +318,7 @@ function argsLines(captures: readonly Capture[], chained: readonly ChainedField[
     const schema = (captured && ZOD_FOR_CLASS.get(captured)) ?? "z.unknown()";
     return `    ${capture.key}: ${schema},`;
   });
-  const chainedFields = chained.map((field) => `    ${field.key}: ${field.identifier}.returns.shape.${field.key},`);
+  const chainedFields = chained.map((field) => `    ${field.key}: ${field.producers[0].identifier}.returns.shape.${field.key},`);
   return ["  args: z.object({", ...fields, ...chainedFields, "  }),"];
 }
 
@@ -305,7 +326,10 @@ function fromLines(chained: readonly ChainedField[]): string[] {
   if (chained.length === 0) return [];
   return [
     "  from: {",
-    ...chained.map((field) => `    ${field.key}: [${field.identifier}, ${JSON.stringify(field.key)}],`),
+    ...chained.map((field) => {
+      const candidates = field.producers.map((producer) => `[${producer.identifier}, ${JSON.stringify(field.key)}]`);
+      return `    ${field.key}: ${candidates.length === 1 ? candidates[0] : `[${candidates.join(", ")}]`},`;
+    }),
     "  },",
   ];
 }
@@ -313,10 +337,10 @@ function fromLines(chained: readonly ChainedField[]): string[] {
 function importLines(chained: readonly ChainedField[]): string[] {
   const seen = new Set<string>();
   const lines: string[] = [];
-  for (const field of chained) {
-    if (seen.has(field.identifier)) continue;
-    seen.add(field.identifier);
-    lines.push(`import ${field.identifier} from ${JSON.stringify(field.specifier)};`);
+  for (const { identifier, specifier } of chained.flatMap((field) => field.producers)) {
+    if (seen.has(identifier)) continue;
+    seen.add(identifier);
+    lines.push(`import ${identifier} from ${JSON.stringify(specifier)};`);
   }
   return lines;
 }
@@ -372,7 +396,7 @@ function commandArgv(fields: readonly Field[]): string {
   return ["cli", ...fields.map((field) => (field.valueClass === "string" ? field.key : `String(${field.key})`))].join(", ");
 }
 
-export function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, description, relativeFilePath }: StepTemplate): string {
+export function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, cwd, description, relativeFilePath }: StepTemplate): string {
   const fields = fieldsOf(captures, chained);
   const keys = fields.map((field) => field.key);
   const argsParameter = keys.length === 0 ? "" : `{ ${keys.join(", ")} }`;
@@ -406,7 +430,11 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
       : [];
   const describedAs =
     description ??
-    (command ? "Run the command under test in an empty scratch directory" : `${DESCRIPTION_TODO_PREFIX} ${name}`);
+    (command
+      ? cwd === null
+        ? "Run the command under test in an empty scratch directory"
+        : `Run the command under test in the directory ${cwd} names`
+      : `${DESCRIPTION_TODO_PREFIX} ${name}`);
   const outcomeLines =
     variant === "then"
       ? ["  mutates: false,"]
@@ -425,9 +453,11 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
           ];
   const runLines = command
     ? [
-        `  async run({ scratch }${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
+        `  async run(${cwd === null ? "{ scratch }" : "{}"}${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
         ...placeholderGuard,
-        `    return await runCommand(process.execPath, [${commandArgv(fields)}], { cwd: scratch.dir() });`,
+        `    return await runCommand(process.execPath, [${commandArgv(fields.filter((field) => field.key !== cwd))}], { cwd: ${
+          cwd === null ? "scratch.dir()" : cwd
+        } });`,
       ]
     : [
         `  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`,
@@ -525,14 +555,17 @@ function readFromFlags(
 ): { requests: readonly FromRequest[] } | { refusal: string } {
   const requests: FromRequest[] = [];
   const keys = new Set(captures.map((capture) => capture.key));
+  const given = new Set<string>();
   for (const text of texts) {
     const request = parseFromFlag(text);
     if ("refusal" in request) return request;
-    if (keys.has(request.key)) {
+    if (keys.has(request.key) && !requests.some((earlier) => earlier.key === request.key)) {
       return {
-        refusal: `args key "${request.key}" is filled twice (a capture or another --from), and one args field holds one value`,
+        refusal: `args key "${request.key}" is filled by a capture and by --from, and one args field holds one value`,
       };
     }
+    if (given.has(text)) return { refusal: `--from ${text} is given twice` };
+    given.add(text);
     keys.add(request.key);
     requests.push(request);
   }
@@ -553,8 +586,29 @@ function chainedClass(schema: z.ZodTypeAny): PrimitiveClass {
   return schema.type === "string" || schema.type === "number" ? schema.type : "other";
 }
 
-/** Resolves each request against the project's typed steps, or names the
- * first producer that cannot give the key. */
+/** A schema's JSON Schema with every `description` (and the `$schema`
+ * dialect line) dropped, as text, or `null` when zod cannot represent it:
+ * two producers that describe one key differently still declare one type. */
+export function declaredType(schema: z.ZodType): string | null {
+  const strip = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(strip);
+    if (value === null || typeof value !== "object") return value;
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "description" && key !== "$schema")
+        .map(([key, inner]) => [key, strip(inner)]),
+    );
+  };
+  try {
+    return JSON.stringify(strip(z.toJSONSchema(schema)));
+  } catch {
+    return null;
+  }
+}
+
+/** Resolves each request against the project's typed steps, grouped by
+ * key in the order each key first appears, or names the first producer
+ * that cannot give the key. */
 function resolveChain(
   requests: readonly FromRequest[],
   typedSteps: ReadonlyMap<string, TypedVocabularyEntry>,
@@ -564,7 +618,7 @@ function resolveChain(
   moduleNames: ReadonlySet<string>,
 ): { chained: readonly ChainedField[] } | { refusal: string } {
   const identifiers = importIdentifiers(requests.map((request) => request.step), moduleNames);
-  const chained: ChainedField[] = [];
+  const byKey = new Map<string, { producers: [Producer, ...Producer[]]; schema: z.ZodType }>();
   for (const request of requests) {
     const producer = typedSteps.get(request.step);
     if (producer === undefined) {
@@ -582,13 +636,33 @@ function resolveChain(
       const named = returnKeys.length === 0 ? "it returns no keys" : `its keys are ${returnKeys.join(", ")}`;
       return { refusal: `${request.step} does not return "${request.key}"; ${named}` };
     }
-    chained.push({
-      ...request,
+    const schema = shape[request.key] as z.ZodType;
+    const resolved: Producer = {
+      step: request.step,
       identifier: identifiers.get(request.step)!,
       specifier: importSpecifier(stepDir, path.resolve(rootDir, producer.filePath)),
-      valueClass: chainedClass(shape[request.key] as z.ZodTypeAny),
-    });
+    };
+    const earlier = byKey.get(request.key);
+    if (earlier === undefined) {
+      byKey.set(request.key, { producers: [resolved], schema });
+      continue;
+    }
+    const first = earlier.producers[0].step;
+    const firstType = declaredType(earlier.schema);
+    const thisType = declaredType(schema);
+    if (firstType === null || thisType === null || firstType !== thisType) {
+      const shown = (type: string | null) => type ?? "a schema that JSON Schema cannot represent";
+      return {
+        refusal: `--from ${first}.${request.key} and --from ${request.step}.${request.key} fill one args field, which holds one type, and their schemas differ (${shown(firstType)} and ${shown(thisType)}); give both producers the same schema for "${request.key}", or chain them into different keys`,
+      };
+    }
+    earlier.producers.push(resolved);
   }
+  const chained = [...byKey].map(([key, { producers, schema }]) => ({
+    key,
+    producers,
+    valueClass: chainedClass(schema as z.ZodTypeAny),
+  }));
   return { chained };
 }
 
@@ -655,7 +729,7 @@ export function refusedBelowParentConfig(rootDir: string, sinks: RefusalSinks): 
 }
 
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
-  const { rootDir, name, pattern, then, command, entryPoint, description, from, stdout, stderr } = options;
+  const { rootDir, name, pattern, then, command, entryPoint, cwd, description, from, stdout, stderr } = options;
   const sinks = { json: false, stdout, stderr };
   const help = helpFor("scaffold");
 
@@ -665,6 +739,9 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
 
   if (command && then) {
     return refuse(sinks, "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false", help);
+  }
+  if (cwd !== null && !command) {
+    return refuse(sinks, "Refusing to scaffold: --cwd names the directory the program runs in, and only a --command step runs one", help);
   }
   const variant: Variant = command ? "command" : then ? "then" : "when";
   const variantShape = VARIANTS[variant];
@@ -690,7 +767,8 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const shape: VariantShape =
     command && entryPoint === null
       ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error"]) }
-      : assertsInBody(variant, read.captures.length, from.length)
+      : // Several --from for one key fill one field, so the count is of keys.
+        assertsInBody(variant, read.captures.length, new Set(from.map((text) => text.slice(text.indexOf(".") + 1))).size)
         ? {
             bodyNames: new Set([...variantShape.bodyNames, ...ASSERT_BODY_NAMES]),
             moduleNames: new Set([...variantShape.moduleNames, "assert"]),
@@ -699,6 +777,11 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const fromFlags = readFromFlags(from, read.captures, shape.bodyNames);
   if ("refusal" in fromFlags) {
     return refuse(sinks, `Refusing to scaffold: ${fromFlags.refusal}`, help);
+  }
+  const argsKeys = [...read.captures.map((capture) => capture.key), ...new Set(fromFlags.requests.map((request) => request.key))];
+  if (cwd !== null && !argsKeys.includes(cwd)) {
+    const keys = argsKeys.length === 0 ? "it has none" : `its keys are ${argsKeys.join(", ")}`;
+    return refuse(sinks, `Refusing to scaffold: --cwd ${cwd} names no args key of this step (${keys}); pass the key a --from or a capture fills`, help);
   }
 
   const belowParent = refusedBelowParentConfig(rootDir, sinks);
@@ -761,6 +844,15 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     chained = resolved.chained;
   }
 
+  const cwdField = fieldsOf(read.captures, chained).find((field) => field.key === cwd);
+  if (cwdField !== undefined && cwdField.valueClass !== "string") {
+    return refuse(
+      sinks,
+      `Refusing to scaffold: --cwd ${cwdField.key} may hold a value that is not a string, and runCommand takes cwd as a string; chain a key whose schema is a bare z.string(), or capture it as {${cwdField.key}:string}`,
+      help,
+    );
+  }
+
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(
     filePath,
@@ -771,6 +863,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       chained,
       variant,
       entryPoint,
+      cwd,
       description,
       relativeFilePath: relativeFilePath.split(path.sep).join("/"),
     }),

@@ -52,6 +52,22 @@ just until 0.1.
 
 ### Added
 
+- **`nuka scaffold` writes a CLI When step that reads a Given's directory with no hand edit.**
+  `--from` given the same key for several steps (`--from a-csv-file-with.dir
+  --from an-empty-directory.dir`) writes one `from` entry that lists each
+  step as a candidate producer, which used to be refused as `args key
+  "dir" is filled twice`; the binding-order check already decides which
+  candidate ran. The candidates must declare the same JSON Schema for the
+  key, descriptions aside, or scaffold refuses and names both; the args
+  field reads the first one's schema. `--cwd <key>`, with `--command`,
+  runs the program in the directory that args key holds instead of a new,
+  empty `scratch.dir()`, so the program sees a file a Given wrote; the key
+  leaves argv, and has to be a capture or a `--from` key whose schema is a
+  bare `z.string()`. A key that a capture and a `--from` both fill is
+  still refused, with a message that says so, and so is the same `--from`
+  given twice. The acceptance skill's CLI worked example is rescaffolded
+  this way and lists no hand edit for either.
+
 - **`nuka check` warns `scenario-without-then` and `outline-rows-share-name`.**
   A scenario with a Given or a When and no Then passed whenever its steps
   ran without an error, and an outline whose name holds none of its
