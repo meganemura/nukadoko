@@ -32,7 +32,7 @@ describe("nuka check: a feature argument that is not a missing file", () => {
     await chmod(feature, 0o000);
     try {
       const { exitCode, stdout, stderr } = await invoke("check", "features/probe.feature", rootDir);
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stdout).toBe("");
       expect(stderr).toContain("EACCES");
       expect(stderr).toContain("permission denied");
