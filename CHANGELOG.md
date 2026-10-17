@@ -596,6 +596,13 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka init` names the `package.json` condition that made it write `nukadoko.config.mts`.**
+  The notice said every project without `"type": "module"` reads `.ts`
+  as CommonJS. With no `"type"`, Node loads such a file with a
+  `MODULE_TYPELESS_PACKAGE_JSON` warning instead. The notice now says
+  `"type": "commonjs"` when the project says so, and otherwise names the
+  warning and the `"type": "module"` that removes it. The migration guides
+  and the step-files reference say the same.
 - **A failed step's line and its `used` line name a crashed Node program's error.**
   Node writes where an uncaught error was thrown, that source line, and a
   line of carets before the error itself, so both lines read

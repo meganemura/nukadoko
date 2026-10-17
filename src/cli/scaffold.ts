@@ -839,10 +839,10 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
 
   // The same `isCommonJsProject` call `nuka init` already defers to
   // (src/config/module-kind.ts's own header): a project with no
-  // "type": "module" in package.json reads a plain .ts file as CommonJS,
-  // and nukadoko is ESM-only, so a step file scaffolded there has to be
-  // .mts or `nuka check` immediately flags the very file this command just
-  // wrote.
+  // "type": "module" in package.json either reads a plain .ts file as
+  // CommonJS ("type": "commonjs") or reparses it with a warning on every
+  // load (no "type"), so a step file scaffolded there is .mts, matching the
+  // nukadoko.config.mts that `nuka init` wrote.
   const stepExtension = isCommonJsProject(rootDir) ? ".mts" : ".ts";
   const relativeFilePath = path.join(config.featuresDir, "steps", `${name}${stepExtension}`);
   const filePath = path.join(rootDir, relativeFilePath);

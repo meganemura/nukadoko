@@ -23,9 +23,11 @@ export default defineConfig({
 });
 ```
 
-In that CommonJS case, step files need the same `.mts` extension too,
-since a plain `.ts` file is read as CommonJS in that project and nukadoko
-is ESM-only; `nuka init` says so on stderr.
+In that CommonJS case, step files need the same `.mts` extension too, and
+`nuka init` says why on stderr. Under `"type": "commonjs"`, Node reads a
+plain `.ts` file as CommonJS, and nukadoko is ESM-only. With no `"type"`,
+Node loads a `.ts` file only after it parses it again, with a
+`MODULE_TYPELESS_PACKAGE_JSON` warning on every load.
 
 A Playwright Test suite already has its own `baseURL`, in
 `playwright.config.ts`'s `use.baseURL`. That is a separate field, and

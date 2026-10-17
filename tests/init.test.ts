@@ -571,10 +571,10 @@ describe("nuka init", () => {
   });
 });
 
-// Responsibility: the CJS door — a project whose own package.json has no
-// "type": "module" reads nukadoko.config.ts as CommonJS (Node takes a
-// plain .ts file's module kind from that field, and reparses it with a
-// warning on every load when the field is absent), so `nuka init` writes
+// Responsibility: the CJS door. In a project whose own package.json has no
+// "type": "module", Node reads nukadoko.config.ts as CommonJS under
+// "type": "commonjs" and reparses it with a warning on every load when the
+// field is absent, so `nuka init` writes
 // nukadoko.config.mts there instead and says why on stderr. isCommonJsProject (src/config/
 // module-kind.ts) is the one place that decision is made; this only
 // exercises it through `nuka init` itself.
@@ -606,13 +606,10 @@ describe("nuka init: CommonJS projects", () => {
     expect(existsSync(path.join(rootDir, "nukadoko.config.mts"))).toBe(true);
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(false);
 
-    // One line, naming both the fact (.mts was written) and the reason
-    // (.ts is read as CommonJS here, nukadoko is ESM-only) — never
-    // silently, per this file's own header.
-    expect(stderr.text()).toContain(".mts");
-    expect(stderr.text()).toMatch(/type.*module/);
-    expect(stderr.text().trim().split("\n")).toHaveLength(2);
-    expect(stderr.text().endsWith(NEXT_LINE)).toBe(true);
+    expect(stderr.text()).toBe(
+      'package.json has no "type": "module", so nuka init wrote nukadoko.config.mts; write step files as .mts too, since Node loads each .ts file here with a MODULE_TYPELESS_PACKAGE_JSON warning, or add "type": "module" to use .ts with no warning\n' +
+        NEXT_LINE,
+    );
 
     // The self-check (loadConfig + discoverSteps) still passed above
     // (exitCode 0) — this is the further proof that a step file placed
@@ -644,6 +641,25 @@ describe("nuka init: CommonJS projects", () => {
     });
     expect(stepsExitCode).toBe(0);
     expect(stepsStdout.text()).toContain("ping");
+  });
+
+  it('writes nukadoko.config.mts and names "type": "commonjs" on stderr when package.json says so', async () => {
+    await writeFile(
+      path.join(rootDir, "package.json"),
+      JSON.stringify({ name: "cjs-project", private: true, type: "commonjs" }),
+    );
+
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.mts"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(false);
+    expect(stderr.text()).toBe(
+      'package.json says "type": "commonjs", so nuka init wrote nukadoko.config.mts; write step files as .mts too, since Node reads .ts here as CommonJS and nukadoko is ESM-only\n' +
+        NEXT_LINE,
+    );
   });
 
   it('still writes nukadoko.config.ts, with no CJS notice, when package.json has "type": "module"', async () => {

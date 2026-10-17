@@ -29,9 +29,10 @@ export default defineConfig({
 
 CommonJS のスイートでは、`nuka init` は代わりに `nukadoko.config.mts` を書きます(中身は同じで、stderr にその旨を伝えます)。
 そこでは step ファイルも同じ `.mts` 拡張子にする必要があります。
-そのプロジェクトではふつうの `.ts` ファイルが CommonJS として読まれ、nukadoko は ESM 専用だからです。
-そのプロジェクトで `nukadoko.config.ts` を手で書くと、読み込みに失敗します。
+`"type": "commonjs"` では、Node はふつうの `.ts` ファイルを CommonJS として読み、nukadoko は ESM 専用だからです。
+そのため `nukadoko.config.ts` を手で書くと、読み込みに失敗します。
 エラーはそのファイルと原因を名指しし、ファイルが `.ts` なので `.mts` へのリネームを案内します。
+`"type"` が無い場合、Node は `.ts` ファイルを解析し直してから読み込み、読み込むたびに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
 
 `nuka init` は `nukadoko.config.ts` か `nukadoko.config.mts` のどちらかが既に存在する場合は実行を拒否し、`<featuresDir>/steps/` を作成し、`.nukadoko/`、`.env`、`.env.*` を `.gitignore` に追加し(`!.env.example` で example は追跡されたままにします)、(まだ空の)語彙を発見する self-check で終わります。
 `featuresDir` はデフォルトで `features`(cucumber-js 自身の規約)なので、ほとんどのスイートは上書き不要であり、discovery はディレクトリ全体をたどるため、その配下の別の場所にある step ファイル(`features/step_definitions/`、`features/support/`)も並べ替えは不要です。

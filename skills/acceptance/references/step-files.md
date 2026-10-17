@@ -10,8 +10,10 @@ configured `featuresDir`, `features` unless the project says otherwise,
 with feature files ending in `.feature`. A file a scenario runs as a process (a fake server, a fixture script) belongs outside `featuresDir`: discovery imports every module under it on every `nuka check`, top-level code included.
 
 Step files end in `.ts`, except in a CommonJS project (no
-`"type": "module"` in `package.json`), where they end in `.mts` instead:
-a plain `.ts` file is read as CommonJS there, and nukadoko is ESM-only.
+`"type": "module"` in `package.json`), where they end in `.mts` instead.
+Under `"type": "commonjs"`, Node reads a plain `.ts` file as CommonJS, and
+nukadoko is ESM-only. With no `"type"`, Node loads a `.ts` file only after
+it parses it again, with a `MODULE_TYPELESS_PACKAGE_JSON` warning.
 `nuka init` already wrote a matching `nukadoko.config.mts` in that case
 (`running.md`, "Setting up"), so the same rule applies to every
 step file underneath it.

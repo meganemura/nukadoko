@@ -24,7 +24,8 @@ export default defineConfig({
 ```
 
 その CommonJS の場合、step ファイルも同じ `.mts` 拡張子にする必要があります。
-そのプロジェクトではふつうの `.ts` ファイルが CommonJS として読まれ、nukadoko は ESM 専用だからです。
+`"type": "commonjs"` では、Node はふつうの `.ts` ファイルを CommonJS として読み、nukadoko は ESM 専用だからです。
+`"type"` が無い場合、Node は `.ts` ファイルを解析し直してから読み込み、読み込むたびに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
 `nuka init` はそれを stderr で伝えます。
 
 Playwright Test のスイートはすでに自分自身の `baseURL` を持っています。

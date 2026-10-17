@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CONFIG_FILE_NAME, CONFIG_FILE_NAMES, loadConfig } from "../config/load-config.js";
-import { isCommonJsProject } from "../config/module-kind.js";
+import { isCommonJsProject, refusesEsmTs } from "../config/module-kind.js";
 import { configSchema } from "../config/schema.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
@@ -344,7 +344,9 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   stdout.write(`${configFileName}\n`);
   if (isCjs) {
     stderr.write(
-      `No "type": "module" in package.json, so nuka init wrote ${configFileName}; write step files as .mts too, since nukadoko is ESM-only and this project reads .ts as CommonJS\n`,
+      refusesEsmTs(rootDir)
+        ? `package.json says "type": "commonjs", so nuka init wrote ${configFileName}; write step files as .mts too, since Node reads .ts here as CommonJS and nukadoko is ESM-only\n`
+        : `package.json has no "type": "module", so nuka init wrote ${configFileName}; write step files as .mts too, since Node loads each .ts file here with a MODULE_TYPELESS_PACKAGE_JSON warning, or add "type": "module" to use .ts with no warning\n`,
     );
   }
 
