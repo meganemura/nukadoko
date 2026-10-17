@@ -36,6 +36,7 @@ import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
 //   ("Compat steps" for "Compat steps (the migration door)") counts.
 // - the CLI summary in docs/spec.md and docs/spec.ja.md has an entry for
 //   every command, and each command's entries name each of its flags.
+// - llms.txt names every top-level command at least once.
 // Fenced blocks are not prose: only their `nuka` lines are read.
 
 interface CommandNode {
@@ -296,6 +297,13 @@ function summaryOmissions(tree: CommandNode, summary: string): string[] {
   return missing;
 }
 
+/** The top-level commands no `nuka ...` in the file names. llms.txt is
+ * the one file an agent may read alone, so it names each one. */
+function commandOmissions(tree: CommandNode, file: DocFile): string[] {
+  const named = new Set(nukaInvocations(file).map((invocation) => invocation.trim().split(/\s+/)[0]!));
+  return [...tree.subcommands.keys()].filter((name) => !named.has(name)).map((name) => `nuka ${name}`);
+}
+
 // A command a release removed is still named by the upgrade notes that say
 // what replaced it, and by their history. Only those two files may cite one.
 const REMOVED_COMMANDS = new Set(["accept", "mcp-tools"]);
@@ -325,6 +333,11 @@ describe("names in README.md, llms.txt, docs/, and skills/", () => {
 
   it("every quoted heading is a heading of the file it points at", () => {
     expect(perFile(headingProblems)).toEqual({});
+  });
+
+  it("llms.txt names every top-level command", async () => {
+    const llms = docFiles.find((file) => file.relativePath === "llms.txt")!;
+    expect(commandOmissions(await readCommandTree(), llms)).toEqual([]);
   });
 
   it.each(["docs/spec.md", "docs/spec.ja.md"])(
@@ -391,6 +404,12 @@ describe("the extraction itself", () => {
       ),
     ).toEqual(['"What compat steps lack" is not a heading of docs/spec.md']);
     expect(headingProblems(sample("docs/spec.ja.md", "「Compat steps」を参照。「成果物」を参照。\n"))).toEqual([]);
+  });
+
+  it("reports a top-level command llms.txt leaves out", async () => {
+    const llms = docFiles.find((file) => file.relativePath === "llms.txt")!;
+    const withoutClean = sample("llms.txt", llms.text.replace(/^- `nuka clean`.*$/m, ""));
+    expect(commandOmissions(await readCommandTree(), withoutClean)).toEqual(["nuka clean"]);
   });
 
   it("reports a command or a flag the CLI summary leaves out", async () => {

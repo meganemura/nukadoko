@@ -91,6 +91,17 @@ just until 0.1.
   the built CLI's `--codes --json`, and `tests/llms-codes.test.ts` fails
   while either table differs from its registry.
 
+### Packaging
+
+- **A test keeps the tarball's agent-facing files shipped and their links live.**
+  `tests/package-files.test.ts` reads `npm pack --dry-run --json` and fails
+  when llms.txt, a skill file, or one of the docs an agent is pointed at is
+  left out of the package, or when a relative link in llms.txt or a packed
+  Markdown file lands outside the packed files. The two links from
+  `docs/releasing.md` to the publish workflow are the named exception: that
+  page is read from a checkout. `tests/docs-cli-names.test.ts` also fails
+  when llms.txt stops naming a top-level `nuka` command.
+
 ### Changed
 
 - **`nuka run` writes its scenario records to stdout only when stdout is not a terminal, or under `--records`.**
