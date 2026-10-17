@@ -20,7 +20,7 @@ import { promisify } from "node:util";
 // stale `dist/` shows up here instead of after publish.
 //
 // Deliberately outside this repository's own node_modules tree, not
-// nested under it: Node resolves a bare specifier such as `tsx` by walking
+// nested under it: Node resolves a bare specifier such as `zod` by walking
 // up through every ancestor `node_modules`, so an install target inside
 // this repository would find this repository's own node_modules (which
 // mixes dependencies and devDependencies) and silently paper over exactly
@@ -224,12 +224,25 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
 // each step file, and a step's type is inferred from `defineStep`. Every
 // name that inferred type reaches has to be exported from the package
 // entry, or tsc stops with TS2742 on a step that declares no `returns`.
-// The scaffolded steps are each shape `nuka scaffold` writes.
+// The scaffolded steps are each shape `nuka scaffold` writes, including a
+// `--from` chain, whose import names the producer's `.ts` file; tsc accepts
+// that with the option `nuka init` writes into a project's tsconfig.json.
 async function verifyDeclarationEmit(projectDir, nukaBin) {
   await runInherit(nukaBin, ["scaffold", "output-is-empty", "--pattern", "the output is empty", "--then"], {
     cwd: projectDir,
   });
   await runInherit(nukaBin, ["scaffold", "plain-stub", "--pattern", "nothing happens yet"], { cwd: projectDir });
+  await runInherit(nukaBin, ["scaffold", "run-tool", "--pattern", "I run the tool", "--command"], { cwd: projectDir });
+  await runInherit(
+    nukaBin,
+    ["scaffold", "tool-printed", "--pattern", "the tool printed it", "--then", "--from", "run-tool.stdout"],
+    { cwd: projectDir },
+  );
+  const chained = await readFile(path.join(projectDir, "features", "steps", "tool-printed.ts"), "utf8");
+  if (!chained.includes('from "./run-tool.ts"')) {
+    throw new Error(`a --from step does not import its producer by the .ts name:\n${chained}`);
+  }
+  await runInherit(nukaBin, ["steps"], { cwd: projectDir });
   const configPath = path.join(projectDir, "tsconfig.declarations.json");
   await writeFile(
     configPath,
@@ -243,6 +256,7 @@ async function verifyDeclarationEmit(projectDir, nukaBin) {
           skipLibCheck: false,
           declaration: true,
           composite: true,
+          rewriteRelativeImportExtensions: true,
           outDir: "declarations-out",
           typeRoots: [path.join(repoRoot, "node_modules", "@types")],
           types: ["node"],
@@ -344,7 +358,9 @@ async function main() {
     await writeFile(projectPackageJsonPath, `${JSON.stringify(projectPackageJson, null, 2)}\n`);
 
     stage = "npm install <tarball>";
-    await runInherit("npm", ["install", "--omit=peer", tarballPath], { cwd: projectDir });
+    // `--ignore-scripts`: nothing nukadoko needs at run time may depend on
+    // an install script, since many projects and CI setups turn them off.
+    await runInherit("npm", ["install", "--omit=peer", "--ignore-scripts", tarballPath], { cwd: projectDir });
 
     const nukaBin = path.join(projectDir, "node_modules", ".bin", "nuka");
 
@@ -355,14 +371,10 @@ async function main() {
     await runInherit(nukaBin, ["init"], { cwd: projectDir });
 
     stage = "nuka steps";
-    // The one call in this whole check that proves the installed
-    // package's own `tsx` dependency resolves at runtime: `nuka steps`
-    // loads `nukadoko.config.ts` (written by `nuka init` just above)
-    // through tsx's runtime `register()` call
-    // (src/discover/discover-steps.ts), which is the exact code path that
-    // broke, in a different project, when a `bin`'s own runtime dependency
-    // was reachable only in that project's own checked-out tree and not
-    // from an installed tarball.
+    // The first call that loads TypeScript from the installed package:
+    // `nuka steps` loads `nukadoko.config.ts` (written by `nuka init` just
+    // above) with Node's own type stripping, through the loader hook in
+    // dist/config/ts-loader.js.
     await runInherit(nukaBin, ["steps"], { cwd: projectDir });
 
     stage = "nuka run without playwright";

@@ -44,6 +44,8 @@ just until 0.1.
   neither that option nor `allowImportingTsExtensions`, in place, with the
   same layout rules as the `include` edit, and prints `tsconfig.json` when
   it wrote either edit.
+- CI adds a packed-tarball job that installs the packed package with
+  `--ignore-scripts` and runs the walkthrough on Node 22.18.0 and 26.
 
 ### Changed
 

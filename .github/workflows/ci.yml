@@ -50,3 +50,30 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run selftest
+
+  # The packed tarball, installed into a fresh project and driven through
+  # the CLI (scripts/pack-check.mjs), on the lowest release package.json's
+  # `engines` allows and on the newest line. The main job runs on 24 only,
+  # because its lockfile needs npm 11; here npm installs the tarball alone,
+  # which any npm can do, so the build happens on 24 and the check on the
+  # matrix release.
+  packed-tarball:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.18.0", "26"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node --version
+      - run: node scripts/pack-check.mjs
