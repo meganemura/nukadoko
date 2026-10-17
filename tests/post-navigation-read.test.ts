@@ -1,4 +1,4 @@
-import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -174,15 +174,16 @@ describe("nuka tend: post-navigation-read", () => {
       expect(notes[0]!.step).toBe("wait-for-late-element");
       expect(notes[0]!.message).toContain('"goto"');
       expect(notes[0]!.message).toContain('"expect"');
-      // The step's own two calls (`await page.goto(...)` then
-      // `await expect(...)`) run back to back with nothing in between, so
-      // the real, measured gap is small: well inside the cutoff this
-      // finding uses to decide whether listing it is still worth a reader's
-      // attention.
-      const [, gapMsText] = /(\d+)ms after its own/.exec(notes[0]!.message) ?? [];
-      expect(gapMsText).toBeDefined();
-      expect(Number(gapMsText)).toBeGreaterThanOrEqual(0);
-      expect(Number(gapMsText)).toBeLessThan(10_000);
+      // The gap is the one the step record measured: the next call's start
+      // minus the goto's end. Compared to the record rather than to a
+      // duration, so a loaded machine changes the number on both sides.
+      const stepRecord = JSON.parse(await readFile(path.join(rootDir, recordPath), "utf8"));
+      const gotoIndex = stepRecord.actions.findIndex((action: { method: string }) => action.method === "goto");
+      const gotoAction = stepRecord.actions[gotoIndex];
+      const nextAction = stepRecord.actions[gotoIndex + 1];
+      expect(nextAction.method).toBe("expect");
+      const gapMs = Date.parse(nextAction.at) - (Date.parse(gotoAction.at) + gotoAction.ms);
+      expect(notes[0]!.message).toContain(`called "expect" ${gapMs}ms after its own "goto" finished`);
       // Not a verdict, the same
       // wording fixture-touches-app.ts's own note already uses.
       expect(notes[0]!.message).toContain("Not a judgment");

@@ -22,6 +22,20 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
+// The timed-out step waits on a promise only the test settles, so a run
+// that waited for it would never return. The run returning, with the step
+// still held, shows the timeout cut it off.
+const g = globalThis as Record<string, unknown>;
+
+function heldSteps(): Array<() => void> {
+  return (g.__nukadokoHeldSteps as Array<() => void> | undefined) ?? [];
+}
+
+function releaseHeldSteps(): void {
+  for (const release of heldSteps()) release();
+  g.__nukadokoHeldSteps = [];
+}
+
 describe("nuka run: compat step/hook execution honesty", () => {
   let rootDir: string;
 
@@ -30,30 +44,21 @@ describe("nuka run: compat step/hook execution honesty", () => {
   });
 
   afterEach(async () => {
+    releaseHeldSteps();
     await removeTempDir(rootDir);
   });
 
   describe("step timeout enforcement (item 2)", () => {
     it("a step exceeding its own timeout fails at the configured value, not at how long it actually runs, and the scenario moves on", async () => {
       const stdout = createCaptureSink();
-      const startedAt = Date.now();
       const exitCode = await runCli(["run", "--no-check", "features/step-timeout.feature:3"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
       });
-      const elapsedMs = Date.now() - startedAt;
 
       expect(exitCode).toBe(1);
-      // The glue's own sleep is 30000ms; a run that actually waited for it
-      // would take at least that long. This bound only has to be far below
-      // that and far above ordinary CLI/discovery overhead, so what it
-      // proves is that the 20ms timeout — not the glue's own duration — is
-      // what this scenario waited on. The bound was 3000ms against a 5000ms
-      // sleep until a full `vitest run` measured 3332ms here under parallel
-      // load: the fix is a wider gap, not a threshold creeping toward the
-      // sleep it is supposed to be distinguishable from.
-      expect(elapsedMs).toBeLessThan(10_000);
+      expect(heldSteps()).toHaveLength(1);
 
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.status).toBe("failed");
@@ -146,21 +151,15 @@ describe("nuka run: compat step/hook execution honesty", () => {
   describe("done-callback form is not supported (item 5)", () => {
     it("a step expecting a done callback fails instead of hanging, with a readable message", async () => {
       const stdout = createCaptureSink();
-      const startedAt = Date.now();
       const exitCode = await runCli(["run", "--no-check", "features/step-done-callback.feature"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),
       });
-      const elapsedMs = Date.now() - startedAt;
 
+      // A run that called the step would throw "done is not a function"
+      // from inside it, and the message checks below tell that apart.
       expect(exitCode).toBe(1);
-      // No timeout is configured on this step at all — a run that actually
-      // called it and waited on `done()` (never invoked with the right
-      // signature) would hang indefinitely. The comparison here is against
-      // "forever", so the bound can be loose enough to survive parallel-
-      // worker load without weakening what it proves.
-      expect(elapsedMs).toBeLessThan(10_000);
 
       const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
       expect(record.steps[0].status).toBe("failed");

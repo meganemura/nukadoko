@@ -343,6 +343,25 @@ just until 0.1.
   skill now also says what to add when `nuka check` warns
   `scenario-without-then`.
 
+- **The remaining duration bounds in the test suite are gone.** This
+  changes the test suite only. The compat step timeout test in
+  `tests/compat-execution.test.ts` holds its step on a promise only the
+  test settles, as the other compat timeout tests already do, and the
+  done-callback test drops its 10 second bound, since the run returning at
+  all is the claim. `tests/do-fixture-use-contract.test.ts` drops its 10
+  second per-test budget and checks that the error names the fixture's own
+  150ms timeout. `tests/poll.test.ts` waits on each poll without a time
+  limit, checks that an invalid option ends the poll before `fn` runs, and
+  measures `waitedMs` on a fake clock. `tests/post-navigation-read.test.ts`
+  compares the reported gap with the one the step record measured, and
+  `tests/compat-negative-timeout.test.ts` holds its step forever instead of
+  bounding how long the call took. `tests/run-fixture-bag.test.ts` and
+  `tests/compat-parameter-type-transformer.test.ts` load the command module
+  in a `beforeAll`, so the first test no longer pays for that import inside
+  its own timeout. The busy-session test in `tests/live-session.test.ts`
+  holds its first step until the second call has been refused, instead of
+  racing a 150ms sleep against a 600ms step.
+
 - **Tests that a loaded machine failed now assert an ordering or an event instead of a duration.**
   This changes the test suite only. The compat timeout tests in
   `tests/compat-run-scope.test.ts` held their slow step or hook on a sleep

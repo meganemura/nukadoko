@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { pollWithRecording, type PollOutcome } from "../src/context/poll.js";
@@ -113,29 +113,29 @@ describe("ctx.poll", () => {
   // The timeout is a budget for the whole call. A deadline checked only
   // after an attempt has already finished lets that attempt, and the sleep
   // before the next one, run past it. A non-finite timeout never satisfies
-  // the comparison, so the loop does not end.
+  // the comparison, so the loop does not end. An attempt here settles only
+  // when the test releases it, so a poll that waited for it would never
+  // end, and its ending at all shows the budget cut it off.
   it("does not return a value from an attempt that outlasts the timeout", async () => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
-    const started = Date.now();
-    const outcome = await outcomeWithin(
+    let releaseLate: () => void = () => {};
+    const outcome = await settled(
       ctx.poll(
-        async () => {
-          await delay(600);
-          return "late";
-        },
+        () =>
+          new Promise<string>((resolve) => {
+            releaseLate = () => resolve("late");
+          }),
         { timeout: 100, interval: 10 },
       ),
-      400,
     );
+    releaseLate();
     expect(outcome).toBeInstanceOf(PollTimeoutError);
-    expect(Date.now() - started).toBeLessThan(400);
   });
 
   it("does not take another attempt once waiting the interval would pass the timeout", async () => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
     let calls = 0;
-    const started = Date.now();
-    const outcome = await outcomeWithin(
+    const outcome = await settled(
       ctx.poll(
         async () => {
           calls += 1;
@@ -143,44 +143,47 @@ describe("ctx.poll", () => {
         },
         { timeout: 80, interval: 500 },
       ),
-      400,
     );
     expect(outcome).toBeInstanceOf(PollTimeoutError);
     expect(calls).toBe(1);
-    expect(Date.now() - started).toBeLessThan(400);
   });
 
   it("times out a fn that never settles", async () => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
-    const started = Date.now();
-    const outcome = await outcomeWithin(
-      ctx.poll(() => new Promise(() => {}), { timeout: 120, interval: 20 }),
-      400,
-    );
+    const outcome = await settled(ctx.poll(() => new Promise(() => {}), { timeout: 120, interval: 20 }));
     expect(outcome).toBeInstanceOf(PollTimeoutError);
-    expect(Date.now() - started).toBeLessThan(400);
   });
 
-  it("ends when timeout is NaN", async () => {
+  it("ends when timeout is NaN, before calling fn", async () => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
-    const started = Date.now();
-    const outcome = await outcomeWithin(
-      ctx.poll(async () => undefined, { timeout: Number.NaN, interval: 20 }),
-      300,
+    let calls = 0;
+    const outcome = await settled(
+      ctx.poll(
+        async () => {
+          calls += 1;
+          return undefined;
+        },
+        { timeout: Number.NaN, interval: 20 },
+      ),
     );
     expect(outcome).toBeInstanceOf(InvalidPollOptionsError);
-    expect(Date.now() - started).toBeLessThan(300);
+    expect(calls).toBe(0);
   });
 
-  it("ends when interval is NaN", async () => {
+  it("ends when interval is NaN, before calling fn", async () => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
-    const started = Date.now();
-    const outcome = await outcomeWithin(
-      ctx.poll(async () => undefined, { timeout: 5_000, interval: Number.NaN }),
-      300,
+    let calls = 0;
+    const outcome = await settled(
+      ctx.poll(
+        async () => {
+          calls += 1;
+          return undefined;
+        },
+        { timeout: 5_000, interval: Number.NaN },
+      ),
     );
     expect(outcome).toBeInstanceOf(InvalidPollOptionsError);
-    expect(Date.now() - started).toBeLessThan(300);
+    expect(calls).toBe(0);
   });
 
   it.each([
@@ -193,12 +196,11 @@ describe("ctx.poll", () => {
   ])("refuses a non-positive or non-finite timeout or interval (%j) before calling fn", async (options) => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
     let calls = 0;
-    const outcome = await outcomeWithin(
+    const outcome = await settled(
       ctx.poll(async () => {
         calls += 1;
         return "ready";
       }, options),
-      300,
     );
     expect(outcome).toBeInstanceOf(InvalidPollOptionsError);
     expect(calls).toBe(0);
@@ -207,7 +209,7 @@ describe("ctx.poll", () => {
   it("records timed_out, not a late rejection, when fn never settles and then rejects", async () => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
     let rejectLate: (error: Error) => void = () => {};
-    const outcome = await outcomeWithin(
+    const outcome = await settled(
       ctx.poll(
         () =>
           new Promise<undefined>((_resolve, reject) => {
@@ -215,7 +217,6 @@ describe("ctx.poll", () => {
           }),
         { timeout: 40, interval: 10 },
       ),
-      400,
     );
     expect(outcome).toBeInstanceOf(PollTimeoutError);
     const unhandled = new Promise<unknown>((resolve) => {
@@ -231,23 +232,13 @@ describe("ctx.poll", () => {
   });
 });
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-// Resolves with the poll's value, the error it rejected with, or "pending"
-// once `limitMs` has passed. The limit is what makes a poll that never
-// settles fail the test instead of holding the run.
-async function outcomeWithin(work: Promise<unknown>, limitMs: number): Promise<unknown> {
-  return Promise.race([
-    work.then(
-      (value) => value,
-      (error: unknown) => error,
-    ),
-    delay(limitMs).then(() => "pending"),
-  ]);
+// Resolves with the poll's value or the error it rejected with. A poll that
+// never settles is left to the test's own timeout.
+async function settled(work: Promise<unknown>): Promise<unknown> {
+  return work.then(
+    (value) => value,
+    (error: unknown) => error,
+  );
 }
 
 // Responsibility: `pollWithRecording`'s own per-iteration `onProgress`
@@ -318,23 +309,32 @@ describe("pollWithRecording: onProgress", () => {
     expect(finished?.outcome).toBe("timed_out");
   });
 
-  it("reports one timed_out attempt when fn has not settled by the budget", async () => {
-    const progressCalls: number[] = [];
-    let finished: PollOutcome | undefined;
-    await expect(
-      pollWithRecording(
-        () => new Promise(() => {}),
-        { timeout: 40, interval: 10 },
-        (outcome) => {
-          finished = outcome;
-        },
-        (attempts) => progressCalls.push(attempts),
-      ),
-    ).rejects.toBeInstanceOf(PollTimeoutError);
-    expect(progressCalls).toEqual([1]);
-    expect(finished?.attempts).toBe(1);
-    expect(finished?.outcome).toBe("timed_out");
-    expect(finished?.waitedMs).toBeLessThan(300);
+  // A fake clock, so waitedMs is the budget itself and not whatever a loaded
+  // machine stretched it to.
+  it("reports one timed_out attempt, waiting exactly the budget, when fn has not settled by it", async () => {
+    vi.useFakeTimers();
+    try {
+      const progressCalls: number[] = [];
+      let finished: PollOutcome | undefined;
+      const outcome = settled(
+        pollWithRecording(
+          () => new Promise(() => {}),
+          { timeout: 40, interval: 10 },
+          (result) => {
+            finished = result;
+          },
+          (attempts) => progressCalls.push(attempts),
+        ),
+      );
+      await vi.advanceTimersByTimeAsync(40);
+      expect(await outcome).toBeInstanceOf(PollTimeoutError);
+      expect(progressCalls).toEqual([1]);
+      expect(finished?.attempts).toBe(1);
+      expect(finished?.outcome).toBe("timed_out");
+      expect(finished?.waitedMs).toBe(40);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("is optional: omitting it changes nothing about a poll's own resolution", async () => {

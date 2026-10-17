@@ -1,27 +1,24 @@
 import { Given, When } from "../../nukadoko-compat-shim.js";
 
-// A compat step's own `{ timeout }`
-// is now actually enforced (previously kept but never applied). The first
-// step below sleeps well past its own timeout — the point is that
-// `{ timeout }` cuts the wait short at 20ms, not that its own longer sleep
-// ever completes (the honest limitation: the sleep keeps running in the
-// background regardless).
+// A compat step's own `{ timeout }` is enforced: the first step below
+// never settles on its own, so only its 20ms timeout can end it.
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Outlives its own 20ms timeout — always fails, promptly, at ~20ms, never at
-// 30000ms. tests/compat-execution.test.ts proves that by asserting the
-// elapsed wall time, so the gap between these two numbers is exactly the
-// room that assertion's own threshold has to sit in. Lengthening this sleep
-// costs nothing — the timeout cuts it short either way, so the test does not
-// get slower — which is why the number has been raised whenever the gap
-// proved too narrow: 2000ms originally, then 5000ms, and now 30000ms, after
-// a full-suite run under parallel load measured 3332ms against a 3000ms
-// threshold.
+// Settles only when tests/compat-execution.test.ts releases it, after the
+// run has returned. A run that waited for this step instead of cutting it
+// off at its timeout would never return, however fast or slow the machine.
+function heldUntilReleased(): Promise<void> {
+  const g = globalThis as Record<string, unknown>;
+  const held = (g.__nukadokoHeldSteps as Array<() => void> | undefined) ?? [];
+  g.__nukadokoHeldSteps = held;
+  return new Promise((resolve) => held.push(resolve));
+}
+
 Given("a legacy step that outlives its own timeout", { timeout: 20 }, async function () {
-  await sleep(30_000);
+  await heldUntilReleased();
 });
 
 // 12345ms is a distinctive, otherwise-unlikely-to-collide timeout value

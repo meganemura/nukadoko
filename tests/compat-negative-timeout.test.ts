@@ -31,15 +31,11 @@ describe("runWithTimeout: a negative compat timeout means no timeout", () => {
     ).rejects.toThrow("timed out after 0ms");
   });
 
+  // The step never settles, so only the 30ms timeout can end the call.
   it("still times out at a positive value", async () => {
-    const startedAt = Date.now();
     await expect(
-      runWithTimeout(async () => {
-        await sleep(400);
-        return "finished";
-      }, 30, "Step", "compat: a slow step"),
+      runWithTimeout(() => new Promise<string>(() => {}), 30, "Step", "compat: a slow step"),
     ).rejects.toThrow("timed out after 30ms");
-    expect(Date.now() - startedAt).toBeLessThan(300);
   });
 
   it("still times out a typed step whose own timeout is negative", async () => {

@@ -203,24 +203,27 @@ describe("nuka session start/stop (live sessions)", () => {
 
   it("a second execution against a busy session is refused, not queued", async () => {
     await start("dana");
+    const started = path.join(rootDir, "held-started");
+    const release = path.join(rootDir, "held-release");
 
-    const [slow, fast] = await Promise.all([
-      doStep("slow", '{"ms":600}', "dana"),
-      (async () => {
-        // Started shortly after the slow one, while it is still busy —
-        // long enough after to be certain the daemon has already claimed
-        // its own busy slot, short enough to still be well inside the
-        // slow call's own 600ms.
-        await new Promise((resolve) => setTimeout(resolve, 150));
-        return doStep("slow", '{"ms":50}', "dana");
-      })(),
-    ]);
+    let heldSettled = false;
+    const held = doStep("held", JSON.stringify({ started, release }), "dana").finally(() => {
+      heldSettled = true;
+    });
+    while (!existsSync(started)) {
+      if (heldSettled) throw new Error(`the held step ended before it started: ${(await held).stderr}`);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 
-    expect(slow.exitCode).toBe(0);
-    expect(slow.record?.status).toBe("passed");
-    expect(fast.exitCode).toBe(1);
-    expect(fast.record).toBeUndefined();
-    expect(fast.stderr).toContain("busy");
+    const second = await doStep("count", "{}", "dana");
+    await writeFile(release, "");
+    const first = await held;
+
+    expect(first.exitCode).toBe(0);
+    expect(first.record?.status).toBe("passed");
+    expect(second.exitCode).toBe(1);
+    expect(second.record).toBeUndefined();
+    expect(second.stderr).toContain("busy");
   });
 
   it("socket is 0600 in a 0700 directory while live, and stop persists storageState to the same .json path", async () => {

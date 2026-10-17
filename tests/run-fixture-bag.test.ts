@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
@@ -9,6 +9,12 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // any scenario record is written" test) rather than letting the step run
 // and fail. Exercised through both `nuka run` and `nuka do` — the two
 // executors src/fixture/validate-fixtures.ts's shared judgment protects.
+
+// runCli imports a command's module the first time it runs. Loaded here,
+// that import counts against the hook's budget, not the first test's.
+beforeAll(async () => {
+  await Promise.all([import("../src/cli/run.js"), import("../src/cli/do.js")]);
+});
 
 describe("nuka run: fixture bag's structural refusal", () => {
   let rootDir: string;

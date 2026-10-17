@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stripRunProgressLines } from "./helpers/fixtures.js";
 
@@ -17,6 +17,12 @@ async function readStepRecord(rootDir: string, recordId: string): Promise<Record
 
 describe("nuka run: a parameter-type transformer", () => {
   let rootDir: string;
+
+  // runCli imports a command's module the first time it runs. Loaded here,
+  // that import counts against the hook's budget, not the first test's.
+  beforeAll(async () => {
+    await import("../src/cli/run.js");
+  });
 
   beforeEach(async () => {
     rootDir = await copyFixtureToTempDir("compat-parameter-type-transformer-project");
