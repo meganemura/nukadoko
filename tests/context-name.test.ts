@@ -1,11 +1,15 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
+import * as nukadoko from "../src/index.js";
 import {
+  ContextOptionsConflictError,
   contextFileName,
+  InvalidContextNameError,
   isNamedContextHarnessFile,
   isValidContextName,
   MAX_CONTEXT_NAME_LENGTH,
+  snapshotContextOptions,
 } from "../src/context/context-name.js";
 import { createEvidenceCollector } from "../src/context/evidence.js";
 import { ReservedEvidenceNameError } from "../src/context/errors.js";
@@ -64,5 +68,51 @@ describe("context names", () => {
     for (const name of ["trace.json", "final.jpg", "trace..zip", "trace.-x.zip", "screenshot.png", "notes.txt"]) {
       expect(isNamedContextHarnessFile(name)).toBe(false);
     }
+  });
+});
+
+describe("snapshotContextOptions", () => {
+  // Nested option values: what `pageAs` compares a later call against.
+  const leaf = gs.oneOf<unknown>(gs.integers({ minValue: -5, maxValue: 5 }), gs.booleans(), gs.text({ maxSize: 4 }), gs.just(undefined), gs.just(null));
+  const plain = gs.composite((tc): Record<string, unknown> => {
+    const keys = tc.draw(gs.arrays(gs.sampledFrom(["viewport", "width", "height", "locale", "javaScriptEnabled"]), { maxSize: 4 }));
+    const value: Record<string, unknown> = {};
+    for (const key of keys) {
+      value[key] = tc.draw(gs.booleans()) ? tc.draw(leaf) : { [key]: tc.draw(leaf), list: [tc.draw(leaf)] };
+    }
+    return value;
+  });
+
+  it("keeps no undefined-valued key, and is unchanged by a later mutation of its input", () =>
+    hegel.test((tc) => {
+      const options = tc.draw(plain);
+      const snapshot = snapshotContextOptions(options);
+      const before = JSON.stringify(snapshot);
+      expect(Object.values(snapshot).some((value) => value === undefined)).toBe(false);
+      for (const value of Object.values(snapshot)) {
+        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+          expect(Object.values(value).some((inner) => inner === undefined)).toBe(false);
+        }
+      }
+      // JSON drops undefined-valued keys too, so the two must agree.
+      expect(before).toBe(JSON.stringify(options));
+      for (const value of Object.values(options)) {
+        if (typeof value === "object" && value !== null) (value as Record<string, unknown>).mutated = 1;
+      }
+      options.added = true;
+      expect(JSON.stringify(snapshot)).toBe(before);
+      expect(snapshotContextOptions(snapshot)).toEqual(snapshot);
+    }));
+
+  it("reads no options the same as empty options", () => {
+    expect(snapshotContextOptions(undefined)).toEqual({});
+    expect(snapshotContextOptions({ viewport: undefined })).toEqual({});
+  });
+});
+
+describe("the package entry point", () => {
+  it("exports both pageAs errors, so a step can tell them apart with instanceof", () => {
+    expect(nukadoko.InvalidContextNameError).toBe(InvalidContextNameError);
+    expect(nukadoko.ContextOptionsConflictError).toBe(ContextOptionsConflictError);
   });
 });

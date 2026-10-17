@@ -35,13 +35,17 @@ just until 0.1.
   `fixture-touches-app`, `fixture-scope-violation`, and
   `page-override-unowned` count it as a browser fixture. `ctx.page()`
   is unchanged. docs/spec.md "Context API" records the shapes that were
-  refused and why.
+  refused and why. `InvalidContextNameError`, `ContextOptionsConflictError`,
+  and the `NamedTraceEntry` type are exported from `nukadoko`, and the
+  `fixture-touches-app` note now says a fixture reaches `page`, `context`,
+  or `pageAs`.
 - **A failed step's lines on stderr name what an `expect` compared.**
   The first line of a Playwright assertion names the matcher and leaves
   out both values (`expect(locator).toHaveText(expected) failed`), so the
   reason was only in the step record. Its `Locator:`, `Expected:`,
   `Received:`, and `Error:` lines now follow, at most four, each cut to
-  200 characters, and the `Call log:` stays in the step record.
+  200 characters (code points, so a cut never splits a surrogate pair),
+  and the `Call log:` stays in the step record.
 
 ## 0.17.0 — 2026-10-17
 

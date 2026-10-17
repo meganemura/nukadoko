@@ -103,8 +103,13 @@ export function assertionDetailLines(message: string): string[] {
     const trimmed = line.trim();
     if (trimmed === "Call log:") break;
     if (!ASSERTION_DETAIL.test(trimmed)) continue;
+    // Cut by code point, not by UTF-16 unit: a slice at a unit index can
+    // split a surrogate pair and print half of an emoji as a lone surrogate.
+    const codePoints = Array.from(trimmed);
     details.push(
-      trimmed.length > MAX_ASSERTION_DETAIL_LENGTH ? `${trimmed.slice(0, MAX_ASSERTION_DETAIL_LENGTH)}...` : trimmed,
+      codePoints.length > MAX_ASSERTION_DETAIL_LENGTH
+        ? `${codePoints.slice(0, MAX_ASSERTION_DETAIL_LENGTH).join("")}...`
+        : trimmed,
     );
     if (details.length === MAX_ASSERTION_DETAIL_LINES) break;
   }

@@ -40,6 +40,7 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "HttpOmittedCounts",
     "Model",
     "ModelCommand",
+    "NamedTraceEntry",
     "NukadokoConfig",
     "NukadokoConfigInput",
     "ObservedCounts",

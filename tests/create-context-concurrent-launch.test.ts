@@ -153,6 +153,24 @@ describe("createStepContext: concurrent first calls share one launch", () => {
     await expect(ctx.pageAs("ben", { javaScriptEnabled: true })).rejects.toThrow(ContextOptionsConflictError);
   });
 
+  it("compares a later call against a copy of the first options, with undefined keys read as absent", async () => {
+    launcher.launch.mockImplementation(async () => stubHandle());
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+
+    const first: { javaScriptEnabled: boolean; locale?: string } = { javaScriptEnabled: false, locale: undefined };
+    const ben = await ctx.pageAs("ben", first);
+    await expect(ctx.pageAs("ben", { javaScriptEnabled: false })).resolves.toBe(ben);
+
+    // Mutating the object the first call passed does not move what the
+    // context was opened with: the same object now asks for other options.
+    first.javaScriptEnabled = true;
+    await expect(ctx.pageAs("ben", first)).rejects.toThrow(ContextOptionsConflictError);
+    await expect(ctx.pageAs("ben", { javaScriptEnabled: false, viewport: undefined })).resolves.toBe(ben);
+
+    const aki = await ctx.pageAs("aki");
+    await expect(ctx.pageAs("aki", { viewport: undefined })).resolves.toBe(aki);
+  });
+
   it("retries the launch on the next call after a launch failed", async () => {
     launcher.launch.mockRejectedValueOnce(new Error("launch failed"));
     launcher.launch.mockImplementation(async () => stubHandle());

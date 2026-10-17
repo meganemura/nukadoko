@@ -1,5 +1,6 @@
 import { PLAYWRIGHT_VERSION, PlaywrightMissingError } from "../context/load-playwright.js";
 import { closeFixtureNames, type FixtureGraph } from "../fixture/graph.js";
+import { BROWSER_FIXTURE_NAMES } from "../step/context.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { BoundStepLine } from "./feature-check.js";
@@ -35,12 +36,29 @@ import type { CheckIssue } from "./types.js";
 // scenarios. Compat steps are not judged: their `this` is not read
 // statically, so there is nothing certain to report.
 
-/** The builtins that load Playwright, and the call a run names for each.
- * `context` is built from `ctx.page()`, so a run names that call for it. */
+/** The call a run names for each browser builtin. `context` is built from
+ * `ctx.page()`, so a run names that call for it. */
+const BROWSER_BUILTIN_CALLS: Readonly<Record<string, string>> = {
+  page: "ctx.page()",
+  context: "ctx.page()",
+  pageAs: "pageAs()",
+};
+
+/** The builtins that load Playwright, and the call a run names for each:
+ * every name in `BROWSER_FIXTURE_NAMES`, in its order, then `request`,
+ * which loads Playwright without opening a browser. Derived from the shared
+ * set rather than listed again, so a new browser builtin cannot reach
+ * `needs_browser` and miss this check; one with no call named above fails
+ * at load, in every test that imports this module, instead of reporting a
+ * guessed call. */
 const PLAYWRIGHT_BUILTINS: ReadonlyMap<string, string> = new Map([
-  ["page", "ctx.page()"],
-  ["context", "ctx.page()"],
-  ["pageAs", "pageAs()"],
+  ...[...BROWSER_FIXTURE_NAMES].map((name): [string, string] => {
+    const call = BROWSER_BUILTIN_CALLS[name];
+    if (call === undefined) {
+      throw new Error(`playwright-check.ts names no call for the browser builtin "${name}"`);
+    }
+    return [name, call];
+  }),
   ["request", "ctx.request()"],
 ]);
 

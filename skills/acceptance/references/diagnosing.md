@@ -92,6 +92,9 @@ trace only when the DOM itself is what's in question: `npx playwright
 show-trace <evidence.dir>/trace.zip`. That trace is this one step's own
 window now, not the whole scenario's recording, so what it shows is exactly
 this failure, nothing earlier in the scenario to scrub past first.
+A `pageAs(name)` context records apart from the default one: its trace is
+the `evidence.named_traces[]` entry whose `as` is that name, with `file`
+naming `trace.<name>.zip`, and its screenshot is `final.<name>.png`.
 
 ## A step that timed out
 

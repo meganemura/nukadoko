@@ -53,9 +53,34 @@ describe("assertionDetailLines", () => {
       const details = assertionDetailLines(message);
       expect(details.length).toBeLessThanOrEqual(4);
       for (const detail of details) {
-        expect(detail.length).toBeLessThanOrEqual(203);
-        const kept = detail.endsWith("...") && detail.length === 203 ? detail.slice(0, 200) : detail;
+        const codePoints = Array.from(detail);
+        expect(codePoints.length).toBeLessThanOrEqual(203);
+        const kept =
+          detail.endsWith("...") && codePoints.length === 203 ? codePoints.slice(0, 200).join("") : detail;
         expect(lines.some((line) => line.trim().startsWith(kept))).toBe(true);
       }
     }));
+
+  it("never cuts a surrogate pair in half", () =>
+    hegel.test((tc) => {
+      // Astral characters make every cut position a candidate for landing
+      // between the two halves of a pair, which a UTF-16 slice would do.
+      const astral = tc.draw(gs.arrays(gs.sampledFrom(["\u{1F600}", "\u{20BB7}", "a", " ", "\u00e9"]), { maxSize: 450 }));
+      const value = tc.draw(gs.text({ maxSize: 50 })).replace(/[\r\n\u2028\u2029\u001b]/g, " ") + astral.join("");
+      if (hasLoneSurrogate(value)) return;
+      const message = ["expect(received).toEqual(expected)", "", `Received: ${value}`].join("\n");
+      for (const detail of assertionDetailLines(message)) {
+        expect(hasLoneSurrogate(detail)).toBe(false);
+      }
+    }));
+
+  it("cuts a long line of astral characters at 200 code points", () => {
+    const detail = assertionDetailLines(`expect(received).toBe(expected)\n\nReceived: ${"\u{1F600}".repeat(300)}`);
+    expect(Array.from(detail[0]!)).toHaveLength(203);
+    expect(detail[0]!.endsWith("\u{1F600}...")).toBe(true);
+  });
 });
+
+function hasLoneSurrogate(text: string): boolean {
+  return /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text);
+}

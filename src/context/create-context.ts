@@ -25,7 +25,12 @@ import { parseStepReturns } from "../step/parse-returns.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowser, type BrowserHandle, type TracedContextHandle } from "./browser-evidence.js";
-import { assertValidContextName, ContextOptionsConflictError, contextFileName } from "./context-name.js";
+import {
+  assertValidContextName,
+  ContextOptionsConflictError,
+  contextFileName,
+  snapshotContextOptions,
+} from "./context-name.js";
 import { createCallsCollector } from "./calls.js";
 import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
@@ -727,8 +732,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const pageSetups = new Map<string | undefined, Promise<Page>>();
   let contextOpensInFlight = 0;
   // The options each `pageAs` name was first asked for, recorded before its
-  // setup starts so a concurrent second call is compared too.
-  const requestedOptions = new Map<string, BrowserContextOptions | undefined>();
+  // setup starts so a concurrent second call is compared too. A snapshot,
+  // not the caller's object (see `snapshotContextOptions`).
+  const requestedOptions = new Map<string, Record<string, unknown>>();
   let requestContext: APIRequestContext | undefined;
   let requestSetup: Promise<APIRequestContext> | undefined;
 
@@ -932,13 +938,16 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // A later call without options reaches the context as it is. One
         // with options must ask for what the context already has: Playwright
         // fixes a context's options when it creates it.
-        if (options !== undefined && !isDeepStrictEqual(options, requestedOptions.get(name) ?? {})) {
+        if (options !== undefined && !isDeepStrictEqual(snapshotContextOptions(options), requestedOptions.get(name))) {
           throw new ContextOptionsConflictError(name);
         }
       } else {
-        requestedOptions.set(name, options);
+        requestedOptions.set(name, snapshotContextOptions(options));
       }
-      return pageOf(name, options);
+      // The snapshot opens the context too, so what Playwright receives is
+      // what later calls are compared against, even if the caller mutates
+      // its object while the browser is still launching.
+      return pageOf(name, requestedOptions.get(name) as BrowserContextOptions);
     },
     async request(): Promise<APIRequestContext> {
       // Same sharing as `ctx.page()`: two concurrent first calls must not each

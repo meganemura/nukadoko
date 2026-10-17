@@ -107,11 +107,12 @@ return is exactly what stays missing from that step record too.
 
 ## Several people in one scenario
 
-When the app tells people apart by a cookie, give each person a browser
-context of their own: `await pageAs(name, { javaScriptEnabled: false })`
-returns Playwright's `Page` (a `context.newPage()` tab shares cookies).
-Later calls for a name return the same page; other options there throw.
-Use the person's name from the feature line: records tag it with `as`.
+When the app tells people apart by a cookie, give each person a browser context of their own:
+`await pageAs(name, { javaScriptEnabled: false })` returns Playwright's
+`Page` (a `context.newPage()` tab shares cookies). Later calls for a name
+return the same page; other options there throw. A name is 1 to 64
+lowercase letters, digits, and hyphens, starting with a letter or digit, or it throws:
+take it from the feature line, lowercased (`pageAs(name.toLowerCase())`); records tag it with `as`.
 
 ## `page.goto` and baseURL
 

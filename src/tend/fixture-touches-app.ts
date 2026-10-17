@@ -3,7 +3,7 @@ import type { TendIssue } from "./types.js";
 
 // Responsibility: docs/spec.md "Tending"'s `fixture-touches-app` finding —
 // names every `config.fixtures` entry that
-// reaches `page`/`context`, directly or through another fixture. This is
+// reaches `page`, `context`, or `pageAs`, directly or through another fixture. This is
 // the standing answer to "a fixture that drives Given": a fixture that logs
 // a user in before a step ever runs lets a scenario go green with a
 // precondition the feature file itself never named, quietly reversing "the
@@ -27,7 +27,7 @@ export function findFixturesTouchingApp(graph: FixtureGraph): TendIssue[] {
     if (fixtureReachesBrowser(name, graph)) {
       issues.push({
         code: "fixture-touches-app",
-        message: `Fixture "${name}" reaches page/context, directly or through another fixture, so it can ` +
+        message: `Fixture "${name}" reaches page, context, or pageAs, directly or through another fixture, so it can ` +
           `drive the application before any step names it. Not a verdict: storageState setup is the common ` +
           `legitimate reason a fixture does this.`,
         fixture: name,

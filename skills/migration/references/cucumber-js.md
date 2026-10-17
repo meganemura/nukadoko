@@ -244,7 +244,8 @@ What changed:
 - `this.request` becomes the `request` fixture, named by destructuring the
   first argument: only what the executor actually injects can be named
   there, nothing implicit, and only the names actually named get built.
-  A step naming neither `page` nor `context` never launches a browser.
+  A step naming none of `page`, `context`, and `pageAs` never launches a
+  browser.
   A write made with `page.request` or `context.request` (the
   APIRequestContext on the page, not the `request` fixture) is recorded on
   `observed` and http.jsonl the same way, with `via: "request"`. A GET or

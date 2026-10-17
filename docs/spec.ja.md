@@ -448,6 +448,7 @@ fixture の名前:
   context は scenario の中でその `name` が最初に呼ばれたときに開き、後の呼び出しは同じページを返します。
   後の呼び出しが別の `options` を渡すと `ContextOptionsConflictError` を投げます。
   Playwright は context を作るときにオプションを固定するので、2 つ目のオプションは無視するしかないからです。
+  比較には最初の呼び出しのときのオプションを使い、値が `undefined` のキーは無いものとして扱います。
   `name` は小文字、数字、ハイフンの 1 文字から 64 文字で、先頭は文字か数字です。
   名前がファイル名の一部になるからです。
   それ以外の名前は `InvalidContextNameError` を投げます。
@@ -3462,7 +3463,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               then every location this run wrote and a summary
                               line. A failed step's line is followed by its
                               error's first line (and an expect's Locator,
-                              Expected, and Received lines), a used line for each step
+                              Expected, Received, and Error lines), a used line
+                              for each step
                               it read from whose process exited nonzero
                               (its exit code and first stderr line), and its
                               step record path.
@@ -3723,7 +3725,8 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               support code, a secrets entry naming a key no
                               envFile defines,
                               a fixture no typed step requires, a fixture
-                              reaching page/context, a step that made a call soon
+                              reaching page, context, or pageAs, a step that
+                              made a call soon
                               after its own navigation, and scenarios that
                               open with the same steps up to the first When,
                               docstrings and tables compared too (measured,

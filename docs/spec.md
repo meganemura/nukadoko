@@ -541,7 +541,9 @@ The fixture names:
   call for `name` in the scenario, and a later call returns the same page.
   A later call with other `options` throws `ContextOptionsConflictError`:
   Playwright fixes a context's options when it creates it, so the second
-  set could only be ignored. A `name` is 1 to 64 lowercase letters, digits,
+  set could only be ignored. The comparison reads the options as they were
+  at the first call, and a key whose value is `undefined` counts as absent.
+  A `name` is 1 to 64 lowercase letters, digits,
   and hyphens, starting with a letter or a digit, because it becomes part
   of file names; another name throws `InvalidContextNameError`. The context
   is `page.context()` of the page it returns. Destructuring `pageAs` launches
@@ -4043,7 +4045,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               then every location this run wrote and a summary
                               line. A failed step's line is followed by its
                               error's first line (and an expect's Locator,
-                              Expected, and Received lines), a used line for each step
+                              Expected, Received, and Error lines), a used line
+                              for each step
                               it read from whose process exited nonzero
                               (its exit code and first stderr line), and its
                               step record path.
@@ -4304,7 +4307,8 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               support code, a secrets entry naming a key no
                               envFile defines,
                               a fixture no typed step requires, a fixture
-                              reaching page/context, a step that made a call soon
+                              reaching page, context, or pageAs, a step that
+                              made a call soon
                               after its own navigation, and scenarios that
                               open with the same steps up to the first When,
                               docstrings and tables compared too (measured,

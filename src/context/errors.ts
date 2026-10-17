@@ -3,6 +3,12 @@
 // pulling in that module's browser/request/session wiring — same convention
 // as config/errors.ts, discover/errors.ts, environment/errors.ts,
 // session/errors.ts, run/errors.ts.
+//
+// The two `pageAs` errors are declared in context-name.ts, beside the rule
+// they enforce, and re-exported here so this file stays the one place the
+// package entry point takes this module's errors from.
+
+export { ContextOptionsConflictError, InvalidContextNameError } from "./context-name.js";
 
 /** Thrown by `ctx.requireEnv(name)` (docs/spec.md "Context API") when `name`
  * has no value in `ctx.env`, or its value is the empty string. Empty string

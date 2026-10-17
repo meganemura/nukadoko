@@ -80,6 +80,33 @@ export function isNamedContextHarnessFile(fileName: string): boolean {
   return false;
 }
 
+/** The options `pageAs` compares a later call against: a copy, so a caller
+ * that mutates its own object after the first call cannot change what the
+ * context was opened with, and with every `undefined`-valued key dropped,
+ * since Playwright reads `{ viewport: undefined }` the same as `{}`. Plain
+ * objects and arrays are copied all the way down; any other value (a
+ * function, a class instance) is kept as it is, because it cannot be
+ * copied without changing what it is. */
+export function snapshotContextOptions(options: object | undefined): Record<string, unknown> {
+  return (options === undefined ? {} : snapshotValue(options)) as Record<string, unknown>;
+}
+
+function snapshotValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(snapshotValue);
+  }
+  if (typeof value === "object" && value !== null && Object.getPrototypeOf(value) === Object.prototype) {
+    const copy: Record<string, unknown> = {};
+    for (const [key, inner] of Object.entries(value)) {
+      if (inner !== undefined) {
+        copy[key] = snapshotValue(inner);
+      }
+    }
+    return copy;
+  }
+  return value;
+}
+
 /** Thrown by `pageAs(name, options)` when `name` is already open in this
  * scenario with other options. A context's options are fixed when
  * Playwright creates it, so the second set could only be ignored, and an
