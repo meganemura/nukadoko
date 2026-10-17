@@ -1,3 +1,5 @@
+import { listTendCodes, type TendCode } from "./codes.js";
+
 // Responsibility: the one finding shape `nuka tend`'s six checks all
 // produce. Shaped identically to
 // src/check/types.ts's `CheckIssue` (code/message/optional file/line/step, plus `fixture`)
@@ -16,7 +18,7 @@
 // analyze.ts's own header says why the field stays).
 
 export interface TendIssue {
-  readonly code: string;
+  readonly code: TendCode;
   readonly message: string;
   readonly file?: string;
   readonly line?: number;
@@ -88,27 +90,13 @@ export { DECLARATION_TEND_CODES, selectReportedNotes, type NoteSelection } from 
 // read it from here.
 export { DESCRIPTION_TODO_PREFIX } from "./description-todo.js";
 
+export { listTendCodes, type TendCode, type TendCodeEntry, type TendCodeInfo } from "./codes.js";
+
 /** Every code a `nuka tend` finding can carry. `nuka tend --fail-on <code>`
  * refuses a code outside this set, so a typo cannot become a flag that
  * never fires; tests/tend-fail-on.test.ts keeps this list equal to the
  * literals under src/tend/. */
-export const TEND_CODES: ReadonlySet<string> = new Set([
-  "additional-feature-dir-missing",
-  "fixture-touches-app",
-  "fixture-unused",
-  "from-unused",
-  "import-failures-unseen",
-  "parameter-type-support-origin",
-  "parameter-type-unused",
-  "pattern-unbound",
-  "post-navigation-read",
-  "repeated-scenario-prefix",
-  "schema-field-undescribed",
-  "secrets-public-key-unknown",
-  "secrets-redact-key-unknown",
-  "step-description-todo",
-  "step-rationale-missing",
-]);
+export const TEND_CODES: ReadonlySet<string> = new Set(listTendCodes().map((entry) => entry.code));
 
 /** Codes an earlier release reported and this one does not, each with what
  * replaced it. `nuka tend --fail-on` refuses these like any unknown code, but

@@ -3766,6 +3766,10 @@ neglect.
 `nuka tend` answers the other question: are this vocabulary and its records
 still healthy.
 
+`nuka tend --codes` lists every code a tend finding can carry, each with a
+one-line description and whether a run without `--all` reports it; with
+`--json` it prints the same list as JSON.
+
 It is a separate command, rather than another set of `check` warnings,
 because the two commands are read at different times and have different meanings.
 `check` runs before every run, in CI, inside an agent's loop, and every
@@ -4417,6 +4421,10 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               --all adds a schema field with no
                               `.describe()` and a step with no `rationale`,
                               and --fail-on naming either code adds that one
+nuka tend --codes [--json]    list every finding code nuka tend can report,
+                              whether a plain run reports it or only --all
+                              does, and a one-line description, instead of
+                              tending a project
 nuka session list [--json]    list every session, across all environments;
                               --json names each one's environment
 nuka session clear [name] [--env <name>]

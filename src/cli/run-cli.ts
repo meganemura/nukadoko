@@ -198,6 +198,7 @@ interface CheckArgs {
 
 interface TendArgs {
   json?: boolean;
+  codes?: boolean;
   all?: boolean;
   /** `--fail-on`; yargs collects a repeated flag into an array. */
   "fail-on"?: string[];
@@ -1033,6 +1034,13 @@ export async function runCli(
             "exit 1 when a finding with this code is reported (repeatable, or comma-separated); every finding " +
             "stays a note in the output, only the exit code changes. For a job that gates on one note, such as " +
             "pattern-unbound",
+        })
+        .option("codes", {
+          type: "boolean",
+          default: false,
+          describe:
+            "list every finding code nuka tend can report, whether a plain run reports it (default) or only --all does, " +
+            "and a one-line description, instead of tending a project",
         }) as Argv<TendArgs>,
     handler: async (args: Arguments<TendArgs>) => {
       if (argsFailed) return;
@@ -1040,6 +1048,7 @@ export async function runCli(
       exitCode = await runTend({
         rootDir,
         json: args.json ?? false,
+        codes: args.codes ?? false,
         all: args.all ?? false,
         failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
         stdout,

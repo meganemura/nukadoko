@@ -3226,6 +3226,10 @@ nukadoko はすべての段階を記録します。
 `nuka tend` が答えるのはもう一つの問いです。
 この語彙と、それが生み出した記録は、いまも健全か、です。
 
+`nuka tend --codes` は、tend の所見が持ちうるコードをすべて一覧にします。
+各コードには 1 行の説明と、`--all` なしで報告されるかどうかが付きます。
+`--json` を付けると、同じ一覧を JSON で出力します。
+
 これが `check` への警告の追加ではなく別のコマンドである理由は、この 2 つが異なる瞬間に読まれ、異なる意味を持つからです。
 `check` はあらゆる run の前に、CI の中で、agent のループの中で実行されます。
 そこが出力する行はどれも、プロジェクトと green な run の間に立ちはだかるものです。
@@ -3838,6 +3842,10 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               --all adds a schema field with no
                               `.describe()` and a step with no `rationale`,
                               and --fail-on naming either code adds that one
+nuka tend --codes [--json]    list every finding code nuka tend can report,
+                              whether a plain run reports it or only --all
+                              does, and a one-line description, instead of
+                              tending a project
 nuka session list [--json]    list every session, across all environments;
                               --json names each one's environment
 nuka session clear [name] [--env <name>]

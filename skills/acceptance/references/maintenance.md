@@ -40,7 +40,8 @@ rather than something blocking, so it exits 0 by default. A job that must
 block on one of them passes `--fail-on <code>` (for instance
 `pattern-unbound`); the finding stays a note in the output, and only that
 invocation's exit code turns red. The code to pass is the one printed
-beside each finding.
+beside each finding, or one from `nuka tend --codes`, which lists every
+code with a one-line meaning before any of them has fired.
 
 By default it leaves out two declaration notes: `step-rationale-missing`
 (a typed step with no `rationale`) and `schema-field-undescribed` (a field

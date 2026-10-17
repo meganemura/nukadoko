@@ -1,4 +1,4 @@
-import type { TendIssue } from "./types.js";
+import { listTendCodes } from "./codes.js";
 
 // Responsibility: which of `analyzeTend`'s notes `nuka tend` reports by
 // default. Analysis still computes every finding (the `declared:` summary
@@ -15,11 +15,12 @@ import type { TendIssue } from "./types.js";
 // it, and a gate that could never see its own code would pass silently.
 
 /** Codes `nuka tend` reports only under `--all`, or when `--fail-on` names
- * them. Each is also in `TEND_CODES`. */
-export const DECLARATION_TEND_CODES: ReadonlySet<string> = new Set([
-  "schema-field-undescribed",
-  "step-rationale-missing",
-]);
+ * them. */
+export const DECLARATION_TEND_CODES: ReadonlySet<string> = new Set(
+  listTendCodes()
+    .filter((entry) => !entry.reportedByDefault)
+    .map((entry) => entry.code),
+);
 
 export interface NoteSelection {
   readonly all: boolean;
@@ -27,7 +28,7 @@ export interface NoteSelection {
 }
 
 /** The notes to report, in their original order. */
-export function selectReportedNotes<T extends Pick<TendIssue, "code">>(
+export function selectReportedNotes<T extends { readonly code: string }>(
   notes: readonly T[],
   selection: NoteSelection,
 ): T[] {

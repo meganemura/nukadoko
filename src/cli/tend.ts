@@ -1,5 +1,6 @@
 import { analyzeTend } from "../tend/analyze.js";
 import {
+  listTendCodes,
   REMOVED_TEND_CODES,
   selectReportedNotes,
   TEND_CODES,
@@ -46,6 +47,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 export interface RunTendOptions {
   rootDir: string;
   json: boolean;
+  /** `--codes`: print the code catalog instead of tending a project. It
+   * answers before the project loads, so it works while config is broken. */
+  codes?: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
   /** `--fail-on`: codes whose presence turns this invocation's exit code
@@ -99,6 +103,18 @@ function formatSummaryLines(summary: TendSummary, declarationNotesLeftOut: boole
 
 export async function runTend(options: RunTendOptions): Promise<number> {
   const { rootDir, json, failOn, all, stdout, stderr } = options;
+
+  if (options.codes) {
+    const entries = listTendCodes();
+    if (json) {
+      stdout.write(`${JSON.stringify(entries, null, 2)}\n`);
+    } else {
+      for (const entry of entries) {
+        stdout.write(`${entry.code}\t${entry.reportedByDefault ? "default" : "--all"}\t${entry.description}\n`);
+      }
+    }
+    return 0;
+  }
 
   // Refused before anything is analyzed: a code tend never emits would
   // otherwise be a flag that never fires, and a team gating a PR on it

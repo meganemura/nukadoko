@@ -351,7 +351,7 @@ describe("the extraction itself", () => {
   it("reports a command group named with a subcommand it does not have, and an unknown flag", async () => {
     const tree = await readCommandTree();
     expect(invocationProblem(tree, "skill install")).toBe('"nuka skill" has no command "install"');
-    expect(invocationProblem(tree, "tend --codes")).toBe('"nuka tend" has no flag --codes');
+    expect(invocationProblem(tree, "tend --fix")).toBe('"nuka tend" has no flag --fix');
     expect(invocationProblem(tree, "experimental mcp-tools --json -- node server.js --port 1")).toBe(undefined);
     expect(invocationProblem(tree, "run features/ --no-quiet")).toBe(undefined);
   });

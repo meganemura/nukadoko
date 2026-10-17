@@ -75,6 +75,21 @@ just until 0.1.
   `--from`, or `--description` is a usage error. `nuka scaffold` with
   neither a name nor `--feature` says `Missing required argument: name
   (or --feature <path>)`.
+- **`nuka tend --codes [--json]` lists every code a tend finding can carry.**
+  It mirrors `nuka check --codes`: one line per code, code ascending, as
+  `code`, `default` or `--all`, and a one-line description; `--json` prints
+  `[{ code, description, reportedByDefault }]`. `reportedByDefault` is
+  false for `step-rationale-missing` and `schema-field-undescribed`, which a
+  run reports only under `--all` or when `--fail-on` names them. It answers
+  before the project loads, so it works while the config is broken. The
+  codes now live in one registry (`src/tend/codes.ts`), and a tend finding
+  whose code is not registered fails to compile; `--fail-on` and `--all`
+  read the same registry.
+- **llms.txt carries the `nuka check` and `nuka tend` code tables.** A new
+  "Findings" section holds both, between generation markers.
+  `node scripts/llms-codes.ts` (after `npm run build`) rewrites them from
+  the built CLI's `--codes --json`, and `tests/llms-codes.test.ts` fails
+  while either table differs from its registry.
 
 ### Changed
 

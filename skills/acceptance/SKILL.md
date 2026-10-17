@@ -141,7 +141,9 @@ those four; the rest carries the result to a person.
    targets step 4 runs. `references/running.md`. A schema that
    coerces the capture is not `capture-type-mismatch`
    (`references/writing-steps.md`). Compat glue that declares a done()
-   callback is `done-callback-arity`.
+   callback is `done-callback-arity`. `nuka check --codes` and
+   `nuka tend --codes` list every code each command can report, with a
+   one-line meaning.
 4. **`nuka run <feature>`** until green. It stops before executing on any
    error step 3 would report; `--no-check` runs anyway.
    `references/running.md`. When it fails, stderr names the failed step's
