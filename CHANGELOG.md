@@ -67,6 +67,19 @@ just until 0.1.
   still refused, with a message that says so, and so is the same `--from`
   given twice. The acceptance skill's CLI worked example is rescaffolded
   this way and lists no hand edit for either.
+- **`nuka scaffold --command --from` no longer appends the chained keys to argv.**
+  argv holds the pattern's captures alone. A chained value is the
+  program's context (a working directory, an XDG or data directory, a
+  flag's value) and was never a bare positional argument in any CLI
+  project measured, so passing it as one started the program with stray
+  arguments while the step still passed `nuka check`. Each `--from` key
+  other than the `--cwd` one now goes into a TODO and a guard: `run`
+  throws `pass <keys> where the program reads them: <file>:<line>; args
+  <values>` until the values are passed through `runCommand`'s `env`, a
+  flag, or `--cwd`, so the step fails by name instead of running the
+  program without its context. The message reads every value, so the
+  file still compiles under `noUnusedParameters`. A step file already
+  scaffolded is not changed.
 
 - **`nuka check` warns `scenario-without-then` and `outline-rows-share-name`.**
   A scenario with a Given or a When and no Then passed whenever its steps

@@ -101,7 +101,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //
 // `--command` is the When step of a command-line program, the step every
 // CLI project writes first: it runs `process.execPath` on one entry point
-// with the args as argv, in `scratch.dir()`, and returns `exitCode`,
+// with the pattern's captures as argv, in `scratch.dir()`, and returns `exitCode`,
 // `stdout`, and `stderr`. Those three keys are written into `returns` so a
 // Then step can be scaffolded `--from` it at once, with no hand edit in
 // between. The entry point is the one thing scaffold cannot read from the
@@ -390,6 +390,24 @@ function assertBody(expected: Field, chained: Field | undefined): string[] {
   return [...actualLines, `    assert.${method}(actual, ${expected.key}, \`${message}\`);`];
 }
 
+/** Stands for the 1-based number of the line that holds it, filled in
+ * once the whole file is assembled. */
+const LINE_MARKER = "\u0000line";
+
+/** The guard a `--command` step throws while a chained value has nowhere
+ * to go yet. The values are in its message, so the step compiles under
+ * `noUnusedParameters`, and the first failed run shows what was bound. */
+function unplacedGuard(relativeFilePath: string, unplaced: readonly Field[]): string[] {
+  const keys = unplaced.map((field) => field.key);
+  const mayHoldBigint = unplaced.some((field) => field.valueClass === "bigint" || field.valueClass === "other");
+  const replacer = mayHoldBigint ? `, ${BIGINT_REPLACER}` : "";
+  return [
+    "    // TODO: pass each chained value where the program reads it: an environment",
+    "    // variable (runCommand's env, with ...process.env), a flag, or --cwd. Then delete the throw.",
+    `    throw new Error(\`pass ${keys.join(", ")} where the program reads them: ${relativeFilePath}:${LINE_MARKER}; args \${JSON.stringify({ ${keys.join(", ")} }${replacer})}\`);`,
+  ];
+}
+
 /** One argv element per field, in order: a string as it is, anything else
  * as its text. */
 function commandArgv(fields: readonly Field[]): string {
@@ -451,19 +469,23 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
             '  // beside an absence (false, 0, ""), return proof the read was valid.',
             "  returns: z.object({}),",
           ];
+  // A chained value is the program's context (a directory, an environment
+  // variable, a flag's value), never a bare positional argument, so argv
+  // holds the captures alone.
+  const unplaced = fieldsOf([], chained).filter((field) => field.key !== cwd);
+  const argvFields = fieldsOf(captures, []).filter((field) => field.key !== cwd);
   const runLines = command
     ? [
         `  async run(${cwd === null ? "{ scratch }" : "{}"}${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
         ...placeholderGuard,
-        `    return await runCommand(process.execPath, [${commandArgv(fields.filter((field) => field.key !== cwd))}], { cwd: ${
-          cwd === null ? "scratch.dir()" : cwd
-        } });`,
+        ...(unplaced.length === 0 ? [] : unplacedGuard(relativeFilePath, unplaced)),
+        `    return await runCommand(process.execPath, [${commandArgv(argvFields)}], { cwd: ${cwd === null ? "scratch.dir()" : cwd} });`,
       ]
     : [
         `  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`,
         ...(asserts ? assertBody(fields[0]!, fields[1]) : [stubBody(name, fields)]),
       ];
-  return [
+  const lines = [
     ...headerLines,
     "",
     "export default defineStep({",
@@ -477,7 +499,8 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
     "  },",
     "});",
     "",
-  ].join("\n");
+  ];
+  return lines.map((line, index) => line.replace(LINE_MARKER, String(index + 1))).join("\n");
 }
 
 /** What the pattern captures, read against the built-in types alone, or
@@ -763,12 +786,16 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   if ("refusal" in read) {
     return refuse(sinks, `Refusing to scaffold: ${read.refusal}`, help);
   }
-  // The placeholder guard throws an `Error`, so an args key may not hide it.
+  const fromKeys = new Set(from.map((text) => text.slice(text.indexOf(".") + 1)));
+  // The entry-point guard throws an `Error`, and the unplaced-value guard
+  // also reads `JSON`, so an args key may not hide either.
+  const unplacedFrom = [...fromKeys].some((key) => key !== cwd);
+  const guardNames = [...(entryPoint === null || unplacedFrom ? ["Error"] : []), ...(unplacedFrom ? ["JSON"] : [])];
   const shape: VariantShape =
-    command && entryPoint === null
-      ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error"]) }
+    command && guardNames.length > 0
+      ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, ...guardNames]) }
       : // Several --from for one key fill one field, so the count is of keys.
-        assertsInBody(variant, read.captures.length, new Set(from.map((text) => text.slice(text.indexOf(".") + 1))).size)
+        assertsInBody(variant, read.captures.length, fromKeys.size)
         ? {
             bodyNames: new Set([...variantShape.bodyNames, ...ASSERT_BODY_NAMES]),
             moduleNames: new Set([...variantShape.moduleNames, "assert"]),

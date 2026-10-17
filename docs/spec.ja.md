@@ -3488,8 +3488,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               args field reads the first one's. --command
                               writes a When step that runs a program
                               instead of the stub:
-                              runCommand(process.execPath, [cli, ...args],
-                              { cwd: scratch.dir() }),
+                              runCommand(process.execPath, [cli,
+                              ...captures], { cwd: scratch.dir() }),
                               returns exitCode, stdout, and stderr (so
                               --from can chain them at once), and
                               const cli = resolve("<entry point>"), the
@@ -3507,7 +3507,12 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               entry point: <file>:<line>" before it calls
                               runCommand, so do and run fail by name at
                               that step while check still passes.
-                              --command with --then is refused.
+                              --command with --then is refused. A
+                              --from key is never argv: it is the
+                              program's context, so until it is placed
+                              (an env variable, a flag, or --cwd) run
+                              throws "pass <keys> where the program reads
+                              them: <file>:<line>" with the values.
                               --cwd <key> (with --command) runs the
                               program in the directory that args key
                               holds, { cwd: <key> }, instead of

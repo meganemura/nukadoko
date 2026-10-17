@@ -532,6 +532,34 @@ describe("nuka scaffold --command --cwd", () => {
     expect(run.exitCode).toBe(0);
   });
 
+  it("keeps a chained value out of argv, and fails the run by name until the value is placed", async () => {
+    const entry = path.join(rootDir, "src", "show.mjs");
+    const result = await cli(rootDir, ["scaffold", "run-show", "--pattern", "I show {file:string}", "--command", entry, "--from", "write-file.dir"]);
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    const text = await readFile(stepPath(rootDir, "run-show"), "utf8");
+    expect(text).toContain(
+      [
+        "  async run({ scratch }, { file, dir }) {",
+        "    // TODO: pass each chained value where the program reads it: an environment",
+        "    // variable (runCommand's env, with ...process.env), a flag, or --cwd. Then delete the throw.",
+        "    throw new Error(`pass dir where the program reads them: features/steps/run-show.ts:26; args ${JSON.stringify({ dir })}`);",
+        "    return await runCommand(process.execPath, [cli, file], { cwd: scratch.dir() });",
+      ].join("\n"),
+    );
+    expect(text.split("\n")[25]).toContain("throw new Error(`pass dir where");
+    await writeFile(
+      path.join(rootDir, "features", "show.feature"),
+      ["Feature: show", "  Scenario: a file a Given wrote", '    Given a file "a.txt" holding "hi"', '    When I show "a.txt"', ""].join("\n"),
+    );
+
+    const check = await cli(rootDir, ["check"]);
+    expect(check.stdout + check.stderr).toContain("warning\tscenario-without-then");
+    const run = await cli(rootDir, ["run", "features/show.feature"]);
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("pass dir where the program reads them: features/steps/run-show.ts:26; args {");
+  });
+
   it.each([
     [["--pattern", "show {file:string}", "--cwd", "file"], "--cwd names the directory the program runs in, and only a --command step runs one"],
     [["--command", "--pattern", "show {file:string}", "--cwd", "dir"], "--cwd dir names no args key of this step (its keys are file); pass the key a --from or a capture fills"],
@@ -813,8 +841,18 @@ describe("every scaffolded variant", () => {
       expect(result.exitCode).toBe(0);
       files[`${argv[1]}.ts`] = await readFile(stepPath(rootDir, argv[1]!), "utf8");
     }
-    expect(files["chained-command.ts"]).toContain("[cli, stdout, String(exitCode)]");
-    expect(files["chained-optional.ts"]).toContain("[cli, String(name)]");
+    expect(files["chained-command.ts"]).toContain(
+      [
+        "    // TODO: pass each chained value where the program reads it: an environment",
+        "    // variable (runCommand's env, with ...process.env), a flag, or --cwd. Then delete the throw.",
+        "    throw new Error(`pass stdout, exitCode where the program reads them: features/steps/chained-command.ts:28; args ${JSON.stringify({ stdout, exitCode }, (_key, value) => (typeof value === \"bigint\" ? String(value) : value))}`);",
+        "    return await runCommand(process.execPath, [cli], { cwd: scratch.dir() });",
+      ].join("\n"),
+    );
+    expect(files["chained-command.ts"]!.split("\n")[27]).toContain("throw new Error(`pass stdout, exitCode");
+    expect(files["chained-optional.ts"]).toContain(
+      "args ${JSON.stringify({ name }, (_key, value) => (typeof value === \"bigint\" ? String(value) : value))}`);\n    return await runCommand(process.execPath, [cli], { cwd: scratch.dir() });",
+    );
     expect(files["run-in-capture.ts"]).toContain("[cli, s], { cwd: where });");
     expect(files["run-in-chained.ts"]).toContain("[cli], { cwd: stdout });");
     expect(files["chained-then.ts"]).toContain("throw new Error(`not implemented: chained-then;");
