@@ -149,17 +149,19 @@ $ npx nuka tend
 scanned: features
 bed: typed 6, compat 0, read-only 4
 declared: describe 19/19
-note	repeated-scenario-prefix	features/signup.feature	2 scenarios begin with the same 2 steps, which took 0 seconds across them, 13.6% of this run's summed scenario time. The shared steps: "a registration for "ada@example.com" with password "correct horse" is submitted", "the confirmation link is opened". The place to lift a shared opening into is a "process"-scope fixture (nukadoko.config.ts fixtures); whether these scenarios can share what it builds depends on which of them write to that state, which this tool cannot see.
-  do: No change is necessary. If the shared steps set up the same state each time, a Background or a fixture can hold them.
+note	repeated-scenario-prefix	features/signup.feature	2 scenarios begin with the same 2 steps, which took 0 seconds across them, 11% of this run's summed scenario time. The shared steps: "a registration for "ada@example.com" with password "correct horse" is submitted", "the confirmation link is opened". "a registration for "ada@example.com" with password "correct horse" is submitted" does not declare mutates: false, so a later scenario may read what this opening writes: a "process"-scope fixture would share that state between scenarios. A Background keeps the shared steps in one place and still runs them for each scenario.
+  do: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
 ```
 
-A second run of the same project reported `4 scenarios begin with the
-same 1 step` instead, naming the registration line alone: which opening
-the note names depends on the times it measured.
+Four scenarios also share the registration line alone. The note names
+the opening that covers the most step executions, and on a tie the
+longer one: 2 scenarios of 2 steps against 4 of 1, so the two lines. It
+names the same opening on every run, whatever the steps took.
 
 Not every scenario of the file opens with these lines, so a
 Background does not fit. Both lines write to the store the scenario then
-reads, so a process-scope fixture does not fit either (S8).
+reads, so a process-scope fixture does not fit either, as the note says
+(S8).
 
 ## Decisions
 

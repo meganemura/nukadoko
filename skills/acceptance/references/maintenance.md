@@ -61,11 +61,14 @@ step does in its place.
 shared the same opening steps. It also shows the measured time for that
 opening and its share of the run's summed scenario time. An opening ends
 before the first When, and two steps share it only when their docstring
-or table is the same too. The note's pointer to a process-scope fixture
-fits only when the shared steps write nothing a later scenario reads: an
+or table is the same too. The note names the same opening on every run:
+the one that covers the most step executions, not the slowest. It names a
+process-scope fixture only when every shared step declares
+`mutates: false`. Otherwise it names the first step that may write: an
 opening that creates the record each scenario then reads by id stays in
-each scenario (`scenario-rules.md`, S8, and `examples/http-api.md`). Say
-that when you report the note.
+each scenario (`scenario-rules.md`, S8, and `examples/http-api.md`). A
+step that keeps the default `mutates: true` but writes nothing a later
+scenario reads is the one case to judge yourself.
 
 `post-navigation-read` is the one worth knowing the shape of, because
 there is a way to make it stop being true and only one. It reads every

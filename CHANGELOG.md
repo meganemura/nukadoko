@@ -287,6 +287,23 @@ just until 0.1.
 
 ### Changed
 
+- **`repeated-scenario-prefix` names the same opening on every run, and offers a process-scope fixture only for an opening that declares it writes nothing.**
+  Within a family of nested openings the note named the one with the
+  most measured time, so on a fast suite it named a different opening
+  from run to run. It now names the opening that covers the most step
+  executions (scenarios times shared steps), then the longer one, then
+  the one that comes first in the feature files; `file` is that earliest
+  feature file. Measured time still decides only the 2% floor and the
+  numbers the note prints. The note also read every opening as one a
+  `"process"`-scope fixture could hold, which broke scenarios where the
+  opening writes state a later scenario reads. It now reads each shared
+  step's `mutates` from its step record: when every shared step declares
+  `mutates: false` it names the process-scope fixture; otherwise it names
+  the first step that does not (a `mutates: true` step, a compat step, or
+  a step with no step record) and says a process-scope fixture would
+  share what it writes. The code, its fields, and its 2% floor are
+  unchanged; its `--codes` description and `do:` line say the same.
+
 - **The acceptance skill gains rules for a scenario that can be wrong, three worked examples, and a size budget.**
   `skills/acceptance/references/scenario-rules.md` holds twelve rules
   (S1 to S12), each with a weak form, a strong form, and a `Checked by:`

@@ -66,9 +66,9 @@ const TEND_CODE_INFO = {
   },
   "repeated-scenario-prefix": {
     description:
-      "Scenarios in the latest run open with the same steps, before the first When, with the same docstrings and tables. The note reports the measured repetition and recommends no fix.",
+      "Scenarios in the latest run open with the same steps, before the first When, with the same docstrings and tables. The note reports the measured repetition, and names a process-scope fixture only when every shared step declares mutates: false.",
     reportedByDefault: true,
-    do: "No change is necessary. If the shared steps set up the same state each time, a Background or a fixture can hold them.",
+    do: "No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.",
   },
   "schema-field-undescribed": {
     description: "A field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.",

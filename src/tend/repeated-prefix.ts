@@ -8,13 +8,21 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: find repeated scenario openings in the latest run's live
-// records. It reports measured repetition only and does not recommend a fix.
-// An opening ends at the first When or Then, since a step there is what the
-// scenario exercises, not its setup; and two steps are the same step only
-// when their docstring or table is the same too. Both facts come from the
-// scenario as the scanned features hold it now. A record whose scenario is
-// no longer there, or no longer has the same step texts, is keyed by its
-// texts alone.
+// records. It reports measured repetition, and names a process-scope fixture
+// as the place to lift an opening only when every shared step declares
+// `mutates: false`. An opening ends at the first When or Then, since a step
+// there is what the scenario exercises, not its setup; and two steps are the
+// same step only when their docstring or table is the same too. Both facts
+// come from the scenario as the scanned features hold it now. A record whose
+// scenario is no longer there, or no longer has the same step texts, is keyed
+// by its texts alone.
+//
+// Which opening a note names depends on the scenarios alone: within one
+// family of nested openings, the one that covers the most step executions,
+// then the longer one, then the one that comes first in the feature files.
+// Measured time only decides whether an opening clears the 2% floor. Ranking
+// by time named a different opening from run to run on a fast suite, where
+// the differences were timing noise.
 
 interface TrieNode {
   readonly texts: readonly string[];
@@ -24,7 +32,21 @@ interface TrieNode {
   readonly children: Map<string, TrieNode>;
   count: number;
   ms: number;
-  firstFeature: string | null;
+  /** The earliest scenario, in source order, that opens with this prefix. */
+  first: SourcePosition | null;
+  /** True when some record of this node's own step lacks `mutates: false`:
+   * it declares `mutates: true`, is a compat step with no declaration, or
+   * has no step record to read the declaration from. */
+  mayWrite: boolean;
+}
+
+interface SourcePosition {
+  readonly feature: string;
+  readonly line: number;
+}
+
+function comesBefore(a: SourcePosition, b: SourcePosition): boolean {
+  return a.feature < b.feature || (a.feature === b.feature && a.line < b.line);
 }
 
 function isScenarioRecord(value: unknown): value is ScenarioRecord {
@@ -116,21 +138,23 @@ function buildTrie(
   features: readonly FeatureFile[],
 ): TrieNode {
   const root: TrieNode = {
-    texts: [], withArgument: false, parent: null, children: new Map(), count: 0, ms: 0, firstFeature: null,
+    texts: [], withArgument: false, parent: null, children: new Map(), count: 0, ms: 0, first: null, mayWrite: false,
   };
   const pickles = picklesByScenario(features);
 
   for (const record of records) {
     let node = root;
     let prefixMs = 0;
+    const position: SourcePosition = {
+      feature: record.feature,
+      line: typeof record.line === "number" ? record.line : Number.POSITIVE_INFINITY,
+    };
     const pickleSteps = pickleStepsFor(record, pickles);
     for (const [index, step] of record.steps.entries()) {
       const pickleStep = pickleSteps?.[index];
       if (pickleStep?.type === PickleStepType.ACTION || pickleStep?.type === PickleStepType.OUTCOME) break;
-      if (step.step_record_id !== null) {
-        const stepRecord = readStepRecordById(rootDir, stateDir, step.step_record_id);
-        if (stepRecord !== null) prefixMs += elapsedMs(stepRecord.started_at, stepRecord.finished_at);
-      }
+      const stepRecord = step.step_record_id === null ? null : readStepRecordById(rootDir, stateDir, step.step_record_id);
+      if (stepRecord !== null) prefixMs += elapsedMs(stepRecord.started_at, stepRecord.finished_at);
 
       const key = pickleStep === undefined ? stepPrefixKey(step) : stepPrefixKey(pickleStep);
       let child = node.children.get(key);
@@ -142,13 +166,15 @@ function buildTrie(
           children: new Map(),
           count: 0,
           ms: 0,
-          firstFeature: null,
+          first: null,
+          mayWrite: false,
         };
         node.children.set(key, child);
       }
       child.count += 1;
       child.ms += prefixMs;
-      child.firstFeature ??= record.feature;
+      if (child.first === null || comesBefore(position, child.first)) child.first = position;
+      if (stepRecord?.mutates !== false) child.mayWrite = true;
       node = child;
     }
   }
@@ -172,13 +198,24 @@ function isAncestor(ancestor: TrieNode, descendant: TrieNode): boolean {
   return false;
 }
 
+/** True when `a` names a better opening than `b`: it covers more step
+ * executions, or as many with more steps, or comes first in source order. Every
+ * candidate has a `first`, since a record reached it. */
+function ranksAbove(a: TrieNode, b: TrieNode): boolean {
+  const executionsA = a.count * a.texts.length;
+  const executionsB = b.count * b.texts.length;
+  if (executionsA !== executionsB) return executionsA > executionsB;
+  if (a.texts.length !== b.texts.length) return a.texts.length > b.texts.length;
+  return comesBefore(a.first!, b.first!);
+}
+
 function removeOverlaps(candidates: readonly TrieNode[]): TrieNode[] {
   const remaining = [...candidates];
   const selected: TrieNode[] = [];
   while (remaining.length > 0) {
     let best = remaining[0]!;
     for (const candidate of remaining.slice(1)) {
-      if (candidate.ms > best.ms) best = candidate;
+      if (ranksAbove(candidate, best)) best = candidate;
     }
     selected.push(best);
     for (let index = remaining.length - 1; index >= 0; index -= 1) {
@@ -189,6 +226,15 @@ function removeOverlaps(candidates: readonly TrieNode[]): TrieNode[] {
     }
   }
   return selected;
+}
+
+/** The first shared step, in order, that may write. */
+function firstWritingStep(node: TrieNode): string | undefined {
+  const chain: TrieNode[] = [];
+  for (let current: TrieNode | null = node; current !== null && current.parent !== null; current = current.parent) {
+    chain.unshift(current);
+  }
+  return chain.find((step) => step.mayWrite)?.texts.at(-1);
 }
 
 function formatNumber(value: number, maximumFractionDigits: number): string {
@@ -202,17 +248,25 @@ function toIssue(node: TrieNode, totalScenarioMs: number): TendIssue {
   const seconds = formatNumber(node.ms / 1_000, 1);
   const percentage = formatNumber((node.ms / totalScenarioMs) * 100, 1);
   const steps = node.texts.map((text) => `"${text}"`).join(", ");
+  const writer = firstWritingStep(node);
+  // `mutates` is the step's own declaration, so this trusts it rather than
+  // guessing from the trace whether the opening wrote anything.
+  const lift =
+    writer === undefined
+      ? `Every shared step declares mutates: false, so a "process"-scope fixture (nukadoko.config.ts fixtures) ` +
+        `can build this opening once for all of them.`
+      : `"${writer}" does not declare mutates: false, so a later scenario may read what this opening writes: ` +
+        `a "process"-scope fixture would share that state between scenarios. ` +
+        `A Background keeps the shared steps in one place and still runs them for each scenario.`;
   return {
     code: "repeated-scenario-prefix",
-    file: node.firstFeature ?? undefined,
+    file: node.first?.feature,
     message:
       `${node.count} scenarios begin with the same ${node.texts.length} ` +
       `step${node.texts.length === 1 ? "" : "s"}, which took ${seconds} seconds across them, ` +
       `${percentage}% of this run's summed scenario time. The shared steps: ${steps}. ` +
       (node.withArgument ? "The shared steps take the same docstring or table. " : "") +
-      `The place to lift a shared opening into is a "process"-scope fixture (nukadoko.config.ts fixtures); ` +
-      `whether these scenarios can share what it builds depends on which of them write to that state, ` +
-      `which this tool cannot see.`,
+      lift,
   };
 }
 

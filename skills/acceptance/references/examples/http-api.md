@@ -235,12 +235,13 @@ $ npx nuka tend
 scanned: features
 bed: typed 7, compat 0, read-only 5
 declared: describe 18/18
-note	repeated-scenario-prefix	features/items.feature	2 scenarios begin with the same 1 step, which took 0 seconds across them, 5.5% of this run's summed scenario time. The shared steps: "an item named "lamp" exists". The place to lift a shared opening into is a "process"-scope fixture (nukadoko.config.ts fixtures); whether these scenarios can share what it builds depends on which of them write to that state, which this tool cannot see.
-  do: No change is necessary. If the shared steps set up the same state each time, a Background or a fixture can hold them.
+note	repeated-scenario-prefix	features/items.feature	2 scenarios begin with the same 1 step, which took 0 seconds across them, 6.5% of this run's summed scenario time. The shared steps: "an item named "lamp" exists". "an item named "lamp" exists" does not declare mutates: false, so a later scenario may read what this opening writes: a "process"-scope fixture would share that state between scenarios. A Background keeps the shared steps in one place and still runs them for each scenario.
+  do: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
 ```
 
 The shared step writes the item that each scenario then reads by id, so a
-process-scope fixture would bring back the failure above.
+process-scope fixture would bring back the failure above. The note says
+so, because the step keeps the default `mutates: true`.
 
 ## Decisions
 

@@ -78,9 +78,9 @@ read got `{"id":2,"name":"lamp"}` where the feature expects id 1.
 Good: `Given an item named "lamp" exists` in the scenario that reads it,
 and a fixture that holds state is scoped per scenario. `scope: "process"`
 is for a resource no scenario writes to, or one each scenario resets.
-Checked by: review. `repeated-scenario-prefix` measures time, not state:
-its pointer to a process-scope fixture applies only when the shared steps
-write nothing a later scenario reads.
+Checked by: review. `repeated-scenario-prefix` names a process-scope
+fixture only when every shared step declares `mutates: false`; for any
+other opening it names the step that may write.
 
 ## S9. One action per scenario, one claim per Then line
 

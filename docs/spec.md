@@ -3639,8 +3639,12 @@ The following findings show what `tend` inspects and why each item is rot rather
   than read off the feature files. It groups the most recent run's
   scenario records by their leading step text, reads those steps' own
   records for what each took, and names the group, its steps, and the
-  total. One finding per family, at the depth where the most time is
-  spent, so one nested group is never counted again at three depths. Two
+  total. One finding per family, so one nested group is never counted
+  again at three depths. The depth it names does not depend on timing: the
+  opening that covers the most step executions (scenarios times shared
+  steps), then the longer opening, then the one that comes first in the
+  feature files. Ranking by time named a different opening from run to run
+  on a fast suite, where the differences were noise. Two
   gates keep it quiet: two scenarios at least, and at least 2% of that
   run's summed scenario time. That floor came from measuring a real
   suite, where it removed exactly the groups whose cost rounded to zero
@@ -3651,11 +3655,17 @@ The following findings show what `tend` inspects and why each item is rot rather
   since a scenario record carries no mark saying its run has finished. A
   scenario that ran more than once in that run (`--repeat`) counts once,
   as its last execution. It
-  stops at the number, and names the place a lift goes: a `process`-scope
-  fixture (see "Fixtures"). What to do about a shared opening depends on
-  which of those scenarios write to the state they share, which this tool
-  cannot see. Naming a saving would be claiming the lift is possible,
-  which nothing here measured.
+  stops at the number. What to do about a shared opening depends on
+  whether its steps write state a later scenario reads, and the step
+  records carry each step's own `mutates` declaration. When every shared
+  step declares `mutates: false`, the note names the place a lift goes: a
+  `process`-scope fixture (see "Fixtures"). When one does not (it declares
+  `mutates: true`, is a compat step with no declaration, or has no step
+  record), the note names that step and says a `process`-scope fixture
+  would share what it writes between scenarios. Following that advice on a
+  writing opening broke two of seven scenarios in a measured HTTP API
+  project. Naming a saving would be claiming the lift is possible, which
+  nothing here measured.
 - **A step whose trace shows another call soon after a navigation
   call.** `tend` reads this from the tool's step records under
   `.nukadoko/records/steps/` (see "Records"), so it reaches every step
