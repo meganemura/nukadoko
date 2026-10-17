@@ -7,7 +7,9 @@ import path from "node:path";
 // project's type check reads the step files as nuka loads them: `include`
 // reaches the steps directory and the config file, and `compilerOptions`
 // accepts an import that names a `.ts` file (the spelling `nuka scaffold`
-// writes, because Node resolves only a file that exists). Reads and writes
+// writes when tsc accepts it, because Node resolves only a file that
+// exists). It also answers, for `nuka scaffold`, whether the project's tsc
+// accepts that spelling as tsconfig.json stands. Reads and writes
 // tsconfig.json and nothing else.
 //
 // The option is `rewriteRelativeImportExtensions` (TypeScript 5.7 and
@@ -400,4 +402,51 @@ export async function ensureTsconfig(
   const written = edited !== text;
   if (written) await writeFile(tsconfigPath, edited);
   return notice === undefined ? { written } : { written, notice };
+}
+
+type OptionValue = { kind: "set"; value: unknown } | { kind: "unset" } | { kind: "unread" };
+
+/** The value TypeScript takes for one compiler option: the file's own
+ * `compilerOptions`, else the last `extends` entry that sets it, as a later
+ * base overrides an earlier one. */
+function effectiveOption(tsconfig: unknown, fromDir: string, key: string, seen: Set<string>): OptionValue {
+  const options = ownCompilerOptions(tsconfig);
+  if (options !== undefined && key in options) return { kind: "set", value: (options as Record<string, unknown>)[key] };
+  const specifiers = extendsSpecifiers(tsconfig);
+  if (specifiers === undefined) return { kind: "unread" };
+  for (const specifier of [...specifiers].reverse()) {
+    const file = resolveExtends(specifier, fromDir);
+    if (file === undefined) return { kind: "unread" };
+    if (seen.has(file)) continue;
+    let base: unknown;
+    try {
+      base = parseJsonc(readFileSync(file, "utf8"));
+    } catch {
+      return { kind: "unread" };
+    }
+    const inherited = effectiveOption(base, path.dirname(file), key, new Set([...seen, file]));
+    if (inherited.kind !== "unset") return inherited;
+  }
+  return { kind: "unset" };
+}
+
+/** Whether the project's `tsc` accepts a relative import that names a `.ts`
+ * file: tsconfig.json, through its `extends` chain, sets
+ * `rewriteRelativeImportExtensions` or `allowImportingTsExtensions` to true.
+ * `undefined` when there is no tsconfig.json to read. A file that does not
+ * parse, or an `extends` that cannot be read, counts as not accepting,
+ * because nothing then says tsc does. */
+export function tsExtensionImportsAccepted(rootDir: string): boolean | undefined {
+  const tsconfigPath = path.join(rootDir, "tsconfig.json");
+  if (!existsSync(tsconfigPath)) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = parseJsonc(readFileSync(tsconfigPath, "utf8"));
+  } catch {
+    return false;
+  }
+  return [TS_EXTENSION_OPTION, "allowImportingTsExtensions"].some((key) => {
+    const option = effectiveOption(parsed, rootDir, key, new Set([tsconfigPath]));
+    return option.kind === "set" && option.value === true;
+  });
 }

@@ -580,6 +580,9 @@ API の形は [An HTTP API](#an-http-api) にあります。
 このオプションは出力するプロジェクトでもしないプロジェクトでも有効で、変わるのは `.ts` ファイルを名指しする import の出力だけです。
 `tsconfig.json` が extends するファイルがこのオプションを名指していれば、`init` はそのままにします。
 オプションが `extends` を通してだけ届き、そこのどのファイルも名指していないとき、または `init` がそのどれかを読めないときは、`init` はそのことを stderr に書きます。
+`tsconfig.json` がどちらのオプションも true にしていないプロジェクトでは、`nuka scaffold --from` は代わりに `./run-greet.js` を書きます。
+これは `tsc` がどのオプションの下でも受け付ける名前で、`nuka` は `run-greet.ts` として読み込みます。
+そのことは stderr の 1 行の `note:` で伝えます。
 2 つのフラグで書くものを増やせます。
 `--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
 `nuka` は config があるディレクトリ、workspace ならそのパッケージで実行します。

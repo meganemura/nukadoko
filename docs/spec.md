@@ -221,8 +221,12 @@ Node floor is the first release that does that without a flag (22.18 on the
 
 - A step file imports another by its own file name, `.ts` included
   (`import createProject from "./create-project.ts"`). That is the spelling
-  `nuka scaffold --from` writes and the one plain `node` resolves. `tsc`
-  accepts it with `rewriteRelativeImportExtensions` or
+  `nuka scaffold --from` writes and the one plain `node` resolves. When
+  `tsconfig.json`, through its `extends` chain, sets neither option below
+  to true, `scaffold --from` writes the `.js` name instead and says so in
+  one `note:` line on stderr, so the file it writes passes the project's
+  own `tsc` as it stands. `tsc`
+  accepts the `.ts` name with `rewriteRelativeImportExtensions` or
   `allowImportingTsExtensions`; `nuka init` adds the first when
   `tsconfig.json` names neither. It follows `extends` to ask: a base
   file that names either option is the project's choice. When the

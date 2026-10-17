@@ -18,6 +18,7 @@ import { helpFor, refuse, type RefusalSinks } from "./refusal.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import { DESCRIPTION_TODO_PREFIX } from "../tend/types.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
+import { tsExtensionImportsAccepted } from "./tsconfig-edit.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka scaffold <name>`'s actual work, kept out of
@@ -299,14 +300,22 @@ export function importIdentifiers(
   return identifiers;
 }
 
-/** The relative specifier one step file imports another by: the file's
- * own name, `.ts` included. Node resolves only a file that exists, so this
- * is the spelling that loads under plain `node` as well as under nuka;
- * `tsc` accepts it with `allowImportingTsExtensions`, which `nuka init`
- * writes into tsconfig.json. */
-export function importSpecifier(fromDir: string, toFile: string): string {
+/** How a relative import names a TypeScript file: by its own name, or by
+ * the JavaScript name tsc maps back to it. */
+export type ImportSpelling = "ts" | "js";
+
+const JS_NAME: Readonly<Record<string, string>> = { ".ts": ".js", ".mts": ".mjs", ".cts": ".cjs" };
+
+/** The relative specifier one step file imports another by. The `.ts` name
+ * loads under plain `node` as well as under nuka, and tsc accepts it only
+ * with `rewriteRelativeImportExtensions` or `allowImportingTsExtensions`.
+ * The `.js` name is the one tsc accepts under any options, and nuka's
+ * loader falls back from it to the `.ts` file beside it. */
+export function importSpecifier(fromDir: string, toFile: string, spelling: ImportSpelling): string {
   const relative = path.relative(fromDir, toFile).split(path.sep).join("/");
-  return relative.startsWith(".") ? relative : `./${relative}`;
+  const extension = path.posix.extname(relative);
+  const named = spelling === "js" && JS_NAME[extension] !== undefined ? `${relative.slice(0, -extension.length)}${JS_NAME[extension]}` : relative;
+  return named.startsWith(".") ? named : `./${named}`;
 }
 
 function argsLines(captures: readonly Capture[], chained: readonly ChainedField[]): string[] {
@@ -639,6 +648,7 @@ function resolveChain(
   stepDir: string,
   importFailureCount: number,
   moduleNames: ReadonlySet<string>,
+  spelling: ImportSpelling,
 ): { chained: readonly ChainedField[] } | { refusal: string } {
   const identifiers = importIdentifiers(requests.map((request) => request.step), moduleNames);
   const byKey = new Map<string, { producers: [Producer, ...Producer[]]; schema: z.ZodType }>();
@@ -663,7 +673,7 @@ function resolveChain(
     const resolved: Producer = {
       step: request.step,
       identifier: identifiers.get(request.step)!,
-      specifier: importSpecifier(stepDir, path.resolve(rootDir, producer.filePath)),
+      specifier: importSpecifier(stepDir, path.resolve(rootDir, producer.filePath), spelling),
     };
     const earlier = byKey.get(request.key);
     if (earlier === undefined) {
@@ -835,6 +845,10 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     return refuse(sinks, `Refusing to scaffold: ${relativeFilePath} already exists`, help);
   }
 
+  // A project whose tsc refuses `./x.ts` gets the `.js` name instead, so the
+  // file this command writes passes the project's own type check as it
+  // stands. With no tsconfig.json there is no tsc setting to follow.
+  const spelling: ImportSpelling = tsExtensionImportsAccepted(rootDir) === false ? "js" : "ts";
   let chained: readonly ChainedField[] = [];
   if (fromFlags.requests.length > 0 || read.projectTypes.length > 0) {
     // Tolerant, as `nuka check` is: an unrelated broken step file must not
@@ -864,6 +878,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       path.dirname(filePath),
       importFailures.length,
       shape.moduleNames,
+      spelling,
     );
     if ("refusal" in resolved) {
       return refuse(sinks, `Refusing to scaffold: ${resolved.refusal}`, help);
@@ -897,5 +912,9 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   );
 
   stdout.write(`${relativeFilePath}\n`);
+  if (spelling === "js" && chained.length > 0) stderr.write(`note: ${JS_IMPORT_NOTE}\n`);
   return 0;
 }
+
+export const JS_IMPORT_NOTE =
+  'the import names the .js file, because tsconfig.json sets neither rewriteRelativeImportExtensions nor allowImportingTsExtensions and tsc refuses a .ts name without one; nuka loads the .ts file under that name. Add "rewriteRelativeImportExtensions": true to compilerOptions to import by the .ts name';

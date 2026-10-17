@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
@@ -8,6 +11,7 @@ import {
   missingIncludeEntries,
   needsTsExtensionOption,
   parseJsonc,
+  tsExtensionImportsAccepted,
 } from "../src/cli/tsconfig-edit.js";
 
 // Responsibility: the pure half of `nuka init`'s tsconfig.json edit and
@@ -319,4 +323,57 @@ describe("appendCompilerOption", () => {
       expect(edited.startsWith(`${prefix}{`)).toBe(true);
       expect(edited.endsWith(`}${suffix}`)).toBe(true);
     }));
+});
+
+describe("tsExtensionImportsAccepted", () => {
+  function accepted(files: Record<string, string>): boolean | undefined {
+    const dir = mkdtempSync(path.join(tmpdir(), "nuka-ts-ext-"));
+    try {
+      for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
+      return tsExtensionImportsAccepted(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("answers from the value where TypeScript takes it: the file's own options, then the last base that sets it", () => {
+    expect(accepted({})).toBe(undefined);
+    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "module": "nodenext" } }' })).toBe(false);
+    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }' })).toBe(true);
+    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "allowImportingTsExtensions": true, "noEmit": true } }' })).toBe(true);
+    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }' })).toBe(false);
+    expect(
+      accepted({
+        "base.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
+        "tsconfig.json": '// comment\n{ "extends": "./base", }',
+      }),
+    ).toBe(true);
+    expect(
+      accepted({
+        "base.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
+        "tsconfig.json": '{ "extends": "./base.json", "compilerOptions": { "rewriteRelativeImportExtensions": false } }',
+      }),
+    ).toBe(false);
+    expect(
+      accepted({
+        "a.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
+        "b.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }',
+        "tsconfig.json": '{ "extends": ["./a.json", "./b.json"] }',
+      }),
+    ).toBe(false);
+    expect(
+      accepted({
+        "a.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }',
+        "b.json": '{ "extends": "./c.json" }',
+        "c.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
+        "tsconfig.json": '{ "extends": ["./a.json", "./b.json"] }',
+      }),
+    ).toBe(true);
+  });
+
+  it("counts a file it cannot read as not accepting, and ends an extends cycle", () => {
+    expect(accepted({ "tsconfig.json": "{ not json" })).toBe(false);
+    expect(accepted({ "tsconfig.json": '{ "extends": "./missing.json" }' })).toBe(false);
+    expect(accepted({ "a.json": '{ "extends": "./tsconfig.json" }', "tsconfig.json": '{ "extends": "./a.json" }' })).toBe(false);
+  });
 });

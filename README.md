@@ -615,7 +615,10 @@ changes only the output of an import that names a `.ts` file. A file
 that `tsconfig.json` extends can name the option instead, and then `init`
 leaves it alone. When the options come only through `extends` and no
 file there names it, or `init` cannot read one, `init` says so on
-stderr. Two flags
+stderr. In a project whose `tsconfig.json` sets neither option to true,
+`nuka scaffold --from` writes `./run-greet.js` instead, the name `tsc`
+accepts under any options and `nuka` loads as `run-greet.ts`, and says so
+in one `note:` line on stderr. Two flags
 add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
 (see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
 `!.env.example` to `.gitignore` for a project that keeps env files.

@@ -8,7 +8,8 @@ import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { z } from "zod";
-import { declaredType, importIdentifiers, importSpecifier, parseFromFlag } from "../src/cli/scaffold.js";
+import { declaredType, importIdentifiers, importSpecifier, JS_IMPORT_NOTE, parseFromFlag } from "../src/cli/scaffold.js";
+import { typeScriptSpecifier } from "../src/config/ts-loader.js";
 import {
   createCaptureSink,
   createEmptyTempDir,
@@ -325,12 +326,70 @@ describe("nuka scaffold --from", () => {
   });
 });
 
+describe("nuka scaffold --from in a project whose tsconfig.json accepts no .ts import name", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await initProject();
+    await writeFile(path.join(rootDir, "features", "steps", "run-greet.ts"), RUN_GREET);
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("imports the producer by its .js name, says why on stderr, and the file passes check and tsc", async () => {
+    await writeFile(
+      path.join(rootDir, "tsconfig.json"),
+      '{\n  "compilerOptions": { "module": "nodenext", "verbatimModuleSyntax": true, "noEmit": true },\n  "include": ["features"]\n}\n',
+    );
+
+    const result = await cli(rootDir, ["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
+
+    expect(result.stderr).toBe(`note: ${JS_IMPORT_NOTE}\n`);
+    expect(result.exitCode).toBe(0);
+    const written = await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8");
+    expect(written.split("\n").slice(0, 3)).toEqual([
+      'import { defineStep, z } from "nukadoko";',
+      'import assert from "node:assert/strict";',
+      'import runGreet from "./run-greet.js";',
+    ]);
+    const check = await cli(rootDir, ["check"]);
+    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+
+    const typecheck = await typecheckSteps({ "run-greet.ts": RUN_GREET, "output-says.ts": written }, {});
+    expect(typecheck.output).toBe("");
+    expect(typecheck.code).toBe(0);
+    const tsName = await typecheckSteps({ "run-greet.ts": RUN_GREET, "output-says.ts": written.replace("./run-greet.js", "./run-greet.ts") }, {});
+    expect(tsName.output).toContain("error TS5097");
+  }, 120_000);
+
+  it("keeps the .ts name, and says nothing, when a file tsconfig.json extends sets rewriteRelativeImportExtensions", async () => {
+    await writeFile(path.join(rootDir, "tsconfig.base.json"), '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }\n');
+    await writeFile(
+      path.join(rootDir, "tsconfig.json"),
+      '{ "extends": "./tsconfig.base.json", "compilerOptions": { "module": "nodenext" } }\n',
+    );
+
+    const result = await cli(rootDir, ["scaffold", "output-says", "--then", "--from", "run-greet.stdout"]);
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8")).toContain(
+      'import runGreet from "./run-greet.ts";',
+    );
+  });
+});
+
 const execFileAsync = promisify(execFile);
 
 /** Compiles step files against the built package, the types a project
  * sees, under NodeNext: the resolution the `.js` import specifier is
  * written for. */
-async function typecheckSteps(files: Record<string, string>): Promise<{ code: number; output: string }> {
+async function typecheckSteps(
+  files: Record<string, string>,
+  importOption: Record<string, boolean> = { rewriteRelativeImportExtensions: true },
+): Promise<{ code: number; output: string }> {
   // Under tests/ so "nukadoko" resolves to this package by its own name.
   const parent = path.join(testsDir, ".tmp-fixtures");
   await mkdir(parent, { recursive: true });
@@ -349,7 +408,7 @@ async function typecheckSteps(files: Record<string, string>): Promise<{ code: nu
           skipLibCheck: true,
           noEmit: true,
           // What `nuka init` adds, so the `.ts` import names scaffold writes check.
-          rewriteRelativeImportExtensions: true,
+          ...importOption,
           types: ["node"],
         },
         include: ["**/*.ts"],
@@ -483,9 +542,26 @@ describe("scaffold --from helpers", () => {
   });
 
   it("imports a sibling and a nested file by its relative path with its own extension", () => {
-    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.ts")).toBe("./run-greet.ts");
-    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.mts")).toBe("./run-greet.mts");
-    expect(importSpecifier("/p/features/steps", "/p/features/steps/cli/run.ts")).toBe("./cli/run.ts");
-    expect(importSpecifier("/p/features/steps", "/p/features/shared/run.ts")).toBe("../shared/run.ts");
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.ts", "ts")).toBe("./run-greet.ts");
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.mts", "ts")).toBe("./run-greet.mts");
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/cli/run.ts", "ts")).toBe("./cli/run.ts");
+    expect(importSpecifier("/p/features/steps", "/p/features/shared/run.ts", "ts")).toBe("../shared/run.ts");
   });
+
+  it("imports by the JavaScript name when asked, and leaves a JavaScript file's name as it is", () => {
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.ts", "js")).toBe("./run-greet.js");
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.mts", "js")).toBe("./run-greet.mjs");
+    expect(importSpecifier("/p/features/steps", "/p/features/shared/run.cts", "js")).toBe("../shared/run.cjs");
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.mjs", "js")).toBe("./run-greet.mjs");
+  });
+
+  it("writes a .js name that nuka's loader maps back to the .ts name", () =>
+    hegel.test((tc) => {
+      const dirs = tc.draw(gs.arrays(gs.fromRegex("[a-z0-9.-]{1,6}"), { maxSize: 3 }));
+      const stem = tc.draw(gs.fromRegex("[a-z0-9.-]{1,8}"));
+      const extension = tc.draw(gs.sampledFrom([".ts", ".mts", ".cts"]));
+      const toFile = path.posix.join("/p", ...dirs, `${stem}${extension}`);
+      const fromDir = "/p/features/steps";
+      expect(typeScriptSpecifier(importSpecifier(fromDir, toFile, "js"))).toBe(importSpecifier(fromDir, toFile, "ts"));
+    }));
 });

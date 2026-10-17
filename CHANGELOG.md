@@ -352,6 +352,17 @@ just until 0.1.
 
 ### Changed
 
+- **`nuka scaffold --from` imports a producer by its `.js` name when the project's `tsc` would refuse the `.ts` name.**
+  Scaffold now reads `tsconfig.json` and every file it extends, as
+  `nuka init` does. When none of them sets `rewriteRelativeImportExtensions`
+  or `allowImportingTsExtensions` to true, the import is
+  `./run-greet.js` (`.mjs` for an `.mts` producer), which `tsc` accepts
+  under any options and nuka's loader maps to the `.ts` file, and stderr
+  gets one `note:` line naming the option for `.ts` names. Before, the
+  scaffolded file failed the project's own `tsc` with TS5097 while
+  `nuka check` said nothing. A project with no `tsconfig.json`, or one
+  that sets either option, still gets the `.ts` name and no note.
+
 - **`repeated-scenario-prefix` names the same opening on every run, and offers a process-scope fixture only for an opening that declares it writes nothing.**
   Within a family of nested openings the note named the one with the
   most measured time, so on a fast suite it named a different opening
