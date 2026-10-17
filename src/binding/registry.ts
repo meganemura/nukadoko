@@ -51,7 +51,8 @@ export function createParameterTypeRegistry(
 
     // `type: null` and the default `useForSnippets`: both are only ever
     // consulted for snippet generation (cucumber-expressions' own
-    // CucumberExpressionGenerator), which this project doesn't use.
+    // CucumberExpressionGenerator). `nuka scaffold --feature` reads lines
+    // with it, so a registered type is offered as one reading of a line.
     // `preferForRegexpMatch` decides a RegExp group that several types match.
     const parameterType = new ParameterType(
       entry.name,

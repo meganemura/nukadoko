@@ -381,7 +381,7 @@ the files `nuka run` would select for them; with no target it checks the
 whole project.
 
 ```
-error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
+error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold --feature features/todo.feature` to add one
 ```
 
 When a step that declares a pattern is bound by no line in the scanned
@@ -389,6 +389,27 @@ feature directories, the same message ends with `patterned steps no scanned
 feature line binds:` and names that step, its pattern, and its file. A
 renamed sentence or a renamed pattern leaves exactly that pair, so read
 the list before you scaffold a second step.
+
+When the feature comes first, `nuka scaffold --feature <file>` writes one
+stub for each line `check` calls undefined, so each sentence is typed once:
+
+```sh
+npx nuka scaffold --feature features/greet.feature
+```
+
+```text
+features/steps/i-run-greet-with.ts
+features/steps/the-output-says.ts
+features/steps/the-exit-code-is.ts
+```
+
+The pattern is the line as cucumber-expressions reads it: a quoted value
+becomes `{value:string}`, an integer `{value:int}`, a decimal
+`{value:float}`, and a Then line gets `mutates: false`. Rename `value` in
+the pattern and in `args` together. When a line reads more than one way
+(a registered type and a built-in both fit), or its reading would also
+match another line of the project, the stub keeps the line itself as its
+pattern, with no capture, and a `note:` line on stderr says so.
 
 A from-order violation is the case plain glue cannot even represent,
 because without a typed contract there is nothing for the concept to

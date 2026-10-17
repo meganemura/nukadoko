@@ -4,7 +4,7 @@ import { analyzeProject, analyzeRunSelection } from "../check/analyze.js";
 import { listCheckCodes } from "../check/codes.js";
 import type { CheckIssue, CheckReport } from "../check/types.js";
 import { loadConfig } from "../config/load-config.js";
-import { describeFailedFeatureRead } from "../feature/feature-arg-read.js";
+import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
 import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { readFeaturesForCheck, resolveFeatureTargets } from "../run/select-pickles.js";
 import { formatVocabularyError } from "./vocabulary.js";
@@ -191,6 +191,18 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
 }
 
 async function analyzeTargets(rootDir: string, targets: readonly string[]): Promise<CheckReport> {
+  const selected = await readCheckTargets(rootDir, targets);
+  return analyzeRunSelection(rootDir, selected.features, selected.parseErrors);
+}
+
+/** The feature files `nuka check <targets>` reads, and the ones of them
+ * that did not parse. `nuka scaffold --feature` selects its file the same
+ * way, so it fills the lines this command would report. */
+export async function readCheckTargets(
+  rootDir: string,
+  targets: readonly string[],
+  command: FeatureArgCommand = "nuka check",
+): Promise<ReturnType<typeof readFeaturesForCheck>> {
   const config = await loadConfig(rootDir);
   // A target that resolves to nothing is named before any selection, so a
   // `:line` suffix reads as refused rather than as a missing file.
@@ -199,7 +211,7 @@ async function analyzeTargets(rootDir: string, targets: readonly string[]): Prom
     try {
       statSync(path.join(rootDir, relativePath));
     } catch (error) {
-      throw new Error(describeFailedFeatureRead("nuka check", rootDir, relativePath, error).message);
+      throw new Error(describeFailedFeatureRead(command, rootDir, relativePath, error).message);
     }
   }
   let selected;
@@ -208,9 +220,9 @@ async function analyzeTargets(rootDir: string, targets: readonly string[]): Prom
     const files = resolveFeatureTargets(rootDir, targets, oaths.files, oaths.directories);
     selected = readFeaturesForCheck(rootDir, files.map(([relativePath]) => relativePath));
   } catch (error) {
-    throw new Error(`nuka check: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`${command}: ${error instanceof Error ? error.message : String(error)}`);
   }
-  return analyzeRunSelection(rootDir, selected.features, selected.parseErrors);
+  return selected;
 }
 
 /**

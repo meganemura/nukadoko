@@ -249,8 +249,7 @@ describe("nuka scaffold --command", () => {
 
     expect(result.stderr).toBe(
       [
-        "Not enough non-option arguments: got 0, need at least 1",
-        "Missing required argument: name",
+        "Missing required argument: name (or --feature <path>)",
         '--command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value',
         "",
       ].join("\n"),

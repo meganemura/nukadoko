@@ -53,7 +53,7 @@ describe("nuka run checks before it executes", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       "error\tundefined-step\tfeatures/mixed.feature:9\t" +
-        'No step definition matches "this line matches no step"; run `nuka scaffold <name>` to add one\n' +
+        'No step definition matches "this line matches no step"; run `nuka scaffold --feature features/mixed.feature` to add one\n' +
         "nuka run did not start: nuka check reports 1 error for these scenarios. " +
         "Fix them, or pass --no-check to run anyway.\n",
     );

@@ -23,7 +23,7 @@ describe("nuka check: escape hint with a compat parameter type", () => {
       {
         code: "undefined-step",
         message:
-          'No step definition matches "the wall (north) is painted red"; run `nuka scaffold <name>` to add one; hint: would match step "paint" pattern "the wall (north) is painted {c:color}" if its bare ( ) / were escaped; cucumber-expressions reads bare ( ) as optional text and / as alternation; patterned steps no scanned feature line binds: paint ("the wall (north) is painted {c:color}", features/steps/paint.ts)',
+          'No step definition matches "the wall (north) is painted red"; run `nuka scaffold --feature features/wall.feature` to add one; hint: would match step "paint" pattern "the wall (north) is painted {c:color}" if its bare ( ) / were escaped; cucumber-expressions reads bare ( ) as optional text and / as alternation; patterned steps no scanned feature line binds: paint ("the wall (north) is painted {c:color}", features/steps/paint.ts)',
         file: "features/wall.feature",
         line: 4,
       },

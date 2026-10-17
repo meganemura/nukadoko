@@ -2743,6 +2743,7 @@ agent は、チケットの受け入れ基準に対して次の手順を実行�
 
 1. 語彙を読みます(`nuka steps --json`、そして関連しそうなものの契約については `nuka describe <step>`)。
 2. 操作が欠けているときは `nuka scaffold <name>` し、それを実装し、step record が正しく見えるまで `nuka do` で単体で動かします。
+   feature を先に書いたときは、`nuka scaffold --feature <file>` が、step が一致しない行ごとに stub を 1 つ書きます。
 3. feature を書きます。
    tag と `Feature:` の下の説明文が、チケットの id とレビュアーの言葉による基準を運びます。
    scenario は、その基準を語彙に翻訳したものです。
@@ -3717,6 +3718,32 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               --command, a sentence about running the
                               program), which tend reports as
                               step-description-todo
+nuka scaffold --feature <path>
+                              one stub for each line nuka check <path>
+                              reports as undefined-step, so a sentence is
+                              typed once, in the feature. The pattern is
+                              the line as cucumber-expressions' generator
+                              reads it over the project's registry: a
+                              quoted literal becomes {value:string}, an
+                              integer {value:int}, a decimal
+                              {value:float}, keyed value, value2, ... A
+                              Then line (and its And/But) gets --then's
+                              mutates: false. The name is the pattern's
+                              literal words in kebab-case, with -2, -3
+                              added past a name the project already
+                              holds; lines that read as one pattern share
+                              one file. When the line reads more than one
+                              way (a registered type against a built-in),
+                              or the reading would also match another
+                              line of the project, the pattern is the
+                              line as written with no capture, and a
+                              "note:" line on stderr says so. An outline
+                              line whose Examples rows read as different
+                              patterns gets no file and a note. Prints
+                              each written path on stdout. Refuses while
+                              a step file does not import, and takes no
+                              name, --pattern, --then, --command, --from,
+                              or --description
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

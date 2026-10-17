@@ -88,6 +88,12 @@ This part does not change release to release.
   Add `"type": "module"` to `package.json` to keep `.ts` names with no
   warning. With `"type": "commonjs"`, a `.ts` file still fails to import,
   and the error says to rename it to `.mts`.
+- **`undefined-step`'s message names `nuka scaffold --feature <file>`.**
+  It used to end with "run `nuka scaffold <name>` to add one"; it now
+  names the feature file the line is in, so the command writes a stub for
+  every undefined line of that file. The code and its `file` and `line`
+  are unchanged. A script that matches the old sentence matches on the
+  code instead.
 
 ## 0.15.0 to 0.16.0
 

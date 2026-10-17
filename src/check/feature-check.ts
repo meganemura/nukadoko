@@ -204,10 +204,21 @@ export interface BoundStepLine {
   readonly title: string;
 }
 
+/** One feature line no step matches, as the `undefined-step` issue for it
+ * was reported: `nuka scaffold --feature` writes its stubs from these, so
+ * the lines it fills are exactly the lines this check calls undefined. */
+export interface UndefinedStepLine {
+  readonly file: string;
+  readonly line: number | undefined;
+  readonly text: string;
+  readonly type: PickleStepType | undefined;
+}
+
 export interface FeatureCheckResult {
   readonly errors: readonly CheckIssue[];
   readonly warnings: readonly CheckIssue[];
   readonly boundSteps: readonly BoundStepLine[];
+  readonly undefinedSteps: readonly UndefinedStepLine[];
 }
 
 export function checkFeatures(
@@ -221,6 +232,7 @@ export function checkFeatures(
   const warnings: CheckIssue[] = [];
   const match = createStepTextMatcher(patterns);
   const boundSteps = new Map<string, BoundStepLine>();
+  const undefinedSteps: UndefinedStepLine[] = [];
 
   for (const feature of features) {
     const reportedUndefinedText = new Set<string>();
@@ -261,10 +273,11 @@ export function checkFeatures(
             : "";
           errors.push({
             code: "undefined-step",
-            message: `No step definition matches "${step.text}"; run \`nuka scaffold <name>\` to add one${hintSuffix}`,
+            message: `No step definition matches "${step.text}"; run \`nuka scaffold --feature ${feature.relativePath}\` to add one${hintSuffix}`,
             file: feature.relativePath,
             line,
           });
+          undefinedSteps.push({ file: feature.relativePath, line, text: step.text, type: step.type });
           continue;
         }
 
@@ -414,7 +427,7 @@ export function checkFeatures(
     }
   }
 
-  return { errors: firstOfEach(errors), warnings: firstOfEach(warnings), boundSteps: [...boundSteps.values()] };
+  return { errors: firstOfEach(errors), warnings: firstOfEach(warnings), boundSteps: [...boundSteps.values()], undefinedSteps };
 }
 
 /** A Background or an outline repeats one source line across pickles, and

@@ -18,7 +18,7 @@ import path from "node:path";
 
 const LINE_SUFFIX_PATTERN = /^(.+):(\d+)$/;
 
-export type FeatureArgCommand = "nuka check";
+export type FeatureArgCommand = "nuka check" | "nuka scaffold --feature";
 
 export type FeatureArgReadKind = "not-found" | "line" | "other";
 

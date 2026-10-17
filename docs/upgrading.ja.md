@@ -77,6 +77,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka init` はそこでは引き続き `nukadoko.config.mts` を書き、`.mts` の step ファイルは警告なしで読み込まれます。
   `.ts` の名前のまま警告をなくすには、`package.json` に `"type": "module"` を追加してください。
   `"type": "commonjs"` のもとでは、`.ts` ファイルは引き続き import に失敗し、エラーは `.mts` に名前を変えるよう伝えます。
+- **`undefined-step` のメッセージは `nuka scaffold --feature <file>` を名指します。**
+  以前は「run `nuka scaffold <name>` to add one」で終わっていました。
+  今は、その行がある feature ファイルを名指すので、そのコマンドはそのファイルの未定義の行すべてに stub を書きます。
+  code と、その `file` と `line` は変わりません。
+  古い文に一致させているスクリプトは、代わりに code に一致させます。
 
 ## 0.15.0 から 0.16.0 へ
 

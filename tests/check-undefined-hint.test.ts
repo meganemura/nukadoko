@@ -94,7 +94,7 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
       {
         code: "undefined-step",
         message:
-          'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold <name>` to add one; patterned steps no scanned feature line binds: output-says ("the output says {text:string}", features/steps/output-says.ts)',
+          'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold --feature features/greet.feature` to add one; patterned steps no scanned feature line binds: output-says ("the output says {text:string}", features/steps/output-says.ts)',
         file: "features/greet.feature",
         line: 5,
       },
@@ -105,7 +105,7 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
     const dir = await tracked({ "run-greet": "I run greet" }, { "greet.feature": greetFeature });
     const report = await json(dir, ["check", "--json"]);
     expect(report.errors.map((issue) => issue.message)).toEqual([
-      'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold <name>` to add one',
+      'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold --feature features/greet.feature` to add one',
     ]);
   });
 
@@ -130,7 +130,7 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
       },
     );
     const expected = [
-      'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold <name>` to add one; patterned steps no scanned feature line binds: orphan-step ("nobody says this", features/steps/orphan-step.ts)',
+      'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold --feature features/greet.feature` to add one; patterned steps no scanned feature line binds: orphan-step ("nobody says this", features/steps/orphan-step.ts)',
     ];
     const whole = await json(dir, ["check", "--json"]);
     expect(whole.errors.map((issue) => issue.message)).toEqual(expected);

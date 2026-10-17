@@ -31,6 +31,17 @@ steps no scanned feature line binds:`, a step that already exists lost
 its line, usually through a renamed sentence or a renamed pattern. Fix
 the line or the pattern instead of scaffolding a second step.
 
+When the feature already holds the lines, `nuka scaffold --feature
+<file>` writes one stub for each line `nuka check <file>` calls
+undefined, with the pattern read from the line: a quoted value is
+`{value:string}`, an integer `{value:int}`, a decimal `{value:float}`, and
+a Then line gets `mutates: false`. Rename `value`, `value2` to what the
+values mean, in the pattern and in `args` together. A `note:` line on
+stderr names each line whose reading was not the only one, or would also
+match another line: that stub's pattern is the line as written, with no
+capture, so put the captures in by hand. Steps that need `--command` or
+`--from` are still scaffolded one at a time, as below.
+
 1. `nuka scaffold <name> --pattern "<feature line>"`, kebab-case, one
    file per step. Each `{key:type}` capture becomes an args field, so the
    file passes `nuka check` against that line before `run` is written. A

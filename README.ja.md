@@ -377,12 +377,30 @@ agent の探索ループも、この呼び出しから始まります。
 対象を渡さなければ、プロジェクト全体を check します。
 
 ```
-error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold <name>` to add one
+error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold --feature features/todo.feature` to add one
 ```
 
 pattern を宣言した step のうち、走査する feature ディレクトリのどの行にも結び付けられていないものがあれば、同じメッセージの末尾に `patterned steps no scanned feature line binds:` が付き、その step と pattern とファイルを名指しします。
 文や pattern の名前を変えると、ちょうどこの組が残ります。
 そのため、2 つ目の step を scaffold する前にこの一覧を読んでください。
+
+feature を先に書いたときは、`nuka scaffold --feature <file>` が、`check` が未定義とする行ごとに stub を 1 つ書きます。
+これで、それぞれの文を打つのは 1 回だけになります。
+
+```sh
+npx nuka scaffold --feature features/greet.feature
+```
+
+```text
+features/steps/i-run-greet-with.ts
+features/steps/the-output-says.ts
+features/steps/the-exit-code-is.ts
+```
+
+pattern は、cucumber-expressions がその行を読んだとおりのものです。
+引用符で囲んだ値は `{value:string}`、整数は `{value:int}`、小数は `{value:float}` になり、Then の行には `mutates: false` が付きます。
+`value` の名前を変えるときは、pattern と `args` を一緒に変えてください。
+行が 2 通り以上に読めるとき(登録した型と組み込みの型の両方が当てはまるとき)や、その読み方がプロジェクトの別の行にも一致するときは、stub は行そのものを キャプチャなしの pattern にし、stderr の `note:` 行がそのことを伝えます。
 
 `from` の束縛順序違反は、ふつうの glue には表現すらできない種類のケースです。
 型付きの契約がなければ、この概念がつなぎ留まる先自体がないからです。

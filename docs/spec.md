@@ -3306,6 +3306,8 @@ An agent follows this process for a ticket's acceptance criteria:
    for the contract of anything that looks relevant.
 2. When an operation is missing, `nuka scaffold <name>`, implement it, and
    exercise it alone with `nuka do` until its step record looks right.
+   When the feature is written first, `nuka scaffold --feature <file>`
+   writes one stub for each of its lines no step matches.
 3. Write the feature. A tag and the description under `Feature:` carry the
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
@@ -4295,6 +4297,32 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--
                               --command, a sentence about running the
                               program), which tend reports as
                               step-description-todo
+nuka scaffold --feature <path>
+                              one stub for each line nuka check <path>
+                              reports as undefined-step, so a sentence is
+                              typed once, in the feature. The pattern is
+                              the line as cucumber-expressions' generator
+                              reads it over the project's registry: a
+                              quoted literal becomes {value:string}, an
+                              integer {value:int}, a decimal
+                              {value:float}, keyed value, value2, ... A
+                              Then line (and its And/But) gets --then's
+                              mutates: false. The name is the pattern's
+                              literal words in kebab-case, with -2, -3
+                              added past a name the project already
+                              holds; lines that read as one pattern share
+                              one file. When the line reads more than one
+                              way (a registered type against a built-in),
+                              or the reading would also match another
+                              line of the project, the pattern is the
+                              line as written with no capture, and a
+                              "note:" line on stderr says so. An outline
+                              line whose Examples rows read as different
+                              patterns gets no file and a note. Prints
+                              each written path on stdout. Refuses while
+                              a step file does not import, and takes no
+                              name, --pattern, --then, --command, --from,
+                              or --description
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

@@ -155,14 +155,14 @@ export interface FromRequest {
 /** One `--from` resolved against the vocabulary: the identifier the
  * producer is imported as, the specifier it is imported from, and the
  * class of the value the producer's schema holds. */
-interface ChainedField extends FromRequest {
+export interface ChainedField extends FromRequest {
   readonly identifier: string;
   readonly specifier: string;
   readonly valueClass: PrimitiveClass;
 }
 
 /** What the step is for, which decides its outcome and its body. */
-type Variant = "when" | "then" | "command";
+export type Variant = "when" | "then" | "command";
 
 interface VariantShape {
   /** Names the written `run` reads, so no args key may take them. */
@@ -189,7 +189,7 @@ interface Field {
   readonly valueClass: PrimitiveClass;
 }
 
-interface StepTemplate {
+export interface StepTemplate {
   readonly name: string;
   readonly pattern: string | null;
   readonly captures: readonly Capture[];
@@ -326,7 +326,7 @@ function commandArgv(fields: readonly Field[]): string {
   return ["cli", ...fields.map((field) => (field.valueClass === "string" ? field.key : `String(${field.key})`))].join(", ");
 }
 
-function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, description, relativeFilePath }: StepTemplate): string {
+export function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, description, relativeFilePath }: StepTemplate): string {
   const fields = fieldsOf(captures, chained);
   const keys = fields.map((field) => field.key);
   const argsParameter = keys.length === 0 ? "" : `{ ${keys.join(", ")} }`;

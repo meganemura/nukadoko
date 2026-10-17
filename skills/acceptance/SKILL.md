@@ -114,7 +114,9 @@ those four; the rest carries the result to a person.
    that runs a program, `--from <step>.<key>` for each value it reads from an earlier
    step, `--description "<what it does>"` so no TODO is left for
    `nuka tend`), implement it, exercise it alone with
-   `nuka do`. `references/writing-steps.md` ("Reading the vocabulary",
+   `nuka do`. When the feature is written first, `nuka scaffold --feature
+   <file>` writes one stub per line `check` calls undefined; rename each
+   `value` key and read any `note:` line it prints. `references/writing-steps.md` ("Reading the vocabulary",
    "When the vocabulary has no step for it"). The same file: chaining
    (`from`, "Chaining a value from an earlier step"), helper vs part vs
    step ("Helper, part, or step?"), a second scenario that needs part of

@@ -17,13 +17,13 @@ const UNBOUND =
 const PROJECT_WIDE = "error\tunknown-parameter-type\tunknown-type-step\t";
 const OUTSIDE =
   "error\tundefined-step\tacceptance/outside.feature:4\t" +
-  'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold <name>` to add one' + UNBOUND;
+  'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold --feature acceptance/outside.feature` to add one' + UNBOUND;
 const INSIDE =
   "error\tundefined-step\tfeatures/inside.feature:4\t" +
-  'No step definition matches "this step is undefined inside featuresDir"; run `nuka scaffold <name>` to add one' + UNBOUND;
+  'No step definition matches "this step is undefined inside featuresDir"; run `nuka scaffold --feature features/inside.feature` to add one' + UNBOUND;
 const EXTRA =
   "error\tundefined-step\tacceptance/nested/extra.feature:4\t" +
-  'No step definition matches "this step is undefined in a nested file"; run `nuka scaffold <name>` to add one' + UNBOUND;
+  'No step definition matches "this step is undefined in a nested file"; run `nuka scaffold --feature acceptance/nested/extra.feature` to add one' + UNBOUND;
 
 async function check(rootDir: string, argv: string[]) {
   const stdout = createCaptureSink();
@@ -121,7 +121,7 @@ describe("nuka check [target..]", () => {
     expect((targeted as { errors: { code: string; file?: string; line?: number }[] }).errors[2]).toEqual({
       code: "undefined-step",
       message:
-        'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold <name>` to add one' +
+        'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold --feature acceptance/outside.feature` to add one' +
         UNBOUND,
       file: "acceptance/outside.feature",
       line: 4,

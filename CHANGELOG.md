@@ -49,6 +49,33 @@ just until 0.1.
 - CI adds a packed-tarball job that installs the packed package with
   `--ignore-scripts` and runs the walkthrough on Node 22.18.0 and 26.
 
+### Added
+
+- **`nuka scaffold --feature <path>` writes a stub for each undefined line of a feature.**
+  A sentence used to be typed twice, once in the feature and once in
+  `--pattern`. The command runs the analysis `nuka check <path>` runs and
+  writes one step file for each line it reports as `undefined-step`. The
+  pattern is the line as cucumber-expressions' own generator reads it over
+  the project's registry (built-ins, `config.parameterTypes`, compat
+  `defineParameterType`): a quoted value becomes `{value:string}`, an
+  integer `{value:int}`, a decimal `{value:float}`, keyed `value`,
+  `value2`, and so on. A Then line, with its And and But lines, gets the
+  `--then` template. The name is the pattern's literal words in kebab-case,
+  with `-2`, `-3` past a name the project already defines or a file the
+  steps directory holds, and lines that read as one pattern share one file.
+  A capture is written only when the reading ends one way: when a line
+  reads more than one way (a registered type and a built-in both fit) or
+  the reading would also match another line of the project, the stub's
+  pattern is the line as written, escaped, with no capture, and a `note:`
+  line on stderr names it. An outline line whose Examples rows read as
+  different patterns gets no file and a note. Each written path goes to
+  stdout, exit 0. The command refuses, with nothing written, while a step
+  file does not import (which lines are undefined is then unknown), and
+  `--feature` beside a step name, `--pattern`, `--then`, `--command`,
+  `--from`, or `--description` is a usage error. `nuka scaffold` with
+  neither a name nor `--feature` says `Missing required argument: name
+  (or --feature <path>)`.
+
 ### Changed
 
 - **`nuka run` writes its scenario records to stdout only when stdout is not a terminal, or under `--records`.**
@@ -62,6 +89,11 @@ just until 0.1.
   `--concurrency`; worker processes are always piped. `nuka do`'s step
   record on stdout is unchanged. Breaking for a pseudo-terminal driver
   that parses stdout: see docs/upgrading.md.
+
+- **`undefined-step` names `nuka scaffold --feature <file>`.** The message
+  ends with "run `nuka scaffold --feature <the line's feature file>` to
+  add one" instead of "run `nuka scaffold <name>` to add one". The code,
+  `file`, `line`, and the hint and unbound-step suffixes are unchanged.
 
 ## 0.16.0 — 2026-10-17
 

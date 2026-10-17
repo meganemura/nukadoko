@@ -178,7 +178,9 @@ interface InitArgs {
 }
 
 interface ScaffoldArgs {
-  name: string;
+  /** Absent only with `--feature`, which names each stub itself. */
+  name?: string;
+  feature?: string;
   pattern?: string;
   then?: boolean;
   /** `""` when the flag is given with no value, and `false` for yargs'
@@ -224,6 +226,22 @@ interface McpToolsArgs {
 }
 
 type SkillPathArgs = Record<string, never>;
+
+/** Why `--feature` cannot go with the other scaffold options, or `null`.
+ * Each undefined line decides its own name, pattern, and outcome, so a
+ * value given once would apply to every stub at once. */
+function featureScaffoldConflict(args: ScaffoldArgs): string | null {
+  const given = [
+    args.name !== undefined ? "a step name" : null,
+    args.pattern !== undefined ? "--pattern" : null,
+    args.then === true ? "--then" : null,
+    typeof args.command === "string" ? "--command" : null,
+    args.description !== undefined ? "--description" : null,
+    (args.from ?? []).length > 0 ? "--from" : null,
+  ].filter((option): option is string => option !== null);
+  if (given.length === 0) return null;
+  return `--feature names each stub and reads its pattern and outcome from its own line; leave out ${given.join(", ")}, or scaffold that step on its own with nuka scaffold <name>`;
+}
 
 // yargs-parser collects a repeated string or number flag into an array.
 // `duplicate-arguments-array: false` would keep the last value, but the
@@ -831,14 +849,18 @@ export async function runCli(
   };
 
   const scaffoldCommand: CommandModule<Record<string, never>, ScaffoldArgs> = {
-    command: "scaffold <name>",
+    command: "scaffold [name]",
     describe: "typed step template that fails until implemented",
     builder: (y: Argv) =>
       y
         .positional("name", {
           type: "string",
-          demandOption: true,
-          describe: "step name, kebab-case (becomes the step's file name)",
+          describe: "step name, kebab-case (becomes the step's file name); leave it out with --feature",
+        })
+        .option("feature", {
+          type: "string",
+          describe:
+            "<path> a feature file (or a directory of them): write one stub for each line nuka check calls undefined-step, its pattern read from the line",
         })
         .option("pattern", {
           type: "string",
@@ -864,26 +886,36 @@ export async function runCli(
           describe:
             "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable",
         })
-        .check(rejectRepeatedFlags(["pattern", "command", "description"]))
-        // yargs has already reported the missing name by now; this adds why
-        // it is missing when the name went to --command.
-        .check((args) =>
-          args.name === undefined && typeof args.command === "string" && VALID_STEP_NAME.test(args.command)
-            ? commandTookTheName(args.command)
-            : true,
-        ) as Argv<ScaffoldArgs>,
+        .check(rejectRepeatedFlags(["pattern", "command", "description", "feature"]))
+        .check((args) => {
+          if (args.feature !== undefined) return featureScaffoldConflict(args as unknown as ScaffoldArgs) ?? true;
+          if (args.name !== undefined) return true;
+          // The name is optional only beside --feature; this also says why
+          // it is missing when the name went to --command.
+          const missing = "Missing required argument: name (or --feature <path>)";
+          return typeof args.command === "string" && VALID_STEP_NAME.test(args.command)
+            ? `${missing}\n${commandTookTheName(args.command)}`
+            : missing;
+        }) as Argv<ScaffoldArgs>,
     handler: async (args: Arguments<ScaffoldArgs>) => {
       if (argsFailed) return;
+      if (args.feature !== undefined) {
+        const { runScaffoldFeature } = await import("./scaffold-feature.js");
+        exitCode = await runScaffoldFeature({ rootDir, feature: args.feature, stdout, stderr });
+        return;
+      }
+      const name = args.name;
+      if (name === undefined) return;
       const { runScaffold } = await import("./scaffold.js");
       exitCode = await runScaffold({
         rootDir,
-        name: args.name,
+        name,
         pattern: args.pattern ?? null,
         then: args.then ?? false,
         command: typeof args.command === "string",
         entryPoint: typeof args.command === "string" && args.command !== "" ? args.command : null,
         // `--command <value>` written before the name, rather than `--command=<value>` or after it.
-        commandBeforeName: argv.indexOf("--command") !== -1 && argv.indexOf("--command") < argv.indexOf(args.name),
+        commandBeforeName: argv.indexOf("--command") !== -1 && argv.indexOf("--command") < argv.indexOf(name),
         description: args.description ?? null,
         from: args.from ?? [],
         stdout,

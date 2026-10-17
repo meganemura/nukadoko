@@ -30,7 +30,7 @@ import {
   SCENARIO_HOOK_ARG_COUNT,
 } from "./done-callback.js";
 import { checkExploreDeclarations } from "./explore-check.js";
-import { checkFeatures } from "./feature-check.js";
+import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing } from "./playwright-check.js";
@@ -161,6 +161,9 @@ function runSelectionFeatures(
 export interface RunSelectionAnalysis {
   readonly report: CheckReport;
   readonly discovery: DiscoveryResult;
+  /** The lines the report calls `undefined-step`, empty while that finding
+   * is held back because a step file did not import. */
+  readonly undefinedSteps: readonly UndefinedStepLine[];
 }
 
 /**
@@ -194,7 +197,7 @@ async function analyze(
   // still do via their own plain `discoverSteps(rootDir, config.featuresDir)`
   // calls.
   const discovery = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true });
-  return { report: await reportFor(rootDir, config, discovery, loadFeatures, selection), discovery };
+  return { ...(await reportFor(rootDir, config, discovery, loadFeatures, selection)), discovery };
 }
 
 async function reportFor(
@@ -203,7 +206,7 @@ async function reportFor(
   discovery: DiscoveryResult,
   loadFeatures: (config: Config) => LoadFeaturesResult,
   selection: boolean,
-): Promise<CheckReport> {
+): Promise<{ report: CheckReport; undefinedSteps: readonly UndefinedStepLine[] }> {
   const {
     vocabulary,
     models,
@@ -559,5 +562,8 @@ async function reportFor(
     errors.push(...featureErrors);
   }
 
-  return { errors, warnings };
+  return {
+    report: { errors, warnings },
+    undefinedSteps: importFailures.length > 0 ? [] : featureResult.undefinedSteps,
+  };
 }
