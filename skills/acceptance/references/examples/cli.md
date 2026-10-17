@@ -153,12 +153,13 @@ export default defineStep({
 
 ## The commands, in order
 
-A producer has to return its key before a consumer is scaffolded `--from`
-it. Scaffolding `run-tally` while `a-csv-file-with` was still a stub:
+A producer has to declare its key in `returns` before a consumer is
+scaffolded `--from` it. Scaffolding `run-tally` while `a-csv-file-with`
+was still a stub:
 
 ```
 $ npx nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir
-Refusing to scaffold: a-csv-file-with does not return "dir"; it returns no keys
+Refusing to scaffold: a-csv-file-with declares no returns, so it has no key to chain; declare returns with "dir" in features/steps/a-csv-file-with.ts
 do: nuka scaffold --help
 ```
 

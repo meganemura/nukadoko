@@ -185,8 +185,8 @@ export default defineStep({
     title: z.string(),
   }),
   // Return what later steps cite and the values this step's correctness rests on;
-  // beside an absence (false, 0, ""), return proof the read was valid.
-  returns: z.object({}),
+  // beside an absence (false, 0, ""), return proof the read was valid. Declare them here:
+  // returns: z.object({ ... }),
   run({}, { title }) {
     throw new Error(`not implemented: complete-todo; args ${JSON.stringify({ title })}`);
   },

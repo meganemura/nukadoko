@@ -402,6 +402,23 @@ just until 0.1.
   The `playwright-missing` finding for a bound step is reported once per
   step, at the first line that binds it, as docs/spec.md already said.
 
+- **A `returns` failure says what happened when zod's text does not.**
+  A step that declares `returns` and whose `run` returns nothing used to
+  fail with `returns validation failed: (root): Invalid input: expected
+  object, received undefined`. It now reads `this step declares returns,
+  but run returned nothing; return a value that matches returns, or
+  delete returns if no later step reads from this one`. A key whose value
+  is a Promise keeps zod's text and adds `<key> holds a Promise: await the
+  call inside run`, since the harness awaits only what `run` itself
+  returns. A key that is `undefined` because it was read off an unawaited
+  Promise is not named, because nothing in the value shows that it was.
+  **`nuka scaffold` writes the Given and When stub's `returns` line as a
+  comment** (`// returns: z.object({ ... }),`), so a stub filled in with a
+  body that returns nothing passes instead of failing on the empty
+  schema, and one that returns keys is told to declare them. `--from` a
+  producer that declares no `returns` is refused with `<step> declares no
+  returns, so it has no key to chain; declare returns with "<key>" in
+  <file>`, where it used to say the producer's returns is not a z.object.
 - **`repeated-scenario-prefix` names the same opening on every run, and offers a process-scope fixture only for an opening that declares it writes nothing.**
   Within a family of nested openings the note named the one with the
   most measured time, so on a fast suite it named a different opening

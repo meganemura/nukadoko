@@ -17,10 +17,10 @@ export function parseStepReturns(step: Step, value: unknown): ReturnsParse {
   if (parsed.success) {
     return { success: true, data: parsed.data };
   }
-  return { success: false, message: `returns validation failed: ${explain(step, parsed.error.issues)}` };
+  return { success: false, message: `returns validation failed: ${explain(step, value, parsed.error.issues)}` };
 }
 
-function explain(step: Step, issues: readonly z.core.$ZodIssue[]): string {
+function explain(step: Step, value: unknown, issues: readonly z.core.$ZodIssue[]): string {
   if (!declaresReturns(step)) {
     // The default schema is a strict empty object, so its only way to
     // refuse an object is by naming the keys it would have stripped.
@@ -32,6 +32,43 @@ function explain(step: Step, issues: readonly z.core.$ZodIssue[]): string {
         `declare returns with ${one ? "that key" : "those keys"}, or stop returning ${one ? "it" : "them"}`
       );
     }
+  } else if (value === undefined) {
+    // zod's "(root): expected object, received undefined" names neither
+    // the cause nor either fix.
+    return (
+      "this step declares returns, but run returned nothing; return a value that matches returns, " +
+      "or delete returns if no later step reads from this one"
+    );
   }
-  return formatValidationIssues(issues);
+  // The harness awaits what run returns, so a Promise can only survive
+  // inside the value, where it is a call nobody awaited. That much is
+  // certain; a key that is undefined because it was read off an unawaited
+  // Promise is not, and gets zod's text alone.
+  const unawaited = issues
+    .filter((issue) => isThenable(valueAt(value, issue.path)))
+    .map((issue) => (issue.path.length > 0 ? issue.path.join(".") : "(root)"));
+  const hint =
+    unawaited.length === 0
+      ? ""
+      : `; ${unawaited.join(", ")} ${unawaited.length === 1 ? "holds a Promise" : "hold Promises"}: await the call inside run`;
+  return formatValidationIssues(issues) + hint;
+}
+
+function valueAt(value: unknown, issuePath: readonly PropertyKey[]): unknown {
+  let current = value;
+  for (const key of issuePath) {
+    if (typeof current !== "object" || current === null) {
+      return undefined;
+    }
+    current = (current as Record<PropertyKey, unknown>)[key];
+  }
+  return current;
+}
+
+function isThenable(value: unknown): boolean {
+  return (
+    (typeof value === "object" || typeof value === "function") &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === "function"
+  );
 }

@@ -19,6 +19,7 @@ import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import { DESCRIPTION_TODO_PREFIX } from "../tend/types.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import { tsExtensionImportsAccepted } from "./tsconfig-edit.js";
+import { declaresReturns } from "../step/define-step.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka scaffold <name>`'s actual work, kept out of
@@ -475,8 +476,8 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
           ]
         : [
             "  // Return what later steps cite and the values this step's correctness rests on;",
-            '  // beside an absence (false, 0, ""), return proof the read was valid.',
-            "  returns: z.object({}),",
+            '  // beside an absence (false, 0, ""), return proof the read was valid. Declare them here:',
+            "  // returns: z.object({ ... }),",
           ];
   // A chained value is the program's context (a directory, an environment
   // variable, a flag's value), never a bare positional argument, so argv
@@ -660,6 +661,11 @@ function resolveChain(
       return { refusal: `no typed step is named "${request.step}" (\`nuka steps\` lists the vocabulary)${unread}` };
     }
     const returns = producer.step.returns as z.ZodTypeAny;
+    if (!declaresReturns(producer.step)) {
+      return {
+        refusal: `${request.step} declares no returns, so it has no key to chain; declare returns with "${request.key}" in ${path.relative(rootDir, path.resolve(rootDir, producer.filePath))}`,
+      };
+    }
     if (returns.type !== "object") {
       return { refusal: `${request.step}'s returns is not a z.object, so it has no key to chain` };
     }

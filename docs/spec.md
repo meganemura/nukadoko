@@ -472,7 +472,9 @@ export default defineStep({
   with `result_invalid`, whose message names the keys: the record would
   otherwise hold `{}` and the value would be lost while the step passed.
   A declared `returns` keeps its meaning: `run` returns the
-  value that schema validates, and returning nothing fails the step.
+  value that schema validates, and returning nothing fails the step with
+  a message that says `run` returned nothing. A key whose value is a
+  Promise adds that the call inside `run` needs an `await`.
 - The `run` body is free TypeScript on the fixtures it destructured.
   Composition is importing another step module and calling its `run` with
   the same fixture bag. Shared helpers live in ordinary modules (e.g.

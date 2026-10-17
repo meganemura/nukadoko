@@ -101,6 +101,10 @@ describe("nuka scaffold --from", () => {
       path.join(rootDir, "features", "steps", "list-names.ts"),
       'import { defineStep, z } from "nukadoko";\nexport default defineStep({ description: "lists", args: z.object({}), returns: z.array(z.string()), run() { return []; } });\n',
     );
+    await writeFile(
+      path.join(rootDir, "features", "steps", "touch-file.ts"),
+      'import { defineStep, z } from "nukadoko";\nexport default defineStep({ description: "touches", args: z.object({}), run() {} });\n',
+    );
   });
 
   afterEach(async () => {
@@ -259,6 +263,10 @@ describe("nuka scaffold --from", () => {
     [["--from", "run-greet.stdot"], 'run-greet does not return "stdot"; its keys are exitCode, stdout'],
     [["--from", "make-dir.stdout"], 'make-dir does not return "stdout"; its keys are cwd'],
     [["--from", "list-names.length"], "list-names's returns is not a z.object, so it has no key to chain"],
+    [
+      ["--from", "touch-file.path"],
+      'touch-file declares no returns, so it has no key to chain; declare returns with "path" in features/steps/touch-file.ts',
+    ],
     [["--from", "no-such-step.stdout"], 'no typed step is named "no-such-step" (`nuka steps` lists the vocabulary)'],
     [["--from", "run-greet"], '--from takes <step>.<key>, a step name and one identifier that is not a reserved word, and got "run-greet"'],
     [["--from", "run-greet.std-out"], '--from takes <step>.<key>, a step name and one identifier that is not a reserved word, and got "run-greet.std-out"'],

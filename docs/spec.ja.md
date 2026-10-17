@@ -386,6 +386,8 @@ export default defineStep({
   キーを持つオブジェクトを返す `run` は、そのキーを挙げる `result_invalid` で step を失敗させます。
   そうしなければ record には `{}` が残り、step が通る一方で値が失われるからです。
   `returns` を宣言した step の意味は変わりません: `run` はその schema が検証する値を返し、何も返さなければ step は失敗します。
+  そのときのメッセージは、`run` が何も返さなかったと述べます。
+  値が Promise であるキーには、`run` の中の呼び出しに `await` が要ることが添えられます。
 - `run` の本体は、自分が分割代入した fixture の上で自由に書ける TypeScript です。
   合成とは、別の step モジュールをインポートし、同じ fixture bag でその `run` を呼び出すことです。
   共有ヘルパーは通常のモジュール(例: `features/steps/lib/`)に置きます。

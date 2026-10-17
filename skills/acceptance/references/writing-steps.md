@@ -37,10 +37,10 @@ its line, usually through a renamed sentence or a renamed pattern. Fix
 the line or the pattern instead of scaffolding a second step.
 
 Scaffold producers before consumers. `--from <step>.<key>` reads the
-producer's `returns`, and a producer that is still a stub returns no keys:
-`nuka scaffold` refuses with `<step> does not return "<key>"; it returns
-no keys`. So write each Given's `returns` first, then the When that reads
-from it, then the Thens that read from the When.
+producer's `returns`, and a producer that is still a stub declares none:
+`nuka scaffold` refuses with `<step> declares no returns, so it has no
+key to chain`. So write each Given's `returns` first, then the When that
+reads from it, then the Thens that read from the When.
 
 When the feature already holds the lines, `nuka scaffold --feature
 <file>` (the `do:` line of the `undefined-step` finding, with the file
