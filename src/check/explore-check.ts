@@ -179,7 +179,7 @@ function unknown(filePath: string, stepName: string, where: string): CheckIssue 
 function browser(filePath: string, stepName: string, where: string): CheckIssue {
   return {
     code: "explore-browser-step",
-    message: `${where} names "${stepName}", which needs a browser (page or context). Explore does not run a step that needs a browser`,
+    message: `${where} names "${stepName}", which needs a browser (page, context, or pageAs). Explore does not run a step that needs a browser`,
     file: filePath,
     step: stepName,
   };

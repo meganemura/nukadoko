@@ -307,6 +307,11 @@
       "en": ["run summary"],
       "ja": "run サマリ",
       "note": "nuka run が書く Markdown(summary.md、$GITHUB_STEP_SUMMARY、--summary)。stderr に出る 1 行のサマリ(サマリ行)とは別物。run は英語のまま"
+    },
+    {
+      "en": ["several people in one scenario", "person", "people"],
+      "ja": "1 つの scenario の複数の人",
+      "note": "docs/spec.md \"Context API\" の pageAs(name) の段落の見出し語。person は受け入れ条件に出てくる人(主催者、参加者など)を指し、ユーザーやアクターと訳さず「人」と書く。pageAs が開く専用の context は browser context のまま英語で書く"
     }
   ],
   "keep_english": [

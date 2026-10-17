@@ -1,5 +1,5 @@
 import type { NukadokoConfig } from "../config/schema.js";
-import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
+import { BROWSER_FIXTURE_NAMES, BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { FixtureScope } from "../record/types.js";
 import { fixtureFnOf, fixtureOptionsOf, type FixtureFn } from "../step/fixture-types.js";
@@ -260,8 +260,8 @@ export function findFixtureScopeViolations(graph: FixtureGraph): FixtureDefiniti
   return issues;
 }
 
-/** `page` overridden by a fixture that destructures neither `page` nor
- * `context` — there is no way for such an override to hand back a page the
+/** `page` overridden by a fixture that destructures none of
+ * `BROWSER_FIXTURE_NAMES` — there is no way for such an override to hand back a page the
  * executor still owns and measures (nothing it could construct on its own
  * traces back to the browser context nukadoko launched). Silent about every
  * other name: overriding `context`/`request`/anything else carries no such
@@ -271,7 +271,7 @@ export function findPageOverrideUnowned(graph: FixtureGraph): FixtureDefinitionI
   if (override === undefined || override.isBuiltin) {
     return [];
   }
-  if (override.dependencies.includes("page") || override.dependencies.includes("context")) {
+  if (override.dependencies.some((name) => BROWSER_FIXTURE_NAMES.has(name))) {
     return [];
   }
   return [
@@ -279,7 +279,7 @@ export function findPageOverrideUnowned(graph: FixtureGraph): FixtureDefinitionI
       code: "page-override-unowned",
       fixture: "page",
       message:
-        'fixture "page" overrides the builtin page but destructures neither "page" nor "context": there is ' +
+        'fixture "page" overrides the builtin page but destructures none of "page", "context", or "pageAs": there is ' +
         "no way for it to hand back a page the executor still owns and measures",
     },
   ];
@@ -297,7 +297,7 @@ export function fixtureReachesBrowser(
   graph: FixtureGraph,
   visited: Set<string> = new Set(),
 ): boolean {
-  if (name === "page" || name === "context") {
+  if (BROWSER_FIXTURE_NAMES.has(name)) {
     return true;
   }
   if (visited.has(name)) {
@@ -310,7 +310,7 @@ export function fixtureReachesBrowser(
   }
   for (const dep of node.dependencies) {
     const edge = resolveDependencyEdge(node, dep, graph);
-    if (edge.kind === "builtin" && (edge.name === "page" || edge.name === "context")) {
+    if (edge.kind === "builtin" && BROWSER_FIXTURE_NAMES.has(edge.name)) {
       return true;
     }
     if (edge.kind === "user" && fixtureReachesBrowser(edge.name, graph, visited)) {

@@ -615,7 +615,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `closeCurrentChunk`) — trace.zip, when it exists at all, is fully
     // written by the time this runs, so `actions`/`truncated` can be read
     // out of it here.
-    const traceEvidence = await collectTraceEvidence(evidenceDir, createTraceVersionWarner(stderr));
+    const traceEvidence = await collectTraceEvidence(
+      evidenceDir,
+      createTraceVersionWarner(stderr),
+      "trace.zip",
+      contextHandle.namedContexts(),
+    );
     // Combines `traceEvidence`'s own `{ actions }` truncation with
     // `evidenceSnapshot`'s into the step record's single
     // top-level `truncated` field — see `mergeTruncated`'s own doc comment

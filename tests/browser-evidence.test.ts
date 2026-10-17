@@ -7,12 +7,8 @@ import path from "node:path";
 import { chromium, type Browser } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
-import { launchBrowserWithTracing } from "../src/context/browser-evidence.js";
+import { launchBrowser } from "../src/context/browser-evidence.js";
 import { createStepContext } from "../src/context/create-context.js";
-import { createHttpLogFailedCollector } from "../src/context/http-log-failed.js";
-import { createHttpOmittedCollector } from "../src/context/http-omitted.js";
-import { createObservedCollector } from "../src/context/observed.js";
-import { createPageEventsCollector } from "../src/context/page-events.js";
 
 // Whether to run at all: computed once at module load (top-level await), so
 // `it.skipIf` below sees the real answer instead of the pre-`beforeAll`
@@ -622,54 +618,24 @@ describe("createStepContext / ctx.page(): console filtering", () => {
 });
 
 // Responsibility: `LaunchBrowserOptions.browserType`'s own documented
-// default — `undefined` behaves exactly like `"chromium"` (this file's own
-// header). The one production caller (create-context.ts) always passes
-// `config.browserType`, which zod defaults to `"chromium"` before this
-// function ever sees it, so this fallback is unreached through that one
-// caller; `launchBrowserWithTracing` is exported and its own doc comment
-// makes a promise about `undefined` specifically, so it is tested directly
-// against that promise here.
-describe("launchBrowserWithTracing: browserType defaults to chromium when omitted", () => {
-  let evidenceDir: string;
-
-  beforeEach(async () => {
-    evidenceDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-default-engine-"));
+// default: `undefined` behaves exactly like `"chromium"`. The one production
+// caller (create-context.ts) always passes `config.browserType`, which zod
+// defaults to `"chromium"` before this function sees it, so this fallback is
+// tested directly against `launchBrowser`'s own promise.
+describe("launchBrowser: browserType defaults to chromium when omitted", () => {
+  it.skipIf(!chromiumAvailable)("launches chromium when browserType itself is undefined", async () => {
+    const handle = await launchBrowser({ neededBy: "ctx.page()" });
+    expect(handle.browserInfo.type).toBe("chromium");
+    await handle.close();
   });
-
-  afterEach(async () => {
-    await rm(evidenceDir, { recursive: true, force: true });
-  });
-
-  it.skipIf(!chromiumAvailable)(
-    "launches chromium when browserType itself is undefined",
-    async () => {
-      const handle = await launchBrowserWithTracing({
-        neededBy: "ctx.page()",
-        evidenceDir,
-        observed: createObservedCollector(),
-        pageEvents: createPageEventsCollector(),
-        logPath: () => path.join(evidenceDir, "http.jsonl"),
-        secrets: [],
-        httpOmitted: createHttpOmittedCollector(),
-        httpLogFailed: createHttpLogFailedCollector(),
-      });
-
-      expect(handle.browserInfo.type).toBe("chromium");
-
-      await handle.finalize();
-    },
-  );
 });
 
-// Responsibility: a browser `launch` already started is closed when a later
-// step of `launchBrowserWithTracing` throws. The handle `dispose()` can
-// close is assigned only after this function returns, so a throw here used
-// to leave the process running. An invalid viewport is what produces that
-// throw: `newContext` accepts `{ width: -1, height: -1 }`, and `newPage`
-// then rejects it (screen width and height must be positive), after
-// `launch` has already succeeded. A launch that does not throw still
-// returns the handle, with a page that can be used.
-describe("launchBrowserWithTracing: a throw after launch closes the browser", () => {
+// Responsibility: a browser `launch` already started is closed when opening
+// its first context throws, so the process does not stay alive for the rest
+// of the run. An invalid viewport is what produces that throw: `newContext`
+// accepts `{ width: -1, height: -1 }`, and `newPage` then rejects it (screen
+// width and height must be positive), after `launch` has already succeeded.
+describe("ctx.page(): a throw after launch closes the browser", () => {
   let evidenceDir: string;
 
   beforeEach(async () => {
@@ -680,55 +646,41 @@ describe("launchBrowserWithTracing: a throw after launch closes the browser", ()
     await rm(evidenceDir, { recursive: true, force: true });
   });
 
-  function launchOptions(browserContext?: { viewport: { width: number; height: number } }) {
-    return {
-      neededBy: "ctx.page()",
+  it.skipIf(!chromiumAvailable)("closes the browser when newPage rejects an invalid viewport", async () => {
+    const launched: Browser[] = [];
+    const realLaunch = chromium.launch.bind(chromium);
+    const spy = vi.spyOn(chromium, "launch").mockImplementation(async (options) => {
+      const browser = await realLaunch(options);
+      launched.push(browser);
+      return browser;
+    });
+    const handle = createStepContext({
+      config: baseConfig({ browserContext: { viewport: { width: -1, height: -1 } } }),
       evidenceDir,
-      ...(browserContext ? { browserContext } : {}),
-      observed: createObservedCollector(),
-      pageEvents: createPageEventsCollector(),
-      logPath: () => path.join(evidenceDir, "http.jsonl"),
-      secrets: [],
-      httpOmitted: createHttpOmittedCollector(),
-      httpLogFailed: createHttpLogFailedCollector(),
-    };
-  }
-
-  it.skipIf(!chromiumAvailable)(
-    "closes the browser when newPage rejects an invalid viewport",
-    async () => {
-      const launched: Browser[] = [];
-      const realLaunch = chromium.launch.bind(chromium);
-      const spy = vi.spyOn(chromium, "launch").mockImplementation(async (options) => {
-        const browser = await realLaunch(options);
-        launched.push(browser);
-        return browser;
-      });
-      try {
-        await expect(
-          launchBrowserWithTracing(launchOptions({ viewport: { width: -1, height: -1 } })),
-        ).rejects.toThrow(/must be positive/);
-        expect(launched).toHaveLength(1);
-        const browser = launched[0];
-        if (browser === undefined) {
-          throw new Error("launch did not return a browser");
-        }
-        expect(browser.isConnected()).toBe(false);
-      } finally {
-        spy.mockRestore();
-        for (const browser of launched) {
-          if (browser.isConnected()) {
-            await browser.close();
-          }
+      env: {},
+    });
+    try {
+      await expect(handle.ctx.page()).rejects.toThrow(/must be positive/);
+      expect(launched).toHaveLength(1);
+      expect(launched[0]?.isConnected()).toBe(false);
+    } finally {
+      spy.mockRestore();
+      await handle.dispose();
+      for (const browser of launched) {
+        if (browser.isConnected()) {
+          await browser.close();
         }
       }
-    },
-  );
+    }
+  });
 
-  it.skipIf(!chromiumAvailable)("returns the browser when launch succeeds", async () => {
-    const handle = await launchBrowserWithTracing(launchOptions());
-    expect(handle.browserInfo.type).toBe("chromium");
-    await expect(handle.page.evaluate(() => 1 + 1)).resolves.toBe(2);
-    await handle.finalize();
+  it.skipIf(!chromiumAvailable)("returns a page that can be used when the context opens", async () => {
+    const handle = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+    try {
+      const page = await handle.ctx.page();
+      await expect(page.evaluate(() => 1 + 1)).resolves.toBe(2);
+    } finally {
+      await handle.dispose();
+    }
   });
 });

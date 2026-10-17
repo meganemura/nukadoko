@@ -9,7 +9,7 @@ scaffold --then` writes, and it needs nothing installed:
 `import("playwright/test")` fails with `ERR_MODULE_NOT_FOUND` where
 Playwright is not installed. `examples/cli.md` has a finished Then step of
 that kind. Where Playwright is installed, because a step already needs
-`page`, `context`, or `request`, `expect` comes from it, imported
+`page`, `context`, `pageAs`, or `request`, `expect` comes from it, imported
 directly. Most of what `expect` offers works the same as it would in a
 Playwright test; a few matchers need something a step does not have (see
 "What `expect` needs from the runner" below).

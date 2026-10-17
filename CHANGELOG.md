@@ -7,6 +7,36 @@ just until 0.1.
 
 ## Unreleased
 
+### Breaking
+
+- **`evidence.attach` and `evidence.path` refuse `trace.<name>.zip` and `final.<name>.png`.**
+  Those are the files a `pageAs(name)` context writes beside the step's
+  own, so an attachment with that name would replace one. The names are
+  reserved for every valid context name, opened or not, because whether a
+  later step opens one is not known when a step attaches. Breaking for a
+  step that attached a file under such a name: see docs/upgrading.md.
+
+### Added
+
+- **`pageAs(name, options?)`: a browser context of its own for each person in a scenario.**
+  A scenario with a host and a guest needs two cookie jars, and the one
+  context a scenario had gave a second tab the first tab's cookies.
+  `browser` stays refused as a fixture, because a context it made would
+  be outside every record. `pageAs` opens the context in the browser the
+  executor launched, with Playwright's own `BrowserContextOptions` for
+  that context alone (`{ javaScriptEnabled: false }` turns scripts off for
+  one person), and returns Playwright's own `Page`. The first call for a
+  name opens it, later calls return the same page, and it closes when the
+  scenario ends. It records where the default context records: request
+  counts, http.jsonl lines and `page_events` entries with `as`, a trace
+  chunk per step as `trace.<name>.zip` in the new `evidence.named_traces`,
+  `actions` with `as` on one timeline, and `final.<name>.png` in
+  `evidence.screenshots`. `needs_browser`, `playwright-missing`,
+  `fixture-touches-app`, `fixture-scope-violation`, and
+  `page-override-unowned` count it as a browser fixture. `ctx.page()`
+  is unchanged. docs/spec.md "Context API" records the shapes that were
+  refused and why.
+
 ## 0.17.0 — 2026-10-17
 
 ### Breaking

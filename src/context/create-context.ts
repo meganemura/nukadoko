@@ -1,12 +1,14 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { APIRequestContext, Page } from "playwright";
+import { isDeepStrictEqual } from "node:util";
+import type { APIRequestContext, BrowserContextOptions, Page } from "playwright";
 import type { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { FixtureBag, PollOptions, StepContext } from "../step/context.js";
 import type {
   CallEntry,
+  NamedTraceEntry,
   ErrorKind,
   HttpOmittedCounts,
   ObservedCounts,
@@ -22,7 +24,8 @@ import type { Step } from "../step/define-step.js";
 import { parseStepReturns } from "../step/parse-returns.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import type { StorageState } from "../session/storage-state.js";
-import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
+import { launchBrowser, type BrowserHandle, type TracedContextHandle } from "./browser-evidence.js";
+import { assertValidContextName, ContextOptionsConflictError, contextFileName } from "./context-name.js";
 import { createCallsCollector } from "./calls.js";
 import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
@@ -310,8 +313,21 @@ import { createUsedCollector } from "./used.js";
 // call reaches the second branch exactly as a step's own direct
 // `ctx.page()` call used to.
 
+// `pageAs(name)` gives a step a browser context of its own in the same
+// browser (docs/spec.md "Context API"). Each context, the default one
+// included, is one `OpenedContext` in `contexts`, keyed by its name
+// (`undefined` for the default). Everything that used to be one browser's
+// state is now per entry: its trace chunk is open or not, and it writes its
+// own chunk file and final screenshot (context-name.ts's
+// `contextFileName`). The collectors stay one per `ctx`: every context
+// records into the same `observed`, `pageEvents`, and http.jsonl, tagged
+// with `as`, so a step record's counts cover every person the step acted
+// as. The browser is launched on the first context's demand and closed in
+// `dispose`, after every context's own `finalize`.
+
 export interface EvidenceResult {
   trace?: string;
+  named_traces?: NamedTraceEntry[];
   screenshots: ScreenshotEntry[];
   http?: string;
 }
@@ -418,6 +434,10 @@ export interface StepContextHandle {
    * a heartbeat tick reads. Never exposed on `ctx`, same rule as
    * `pollsSnapshot()`. */
   livePollsSnapshot(): LivePollEntry[];
+  /** Executor-only: the names of the `pageAs(name)` contexts opened so far,
+   * in the order they opened. The executor reads each one's chunk file
+   * beside the default `trace.zip` after `endStep()`. */
+  namedContexts(): string[];
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
    * even for a call that went on to throw `MissingEnvError`. Never exposed on `ctx` — same rule as
@@ -589,6 +609,14 @@ export interface CreateStepContextOptions {
   stepTitle?: string;
 }
 
+/** One browser context this ctx opened: the default one (`as` undefined)
+ * or a `pageAs(name)` one. */
+interface OpenedContext {
+  readonly as: string | undefined;
+  readonly handle: TracedContextHandle;
+  chunkOpen: boolean;
+}
+
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
   const {
     config,
@@ -628,11 +656,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // meaningful when `pendingChunkTitle !== undefined`; `beginStep` is the
   // only thing that ever changes it.
   let pendingChunkFileName = "trace.zip";
-  // Whether a chunk is currently open for the *current* boundary — reset to
-  // `false` by `closeCurrentChunk` (never set back to `false` anywhere
-  // else), and only ever `true` between a successful `ctx.page()`-triggered
-  // `beginStepChunk` and the next `closeCurrentChunk` call.
-  let chunkOpen = false;
   // One collector for this ctx's whole lifetime; `beginStep` resets its
   // *counts*, never replaces the object itself, so every network path
   // opened before or after a reset still tallies into the same instance.
@@ -691,10 +714,22 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // scenario ends" comes from.
   const scratch = createScratchCollector({ rootDir: options.rootDir ?? process.cwd() });
 
-  let browserHandle: BrowserEvidenceHandle | undefined;
+  let browserHandle: BrowserHandle | undefined;
+  let browserSetup: Promise<BrowserHandle> | undefined;
+  // Every browser context this ctx opened, in open order (this file's own
+  // header). `chunkOpen` is whether that context has a chunk open for the
+  // *current* boundary: set by `setUpPage`, cleared only by
+  // `closeCurrentChunk`.
+  const contexts = new Map<string | undefined, OpenedContext>();
+  // Context setups in flight, so concurrent first calls for one name share
+  // one context (see `ctx.page()`), and how many are in flight, so a failed
+  // setup closes the browser only when nothing else is using it.
+  const pageSetups = new Map<string | undefined, Promise<Page>>();
+  let contextOpensInFlight = 0;
+  // The options each `pageAs` name was first asked for, recorded before its
+  // setup starts so a concurrent second call is compared too.
+  const requestedOptions = new Map<string, BrowserContextOptions | undefined>();
   let requestContext: APIRequestContext | undefined;
-  // In-flight setup shared by concurrent first calls; see `ctx.page()`.
-  let pageSetup: Promise<Page> | undefined;
   let requestSetup: Promise<APIRequestContext> | undefined;
 
   // Closes whatever trace chunk is open for the *current* boundary, writing
@@ -718,15 +753,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // does not itself matter — both are cheap, and neither depends on the
   // other having run.
   async function closeCurrentChunk(): Promise<void> {
-    if (!browserHandle) {
-      return;
+    for (const opened of contexts.values()) {
+      await opened.handle.flushPageHttpLog();
+      if (!opened.chunkOpen) {
+        continue;
+      }
+      opened.chunkOpen = false;
+      await opened.handle.endStepChunk(path.join(boundaryDir, contextFileName(pendingChunkFileName, opened.as)));
     }
-    await browserHandle.flushPageHttpLog();
-    if (!chunkOpen) {
-      return;
-    }
-    chunkOpen = false;
-    await browserHandle.endStepChunk(path.join(boundaryDir, pendingChunkFileName));
   }
 
   // `step`'s own vocabulary name, or the same fallback wording run-
@@ -890,14 +924,21 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
     baseURL: config.baseURL,
     async page(): Promise<Page> {
-      // Shared by concurrent first calls (`Promise.all([ctx.page(), ctx.page()])`):
-      // each would otherwise see `browserHandle` unset, launch its own browser,
-      // and leak the one the other assigned first. Cleared once settled so a
-      // failed launch is retried by the next call.
-      pageSetup ??= setUpPage().finally(() => {
-        pageSetup = undefined;
-      });
-      return pageSetup;
+      return pageOf(undefined, undefined);
+    },
+    async pageAs(name: string, options?: BrowserContextOptions): Promise<Page> {
+      assertValidContextName(name);
+      if (requestedOptions.has(name)) {
+        // A later call without options reaches the context as it is. One
+        // with options must ask for what the context already has: Playwright
+        // fixes a context's options when it creates it.
+        if (options !== undefined && !isDeepStrictEqual(options, requestedOptions.get(name) ?? {})) {
+          throw new ContextOptionsConflictError(name);
+        }
+      } else {
+        requestedOptions.set(name, options);
+      }
+      return pageOf(name, options);
     },
     async request(): Promise<APIRequestContext> {
       // Same sharing as `ctx.page()`: two concurrent first calls must not each
@@ -975,51 +1016,114 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     return pendingChunkTitle === undefined ? api : `${api} in "${pendingChunkTitle}"`;
   }
 
-  async function setUpPage(): Promise<Page> {
-    if (!browserHandle) {
-      browserHandle = await launchBrowserWithTracing({
-        neededBy: neededBy("ctx.page()"),
-        // `config.browserType` — which of
-        // chromium/firefox/webkit to launch; `undefined` behaves like
-        // `"chromium"` (browser-evidence.ts's own default).
-        browserType: config.browserType,
-        browser: config.browser,
-        // `config.browserContext` — schema.ts
-        // already rejects a `browserContext` that sets `baseURL`/
-        // `storageState`, so the two args below can never collide with
-        // it; browser-evidence.ts still spreads them in last anyway.
-        browserContext: config.browserContext,
+  // Shared by concurrent first calls (`Promise.all([ctx.page(), ctx.page()])`):
+  // each would otherwise see no context, open its own, and leak the one the
+  // other stored first. Cleared once settled so a failed setup is retried by
+  // the next call.
+  function pageOf(as: string | undefined, options: BrowserContextOptions | undefined): Promise<Page> {
+    let setup = pageSetups.get(as);
+    if (setup === undefined) {
+      setup = setUpPage(as, options).finally(() => {
+        pageSetups.delete(as);
+      });
+      pageSetups.set(as, setup);
+    }
+    return setup;
+  }
+
+  function ensureBrowser(api: string): Promise<BrowserHandle> {
+    if (browserHandle) {
+      return Promise.resolve(browserHandle);
+    }
+    browserSetup ??= launchBrowser({
+      neededBy: neededBy(api),
+      // `config.browserType`: which of chromium/firefox/webkit to launch;
+      // `undefined` behaves like `"chromium"` (browser-evidence.ts's own
+      // default).
+      browserType: config.browserType,
+      browser: config.browser,
+    })
+      .then((launched) => {
+        browserHandle = launched;
+        return launched;
+      })
+      .finally(() => {
+        browserSetup = undefined;
+      });
+    return browserSetup;
+  }
+
+  // What `browser.newContext` receives. `config.browserContext` first:
+  // schema.ts already rejects one that sets `baseURL`/`storageState`, so
+  // nukadoko's own values after it never collide with it. A `pageAs` context
+  // starts with no storageState: it is a person of its own, not the session
+  // the default context restores. Its own options come last, so a step can
+  // turn off JavaScript (or set anything else Playwright accepts) for that
+  // one context.
+  function contextOptionsFor(
+    as: string | undefined,
+    options: BrowserContextOptions | undefined,
+  ): BrowserContextOptions {
+    return {
+      ...(config.browserContext ?? {}),
+      ...(as === undefined && storageState ? { storageState } : {}),
+      ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+      ...(options ?? {}),
+    };
+  }
+
+  async function openContext(
+    as: string | undefined,
+    options: BrowserContextOptions | undefined,
+  ): Promise<OpenedContext> {
+    contextOpensInFlight += 1;
+    try {
+      const browser = await ensureBrowser(as === undefined ? "ctx.page()" : "pageAs()");
+      const handle: TracedContextHandle = await browser.openTracedContext({
+        ...(as !== undefined ? { as } : {}),
+        contextOptions: contextOptionsFor(as, options),
         evidenceDir,
-        storageState,
         observed,
         pageEvents,
         // Same getter/secrets pair `ctx.request()` (below) already reads
-        // at call time — page-issued traffic lands on the very same
+        // at call time: page-issued traffic lands on the very same
         // http.jsonl, redacted the very same way (this file's own header).
         logPath: () => path.join(boundaryDir, "http.jsonl"),
         secrets,
         httpOmitted,
         httpLogFailed,
-        baseURL: config.baseURL,
       });
-      // Opens this boundary's own chunk right at launch when a
-      // title is already pending — `undefined` here means a boundary with
-      // nothing worth tracing (a caller with no `stepTitle` that also
-      // never calls `beginStep` before its first `ctx.page()`), which
-      // simply gets a browser with no chunk at all, on purpose.
-      if (pendingChunkTitle !== undefined) {
-        await browserHandle.beginStepChunk(pendingChunkTitle);
-        chunkOpen = true;
+      const opened: OpenedContext = { as, handle, chunkOpen: false };
+      contexts.set(as, opened);
+      return opened;
+    } catch (error) {
+      if (as !== undefined) {
+        requestedOptions.delete(as);
       }
-    } else if (!chunkOpen && pendingChunkTitle !== undefined) {
-      // The browser was already running (an earlier step or hook launched
-      // it) but this boundary has not opened its own chunk yet — this is
-      // that boundary's own first `ctx.page()` call, so start one now,
-      // same as the fresh-launch branch above.
-      await browserHandle.beginStepChunk(pendingChunkTitle);
-      chunkOpen = true;
+      // A browser no context uses would stay alive for the rest of the run:
+      // `dispose` only closes what an opened context reached.
+      if (contexts.size === 0 && contextOpensInFlight === 1 && browserHandle) {
+        const unused = browserHandle;
+        browserHandle = undefined;
+        await unused.close();
+      }
+      throw error;
+    } finally {
+      contextOpensInFlight -= 1;
     }
-    return browserHandle.page;
+  }
+
+  async function setUpPage(as: string | undefined, options: BrowserContextOptions | undefined): Promise<Page> {
+    const opened = contexts.get(as) ?? (await openContext(as, options));
+    // The first call of this boundary for this context opens its chunk.
+    // `pendingChunkTitle` undefined is a boundary with nothing worth tracing
+    // (a caller with no `stepTitle` that also never calls `beginStep`),
+    // which gets a page with no chunk, on purpose.
+    if (!opened.chunkOpen && pendingChunkTitle !== undefined) {
+      await opened.handle.beginStepChunk(pendingChunkTitle);
+      opened.chunkOpen = true;
+    }
+    return opened.handle.page;
   }
 
   async function setUpRequest(): Promise<APIRequestContext> {
@@ -1074,11 +1178,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     let browserStorageState: StorageState | undefined;
     let requestStorageState: StorageState | undefined;
 
+    const defaultContext = contexts.get(undefined);
     if (browserHandle) {
       // Must run before finalize() below: finalize() closes the context,
       // and storageState() can only succeed on one that's still open (see
-      // browser-evidence.ts's collectStorageState doc comment).
-      browserStorageState = await browserHandle.collectStorageState();
+      // browser-evidence.ts's collectStorageState doc comment). Only the
+      // default context's state is a session's: a `pageAs` context is
+      // somebody else.
+      browserStorageState = await defaultContext?.handle.collectStorageState();
       // Closes whatever chunk the *current* boundary still has open (this
       // file's own header) — the only closing point `nuka do` ever reaches
       // (it calls neither `beginStep` nor `endStep`), and, for `nuka run`, a
@@ -1088,7 +1195,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // `collectStorageState` above does — `endStepChunk` needs a
       // still-open context.
       await closeCurrentChunk();
-      evidence.screenshots = await browserHandle.finalize();
+      // The default context first, then each `pageAs` context in the order
+      // it opened, so `screenshots[0]` stays the default page's when there
+      // is one.
+      for (const opened of [...contexts.values()].sort((a, b) => Number(a.as !== undefined) - Number(b.as !== undefined))) {
+        evidence.screenshots.push(...(await opened.handle.finalize(contextFileName("final.png", opened.as))));
+      }
+      await browserHandle.close();
       // Only claim the chunk file exists if `closeCurrentChunk` actually got
       // to write it: `endStepChunk` swallows its own failure (the browser/
       // context can be gone by the time it runs), so this must be checked
@@ -1103,6 +1216,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // `"trace.zip"` for `nuka do` regardless (it never calls `beginStep`).
       if (existsSync(path.join(boundaryDir, pendingChunkFileName))) {
         evidence.trace = pendingChunkFileName;
+      }
+      const namedTraces = namedContexts()
+        .map((as) => ({ as, file: contextFileName(pendingChunkFileName, as) }))
+        .filter((entry) => existsSync(path.join(boundaryDir, entry.file)));
+      if (namedTraces.length > 0) {
+        evidence.named_traces = namedTraces;
       }
     }
 
@@ -1155,7 +1274,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     // (collection failed) — falling back to the request context's value
     // there would contradict "collection failing means skip the save, keep
     // the existing file".
-    const storageStateToPersist = browserHandle ? browserStorageState : requestStorageState;
+    const storageStateToPersist = defaultContext ? browserStorageState : requestStorageState;
 
     return {
       evidence,
@@ -1198,6 +1317,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
   function livePollsSnapshot(): LivePollEntry[] {
     return [...livePolls.values()];
+  }
+
+  function namedContexts(): string[] {
+    return [...contexts.keys()].filter((as): as is string => as !== undefined);
   }
 
   function envReadsSnapshot(): string[] {
@@ -1262,6 +1385,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     recordingProcesses: <T>(fn: () => T): T => withProcessRecording(observed, fn),
     pollsSnapshot,
     livePollsSnapshot,
+    namedContexts,
     envReadsSnapshot,
     pageEventsSnapshot,
     httpOmittedSnapshot,
@@ -1308,6 +1432,10 @@ export async function buildStepFixtures(
     switch (name) {
       case "page":
         fixtures.page = await ctx.page();
+        break;
+      case "pageAs":
+        // A function, like `poll`: nothing opens until the step calls it.
+        fixtures.pageAs = ctx.pageAs;
         break;
       case "context": {
         const page = await ctx.page();

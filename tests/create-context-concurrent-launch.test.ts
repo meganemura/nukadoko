@@ -4,6 +4,7 @@ import path from "node:path";
 import { request as playwrightRequest, type Page } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
+import { ContextOptionsConflictError, InvalidContextNameError } from "../src/context/context-name.js";
 import { createStepContext } from "../src/context/create-context.js";
 
 // Responsibility: concurrent first `ctx.page()` / `ctx.request()` calls (what
@@ -15,7 +16,7 @@ const launcher = vi.hoisted(() => ({ launch: vi.fn() }));
 
 vi.mock("../src/context/browser-evidence.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/context/browser-evidence.js")>()),
-  launchBrowserWithTracing: launcher.launch,
+  launchBrowser: launcher.launch,
 }));
 
 function baseConfig(): NukadokoConfig {
@@ -36,16 +37,30 @@ function baseConfig(): NukadokoConfig {
   };
 }
 
-function stubHandle() {
-  const page = { id: "stub-page" } as unknown as Page;
+function stubContext(id: string) {
+  const page = { id } as unknown as Page;
   return {
     page,
-    browserInfo: { type: "chromium", version: "0" },
     collectStorageState: vi.fn(async () => undefined),
     beginStepChunk: vi.fn(async () => {}),
     endStepChunk: vi.fn(async () => {}),
     flushPageHttpLog: vi.fn(async () => {}),
     finalize: vi.fn(async () => []),
+  };
+}
+
+function stubHandle() {
+  const contexts: ReturnType<typeof stubContext>[] = [];
+  return {
+    contexts,
+    browserInfo: { type: "chromium", version: "0" },
+    openTracedContext: vi.fn(async (options: { as?: string }) => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const context = stubContext(options.as === undefined ? "stub-page" : `stub-page-${options.as}`);
+      contexts.push(context);
+      return context;
+    }),
+    close: vi.fn(async () => {}),
   };
 }
 
@@ -81,10 +96,61 @@ describe("createStepContext: concurrent first calls share one launch", () => {
 
     expect(first).toBe(second);
     expect(launcher.launch).toHaveBeenCalledTimes(1);
-    expect(handles[0]!.beginStepChunk).toHaveBeenCalledTimes(1);
+    expect(handles[0]!.contexts).toHaveLength(1);
+    expect(handles[0]!.contexts[0]!.beginStepChunk).toHaveBeenCalledTimes(1);
 
     await dispose();
-    expect(handles[0]!.finalize).toHaveBeenCalledTimes(1);
+    expect(handles[0]!.contexts[0]!.finalize).toHaveBeenCalledTimes(1);
+    expect(handles[0]!.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens one context per pageAs name in one browser for concurrent first calls", async () => {
+    const handles: ReturnType<typeof stubHandle>[] = [];
+    launcher.launch.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const handle = stubHandle();
+      handles.push(handle);
+      return handle;
+    });
+    const { ctx, dispose, namedContexts } = createStepContext({
+      config: baseConfig(),
+      evidenceDir,
+      env: {},
+      stepTitle: "a step",
+    });
+
+    const [aki, akiAgain, ben, own] = await Promise.all([
+      ctx.pageAs("aki"),
+      ctx.pageAs("aki"),
+      ctx.pageAs("ben"),
+      ctx.page(),
+    ]);
+
+    expect(aki).toBe(akiAgain);
+    expect(aki).not.toBe(ben);
+    expect(aki).not.toBe(own);
+    expect(launcher.launch).toHaveBeenCalledTimes(1);
+    expect(handles[0]!.contexts).toHaveLength(3);
+    expect(namedContexts()).toEqual(["aki", "ben"]);
+
+    await dispose();
+    for (const context of handles[0]!.contexts) {
+      expect(context.finalize).toHaveBeenCalledTimes(1);
+    }
+    expect(handles[0]!.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses other options for an open name and an invalid name, before anything opens for it", async () => {
+    launcher.launch.mockImplementation(async () => stubHandle());
+    const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
+
+    await expect(ctx.pageAs("Aki")).rejects.toThrow(InvalidContextNameError);
+    expect(launcher.launch).not.toHaveBeenCalled();
+
+    const ben = await ctx.pageAs("ben", { javaScriptEnabled: false });
+    await expect(ctx.pageAs("ben")).resolves.toBe(ben);
+    await expect(ctx.pageAs("ben", { javaScriptEnabled: false })).resolves.toBe(ben);
+    await expect(ctx.pageAs("ben", { javaScriptEnabled: true })).rejects.toThrow(ContextOptionsConflictError);
   });
 
   it("retries the launch on the next call after a launch failed", async () => {

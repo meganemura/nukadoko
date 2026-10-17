@@ -93,7 +93,7 @@
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
 import type { SCHEMA_VERSIONS } from "./schema-version.js";
-import type { ActionEntry, ErrorKind, ScreenshotEntry } from "./types.js";
+import type { ActionEntry, ErrorKind, NamedTraceEntry, ScreenshotEntry } from "./types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
 
@@ -143,6 +143,9 @@ export interface ScenarioHookRecord {
    * invocation actually opened a chunk — a hook that never called
    * `ctx.page()`/`this.openPage()` carries no `trace` at all. */
   readonly trace?: string;
+  /** The chunks `pageAs(name)` contexts wrote for this invocation, beside
+   * `trace` (`EvidenceMeta.named_traces`). Present only when non-empty. */
+  readonly named_traces?: readonly NamedTraceEntry[];
   /** Every Playwright call this hook invocation made through `ctx.page()`/
    * `this.openPage()`, read back out of its own trace chunk — same shape,
    * same 100-entry cap, same five-key params allowlist as a step's own

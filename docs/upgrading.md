@@ -39,6 +39,15 @@ This part does not change release to release.
   a refusal exits 2, and `nuka clean` takes no `--records`, `--cache`, or
   `--export`.
 
+## 0.17.0 to the next release
+
+- **`evidence.attach` and `evidence.path` refuse `trace.<name>.zip` and
+  `final.<name>.png`.** A `pageAs(name)` context writes those files beside
+  a step's own `trace.zip` and `final.png`, so the names are reserved for
+  every valid context name, in any case, with
+  `ReservedEvidenceNameError`. A step that attached a file under such a
+  name renames it, for example `trace-aki.zip` or `aki-final.png`.
+
 ## 0.16.1 to 0.17.0
 
 - **`nuka run` writes no scenario record to stdout when stdout is a

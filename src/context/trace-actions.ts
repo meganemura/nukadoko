@@ -2,7 +2,8 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { inflateRawSync } from "node:zlib";
-import type { ActionEntry } from "../record/types.js";
+import type { ActionEntry, NamedTraceEntry } from "../record/types.js";
+import { contextFileName } from "./context-name.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: turn one step's own trace.zip (browser-evidence.ts's
@@ -75,7 +76,7 @@ const INTERNAL_WAIT_METHOD = "__waitInfo__";
  * and a step record trying to hold all of them stops being something a
  * reader can open. The full, uncapped list always still exists in
  * trace.zip. */
-const MAX_ACTIONS = 100;
+export const MAX_ACTIONS = 100;
 
 export type TraceActionsParseResult =
   | { readonly kind: "ok"; readonly actions: readonly ActionEntry[]; readonly truncatedCount?: number }
@@ -91,6 +92,9 @@ export type TraceActionsParseResult =
  * convention. */
 export interface TraceEvidence {
   readonly trace?: string;
+  /** Mirrors `EvidenceMeta.named_traces`: the chunks `pageAs(name)`
+   * contexts wrote for the same boundary. */
+  readonly named_traces?: readonly NamedTraceEntry[];
   readonly actions?: readonly ActionEntry[];
   readonly truncated?: { readonly actions: number };
 }
@@ -356,41 +360,107 @@ export function parseTraceActions(traceTraceBuffer: Buffer): TraceActionsParseRe
  * `fileName` defaults to `"trace.zip"` — every step call site relies on
  * that default; a hook call site (run-scenario.ts) always names its own
  * file explicitly, since more than one can share a scenario's evidence
- * dir. */
+ * dir. `namedContexts` are the `pageAs(name)` contexts the ctx opened so
+ * far (create-context.ts's `namedContexts()`): each one's chunk for this
+ * boundary is `contextFileName(fileName, name)` beside it, read the same
+ * way, and its actions join the default context's on one timeline. */
 export async function collectTraceEvidence(
   stepRecordDir: string,
   onUnknownVersion: (version: number) => void,
   fileName = "trace.zip",
+  namedContexts: readonly string[] = [],
 ): Promise<TraceEvidence> {
-  const traceZipPath = path.join(stepRecordDir, fileName);
+  const sources: ContextActions[] = [];
+  const own = await readOneTrace(path.join(stepRecordDir, fileName), onUnknownVersion);
+  if (own !== undefined) {
+    sources.push(own);
+  }
+  const namedTraces: NamedTraceEntry[] = [];
+  for (const as of namedContexts) {
+    const file = contextFileName(fileName, as);
+    const read = await readOneTrace(path.join(stepRecordDir, file), onUnknownVersion);
+    if (read === undefined) {
+      continue;
+    }
+    namedTraces.push({ as, file });
+    sources.push({ ...read, actions: read.actions.map((action) => ({ ...action, as })) });
+  }
+  const merged = mergeContextActions(sources);
+  return {
+    ...(own !== undefined ? { trace: fileName } : {}),
+    ...(namedTraces.length > 0 ? { named_traces: namedTraces } : {}),
+    ...(merged.actions.length > 0 ? { actions: merged.actions } : {}),
+    ...(merged.truncatedCount !== undefined ? { truncated: { actions: merged.truncatedCount } } : {}),
+  };
+}
+
+/** The `trace`/`named_traces` pair of `evidence`, for a step record or a
+ * hook record to spread in. */
+export function traceFileFields(evidence: TraceEvidence): Pick<TraceEvidence, "trace" | "named_traces"> {
+  return {
+    ...(evidence.trace !== undefined ? { trace: evidence.trace } : {}),
+    ...(evidence.named_traces !== undefined ? { named_traces: evidence.named_traces } : {}),
+  };
+}
+
+/** One context's actions from one chunk: at most `MAX_ACTIONS` of them,
+ * with `total` the count before that cap. */
+export interface ContextActions {
+  readonly actions: readonly ActionEntry[];
+  readonly total: number;
+}
+
+/** `undefined` when `traceZipPath` does not exist. A file that exists but
+ * cannot be read gives no actions, never a throw (this file's own header). */
+async function readOneTrace(
+  traceZipPath: string,
+  onUnknownVersion: (version: number) => void,
+): Promise<ContextActions | undefined> {
   if (!existsSync(traceZipPath)) {
-    return {};
+    return undefined;
   }
   try {
     const zipBuffer = await readFile(traceZipPath);
     const traceTraceBuffer = readZipEntry(zipBuffer, "trace.trace");
     if (traceTraceBuffer === undefined) {
-      return { trace: fileName };
+      return { actions: [], total: 0 };
     }
     const result = parseTraceActions(traceTraceBuffer);
     if (result.kind === "ok") {
-      return {
-        trace: fileName,
-        ...(result.actions.length > 0 ? { actions: result.actions } : {}),
-        ...(result.truncatedCount !== undefined ? { truncated: { actions: result.truncatedCount } } : {}),
-      };
+      return { actions: result.actions, total: result.truncatedCount ?? result.actions.length };
     }
     if (result.kind === "unknown-version") {
       onUnknownVersion(result.version);
     }
-    return { trace: fileName };
+    return { actions: [], total: 0 };
   } catch {
     // Same "the file exists, but nothing further could be read from it"
-    // fallback as the `undefined` branch above — a corrupt zip, a read
-    // error mid-file, or anything else this file did not specifically
-    // anticipate.
-    return { trace: fileName };
+    // fallback as the `undefined` branch above: a corrupt zip, a read error
+    // mid-file, or anything else this file did not specifically anticipate.
+    return { actions: [], total: 0 };
   }
+}
+
+/** Puts the actions of several contexts on one timeline, ordered by `at`
+ * (a stable sort, so equal times keep source order), and caps the result at
+ * `MAX_ACTIONS` the way one trace is capped. Taking the earliest
+ * `MAX_ACTIONS` overall loses nothing a per-source cap already dropped: a
+ * source's dropped actions all come after its own `MAX_ACTIONS` kept ones.
+ * `truncatedCount` is the sum of every source's `total`, present only when
+ * that sum is over the cap. */
+export function mergeContextActions(sources: readonly ContextActions[]): {
+  readonly actions: readonly ActionEntry[];
+  readonly truncatedCount?: number;
+} {
+  const total = sources.reduce((sum, source) => sum + source.total, 0);
+  const actions =
+    sources.length === 1
+      ? (sources[0]?.actions ?? [])
+      : sources
+          .flatMap((source) => source.actions)
+          .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+          .slice(0, MAX_ACTIONS);
+  return { actions, ...(total > MAX_ACTIONS ? { truncatedCount: total } : {}) };
 }
 
 function unknownTraceVersionWarning(version: number): string {

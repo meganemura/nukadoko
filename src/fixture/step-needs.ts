@@ -1,4 +1,5 @@
 import { fixtureReachesBrowser, type FixtureGraph } from "./graph.js";
+import { BROWSER_FIXTURE_NAMES } from "../step/context.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import type { Step } from "../step/define-step.js";
 
@@ -31,14 +32,14 @@ export interface StepNeeds {
 
 /**
  * Whether destructuring `names` opens a browser — a direct membership
- * check, `page` or `context`, the only two fixtures that open one. This is
+ * check against `BROWSER_FIXTURE_NAMES`, the fixtures that open one. This is
  * `stepNeeds`'s own fallback for a caller with no fixture graph at all
  * (below): a step whose bag can only ever contain builtins has no
  * transitive path to walk, so the direct check already gives the right
  * answer without needing one.
  */
 function opensBrowser(names: readonly string[]): boolean {
-  return names.includes("page") || names.includes("context");
+  return names.some((name) => BROWSER_FIXTURE_NAMES.has(name));
 }
 
 /** `step`'s own fixture needs, read the same way `check` already reads them,

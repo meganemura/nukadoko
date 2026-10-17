@@ -1002,6 +1002,14 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
         path: joinRelative(stepRecord.evidence.dir, stepRecord.evidence.trace),
       });
     }
+    for (const named of stepRecord.evidence.named_traces ?? []) {
+      attachments.push({
+        kind: "path",
+        name: `trace (${named.as})`,
+        contentType: "application/vnd.allure.playwright-trace",
+        path: joinRelative(stepRecord.evidence.dir, named.file),
+      });
+    }
     // `screenshot.at` is never surfaced here — an attachment has no field to
     // put a timestamp on, so `file` (the only part Allure can place) is all
     // this mapping carries forward.
@@ -1308,6 +1316,14 @@ export function mapHooks(record: ScenarioRecord, scenarioStartMs: number, scenar
         name: "trace",
         contentType: "application/vnd.allure.playwright-trace",
         path: joinRelative(record.evidence.dir, hook.trace),
+      });
+    }
+    for (const named of hook.named_traces ?? []) {
+      attachments.push({
+        kind: "path",
+        name: `trace (${named.as})`,
+        contentType: "application/vnd.allure.playwright-trace",
+        path: joinRelative(record.evidence.dir, named.file),
       });
     }
     const timelineChildSteps = mapTimelineChildSteps(hook, timestampMs);

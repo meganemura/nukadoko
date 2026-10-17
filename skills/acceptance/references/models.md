@@ -12,7 +12,7 @@ can change or go in any release without a deprecation notice, so do not
 make a model the only check of something that has to keep passing.
 
 Use this only with steps that need `request` alone. A step that needs
-`page` or `context` is `explore-browser-step`, and
+`page`, `context`, or `pageAs` is `explore-browser-step`, and
 `nuka experimental explore` refuses to run it.
 
 ## Writing a model

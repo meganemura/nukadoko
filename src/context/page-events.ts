@@ -69,8 +69,9 @@ export interface PageEventsCollector {
   /** Records one `console.error` call. `at` is stamped here, not supplied by
    * the caller — see this file's header. */
   recordConsoleError(entry: Omit<ConsoleErrorEntry, "at">): void;
-  /** Records one uncaught page error by its message alone. */
-  recordPageError(message: string): void;
+  /** Records one uncaught page error by its message, and the `pageAs(name)`
+   * context it came from when it is not the default one. */
+  recordPageError(message: string, as?: string): void;
   /** Records one network-level request failure. */
   recordFailedRequest(entry: Omit<FailedRequestEntry, "at">): void;
   /** What this boundary accumulated since the last `reset()` (or since
@@ -122,8 +123,8 @@ export function createPageEventsCollector(): PageEventsCollector {
     recordConsoleError(entry: Omit<ConsoleErrorEntry, "at">): void {
       record(consoleErrors, { ...entry, at: new Date().toISOString() });
     },
-    recordPageError(message: string): void {
-      record(pageErrors, { message, at: new Date().toISOString() });
+    recordPageError(message: string, as?: string): void {
+      record(pageErrors, { message, at: new Date().toISOString(), ...(as !== undefined ? { as } : {}) });
     },
     recordFailedRequest(entry: Omit<FailedRequestEntry, "at">): void {
       record(failedRequests, { ...entry, at: new Date().toISOString() });

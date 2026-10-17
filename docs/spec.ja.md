@@ -399,7 +399,7 @@ export default defineStep({
 step の `run` は、素の分割代入パターンで **fixture bag** を受け取ります: `run({ page, section }, args)`。
 名前はアルファベット順に並べます。
 executor は、step が分割代入した fixture だけを構築します。
-step が `page` も `context` も名指さなければ、その step のためにブラウザを起動しません。
+step が `page`、`context`、`pageAs` のどれも名指さなければ、その step のためにブラウザを起動しません。
 
 ブラウザの動作は、中心となる設計目標から生じる帰結です。
 `run({ page }, args)` は「page を渡してほしい」という意味ではありません。
@@ -438,6 +438,23 @@ fixture の名前:
   2 つ目の context ではありません。
   step は `context.newPage()` で 2 枚目のタブを開けます。
   step は、executor が公開していない後述の `browser` を必要としません。
+- `await pageAs(name, options?)`: `page` と同じブラウザの中にある、`name` という名前の専用の browser context の `Page` です。
+  cookie と storage はその context だけのものなので、cookie で人を覚えるアプリに対して、1 つの scenario の 2 人は 2 人のままです。
+  `options` はその 1 つの context のための Playwright 自身の `BrowserContextOptions` で、たとえば `{ javaScriptEnabled: false }` です。
+  `config.browserContext` の上に適用されます。
+  `baseURL` は `page` と同じように渡されます。
+  session の storageState は渡されません。
+  その context は別の人だからです。
+  context は scenario の中でその `name` が最初に呼ばれたときに開き、後の呼び出しは同じページを返します。
+  後の呼び出しが別の `options` を渡すと `ContextOptionsConflictError` を投げます。
+  Playwright は context を作るときにオプションを固定するので、2 つ目のオプションは無視するしかないからです。
+  `name` は小文字、数字、ハイフンの 1 文字から 64 文字で、先頭は文字か数字です。
+  名前がファイル名の一部になるからです。
+  それ以外の名前は `InvalidContextNameError` を投げます。
+  context は、返されたページの `page.context()` です。
+  `pageAs` を分割代入しても何も起動しません。
+  起動するのは最初の呼び出しです。
+  後述の「1 つの scenario の複数の人」を参照してください。
 - `request: APIRequestContext`: session の cookie を持つ Playwright の APIRequestContext です。
   上の `page` と同様に、`baseURL` は任意です。
   複数のホストに絶対 URL だけでアクセスするスイートには、指定する単一の baseURL がありません。
@@ -586,6 +603,40 @@ matcher が Playwright のテストと同じようにアサーションするか
 `browser` そのものを渡すと、step は `browser.newContext()` を呼び、executor が認識しない、計測も trace もされず、その run が書くすべての step record の外にある context を作れます。
 この名前を bag から外すことで、その経路を常に到達不能にし、step が破らないよう覚えておく慣習にはしません。
 
+#### 1 つの scenario の複数の人
+
+受け入れ条件には、2 人以上の人が出てくるものがあります。
+主催者と参加者、買い手と売り手などです。
+それぞれが自分の端末から操作し、アプリは cookie でその人たちを区別します。
+`context.newPage()` は同じ cookie の入れ物の中に 2 枚目のタブを開くので、2 人目の人を演じられません。
+`pageAs(name)` は、2 つ目の context に至る計測された経路です。
+executor はそれを自分が起動したブラウザの中で開き、デフォルトの context が持つ購読をすべて付けるので、同じ step record に記録されます:
+
+- リクエスト数(`observed`)と、`"as": "<name>"` を持つ http.jsonl の行
+- `as` を持つ `page_events` のエントリ
+- `pageAs(name)` を呼んだ step または hook ごとに 1 つの trace チャンク
+  `trace.zip` の隣に `trace.<name>.zip` として書かれ、`evidence.named_traces` に載ります。
+  その `actions` はデフォルトの context の `actions` と 1 つのタイムラインに並び、それぞれが `as` を持ちます。
+- scenario の `evidence.screenshots` に `as` 付きで載る最終スクリーンショット `final.<name>.png`
+
+context は scenario の終わりに、スクリーンショットを撮った後で閉じ、ブラウザはその後で閉じます。
+チャンクは、step がその名前を最初に呼んだときに開きます。
+これは `page` と同じ遅延の規則です。
+`pageAs("aki")` を呼ばない step には、aki のページが前の step から開いたままでも `trace.aki.zip` はありません。
+
+ほかに 4 つの形を検討し、拒否しました。
+`ctx.page({ as: "aki" })` は `page` を値から関数に変えるので、それを分割代入するすべての step が壊れます。
+また、typed step には `ctx` がありません。
+`browser` fixture は上で拒否しています。
+人ごとの context を `nukadoko.config.ts` で宣言すると、scenario の人がプロジェクトの設定に入り、新しい人が feature ファイルの 1 行ではなく設定の変更になります。
+1 つの context の中で人ごとにホスト名(`aki.localhost`)を与えるプロジェクトの fixture は、cookie をホストごとに分けるアプリでしか働かず、スクリプトを止めるにはタブごとに DevTools Protocol の呼び出しが要り、アプリに触れる fixture(`fixture-touches-app`)でもあります。
+`pageAs` が名前を実行時に受け取るのは、人が scenario のデータであり、分割代入パターンに列挙できるものではないからです。
+それでも `pageAs` を分割代入することが、`check` が読む静的な宣言です(`needs_browser`、`playwright-missing`)。
+
+`check` は `pageAs` そのものについての finding を追加しません。
+名前は step の本体の中の引数で、`check` はそこを読まないので、間違った名前を実行前に知ることはできません。
+run がその呼び出しで拒否します。
+
 2 つの形、デフォルト値を持つ分割代入された fixture(`{ page = ... }`)と rest プロパティで集める fixture(`{ ...rest }`)は、誤って部分的に解析されず、そのまま拒否されます。
 どちらもこの節の冒頭で述べた静的な読み取りを損ないます: デフォルト値は `check` が明確に読める名前を壊し、rest プロパティが束縛する名前は分割代入を実行しなければ分からず、`check` は実行してはいけません。
 どちらを拒否しても、fixture が正当に必要とするものは失われません: fixture は名指された時点で必ず存在するため、デフォルト値が使われることはなく、step が必要とする fixture はすべて明示的に名指せます。
@@ -596,7 +647,7 @@ matcher が Playwright のテストと同じようにアサーションするか
 args だけを受け取る引数 1 つの `run` はありません。
 引数 1 つの `run({ page })` はすでに「`page` を必要とし、args を取らない step」を意味しており、TypeScript は 1 つの引数位置を fixture bag と args のどちらとしても型付けできません。
 
-この読み取りは `check` の外にも公開されます: `nuka steps --json` は、各 typed step が分割代入した名前を `needs` として報告し、名前をアルファベット順に並べ、何も必要としないときは `[]` を返し、`page` または `context` を含むかを `needs_browser` で示します。
+この読み取りは `check` の外にも公開されます: `nuka steps --json` は、各 typed step が分割代入した名前を `needs` として報告し、名前をアルファベット順に並べ、何も必要としないときは `[]` を返し、`page`、`context`、`pageAs` のどれかを含むかを `needs_browser` で示します。
 そのため agent は scenario を選ぶとき、実行前にブラウザを開かない step を識別できますが、ブラウザを使う scenario には API だけの scenario にはない分単位の時間と実物のターゲットが必要です。
 同じ静的な読み取りが解析できない `run()`、つまりデフォルト値、rest プロパティ、または分割代入パターンの位置に裸の識別子がある場合、`needs` は `[]` ではなく `null` になり、そのエントリの `needs_error` が理由を示し、導けないブラウザ要否を主張しないため `needs_browser` もありません。
 その step 自身の name、patterns、description は引き続き報告されるため、一つの読めない `run()` が残りの一覧を失わせることはありません。
@@ -618,13 +669,13 @@ nukadoko は現在この shadowing 自体を検出しないため、上の説明
 ### Fixtures
 
 「Context API」の fixture bag は閉じています。
-含まれるのは、`page`、`context`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scratch`だけです。
-`page`、`context`、`request` は Playwright 自身のオブジェクトであり、`playwright` はこのパッケージの optional な peer dependency です。
-プロジェクトがそれをインストールするのは、step か fixture がこの 3 つのどれかを使うときだけです。
+含まれるのは、`page`、`context`、`pageAs`、`request`、`env`、`requireEnv`、`baseURL`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scratch`だけです。
+`page`、`context`、`request` は Playwright 自身のオブジェクトで、`pageAs` はそれを返し、`playwright` はこのパッケージの optional な peer dependency です。
+プロジェクトがそれをインストールするのは、step か fixture がこの 4 つのどれかを使うときだけです。
 パッケージが読み込まれるのはそのどれかが初めて構築されるときで、コマンドの開始時ではないので、`nuka init`、`nuka check`、そうした step の無い run はそれ無しで動きます。
 それが無いときは、fixture の構築が step を失敗させ、その step とコマンド `npm install -D -E playwright@<version>` を名指す 1 行を出します。
 `nuka check` は同じ行を先に error `playwright-missing` として報告します。
-対象は、check する feature の行が束縛する step のうち、fixture が直接か `config.fixtures` を通して `page`、`context`、`request` を構築するもので、step ごとに 1 回です。
+対象は、check する feature の行が束縛する step のうち、fixture が直接か `config.fixtures` を通して `page`、`context`、`pageAs`、`request` を構築するもので、step ごとに 1 回です。
 check は run が読み込むのと同じ方法で `playwright` を解決し、何も構築しないので、`nuka run` はどの step も実行する前に止まります。
 step ファイルに定義されていても、check する行のどれも束縛しない step は報告しません。
 `playwright`、`playwright-core`、`@playwright/test` を自分で import する step ファイルは、そのパッケージが無いと import そのものに失敗します。
@@ -693,7 +744,7 @@ declare module "nukadoko" {
 fixture は step と同じ方法で第一引数を分割代入します。
 `check` は fixture を呼ばずに、ソーステキストから fixture の依存名を読みます。
 step の依存も同じ方法で読みます。
-fixture は builtin の依存として `page`、`context`、`request`、`env`、`requireEnv`、`baseURL` を名指せます。
+fixture は builtin の依存として `page`、`context`、`pageAs`、`request`、`env`、`requireEnv`、`baseURL` を名指せます。
 scenario fixture は、加えて `resultOf`、`section`、`poll`、`evidence`、`scratch` を名指せます。
 これらは、その fixture を構築させた step の記録に載り、step の境界が開いている必要はありません。
 `call` はこれらに含まれません。
@@ -711,7 +762,7 @@ fixture は builtin を上書きできます。
 use(page); }`)。
 この場合、依存の `page` は下層の builtin を指します。
 上書きする fixture 自身は指さないため、この依存は循環ではありません。
-`page` も `context` も分割代入しない上書きは、executor が引き続き所有して計測するページを返せません。
+`page`、`context`、`pageAs` のどれも分割代入しない上書きは、executor が引き続き所有して計測するページを返せません。
 したがって、`check` は `page-override-unowned` で拒否します。
 
 自分の `scratch` fixture をすでに宣言しているプロジェクトは、それをそのまま使えます。
@@ -737,7 +788,7 @@ worker はプロセスであるため、`worker` スコープは存在しませ�
 
 `process` fixture が依存できるのは、別の `process` fixture と、`env`、`requireEnv`、`baseURL` の 3 つの builtin だけです。
 これらの builtin の値は scenario context に依存しません。
-`fixture-scope-violation` は、`page`、`context`、`request`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scratch`、`scenario` fixture への依存を拒否します。
+`fixture-scope-violation` は、`page`、`context`、`pageAs`、`request`、`resultOf`、`call`、`section`、`poll`、`evidence`、`scratch`、`scenario` fixture への依存を拒否します。
 `call` への依存は `process` fixture に限らず、すべての fixture で拒否されます。
 `call` は step の境界を必要とするためです。
 `process` fixture は、これらの値を供給する scenario より長く生きる場合があります。
@@ -869,7 +920,7 @@ scenario record はすでに閉じている場合があり、stderr がその失
 `tend` は 3 つの事実を追加で報告します。
 `fixture-unused` は、直接にも別の fixture 経由でも、どの typed step も要求しない `config.fixtures` エントリを特定します。
 そのエントリには `nuka do` から引き続き到達できます。
-`fixture-touches-app` は、直接または別の fixture 経由で `page` か `context` に到達する fixture を特定します。
+`fixture-touches-app` は、直接または別の fixture 経由で `page`、`context`、`pageAs` のどれかに到達する fixture を特定します。
 ブラウザ fixture は、名指されていない前提条件によって scenario を成功させる場合があります。
 たとえば、どの step もログインを要求する前にユーザーをログインさせられます。
 これは、step の Given が説明しない作業と同じ効果を持ちます。
@@ -1865,7 +1916,7 @@ scenario record 自身の `browser` フィールド(`{ "type": "firefox", "versi
 両者は食い違うことがあります(step が `page` fixture をこの run 自身の `ctx` が一度も起動していない別のブラウザで上書きすることがあるからです)。
 記録に足るだけの信頼性があるのは計測された側だけです。
 run の pickle が一度もブラウザを起動しなかった場合、このフィールドは何らかの既定値になるのではなく、存在しません。
-`page`/`context` を分割代入しない step だけの pickle は何も起動せず、このフィールドが一度も走っていないブラウザを名指すことはありません。
+`page`、`context`、`pageAs` を分割代入しない step だけの pickle は何も起動せず、このフィールドが一度も走っていないブラウザを名指すことはありません。
 
 `:12` は 1 つの scenario だけを選び、これが反復のための経路です。
 feature のフル実行はすべての scenario の分数を消費し、その中の 1 つを正しくすることが、たいてい次の数回の実行の目的です。
@@ -2050,7 +2101,10 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `observed` のカウントと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
   ブラウザが使われるときは Playwright の trace とスクリーンショット、`request` fixture の呼び出し、`page.request` と `context.request` の呼び出し、page 自身の document/XHR/fetch の通信はすべて http.jsonl に記録され、step record 自体が一次記録になります。
-- `evidence.screenshots` はエントリ 1 つまでで、`{ "file": "final.png", "at": "..." }` という形を取ります。
+- `evidence.screenshots` は browser context ごとに 1 つのエントリを持ちます。
+  デフォルトの context は `{ "file": "final.png", "at": "..." }`、`pageAs(name)` の context はそれぞれ `{ "file": "final.<name>.png", "at": "...", "as": "<name>" }` で、デフォルトが先です(「1 つの scenario の複数の人」を参照)。
+  `pageAs` の context がある step で書いた trace チャンクは、`evidence.trace` の隣の `evidence.named_traces` に `{ "as", "file" }` として載ります。
+  その context からの `actions`、`page_events` のエントリ、http.jsonl の行は `as` を持ちます。
   ブラウザを使う実行の evidence は以前は 2 つのファイルで、step が失敗するたびに同じバッファを別名でもう 1 つ保存していました。
   それを書くこと自体にコストは無かったものの、ツールが一度も計測していないことを暗に主張していました。
   「失敗」スクリーンショットが、最後に撮られたものとは別個の事実として存在するという主張です。
@@ -2105,7 +2159,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name` も同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name`、そして有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。
@@ -3253,7 +3307,7 @@ discovery は、どちらかの宣言の default export を step ではなくそ
 `examples/todo/features/explore/` は、request だけを使う model と relation です。
 
 `nuka check` は、command のキーがその step の basename でないとき、または列の step が登録されていないとき、`explore-unknown-step` を報告します。
-その step が `page` または `context` を必要とするとき、fixture を経由する場合も含めて、`explore-browser-step` を報告します。
+その step が `page`、`context`、`pageAs` のどれかを必要とするとき、fixture を経由する場合も含めて、`explore-browser-step` を報告します。
 `request` だけを必要とする step は許されます。
 
 宣言を読んで、結果が 1 通りにしかならない所見がさらに 2 つあります。
@@ -3591,7 +3645,8 @@ nuka check [feature..] [--json]
                               discovery never registered, a fixture
                               dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page
-                              override that owns neither page nor context,
+                              override that owns none of page, context, and
+                              pageAs,
                               config coherence, unreadable step files
                               (reported, not fatal, the rest of the project
                               is still checked), a `.cjs` or `.cts` file discovery

@@ -85,6 +85,10 @@ export interface HttpLogEntry {
   /** `via: "request"` only: why the call threw. Present exactly when no
    * response exists, and then `status` is 0. */
   error?: string;
+  /** The `pageAs(name)` context whose page made the call (through the
+   * page itself, or through `page.request`). Absent for the default
+   * context and for `ctx.request()`. */
+  as?: string;
 }
 
 /** Redacts `entry` and appends it to whatever `logPath()` currently points
@@ -108,6 +112,7 @@ async function logCall(
   observed: ObservedCollector,
   httpLogFailed: HttpLogFailedCollector,
   send: () => Promise<APIResponse>,
+  as?: string,
 ): Promise<APIResponse> {
   // Recorded before `send()` resolves, not after: the method is known
   // upfront regardless of outcome, and a write attempt that fails on the
@@ -133,6 +138,7 @@ async function logCall(
           status: response.status(),
           duration_ms: durationMs,
           via: "request",
+          ...(as !== undefined ? { as } : {}),
         }
       : {
           method,
@@ -141,6 +147,7 @@ async function logCall(
           duration_ms: durationMs,
           via: "request",
           error: firstLine(failure instanceof Error ? failure.message : String(failure)),
+          ...(as !== undefined ? { as } : {}),
         };
     try {
       await appendHttpLogEntry(logPath, entry, secrets);
@@ -234,6 +241,7 @@ export function instrumentApiRequestContext(
   secrets: SecretSet,
   observed: ObservedCollector,
   httpLogFailed: HttpLogFailedCollector,
+  as?: string,
 ): void {
   if (instrumentedApiRequests.has(target)) {
     return;
@@ -249,5 +257,6 @@ export function instrumentApiRequestContext(
       observed,
       httpLogFailed,
       () => originalFetch(urlOrRequest, options),
+      as,
     );
 }

@@ -32,6 +32,13 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   古い節が名指すコマンド、フラグ、終了コードは、後のリリースで削除されたり変わったりしていることがあります。
   最新のリリースでは、拒否は 2 で終了し、`nuka clean` は `--records`、`--cache`、`--export` を受け付けません。
 
+## 0.17.0 から次のリリースへ
+
+- **`evidence.attach` と `evidence.path` は `trace.<name>.zip` と `final.<name>.png` を拒否します。**
+  `pageAs(name)` の context は、step 自身の `trace.zip` と `final.png` の隣にそれらのファイルを書きます。
+  そのため、有効なすべての context 名について、大文字小文字を問わず、これらの名前は `ReservedEvidenceNameError` で予約されます。
+  そのような名前でファイルを添付していた step は、たとえば `trace-aki.zip` や `aki-final.png` に名前を変えます。
+
 ## 0.16.1 から 0.17.0 へ
 
 - **`nuka run` は、stdout が端末のとき、stdout に scenario record を出力しません。**

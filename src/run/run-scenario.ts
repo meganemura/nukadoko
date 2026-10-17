@@ -34,7 +34,7 @@ import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../step/context.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
-import { collectTraceEvidence, type TraceEvidence } from "../context/trace-actions.js";
+import { collectTraceEvidence, traceFileFields, type TraceEvidence } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
 import { ReadOnlyEnvironmentError } from "../environment/resolve-environment.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
@@ -1285,7 +1285,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // step's own `evidence.trace` has to be knowable *now*, from this
     // step's own chunk having already been written to disk.
     await contextHandle.endStep();
-    const traceEvidence = await collectTraceEvidence(begun.recordDir, onUnknownTraceVersion);
+    const traceEvidence = await collectTraceEvidence(begun.recordDir, onUnknownTraceVersion, "trace.zip", contextHandle.namedContexts());
 
     // `observed.http_writes`/`http_reads` are tallied every occurrence,
     // typed or compat alike, and always land on the step record below — this
@@ -1391,7 +1391,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               dir: begun.relativeRecordDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
-              ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
+              ...traceFileFields(traceEvidence),
               ...evidenceMetaFields(evidenceSnapshot),
             },
             observed,
@@ -1443,7 +1443,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               dir: begun.relativeRecordDir,
               screenshots: [],
               ...(httpLogExists ? { http: "http.jsonl" } : {}),
-              ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
+              ...traceFileFields(traceEvidence),
               ...evidenceMetaFields(evidenceSnapshot),
             },
             observed,
@@ -1670,14 +1670,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // step's own chunk, so `trace` is never set on a record whose chunk
     // hasn't actually finished writing yet.
     await contextHandle.endStep();
-    const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
+    const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName, contextHandle.namedContexts());
     const declared = declaredCollector.snapshot();
     if (hookStatus === "passed") {
       hookRecords.push({
         type: "before",
         status: "passed",
         ...recordedHookName(hook.name),
-        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...traceFileFields(hookTraceEvidence),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
         ...(declared ? { declared } : {}),
@@ -1688,7 +1688,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         status: "failed",
         error: { message: hookErrorMessage, kind: hookErrorKind },
         ...recordedHookName(hook.name),
-        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...traceFileFields(hookTraceEvidence),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
         ...(declared ? { declared } : {}),
@@ -1821,7 +1821,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       }
       // Same "close, then read" order as the Before loop above.
       await contextHandle.endStep();
-      const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
+      const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName, contextHandle.namedContexts());
       const declared = declaredCollector.snapshot();
       if (hookStatus === "passed") {
         hookRecords.push({
@@ -1829,7 +1829,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           step_index: stepIndex,
           status: "passed",
           ...recordedHookName(hook.name),
-          ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+          ...traceFileFields(hookTraceEvidence),
           ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
           ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
           ...(declared ? { declared } : {}),
@@ -1841,7 +1841,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           status: "failed",
           error: { message: hookErrorMessage, kind: hookErrorKind },
           ...recordedHookName(hook.name),
-          ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+          ...traceFileFields(hookTraceEvidence),
           ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
           ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
           ...(declared ? { declared } : {}),
@@ -2337,7 +2337,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // ran, so `ctx.page()` could already have opened one before the
         // uncaught throw this backstop exists for.
         await contextHandle.endStep();
-        const traceEvidence = await collectTraceEvidence(began.recordDir, onUnknownTraceVersion);
+        const traceEvidence = await collectTraceEvidence(began.recordDir, onUnknownTraceVersion, "trace.zip", contextHandle.namedContexts());
         const stepFinishedAt = new Date();
         const httpLogExists = existsSync(path.join(began.recordDir, "http.jsonl"));
         const observed = contextHandle.observedCounts();
@@ -2400,7 +2400,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             dir: began.relativeRecordDir,
             screenshots: [],
             ...(httpLogExists ? { http: "http.jsonl" } : {}),
-            ...(traceEvidence.trace !== undefined ? { trace: traceEvidence.trace } : {}),
+            ...traceFileFields(traceEvidence),
             ...evidenceMetaFields(evidenceSnapshot),
           },
           observed,
@@ -2525,14 +2525,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // disk, and read back, *before* `dispose()` closes the browser context
     // for good just below this loop.
     await contextHandle.endStep();
-    const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName);
+    const hookTraceEvidence = await collectTraceEvidence(scenarioDir, onUnknownTraceVersion, chunkFileName, contextHandle.namedContexts());
     const declared = declaredCollector.snapshot();
     if (hookStatus === "passed") {
       hookRecords.push({
         type: "after",
         status: "passed",
         ...recordedHookName(hook.name),
-        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...traceFileFields(hookTraceEvidence),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
         ...(declared ? { declared } : {}),
@@ -2543,7 +2543,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         status: "failed",
         error: { message: hookErrorMessage, kind: hookErrorKind },
         ...recordedHookName(hook.name),
-        ...(hookTraceEvidence.trace !== undefined ? { trace: hookTraceEvidence.trace } : {}),
+        ...traceFileFields(hookTraceEvidence),
         ...(hookTraceEvidence.actions !== undefined ? { actions: hookTraceEvidence.actions } : {}),
         ...(hookTraceEvidence.truncated !== undefined ? { truncated: hookTraceEvidence.truncated } : {}),
         ...(declared ? { declared } : {}),

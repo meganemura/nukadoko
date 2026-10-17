@@ -105,6 +105,14 @@ failure's own step record can show you: a failed step's `used` entries
 carry each upstream step's full `result`, so whatever this step declined to
 return is exactly what stays missing from that step record too.
 
+## Several people in one scenario
+
+When the app tells people apart by a cookie, give each person a browser
+context of their own: `await pageAs(name, { javaScriptEnabled: false })`
+returns Playwright's `Page` (a `context.newPage()` tab shares cookies).
+Later calls for a name return the same page; other options there throw.
+Use the person's name from the feature line: records tag it with `as`.
+
 ## `page.goto` and baseURL
 
 A leading slash in `page.goto("/path")` replaces baseURL's own path, the

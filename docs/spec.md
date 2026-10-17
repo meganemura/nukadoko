@@ -487,8 +487,9 @@ export default defineStep({
 
 A step's `run` takes a **fixture bag** in a plain destructuring pattern:
 `run({ page, section }, args)`. Names use alphabetical order. The executor
-builds only the fixtures that the step destructures. If the step names neither
-`page` nor `context`, the executor does not launch a browser for that step.
+builds only the fixtures that the step destructures. If the step names none of
+`page`, `context`, and `pageAs`, the executor does not launch a browser for
+that step.
 
 The browser behavior is a consequence of the main design goal.
 `run({ page }, args)` does not mean "give me the page." The object pattern is
@@ -529,6 +530,22 @@ The fixture names:
   to (`page.context()`). It is never a second context. It lets a step open a
   second tab with `context.newPage()`. The step does not need the `browser`
   that the executor does not expose (below).
+- `await pageAs(name, options?)`: the `Page` of a browser context of its
+  own, named `name`, in the same browser as `page`. Its cookies and storage
+  are its own, so two people in one scenario stay two people to an app
+  that remembers a person by a cookie. `options` is Playwright's own
+  `BrowserContextOptions` for that one context, such as
+  `{ javaScriptEnabled: false }`, applied over `config.browserContext`.
+  `baseURL` is wired in as for `page`; the session's storageState is not,
+  because the context is somebody else. The context opens on the first
+  call for `name` in the scenario, and a later call returns the same page.
+  A later call with other `options` throws `ContextOptionsConflictError`:
+  Playwright fixes a context's options when it creates it, so the second
+  set could only be ignored. A `name` is 1 to 64 lowercase letters, digits,
+  and hyphens, starting with a letter or a digit, because it becomes part
+  of file names; another name throws `InvalidContextNameError`. The context
+  is `page.context()` of the page it returns. Destructuring `pageAs` launches
+  nothing; the first call does. See "Several people in one scenario" below.
 - `request: APIRequestContext`: a Playwright APIRequestContext with the
   session's cookies. As with `page` above, `baseURL` is optional. A suite that
   calls only absolute URLs across multiple hosts has no single baseURL to
@@ -706,6 +723,51 @@ unmeasured, untraced, outside every step record the run writes. Leaving the
 name out of the bag is what keeps that path always unreachable, rather
 than a convention a step has to remember not to break.
 
+#### Several people in one scenario
+
+Some acceptance criteria have more than one person in them: a host and a guest, a buyer and a seller. Each acts
+from a device of their own, and the app tells them apart by a cookie.
+`context.newPage()` gives a second tab in the same cookie jar, so it cannot
+play a second person. `pageAs(name)` is the measured way to a second
+context. The executor opens it in the browser it launched and gives it
+every subscription the default context has, so it records into the same
+step records:
+
+- request counts (`observed`) and http.jsonl lines, each line with
+  `"as": "<name>"`;
+- `page_events` entries, each with `as`;
+- one trace chunk per step or hook that called `pageAs(name)`, written as
+  `trace.<name>.zip` beside `trace.zip` and listed in
+  `evidence.named_traces`; its `actions` join the default context's on one
+  timeline, each with `as`;
+- a final screenshot, `final.<name>.png`, in the scenario's
+  `evidence.screenshots`, with `as`.
+
+The contexts close when the scenario ends, after their screenshots, and
+the browser closes after them. A chunk opens on a step's first call for
+that name, the same lazy rule as `page`: a step that does not call
+`pageAs("aki")` has no `trace.aki.zip`, even when aki's page is still open
+from an earlier step.
+
+Four other shapes were considered and refused.
+`ctx.page({ as: "aki" })` changes `page` from a value into a function,
+which breaks every step that destructures it, and a typed step has no
+`ctx`. A `browser` fixture is refused above. A context per person declared
+in `nukadoko.config.ts` puts the scenario's people into project
+configuration, where a new person is a config change instead of a line in
+the feature file. A project fixture that gives each person a host name of
+their own (`aki.localhost`) in the one context works only for an app that
+scopes its cookies to the host, needs a DevTools Protocol call per tab to
+turn scripts off, and is a fixture that touches the app
+(`fixture-touches-app`). `pageAs` takes a name at run time because the
+people are the scenario's data, not something a destructuring pattern can
+list; destructuring `pageAs` is still the static declaration that `check`
+reads (`needs_browser`, `playwright-missing`).
+
+`check` adds no finding for `pageAs` itself. The name is an argument in
+the step body, which `check` does not read, so a wrong name is not
+something it can know before the run. The run refuses it at the call.
+
 Two shapes are refused outright rather than silently mis-parsed: a
 destructured fixture with a default value (`{ page = ... }`) and one
 collected through a rest property (`{ ...rest }`). Both defeat the same
@@ -732,8 +794,8 @@ parameter position as either the fixture bag or the args.
 
 That reading is exposed outside `check` too: `nuka steps --json` reports
 each typed step's own destructured names as `needs` (alphabetized, `[]`
-when the step needs none) and `needs_browser` (whether `page` or `context`
-is one of them). An agent picking a scenario can therefore see which ones
+when the step needs none) and `needs_browser` (whether `page`, `context`,
+or `pageAs` is one of them). An agent picking a scenario can therefore see which ones
 never open a browser at all before running any of them; a browser-using
 scenario costs minutes and a real target that an API-only one does not.
 `needs` is `null`, not `[]`, for the one `run()` this same static reading
@@ -795,18 +857,18 @@ be read as a claim that it does.
 ### Fixtures
 
 The fixture bag in "Context API" is closed.
-It contains only `page`, `context`, `request`, `env`, `requireEnv`, `baseURL`,
-`resultOf`, `call`, `section`, `poll`, `evidence`, and `scratch`.
-`page`, `context`, and `request` are Playwright's own objects, and
-`playwright` is an optional peer dependency of this package.
-A project installs it only when a step or fixture uses one of the three.
+It contains only `page`, `context`, `pageAs`, `request`, `env`, `requireEnv`,
+`baseURL`, `resultOf`, `call`, `section`, `poll`, `evidence`, and `scratch`.
+`page`, `context`, and `request` are Playwright's own objects, `pageAs`
+returns one, and `playwright` is an optional peer dependency of this package.
+A project installs it only when a step or fixture uses one of the four.
 The package is loaded when one of them is first built, never when a command
 starts, so `nuka init`, `nuka check`, and a run with no such step work without it.
 When it is missing, building the fixture fails the step with one line that
 names the step and the command `npm install -D -E playwright@<version>`.
 `nuka check` reports the same line first, as the error `playwright-missing`,
 once for each step that a checked feature line binds and whose fixtures build
-`page`, `context`, or `request`, directly or through `config.fixtures`.
+`page`, `context`, `pageAs`, or `request`, directly or through `config.fixtures`.
 It resolves `playwright` the way the run loads it and builds nothing, so
 `nuka run` stops before any step runs.
 A step defined in a step file that no checked line binds is not reported.
@@ -891,8 +953,8 @@ A fixture destructures its first argument in the same way as a step.
 `check` reads the fixture dependency names from the source text without
 calling the fixture.
 It reads step dependencies in the same way.
-A fixture can name a builtin dependency: `page`, `context`, `request`, `env`,
-`requireEnv`, or `baseURL`.
+A fixture can name a builtin dependency: `page`, `context`, `pageAs`,
+`request`, `env`, `requireEnv`, or `baseURL`.
 A scenario fixture can also name `resultOf`, `section`, `poll`, `evidence`, or
 `scratch`.
 Those record on the step that caused the fixture to be built, and they do not
@@ -915,8 +977,8 @@ For example, a `page` fixture can wrap the page that the executor launches:
 use(page); }`).
 In this case, the dependency `page` refers to the underlying builtin.
 It does not refer to the overriding fixture, so this dependency is not a cycle.
-An override that destructures neither `page` nor `context` cannot return a
-page that the executor still owns and measures.
+An override that destructures none of `page`, `context`, and `pageAs` cannot
+return a page that the executor still owns and measures.
 Therefore, `check` refuses it with `page-override-unowned`.
 
 A project that already declares its own `scratch` fixture keeps it.
@@ -948,7 +1010,7 @@ Therefore, a `process` fixture behaves like a `scenario` fixture in that command
 A `process` fixture can depend only on other `process` fixtures and three
 builtins: `env`, `requireEnv`, and `baseURL`.
 The values of these builtins do not depend on a scenario context.
-`fixture-scope-violation` refuses a dependency on `page`, `context`, `request`,
+`fixture-scope-violation` refuses a dependency on `page`, `context`, `pageAs`, `request`,
 `resultOf`, `call`, `section`, `poll`, `evidence`, `scratch`, or a `scenario` fixture.
 A dependency on `call` is refused for every fixture, not only a `process` one,
 because `call` needs the step boundary.
@@ -1100,8 +1162,8 @@ the transformed source of a default value.
 `fixture-unused` identifies a `config.fixtures` entry that no typed step requires,
 directly or through another fixture.
 The entry can still be reached through `nuka do`.
-`fixture-touches-app` identifies a fixture that reaches `page` or `context`,
-directly or through another fixture.
+`fixture-touches-app` identifies a fixture that reaches `page`, `context`, or
+`pageAs`, directly or through another fixture.
 A browser fixture can create an unnamed precondition that lets a scenario pass.
 For example, it can log in a user before any step requests a login.
 This has the same effect as work that a step's Given does not describe.
@@ -2191,7 +2253,7 @@ from `config.browserType`. The two can disagree (a step can override the
 `page` fixture with a browser this run's own `ctx` never launched), and only
 the measured one is trustworthy enough to record. It is absent, not set to
 some default, for a run whose pickle never launched a browser at all: a
-pickle whose steps never destructure `page`/`context` opens none, and this
+pickle whose steps never destructure `page`, `context`, or `pageAs` opens none, and this
 field never names a browser that never ran.
 
 `:12` selects one scenario, which is the iteration path: a feature's full
@@ -2434,8 +2496,14 @@ array identifies each step record by id, so either record leads to the other.
   call, every `page.request` or `context.request` call, and the page's own
   document/XHR/fetch traffic alike logged to
   http.jsonl, the step record itself as the primary one.
-- `evidence.screenshots` contains at most one entry, `{ "file": "final.png", "at":
-  "..." }`: a browser-using execution's evidence used to be two files, the
+- `evidence.screenshots` contains one entry per browser context, `{ "file":
+  "final.png", "at": "..." }` for the default one and `{ "file":
+  "final.<name>.png", "at": "...", "as": "<name>" }` for each `pageAs(name)`
+  context (see "Several people in one scenario"), default first. A
+  `pageAs` context's trace chunk for a step is listed in
+  `evidence.named_traces` as `{ "as", "file" }`, beside `evidence.trace`,
+  and `actions`, `page_events` entries, and http.jsonl lines from it carry
+  `as`. A browser-using execution's evidence used to be two files, the
   same buffer saved under a second name whenever the step failed. That cost
   nothing to write but implied something the tool never measured: that a
   "failure" screenshot exists as a distinct fact from the last one taken. It
@@ -2515,7 +2583,8 @@ array identifies each step record by id, so either record leads to the other.
   call. A `name` containing a path separator, or equal to `.`/`..`/the
   empty string, is refused before anything is written, never silently
   rewritten into something safe. A `name` of `record.json`, `final.png`,
-  `trace.zip`, or `http.jsonl` is refused the same way
+  `trace.zip`, or `http.jsonl`, or of the shape `trace.<name>.zip` or
+  `final.<name>.png` for a valid `pageAs` name, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by
   case: those are files the harness writes in this directory. Capped at 100
   entries, sorted by `at`, the
@@ -3805,8 +3874,8 @@ not as a step. The file can live anywhere under `featuresDir`.
 
 `nuka check` reports `explore-unknown-step` when a command key is not the
 basename of the step it holds, or when a sequence entry's step was never
-registered. It reports `explore-browser-step` when that step needs `page` or
-`context`, including through a fixture that reaches one. A step that needs
+registered. It reports `explore-browser-step` when that step needs `page`,
+`context`, or `pageAs`, including through a fixture that reaches one. A step that needs
 only `request` is allowed.
 
 Two more findings read the declaration and end only one way.
@@ -4155,7 +4224,8 @@ nuka check [feature..] [--json]
                               discovery never registered, a fixture
                               dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page
-                              override that owns neither page nor context,
+                              override that owns none of page, context, and
+                              pageAs,
                               config coherence, unreadable step files
                               (reported, not fatal, the rest of the project
                               is still checked), a `.cjs` or `.cts` file discovery

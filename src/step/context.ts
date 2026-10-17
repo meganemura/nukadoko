@@ -1,4 +1,4 @@
-import type { APIRequestContext, BrowserContext, Page } from "playwright";
+import type { APIRequestContext, BrowserContext, BrowserContextOptions, Page } from "playwright";
 import type { z } from "zod";
 import type { Step } from "./define-step.js";
 
@@ -82,6 +82,18 @@ import type { Step } from "./define-step.js";
 // exporting the name is what keeps that always unreachable through the bag,
 // rather than a rule a step has to remember not to break.
 //
+// `pageAs` is the measured way to a second browser context, the one
+// `browser` was refused for above. A scenario with several people in it
+// (each with their own cookies, storage, and options such as
+// `javaScriptEnabled`) needs a context per person, and `context.newPage()`
+// shares one cookie jar. `pageAs(name)` opens that context in the browser
+// the executor launched, with the same subscriptions, its own trace chunks,
+// and its own final screenshot, so it stays inside every step record the
+// run writes. It is a function rather than a value because the names are
+// the scenario's data (`aki`, `ben`), not something a destructuring
+// pattern can list; destructuring `pageAs` is still what tells `check`
+// that the step may open a browser.
+//
 // `call` (docs/spec.md "Parts") runs one of the step's own declared `parts`
 // — a `Step` a step reaches for the same static way it reaches for a
 // fixture: `parts` is read before `run()` starts, never inferred from where
@@ -150,6 +162,18 @@ export interface StepFixtures {
    * (`context.newPage()`) can open one without reaching for `browser`
    * (not a fixture at all — see this file's own header for why). */
   readonly context: BrowserContext;
+  /** The page of a browser context of its own, named `name`, in the same
+   * browser as `page` (this file's own header). Its cookies and storage are
+   * its own, and `options` (Playwright's own `BrowserContextOptions`, such
+   * as `javaScriptEnabled: false`) apply to it alone, over
+   * `config.browserContext`; `baseURL` is wired in as for `page`. The
+   * context opens on the first call for `name` in a scenario, and a later
+   * call returns the same page. A later call with different `options`
+   * throws `ContextOptionsConflictError`, and a name that is not 1 to 64
+   * lowercase letters, digits, and hyphens throws `InvalidContextNameError`
+   * (src/context/context-name.ts). Closed when the scenario ends, after its
+   * final screenshot (`final.<name>.png`). The context is `page.context()`. */
+  readonly pageAs: (name: string, options?: BrowserContextOptions) => Promise<Page>;
   /** Playwright APIRequestContext with the configured baseURL and the
    * session's cookies; built when this name is destructured. */
   readonly request: APIRequestContext;
@@ -286,6 +310,7 @@ export type FixtureBag = StepFixtures & Omit<ReplaceableFixtures, keyof StepFixt
 const FIXTURE_NAME_MEMBERSHIP: Record<keyof FixtureBag, true> = {
   page: true,
   context: true,
+  pageAs: true,
   request: true,
   env: true,
   requireEnv: true,
@@ -300,11 +325,18 @@ const FIXTURE_NAME_MEMBERSHIP: Record<keyof FixtureBag, true> = {
 
 export const BUILTIN_FIXTURE_NAMES: readonly string[] = Object.keys(FIXTURE_NAME_MEMBERSHIP);
 
+/** The builtins that can open a browser: `needs_browser`, `playwright-missing`,
+ * `fixture-touches-app`, and `page-override-unowned` all read this one set,
+ * so a new browser builtin cannot reach one of them and miss another. */
+export const BROWSER_FIXTURE_NAMES: ReadonlySet<string> = new Set<keyof FixtureBag>(["page", "context", "pageAs"]);
+
 export interface StepContext {
   /** Playwright Page; browser launches on first call, restored from the
    * session's storageState, with the configured baseURL wired into the
    * browser context so `page.goto("/path")` resolves against it. */
   page(): Promise<Page>;
+  /** The same function as `StepFixtures.pageAs`; see its doc comment. */
+  pageAs(name: string, options?: BrowserContextOptions): Promise<Page>;
   /** Playwright APIRequestContext with the configured baseURL and the session's cookies. */
   request(): Promise<APIRequestContext>;
   /** Environment variables from the configured envFiles. A frozen copy of

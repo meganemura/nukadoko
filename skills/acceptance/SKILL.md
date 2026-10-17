@@ -26,7 +26,7 @@ touch, then one line for each of these that applies:
   `scratch`, or only to a server a fixture started for the scenario, needs
   none (`references/writing-steps.md`, "Asking before a step changes
   something").
-- A step that needs `page`, `context`, or `request` needs the project's
+- A step that needs `page`, `context`, `pageAs`, or `request` needs the project's
   own `playwright`; `nuka check` reports `playwright-missing` with the
   install line. Adding it is a dependency change: ask first. A `page` step
   makes `nuka run` open a browser and take minutes.

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { EvidenceAttachmentEntry, EvidenceMeta } from "../record/types.js";
+import { isNamedContextHarnessFile } from "./context-name.js";
 import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
@@ -42,7 +43,10 @@ import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js
 // `http.jsonl`) are refused up front, including a spelling that differs
 // only by case (`ReservedEvidenceNameError`). A suffixed copy would not be
 // the name the step asked for, and writing the name as given would replace
-// the file the harness writes in this directory.
+// the file the harness writes in this directory. A `pageAs(name)` context
+// writes `trace.<name>.zip` and `final.<name>.png` beside them, so those
+// shapes are refused for every valid context name, opened or not: whether
+// a later step opens one is not known when this step attaches.
 //
 // A name is refused, never sanitized, when it contains a path separator or
 // is `.`/`..`/empty — see `InvalidEvidenceNameError`'s own doc comment
@@ -130,7 +134,10 @@ function assertSafeEvidenceName(name: string): void {
     throw new InvalidEvidenceNameError(name);
   }
   const key = evidenceNameKey(name);
-  if (HARNESS_EVIDENCE_FILE_NAMES.some((reserved) => evidenceNameKey(reserved) === key)) {
+  if (
+    HARNESS_EVIDENCE_FILE_NAMES.some((reserved) => evidenceNameKey(reserved) === key) ||
+    isNamedContextHarnessFile(name)
+  ) {
     throw new ReservedEvidenceNameError(name);
   }
 }

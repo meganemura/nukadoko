@@ -6,7 +6,7 @@ import type { BoundStepLine } from "./feature-check.js";
 import type { CheckIssue } from "./types.js";
 
 // Responsibility: the `playwright-missing` finding. A step whose fixture bag
-// builds `page`, `context`, or `request` loads Playwright when it runs, and
+// builds `page`, `context`, `pageAs`, or `request` loads Playwright when it runs, and
 // whether Playwright resolves is known before anything runs, so a project
 // without it learns at `nuka check` rather than at the first such step of
 // `nuka run`. The text is `PlaywrightMissingError`'s, the same one the run
@@ -40,6 +40,7 @@ import type { CheckIssue } from "./types.js";
 const PLAYWRIGHT_BUILTINS: ReadonlyMap<string, string> = new Map([
   ["page", "ctx.page()"],
   ["context", "ctx.page()"],
+  ["pageAs", "pageAs()"],
   ["request", "ctx.request()"],
 ]);
 

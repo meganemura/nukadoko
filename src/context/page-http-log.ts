@@ -95,13 +95,15 @@ export interface PageHttpLogHandle {
  * after the directory moves lands in the new step. The path is read when
  * the request starts (see this file's own header): the response is
  * appended to that path, not to wherever the getter points when the
- * response arrives. */
+ * response arrives. `as` names the `pageAs(name)` context `context` is, and
+ * is copied onto every entry it writes. */
 export function subscribePageHttpLogging(
   context: BrowserContext,
   logPath: () => string,
   secrets: SecretSet,
   httpOmitted: HttpOmittedCollector,
   httpLogFailed: HttpLogFailedCollector,
+  as?: string,
 ): PageHttpLogHandle {
   // `at` is the duration origin. `logPath` is that step's http.jsonl,
   // resolved now so a later step boundary cannot move the line.
@@ -144,6 +146,7 @@ export function subscribePageHttpLogging(
         status: response.status(),
         duration_ms: durationMs,
         via: "page",
+        ...(as !== undefined ? { as } : {}),
       },
       secrets,
     )

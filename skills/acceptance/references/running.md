@@ -52,7 +52,7 @@ otherwise costs a whole browser session to discover, since the scenario
 looks correct until the consuming step actually runs. A default-exported
 `experimental_defineModel` or `experimental_defineRelation` is checked
 too. An unknown step name, and a step that needs a browser, are errors.
-Check does not run those steps. A step whose fixtures build `page`, `context`, or `request` in a
+Check does not run those steps. A step whose fixtures build `page`, `context`, `pageAs`, or `request` in a
 project that has not installed `playwright` is `playwright-missing`, with
 the install line, so the run stops before it starts. A step file that
 imports `playwright/test` (or `playwright-core`, `@playwright/test`)

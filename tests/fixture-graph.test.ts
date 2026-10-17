@@ -185,6 +185,20 @@ describe("findFixtureScopeViolations", () => {
     expect(issues[0]?.message).toContain("page");
   });
 
+  it("flags a process-scope fixture depending on pageAs", () => {
+    const seededDb: FixtureDefinition = [
+      async ({ pageAs }: any, use) => {
+        void pageAs;
+        await use(1);
+      },
+      { scope: "process" },
+    ];
+    const issues = findFixtureScopeViolations(buildFixtureGraph(configWithFixtures({ seededDb })));
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: "fixture-scope-violation", fixture: "seededDb" });
+    expect(issues[0]?.message).toContain("pageAs");
+  });
+
   it("flags a process-scope fixture depending on a scenario-scope user fixture", () => {
     const tenant: FixtureDefinition = async ({ request }, use) => {
       void request;
@@ -265,6 +279,14 @@ describe("findPageOverrideUnowned", () => {
     expect(findPageOverrideUnowned(graph)).toEqual([]);
   });
 
+  it("does not flag a page override that destructures pageAs instead", () => {
+    const pageOverride: FixtureDefinition = async ({ pageAs }: any, use) => {
+      await use(await pageAs("someone"));
+    };
+    const graph = buildFixtureGraph(configWithFixtures({ page: pageOverride }));
+    expect(findPageOverrideUnowned(graph)).toEqual([]);
+  });
+
   it("does not flag a page override that destructures context instead", () => {
     const pageOverride: FixtureDefinition = async ({ context }: any, use) => {
       const p = await context.newPage();
@@ -281,10 +303,19 @@ describe("findPageOverrideUnowned", () => {
 });
 
 describe("fixtureReachesBrowser", () => {
-  it("is true for page/context themselves", () => {
+  it("is true for page/context/pageAs themselves", () => {
     const graph = buildFixtureGraph(configWithFixtures({}));
     expect(fixtureReachesBrowser("page", graph)).toBe(true);
     expect(fixtureReachesBrowser("context", graph)).toBe(true);
+    expect(fixtureReachesBrowser("pageAs", graph)).toBe(true);
+  });
+
+  it("is true for a user fixture that destructures pageAs", () => {
+    const people: FixtureDefinition = async ({ pageAs }: any, use) => {
+      await use(pageAs);
+    };
+    const graph = buildFixtureGraph(configWithFixtures({ people }));
+    expect(fixtureReachesBrowser("people", graph)).toBe(true);
   });
 
   it("is false for another builtin", () => {

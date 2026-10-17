@@ -96,7 +96,7 @@ const CHECK_CODES = {
   },
   "explore-browser-step": {
     description:
-      "A model command or a relation sequence entry names a step that needs a browser (page or context). Explore does not run that step.",
+      "A model command or a relation sequence entry names a step that needs a browser (page, context, or pageAs). Explore does not run that step.",
     severity: "error",
     do: "Remove the step from the model or the relation. Explore runs only steps that need no browser.",
   },
@@ -181,9 +181,9 @@ const CHECK_CODES = {
     do: "Add an Examples column to the outline's name, such as <column>, so that each row has its own name.",
   },
   "page-override-unowned": {
-    description: "A config.fixtures definition overrides page, but owns neither page nor context.",
+    description: "A config.fixtures definition overrides page, but owns none of page, context, and pageAs.",
     severity: "error",
-    do: "Make the fixture that overrides page own page or context, or remove the override.",
+    do: "Make the fixture that overrides page own page, context, or pageAs, or remove the override.",
   },
   "parameter-type-invalid": {
     description:
@@ -220,7 +220,7 @@ const CHECK_CODES = {
   },
   "playwright-missing": {
     description:
-      "A feature line binds a step whose fixtures build page, context, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs; or a step file imports playwright, playwright-core, or @playwright/test, which the project has not installed, so the file does not import. A step is reported once, at the first line that binds it.",
+      "A feature line binds a step whose fixtures build page, context, pageAs, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs; or a step file imports playwright, playwright-core, or @playwright/test, which the project has not installed, so the file does not import. A step is reported once, at the first line that binds it.",
     severity: "error",
     do: "Install the package that the message names in the project, at the version that the message names.",
   },

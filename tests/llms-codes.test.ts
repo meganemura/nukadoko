@@ -68,7 +68,7 @@ describe("nuka tend --codes", () => {
       "fixture-replaces-builtin\tdefault\tA config.fixtures definition has the name of a builtin fixture that a project may replace (scratch), so it replaces the builtin.\tDelete the fixture and its StepFixtures declaration if the builtin covers what it does; keep both if the project needs its own shape.",
     );
     expect(lines[1]).toBe(
-      "fixture-touches-app\tdefault\tA config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.\tIf a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary.",
+      "fixture-touches-app\tdefault\tA config.fixtures definition reaches page, context, or pageAs, directly or through another fixture, so it can set up a precondition that no feature line names.\tIf a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary.",
     );
     expect(lines.find((line) => line.startsWith("schema-field-undescribed\t"))).toBe(
       "schema-field-undescribed\t--all\tA field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.\tAdd a .describe() that says what the field means to each field that the message names.",

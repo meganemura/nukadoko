@@ -33,6 +33,13 @@ describe("nuka steps --json: needs / needs_browser", () => {
     expect(touchesBrowser?.needs_browser).toBe(true);
   });
 
+  it("is true for a step that destructures only pageAs", async () => {
+    const summaries = await stepsJson(fixture("run-browser-project"));
+    const opensAPerson = summaries.find((s) => s.name === "opens-a-person");
+    expect(opensAPerson?.needs).toEqual(["pageAs"]);
+    expect(opensAPerson?.needs_browser).toBe(true);
+  });
+
   it("is false, with an empty needs array (not omitted), for a step that destructures neither page nor context", async () => {
     const summaries = await stepsJson(fixture("run-browser-project"));
     const noBrowserTouch = summaries.find((s) => s.name === "no-browser-touch");

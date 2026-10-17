@@ -27,7 +27,7 @@ const TEND_CODE_INFO = {
   },
   "fixture-touches-app": {
     description:
-      "A config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.",
+      "A config.fixtures definition reaches page, context, or pageAs, directly or through another fixture, so it can set up a precondition that no feature line names.",
     reportedByDefault: true,
     do: "If a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary.",
   },

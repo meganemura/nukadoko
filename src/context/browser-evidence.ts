@@ -22,8 +22,8 @@ import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
 
 // Responsibility: the Playwright side of evidence collection when a step
-// calls `ctx.page()` — launch the configured browser engine (chromium by
-// default), trace the whole browser context, and capture a screenshot at
+// calls `ctx.page()` or `pageAs()`: launch the configured browser engine (chromium by
+// default), trace each browser context, and capture a screenshot of each at
 // the end — kept separate from
 // context/create-context.ts so that module isn't also responsible for
 // Playwright's specific launch/newContext/tracing/newPage lifecycle and its
@@ -121,160 +121,144 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // `webkit`) fails right here, at `launch` — Playwright's own error, neither
 // caught nor reworded, since it already names the missing engine as part of
 // the executable path it looked for.
+//
+// One browser, several contexts. `launchBrowser` starts the engine once per
+// `ctx`, and `openTracedContext` gives each browser context its own
+// instrumentation: the default context `page` belongs to, and one per
+// `pageAs(name)` (docs/spec.md "Context API"). Every subscription above is
+// per context, because Playwright emits `request`, `console`, and the rest
+// on the context that owns the page, and tracing is per context too. Each
+// context therefore records into the same collectors, its own trace chunks,
+// and its own final screenshot. `as` is the context's name on every entry
+// it writes, absent for the default context.
 export type BrowserEngineName = "chromium" | "firefox" | "webkit";
 
 export interface LaunchBrowserOptions {
   /** `config.browserType` (config/schema.ts), naming which of `chromium`/
    * `firefox`/`webkit` to launch. `undefined` behaves exactly like
-   * `"chromium"` — the previous default, before this option existed — so
-   * a caller that never wires this in (existing tests, `nuka do`'s own
-   * defaults) keeps launching what it always has. */
+   * `"chromium"`, the default. */
   browserType?: BrowserEngineName;
   /** What asked for the browser (a step's text, or `ctx.page()` when no step
    * is named), for the one-line error a project without `playwright`
    * installed sees (load-playwright.ts). */
   neededBy: string;
   /** `config.browser` (config/schema.ts) as a config author wrote it,
-   * passed straight through to the selected engine's own `launch`
-   * (widened from always-chromium to whichever `browserType` above
-   * names) — this module no longer picks `headless` out of it itself.
+   * passed straight through to the selected engine's own `launch`.
    * `undefined` when a project sets no `browser` at all; passing `undefined`
    * to `launch` is the same as omitting the argument, so Playwright's own
    * default (`headless: true`) applies exactly as it would without nukadoko
    * in between. */
   browser?: LaunchOptions;
-  /** `config.browserContext` (config/schema.ts), passed straight through to
-   * `browser.newContext`. `storageState` and `baseURL` below are spread in
-   * *after* this, not before: schema.ts
-   * already rejects a `browserContext` that sets either key, so the two
-   * never actually collide, but keeping nukadoko's own values last is a
-   * cheap second line of defense against that invariant ever slipping. */
-  browserContext?: BrowserContextOptions;
-  /** Where trace.zip and screenshot(s) are written. Must already exist. */
+}
+
+export interface BrowserHandle {
+  /** The engine and version this handle actually launched — read once,
+   * from the real `Browser` object, right after `launch` resolved (this
+   * file's own header). Never derived from `options.browserType`, which
+   * only says what was *asked* for. */
+  readonly browserInfo: { readonly type: string; readonly version: string };
+  /** Opens one instrumented browser context in this browser. */
+  openTracedContext(options: TracedContextOptions): Promise<TracedContextHandle>;
+  /** Closes the browser. Swallows its own failure, the same as
+   * `TracedContextHandle.finalize`: a browser already gone is not a reason
+   * to lose a record. */
+  close(): Promise<void>;
+}
+
+export interface TracedContextOptions {
+  /** The `pageAs(name)` name, or `undefined` for the default context. Copied
+   * onto every page event and http.jsonl entry this context records, and
+   * into its file names (context-name.ts's `contextFileName`). */
+  as?: string;
+  /** Passed straight to `browser.newContext`. The caller merges
+   * `config.browserContext`, `baseURL`, `storageState`, and a `pageAs`
+   * call's own options into it; this module adds nothing of its own. */
+  contextOptions: BrowserContextOptions;
+  /** Where the final screenshot is written. Must already exist. */
   evidenceDir: string;
-  /** Restores a `--session`'s prior storageState, when one was loaded;
-   * `undefined` for a session's first-ever use or when `--session` wasn't
-   * given at all. */
-  storageState?: StorageState;
-  /** Tallies every request this browser context's page(s) make — see this
-   * module's header comment. */
+  /** Tallies every request this context's page(s) make (this file's own
+   * header). */
   observed: ObservedCollector;
   /** Records console errors, uncaught page errors, and failed requests this
-   * browser context's page(s) produce — see this module's header comment. */
+   * context's page(s) produce (this file's own header). */
   pageEvents: PageEventsCollector;
   /** Where this ctx's http.jsonl currently lives. A getter, not a fixed
    * path, for the same reason http-log.ts's own `logPath` is one: create-
    * context.ts's `beginStep` redirects it at each step boundary.
-   * page-http-log.ts reads it when a page request starts, not when the
-   * browser was launched and not when the response arrives, so a response
+   * page-http-log.ts reads it when a page request starts, so a response
    * that lands after the next boundary still appends to the step that
    * sent the request. */
   logPath: () => string;
-  /** Values page-issued http.jsonl entries must redact — the same
-   * `SecretSet` http-log.ts's own `ctx.request()` wrapper already
-   * receives. */
+  /** Values page-issued http.jsonl entries must redact, the same
+   * `SecretSet` http-log.ts's own `ctx.request()` wrapper receives. */
   secrets: SecretSet;
-  /** Tallies every page-issued request left out of http.jsonl — an
-   * image/stylesheet/script/etc, by `request.resourceType()` (this file's
-   * own header, and http-omitted.ts's). */
+  /** Tallies every page-issued request left out of http.jsonl, by
+   * `request.resourceType()` (http-omitted.ts). */
   httpOmitted: HttpOmittedCollector;
   /** Tallies every page-issued http.jsonl line whose append failed
    * (http-log-failed.ts). */
   httpLogFailed: HttpLogFailedCollector;
-  /** `config.baseURL`, wired into the browser context so `page.goto("/path")`
-   * resolves against it (docs/spec.md "Context API"). Omitted from
-   * `newContext` when unset — Playwright's own default for an unset
-   * `baseURL` (relative navigation stays an error) is preferable to nukadoko
-   * inventing one. */
-  baseURL?: string;
 }
 
-export interface BrowserEvidenceHandle {
+export interface TracedContextHandle {
   readonly page: Page;
-  /** The engine and version this handle actually launched — read once,
-   * from the real `Browser` object, right after `launch` resolved (this
-   * file's own header). create-context.ts's
-   * `dispose()` hands this straight to `ScenarioRecord.browser` when this
-   * handle exists at all; it is never derived from `options.browserType`,
-   * which only says what was *asked* for. */
-  readonly browserInfo: { readonly type: string; readonly version: string };
-  /** Snapshot of the browser context's current storageState, for the
-   * executor to persist as the session's new state. Must be called *before*
-   * `finalize()` (which closes the context) — collected on a still-open
-   * context is the only way `context.storageState()` can succeed at all.
-   * Swallows failures (returns `undefined`) rather than throwing: a step can
-   * reach the browser via `ctx.page()` and close or crash it before
-   * returning, and losing this snapshot must not cost the step record (or, per
-   * docs/spec.md's sessions design, force the session's file to be deleted —
+  /** Snapshot of the context's current storageState, for the executor to
+   * persist as the session's new state. Must be called *before*
+   * `finalize()` (which closes the context). Swallows failures (returns
+   * `undefined`): a step can close or crash the page before returning, and
    * `undefined` here means create-context.ts's `dispose` leaves the
-   * existing session file untouched). */
+   * existing session file untouched. */
   collectStorageState(): Promise<StorageState | undefined>;
-  /** Opens a new trace chunk (`tracing.startChunk({ title })`) — `title`
-   * lands on the chunk's own `context-options` entry (this file's own
-   * header). Executor-only, called from create-context.ts, never from a
-   * step's own `ctx`. Must not be called while a chunk is already open
-   * (create-context.ts's own `chunkOpen` bookkeeping is what keeps that
-   * true); unlike `endStepChunk` below, a failure here is not swallowed —
-   * it propagates out of whichever `ctx.page()` call triggered it, the same
-   * way a `launchBrowserWithTracing` failure already does, since a chunk
-   * that failed to open leaves nothing for `ctx.page()`'s own caller to
-   * usefully continue on. */
+  /** Opens a new trace chunk (`tracing.startChunk({ title })`); `title`
+   * lands on the chunk's own `context-options` entry. Must not be called
+   * while a chunk is already open. A failure here is not swallowed: it
+   * propagates out of the `ctx.page()`/`pageAs()` call that triggered it,
+   * since a chunk that failed to open leaves that caller nothing to
+   * continue on. */
   beginStepChunk(title: string): Promise<void>;
-  /** Closes the currently open trace chunk (`tracing.stopChunk({ path })`),
-   * writing it to `path`. Executor-only; only ever called when a chunk is
-   * actually open. Swallows its own failure — the same fault-tolerance
-   * `finalize`'s own teardown calls already have, and for the same reason:
-   * losing one step's own trace chunk must not cost that step's step record.
-   * Measurement must not break execution. */
+  /** Closes the open trace chunk (`tracing.stopChunk({ path })`), writing it
+   * to `path`. Swallows its own failure: losing one step's trace chunk must
+   * not cost that step's step record. */
   endStepChunk(path: string): Promise<void>;
-  /** Waits for every page-issued http.jsonl append this handle's own
-   * `subscribePageHttpLogging` subscription has kicked off *so far* to
-   * settle (page-http-log.ts's own `PageHttpLogHandle.flush`) — each append
-   * fires from inside a `response` event handler with no caller of its own
-   * to await it, unlike `ctx.request()`'s own entries. Executor-only,
-   * called from create-context.ts's `closeCurrentChunk` at the same step
-   * boundary that already closes this step's own trace chunk, *before*
-   * anything downstream reads http.jsonl for that boundary. A no-op cost,
-   * not merely a no-op call, when nothing is in flight: `Promise.all([])`
-   * resolves immediately. */
+  /** Waits for every page-issued http.jsonl append this context has kicked
+   * off *so far* to settle (page-http-log.ts's `PageHttpLogHandle.flush`). */
   flushPageHttpLog(): Promise<void>;
-  /** Captures the final screenshot and closes the context and browser.
-   * Returns the screenshot(s) actually written — at most one, `final.png`
-   * (best effort: a screenshot failure here must never mask the step's real
-   * outcome, so it is swallowed rather than thrown). No longer calls
-   * `tracing.stop()` (this file's own header: that call fails once a chunk
-   * has been used) — whatever chunk is still open when this runs is the
-   * caller's own responsibility to have already closed via `endStepChunk`,
-   * same as create-context.ts's `dispose()` does. */
-  finalize(): Promise<ScreenshotEntry[]>;
+  /** Captures the final screenshot as `fileName` in `evidenceDir` and
+   * closes the context. Returns the screenshot actually written, at most
+   * one (best effort: a screenshot failure here must never mask the step's
+   * real outcome, so it is swallowed rather than thrown). Whatever chunk is
+   * still open is the caller's to have closed via `endStepChunk` first. */
+  finalize(fileName: string): Promise<ScreenshotEntry[]>;
 }
 
-export async function launchBrowserWithTracing(
-  options: LaunchBrowserOptions,
-): Promise<BrowserEvidenceHandle> {
-  // `browserType ?? "chromium"` (this file's own header) is the whole
-  // selection: every other caller keeps launching chromium exactly as
-  // before, since `undefined` and `"chromium"` land on the same namespace.
+export async function launchBrowser(options: LaunchBrowserOptions): Promise<BrowserHandle> {
   // Loaded here, not at module load: `playwright` is an optional peer
-  // (load-playwright.ts), and a project that never calls `ctx.page()` never
-  // reaches this line.
+  // (load-playwright.ts), and a project that never builds a browser fixture
+  // never reaches this line.
   const playwright = await loadPlaywright(options.neededBy);
   const engine = playwright[options.browserType ?? "chromium"];
   const browser: Browser = await engine.launch(options.browser);
-  // The handle `dispose()` closes is assigned only after this function
-  // returns. `newContext`, `tracing.start`, and `newPage` can all throw after
-  // launch has already started the process (an invalid viewport is rejected
-  // by `newPage`, not by launch). Close that process before the error
-  // propagates, or it stays alive for the rest of the run.
+  return {
+    browserInfo: { type: browser.browserType().name(), version: browser.version() },
+    openTracedContext: (contextOptions) => openTracedContext(browser, contextOptions),
+    async close(): Promise<void> {
+      try {
+        await browser.close();
+      } catch {
+        // See the interface's own doc comment above.
+      }
+    },
+  };
+}
+
+async function openTracedContext(browser: Browser, options: TracedContextOptions): Promise<TracedContextHandle> {
+  const { as } = options;
+  const context: BrowserContext = await browser.newContext(options.contextOptions);
+  // `tracing.start` and `newPage` can throw after the context exists (an
+  // invalid viewport is rejected by `newPage`, not by `newContext`). Close
+  // the context before the error propagates, or it stays open in a browser
+  // that later contexts of this scenario share.
   try {
-    // Measured, not declared (this file's own header) — read once, right
-    // after `launch` resolved, from the `Browser` object itself.
-    const browserInfo = { type: browser.browserType().name(), version: browser.version() };
-    const context: BrowserContext = await browser.newContext({
-      ...(options.browserContext ?? {}),
-      ...(options.storageState ? { storageState: options.storageState } : {}),
-      ...(options.baseURL ? { baseURL: options.baseURL } : {}),
-    });
     context.on("request", (request) => {
       options.observed.record(request.method());
     });
@@ -287,6 +271,7 @@ export async function launchBrowserWithTracing(
       options.secrets,
       options.observed,
       options.httpLogFailed,
+      as,
     );
     context.on("console", (msg) => {
       if (msg.type() !== "error") {
@@ -300,10 +285,11 @@ export async function launchBrowserWithTracing(
           lineNumber: location.lineNumber,
           columnNumber: location.columnNumber,
         },
+        ...(as !== undefined ? { as } : {}),
       });
     });
     context.on("weberror", (webError) => {
-      options.pageEvents.recordPageError(webError.error().message);
+      options.pageEvents.recordPageError(webError.error().message, as);
     });
     context.on("requestfailed", (request) => {
       const failure = request.failure();
@@ -311,6 +297,7 @@ export async function launchBrowserWithTracing(
         method: request.method(),
         url: request.url(),
         ...(failure ? { failure: failure.errorText } : {}),
+        ...(as !== undefined ? { as } : {}),
       });
     });
     // A second, separate subscription (this file's own header) — appends
@@ -322,88 +309,68 @@ export async function launchBrowserWithTracing(
       options.secrets,
       options.httpOmitted,
       options.httpLogFailed,
+      as,
     );
     await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();
 
-    async function collectStorageState(): Promise<StorageState | undefined> {
-      try {
-        return await context.storageState();
-      } catch {
-        // See doc comment above.
-        return undefined;
-      }
-    }
-
-    async function beginStepChunk(title: string): Promise<void> {
-      // Not swallowed — see the interface's own doc comment above for why.
-      await context.tracing.startChunk({ title });
-    }
-
-    async function endStepChunk(filePath: string): Promise<void> {
-      try {
-        await context.tracing.stopChunk({ path: filePath });
-      } catch {
-        // See the interface's own doc comment above.
-      }
-    }
-
-    async function flushPageHttpLog(): Promise<void> {
-      await pageHttpLog.flush();
-    }
-
-    async function finalize(): Promise<ScreenshotEntry[]> {
-      const screenshots: ScreenshotEntry[] = [];
-      try {
-        const buffer = await page.screenshot();
-        // Taken right when the screenshot itself resolved (this file's own
-        // header) — not after the write below, which measures disk I/O rather
-        // than the moment the page was actually captured.
-        const at = new Date().toISOString();
-        await writeFile(path.join(options.evidenceDir, "final.png"), buffer);
-        screenshots.push({ file: "final.png", at });
-      } catch {
-        // The page may already be closed or otherwise unusable after a failed
-        // run; losing a screenshot is not a reason to also lose the step record.
-      }
-      // Same reasoning for the two teardown calls below: a step can reach the
-      // browser via ctx.page() and close (or crash) it before throwing, so
-      // context.close/browser.close can each fail on an already-gone context/
-      // browser. A browser left half-torn-down is not a reason to also lose
-      // the step record, so each is swallowed independently and best-effort
-      // teardown continues. `tracing.stop()` is deliberately not called here
-      // any more (this file's own header) — the caller (create-context.ts's
-      // `dispose`) already closed whatever chunk was open via `endStepChunk`
-      // before calling this.
-      try {
-        await context.close();
-      } catch {
-        // See comment above.
-      }
-      try {
-        await browser.close();
-      } catch {
-        // See comment above.
-      }
-      return screenshots;
-    }
-
     return {
       page,
-      browserInfo,
-      collectStorageState,
-      beginStepChunk,
-      endStepChunk,
-      flushPageHttpLog,
-      finalize,
+      async collectStorageState(): Promise<StorageState | undefined> {
+        try {
+          return await context.storageState();
+        } catch {
+          // See the interface's own doc comment above.
+          return undefined;
+        }
+      },
+      async beginStepChunk(title: string): Promise<void> {
+        // Not swallowed: see the interface's own doc comment above.
+        await context.tracing.startChunk({ title });
+      },
+      async endStepChunk(filePath: string): Promise<void> {
+        try {
+          await context.tracing.stopChunk({ path: filePath });
+        } catch {
+          // See the interface's own doc comment above.
+        }
+      },
+      async flushPageHttpLog(): Promise<void> {
+        await pageHttpLog.flush();
+      },
+      async finalize(fileName: string): Promise<ScreenshotEntry[]> {
+        const screenshots: ScreenshotEntry[] = [];
+        try {
+          const buffer = await page.screenshot();
+          // Taken right when the screenshot itself resolved (this file's own
+          // header), not after the write below, which measures disk I/O
+          // rather than the moment the page was captured.
+          const at = new Date().toISOString();
+          await writeFile(path.join(options.evidenceDir, fileName), buffer);
+          screenshots.push({ file: fileName, at, ...(as !== undefined ? { as } : {}) });
+        } catch {
+          // The page may already be closed or otherwise unusable after a
+          // failed run; losing a screenshot is not a reason to also lose the
+          // step record.
+        }
+        // A step can close (or crash) the context before throwing, so this
+        // can fail on a context already gone. That is not a reason to lose
+        // the step record either.
+        try {
+          await context.close();
+        } catch {
+          // See comment above.
+        }
+        return screenshots;
+      },
     };
   } catch (error) {
     try {
-      await browser.close();
+      await context.close();
     } catch {
       // A close that itself fails must not replace the error that aborted
-      // the launch. The caller needs the reason `newContext`, `tracing.start`,
-      // or `newPage` failed.
+      // the setup. The caller needs the reason `tracing.start` or `newPage`
+      // failed.
     }
     throw error;
   }

@@ -285,6 +285,9 @@ export interface ConsoleErrorEntry {
     readonly columnNumber: number;
   };
   readonly at: string;
+  /** The `pageAs(name)` context this came from (docs/spec.md "Context
+   * API"). Absent for the default context, the one `page` belongs to. */
+  readonly as?: string;
 }
 
 /** One uncaught error the page itself threw (`BrowserContext`'s own
@@ -293,6 +296,9 @@ export interface ConsoleErrorEntry {
 export interface PageErrorEntry {
   readonly message: string;
   readonly at: string;
+  /** The `pageAs(name)` context this came from (docs/spec.md "Context
+   * API"). Absent for the default context, the one `page` belongs to. */
+  readonly as?: string;
 }
 
 /** One request the page issued that failed at the network level (DNS,
@@ -307,6 +313,9 @@ export interface FailedRequestEntry {
    * else to report in that case). */
   readonly failure?: string;
   readonly at: string;
+  /** The `pageAs(name)` context this came from (docs/spec.md "Context
+   * API"). Absent for the default context, the one `page` belongs to. */
+  readonly as?: string;
 }
 
 /** Which of `page_events`'s three categories were truncated, each mapped to
@@ -369,6 +378,9 @@ export interface ActionEntry {
    * same absolute timeline `sections`/`polls`/`evidence.screenshots[].at`
    * already share. */
   readonly at: string;
+  /** The `pageAs(name)` context this came from (docs/spec.md "Context
+   * API"). Absent for the default context, the one `page` belongs to. */
+  readonly as?: string;
 }
 
 export interface UsedEntry {
@@ -554,12 +566,25 @@ export interface PollRecord {
  * is what a second file was standing in for without ever stating it. */
 export interface ScreenshotEntry {
   /** The screenshot's file name, relative to `EvidenceMeta.dir` /
-   * `ScenarioEvidence.dir` — always `"final.png"`; there is only ever one. */
+   * `ScenarioEvidence.dir`: `"final.png"` for the default context, and
+   * `"final.<name>.png"` for each `pageAs(name)` context. */
   readonly file: string;
   /** ISO 8601 — the moment `page.screenshot()` resolved (src/context/
    * browser-evidence.ts's `finalize`), not when the file finished writing or
    * when `finalize` itself was called. */
   readonly at: string;
+  /** The `pageAs(name)` context this came from (docs/spec.md "Context
+   * API"). Absent for the default context, the one `page` belongs to. */
+  readonly as?: string;
+}
+
+/** The trace chunk one `pageAs(name)` context wrote for one step or hook
+ * boundary. The default context's chunk stays on `trace`, so a reader that
+ * only knows `trace` still finds it. */
+export interface NamedTraceEntry {
+  readonly as: string;
+  /** Relative to the same directory `trace` is relative to. */
+  readonly file: string;
 }
 
 /** One `evidence.attach`/`evidence.path` result the harness confirmed
@@ -582,12 +607,16 @@ export interface EvidenceMeta {
   /** Step record directory, relative to the project root (e.g.
    * ".nukadoko/records/steps/step-..."). */
   dir: string;
-  /** Present only when a browser was used. */
+  /** Present only when the default context (the one `page` belongs to)
+   * recorded a chunk. */
   trace?: string;
-  /** Screenshots actually written; empty when no browser was used. At most
-   * one entry: the second, per-outcome
-   * copy is gone, so a run that used the browser writes exactly
-   * `final.png`, whatever the outcome. */
+  /** One entry per `pageAs(name)` context that recorded a chunk, in the
+   * order the contexts opened. Present only when non-empty. */
+  named_traces?: readonly NamedTraceEntry[];
+  /** Screenshots actually written; empty when no browser was used. One
+   * entry per browser context: `final.png` for the default context, then
+   * `final.<name>.png` for each `pageAs(name)` context, whatever the
+   * outcome. */
   screenshots: ScreenshotEntry[];
   /** Present only when at least one `ctx.request()` call was logged. */
   http?: string;
