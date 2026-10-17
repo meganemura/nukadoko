@@ -774,6 +774,7 @@ export async function runCli(
         })
         .option("pattern", {
           type: "string",
+          nargs: 1,
           describe: "the feature line text the step matches; each {key:type} capture becomes an args field",
         })
         .option("then", {
@@ -788,6 +789,7 @@ export async function runCli(
         })
         .option("description", {
           type: "string",
+          nargs: 1,
           describe: "what the step does, written as its description; without it the description is a TODO nuka tend reports",
         })
         .option("from", {
@@ -796,10 +798,18 @@ export async function runCli(
           describe:
             "<step>.<key>: chain that key of an earlier step's returns into args (import, args field, from entry); repeatable",
         })
+        // A pattern or a description is free text a feature line may start
+        // with a dash, so each takes the next word whatever it starts with,
+        // as getopt_long does for a required value, and keeps its quotes.
+        .parserConfiguration({ "nargs-eats-options": true })
         .check(rejectRepeatedFlags(["pattern", "command", "description", "feature"]))
         .check((args) => {
           if (args.feature !== undefined) return featureScaffoldConflict(args as unknown as ScaffoldArgs) ?? true;
           if (args.name !== undefined) return true;
+          // A flag given no value is `true` here: the parser has already
+          // refused it, and left the name unbound as well.
+          const given: Record<string, unknown> = args;
+          if (given.pattern === true || given.description === true) return true;
           // The name is optional only beside --feature; this also says why
           // it is missing when the name went to --command.
           const missing = "Missing required argument: name (or --feature <path>)";

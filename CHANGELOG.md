@@ -424,6 +424,18 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka scaffold --pattern` and `--description` take a value that starts with a dash.**
+  The parser read a word such as `-` or `-x` after the flag as a flag of
+  its own, so `nuka scaffold dash --pattern -` refused with
+  `Unknown argument: -` before scaffold could read the pattern. Each of
+  the two flags now takes the next word as its value, whatever it starts
+  with, as `getopt_long` does for a required value, so `--pattern --then`
+  is the pattern `--then`. `--pattern=<value>` keeps quotes that wrap the
+  value, as the spaced form always did, where it used to drop them. A
+  flag given no value at the end of the line refuses with
+  `Not enough arguments following: pattern` (exit 2) instead of
+  `the pattern is empty`.
+
 - **docs/spec.md no longer lists a `rationale` key in the `nuka tend --json` summary.**
   The key went away with `defineStep`'s `rationale` option; the summary
   keeps `describe` as its one `{ declared, total }` count. The acceptance

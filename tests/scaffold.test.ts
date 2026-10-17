@@ -382,11 +382,11 @@ describe("nuka scaffold --description: any text", () => {
         const description = tc.draw(
           gs.oneOf(
             gs.text({ minSize: 1, maxSize: 30 }),
-            // The characters a string literal escapes or a template literal reads.
-            gs.text({ minSize: 1, maxSize: 12, alphabet: "a \\\"'`${}\u2028\u2029" }),
+            // The characters a string literal escapes or a template literal reads, and a leading dash.
+            gs.text({ minSize: 1, maxSize: 12, alphabet: "a \\\"'`${}\u2028\u2029-" }),
           ),
         );
-        tc.assume(!/[\n\r]/.test(description) && !description.startsWith("-"));
+        tc.assume(!/[\n\r]/.test(description));
         counter += 1;
         const name = `described-${counter}`;
         try {

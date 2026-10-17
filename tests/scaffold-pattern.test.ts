@@ -135,6 +135,29 @@ describe("nuka scaffold --pattern", () => {
     expect(existsSync(path.join(rootDir, "features", "steps", "broken.ts"))).toBe(false);
   });
 
+  it.each([
+    ["--pattern -", ["--pattern", "-"], '  pattern: "-",\n'],
+    ["--pattern=-", ["--pattern=-"], '  pattern: "-",\n'],
+    ["--pattern -x", ["--pattern", "-x"], '  pattern: "-x",\n'],
+    ["--pattern --then", ["--pattern", "--then"], '  pattern: "--then",\n'],
+    ["--pattern='-'", ["--pattern='-'"], '  pattern: "\'-\'",\n'],
+    ["--description - a dash", ["--pattern", "a", "--description", "- a dash"], '  description: "- a dash",\n'],
+  ])("takes a value that starts with a dash, quotes kept, through %s", async (_label, flags, line) => {
+    const result = await cli(rootDir, ["scaffold", "dash", ...flags]);
+
+    expect(result.stderr).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "dash.ts"), "utf8")).toContain(line);
+  });
+
+  it.each([["--pattern"], ["--description"]])("refuses %s given no value, and names only that", async (flag) => {
+    const result = await cli(rootDir, ["scaffold", "dash", flag]);
+
+    expect(result.stderr).toBe(`Not enough arguments following: ${flag.slice(2)}\ndo: nuka scaffold --help\n`);
+    expect(result.exitCode).toBe(2);
+    expect(existsSync(path.join(rootDir, "features", "steps", "dash.ts"))).toBe(false);
+  });
+
   it("refuses a capture typed number, lists the registered types, and names int and float", async () => {
     const result = await cli(rootDir, ["scaffold", "run-sum", "--pattern", "I add {a:number} and {b:number}"]);
 
@@ -337,6 +360,9 @@ describe("nuka scaffold --pattern: any text", () => {
       "\n",
       " ",
       "é",
+      "-",
+      "--",
+      "-x",
     ]),
     gs.text({ maxSize: 6 }),
   );
