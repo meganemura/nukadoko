@@ -6,8 +6,8 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: a step file that throws while it is imported is named by
 // the commands that stop at the first such file. `nuka check` and `nuka
-// steps` already name it. `nuka run`, `nuka do`, and `nuka harvest` print
-// only the thrown error's message, and a top-level property read's message
+// steps` already name it. `nuka run` and `nuka do` print only
+// the thrown error's message, and a top-level property read's message
 // does not include the file.
 
 const rootDir = fixture("import-throw-project");
@@ -33,14 +33,6 @@ describe("a step file that throws on import", () => {
 
   it("nuka do names the file on stderr and exits 1", async () => {
     const result = await run(["do", "anything", "--args", "{}"]);
-
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toBe(reported);
-    expect(result.stdout).toBe("");
-  });
-
-  it("nuka harvest names the file on stderr and exits 1", async () => {
-    const result = await run(["harvest", "no-such-id"]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe(reported);

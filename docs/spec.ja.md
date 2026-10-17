@@ -138,8 +138,8 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   このファイルのない run は、最も新しい record が `retention.adHocDays` より古くなって初めて retention が消します。
   実行中の run、強制終了された run、このファイルができる前に書かれた run は見分けがつかず、終わったと証明できないものは消しません。
   retention を適用する run 自身は、より新しい run が先に終わっていても、自分の適用で消されることはありません。
-  保持された run のどれにも属さない record(`nuka do` や `recordStep` の record、run が消えた record、`record.json` が読めないか `started_at` を日時として解釈できない scenario ディレクトリ、最初の scenario が終わる前に止まった run)は、`retention.adHocDays` 日(既定 7)より古くなった時点で消えます。
-  `nuka do --use` と `nuka harvest` は設計上、日をまたいでそれらを読むため、run の回数ではなく日数を与えています。
+  保持された run のどれにも属さない record(`nuka do` の record、run が消えた record、`record.json` が読めないか `started_at` を日時として解釈できない scenario ディレクトリ、最初の scenario が終わる前に止まった run)は、`retention.adHocDays` 日(既定 7)より古くなった時点で消えます。
+  `nuka do --use` は設計上、日をまたいでそれらを読むため、run の回数ではなく日数を与えています。
   寿命を過ぎた record への `--use` は、有効な方針を添えて拒否され、何も返さないまま終わることはありません。
   どちらの数字にも「無効」の値はなく、履歴を長く持ちたいプロジェクトは数字を上げます。
   既定値は判断です。
@@ -306,7 +306,7 @@ export default defineStep({
 - pattern、table/docstring、`from` のどれも埋めず、しかもスキーマが宣言していない args キーは、`nuka describe` がそのスキーマについて公開する契約に従います。
   `nuka describe` は各オブジェクトの `args` スキーマを `z.toJSONSchema` で公開します。
   素の `z.object(...)` は `additionalProperties: false` になり、step の `args` をバリデーション済みの値に変える経路はすべて、同じ閉じた形に対してパースします。
-  対象は `nuka do`、`nuka do --session <live>`、`nuka run`、`recordStep`、part が呼ばれる `call` fixture です(「Parts」を参照)。
+  対象は `nuka do`、`nuka do --session <live>`、`nuka run`、part が呼ばれる `call` fixture です(「Parts」を参照)。
   宣言していないキーは、黙って捨てられるのではなく拒否されます。
   `nuka describe` はその閉じた args スキーマを、呼び出し側が渡さなければならない入力として描きます。
   そのため `required` に載るのは、呼び出し側が省略できないキーだけです。
@@ -1576,74 +1576,6 @@ export default defineStep({ returns: openCartReturns, run: ({ request }) => open
 spec と step は 1 つの定義を import するため、両者の形は一致し続けます。
 共有ファイルは Playwright と zod だけに依存するため、依存の向きは変わりません。
 
-**record** は、移行のもう半分です。
-実装を共有しても、record は作られません。
-Playwright の run は Playwright の成果物を作りますが、step record を書く nukadoko executor がありません。
-したがって、スイートがすべての実装コードを共有しても、`nuka harvest` の入力が作られないことがあります。
-
-`recordStep` は、不足する record を作ります。
-nukadoko は自分のテストでこの API をテストしましたが、実際に移行したスイートではまだ使われていません。
-
-```ts
-const opened = await recordStep(
-  openCartStep, { sku }, { name: "open-cart", rootDir, request },
-);
-const added = await recordStep(
-  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
-);
-```
-
-**record の id を渡します。**
-spec は通常、返された値を変数に保存し、次の呼び出しへ渡します。
-この操作は連鎖を記録しません。
-`use` オプションは、`nuka do --use` と同じ意味で連鎖を宣言します。
-`use` がなければ、record はそのキーを呼び出し元から渡された値として扱います。
-その場合、`nuka harvest` はその run の id を下書きに書きます。
-下書きは id を覚えているサーバでは通りますが、新しいサーバでは失敗します。
-record の id を渡すと、`nuka run` と同様に `from` が値を提供できます。
-
-step は spec の `request` を使い、schema を強制し、`nuka do` の record と同じ場所に step record を書きます。
-既存のスイートが record の供給元になります。
-`nuka harvest` は、既存の道のりを下書きに変換できます。
-この方法では、チームは既存のコードを書き直さずに実行します。
-
-`recordStep` は `request` に加えて `page` を受け取り、`page.context()` から context を取得します。
-したがって、browser 中心のスイートと HTTP 中心のスイートをサポートします。
-evidence の収集は、呼び出し元の context にリスナーを追加します。
-実行が終わると、リスナーを削除します。
-削除しない場合、1 つの記録済み step が spec の残りの通信も数え続けます。
-
-external record は、`nuka run` の record より少ないデータを含みます。
-trace chunk、スクリーンショット、page 通信の `http.jsonl` 行は含みません。
-Playwright がすでにこれらの成果物を作るため、2 つ目のコピーは情報を増やしません。
-external record は、nukadoko だけが計測する args、バリデーション済み result、`observed`、page event を保持します。
-
-`recordStep` には、`nuka do` には無い 4 つの制限があります。
-1 つ目に、`use` は、同じプロセスが先に `recordStep` で実行した step に対してだけ解決されます。
-`recordStep` は step の名前を自分の `name` オプションからしか得ないので、`nuka do` や別のプロセスが書いた record は拒否され、その拒否はこの原因を名指しします。
-2 つ目に、`config.fixtures` のエントリを必要とする step は、record が存在するより前に常に拒否されます。
-`recordStep` が組み立てるのは組み込みの fixture だけだからです。
-3 つ目に、environment は選択されません。
-record は `environment: "default"` と `session: null` を持ち、どの environment の read-only policy も強制されないので、`mutates: true` を宣言した step は、`nuka do` なら拒否される場所でも実行されます。
-4 つ目に、version プローブはありません。
-そのため record は `target_version` を持ちません。
-
-3 つの性質が、record の意味を維持します。
-1 つ目は、record が `kind: "external"` を持つことです。
-これは `do` と `run` に続く 3 つ目の実行元であり、人が入力したコマンドの record と区別します。
-`harvest` は external record を受け入れますが、すでに feature を持つ `run` record は引き続き拒否します。
-2 つ目は、nukadoko が注入された request context を通常のログと redact のためにラップすることです。
-別の所有者が開いたため、その context を破棄しません。
-破棄すると、あとで行う呼び出しが失敗します。
-3 つ目は、呼び出しが `page` を渡さない場合、nukadoko が browser を必要とする step を record の作成前に拒否することです。
-この経路は browser を起動しません。
-
-**run サマリ** には、別の経路が必要です。
-run サマリは `nuka run` とその scenario record から組み立てられ、external record はそのどちらも持ちません。
-nukadoko が保証できるのは、自分で駆動した実行だけです。
-external record は、`do` record と同じ作業 record です。
-harvest する scenario の材料であり、レビュアーが evidence として読むものではありません。
-
 この移行によって、nukadoko の 2 つの経路が開きます。
 `nuka run` は feature ファイルに経路を固定し、`nuka do` は各 step を単体で実行します。
 既存のスイートがすでに信頼する操作は、agent が探索に使う語彙になります(「単体 step」と「Live sessions」を参照)。
@@ -2101,7 +2033,7 @@ lock はすでに「今これを誰かが所有している」ことを意味す
 そして、そうあり続けるための新しい柵は要りません。
 live session は step record を生みますが、scenario record は生みません。
 レビュアーが読む run サマリは scenario record から組み立てられます(「レビュー」を参照)。
-だから探索からそのサマリへの道は、`nuka harvest` と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
+だから探索からそのサマリへの道は、誰かが書いた feature と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
 
 `nuka run` は live session を見つけると、その名前と止め方とともに報告しますが、それを理由に何かを拒否することはありません。
 表に出す価値がある事実は、探索がそこに置いた state をアプリケーションがまだ保持しているかもしれないということであり、これはまさに、scenario が誰も書き残していない理由で通ってしまう類のことです。
@@ -2127,7 +2059,7 @@ unix socket のパスの長さには、どのプラットフォームにも上�
 
 正直な限界こそがこの機能の要点であり、欠陥ではありません。
 30 回の実行を経た世界は、それを保持しているプロセス自身を含め、誰にも再現できません。
-だからこそ、探索から出てくるのは run そのものではなく、収穫されてゼロからもう一度実行される下書きです。
+だからこそ、探索から出てくるのは run そのものではなく、それをもとに書かれてゼロからもう一度実行される scenario です。
 
 ## Records
 
@@ -2820,92 +2752,9 @@ agent は、チケットの受け入れ基準に対して次の手順を実行�
 scenario がチケットの求めたことを述べているか、そしてサマリが記述する run が数えるべき run かどうかです。
 
 このループは受け入れ基準から始まります。
-「Harvesting(収穫)」は探索から始まり、このループの手順 3 で合流します。
-
-## Harvesting(収穫)
-
-`nuka do` は適応的なループを提供します(「単体 step」を参照)。
-agent は 1 つのバリデーション済み result を読み、それを使って次の呼び出しを選びます。
-その結果できる ad-hoc な一連の呼び出しは作業記録であり、evidence ではありません。
-それが物語だと誰も合意していないからです。
-したがって、探索で何か本物を見つけても、その発見は何もゲートできない形のままです。
-探索の経路は、削除しても安全なディレクトリにだけ残ります。
-
-`nuka harvest <step-record-id>...` は、それらの記録から 1 つの feature の下書きを組み立て、stdout に出力します。
-このコマンドは、ツールが分けて保つ 2 つのものをつなぎます。
-一方は適応によって見つかった経路で、もう一方は誰かが受け入れた文に固定された経路です。
-
-```sh
-nuka harvest step-20260817-a1b2 step-20260817-c3d4 > acceptance/cart.feature
-```
-
-このコマンドは、ツールの他の部分と同じ分業に従います。
-`harvest` は、実行された step、その順序、各行のテキスト、行ではなく以前の実行が供給した値だけを埋めます。
-step record は主張を含まないため、あらゆる**主張**を空欄のまま残します。
-
-下書きには、同じ空欄が 2 つの形で現れます。
-`Feature:` と `Scenario:` は、生成された名前ではなくプレースホルダーを使います。
-各行は `Given`、`When`、`Then` ではなく `*` を使います。
-キーワードは行の意味を読み手に伝えますが、記録が述べるのは何が実行されたかだけです。
-キーワードを選ぶと、裏付けのない主張を作ることになります。
-`*` は位置を持たない有効な Gherkin キーワードなので、物語ができる前でも下書きをパースでき、`nuka check` が読めます。
-
-退けた代替案は、`mutates` からキーワードを導く方法でした。
-もっともらしいキーワードはレビューを通る可能性がありますが、`*` は通らないため、ここでは誤った推測が推測なしより悪くなります。
-下書きを仕上げる agent または人は、生成された推測も検証しなければなりません。
-
-**コマンドラインは 1 つの一連に含める記録を選びますが、記録はそのグループを保存しません。**
-グループ化のラベルがあると ad-hoc な一連の呼び出しが evidence に見えるため、`do` は意図的にそのラベルを持ちません。
-各 `do` は step record を出力するので、適応的なループを動かす呼び出し元はすでにすべての id を持っています。
-期間(`--since`、`--last 10`)を使うと推測になり、放棄した探りを含める可能性があります。
-読み手は、その探りを本物の行と区別できません。
-
-コマンドラインは*どの*記録を使うかを選びますが、順序は設定しません。
-下書きは記録を `started_at` で並べるため、id を逆順に指定しても実行時の順序になります。
-ここでは順序が計測であり、引数リストは選択だけを行います。
-
-行に現れない値は連鎖に残ります。
-step record の `used` は、各 `from` キーを供給した実行を特定します(「Records」を参照)。
-この情報は再構築ではなく計測なので、`harvest` はそのキーを省き、生産者の行に供給させます。
-その後、`nuka check` と `nuka run` が共有する束縛順序のチェックが、実行前に順序を証明します。
-`--args` から来たキーについては、`harvest` が値を対応するキャプチャへ書き込みます。
-入力が残り 1 つの required キーを消費できる場合は、docstring または table にも書き込めます(「型付き step」を参照)。
-キーがどの場所にも当てはまらない場合、`harvest` はキーを省いてコメントを追加します。
-キーが required なら、その後 `check` は通常の理由でその行を拒否します。
-計測された optional または default のキーにも、同じコメントが付きます。
-schema が欠落をすでに許すキーについては `check` が沈黙し、コメントがなければ後の実行は探索が計測した値ではなく schema に従うからです。
-schema が自分で生み出す値は、コメントに書きません。
-
-`harvest` は、未解決の 3 つのケースを下書きと stderr の両方に記録します。
-
-- **`pattern` を持たない step** は行になれません。
-  `harvest` は、step とその args を示すコメントを追加します。
-  scenario の目的によって、それが文のない step か、別の step の中にある part かが決まります。
-  下書きは計測した事実を述べ、その判断を未決のまま残します。
-- **実行が失敗した記録** は、失敗の内容を述べるコメント付きの行になります。
-  これにより有用なケースが残ります。
-  バグを再現した探索は red の scenario になり、振る舞いが変わると green になります。
-  red の下書きが誤って evidence になることはありません。
-  レビュアーが読む run サマリは、振る舞いが変わるまでそれを red と報告するからです(「レビュー」を参照)。
-  `--use` がすでに拒否するため、失敗した記録は連鎖を供給できません。
-  したがって、再構築は健全なままです。
-- **元の記録へ読み戻らない行** は未解決のままです。
-  pattern は optional text(`item(s)`)または alternation(`is/are`)を含むことがあり、どちらにも逆向きの形が 1 つだけあるわけではありません。
-  そのため、`harvest` は生成した各行を `nuka run` と同じ matcher に通して読み戻します。
-  そして、その行が同じ step と args に解決されることを検証します。
-  一致しない場合、`harvest` は行、生成したテキスト、パース結果を報告します。
-
-この往復だけが、`harvest` が出力を判定する場所です。
-2 つ目の実装ではなく `run` の matcher を使うため、両方のコマンドが同じ行の意味を使います。
-
-由来は stderr に出し、feature ファイルには入れません。
-id は gitignore された state directory を指し、そのディレクトリは削除しても安全です(「State directory」を参照)。
-commit された feature がこれらの id を示すと、読み手がたどれない参照を含むことになります。
-作業情報は作業と同じ場所に残し、耐久性のある feature ファイルには真であり続ける事実だけを残します。
-
-`harvest` は `nuka run` の step record を拒否します。
-その記録はすでに feature に属するため、2 つ目の feature を生成しても役に立ちません。
-代わりに、拒否は元の scenario record を示します。
+探索はこのループの手順 3 で合流します。
+`nuka do` の一連の呼び出しを実行した agent は、各 step とその args を知っているので、keyword と主張も含めて scenario を書きます。
+そのあと `nuka check` が、何かを実行する前に、各行を語彙に照らして読み戻します。
 
 ## Allure emitter
 
@@ -3567,7 +3416,7 @@ step record は書きません。
 
 失敗すると、stdout には feature に貼り付ける scenario が出ます。
 中身は、それを再実行するコマンドのコメント、どう失敗したかのコメント、そして step ごとに 1 行の `*` の行です。
-行は、`nuka harvest` と同じ描画器で、その step の最初の pattern から書かれます。
+行は、その step の最初の pattern から書かれます。
 capture も `from` も受け持たない必須の args のキーが 1 つだけあるとき、それは `nuka run` が束縛するのと同じく書かれます。
 文字列の行のリストなら table として、文字列なら docstring として書かれます。
 失敗した step の上には、そのメッセージのコメントが付きます。
@@ -3680,16 +3529,6 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--sess
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
-nuka harvest <step-record-id>...
-                              turn a `do` sequence into one feature draft on
-                              stdout: the lines and their order are measured,
-                              the keywords are `*` and the names are
-                              placeholders, because a claim is not in a step
-                              record. What cannot become a line, what failed
-                              when it ran, and what does not read back to the
-                              record it came from are named in the draft and
-                              on stderr. Provenance goes to stderr only. A
-                              `nuka run` record is refused
 nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
                               run one model or relation file found under
                               featuresDir, request-only steps only, with no
@@ -3984,7 +3823,6 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 同じ壊れたファイルは呼び出し全体をそのまま拒否します。
 なぜなら、その先へ進むことはこれから実行しようとしている何かにとって危険であり、報告するだけとは違うからです。
 その拒否は、そのファイルをプロジェクトのルートからの相対パスで、投げられたエラー自身の文より前に名指しします。
-`nuka harvest` も step record を読む前に語彙を同じやり方で読むので、その拒否もファイルを名指しします。
 移行中のスイートにとって、glue の一部がまだ壊れているのは通常の状態です。
 その状態でまったく動かなくなる報告の道具は、移行のダッシュボードとして役に立ちません。
 そのまま押し進んでしまう実行の道具は、実際には一度も読めていない glue に対して実行することになります。
@@ -4069,8 +3907,10 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
   受け入れ条件そのものではない片付けを置く場所です。
 - **M9(parts)**: `defineStep` の `parts`、`call` fixture、step record が新たに持つ `calls` エントリ、そしてそれに伴う check です(「Parts」を参照)。
   feature ファイルを書き換えずに step を分割できるようになり、scenario の行より小さい粒度での再利用がそもそも可能になります。
-- **M10(harvesting)**: `nuka harvest`、名指しされた `do` の一連の呼び出しから組み立てられる 1 つの feature の下書きです(「Harvesting(収穫)」を参照)。
-  これは適応的なループを閉じる一手です: 探索によって見つかった経路が、1 つの文に固定された経路になり、それがここでゲートできる唯一の形だからです。
+- **M10(harvesting)**: 名指しされた `do` の一連の呼び出しから 1 つの feature の下書きを組み立てる `harvest` コマンドです。
+  これはのちに削除されました。
+  一連の呼び出しを実行した agent はその step をすでに知っており、下書きは scenario が述べるべき主張を空欄のまま残していたからです。
+  探索によって見つかった経路は、今も探索した者が書くことで、1 つの文に固定された経路になります。
 - **M11(live sessions)**: `nuka session start`/`stop`、プロセス内で開いたまま保持する 1 つの `ctx` です。
   これにより、`nuka do` はすでに途中まで進んだ world に降り立てます(「Live sessions」を参照)。
   ここより前のすべては何もない状態から始まっており、それは読み取りにとっては単に遅いだけですが、繰り返せない作業にとっては不可能を意味します。

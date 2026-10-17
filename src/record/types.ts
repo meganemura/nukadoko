@@ -10,15 +10,11 @@
 // scenario record's id for a `run`-originated step record, `null` for a
 // `do`-originated one.
 //
-// `kind` widens again to add `"external"`: a step run from inside a
-// Playwright Test spec (src/external/record-step.ts) rather than from
-// `nuka do`/`nuka run` is a third, distinct origin — the executor that
-// measured it is neither of the other two. `nuka harvest` treats
-// `"external"` the same as `"do"` (both are a working record, never
-// part of a `nuka run` scenario), while `scenario_record_id`/`run_id` stay
-// `null` for it the same way they already are for a `"do"`-originated
-// record: an externally-driven step belongs to no `nuka run` scenario
-// either.
+// `"external"` is a third origin that nothing writes any more: a step run
+// from inside a Playwright Test spec through `recordStep`, which was
+// removed. Such a record stays on disk until retention removes it, so the
+// type still names it; its `scenario_record_id`/`run_id` are `null`, as for
+// a `"do"` record.
 //
 // This shape was called `Receipt` before this rename. Step-level and
 // scenario-level records both answer the same question, what did this
@@ -624,10 +620,8 @@ export interface StepRecordBase {
   step: string;
   /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka
    * run` scenario (docs/spec.md "Records": "the same shape whether the step
-   * ran inside a scenario or via `do`"), `"external"` for one run from
-   * inside a Playwright Test spec through `recordStep`
-   * (src/external/record-step.ts) — a working record the same way `"do"`
-   * is, never part of a `nuka run` scenario. */
+   * ran inside a scenario or via `do`"), `"external"` on a record the removed
+   * `recordStep` wrote, still on disk until retention removes it. */
   kind: "do" | "run" | "external";
   /** Exactly what `--args` deserialized to (`do`) or what the pickle step's
    * captures/table/docstring bound (`run`) — unvalidated and uncoerced by

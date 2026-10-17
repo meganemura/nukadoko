@@ -18,8 +18,7 @@ import type { PlannedStep } from "./sequence.js";
 // args key that no capture and no `from` speaks for becomes a table or a
 // docstring, as `nuka run` would bind it. Any other key the line cannot
 // carry is named in a comment, because pasting the line would lose that
-// value. Rendering and the read-back are src/draft's, shared with
-// `nuka harvest`.
+// value. Rendering and the read-back are src/draft's.
 
 export interface RenderScenarioInput {
   readonly title: string;

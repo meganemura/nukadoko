@@ -19,7 +19,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
-// `clean`, `tend`, `harvest`, `skill path`, `experimental mcp-tools`,
+// `clean`, `tend`, `skill path`, `experimental mcp-tools`,
 // `experimental webmcp-tools`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
@@ -50,9 +50,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // `import()` rather than a static one; that file's own header explains
 // why), under `experimental` too: it lists another server's tools, which
 // no step of the everyday loop needs, so the top-level help keeps it out
-// of a newcomer's first screen; `harvest`'s own draft-rendering and
-// round-trip logic lives in cli/harvest.ts (thin wiring) and
-// src/harvest/* (the actual work), the same split as `check`/`tend`;
+// of a newcomer's first screen;
 // this module only wires their argv shapes and reports their
 // exit codes.
 //
@@ -129,14 +127,6 @@ interface RunArgs {
   concurrency?: number;
   /** `--summary <path>`: one more copy of the Markdown run summary. */
   summary?: string;
-}
-
-interface HarvestArgs {
-  /** yargs' own `<name..>` variadic positional syntax collects every
-   * positional token into this array, in the order given on the command
-   * line — `nuka harvest`'s own handler re-sorts them by each record's
-   * `started_at` before rendering anything (docs/spec.md "Harvesting"). */
-  stepRecordIds: string[];
 }
 
 interface ExploreArgs {
@@ -663,36 +653,6 @@ export async function runCli(
     },
   };
 
-  const harvestCommand: CommandModule<Record<string, never>, HarvestArgs> = {
-    command: "harvest <step-record-ids..>",
-    describe:
-      "one feature draft to stdout from `nuka do`'s own step record ids, in the order they actually " +
-      "ran; every line's keyword is `*` and its name is a placeholder (provenance goes to stderr only)",
-    builder: (y: Argv) =>
-      y.positional("step-record-ids", {
-        type: "string",
-        array: true,
-        demandOption: true,
-        describe: "one or more step record ids, as printed by `nuka do` (no time window, no --since)",
-        // yargs' own variadic-positional overloads produce a type its
-        // `.check()`/`.alias()` chain (used internally, not by this file)
-        // can't structurally match against `HarvestArgs` — `unknown` first,
-        // same remedy TS itself suggests, since the runtime shape (yargs'
-        // own camelCase expansion of "step-record-ids") is exactly
-        // `HarvestArgs` regardless.
-      }) as unknown as Argv<HarvestArgs>,
-    handler: async (args: Arguments<HarvestArgs>) => {
-      if (argsFailed) return;
-      const { runHarvest } = await import("./harvest.js");
-      exitCode = await runHarvest({
-        rootDir,
-        stepRecordIds: args.stepRecordIds,
-        stdout,
-        stderr,
-      });
-    },
-  };
-
   const exploreCommand: CommandModule<Record<string, never>, ExploreArgs> = {
     command: "explore <file>",
     describe:
@@ -1195,6 +1155,23 @@ export async function runCli(
     },
   };
 
+  // `harvest` was removed. The old spelling names the upgrading note
+  // instead of yargs' bare "Unknown argument", so a script that still
+  // calls it learns what replaced it. Hidden from the help: it runs nothing.
+  const removedHarvestCommand: CommandModule = {
+    command: "harvest",
+    describe: false,
+    builder: (y: Argv) => y.strict(false),
+    handler: () => {
+      if (argsFailed) return;
+      exitCode = 1;
+      stderr.write(
+        "`nuka harvest` was removed; write the scenario from the steps you ran, then run `nuka check` " +
+          "(see docs/upgrading.md in the nukadoko package)\n",
+      );
+    },
+  };
+
   const experimentalCommand: CommandModule = {
     command: "experimental",
     describe:
@@ -1241,7 +1218,7 @@ export async function runCli(
     },
     {
       heading: "Exploring",
-      commands: [namingMissingConfig(doCommand), sessionCommand, namingMissingConfig(harvestCommand), namingMissingConfig(exploreCommand)],
+      commands: [namingMissingConfig(doCommand), sessionCommand, namingMissingConfig(exploreCommand)],
     },
     { heading: "Upkeep", commands: [namingMissingConfig(tendCommand), namingMissingConfig(cleanCommand), skillCommand] },
     { heading: "Experimental", commands: [experimentalCommand] },
@@ -1274,6 +1251,7 @@ export async function runCli(
     )
     .wrap(null)
     .command(movedMcpToolsCommand)
+    .command(removedHarvestCommand)
     .demandCommand(1)
     .strict()
     .help();

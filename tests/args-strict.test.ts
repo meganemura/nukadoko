@@ -1,10 +1,8 @@
 import path from "node:path";
-import { request as playwrightRequest, type APIRequestContext } from "playwright";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { recordStep } from "../src/external/record-step.js";
 import { readStepRecord } from "../src/record/read-step-record.js";
 import { defineStep } from "../src/step/define-step.js";
 import { strictArgsSchema } from "../src/step/strict-args.js";
@@ -18,10 +16,9 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // contract and the runtime used to disagree: an extra key was silently
 // dropped (and, worse, still landed in a step record's own `args`) instead
 // of being refused. This file covers the fix (src/step/strict-args.ts)
-// across the three execution paths that turn a step's `args` into a
-// validated value: `nuka do` (src/cli/do.ts), `nuka run`
-// (src/run/run-scenario.ts), and `recordStep`
-// (src/external/record-step.ts). Each path gets the same pair of tests —
+// across the two execution paths that turn a step's `args` into a
+// validated value: `nuka do` (src/cli/do.ts) and `nuka run`
+// (src/run/run-scenario.ts). Each path gets the same pair of tests —
 // an extra key refused, naming it, and the same call with only the
 // declared keys still accepted — so passing proves the fix discriminates
 // rather than just refusing everything.
@@ -39,8 +36,8 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // an extra key is. `z.toJSONSchema` (what `nuka describe` publishes)
 // renders `z.looseObject` and `.passthrough()` as `additionalProperties:
 // {}`, and `.catchall(z.number())` as `additionalProperties: { type:
-// "number" }`. `strictArgsSchema` is what `nuka do`, `nuka run`, and
-// `recordStep` parse against, so those three have to accept exactly what
+// "number" }`. `strictArgsSchema` is what `nuka do` and `nuka run`
+// parse against, so those two have to accept exactly what
 // that published shape accepts. A plain `z.object` and a `z.strictObject`
 // stay `additionalProperties: false`. The extra key and its value are
 // drawn: one hand-picked pair would only pin the key its author typed.
@@ -281,108 +278,5 @@ describe("nuka run: strict args validation", () => {
     } finally {
       await removeTempDir(rootDir);
     }
-  });
-});
-
-describe("recordStep: strict args validation", () => {
-  let rootDir: string;
-  let requestContext: APIRequestContext;
-
-  beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("external-driver-project");
-    // Never actually dialed: every step in this describe block declines
-    // every fixture (`run({}, args)`), so `request` only has to exist to
-    // satisfy `RecordStepOptions`'s own required field.
-    requestContext = await playwrightRequest.newContext({ baseURL: "http://127.0.0.1:1" });
-  });
-
-  afterEach(async () => {
-    await requestContext.dispose();
-    await removeTempDir(rootDir);
-  });
-
-  const cartIdStep = defineStep({
-    description: "requires a cartId, to exercise strict extra-key rejection",
-    args: z.object({ cartId: z.string() }),
-    returns: z.object({ cartId: z.string() }),
-    async run({}, args) {
-      return { cartId: args.cartId };
-    },
-  });
-
-  it("accepts exactly the declared args key", async () => {
-    const { result } = await recordStep(cartIdStep, { cartId: "c1" }, {
-      name: "cart-id-step",
-      rootDir,
-      request: requestContext,
-    });
-    expect(result).toEqual({ cartId: "c1" });
-  });
-
-  it("rejects the same call with one extra key added, naming it", async () => {
-    await expect(
-      recordStep(
-        cartIdStep,
-        // @ts-expect-error deliberately an extra key `cartIdStep.args` does not declare
-        { cartId: "c1", EXTRA: "nope" },
-        { name: "cart-id-step", rootDir, request: requestContext },
-      ),
-    ).rejects.toThrow(/args validation failed.*EXTRA/s);
-  });
-
-  it("does not treat a use-filled key as extra", async () => {
-    const producerStep = defineStep({
-      description: "Produce a projectId",
-      args: z.object({}),
-      returns: z.object({ projectId: z.string() }),
-      async run() {
-        return { projectId: "p1" };
-      },
-    });
-    const consumerStep = defineStep({
-      description: "Consume a projectId via use",
-      args: z.object({ projectId: z.string() }),
-      returns: z.object({ projectId: z.string() }),
-      from: { projectId: [producerStep, "projectId"] },
-      async run({}, args) {
-        return { projectId: args.projectId };
-      },
-    });
-
-    const produced = await recordStep(producerStep, {}, {
-      name: "producer-step",
-      rootDir,
-      request: requestContext,
-    });
-    const consumed = await recordStep(consumerStep, {}, {
-      name: "consumer-step",
-      rootDir,
-      request: requestContext,
-      use: [produced.stepRecordId],
-    });
-
-    expect(consumed.result).toEqual({ projectId: "p1" });
-  });
-
-  it("records the schema-validated args, including a filled default, on a passing step record", async () => {
-    const couponStep = defineStep({
-      description: "requires a cartId, defaults couponCode when the caller omits it",
-      args: z.object({ cartId: z.string(), couponCode: z.string().default("NONE") }),
-      returns: z.object({ cartId: z.string(), couponCode: z.string() }),
-      async run({}, args) {
-        return { cartId: args.cartId, couponCode: args.couponCode };
-      },
-    });
-
-    const { stepRecordId } = await recordStep(couponStep, { cartId: "c1" }, {
-      name: "coupon-step",
-      rootDir,
-      request: requestContext,
-    });
-
-    const stepRecord = readStepRecord(path.join(rootDir, ".nukadoko", "records", "steps", stepRecordId));
-    // `couponCode` was never given: this is the schema's own default,
-    // present only if the record holds the validated value.
-    expect(stepRecord?.args).toEqual({ cartId: "c1", couponCode: "NONE" });
   });
 });

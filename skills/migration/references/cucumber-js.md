@@ -112,7 +112,7 @@ stderr otherwise) instead of emptying the whole vocabulary. Read the
 vocabulary as you go rather than waiting for every file to import cleanly
 first; `nuka run <feature>` and `nuka do <step>` still refuse outright on
 an unreadable glue file, and the refusal names that file, on purpose,
-since they are about to execute. `nuka harvest` names the file the same way.
+since they are about to execute.
 `nuka check` does not report a cited step as missing from the vocabulary
 while any step file failed to import. `nuka tend` counts only the steps
 that imported and leaves the unread files to `nuka check`. Fix the import

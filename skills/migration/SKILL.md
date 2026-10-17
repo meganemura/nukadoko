@@ -1,7 +1,7 @@
 ---
 name: migration
 description: Use when moving an existing test suite onto nukadoko, whether from cucumber-js (typically driving Playwright), from a Playwright Test suite with no cucumber and no Gherkin, or from another DSL already shaped as typed steps. Covers the two-stage discipline that keeps every failure traceable to one change, the `nukadoko/compat` door, sharing an implementation with a Playwright Test suite, and promoting steps to typed `defineStep`s at your own pace.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; every step below shells out to it (nuka init, nuka check, nuka run, nuka steps, nuka describe, nuka do, nuka harvest).
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; every step below shells out to it (nuka init, nuka check, nuka run, nuka steps, nuka describe, nuka do).
 license: MIT
 ---
 
@@ -51,9 +51,6 @@ version; npm refuses to install nukadoko beside a different one.
 A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use` and `--fail-on`
 are the repeatable flags. Each value is kept, in the order given.
-
-For a draft from an exploration, run `nuka harvest <step-record-id>...`.
-If it refuses the selection, use stderr to correct the ids before saving the draft.
 
 ## Before the first change
 

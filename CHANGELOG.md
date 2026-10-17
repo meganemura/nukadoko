@@ -236,6 +236,23 @@ just until 0.1.
   path to the config, exits 1, and writes nothing. Without a
   parent config, `scaffold` writes as before and prints the stderr line.
 
+### Removed
+
+- **BREAKING: `nuka harvest` and the `recordStep` export are removed.**
+  `harvest` printed a draft whose keywords were `*`, whose names were
+  placeholders, and whose claims were blank. The agent that ran the `nuka
+  do` sequence already knows each step and its args, and the claims are
+  the part the draft could not supply. Write the scenario from the steps
+  that ran, then run `nuka check`. `nuka harvest` now exits 1 and names
+  docs/upgrading.md. `recordStep` existed so a Playwright Test spec could
+  write step records for `harvest`; it goes with it, together with its
+  `RecordStepOptions`, `StepExecution`, and `UnsupportedExternalFixtureError`
+  exports. A spec calls the shared function directly instead, as
+  docs/migration-playwright-test.md describes. `retention.adHocDays` stays,
+  since `nuka do --use` still reads ad-hoc records across days. A step
+  record that `recordStep` wrote keeps `kind: "external"` on disk until
+  retention removes it. Breaking: see docs/upgrading.md.
+
 ### Fixed
 
 - **Discovery, the `.feature` walk, and the oath walk follow symbolic links.**

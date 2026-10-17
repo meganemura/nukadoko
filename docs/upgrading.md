@@ -101,7 +101,7 @@ This part does not change release to release.
   `steps[]` and `hooks[]`, and in `nuka explore --json`'s `steps[]`. A
   script or a jq filter that tests `.status == "ok"` tests `"passed"`. A
   record that nukadoko 0.16.1 or earlier wrote still says `"ok"` on disk; `nuka do
-  --use`, `nuka harvest`, and the emitters read it as `"passed"`, so it can
+  --use` and the emitters read it as `"passed"`, so it can
   stay until retention removes it. The exported TypeScript type
   `StepRecordOk` is now `StepRecordPassed`.
 - **`nuka tend --json` names its summary keys in snake_case.**
@@ -164,6 +164,22 @@ This part does not change release to release.
   instead, so a CI job that names one fails until it is edited. The
   `declared:` line reads `declared: describe <n>/<total>`; a script that
   reads the `rationale` count reads the `describe` count instead.
+- **`nuka harvest` is removed.** It exits 1 and names this note. Write
+  the scenario from the `nuka do` calls you ran: one line per step in the
+  order they ran, worded to match its pattern, with `Given`, `When`, or
+  `Then` chosen by what the line tells a reader. Leave a value an earlier
+  step produced off the line, since the step's `from` supplies it. Then
+  run `nuka check`, which reads every line back against the vocabulary.
+  The acceptance skill's "Where to start" route for an exploration says
+  the same.
+- **`recordStep` is no longer exported, and neither are
+  `RecordStepOptions`, `StepExecution`, or
+  `UnsupportedExternalFixtureError`.** A Playwright Test spec that imports
+  `recordStep` fails to compile. Call the shared function the step's `run`
+  calls directly from the spec, and delete the `nukadoko` import: the spec
+  then depends only on Playwright again (docs/migration-playwright-test.md,
+  "Share the implementation, not the runner"). Records `recordStep` wrote
+  stay on disk with `kind: "external"` until retention removes them.
 
 ## 0.15.0 to 0.16.1
 

@@ -124,7 +124,7 @@ when it runs.
 
 ## Pasting the printed scenario
 
-The printed scenario is a draft, like `nuka harvest` output. Read it
+The printed scenario is a draft. Read it
 before it goes anywhere:
 
 1. Decide who was wrong: the system, the model, or the relation. Ask a

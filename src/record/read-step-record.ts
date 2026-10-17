@@ -36,8 +36,8 @@ import type { StepRecord } from "./types.js";
 
 // A record written by nukadoko 0.16.1 or earlier says `"ok"` where it now
 // says `"passed"`.
-// Such a record stays on disk until retention removes it, and `--use` or
-// `harvest` may still name it, so it is read as the word it stands for.
+// Such a record stays on disk until retention removes it, and `--use` may
+// still name it, so it is read as the word it stands for.
 export function readStepRecord(recordDir: string): StepRecord | null {
   try {
     const content = readFileSync(path.join(recordDir, "record.json"), "utf8");

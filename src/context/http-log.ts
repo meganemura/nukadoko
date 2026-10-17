@@ -222,13 +222,9 @@ export function wrapRequestContextWithLogging(
 // once logs every verb once and leaves the real object in place.
 const instrumentedApiRequests = new WeakSet<APIRequestContext>();
 
-/** Logs `target`'s HTTP verbs into http.jsonl and `observed`, in place.
- * Returns a function that puts `fetch` back. The launched browser path
- * ignores it (the context is closed with the browser). An adopted page
- * calls it from `dispose()`, because that page keeps living in the
- * caller's own runner and later `page.request` calls must not keep
- * appending to a step that has already finished.
- * Idempotent: a second call on the same object returns a no-op undo, so
+/** Logs `target`'s HTTP verbs into http.jsonl and `observed`, in place,
+ * for as long as `target` lives (the launched browser closes it).
+ * Idempotent: a second call on the same object does nothing, so
  * one POST cannot be counted twice when both `page.request` and
  * `context.request` are passed, or when a later page copies the same
  * reference. */
@@ -238,9 +234,9 @@ export function instrumentApiRequestContext(
   secrets: SecretSet,
   observed: ObservedCollector,
   httpLogFailed: HttpLogFailedCollector,
-): () => void {
+): void {
   if (instrumentedApiRequests.has(target)) {
-    return () => {};
+    return;
   }
   instrumentedApiRequests.add(target);
   const originalFetch = target.fetch.bind(target);
@@ -254,8 +250,4 @@ export function instrumentApiRequestContext(
       httpLogFailed,
       () => originalFetch(urlOrRequest, options),
     );
-  return () => {
-    target.fetch = originalFetch;
-    instrumentedApiRequests.delete(target);
-  };
 }

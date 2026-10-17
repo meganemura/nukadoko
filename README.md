@@ -573,8 +573,8 @@ more of the roadmap has landed, not that the surface has frozen.
 
 Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
-emitters, the Markdown run summary, tending (`nuka tend`), scenario
-harvesting (`nuka harvest`), models and relations (`nuka explore`), the
+emitters, the Markdown run summary, tending (`nuka tend`), models and
+relations (`nuka explore`), the
 MCP tool listing (`nuka experimental mcp-tools`), Varar-style Markdown
 oaths (a second front beside Gherkin; see [Markdown oaths](#markdown-oaths)), and two
 agent skills. Not implemented: an AI-assisted glue converter, and the rest

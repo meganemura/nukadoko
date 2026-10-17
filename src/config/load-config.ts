@@ -178,9 +178,10 @@ export function resolveConfigFileName(rootDir: string): string {
 }
 
 // Each load is a module graph of its own (src/config/ts-loader.ts), and
-// Node never frees a module it loaded. recordStep calls loadConfig once per
-// step inside one process, so a load per call would grow that process by a
-// graph per step. So the parsed result is kept per root, and the load
+// Node never frees a module it loaded. One command reaches loadConfig from
+// several modules, and a process that calls runCli again and again (a test
+// suite) calls it once per command, so a load per call would
+// grow that process by a graph per call. So the parsed result is kept per root, and the load
 // happens once for each version of the file. One process can outlive an
 // edit to the config (runCli called twice, a live session, the MCP server),
 // so the kept result is reused only while the same file name exists with

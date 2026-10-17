@@ -129,8 +129,8 @@ wait, in seconds, 900 when omitted. A value the process cannot keep is refused b
 session starts. One execution runs at a time.
 
 A world many executions deep is not reproducible, by anyone, which is the
-reason to harvest what you found and run it again from nothing rather
-than trusting the session itself.
+reason to write a scenario from what you found and run it again from
+nothing rather than trusting the session itself.
 
 A session left running, or left behind after the terminal that started it
 is gone, is easy to lose track of. `nuka session list` finds every one
@@ -149,10 +149,10 @@ exits 0 and names that session and its environment on stderr.
 A step record has a lifetime without anyone cleaning: `nuka run` keeps the
 newest `retention.runs` runs (default 20) and a record no run owns, which
 is what a `nuka do` record is, for `retention.adHocDays` days (default 7),
-both set in `nukadoko.config.ts`. A `--use <id>` or `harvest <id>` whose
+both set in `nukadoko.config.ts`. A `--use <id>` whose
 record aged out is refused with those numbers in the message, so an id
-that resolved last week and does not today is that, not a typo. Chain and
-harvest within the window, or raise `adHocDays` for a longer exploration.
+that resolved last week and does not today is that, not a typo. Chain
+within the window, or raise `adHocDays` for a longer exploration.
 
 `nuka clean [--records] [--cache] [--export] [--dry-run]` is the wider
 version of the same idea, once you are done exploring rather than mid-way
@@ -174,60 +174,35 @@ session first (`nuka session stop <name>`), then clean.
 `allure-results/`, not inside it, and is the one export artifact no
 re-run can reproduce.
 
-## What a harvested draft names rather than decides
-
-Four of them, each also reported on stderr.
-
-- **A comment where a step has no pattern.** It could not be a line.
-  Decide which it was: give that step a `pattern` if the scenario should
-  name it, or leave it out if it belongs inside another step as a part.
-- **A line that failed when it ran.** The scenario is red until the
-  behavior changes. That is the shape a reproduction takes here: red,
-  fixed, green, then a pull request whose run summary shows it green.
-- **A line that does not read back to the record it came from.** Its
-  wording has to be fixed or it will not bind. This happens where a
-  pattern carries optional text or alternation, neither of which reverses
-  into one answer.
-- **A comment naming a measured optional or defaulted arg the line
-  cannot bind.** The value is in the comment. `nuka check` stays silent,
-  because the schema allows the key to be absent, so the comment is the
-  record of what the exploration measured. A value the schema would
-  produce on its own is not named. Keywords stay `*` and both names stay
-  placeholders.
-
-Nothing needs stripping before the file is committed: which records the
-draft came from went to stderr, never into it.
-
 ## Then fix what you found
 
-Once the path works, `nuka harvest` turns those records into a feature
-draft:
+Once the path works, write the scenario from the calls you made. You
+already know each step, its args, and which result fed the next one,
+because you made each call. Write it the way a reader needs it:
 
-```sh
-nuka harvest step-20260818-a1b2 step-20260818-c3d4 > acceptance/cart.feature
-```
-
-The ids are the ones `nuka do` printed. There is no time window and no
-`--since`: it cannot tell an abandoned probe from the call that mattered.
-Order does not matter either; the draft follows what the records say about
-when each one ran.
-
-**One call is one scenario.** Harvest never splits a list, since where one
-story ends is a judgment about meaning and not something a step record
-holds. Two paths means calling it twice and pasting both under one
-`Feature:`.
-
-What comes back is deliberately unfinished. Every keyword is `*` and both
-names are placeholders, because the records say what ran and nothing
-about what any of it was for. Finishing that is the part worth doing
-carefully:
-
-- Replace each `*` with `Given`, `When`, or `Then` by what that line tells
-  the person reading the scenario, not by what the code did.
+- One line per step that is part of the story, in the order they ran,
+  worded to match that step's pattern. Leave out every probe: exploring
+  means running things that turned out not to matter.
+- Pick `Given`, `When`, or `Then` by what that line tells the person
+  reading the scenario, not by what the code did.
+- Keep a value an earlier step produced off the line. The step's `from`
+  supplies it at run time, as `--use` did during the exploration; a
+  literal id from one run passes against that server and fails against a
+  fresh one.
 - Name the `Feature:` and the `Scenario:` for the behavior being claimed.
-- Delete any line that was a probe rather than part of the story. A draft
-  is a record of what you ran, and exploring means running things that
-  turned out not to matter.
+  Two paths are two scenarios.
+- A call that failed because it reproduced a bug becomes a red scenario.
+  It goes green when the behavior changes, and the pull request's run
+  summary shows it.
+
+Keep record ids out of the file. They point into the state directory,
+which is safe to delete, so a committed feature that named them would
+point at nothing.
+
+Then run `nuka check` on the file, which is step 3 of the loop in
+`SKILL.md`. It reads each line back against the vocabulary before
+anything runs, and names a line no step matches, a line two steps match,
+and a required key that nothing supplies.
 
 The probe step stays behind: it has no pattern, so it was never going to
 appear in a scenario, and nothing you learned through it is lost, because

@@ -367,7 +367,7 @@ export async function discoverSteps(
         // The tolerant path reports this failure through `importFailures`,
         // which names the file and leaves Node's message unmodified. The
         // CommonJS/.ts sentence is added later, by the caller. This path
-        // throws, and `nuka run`, `nuka do`, and `nuka harvest` print only
+        // throws, and `nuka run` and `nuka do` print only
         // `error.message`. A top-level throw's own message does not name
         // the file, so the path relative to the project root has to be
         // part of the message, and that sentence has to travel with it:

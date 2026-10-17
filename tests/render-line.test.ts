@@ -5,9 +5,8 @@ import {
   type DocStringAttachment,
 } from "../src/draft/render-line.js";
 
-// Responsibility: the pattern-escape and docstring-escape paths
-// tests/build-draft.test.ts's own end-to-end harvest coverage never reaches
-// directly: a backslash escape mid-pattern, a trailing unpaired backslash,
+// Responsibility: the pattern-escape and docstring-escape paths that
+// explore's end-to-end coverage never reaches directly: a backslash escape mid-pattern, a trailing unpaired backslash,
 // an unterminated capture, and a docstring content line that itself starts
 // with `"""` once trimmed. Unit-level against renderPatternLine/
 // renderAttachmentBlock directly, the same way this module's own header
@@ -48,10 +47,10 @@ describe("renderPatternLine: unterminated capture", () => {
 
 describe("renderPatternLine: a {string} capture given a non-string value", () => {
   it("still renders a quoted textual form via String(value), not a thrown error", () => {
-    // A harvested arg can disagree with its own pattern's declared type (a
-    // custom step could return anything under that key); this function's
-    // only job is to render *something* coherent. build-draft.ts's round
-    // trip is what judges whether the result is right.
+    // An arg can disagree with its own pattern's declared type (a custom
+    // step could return anything under that key); this function's only job
+    // is to render *something* coherent. The read-back in
+    // src/draft/scenario.ts is what judges whether the result is right.
     const result = renderPatternLine("{amount:string}", { amount: 42 });
     expect(result.ok).toBe(true);
     if (result.ok) {

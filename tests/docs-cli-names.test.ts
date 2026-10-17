@@ -307,7 +307,7 @@ function commandOmissions(tree: CommandNode, file: DocFile): string[] {
 // A command or flag a release removed is still named by the upgrade notes
 // that say what replaced it, and by their history. Only those two files may
 // cite one.
-const REMOVED_COMMANDS = new Set(["accept", "mcp-tools"]);
+const REMOVED_COMMANDS = new Set(["accept", "harvest", "mcp-tools"]);
 const REMOVED_FLAGS = new Set(["init --env"]);
 const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
 

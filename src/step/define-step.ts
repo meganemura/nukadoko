@@ -229,8 +229,7 @@ function isCandidateTuple(value: unknown): value is FromCandidate {
  * forces every caller to decide at compile time what a malformed entry
  * means for it: src/step/validate-from.ts turns it into a reported
  * `FromIssue` instead of a crash; src/step/resolve-use.ts,
- * src/cli/vocabulary.ts, src/harvest/categorize-args.ts,
- * src/run/run-scenario.ts, and src/external/record-step.ts each turn it
+ * src/cli/vocabulary.ts and src/run/run-scenario.ts each turn it
  * into a message naming the broken key (`malformedFromEntryMessage`
  * below); src/check/from-order.ts skips it, since a structural fact about
  * the declaration is src/step/validate-from.ts's finding to report, not
@@ -271,8 +270,7 @@ function describeMalformedFromEntry(entry: unknown): string {
 /** The message every caller with a `from` key in scope uses to report a
  * malformed entry (`tryFromCandidates` returning `null`) — one shared
  * wording, so `nuka check`, `nuka steps --json`/`nuka describe`, `nuka do
- * --use`, `nuka harvest`, and `recordStep` all name the same
- * broken key the same way. */
+ * --use`, and `nuka run` all name the same broken key the same way. */
 export function malformedFromEntryMessage(key: string, entry: unknown): string {
   return `from.${key} is not usable: ${describeMalformedFromEntry(entry)}`;
 }

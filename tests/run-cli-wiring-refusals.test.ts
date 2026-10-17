@@ -13,26 +13,24 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 // own ConfigError propagation, which `nuka steps`' sibling test
 // (cli.test.ts) already proves for `steps` but not for `describe`.
 
-describe("nuka <command> --unknown-flag: the matched handler never runs", () => {
-  it("nuka harvest: writes nothing and never reads any step record", async () => {
-    const rootDir = await copyFixtureToTempDir("harvest-project");
-    try {
+describe("nuka harvest, removed", () => {
+  it("exits 1 and names what replaced it, with or without arguments", async () => {
+    for (const argv of [["harvest"], ["harvest", "step-20260817-a1b2", "--unknown-flag"]]) {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["harvest", "whatever-id", "--unknown-flag"], {
-        rootDir,
-        stdout,
-        stderr,
-      });
+      const exitCode = await runCli(argv, { rootDir: fixture("basic-project"), stdout, stderr });
 
       expect(exitCode).toBe(1);
-      expect(stderr.text()).toContain("unknown-flag");
+      expect(stderr.text()).toBe(
+        "`nuka harvest` was removed; write the scenario from the steps you ran, then run `nuka check` " +
+          "(see docs/upgrading.md in the nukadoko package)\n",
+      );
       expect(stdout.text()).toBe("");
-    } finally {
-      await removeTempDir(rootDir);
     }
   });
+});
 
+describe("nuka <command> --unknown-flag: the matched handler never runs", () => {
   it("nuka session list: prints nothing", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

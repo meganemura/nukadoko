@@ -87,7 +87,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   step record、scenario record の `steps[]` と `hooks[]`、`nuka explore --json` の `steps[]` で、成功を表す語が同じになりました。
   `.status == "ok"` を調べるスクリプトや jq のフィルタは、`"passed"` を調べるようにします。
   nukadoko 0.16.1 以前が書いた record は、ディスク上では `"ok"` のままです。
-  `nuka do --use`、`nuka harvest`、各 emitter はそれを `"passed"` として読むので、retention が削除するまで残しておけます。
+  `nuka do --use` と各 emitter はそれを `"passed"` として読むので、retention が削除するまで残しておけます。
   export されている TypeScript の型 `StepRecordOk` は `StepRecordPassed` になりました。
 - **`nuka tend --json` の summary のキーは snake_case になりました。**
   `typedSteps`、`compatSteps`、`compatStepNames`、`scannedFeatureDirs`、`readOnlySteps` は、`typed_steps`、`compat_steps`、`compat_step_names`、`scanned_feature_dirs`、`read_only_steps` になります。
@@ -137,6 +137,19 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   そのため、どれかを名指す CI ジョブは、書き換えるまで失敗します。
   `declared:` の行は `declared: describe <n>/<total>` になります。
   `rationale` の件数を読むスクリプトは、代わりに `describe` の件数を読みます。
+- **`nuka harvest` は削除されました。**
+  終了コード 1 で終わり、この注記を名指しします。
+  実行した `nuka do` の呼び出しから scenario を書いてください。
+  実行した順に step ごとに 1 行を、その pattern に合う文で書き、`Given`、`When`、`Then` は、その行が読み手に何を伝えるかで選びます。
+  先行する step が生んだ値は行に書きません。
+  step の `from` がそれを供給するからです。
+  そのあと `nuka check` を実行すると、すべての行が語彙に照らして読み戻されます。
+  acceptance skill の「Where to start」で探索から始める道筋も同じことを述べています。
+- **`recordStep`、`RecordStepOptions`、`StepExecution`、`UnsupportedExternalFixtureError` は export されなくなりました。**
+  `recordStep` を import している Playwright Test の spec はコンパイルに失敗します。
+  step の `run` が呼んでいる共有関数を spec から直接呼び、`nukadoko` の import を削除してください。
+  そうすると spec は再び Playwright だけに依存します(docs/migration-playwright-test.ja.md の「共有するのは runner ではなく実装」)。
+  `recordStep` が書いた record は、retention が削除するまで `kind: "external"` のままディスクに残ります。
 
 ## 0.15.0 から 0.16.1 へ
 

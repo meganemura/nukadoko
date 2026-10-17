@@ -142,12 +142,12 @@ questions: "what happens if this is deleted" and "who gets to change it":
   run written before the file existed look alike, and nothing here removes
   what it cannot prove finished. The run that applies retention is never
   removed by its own pass, even when newer runs ended first. A record no retained
-  run owns (a `nuka do` or `recordStep` record, a record whose run is
+  run owns (a `nuka do` record, a record whose run is
   gone, a scenario directory whose `record.json` cannot be read or has a
   `started_at` that does not parse, a run
   that stopped before its first scenario finished) is removed once it is
-  older than `retention.adHocDays` (default 7). `nuka do --use` and `nuka
-  harvest` read those across days by design, which is why they get days
+  older than `retention.adHocDays` (default 7). `nuka do --use`
+  reads those across days by design, which is why they get days
   rather than a run count, and a `--use` on a record that aged out is
   refused with the policy in force, never answered with nothing. Neither
   number has an "off" value; a project that wants more history raises it.
@@ -357,7 +357,7 @@ export default defineStep({
   schema through `z.toJSONSchema`. A plain `z.object(...)` comes out as
   `additionalProperties: false`, and every path that turns a step's `args`
   into a validated value parses against that same closed shape (`nuka do`,
-  `nuka do --session <live>`, `nuka run`, `recordStep`, and the `call`
+  `nuka do --session <live>`, `nuka run`, and the `call`
   fixture a part is invoked through, see "Parts"): an undeclared key is
   refused, not silently dropped. `nuka describe` renders that strict args
   schema as the input a caller must supply, so `required` names only keys
@@ -1833,79 +1833,6 @@ The spec and step import one definition, which keeps their shapes aligned.
 The shared file depends only on Playwright and zod, so the dependency
 direction stays unchanged.
 
-The **record** is the other half of the migration. Shared implementation
-does not create a record. A Playwright run produces Playwright artifacts,
-but it has no nukadoko executor to write a step record. A suite can
-therefore share all implementation code and still produce nothing for
-`nuka harvest`.
-
-`recordStep` creates the missing record. Nukadoko has tested this API with
-its own tests, but a real migrated suite has not yet used it.
-
-```ts
-const opened = await recordStep(
-  openCartStep, { sku }, { name: "open-cart", rootDir, request },
-);
-const added = await recordStep(
-  addItemStep, {}, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
-);
-```
-
-**Pass the record id.** A spec usually stores a returned value in a
-variable and passes that value to the next call. This action does not record
-a chain. The `use` option declares the chain with the same meaning as
-`nuka do --use`. Without `use`, the record treats the key as a value from
-the caller. `nuka harvest` then writes that run's id into the draft. The
-draft passes against a server that remembers the id but fails against a
-new server. Passing the record id lets `from` provide the value, as it does
-during `nuka run`.
-
-The step uses the spec's `request`, enforces its schemas, and writes a step
-record beside records from `nuka do`. The existing suite becomes a source
-of records. `nuka harvest` can turn its existing journeys into drafts. This
-method asks the team to run existing code instead of rewriting it.
-
-`recordStep` accepts a `page` as well as a `request` and gets the context
-from `page.context()`. It therefore supports browser-based and HTTP-based
-suites. Evidence collection adds listeners to the caller's context. It
-removes them when execution ends. Otherwise, one recorded step would
-continue to count traffic from the rest of the spec.
-
-An external record contains less data than a `nuka run` record. It has no
-trace chunk, screenshot, or `http.jsonl` line for page traffic. Playwright
-already produces these artifacts, so a second copy adds no information.
-The external record keeps the data that only nukadoko measures: args, the
-validated result, `observed`, and page events.
-
-`recordStep` has four limits that `nuka do` does not have. First, `use`
-resolves only against a step that the same process ran through
-`recordStep` earlier. `recordStep` gets a step's name only from its own
-`name` option, so a record that `nuka do` or another process wrote is
-refused, and the refusal names this cause. Second, a step that needs a
-`config.fixtures` entry is always refused before a record exists:
-`recordStep` builds only the built-in fixtures. Third, no environment is
-selected. The record has `environment: "default"` and `session: null`, and
-no environment's read-only policy is enforced, so a step that declares
-`mutates: true` runs even where `nuka do` would refuse it. Fourth, there is
-no version probe, so the record has no `target_version`.
-
-Three properties preserve the meaning of the record. First, the record has
-`kind: "external"`. This is the third execution source beside `do` and
-`run`, and it distinguishes the record from a command that a person typed.
-`harvest` accepts an external record and continues to refuse a `run` record
-that already has a feature. Second, nukadoko wraps the injected request
-context for standard logging and redaction. It never disposes that context
-because another owner opened it. Disposing it would cause a failure on a
-later call. Third, nukadoko refuses a browser-dependent step before it
-creates a record unless the call supplies a `page`. This path never starts
-a browser.
-
-The **run summary** still requires a different path. It is built from a
-`nuka run` and its scenario records, and an external record has neither.
-Nukadoko can guarantee only an execution that it drove. An external record
-is a working record like a `do` record. It is source material for a
-harvested scenario, and it is not what a reviewer reads as evidence.
-
 This migration opens both nukadoko paths. `nuka run` fixes a path in a
 feature file, and `nuka do` runs each step alone. Operations that the
 existing suite already trusts become the vocabulary that an agent uses for
@@ -2471,7 +2398,7 @@ Nothing here can become evidence, and no new fence is needed to keep it
 that way. A live session produces step records and no scenario record, and
 the run summary a reviewer reads is built from scenario records (see
 "Review"), so the path from an exploration to that summary runs through
-`nuka harvest` and a real `nuka run` or it does not exist.
+a feature someone wrote and a real `nuka run`, or it does not exist.
 
 `nuka run` reports a live session when it finds one,
 naming it and how to stop it, and refuse nothing on its account. The fact
@@ -2507,7 +2434,7 @@ the moment it began listening.
 The honest limit is the point of the feature rather than a flaw in it: a
 world thirty executions deep is not reproducible, by anyone, including
 the process holding it. That is why what comes out of an exploration is a
-draft to be harvested and run again from nothing, not the run itself.
+scenario written from it and run again from nothing, not the run itself.
 
 ## Records
 
@@ -3385,107 +3312,10 @@ one judgment nukadoko leaves to a person: whether the scenarios say what the
 ticket asked for, and whether the run that the summary describes is the one
 that counts.
 
-This loop starts from criteria. "Harvesting" starts from exploration and joins
-this loop at step 3.
-
-## Harvesting
-
-`nuka do` provides the adaptive loop (see "Single steps"). The agent reads
-one validated result and uses it to choose the next call. The resulting
-ad-hoc sequence is a working record, not evidence, because nobody agreed
-that it was the story. An exploration can therefore find something real
-but leave the finding in a form that cannot gate anything. Its path remains
-only in a directory that is safe to delete.
-
-`nuka harvest <step-record-id>...` builds one feature draft from those
-records and prints it to stdout. The command connects two things that this
-tool keeps separate: a path found through adaptation and a path fixed in
-a sentence that someone accepted.
-
-```sh
-nuka harvest step-20260817-a1b2 step-20260817-c3d4 > acceptance/cart.feature
-```
-
-The command follows the same division of labor as the rest of the tool.
-Harvest fills in only what it measured: the steps that ran, their order,
-each line's text, and values supplied by an earlier execution instead of
-the line. It leaves every **claim** blank because step records do not
-contain claims.
-
-The draft has two forms of the same blank. `Feature:` and `Scenario:` use
-placeholders instead of generated names. Each line uses `*` instead of
-`Given`, `When`, or `Then`. A keyword tells the reader what a line means,
-but the records state only what ran. Choosing a keyword would invent an
-unsupported claim. `*` is a valid Gherkin keyword with no position, so the
-draft parses and `nuka check` can read it before the narrative exists.
-
-The rejected alternative derived the keyword from `mutates`. A wrong guess
-is worse here than no guess because a plausible keyword can survive review,
-while `*` cannot. The agent or person who finishes the draft would also
-have to verify any generated guess.
-
-**The command line selects the records in one sequence; no record stores
-that grouping.** `do` deliberately has no grouping label because one would
-make an ad-hoc sequence resemble evidence. Each `do` prints its step record,
-so the caller that runs the adaptive loop already has every id. A time
-window (`--since`, `--last 10`) would guess and could include an abandoned
-probe. A reader could not distinguish that probe from a real line.
-
-The command line selects *which* records to use, but it does not set their
-order. The draft sorts them by `started_at`, so reversed ids still produce
-the sequence that ran. Here, order is a measurement and the argument list
-is only a selection.
-
-A value that does not appear on a line remains in the chain. A step
-record's `used` identifies the execution that supplied each `from` key
-(see "Records"). This information is measured, not reconstructed, so
-harvest omits the key and lets the producer's line supply it. The binding-
-order check shared by `nuka check` and `nuka run` then proves the order
-before execution. For a key from `--args`, harvest writes the value into a
-matching capture. It can also write the value into a docstring or table
-when that input can consume the one remaining required key (see "Typed
-steps"). If the key fits none of these locations, harvest omits it and
-adds a comment. `check` then refuses the line for its usual reason
-when the key is required. A measured optional or defaulted key gets
-the same comment, because `check` stays silent for a key the schema
-already allows to be absent, and a later run would otherwise follow
-the schema instead of the value the exploration measured. A value the
-schema would produce on its own stays unnamed.
-
-Harvest records three unresolved cases in both the draft and stderr.
-
-- **A step with no `pattern`** cannot become a line. Harvest adds a comment
-  that names the step and its args. The scenario's purpose determines
-  whether this is a step without a sentence or a part inside another step.
-  The draft states the measured fact and leaves that judgment open.
-- **A record whose execution failed** becomes a line with a comment that
-  states how it failed. This preserves a useful case: an exploration that
-  reproduced a bug becomes a red scenario. The scenario becomes green
-  after the behavior changes. A red draft cannot become evidence
-  accidentally: the run summary a reviewer reads reports it red until the
-  behavior changes (see "Review"). A failed record cannot supply a chain either,
-  because `--use` already refuses it. The reconstruction therefore remains
-  sound.
-- **A line that does not read back** to its source record remains unresolved.
-  A pattern can contain optional text (`item(s)`) or an alternation
-  (`is/are`), and neither has one reverse form. Harvest therefore reads
-  every generated line through the matcher used by `nuka run`. It verifies
-  that the line resolves to the same step and args. For a mismatch, harvest
-  reports the line, the generated text, and the parsed result.
-
-This round trip is the only place where harvest judges its output. It uses
-the `run` matcher instead of a second implementation, so both commands use
-the same meaning for a line.
-
-Provenance goes to stderr, not the feature file. The ids point into the
-gitignored state directory, which is safe to delete (see "The state
-directory"). A committed feature that named these ids would contain
-references that readers cannot follow. Working information stays with the
-work, while the durable feature file keeps only facts that remain true.
-
-Harvest refuses a step record from `nuka run`. That record already belongs
-to a feature, so generating a second feature would not help. The refusal
-names the source scenario record instead.
+This loop starts from criteria. An exploration joins it at step 3: the agent
+that ran the `nuka do` sequence knows each step and its args, and writes the
+scenario from them, keywords and claims included. `nuka check` then reads
+the lines back against the vocabulary before anything runs.
 
 ## Allure emitter
 
@@ -4146,8 +3976,7 @@ records.
 
 On a failure, stdout gets a scenario to paste into a feature: a comment with
 the command that reruns it, a comment that says how the run failed, and one
-`*` line per step, written from the step's first pattern by the renderer
-`nuka harvest` uses. The one required args key that no capture and no
+`*` line per step, written from the step's first pattern. The one required args key that no capture and no
 `from` speaks for is written as a table when it is a list of string rows,
 or as a docstring when it is a string, the way `nuka run` binds it. The
 failing step has a comment above it with its message. A
@@ -4262,16 +4091,6 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--sess
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
-nuka harvest <step-record-id>...
-                              turn a `do` sequence into one feature draft on
-                              stdout: the lines and their order are measured,
-                              the keywords are `*` and the names are
-                              placeholders, because a claim is not in a step
-                              record. What cannot become a line, what failed
-                              when it ran, and what does not read back to the
-                              record it came from are named in the draft and
-                              on stderr. Provenance goes to stderr only. A
-                              `nuka run` record is refused
 nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
                               run one model or relation file found under
                               featuresDir, request-only steps only, with no
@@ -4574,9 +4393,7 @@ are about to execute a step, or set up a project that is about to, so they
 stay fail-fast: the same broken file rejects the whole call outright,
 because continuing past it is dangerous for anything about to run, not
 merely report on. The rejection names the file, a path relative to the
-project root, ahead of the thrown error's own text. `nuka harvest` loads
-the vocabulary the same way before it reads any step record, so its refusal
-names the file too. A migrating suite's normal state is some glue still
+project root, ahead of the thrown error's own text. A migrating suite's normal state is some glue still
 broken. A reporting tool that refused to run at all in that state would not
 be a useful migration dashboard. An execution tool that pressed on anyway
 would be running against glue it never actually read.
@@ -4696,10 +4513,11 @@ would be running against glue it never actually read.
   "Parts"). A step can be split without its feature file being rewritten.
   This is what makes a reuse granularity smaller than a scenario line
   possible at all.
-- **M10 (harvesting)**: `nuka harvest`, one feature draft built from a
-  named `do` sequence (see "Harvesting"). This is the move that closes the
-  adaptive loop: a path found by exploring becomes a path fixed in a
-  sentence, and a fixed sentence is the only form anything here can gate on.
+- **M10 (harvesting)**: a `harvest` command that built one feature draft
+  from a named `do` sequence. It was removed later: the agent that ran the
+  sequence already knew its steps, and the draft left blank the claims a
+  scenario exists to state. A path found by exploring still becomes a path
+  fixed in a sentence, written by whoever explored it.
 - **M11 (live sessions)**: `nuka session start`/`stop`, one `ctx` held
   open in a process so `nuka do` can land on a world that is already
   partway through (see "Live sessions"). Everything before this started

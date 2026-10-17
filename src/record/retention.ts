@@ -21,24 +21,23 @@ import { runEnded } from "./run-result.js";
 //    some scenario records, and every run written before this rule
 //    existed, still falls under it.
 //
-// 2. The age rule, for what no retained run owns: a `nuka do` or
-//    `recordStep` step record (`run_id: null`), a step record whose run has
+// 2. The age rule, for what no retained run owns: a `nuka do` step
+//    record (`run_id: null`), a step record whose run has
 //    since been removed, a scenario directory whose record.json cannot be
 //    read or has a `started_at` that does not parse, and a run directory with a manifest but no scenario records (a
 //    run that stopped before its first scenario finished). Each is dated by
 //    its own record's `finished_at` (`started_at` failing that) and, when
 //    the record cannot be read at all, by the directory's mtime, and is
-//    removed once older than `retention.adHocDays`. `nuka do --use` and
-//    `nuka harvest` read these across days by design, which is why they
-//    get days rather than a run count.
+//    removed once older than `retention.adHocDays`. `nuka do --use`
+//    reads these across days by design, which is why they get days rather than a run count.
 //
 // A run owns exactly the step records its scenario records' `steps[]`
 // cite. That set is complete: a part invoked through the `call` fixture
 // runs inside its caller and lands as a `calls[]` entry on the caller's
 // own record (src/record/types.ts's `CallEntry`, which has no record id),
 // never as a `records/steps/<id>/` of its own, and a hook's evidence lives
-// inside the scenario's own directory. Only `nuka do`, a live session, and
-// `recordStep` write a step record no scenario cites, and those are what
+// inside the scenario's own directory. Only `nuka do` and a live session
+// write a step record no scenario cites, and those are what
 // the age rule is for.
 //
 // Export files are removed only through a manifest. A results directory
@@ -358,7 +357,7 @@ export function formatRetention(outcome: RetentionOutcome, policy: RetentionPoli
 }
 
 /** The sentence a "no such step record" refusal carries, so a person
- * whose `--use`/`harvest` id stopped resolving learns that records have a
+ * whose `--use` id stopped resolving learns that records have a
  * lifetime before they go looking for a typo. Built from the policy in
  * force, since the numbers are the whole answer. */
 export function retentionNote(policy: RetentionPolicy): string {

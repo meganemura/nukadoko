@@ -1,7 +1,7 @@
 ---
 name: acceptance
 description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka explore` should run.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka harvest, nuka explore, nuka check, nuka run, nuka tend).
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka explore, nuka check, nuka run, nuka tend).
 license: MIT
 ---
 
@@ -78,9 +78,6 @@ A flag that takes one string or one number is refused when it is given
 more than once, and the command writes nothing. `--use` and `--fail-on`
 are the repeatable flags. Each value is kept, in the order given.
 
-For a draft from an exploration, run `nuka harvest <step-record-id>...`.
-If it refuses the selection, use stderr to correct the ids before saving the draft.
-
 1. **All you have is prose** (a ticket, a request, a conversation), nothing
    that reads as a testable statement yet:
    `references/from-prose.md`, then
@@ -91,8 +88,9 @@ If it refuses the selection, use stderr to correct the ids before saving the dra
 3. **You already have, or can write directly, a concrete scenario**: "The
    loop" below.
 4. **You already ran the path** with `nuka do` and want it fixed in a
-   scenario: `references/exploring.md`, then join the loop at step 3
-   (`nuka check`).
+   scenario: write the scenario from the steps you ran
+   (`references/exploring.md`, "Then fix what you found"), then join the
+   loop at step 3 (`nuka check`).
 5. **You want sequences generated against a model, or two runs compared
    by a relation**, with request-only steps: `references/models.md`
    (`nuka explore`), then paste what it prints and join the loop at

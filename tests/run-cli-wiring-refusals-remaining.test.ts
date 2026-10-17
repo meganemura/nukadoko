@@ -7,7 +7,7 @@ import { copyFixtureToTempDir, createCaptureSink, createEmptyTempDir, fixture, r
 // Responsibility: the same "yargs' own .fail() sets argsFailed, then still
 // runs the matched handler, whose own `if (argsFailed) return;` guard is
 // what actually stops it" shape tests/run-cli-wiring-refusals.test.ts
-// already proves for harvest/session list/start/stop, extended
+// already proves for session list/start/stop, extended
 // here to the nine remaining commands that guard reaches: steps, describe,
 // init, scaffold, check, tend, skill path, experimental mcp-tools, and experimental
 // webmcp-tools. Kept in its own file (a new file, not an edit to that one)

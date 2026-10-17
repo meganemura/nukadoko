@@ -122,8 +122,8 @@ export const DEFAULT_STEP_TIMEOUT_MS = 1_200_000;
  * that and the failure a person was chasing an hour ago is already gone on
  * a suite run every few minutes. */
 const DEFAULT_RETENTION_RUNS = 20;
-/** `retention.adHocDays`'s default: long enough that a `nuka do` chain
- * started one week and harvested the next still resolves. */
+/** `retention.adHocDays`'s default: long enough that a `nuka do --use`
+ * chain started one week and continued the next still resolves. */
 const DEFAULT_RETENTION_AD_HOC_DAYS = 7;
 
 /** `APIRequest.newContext`'s options (`requestContext` below) have no named
@@ -448,10 +448,9 @@ export const configSchema = z
      * `runs`: the newest N `nuka run` invocations keep every record and
      * export file they wrote; at the end of each `nuka run`, an older run's
      * are removed. `adHocDays`: a record no run owns (`nuka do`,
-     * `recordStep`, a live session's own `do`, a run that stopped before
-     * writing a scenario record) is removed once it is older than this
-     * many days, since `nuka do --use` and `nuka harvest` read those
-     * across days by design. Neither has an "off" value: a project that
+     * a live session's own `do`, a run that stopped before writing a
+     * scenario record) is removed once it is older than this many days,
+     * since `nuka do --use` reads those across days by design. Neither has an "off" value: a project that
      * wants more history raises the number, and the measurement that
      * motivated the defaults (one heavy suite reached 19 GB in four days
      * with nothing removed) is why "keep everything" is not a setting.

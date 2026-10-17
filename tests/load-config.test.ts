@@ -173,8 +173,8 @@ describe("loadConfig", () => {
 
   // A loader registered on every call and never taken off the chain makes
   // each later call walk every loader the earlier calls left behind, which
-  // is how this once regressed. recordStep loads config once per step in
-  // one process.
+  // is how this once regressed. One process loads config once per command,
+  // and a test suite runs many commands in one process.
   // The bound is the measured shape of that growth (the last window several
   // times the first), with a few milliseconds of slack so a flat run's
   // sub-millisecond samples still pass.

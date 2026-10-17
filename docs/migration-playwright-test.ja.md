@@ -127,64 +127,8 @@ export default defineStep({
 `from` はどのキャプチャも届かなかったキーを埋めるものです。
 
 これは `use` が必要とするものでもあります。
-`nuka do --use <record-id>` と、`recordStep` 自身の `use` オプション(後述)は、どちらも先行する step record の結果から step の `from` キーを埋めます。
+`nuka do --use <record-id>` は、先行する step record の結果から step の `from` キーを埋めます。
 上流の step を名指す `from` エントリを持たない step には `use` が埋めるものが何もなく、黙って無視されるのではなく拒否されます。
-
-## Playwright の実行を record に変える: `recordStep`
-
-実装を共有するだけでは record は生まれません。
-Playwright の run が残すのは Playwright 自身の成果物だけで、step record は残りません。
-step record を書くのは executor であり、その home にはそれがないからです。
-既存のスイートは、実装のすべての行を共有していてもなお、harvest できるものを何も残さないことがあります。
-
-`recordStep` は nukadoko 自身から export されており、この隙間を閉じます。
-この形はいまのところ nukadoko 自身のテストに対してのみ動いており、本物の Playwright Test スイートに対してはまだ動いていません。
-`request` だけでなく注入された `page` にも、すでに対応しています。
-fixture が browser に手を伸ばす step が拒否されるのは、呼び出しが `page` を渡さないときだけです。
-`rootDir` は、`nuka do`/`nuka run` にとっての `nukadoko.config.ts` と `.nukadoko/` が住むのと同じプロジェクトルートです。
-Playwright Test の spec の中では、たいてい `process.cwd()` がそれに当たります。
-
-```ts
-const opened = await recordStep(
-  openCartStep, {}, { name: "open-cart", rootDir, request },
-);
-const added = await recordStep(
-  addItemStep, { sku }, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
-);
-```
-
-**次の呼び出しへ渡すのは record の id であり、返ってきた値ではありません。**
-spec は直前の結果を変数に保持して次へ渡すのが自然な書き方です。
-けれどもそう書くと連鎖は何も記録されません、実際には連鎖していないからです。
-連鎖したと言う手段が `use` であり、意味は `nuka do --use` とまったく同じです。
-`use` を省くと、そのキーは呼び出し側が渡したものとして読まれます。
-すると `nuka harvest` が書く下書きにはその実行自身の id がそのまま載り、それをまだ覚えているサーバでは通り、新しいサーバでは失敗します。
-その失敗は原因となった実行からずっと後になって現れるので、最初から正しくしておく価値があります。
-
-step は spec 自身の `request` に対して実行され、そのスキーマは強制され、step record は `nuka do` の record と同じ場所に置かれます。
-だから、チームがすでに実行しているスイートが record の供給源になり、そこにすでにコード化されている道のりは `nuka harvest` を通じて下書きになります: 書き直すのではなく実行することによる移行です。
-
-3 つの性質が、それによって record の意味がぼやけてしまうのを防ぎます。
-record は `kind: "external"` を記し、これは実行がどう起きたかについて `do` と `run` に並ぶ 3 つ目の答えなので、人が手で打ったものとして読まれることはありません。
-`harvest` はそれを受け入れますが、すでに feature を持つ `run` の record を拒否し続けます。
-注入された request context は、他のどの request と同じログと redact を受けるためにラップされますが、破棄されることは一切ありません。
-別の所有者が開けたものを閉じるのは、2 回目の呼び出しで初めて表に出る不具合だからです。
-そして、fixture が browser に手を伸ばす step は、呼び出しが `page` も渡さない限り、record が存在するより前に拒否されます。
-どちらの場合も、この経路が自分から browser を起動することはありません。
-
-4 つの制限が、`recordStep` を `nuka do` と分けています。
-`use` は、同じプロセスが先に `recordStep` で実行した step に対してだけ解決されます。
-step の名前はその呼び出しの `name` オプションからだけ得られるので、`nuka do` や別のプロセスが書いた record は拒否され、拒否はそのことを述べます。
-`config.fixtures` のエントリを必要とする step は、record が存在するより前に常に拒否されます。
-ここで組み立てられるのは組み込みの fixture だけだからです。
-environment は選択されません。
-record は `environment: "default"` と `session: null` を記し、どの environment の read-only policy も強制されないので、`mutates: true` を宣言した step は、`nuka do` なら拒否される場所でも実行されます。
-そして version プローブは走らないので、record は `target_version` を持ちません。
-
-それでも渡れないままなのが run サマリです。
-run サマリは `nuka run` とその scenario record から組み立てられ、external な record はそのどちらでもありません。
-このツールが保証するのは自分自身が駆動した実行についてであり、自分が駆動しなかった実行については、誰かの言葉を受け取ることしかできません。
-だから external な record は、`do` の record とちょうど同じ意味で作業記録です: scenario が harvest される素材であり、決して evidence ではありません。
 
 ## 1 つのリポジトリに 2 つの木
 
@@ -234,8 +178,3 @@ nukadoko はプロジェクト自身の Playwright を使うので、コピー�
 feature ファイルと step ファイルを削除すれば、Playwright のスイートは無傷のままです。
 これは「共有するのは runner ではなく実装」で述べたのと同じ約束です。
 使っているものが nukadoko を一度も import していないからです。
-
-戻るときに気に留めておくべき唯一の例外が `recordStep` です。
-これを spec ファイルから直接呼んでいる場合、そのファイルには `import { recordStep } from "nukadoko"` という行が実際に書かれています。
-そのスイート自身の実行を record に変えるためにその呼び出しを足していたなら、それを取り除くことも同じ戻り道の一部です。
-feature ファイルと step ファイルと一緒にその呼び出し箇所も削除すれば、nukadoko を知っていたものは何も残りません。

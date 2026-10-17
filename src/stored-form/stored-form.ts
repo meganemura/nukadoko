@@ -2,8 +2,8 @@
 // stored in a record (docs/spec.md "Records"). Records are JSON, so this is
 // what JSON.stringify writes and JSON.parse reads back, with one addition:
 // a bigint becomes its decimal string, because JSON has no bigint and
-// JSON.stringify throws on one. Redaction, harvest's read-back comparison,
-// and explore's printed scenario all work on this form, so it is defined
+// JSON.stringify throws on one. Redaction and explore's printed scenario
+// (with its read-back comparison) both work on this form, so it is defined
 // once.
 //
 // A leaf: secrets sits below records in the layer order and redacts this

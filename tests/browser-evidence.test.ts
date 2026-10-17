@@ -7,7 +7,7 @@ import path from "node:path";
 import { chromium, type Browser } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
-import { attachExternalPageEvidence, launchBrowserWithTracing } from "../src/context/browser-evidence.js";
+import { launchBrowserWithTracing } from "../src/context/browser-evidence.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { createHttpLogFailedCollector } from "../src/context/http-log-failed.js";
 import { createHttpOmittedCollector } from "../src/context/http-omitted.js";
@@ -731,97 +731,4 @@ describe("launchBrowserWithTracing: a throw after launch closes the browser", ()
     await expect(handle.page.evaluate(() => 1 + 1)).resolves.toBe(2);
     await handle.finalize();
   });
-});
-
-// Responsibility: `attachExternalPageEvidence`'s own contract, tested
-// directly rather than only through src/external/record-step.ts — a
-// `BrowserContext#listenerCount` reading of 0 after `dispose()` cannot tell
-// "this handle's own listener was removed" apart from "this handle never
-// attached one in the first place"; a second real event landing on the same
-// collector instance can.
-describe("attachExternalPageEvidence", () => {
-  it.skipIf(!chromiumAvailable)(
-    "filters a plain console.log the same way the launched path does, and stops recording console errors after dispose()",
-    async () => {
-      const browser = await chromium.launch();
-      const context = await browser.newContext();
-      const page = await context.newPage();
-      try {
-        const observed = createObservedCollector();
-        const pageEvents = createPageEventsCollector();
-        const handle = attachExternalPageEvidence(page, {
-          observed,
-          pageEvents,
-          logPath: () => path.join(os.tmpdir(), "nukadoko-external-page-http.jsonl"),
-          secrets: [],
-          httpLogFailed: createHttpLogFailedCollector(),
-        });
-
-        const firstConsoleSeen = context.waitForEvent("console", {
-          predicate: (msg) => msg.type() === "error",
-          timeout: 10_000,
-        });
-        // `onConsole` here is a separate closure from the launched path's
-        // own console handler (createStepContext / ctx.page(): console
-        // filtering, above) — the two duplicate the same filter, so this
-        // adopted-page path needs its own proof that a routine log never
-        // reaches page_events.
-        await page.setContent(`<script>console.log("noise")</script><script>console.error("first")</script>`);
-        await firstConsoleSeen;
-        expect(pageEvents.snapshot()?.console_errors).toHaveLength(1);
-        expect(pageEvents.snapshot()?.console_errors?.[0]?.text).toBe("first");
-
-        handle.dispose();
-
-        const secondConsoleSeen = context.waitForEvent("console", {
-          predicate: (msg) => msg.type() === "error",
-          timeout: 10_000,
-        });
-        await page.setContent(`<script>console.error("second")</script>`);
-        // Waiting for the *context's own* event (not this handle's
-        // collector) is what makes this deterministic: it proves the second
-        // error really fired, so the collector's own count staying at 1 is
-        // evidence dispose() actually removed the listener, not merely that
-        // nothing happened yet.
-        await secondConsoleSeen;
-        expect(pageEvents.snapshot()?.console_errors).toHaveLength(1);
-      } finally {
-        await context.close();
-        await browser.close();
-      }
-    },
-  );
-
-  it.skipIf(!chromiumAvailable)(
-    "dispose() a second time does not throw and removes nothing further",
-    async () => {
-      const browser = await chromium.launch();
-      const context = await browser.newContext();
-      const page = await context.newPage();
-      try {
-        const observed = createObservedCollector();
-        const pageEvents = createPageEventsCollector();
-        const handle = attachExternalPageEvidence(page, {
-          observed,
-          pageEvents,
-          logPath: () => path.join(os.tmpdir(), "nukadoko-external-page-http.jsonl"),
-          secrets: [],
-          httpLogFailed: createHttpLogFailedCollector(),
-        });
-
-        handle.dispose();
-        expect(() => handle.dispose()).not.toThrow();
-
-        const listenerCount = (event: string): number =>
-          (context as unknown as { listenerCount(event: string): number }).listenerCount(event);
-        expect(listenerCount("request")).toBe(0);
-        expect(listenerCount("console")).toBe(0);
-        expect(listenerCount("weberror")).toBe(0);
-        expect(listenerCount("requestfailed")).toBe(0);
-      } finally {
-        await context.close();
-        await browser.close();
-      }
-    },
-  );
 });

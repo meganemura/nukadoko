@@ -25,7 +25,6 @@ Exploring:
 
 - `nuka do <name>`: execute one typed step under its contract; step record on stdout
 - `nuka session`: list, clear, start, or stop sessions
-- `nuka harvest <step-record-ids..>`: draft a feature from `do` record ids
 - `nuka explore <file> [--json]`: run a model or a relation against request-only steps; prints the shortest failing scenario, or one JSON object with `--json`
 
 Upkeep:

@@ -21,12 +21,7 @@ import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import type { StorageState } from "../session/storage-state.js";
-import {
-  attachExternalPageEvidence,
-  launchBrowserWithTracing,
-  type BrowserEvidenceHandle,
-  type ExternalPageEvidenceHandle,
-} from "./browser-evidence.js";
+import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
 import { createCallsCollector } from "./calls.js";
 import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
@@ -313,35 +308,6 @@ import { createUsedCollector } from "./used.js";
 // still calls `buildStepFixtures` once per step, and the second step's own
 // call reaches the second branch exactly as a step's own direct
 // `ctx.page()` call used to.
-//
-// `CreateStepContextOptions.request` is added now: an external driver
-// (src/external/record-step.ts) runs a typed step from inside a Playwright
-// Test spec, which already has its own `request` fixture open and its own
-// teardown that will close it — `ctx.page()`'s lazy-launch branches above
-// stay the only path for a browser (out of scope for that driver so far),
-// but `ctx.request()` needed a second path that takes an already-open
-// context instead of opening one of its own. `requestContextOwnedHere`
-// (below) is the flag that keeps the two paths from colliding at teardown:
-// `dispose()` closes a request context this module opened itself, never one
-// handed in from outside.
-//
-// `CreateStepContextOptions.page` closes that "out of scope so far" gap:
-// the same external driver's own Playwright Test spec typically also has a
-// `page` fixture already open, with its own teardown that will close it.
-// `context` is deliberately not a second option next to it — a `page`
-// always belongs to exactly one context (`page.context()`), so accepting
-// both would only create room for the two to disagree; `ctx.page()`'s own
-// branch for this option derives the context from `page` alone
-// (browser-evidence.ts's `attachExternalPageEvidence`). That branch never
-// opens a trace chunk and never takes a screenshot — the calling spec
-// already owns both for this exact `page` — but it does attach the same
-// `observed`/`pageEvents` listeners `launchBrowserWithTracing` attaches for
-// a browser this module launches itself, and removes exactly those on
-// `dispose()`, the discipline `options.request` already keeps for closing:
-// never touch what this module did not open, but the ownership boundary is
-// listener attachment here, not context closing, since a listener left
-// running past this handle's own lifetime would leak into whatever else the
-// caller goes on to do with `page.context()`.
 
 export interface EvidenceResult {
   trace?: string;
@@ -548,33 +514,6 @@ export interface CreateStepContextOptions {
    * when there is nothing secret to log. Never exposed on `ctx` — only
    * `wrapRequestContextWithLogging` (http-log.ts) sees it. */
   secrets?: SecretSet;
-  /** An already-open Playwright `APIRequestContext` to hand back from
-   * `ctx.request()` instead of lazily launching a fresh one — the "take
-   * what's already running" path an external driver (src/external/
-   * record-step.ts) needs: a Playwright Test spec's own `request` fixture
-   * is already open and owned by that spec's own teardown, so this module
-   * must read and log through it without ever closing it itself. `undefined`
-   * (the default) keeps every existing caller's lazy-launch behavior
-   * unchanged — `nuka do`/`nuka run` never set this. Still wrapped through
-   * `wrapRequestContextWithLogging` the same as a lazily-launched one, so
-   * http.jsonl and `observed` work identically either way; only `dispose`
-   * (below) treats the two differently. */
-  request?: APIRequestContext;
-  /** An already-open Playwright `Page` to hand back from `ctx.page()`
-   * instead of lazily launching a browser of this module's own — the same
-   * "take what's already running" path `request` above is, applied to a
-   * page (this file's own header). `context` is deliberately not a
-   * separate option: `ctx.page()` derives it from `page.context()`, since a
-   * `page` always belongs to exactly one context and accepting both would
-   * only create room for them to disagree. `undefined` (the default) keeps
-   * every existing caller's lazy-launch behavior unchanged — `nuka do`/
-   * `nuka run` never set this. No trace chunk ever opens and no screenshot
-   * is ever taken for this `page` (this file's own header); `observed` and
-   * `pageEvents` still tally its traffic, through listeners this module
-   * attaches on first `ctx.page()` call and removes on `dispose()` (never
-   * the page or its context itself, which stay open for whoever handed
-   * `page` in). */
-  page?: Page;
   /** A `--session`'s previously saved storageState, when one was loaded and
    * parsed successfully; `undefined` for a session's first-ever use or when
    * `--session` wasn't given. Restored into whichever of `ctx.page()` /
@@ -752,23 +691,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const scratch = createScratchCollector({ rootDir: options.rootDir ?? process.cwd() });
 
   let browserHandle: BrowserEvidenceHandle | undefined;
-  // Set only when `options.page` is adopted (below) — kept apart from
-  // `browserHandle` rather than reusing its type, since an adopted page
-  // never opens a trace chunk and `closeCurrentChunk`'s own `if
-  // (!browserHandle) return;` guard already needs `browserHandle` to stay
-  // `undefined` for that page for exactly that reason (this file's own
-  // header).
-  let externalPageHandle: ExternalPageEvidenceHandle | undefined;
   let requestContext: APIRequestContext | undefined;
   // In-flight setup shared by concurrent first calls; see `ctx.page()`.
   let pageSetup: Promise<Page> | undefined;
   let requestSetup: Promise<APIRequestContext> | undefined;
-  // True only once this module's own `playwrightRequest.newContext()` call
-  // below actually opens one — never for `options.request`, which some
-  // other caller already owns and must close itself (`CreateStepContextOptions.request`'s
-  // own doc comment, above). `dispose()` reads this to decide whether
-  // `requestContext.dispose()` is this module's call to make at all.
-  let requestContextOwnedHere = false;
 
   // Closes whatever trace chunk is open for the *current* boundary, writing
   // it to `boundaryDir` (this file's own header) — a no-op when nothing is
@@ -963,28 +889,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
     baseURL: config.baseURL,
     async page(): Promise<Page> {
-      if (options.page) {
-        // Adopt, never launch — same "take what's already running" branch
-        // `ctx.request()` below already has for `options.request`, applied
-        // to a page (this file's own header). No `pendingChunkTitle`/
-        // `chunkOpen` bookkeeping runs on this branch at all: an adopted
-        // page never opens a trace chunk, so `browserHandle` (the trace
-        // machinery's own state) stays `undefined` for this ctx's whole
-        // lifetime even though a page was used.
-        if (!externalPageHandle) {
-          externalPageHandle = attachExternalPageEvidence(options.page, {
-            observed,
-            pageEvents,
-            // Same getter/secrets pair the launched path already passes into
-            // `instrumentApiRequestContext`, so an adopted page's
-            // `page.request` / `context.request` is logged too.
-            logPath: () => path.join(boundaryDir, "http.jsonl"),
-            secrets,
-            httpLogFailed,
-          });
-        }
-        return externalPageHandle.page;
-      }
       // Shared by concurrent first calls (`Promise.all([ctx.page(), ctx.page()])`):
       // each would otherwise see `browserHandle` unset, launch its own browser,
       // and leak the one the other assigned first. Cleared once settled so a
@@ -1119,52 +1023,37 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
   async function setUpRequest(): Promise<APIRequestContext> {
     if (!requestContext) {
-      if (options.request) {
-        // Take what's already running, per this option's own doc comment
-        // above — no `newContext` call, so `requestContextOwnedHere` stays
-        // `false` and `dispose()` below leaves closing it to whoever
-        // opened it.
-        requestContext = wrapRequestContextWithLogging(
-          options.request,
-          () => path.join(boundaryDir, "http.jsonl"),
-          secrets,
-          observed,
-          httpLogFailed,
-        );
-      } else {
-        // No `baseURL` requirement here, matching `ctx.page()` above, which
-        // already passes `config.baseURL` through as `undefined` without
-        // complaint — a suite
-        // that only ever talks to absolute URLs across several hosts has no
-        // single baseURL to state, and forcing one into config would make
-        // config assert something untrue. If a step written against a
-        // relative path actually needs a baseURL and none was configured,
-        // Playwright's own `newContext`/fetch call fails on that URL; this
-        // module does not duplicate Playwright's URL-resolution rules to
-        // pre-empt that with its own error.
-        //
-        // `config.requestContext` is spread in
-        // first, `baseURL`/`storageState` after: schema.ts already rejects
-        // a `requestContext` that sets either key, so this ordering never
-        // actually resolves a real collision, only guards the invariant.
-        // Loaded here, not at module load: `playwright` is an optional
-        // peer (load-playwright.ts), and a step that never calls
-        // `ctx.request()` never reaches this line.
-        const { request: playwrightRequest } = await loadPlaywright(neededBy("ctx.request()"));
-        const raw = await playwrightRequest.newContext({
-          ...(config.requestContext ?? {}),
-          ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-          ...(storageState ? { storageState } : {}),
-        });
-        requestContextOwnedHere = true;
-        requestContext = wrapRequestContextWithLogging(
-          raw,
-          () => path.join(boundaryDir, "http.jsonl"),
-          secrets,
-          observed,
-          httpLogFailed,
-        );
-      }
+      // No `baseURL` requirement here, matching `ctx.page()` above, which
+      // already passes `config.baseURL` through as `undefined` without
+      // complaint — a suite
+      // that only ever talks to absolute URLs across several hosts has no
+      // single baseURL to state, and forcing one into config would make
+      // config assert something untrue. If a step written against a
+      // relative path actually needs a baseURL and none was configured,
+      // Playwright's own `newContext`/fetch call fails on that URL; this
+      // module does not duplicate Playwright's URL-resolution rules to
+      // pre-empt that with its own error.
+      //
+      // `config.requestContext` is spread in
+      // first, `baseURL`/`storageState` after: schema.ts already rejects
+      // a `requestContext` that sets either key, so this ordering never
+      // actually resolves a real collision, only guards the invariant.
+      // Loaded here, not at module load: `playwright` is an optional
+      // peer (load-playwright.ts), and a step that never calls
+      // `ctx.request()` never reaches this line.
+      const { request: playwrightRequest } = await loadPlaywright(neededBy("ctx.request()"));
+      const raw = await playwrightRequest.newContext({
+        ...(config.requestContext ?? {}),
+        ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+        ...(storageState ? { storageState } : {}),
+      });
+      requestContext = wrapRequestContextWithLogging(
+        raw,
+        () => path.join(boundaryDir, "http.jsonl"),
+        secrets,
+        observed,
+        httpLogFailed,
+      );
     }
     return requestContext;
   }
@@ -1183,15 +1072,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     const evidence: EvidenceResult = { screenshots: [] };
     let browserStorageState: StorageState | undefined;
     let requestStorageState: StorageState | undefined;
-
-    if (externalPageHandle) {
-      // Only removes the listeners this module attached (this file's own
-      // header) — the page and its context stay open, exactly as `options.
-      // request` stays open below: closing either would pull it out from
-      // under whoever handed it in (typically a Playwright Test spec's own
-      // fixture teardown, which has not run yet at this point).
-      externalPageHandle.dispose();
-    }
 
     if (browserHandle) {
       // Must run before finalize() below: finalize() closes the context,
@@ -1238,21 +1118,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         // step record (see DisposeResult's doc comment: `undefined` here means
         // "leave the existing session file untouched", never "clear it").
       }
-      // Only a request context this module itself opened (`playwrightRequest.
-      // newContext`, above) is this module's own to close — `options.request`
-      // stays open for whoever handed it in, per `CreateStepContextOptions.
-      // request`'s own doc comment. Closing it here would pull it out from
-      // under a Playwright Test spec's own `request` fixture mid-test, well
-      // before that spec's own teardown ever runs.
-      if (requestContextOwnedHere) {
-        try {
-          await requestContext.dispose();
-        } catch {
-          // As with browser teardown above, losing the request context's own
-          // dispose() is not a reason to lose the step record; http.jsonl is
-          // written incrementally as calls happen, so it is unaffected by a
-          // dispose() failure here.
-        }
+      try {
+        await requestContext.dispose();
+      } catch {
+        // As with browser teardown above, losing the request context's own
+        // dispose() is not a reason to lose the step record; http.jsonl is
+        // written incrementally as calls happen, so it is unaffected by a
+        // dispose() failure here.
       }
     }
 

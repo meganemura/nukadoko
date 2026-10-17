@@ -133,82 +133,10 @@ step that produces the value, paired with which of that step's own
 the unnamed form as `unnamed-capture`. `from` is what fills a key no
 capture reached.
 
-This is also what `use` needs. `nuka do --use <record-id>` and
-`recordStep`'s own `use` option (below) both fill a step's
+This is also what `use` needs. `nuka do --use <record-id>` fills a step's
 `from` keys from an earlier step record's result. A step with no `from`
 entry naming the upstream step has nothing for `use` to fill, and is
 refused rather than silently ignored.
-
-## Turning a Playwright run into records: `recordStep`
-
-Sharing the implementation alone does not produce a record. A Playwright
-run leaves Playwright's own artifacts and no step record, because a step
-record is written by an executor, and that home has none. An existing
-suite could share every line of its implementation and still leave
-nothing to harvest.
-
-`recordStep`, exported from `nukadoko` itself, closes that gap. Its
-shape has run so far against nukadoko's own tests, not yet against a
-real Playwright Test suite. It already supports an injected
-`page`, not only `request`, so a step whose fixtures reach for a browser
-resource is refused only when the call passes none. `rootDir` is the
-same project root `nukadoko.config.ts` and `.nukadoko/` live under for
-`nuka do`/`nuka run`; inside a Playwright Test spec that is usually
-`process.cwd()`.
-
-```ts
-const opened = await recordStep(
-  openCartStep, {}, { name: "open-cart", rootDir, request },
-);
-const added = await recordStep(
-  addItemStep, { sku }, { name: "add-item", rootDir, request, use: [opened.stepRecordId] },
-);
-```
-
-**Pass the record id to the next call, never the value it returned.** A
-spec holds the last result in a variable and hands it on, which is the
-natural way to write one and records no chain at all, because none
-happened. `use` is what says one did, and it means exactly what `nuka do
---use` means. Skip it and the key reads as something the caller supplied,
-so the harvested draft carries that run's own id, passes against a server
-that still remembers it, and fails against a fresh one. That failure
-arrives long after the run that caused it, which is why it is worth
-getting right the first time.
-
-The step runs against the spec's own `request`, its schemas are enforced,
-and a step record lands where `nuka do`'s records land. So the suite a
-team already runs becomes the source of records, and the journeys it
-already encodes become drafts through `nuka harvest`: migrating by
-running rather than by rewriting.
-
-Three properties keep that from blurring what a record means. The record
-says `kind: "external"`, a third answer to how an execution came about
-alongside `do` and `run`, so it cannot be read as something a person
-typed; `harvest` accepts it and goes on refusing a `run` record, which
-already has a feature. The injected request context is wrapped for the
-same logging and redaction any other one gets, and it is never disposed,
-since closing what another owner opened is a fault that only appears on
-the second call. And a step whose fixtures reach for a browser is refused
-before any record exists unless the call also passes a `page`; either
-way, this path never launches a browser of its own.
-
-Four limits set `recordStep` apart from `nuka do`. `use` resolves only
-against a step this same process ran through `recordStep` earlier: the
-step's name comes from that call's `name` option and from nowhere else, so
-a record `nuka do` or another process wrote is refused, and the refusal
-says so. A step that needs a `config.fixtures` entry is always refused
-before any record exists, since only the built-in fixtures are built here.
-No environment is selected: the record says `environment: "default"` and
-`session: null`, and no environment's read-only policy is enforced, so a
-step declaring `mutates: true` runs even where `nuka do` would refuse it.
-And no version probe runs, so the record carries no `target_version`.
-
-What still does not cross is the run summary. It is built from a `nuka
-run` and its scenario records, and an external record is neither. This
-tool's guarantee is about executions it drove itself, and one
-it did not drive is one it can only take somebody's word for. So an
-external record is a working record in exactly the sense a `do` record
-is: the material a scenario gets harvested from, never the evidence.
 
 ## Both trees, one repository
 
@@ -270,11 +198,3 @@ existing suite does.
 Delete the feature files and the step files, and the Playwright suite is
 untouched, the same promise "Share the implementation, not the runner"
 states above: nothing it uses ever imported nukadoko.
-
-`recordStep` is the one exception to notice on the way out.
-A spec file that calls it directly has
-`import { recordStep } from "nukadoko"` written into it, so
-if you added those calls to turn that suite's own runs into records,
-removing them is part of the same reversal: delete the call sites along
-with the feature files and the step files, and nothing is left that ever
-knew nukadoko existed.

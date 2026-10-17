@@ -29,31 +29,4 @@ and a step file named like a spec collides on pattern with it
 
 That is what makes this door reversible: delete the feature files and the
 step files, and the suite is untouched, because nothing it uses ever
-imported nukadoko. `recordStep` is the one exception to keep
-in mind on the way out. Calling it directly from inside a spec file, to
-turn that suite's own runs into step records `nuka harvest` can draft
-from, puts a real `import ... from "nukadoko"` in that spec file, so
-removing those call sites is part of the same reversal.
-
-`use` on `recordStep` hides a trap. Pass the previous call's
-`stepRecordId` through `use`, not the value it returned. The receiving step
-must already declare its own `from` entry naming the upstream step; `use`
-only fills it in. Skip `use` and hold that value in a variable instead, and
-no chain gets recorded at all. `nuka harvest` then bakes that single run's
-value, a cart id, for example, straight into the draft, with no record of
-where it came from. `nuka check` stays clean, and `nuka run` goes green,
-but that pass proves only that the server remembers one value, not that
-the steps chain.
-
-`use` also resolves only against a step this same process ran through
-`recordStep` earlier; a record `nuka do` or another process wrote is
-refused. `recordStep` has three more limits: a step that needs a
-`config.fixtures` entry is always refused, no environment is selected (the
-record says `environment: "default"`, and no read-only policy is enforced,
-so a mutating step runs), and no version probe runs (no `target_version`).
-
-A measured optional or defaulted arg that no capture, chain, or
-docstring/table carries is a different comment: the draft names the key
-and the value, and `nuka check` stays silent because the schema allows
-the key to be absent. A value the schema would produce on its own is
-left unnamed. The draft's keywords and names stay blank.
+imported nukadoko.

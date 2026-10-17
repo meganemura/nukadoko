@@ -68,14 +68,6 @@ export type { Draw, Model, ModelCommand, Relation, RelationSource, RelationStep,
 // mark, and the condition that would let it be dropped.
 export { experimental_callWebmcpTool } from "./webmcp/call-tool.js";
 export type { WebmcpToolDescriptor } from "./webmcp/list-tools.js";
-export {
-  recordStep,
-  UnsupportedExternalFixtureError,
-} from "./external/record-step.js";
-export type {
-  RecordStepOptions,
-  StepExecution,
-} from "./external/record-step.js";
 // `z` itself, not merely its type: `vocabulary.ts` calls
 // `z.toJSONSchema(entry.step.args)` and `strict-args.ts` reads a schema's
 // own `.type` property to decide whether to strictify it, both against
