@@ -2,7 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineModel, defineStep, modelCommand } from "../src/index.js";
+import { experimental_defineModel, defineStep, experimental_modelCommand } from "../src/index.js";
 import { exploreModel, type OpenSequence, type PlannedStep } from "../src/explore/index.js";
 
 // Responsibility: `exploreModel` finds a failing sequence from a seed,
@@ -31,14 +31,14 @@ const countNumbers = defineStep({
   },
 });
 
-const setModel = defineModel(() => new Set<number>()).commands({
-  "add-number": modelCommand(addNumber)({
+const setModel = experimental_defineModel(() => new Set<number>()).commands({
+  "add-number": experimental_modelCommand(addNumber)({
     args: (_state, draw) => ({ n: draw.pick([1, 2, 3, 4, 5]) }),
     pre: () => true,
     next: (state, args) => new Set([...state, args.n]),
     post: () => true,
   }),
-  "count-numbers": modelCommand(countNumbers)({
+  "count-numbers": experimental_modelCommand(countNumbers)({
     args: () => ({}),
     pre: () => true,
     next: (state) => state,
@@ -163,8 +163,8 @@ describe("exploreModel", () => {
   });
 
   it("shrinks a drawn value to the first item and no further", async () => {
-    const addOnly = defineModel(() => 0).commands({
-      "add-number": modelCommand(addNumber)({
+    const addOnly = experimental_defineModel(() => 0).commands({
+      "add-number": experimental_modelCommand(addNumber)({
         args: (_state, draw) => ({ n: draw.pick([3, 4, 5]) }),
         pre: () => true,
         next: (state) => state + 1,
@@ -233,8 +233,8 @@ describe("exploreModel", () => {
   });
 
   it("names the model callback that threw instead of running anything", async () => {
-    const broken = defineModel(() => 0).commands({
-      "count-numbers": modelCommand(countNumbers)({
+    const broken = experimental_defineModel(() => 0).commands({
+      "count-numbers": experimental_modelCommand(countNumbers)({
         args: () => {
           throw new Error("no args today");
         },
@@ -276,14 +276,14 @@ describe("exploreModel", () => {
 // nothing, and a count read before any add reports one. A run that first
 // fails on the third add can shrink to a sequence that starts with the
 // count, which fails too, but on the other command.
-const twoBugModel = defineModel(() => ({ adds: 0 })).commands({
-  "add-number": modelCommand(addNumber)({
+const twoBugModel = experimental_defineModel(() => ({ adds: 0 })).commands({
+  "add-number": experimental_modelCommand(addNumber)({
     args: (_state, draw) => ({ n: draw.pick([1, 2]) }),
     pre: () => true,
     next: (state) => ({ adds: state.adds + 1 }),
     post: (_state, _args, result) => Object.keys(result).length === 0,
   }),
-  "count-numbers": modelCommand(countNumbers)({
+  "count-numbers": experimental_modelCommand(countNumbers)({
     args: () => ({}),
     pre: () => true,
     next: (state) => state,

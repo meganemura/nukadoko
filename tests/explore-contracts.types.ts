@@ -1,4 +1,4 @@
-import { defineModel, defineRelation, defineStep, modelCommand, relationEntry, z } from "../src/index.js";
+import { experimental_defineModel, experimental_defineRelation, defineStep, experimental_modelCommand, experimental_relationEntry, z } from "../src/index.js";
 
 const add = defineStep({
   description: "add",
@@ -9,8 +9,8 @@ const add = defineStep({
   },
 });
 
-defineModel(() => ({ n: 0 })).commands({
-  add: modelCommand(add)({
+experimental_defineModel(() => ({ n: 0 })).commands({
+  add: experimental_modelCommand(add)({
     args: () => ({ title: "a" }),
     pre: (state) => state.n >= 0,
     next: (state, args) => ({ n: state.n + args.title.length }),
@@ -18,15 +18,15 @@ defineModel(() => ({ n: 0 })).commands({
   }),
 });
 
-defineRelation({
+experimental_defineRelation({
   name: "order",
-  source: [relationEntry(add, { title: "A" })],
-  follow: (source) => [relationEntry(add, { title: source[0].args.title })],
+  source: [experimental_relationEntry(add, { title: "A" })],
+  follow: (source) => [experimental_relationEntry(add, { title: source[0].args.title })],
   relate: (sourceResults, followResults) => sourceResults[0].id === followResults[0].id,
 });
 
-defineModel(() => ({ n: 0 })).commands({
-  add: modelCommand(add)({
+experimental_defineModel(() => ({ n: 0 })).commands({
+  add: experimental_modelCommand(add)({
     // @ts-expect-error title is a string on this step, so a number is not args
     args: () => ({ title: 1 }),
     pre: () => true,
@@ -35,10 +35,10 @@ defineModel(() => ({ n: 0 })).commands({
   }),
 });
 
-defineRelation({
+experimental_defineRelation({
   name: "bad args",
   source: [
-    relationEntry(
+    experimental_relationEntry(
       add,
       // @ts-expect-error title is a string on this step, so a number is not args
       { title: 1 },

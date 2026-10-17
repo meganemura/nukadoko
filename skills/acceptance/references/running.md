@@ -24,9 +24,9 @@ anything executes. Among them: a step whose `from` key has no producing
 step earlier in that scenario, or has two of them competing. That case
 otherwise costs a whole browser session to discover, since the scenario
 looks correct until the consuming step actually runs. A default-exported
-`defineModel` or `defineRelation` is checked too. An unknown step name,
-and a step that needs a browser, are errors. Check does not run those
-steps. A step whose fixtures build `page`, `context`, or `request` in a
+`experimental_defineModel` or `experimental_defineRelation` is checked
+too. An unknown step name, and a step that needs a browser, are errors.
+Check does not run those steps. A step whose fixtures build `page`, `context`, or `request` in a
 project that has not installed `playwright` is `playwright-missing`, with
 the install line, so the run stops before it starts. A line in a configured env file that is not a blank, a comment, or
 a binding is `env-file-skipped-line`. Compat glue that

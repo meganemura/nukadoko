@@ -3,13 +3,17 @@
 When one scenario is not enough to say what you want checked: an order of
 operations that should never break the system, or two runs whose results
 should agree. A model generates the sequences, and a relation compares
-two runs. `nuka explore` runs either one and prints a scenario when it
-finds a failure. The feature file stays the set of sequences a person
-chose to keep.
+two runs. `nuka experimental explore` runs either one and prints a
+scenario when it finds a failure. The feature file stays the set of
+sequences a person chose to keep.
+
+The command and the `experimental_` functions are experimental. Either
+can change or go in any release without a deprecation notice, so do not
+make a model the only check of something that has to keep passing.
 
 Use this only with steps that need `request` alone. A step that needs
-`page` or `context` is `explore-browser-step`, and `nuka explore` refuses
-to run it.
+`page` or `context` is `explore-browser-step`, and
+`nuka experimental explore` refuses to run it.
 
 ## Writing a model
 
@@ -17,18 +21,18 @@ A model is the state you expect the system to be in, and one command per
 step. Put the file anywhere under `featuresDir`, with a default export:
 
 ```ts
-import { defineModel, modelCommand } from "nukadoko";
+import { experimental_defineModel, experimental_modelCommand } from "nukadoko";
 import addTodo from "../steps/add-todo.ts";
 import completeTodo from "../steps/complete-todo.ts";
 
-export default defineModel(() => ({ open: [] as string[] })).commands({
-  "add-todo": modelCommand(addTodo)({
+export default experimental_defineModel(() => ({ open: [] as string[] })).commands({
+  "add-todo": experimental_modelCommand(addTodo)({
     args: (_state, draw) => ({ title: draw.pick(["milk", "eggs", "bread"]) }),
     pre: () => true,
     next: (state, args) => ({ open: [...state.open, args.title] }),
     post: (_state, args, result) => result.title === args.title && !result.done,
   }),
-  "complete-todo": modelCommand(completeTodo)({
+  "complete-todo": experimental_modelCommand(completeTodo)({
     args: (state, draw) => ({ title: draw.pick(state.open) }),
     pre: (state) => state.open.length > 0,
     next: (state, args) => ({ open: state.open.filter((title) => title !== args.title) }),
@@ -60,7 +64,8 @@ export default defineModel(() => ({ open: [] as string[] })).commands({
 The target is not reset between sequences. When the model's initial state
 assumes an empty system, give the steps a scenario-scope fixture that
 resets it (`references/fixtures.md`); each sequence opens it again. A
-process-scope fixture is set up once for the whole `nuka explore` call.
+process-scope fixture is set up once for the whole
+`nuka experimental explore` call.
 
 ## Writing a relation
 
@@ -68,29 +73,29 @@ A relation runs one declared sequence, then a second one that `follow`
 builds from it, and `relate` compares the two lists of results:
 
 ```ts
-import { defineRelation, relationEntry } from "nukadoko";
+import { experimental_defineRelation, experimental_relationEntry } from "nukadoko";
 import addTodo from "../steps/add-todo.ts";
 import listIncludes from "../steps/todo-list-includes.ts";
 
-export default defineRelation({
+export default experimental_defineRelation({
   name: "add then listed",
-  source: [relationEntry(addTodo, { title: "milk" })],
-  follow: () => [relationEntry(listIncludes, { title: "milk" })],
+  source: [experimental_relationEntry(addTodo, { title: "milk" })],
+  follow: () => [experimental_relationEntry(listIncludes, { title: "milk" })],
   relate: (sourceResults, followResults) => sourceResults[0].title.length > 0 && followResults[0].found,
 });
 ```
 
 A declared source has no seed and does not shrink. Write it as the
-smallest case that shows the relation. To let `nuka explore` find the
-case, generate the source instead: a function of `draw` and `length`, or
+smallest case that shows the relation. To let `nuka experimental explore`
+find the case, generate the source instead: a function of `draw` and `length`, or
 a model whose commands pick the steps. It then takes `--seed`, `--runs`,
 and `--length`, and a failing source is shrunk:
 
 ```ts
-export default defineRelation({
+export default experimental_defineRelation({
   name: "adding in reverse order reaches the same total",
   source: (draw, length) =>
-    Array.from({ length: draw.int(1, length) }, () => relationEntry(addNumber, { n: draw.int(0, 9) })),
+    Array.from({ length: draw.int(1, length) }, () => experimental_relationEntry(addNumber, { n: draw.int(0, 9) })),
   follow: (source) => [...source].reverse(),
   relate: (source, follow) => source.at(-1)!.total === follow.at(-1)!.total,
 });
@@ -105,8 +110,8 @@ when it runs.
 1. `nuka check`. Fix every `explore-unknown-step`,
    `explore-browser-step`, `explore-empty-model`, and
    `explore-unseeded-random` finding first.
-2. `nuka explore <file>`. For a model, or a relation with a generated
-   source, `--runs` and `--length` set how much it tries. The seed is
+2. `nuka experimental explore <file>`. For a model, or a relation with a
+   generated source, `--runs` and `--length` set how much it tries. The seed is
    printed either way.
 3. A pass prints one line on stderr and nothing on stdout. Add `--json`
    to get one object on stdout instead, on a pass too: the verdict, the

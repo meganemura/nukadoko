@@ -3854,26 +3854,35 @@ an unbound step, a stale fixture.
 deleting a step, or moving a feature: decisions with an author behind
 them.
 
-## Models and relations
+## Models and relations (experimental)
 
-A model and a relation sit next to the step vocabulary. They are declarations.
-`nuka check` reads them. It does not run them, and it does not call `initial`,
-`args`, `pre`, `next`, `post`, `follow`, or `relate`. `nuka explore` runs them
-(see "Exploring a model or a relation").
+This section and the next are experimental. `nuka experimental explore`,
+the four `experimental_` functions, and the `explore-*` findings can change
+shape or go in any release without a deprecation notice. The command sits
+under `experimental` and each function name carries the prefix, so the
+word is at every call site.
 
-`defineModel(initial).commands({ ... })` takes the initial state, then one
-command per step basename. A command is `modelCommand(step)({ args, pre, next,
-post })`. `args` and `post` are typed against that step's args and result.
-`args` receives the state and a `draw`, the one source of variation.
-`next` updates the model from the state and the args. The basename is the
-step file's name, without its extension. The two calls exist so the state
-type is known before those callbacks are checked. One object literal widens
-`step` to `Step` and the check becomes `unknown`.
+A model and a relation sit next to the step vocabulary. They are
+declarations. `nuka check` reads them. It does not run them, and it does
+not call `initial`, `args`, `pre`, `next`, `post`, `follow`, or `relate`.
+`nuka experimental explore` runs them (see "Exploring a model or a
+relation").
 
-`defineRelation` takes a name, a `source` sequence of `relationEntry(step,
-args)`, a `follow` function that returns the second sequence, and `relate`
-over the two runs' results. `relationEntry` checks `args` against that step.
-`follow` and `relate` are stored. Check reads `source` only, because the
+`experimental_defineModel(initial).commands({ ... })` takes the initial
+state, then one command per step basename. A command is
+`experimental_modelCommand(step)({ args, pre, next, post })`. `args` and
+`post` are typed against that step's args and result. `args` receives the
+state and a `draw`, the one source of variation. `next` updates the model
+from the state and the args. The basename is the step file's name, without
+its extension. The two calls exist so the state type is known before those
+callbacks are checked. One object literal widens `step` to `Step` and the
+check becomes `unknown`.
+
+`experimental_defineRelation` takes a name, a `source` sequence of
+`experimental_relationEntry(step, args)`, a `follow` function that returns
+the second sequence, and `relate` over the two runs' results.
+`experimental_relationEntry` checks `args` against that step. `follow` and
+`relate` are stored. Check reads `source` only, because the
 second sequence is the result of calling `follow`.
 
 `source` can instead be generated. A function `(draw, length) => [...]`
@@ -3915,10 +3924,11 @@ of them, because a check that guesses is worse than none.
 
 ### Exploring a model or a relation
 
-`nuka explore <file>` runs one model or one relation. The file is one that
-discovery found under `featuresDir`. Before any step runs, the command makes
-the refusals `nuka check` and `nuka do` make for those steps: any of the
-four `explore-*` findings above, a fixture problem, and an unknown `--env`. Nothing runs when one of them applies.
+`nuka experimental explore <file>` runs one model or one relation. The file
+is one that discovery found under `featuresDir`. Before any step runs, the
+command makes the refusals `nuka check` and `nuka do` make for those steps:
+any of the four `explore-*` findings above, a fixture problem, and an
+unknown `--env`. Nothing runs when one of them applies.
 
 A model run builds each sequence from the model alone. From the state, it
 takes the commands whose `pre` holds, picks one, calls `args(state, draw)`,
@@ -4102,20 +4112,6 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--sess
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
-nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
-                              run one model or relation file found under
-                              featuresDir, request-only steps only, with no
-                              step record. A model runs --runs sequences
-                              (default 20) of at most --length steps (default
-                              10) from one --seed, and shrinks the first
-                              failure; so does a relation whose source is
-                              generated. On a failure stdout gets the scenario to
-                              paste (two for a relation) and the command that
-                              reruns it; stdout is empty on a pass. --json
-                              prints one object instead, on a pass too: the
-                              verdict, the seed and counts, and on a failure
-                              each step's result, the failure, and the
-                              scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout
@@ -4370,6 +4366,20 @@ nuka experimental webmcp-tools <url> [--json]
                               nested one command under `experimental` on
                               purpose, so the word is unavoidable at the call
                               site
+nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
+                              run one model or relation file found under
+                              featuresDir, request-only steps only, with no
+                              step record. A model runs --runs sequences
+                              (default 20) of at most --length steps (default
+                              10) from one --seed, and shrinks the first
+                              failure; so does a relation whose source is
+                              generated. On a failure stdout gets the scenario to
+                              paste (two for a relation) and the command that
+                              reruns it; stdout is empty on a pass. --json
+                              prints one object instead, on a pass too: the
+                              verdict, the seed and counts, and on a failure
+                              each step's result, the failure, and the
+                              scenario. Exits 1 on a failure or a refusal
 ```
 
 A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do` and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
@@ -4563,10 +4573,10 @@ would be running against glue it never actually read.
   Markdown files compile into the same pickles, bind the same `defineStep`
   vocabulary, and fail `nuka check` on a sentence no pattern matches (see
   "Markdown oaths"). This is the oath surface, not Varar's engine.
-- **M14 (exploring)**: `nuka explore`, which runs a model or a relation
-  against request-only steps, shrinks a model's failure with a seeded,
-  replayable list of choices, and prints the scenario to paste (see
-  "Exploring a model or a relation"). The feature file stays the set of
+- **M14 (exploring, experimental)**: `nuka experimental explore`, which
+  runs a model or a relation against request-only steps, shrinks a
+  model's failure with a seeded, replayable list of choices, and prints
+  the scenario to paste (see "Exploring a model or a relation"). The feature file stays the set of
   sequences a person chose to keep.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   tag-expression filtering, cucumber-js adapter if a real suite needs

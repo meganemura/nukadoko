@@ -7,7 +7,7 @@ import { createTodoApp } from "../examples/todo/app/server.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka explore` against the todo example and its real
+// Responsibility: `nuka experimental explore` against the todo example and its real
 // app. The v1 app passes the model and the relation. The v2 app renames
 // the field add-todo reads, so the model shrinks to one line and the
 // relation prints both scenarios.
@@ -26,18 +26,18 @@ function startTodoApp(v2: boolean): Promise<{ server: Server; baseURL: string }>
 // can never be completed. The shortest sequence that shows it adds
 // "bread" and completes it.
 const WRONG_MODEL = [
-  'import { defineModel, modelCommand } from "nukadoko";',
+  'import { experimental_defineModel, experimental_modelCommand } from "nukadoko";',
   'import addTodo from "../steps/add-todo.js";',
   'import completeTodo from "../steps/complete-todo.js";',
   "",
-  "export default defineModel(() => ({ open: [] as string[] })).commands({",
-  '  "add-todo": modelCommand(addTodo)({',
+  "export default experimental_defineModel(() => ({ open: [] as string[] })).commands({",
+  '  "add-todo": experimental_modelCommand(addTodo)({',
   '    args: (_state, draw) => ({ title: draw.pick(["milk", "eggs", "bread"]) }),',
   "    pre: () => true,",
   "    next: (state, args) => ({ open: [...state.open, args.title] }),",
   "    post: () => true,",
   "  }),",
-  '  "complete-todo": modelCommand(completeTodo)({',
+  '  "complete-todo": experimental_modelCommand(completeTodo)({',
   "    args: (state, draw) => ({ title: draw.pick(state.open) }),",
   "    pre: (state) => state.open.length > 0,",
   "    next: (state, args) => ({ open: state.open.filter((title) => title !== args.title) }),",
@@ -47,7 +47,7 @@ const WRONG_MODEL = [
   "",
 ].join("\n");
 
-describe("nuka explore", () => {
+describe("nuka experimental explore", () => {
   let server: Server | undefined;
   let rootDir: string;
   let requests = 0;
@@ -84,7 +84,7 @@ describe("nuka explore", () => {
     });
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["explore", ...args], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["experimental", "explore", ...args], { rootDir, stdout, stderr });
     return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
   }
 
@@ -94,7 +94,7 @@ describe("nuka explore", () => {
       exitCode: 0,
       stdout: "",
       stderr:
-        "Passed: 5 runs, 30 steps, seed 1. Rerun: nuka explore features/explore/add-model.ts --seed 1 --runs 5 --length 6\n",
+        "Passed: 5 runs, 30 steps, seed 1. Rerun: nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6\n",
     });
   });
 
@@ -103,7 +103,7 @@ describe("nuka explore", () => {
     expect(result).toEqual({
       exitCode: 1,
       stdout: [
-        "# nuka explore features/explore/add-model.ts --seed 1 --runs 5 --length 6",
+        "# nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6",
         "# Run 1 of 5 failed after 1 step. Shrunk to 1 step in 1 attempt.",
         "  Scenario: (name me)",
         "    # step 1 failed: returns validation failed: title: Invalid input: expected string, received undefined",
@@ -119,7 +119,7 @@ describe("nuka explore", () => {
     expect({ ...result, stdout: result.stdout.replace(/"id":"[0-9a-f-]+"/, '"id":"<id>"') }).toEqual({
       exitCode: 1,
       stdout: [
-        "# nuka explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8",
+        "# nuka experimental explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8",
         "# Run 1 of 5 failed after 7 steps. Shrunk to 2 steps in 13 attempts.",
         "  Scenario: (name me)",
         '    * a todo titled "bread" is added',
@@ -136,7 +136,7 @@ describe("nuka explore", () => {
     expect(result).toEqual({
       exitCode: 1,
       stdout: [
-        "# nuka explore features/explore/add-relation.ts",
+        "# nuka experimental explore features/explore/add-relation.ts",
         '# Relation "add then listed" failed in its source sequence.',
         '  Scenario: (name me) source of "add then listed"',
         "    # step 1 failed: returns validation failed: title: Invalid input: expected string, received undefined",
@@ -155,7 +155,7 @@ describe("nuka explore", () => {
     expect(result).toEqual({
       exitCode: 0,
       stdout: "",
-      stderr: 'Passed: relation "add then listed". Rerun: nuka explore features/explore/add-relation.ts\n',
+      stderr: 'Passed: relation "add then listed". Rerun: nuka experimental explore features/explore/add-relation.ts\n',
     });
   });
 
@@ -181,7 +181,7 @@ describe("nuka explore", () => {
     expect(result).toEqual({
       exitCode: 0,
       stdout: "",
-      stderr: "Passed: 1 run, 1 step, seed 2. Rerun: nuka explore 'features/explore/my model.ts' --seed 2 --runs 1 --length 1\n",
+      stderr: "Passed: 1 run, 1 step, seed 2. Rerun: nuka experimental explore 'features/explore/my model.ts' --seed 2 --runs 1 --length 1\n",
     });
   });
 
@@ -198,10 +198,10 @@ describe("nuka explore", () => {
         runs: 5,
         length: 6,
         steps: 30,
-        rerun: "nuka explore features/explore/add-model.ts --seed 1 --runs 5 --length 6",
+        rerun: "nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6",
       },
       stderr:
-        "Passed: 5 runs, 30 steps, seed 1. Rerun: nuka explore features/explore/add-model.ts --seed 1 --runs 5 --length 6\n",
+        "Passed: 5 runs, 30 steps, seed 1. Rerun: nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6\n",
     });
   });
 
@@ -222,7 +222,7 @@ describe("nuka explore", () => {
         seed: 1,
         runs: 5,
         length: 8,
-        rerun: "nuka explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8",
+        rerun: "nuka experimental explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8",
         run: 1,
         found_steps: 7,
         shrunk_steps: 2,
@@ -259,7 +259,7 @@ describe("nuka explore", () => {
         file: "features/explore/add-relation.ts",
         name: "add then listed",
         verdict: "failed",
-        rerun: "nuka explore features/explore/add-relation.ts",
+        rerun: "nuka experimental explore features/explore/add-relation.ts",
         failure: {
           sequence: "source",
           index: 0,
@@ -310,7 +310,7 @@ describe("nuka explore", () => {
     const tendBefore = await cli(["tend", "--json"]);
     const stateBefore = (await readdir(path.join(rootDir, ".nukadoko"), { recursive: true })).sort();
 
-    const explored = await cli(["explore", "features/explore/wrong-model.ts", "--seed", "1", "--runs", "5", "--length", "8", "--json"]);
+    const explored = await cli(["experimental", "explore", "features/explore/wrong-model.ts", "--seed", "1", "--runs", "5", "--length", "8", "--json"]);
     expect(JSON.parse(explored.stdout).verdict).toBe("failed");
 
     expect((await readdir(path.join(rootDir, ".nukadoko"), { recursive: true })).sort()).toEqual(stateBefore);
@@ -335,18 +335,18 @@ describe("nuka explore", () => {
       "",
     ].join("\n");
     const attachedModel = [
-      'import { defineModel, modelCommand } from "nukadoko";',
+      'import { experimental_defineModel, experimental_modelCommand } from "nukadoko";',
       'import addTodos from "../steps/add-todos-from-table.js";',
       'import addNote from "../steps/add-note.js";',
       "",
-      "export default defineModel(() => ({ tables: 0 })).commands({",
-      '  "add-todos-from-table": modelCommand(addTodos)({',
+      "export default experimental_defineModel(() => ({ tables: 0 })).commands({",
+      '  "add-todos-from-table": experimental_modelCommand(addTodos)({',
       '    args: (_state, draw) => ({ todos: draw.pick([[["pipe | in a cell"], ["back\\\\slash"]]]) }),',
       "    pre: () => true,",
       "    next: (state) => ({ tables: state.tables + 1 }),",
       "    post: () => true,",
       "  }),",
-      '  "add-note": modelCommand(addNote)({',
+      '  "add-note": experimental_modelCommand(addNote)({',
       "    args: (_state, draw) => ({ title: draw.pick([\"first line\\n\\\"\\\"\\\"\\nthird line\"]) }),",
       "    pre: () => true,",
       "    next: (state) => state,",
@@ -372,7 +372,7 @@ describe("nuka explore", () => {
       return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
     };
 
-    const explored = await cli(["explore", "features/explore/attached-model.ts", "--seed", "1", "--runs", "5", "--length", "4", "--json"]);
+    const explored = await cli(["experimental", "explore", "features/explore/attached-model.ts", "--seed", "1", "--runs", "5", "--length", "4", "--json"]);
     const json = JSON.parse(explored.stdout) as { scenario: string; steps: { step: string; args: unknown }[] };
     expect(json.scenario).toBe(
       [
@@ -415,6 +415,19 @@ describe("nuka explore", () => {
       stderr:
         "features/steps/add-todo.ts is not a model or a relation that discovery found under features. " +
         "Found: features/explore/add-model.ts, features/explore/add-relation.ts\n",
+    });
+  });
+});
+
+describe("nuka explore", () => {
+  it("runs nothing and names the experimental spelling", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["explore", "features/explore/add-model.ts", "--seed", "1"], { stdout, stderr });
+    expect({ exitCode, stdout: stdout.text(), stderr: stderr.text() }).toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n",
     });
   });
 });

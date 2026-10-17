@@ -334,7 +334,7 @@ Everything past the loop above, one line each:
 
 - [Wrong before it runs](#wrong-before-it-runs): what `nuka check` catches before anything executes, and running one step alone with `nuka do`.
 - [Markdown oaths](#markdown-oaths): the same steps behind sentences in a Markdown file instead of a `.feature`.
-- [Exploring a model](#exploring-a-model): `nuka explore` generates sequences of request-only steps and prints the shortest failing one.
+- [Exploring a model](#exploring-a-model): `nuka experimental explore` generates sequences of request-only steps and prints the shortest failing one.
 - [The compat door](#the-compat-door): bring an existing cucumber-js suite in by switching one import.
 - [Reports fill themselves](#reports-fill-themselves): the Allure and cucumber-messages emitters.
 - [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, and `--repeat`.
@@ -487,11 +487,13 @@ and what it leaves for later, is in
 ## Exploring a model
 
 A scenario is one sequence a person chose. A model says what any sequence
-of request-only steps should do, and `nuka explore` generates sequences
-from it:
+of request-only steps should do, and `nuka experimental explore` generates
+sequences from it. The command and the `experimental_` functions a model
+file imports are experimental: they can change or go in any release
+without a deprecation notice.
 
 ```
-nuka explore features/explore/add-model.ts --seed 1
+nuka experimental explore features/explore/add-model.ts --seed 1
 ```
 
 Each sequence is built from `draw.int` and `draw.pick` choices taken from
@@ -575,8 +577,8 @@ more of the roadmap has landed, not that the surface has frozen.
 
 Implemented and covered by tests: typed steps, step records, sessions,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
-emitters, the Markdown run summary, tending (`nuka tend`), models and
-relations (`nuka explore`), the
+emitters, the Markdown run summary, tending (`nuka tend`), experimental
+models and relations (`nuka experimental explore`), the
 MCP tool listing (`nuka experimental mcp-tools`), Varar-style Markdown
 oaths (a second front beside Gherkin; see [Markdown oaths](#markdown-oaths)), and two
 agent skills. Not implemented: an AI-assisted glue converter, and the rest

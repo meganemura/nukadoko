@@ -3301,16 +3301,20 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 直すということは、description を書くこと、step を削除すること、feature を移すことを意味します。
 どれも背後に書き手がいる判断です。
 
-## モデルと関係
+## モデルと関係(実験的)
+
+この節と次の節は実験的です。
+`nuka experimental explore`、4 つの `experimental_` 関数、`explore-*` の指摘は、どのリリースでも非推奨の告知なしに形が変わったりなくなったりすることがあります。
+コマンドは `experimental` の下にあり、各関数名は接頭辞を持つので、その語はすべての呼び出し箇所に現れます。
 
 model と relation は、step の語彙の隣に置く宣言です。
 `nuka check` はそれらを読みます。
 `initial`、`args`、`pre`、`next`、`post`、`follow`、`relate` は呼びません。
 step も実行しません。
-それらを実行するのは `nuka explore` です(「モデルまたは関係を探索する」を参照)。
+それらを実行するのは `nuka experimental explore` です(「モデルまたは関係を探索する」を参照)。
 
-`defineModel(initial).commands({ ... })` は、初期状態のあと、step の basename ごとに 1 つの command を取ります。
-command は `modelCommand(step)({ args, pre, next, post })` です。
+`experimental_defineModel(initial).commands({ ... })` は、初期状態のあと、step の basename ごとに 1 つの command を取ります。
+command は `experimental_modelCommand(step)({ args, pre, next, post })` です。
 `args` と `post` は、その step の args と result に対して型が付きます。
 `args` は状態と、唯一の変化の源である `draw` を受け取ります。
 `next` は、状態と args から model を更新します。
@@ -3318,8 +3322,8 @@ basename は、拡張子を除いた step ファイルの名前です。
 2 回に分かれているのは、callback を検査する前に状態の型が決まっている必要があるからです。
 1 つのオブジェクトリテラルにすると `step` が `Step` へ広がり、検査が `unknown` になります。
 
-`defineRelation` は、名前、`relationEntry(step, args)` の `source` 列、2 本目の列を返す `follow`、2 つの実行の result を比べる `relate` を取ります。
-`relationEntry` は、その step に対して `args` を検査します。
+`experimental_defineRelation` は、名前、`experimental_relationEntry(step, args)` の `source` 列、2 本目の列を返す `follow`、2 つの実行の result を比べる `relate` を取ります。
+`experimental_relationEntry` は、その step に対して `args` を検査します。
 `follow` と `relate` は保存されるだけです。
 check が読むのは `source` だけです。
 2 本目の列は `follow` を呼んだ結果だからです。
@@ -3358,7 +3362,7 @@ check はそのどれについても何も言いません。
 
 ### モデルまたは関係を探索する
 
-`nuka explore <file>` は、1 つのモデルまたは 1 つの関係を実行します。
+`nuka experimental explore <file>` は、1 つのモデルまたは 1 つの関係を実行します。
 ファイルは、discovery が `featuresDir` の下で見つけたものです。
 step を 1 つも実行する前に、このコマンドはそれらの step について `nuka check` と `nuka do` が行う拒否を行います。
 対象は、上の 4 つの `explore-*` の所見のどれか、fixture の問題、未知の `--env` です。
@@ -3537,20 +3541,6 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--sess
                               --args is required unless --use supplies
                               every key; --use fills its `from` keys
                               from an earlier execution's result
-nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
-                              run one model or relation file found under
-                              featuresDir, request-only steps only, with no
-                              step record. A model runs --runs sequences
-                              (default 20) of at most --length steps (default
-                              10) from one --seed, and shrinks the first
-                              failure; so does a relation whose source is
-                              generated. On a failure stdout gets the scenario to
-                              paste (two for a relation) and the command that
-                              reruns it; stdout is empty on a pass. --json
-                              prints one object instead, on a pass too: the
-                              verdict, the seed and counts, and on a failure
-                              each step's result, the failure, and the
-                              scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout
@@ -3805,6 +3795,20 @@ nuka experimental webmcp-tools <url> [--json]
                               nested one command under `experimental` on
                               purpose, so the word is unavoidable at the call
                               site
+nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
+                              run one model or relation file found under
+                              featuresDir, request-only steps only, with no
+                              step record. A model runs --runs sequences
+                              (default 20) of at most --length steps (default
+                              10) from one --seed, and shrinks the first
+                              failure; so does a relation whose source is
+                              generated. On a failure stdout gets the scenario to
+                              paste (two for a relation) and the command that
+                              reruns it; stdout is empty on a pass. --json
+                              prints one object instead, on a pass too: the
+                              verdict, the seed and counts, and on a failure
+                              each step's result, the failure, and the
+                              scenario. Exits 1 on a failure or a refusal
 ```
 
 文字列または数値を 1 つ取るフラグを 2 回以上与えると、nuka はそのフラグを拒否し、そのコマンドは何も書き込みません。
@@ -3949,7 +3953,7 @@ discovery は、どのファイルが hook を登録したかを記録しない�
 - **M13(Markdown oaths)**: Gherkin の隣にある 2 つ目の表側です。
   名指しされた Markdown ファイルは同じ pickle にコンパイルされ、同じ `defineStep` の語彙に結び付き、どの pattern にもマッチしない文では `nuka check` が失敗します(「Markdown oaths」を参照)。
   これは oath の表面であり、Varar のエンジンではありません。
-- **M14(exploring)**: `nuka explore` です。
+- **M14(exploring、実験的)**: `nuka experimental explore` です。
   request だけを使う step に対してモデルまたは関係を実行し、モデルの失敗を seed から再生できる選択の列で縮小し、貼り付ける scenario を表示します(「モデルまたは関係を探索する」を参照)。
   feature ファイルは、人が残すと決めた列の集まりのままです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。

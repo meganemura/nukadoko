@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
-// Responsibility: fixture lifetimes under `nuka explore`. A process-scope
+// Responsibility: fixture lifetimes under `nuka experimental explore`. A process-scope
 // fixture lasts the whole invocation, runs and shrink attempts included,
 // and a scenario-scope fixture lasts one sequence. SIGINT tears both down,
 // as it does for `nuka do`. The signal case spawns a real process, for the
@@ -22,11 +22,11 @@ const children: ChildProcess[] = [];
 
 function model(step: string): string {
   return [
-    'import { defineModel, modelCommand } from "../nukadoko-shim.js";',
+    'import { experimental_defineModel, experimental_modelCommand } from "../nukadoko-shim.js";',
     `import step from "./steps/${step}.js";`,
     "",
-    "export default defineModel(() => 0).commands({",
-    `  "${step}": modelCommand(step)({`,
+    "export default experimental_defineModel(() => 0).commands({",
+    `  "${step}": experimental_modelCommand(step)({`,
     "    args: () => ({}),",
     "    pre: () => true,",
     "    next: (state) => state + 1,",
@@ -55,7 +55,7 @@ function count(log: readonly LogEntry[], fixture: string, phase: string): number
   return log.filter((entry) => entry.fixture === fixture && entry.phase === phase).length;
 }
 
-describe("fixture scope under nuka explore", () => {
+describe("fixture scope under nuka experimental explore", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -75,7 +75,7 @@ describe("fixture scope under nuka explore", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["explore", "features/finish-model.ts", "--seed", "1", "--runs", "3", "--length", "5"],
+      ["experimental", "explore", "features/finish-model.ts", "--seed", "1", "--runs", "3", "--length", "5"],
       { rootDir, stdout, stderr },
     );
 
@@ -96,13 +96,14 @@ describe("fixture scope under nuka explore", () => {
     expect(log.at(-1)).toEqual({ fixture: "ledger", phase: "teardown", outcome: "failed" });
   });
 
-  it("tears both scopes down when nuka explore receives SIGINT", async () => {
+  it("tears both scopes down when nuka experimental explore receives SIGINT", async () => {
     await writeFile(path.join(rootDir, "features", "hold-model.ts"), model("hold-fixture"));
     const child = spawn(
       process.execPath,
       [
         ...sourceNodeArgs,
         path.join(repoRoot, "src", "cli.ts"),
+        "experimental",
         "explore",
         "features/hold-model.ts",
         "--seed",

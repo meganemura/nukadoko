@@ -2,7 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineModel, defineRelation, defineStep, modelCommand, relationEntry } from "../src/index.js";
+import { experimental_defineModel, experimental_defineRelation, defineStep, experimental_modelCommand, experimental_relationEntry } from "../src/index.js";
 import { exploreRelation, type OpenSequence } from "../src/explore/index.js";
 import type { Step } from "../src/step/define-step.js";
 
@@ -39,9 +39,9 @@ const counter: OpenSequence = async () => {
 
 describe("exploreRelation", () => {
   it("holds when adding in either order reaches the same total", async () => {
-    const relation = defineRelation({
+    const relation = experimental_defineRelation({
       name: "addition commutes",
-      source: [relationEntry(addCount, { n: 2 }), relationEntry(addCount, { n: 5 })],
+      source: [experimental_relationEntry(addCount, { n: 2 }), experimental_relationEntry(addCount, { n: 5 })],
       follow: (source) => [...source].reverse(),
       relate: (source, follow) => source[1].total === follow[1]!.total,
     });
@@ -59,10 +59,10 @@ describe("exploreRelation", () => {
   });
 
   it("fails with both sequences when relate does not hold", async () => {
-    const relation = defineRelation({
+    const relation = experimental_defineRelation({
       name: "doubling doubles",
-      source: [relationEntry(addCount, { n: 3 })],
-      follow: () => [relationEntry(addCount, { n: 3 }), relationEntry(addCount, { n: 4 })],
+      source: [experimental_relationEntry(addCount, { n: 3 })],
+      follow: () => [experimental_relationEntry(addCount, { n: 3 }), experimental_relationEntry(addCount, { n: 4 })],
       relate: (source, follow) => follow[1].total === source[0].total * 2,
     });
     expect(await exploreRelation({ relation, resolve, open: counter })).toEqual({
@@ -95,10 +95,10 @@ describe("exploreRelation", () => {
       },
     });
     let opened = 0;
-    const relation = defineRelation({
+    const relation = experimental_defineRelation({
       name: "stray",
-      source: [relationEntry(addCount, { n: 1 })],
-      follow: () => [relationEntry(stray, {})],
+      source: [experimental_relationEntry(addCount, { n: 1 })],
+      follow: () => [experimental_relationEntry(stray, {})],
       relate: () => true,
     });
     const result = await exploreRelation({
@@ -129,10 +129,10 @@ describe("exploreRelation", () => {
       };
     };
 
-    const reversed = defineRelation({
+    const reversed = experimental_defineRelation({
       name: "adding in reverse order reaches the same total",
       source: (draw, length) =>
-        Array.from({ length: draw.int(1, length) }, () => relationEntry(addCount, { n: draw.int(0, 9) })),
+        Array.from({ length: draw.int(1, length) }, () => experimental_relationEntry(addCount, { n: draw.int(0, 9) })),
       follow: (source) => [...source].reverse(),
       relate: (source, follow) => source.at(-1)!.total === follow.at(-1)!.total,
     });
@@ -159,15 +159,15 @@ describe("exploreRelation", () => {
     });
 
     it("draws its source from a model's commands", async () => {
-      const adds = defineModel(() => 0).commands({
-        "add-count": modelCommand(addCount)({
+      const adds = experimental_defineModel(() => 0).commands({
+        "add-count": experimental_modelCommand(addCount)({
           args: (_state, draw) => ({ n: draw.int(0, 9) }),
           pre: () => true,
           next: (state) => state + 1,
           post: () => true,
         }),
       });
-      const relation = defineRelation({
+      const relation = experimental_defineRelation({
         name: "adding in reverse order reaches the same total",
         source: adds,
         follow: (source) => [...source].reverse(),

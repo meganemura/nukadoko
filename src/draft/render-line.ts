@@ -1,9 +1,9 @@
 import { parseCaptureToken, type Capture } from "../binding/capture.js";
 
 // Responsibility: turn one step's pattern plus a `used`/`from`-independent
-// value bag into the literal Gherkin text `nuka explore` writes for a line,
-// and the table/docstring block that follows it when one is needed
-// (docs/spec.md "Exploring a model or a relation"). This module only
+// value bag into the literal Gherkin text `nuka experimental explore`
+// writes for a line, and the table/docstring block that follows it when
+// one is needed (docs/spec.md "Exploring a model or a relation"). This module only
 // renders text — it never judges whether the result is right, that is
 // what the round trip in src/draft/scenario.ts is for: every line is read
 // back the way `nuka run` reads it.

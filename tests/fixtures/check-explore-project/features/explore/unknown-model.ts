@@ -1,4 +1,4 @@
-import { defineModel, defineStep, modelCommand, z } from "../../nukadoko-shim.js";
+import { experimental_defineModel, defineStep, experimental_modelCommand, z } from "../../nukadoko-shim.js";
 
 const ghost = defineStep({
   description: "not exported as the file's step",
@@ -9,10 +9,10 @@ const ghost = defineStep({
   },
 });
 
-export default defineModel(() => {
+export default experimental_defineModel(() => {
   throw new Error("check called initial");
 }).commands({
-  "missing-step": modelCommand(ghost)({
+  "missing-step": experimental_modelCommand(ghost)({
     args: () => {
       throw new Error("check called args");
     },

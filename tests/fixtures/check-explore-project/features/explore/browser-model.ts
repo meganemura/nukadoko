@@ -1,8 +1,8 @@
-import { defineModel, modelCommand } from "../../nukadoko-shim.js";
+import { experimental_defineModel, experimental_modelCommand } from "../../nukadoko-shim.js";
 import openPage from "../steps/open-page.js";
 
-export default defineModel(() => ({})).commands({
-  "open-page": modelCommand(openPage)({
+export default experimental_defineModel(() => ({})).commands({
+  "open-page": experimental_modelCommand(openPage)({
     args: () => ({}),
     pre: () => true,
     next: (state) => state,

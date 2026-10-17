@@ -1,7 +1,7 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka explore` should run.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka explore, nuka check, nuka run, nuka tend).
+description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka experimental explore` should run.
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka experimental explore, nuka check, nuka run, nuka tend).
 license: MIT
 ---
 
@@ -93,8 +93,8 @@ are the repeatable flags. Each value is kept, in the order given.
    loop at step 3 (`nuka check`).
 5. **You want sequences generated against a model, or two runs compared
    by a relation**, with request-only steps: `references/models.md`
-   (`nuka explore`), then paste what it prints and join the loop at
-   step 3.
+   (`nuka experimental explore`, experimental: it can change in any
+   release), then paste what it prints and join the loop at step 3.
 
 If none of the five is true, ask what this is supposed to do before
 writing anything. A scenario started without knowing what it proves
@@ -187,9 +187,9 @@ those four; the rest carries the result to a person.
   stands (`references/writing-steps.md`). A prompt that asks for a
   different amount of patience overrides the three; it is not a config
   setting.
-- Don't change a model or a relation only to make a failure `nuka explore`
-  printed go away. A person reads the printed scenario first
-  (`references/models.md`).
+- Don't change a model or a relation only to make a failure
+  `nuka experimental explore` printed go away. A person reads the printed
+  scenario first (`references/models.md`).
 - Don't hand-edit a step record or a run summary. It exists because it was
   measured, not claimed; editing it by hand turns it back into a claim.
   A failed run that a later run fixed is history the pull request can

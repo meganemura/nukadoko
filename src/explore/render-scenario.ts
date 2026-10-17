@@ -64,6 +64,6 @@ function toEntry(step: PlannedStep, vocabulary: Vocabulary): DraftEntry {
 /** The scenario as lines, each without its newline. */
 export async function renderScenario(input: RenderScenarioInput): Promise<string[]> {
   const entries = input.steps.map((step) => toEntry(step, input.vocabulary));
-  await readBack(entries, input.vocabulary, input.bindings, "<nuka explore>");
+  await readBack(entries, input.vocabulary, input.bindings, "<nuka experimental explore>");
   return renderScenarioLines(input.title, entries, input.notes);
 }

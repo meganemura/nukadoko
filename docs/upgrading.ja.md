@@ -84,7 +84,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka run --no-check` のもとでは、scenario record にある未定義の step の `error.message` も同じように変わります。
   古い文に一致させているスクリプトは、代わりに code に一致させるか、scenario record にある step の `status: "undefined"` に一致させます。
 - **成功した step record は `"status": "ok"` ではなく `"status": "passed"` と書きます。**
-  step record、scenario record の `steps[]` と `hooks[]`、`nuka explore --json` の `steps[]` で、成功を表す語が同じになりました。
+  step record、scenario record の `steps[]` と `hooks[]`、`nuka experimental explore --json` の `steps[]` で、成功を表す語が同じになりました。
   `.status == "ok"` を調べるスクリプトや jq のフィルタは、`"passed"` を調べるようにします。
   nukadoko 0.16.1 以前が書いた record は、ディスク上では `"ok"` のままです。
   `nuka do --use` と各 emitter はそれを `"passed"` として読むので、retention が削除するまで残しておけます。
@@ -157,6 +157,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `--codes` のテキストには 4 列目として、そのコードの一般的な `do` が加わりました。
   テキスト出力を読むスクリプトは、2 つの空白で始まる行を読み飛ばすか、`--json` を読みます。
   `--json` では `file` と `do` がフィールドで、それ以外は変わりません。
+- **`nuka explore` は `nuka experimental explore` になりました。**
+  フラグも出力も同じです。
+  `nuka explore` は終了コード 1 で終わり、新しい綴りを示します。
+  そのため、`nuka explore features/explore/add-model.ts` を実行していた script は `nuka experimental explore features/explore/add-model.ts` に変えてください。
+  model や relation のファイルは、名前の変わった関数を import します。
+  `defineModel` は `experimental_defineModel`、`modelCommand` は `experimental_modelCommand`、`defineRelation` は `experimental_defineRelation`、`relationEntry` は `experimental_relationEntry` になりました。
+  型の名前は変わりません。
+  `experimental` の下にあるため、このコマンドと関数は、後のリリースで非推奨の告知なしに形が変わったりなくなったりすることがあります。
 
 ## 0.15.0 から 0.16.1 へ
 

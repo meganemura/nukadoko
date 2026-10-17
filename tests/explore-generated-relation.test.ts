@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka explore` of a relation whose source is drawn. The
+// Responsibility: `nuka experimental explore` of a relation whose source is drawn. The
 // fixture project's counter loses the second add of every sequence, so
 // adding the same numbers in reverse order can end on another total.
 
-describe("nuka explore: a relation with a generated source", () => {
+describe("nuka experimental explore: a relation with a generated source", () => {
   let rootDir: string | undefined;
 
   afterEach(async () => {
@@ -18,7 +18,7 @@ describe("nuka explore: a relation with a generated source", () => {
     rootDir ??= await copyFixtureToTempDir("explore-relation-project");
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["explore", "features/reverse.ts", ...args], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["experimental", "explore", "features/reverse.ts", ...args], { rootDir, stdout, stderr });
     return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
   }
 
@@ -27,7 +27,7 @@ describe("nuka explore: a relation with a generated source", () => {
     expect(first).toEqual({
       exitCode: 1,
       stdout: [
-        "# nuka explore features/reverse.ts --seed 1 --runs 20 --length 6",
+        "# nuka experimental explore features/reverse.ts --seed 1 --runs 20 --length 6",
         '# Relation "adding in reverse order reaches the same total" failed: relate returned false for source results [{"total":1},{"total":1}] and follow results [{"total":0},{"total":0}]',
         "# Run 1 of 20 failed with 2 source steps. Shrunk to 2 source steps in 18 attempts.",
         '  Scenario: (name me) source of "adding in reverse order reaches the same total"',
@@ -50,7 +50,7 @@ describe("nuka explore: a relation with a generated source", () => {
       stdout: "",
       stderr:
         'Passed: relation "adding in reverse order reaches the same total", 5 runs, seed 1. ' +
-        "Rerun: nuka explore features/reverse.ts --seed 1 --runs 5 --length 1\n",
+        "Rerun: nuka experimental explore features/reverse.ts --seed 1 --runs 5 --length 1\n",
     });
   });
 });

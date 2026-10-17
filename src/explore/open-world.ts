@@ -101,7 +101,7 @@ export function openWorld(options: WorldOptions): World {
         return { ok: false, message: `step "${name}" is not a typed step in the vocabulary` };
       }
       if (options.needsBrowser(entry.step)) {
-        return { ok: false, message: `step "${name}" needs a browser, and nuka explore runs request-only steps` };
+        return { ok: false, message: `step "${name}" needs a browser, and nuka experimental explore runs request-only steps` };
       }
       if (policy === "read-only" && entry.step.mutates) {
         return { ok: false, message: new ReadOnlyEnvironmentError(name, environment).message };

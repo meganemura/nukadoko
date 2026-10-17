@@ -281,22 +281,22 @@
     {
       "en": ["model"],
       "ja": "モデル",
-      "note": "defineModel が宣言する探索用の状態。統計モデルや言語モデルではない。defineModel と modelCommand は英語のまま"
+      "note": "experimental_defineModel が宣言する探索用の状態。統計モデルや言語モデルではない。experimental_defineModel と experimental_modelCommand は英語のまま"
     },
     {
       "en": ["relation"],
       "ja": "関係",
-      "note": "defineRelation が宣言する、2 つの step 列の結果の間の関係。defineRelation と relationEntry は英語のまま"
+      "note": "experimental_defineRelation が宣言する、2 つの step 列の結果の間の関係。experimental_defineRelation と experimental_relationEntry は英語のまま"
     },
     {
       "en": ["shrink", "shrinking", "shrunk"],
       "ja": "縮小",
-      "note": "nuka explore が失敗した列を短く、小さくすること"
+      "note": "nuka experimental explore が失敗した列を短く、小さくすること"
     },
     {
       "en": ["choice", "choices"],
       "ja": "選択",
-      "note": "nuka explore が列を組み立てるときに記録する 1 つの整数。seed と --seed は英語のまま"
+      "note": "nuka experimental explore が列を組み立てるときに記録する 1 つの整数。seed と --seed は英語のまま"
     },
     {
       "en": ["percent-encoded form", "percent-encoded"],

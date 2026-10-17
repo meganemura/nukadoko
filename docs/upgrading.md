@@ -98,7 +98,8 @@ This part does not change release to release.
   step's `status: "undefined"` in a scenario record.
 - **A step record that passed says `"status": "passed"`, not `"ok"`.** The
   same word now means success in a step record, in a scenario record's
-  `steps[]` and `hooks[]`, and in `nuka explore --json`'s `steps[]`. A
+  `steps[]` and `hooks[]`, and in `nuka experimental explore --json`'s
+  `steps[]`. A
   script or a jq filter that tests `.status == "ok"` tests `"passed"`. A
   record that nukadoko 0.16.1 or earlier wrote still says `"ok"` on disk; `nuka do
   --use` and the emitters read it as `"passed"`, so it can
@@ -189,6 +190,17 @@ This part does not change release to release.
   script that reads text output skips the lines that start with two
   spaces, or reads `--json`, where `file` and `do` are fields and nothing
   else changed.
+- **`nuka explore` is now `nuka experimental explore`.** Same flags, same
+  output. `nuka explore` exits 1 and names the new spelling, so a script
+  that ran `nuka explore features/explore/add-model.ts` becomes
+  `nuka experimental explore features/explore/add-model.ts`. A model or a
+  relation file imports the renamed functions: `defineModel` is
+  `experimental_defineModel`, `modelCommand` is
+  `experimental_modelCommand`, `defineRelation` is
+  `experimental_defineRelation`, and `relationEntry` is
+  `experimental_relationEntry`. The type names do not change. Under
+  `experimental`, the command and the functions can change shape or go in
+  a later release without a deprecation notice.
 
 ## 0.15.0 to 0.16.1
 

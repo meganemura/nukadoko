@@ -5,7 +5,7 @@ import { bindStepArgs, matchPickleStep, type StepBinding } from "../run/match-st
 import { toStoredForm } from "../stored-form/stored-form.js";
 import { renderAttachmentBlock, type Attachment } from "./render-line.js";
 
-// Responsibility: one scenario draft, the shape `nuka explore` prints.
+// Responsibility: one scenario draft, the shape `nuka experimental explore` prints.
 // A caller turns each step into a `DraftEntry`:
 // a rendered line with its table or docstring and the args it must read
 // back to, or a comment when no line can be written. `readBack` then

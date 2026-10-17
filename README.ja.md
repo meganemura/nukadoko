@@ -330,7 +330,7 @@ Feature: greet API
 
 - [Wrong before it runs](#wrong-before-it-runs): 何かが実行される前に `nuka check` が捕まえるもの、および `nuka do` で 1 つの step だけを実行すること。
 - [Markdown oaths](#markdown-oaths): 同じ step を、`.feature` ではなく Markdown ファイルの文の裏に置く。
-- [モデルを探索する](#モデルを探索する): `nuka explore` が request だけの step の列を生成し、失敗する最短の列を出力する。
+- [モデルを探索する](#モデルを探索する): `nuka experimental explore` が request だけの step の列を生成し、失敗する最短の列を出力する。
 - [The compat door](#the-compat-door): import を 1 つ切り替えて、既存の cucumber-js のスイートを取り込む。
 - [Reports fill themselves](#reports-fill-themselves): Allure と cucumber-messages の emitter。
 - [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`。
@@ -467,10 +467,12 @@ Varar 式の Markdown oath は、もう 1 つの表側です。
 ## モデルを探索する
 
 scenario は、人が選んだ 1 つの列です。
-モデルは、request だけを使う step のどんな列が何をすべきかを述べ、`nuka explore` はそこから列を生成します。
+モデルは、request だけを使う step のどんな列が何をすべきかを述べ、`nuka experimental explore` はそこから列を生成します。
+このコマンドと、モデルのファイルが import する `experimental_` の関数は実験的です。
+どのリリースでも、非推奨の告知なしに変わったりなくなったりすることがあります。
 
 ```
-nuka explore features/explore/add-model.ts --seed 1
+nuka experimental explore features/explore/add-model.ts --seed 1
 ```
 
 各列は、1 つの seed から取った `draw.int` と `draw.pick` の選択で組み立てられます。
@@ -550,7 +552,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、Markdown の run サマリ、tending(`nuka tend`)、モデルと関係(`nuka explore`)、MCP のツール一覧(`nuka experimental mcp-tools`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、Markdown の run サマリ、tending(`nuka tend`)、実験的なモデルと関係(`nuka experimental explore`)、MCP のツール一覧(`nuka experimental mcp-tools`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換と、Varar の残り(step の戻り値と文中の語句の比較、すべての方言)です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。

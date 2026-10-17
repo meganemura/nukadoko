@@ -46,7 +46,6 @@ describe("nuka --help", () => {
       "Exploring:",
       "do",
       "session",
-      "explore",
       "Upkeep:",
       "tend",
       "clean",
@@ -62,8 +61,9 @@ describe("nuka --help", () => {
     expect(text.split("\n").slice(0, 3)).toEqual(["nuka init", "", "set up a project; ends with a self-check"]);
   });
 
-  it("lists mcp-tools and webmcp-tools under experimental", async () => {
+  it("lists explore, mcp-tools, and webmcp-tools under experimental", async () => {
     const text = await help(["experimental"]);
+    expect(text).toContain("  nuka experimental explore <file> ");
     expect(text).toContain("  nuka experimental mcp-tools ");
     expect(text).toContain("  nuka experimental webmcp-tools <url> ");
   });

@@ -238,8 +238,8 @@ just until 0.1.
 - **One word for each concept across the JSON nukadoko writes.**
   A step record that passed said `"status": "ok"` while its entry in the
   scenario record said `"passed"`, so an agent had to special-case one of
-  them. Step records, scenario record hooks, and `nuka explore --json`'s
-  steps now say `"passed"`; a stored record that still says `"ok"` is read
+  them. Step records, scenario record hooks, and
+  `nuka experimental explore --json`'s steps now say `"passed"`; a stored record that still says `"ok"` is read
   as `"passed"` by `nuka do --use`, `nuka harvest`, and the emitters. The
   exported type `StepRecordOk` is renamed `StepRecordPassed`. `nuka tend
   --json`'s summary keys are snake_case (`typed_steps`, `compat_steps`,
@@ -250,6 +250,16 @@ just until 0.1.
   `--env-files`, since `--env` names an environment on every other
   command; the old spelling exits 1 and names the new one. Breaking: see
   docs/upgrading.md.
+- **`nuka explore` is now `nuka experimental explore`, and the model API
+  carries the `experimental_` prefix.** The functions are
+  `experimental_defineModel`, `experimental_modelCommand`,
+  `experimental_defineRelation`, and `experimental_relationEntry`; the
+  types (`Model`, `Relation`, `Draw`, and the rest) keep their names. The
+  command, the functions, and the four `explore-*` findings now carry no
+  stability promise: they can change or go in any release without a
+  deprecation notice, and the word is at every call site. `nuka explore`
+  exits 1 and names the new spelling. The flags, the output, and the
+  findings are unchanged. Breaking: see docs/upgrading.md.
 
 - **`undefined-step` names `nuka scaffold --feature <file>`.** The message
   ends with "run `nuka scaffold --feature <the line's feature file>` to

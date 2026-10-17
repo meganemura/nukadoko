@@ -1,3 +1,3 @@
-import { defineModel } from "../../nukadoko-shim.js";
+import { experimental_defineModel } from "../../nukadoko-shim.js";
 
-export default defineModel(() => ({})).commands({});
+export default experimental_defineModel(() => ({})).commands({});

@@ -19,8 +19,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
-// `clean`, `tend`, `skill path`, `experimental mcp-tools`,
-// `experimental webmcp-tools`)
+// `clean`, `tend`, `skill path`, `experimental explore`,
+// `experimental mcp-tools`, `experimental webmcp-tools`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
@@ -1172,15 +1172,35 @@ export async function runCli(
     },
   };
 
+  // `explore` was a top-level command until it moved under `experimental`.
+  // Hidden from the help: it runs nothing, and names the new spelling so a
+  // script written against the old one says what to change.
+  const movedExploreCommand: CommandModule = {
+    command: "explore",
+    describe: false,
+    builder: (y: Argv) => y.strict(false),
+    handler: () => {
+      if (argsFailed) return;
+      exitCode = 1;
+      stderr.write("`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n");
+    },
+  };
+
   const experimentalCommand: CommandModule = {
     command: "experimental",
     describe:
       "EXPERIMENTAL: commands this package is still trying out; any of them may change shape or " +
       "disappear release to release without the deprecation notice a stable command would get",
-    builder: (y: Argv) => y.command(mcpToolsCommand).command(namingMissingConfig(webmcpToolsCommand)).demandCommand(1).strict(),
+    builder: (y: Argv) =>
+      y
+        .command(namingMissingConfig(exploreCommand))
+        .command(mcpToolsCommand)
+        .command(namingMissingConfig(webmcpToolsCommand))
+        .demandCommand(1)
+        .strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // `mcp-tools` or `webmcp-tools`, same pattern as `skillCommand`/`sessionCommand`.
+      // a subcommand, same pattern as `skillCommand`/`sessionCommand`.
     },
   };
 
@@ -1218,7 +1238,7 @@ export async function runCli(
     },
     {
       heading: "Exploring",
-      commands: [namingMissingConfig(doCommand), sessionCommand, namingMissingConfig(exploreCommand)],
+      commands: [namingMissingConfig(doCommand), sessionCommand],
     },
     { heading: "Upkeep", commands: [namingMissingConfig(tendCommand), namingMissingConfig(cleanCommand), skillCommand] },
     { heading: "Experimental", commands: [experimentalCommand] },
@@ -1252,6 +1272,7 @@ export async function runCli(
     .wrap(null)
     .command(movedMcpToolsCommand)
     .command(removedHarvestCommand)
+    .command(movedExploreCommand)
     .demandCommand(1)
     .strict()
     .help();

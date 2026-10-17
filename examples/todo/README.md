@@ -65,9 +65,9 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
   - `todo-list-includes.ts` / `todo-is-marked-done.ts` — read-only
     (`mutates: false`) assertions bound in `Then` position
 - `features/explore/add-model.ts`: a model that adds and completes todos.
-  `nuka explore features/explore/add-model.ts` runs it against the app and
-  prints nothing on stdout while the app agrees with it. Against the v2
-  app it prints the one-line scenario that fails.
+  `nuka experimental explore features/explore/add-model.ts` runs it
+  against the app and prints nothing on stdout while the app agrees with
+  it. Against the v2 app it prints the one-line scenario that fails.
 - `features/explore/add-relation.ts`: a relation. A todo that was added
   is listed.
 

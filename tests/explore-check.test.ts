@@ -4,7 +4,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { checkExploreDeclarations } from "../src/check/explore-check.js";
 import type { VocabularyEntry } from "../src/discover/discover-steps.js";
 import { MODEL_BRAND, type Model } from "../src/step/define-explore.js";
-import { defineModel, defineRelation, defineStep, modelCommand, relationEntry, z } from "../src/index.js";
+import { experimental_defineModel, experimental_defineRelation, defineStep, experimental_modelCommand, experimental_relationEntry, z } from "../src/index.js";
 
 // Responsibility: `checkExploreDeclarations` is a pure reading of a
 // declaration. The findings for a set of command names do not depend on
@@ -94,11 +94,11 @@ describe("checkExploreDeclarations", () => {
   const vocabulary = new Map<string, VocabularyEntry>([
       ["request", { kind: "typed", name: "request", filePath: "features/steps/request.ts", step }],
     ]);
-    const model = defineModel(() => {
+    const model = experimental_defineModel(() => {
       calls.push("initial");
       return {};
     }).commands({
-      request: modelCommand(step)({
+      request: experimental_modelCommand(step)({
         args: () => {
           calls.push("args");
           return {};
@@ -133,23 +133,23 @@ describe("checkExploreDeclarations", () => {
     const vocabulary = new Map<string, VocabularyEntry>([
       ["known", { kind: "typed", name: "known", filePath: "features/steps/known.ts", step: known }],
     ]);
-    const source = defineModel(() => ({})).commands({
-      known: modelCommand(known)({ args: () => ({}), pre: () => true, next: (state) => state, post: () => true }),
-      stray: modelCommand(stray)({ args: () => ({}), pre: () => true, next: (state) => state, post: () => true }),
+    const source = experimental_defineModel(() => ({})).commands({
+      known: experimental_modelCommand(known)({ args: () => ({}), pre: () => true, next: (state) => state, post: () => true }),
+      stray: experimental_modelCommand(stray)({ args: () => ({}), pre: () => true, next: (state) => state, post: () => true }),
     });
     let drawn = 0;
     const issues = checkExploreDeclarations({
       vocabulary,
       models: [],
       relations: [
-        { filePath: "model-source.ts", relation: defineRelation({ name: "m", source, follow: () => [], relate: () => true }) },
+        { filePath: "model-source.ts", relation: experimental_defineRelation({ name: "m", source, follow: () => [], relate: () => true }) },
         {
           filePath: "drawn-source.ts",
-          relation: defineRelation({
+          relation: experimental_defineRelation({
             name: "d",
             source: () => {
               drawn += 1;
-              return [relationEntry(stray, {})];
+              return [experimental_relationEntry(stray, {})];
             },
             follow: () => [],
             relate: () => true,
@@ -180,13 +180,13 @@ describe("checkExploreDeclarations", () => {
       relations: [
         {
           filePath: "empty-source.ts",
-          relation: defineRelation({ name: "e", source: defineModel(() => ({})).commands({}), follow: () => [], relate: () => true }),
+          relation: experimental_defineRelation({ name: "e", source: experimental_defineModel(() => ({})).commands({}), follow: () => [], relate: () => true }),
         },
         {
           filePath: "drawn-source.ts",
-          relation: defineRelation({
+          relation: experimental_defineRelation({
             name: "d",
-            source: () => [relationEntry(known, {})].slice(0, Math.random() > 2 ? 0 : 1),
+            source: () => [experimental_relationEntry(known, {})].slice(0, Math.random() > 2 ? 0 : 1),
             follow: () => [],
             relate: () => true,
           }),

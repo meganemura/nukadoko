@@ -1,9 +1,9 @@
-import { defineRelation, relationEntry } from "../../nukadoko-shim.js";
+import { experimental_defineRelation, experimental_relationEntry } from "../../nukadoko-shim.js";
 import openPage from "../steps/open-page.js";
 
-export default defineRelation({
+export default experimental_defineRelation({
   name: "open twice",
-  source: [relationEntry(openPage, {})],
-  follow: (source) => [relationEntry(openPage, source[0].args)],
+  source: [experimental_relationEntry(openPage, {})],
+  follow: (source) => [experimental_relationEntry(openPage, source[0].args)],
   relate: (sourceResults, followResults) => sourceResults[0].ok === followResults[0].ok,
 });

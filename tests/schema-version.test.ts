@@ -49,7 +49,7 @@ describe("schema_version", () => {
     documents.set("clean_plan", parse(await cli(runProject, ["clean", "--dry-run", "--json"])));
     documents.set(
       "explore_result",
-      parse(await cli(exploreProject, ["explore", "features/reverse.ts", "--seed", "1", "--runs", "20", "--length", "6", "--json"])),
+      parse(await cli(exploreProject, ["experimental", "explore", "features/reverse.ts", "--seed", "1", "--runs", "20", "--length", "6", "--json"])),
     );
   }, 120_000);
 

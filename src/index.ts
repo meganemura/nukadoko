@@ -62,7 +62,12 @@ export type {
   StepRunResult,
 } from "./step/define-step.js";
 export { defineStep, InvalidStepDefinitionError } from "./step/define-step.js";
-export { defineModel, defineRelation, modelCommand, relationEntry } from "./step/define-explore.js";
+export {
+  experimental_defineModel,
+  experimental_defineRelation,
+  experimental_modelCommand,
+  experimental_relationEntry,
+} from "./step/define-explore.js";
 export type { Draw, Model, ModelCommand, Relation, RelationSource, RelationStep, SourceDraw } from "./step/define-explore.js";
 // EXPERIMENTAL: see call-tool.ts's own header for why the name carries the
 // mark, and the condition that would let it be dropped.

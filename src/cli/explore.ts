@@ -40,7 +40,7 @@ import type { Step } from "../step/define-step.js";
 import { toStoredForm } from "../stored-form/stored-form.js";
 import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js";
 
-// Responsibility: `nuka explore`'s wiring. Setup refuses before any step
+// Responsibility: `nuka experimental explore`'s wiring. Setup refuses before any step
 // runs: a file that is not a model or a relation, a finding `nuka check`
 // would report for it, a fixture problem `nuka do` would refuse on. Then
 // the model or the relation runs, and on failure stdout gets the scenario
@@ -75,7 +75,7 @@ function positiveInteger(flag: string, value: number, stderr: WritableSink): boo
 function rerunCommand(options: RunExploreOptions, seed: number | null): string {
   const generated = seed === null ? "" : ` --seed ${seed} --runs ${options.runs} --length ${options.length}`;
   const env = options.env === null ? "" : ` --env ${shellWord(options.env)}`;
-  return `nuka explore ${shellWord(options.file)}${generated}${env}`;
+  return `nuka experimental explore ${shellWord(options.file)}${generated}${env}`;
 }
 
 /** The rerun line is meant to be pasted into a shell, so a path with a
@@ -281,7 +281,7 @@ async function exploreDiscovered(
       resolve: (step) => {
         const name = nameOf(vocabulary, step);
         if (name === undefined) return { error: "this step is not in the vocabulary" };
-        if (needsBrowser(step)) return { error: `step "${name}" needs a browser, and nuka explore runs request-only steps` };
+        if (needsBrowser(step)) return { error: `step "${name}" needs a browser, and nuka experimental explore runs request-only steps` };
         if (resolvedEnv.policy === "read-only" && step.mutates) {
           return { error: new ReadOnlyEnvironmentError(name, resolvedEnv.name).message };
         }
