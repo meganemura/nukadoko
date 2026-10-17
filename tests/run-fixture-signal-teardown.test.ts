@@ -23,9 +23,15 @@ import {
 // under nukadoko's own loader with the fixture project as its cwd. The child is killed if a
 // case ends while it is still alive.
 //
-// Every `nuka run` here passes `--no-check`. These cases wait on fixture
-// setup and process exit with fixed deadlines, and the static check's extra
-// step discovery before the workers start is not what they cover.
+// Every `nuka run` here passes `--no-check`: the static check's extra step
+// discovery before the workers start is not what these cases cover.
+//
+// A loaded runner can take tens of seconds to start the CLI and its
+// workers, so no wait here has a deadline of its own. Each one waits for
+// its event and fails at once, with the child's stderr, if the child exits
+// first. A wait that never ends is a hang, and the test's own timeout,
+// SPAWNED_TEST_TIMEOUT_MS, is the one bound that catches it; afterEach then
+// names the event the test was still waiting for.
 
 interface LogEntry {
   readonly fixture: string;
@@ -33,7 +39,12 @@ interface LogEntry {
   readonly outcome?: string;
 }
 
+const SPAWNED_TEST_TIMEOUT_MS = 120_000;
+
 const children: ChildProcess[] = [];
+const spawnedStderr = new Map<ChildProcess, () => string>();
+const spawnedClose = new Map<ChildProcess, Promise<{ code: number | null; signal: NodeJS.Signals | null }>>();
+let waitingFor: string | null = null;
 
 async function readLog(rootDir: string): Promise<LogEntry[]> {
   try {
@@ -65,18 +76,56 @@ function spawnNuka(rootDir: string, args: readonly string[], env: NodeJS.Process
     env,
   });
   children.push(child);
+  spawnedStderr.set(child, collect(child.stderr));
+  spawnedClose.set(
+    child,
+    new Promise((resolve) => {
+      child.once("close", (code, signal) => resolve({ code, signal }));
+    }),
+  );
   return child;
 }
 
-async function waitForSetups(rootDir: string, perFixture = 1): Promise<void> {
-  const deadline = Date.now() + 20_000;
-  while (Date.now() < deadline) {
-    const setups = (await readLog(rootDir)).filter((entry) => entry.phase === "setup");
-    const count = (fixture: string): number => setups.filter((entry) => entry.fixture === fixture).length;
-    if (count("tenant") >= perFixture && count("ledger") >= perFixture) return;
+function hasExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+async function waitForLog(
+  rootDir: string,
+  child: ChildProcess,
+  event: string,
+  happened: (log: LogEntry[]) => boolean,
+): Promise<void> {
+  waitingFor = event;
+  for (;;) {
+    const exited = hasExited(child);
+    const log = await readLog(rootDir);
+    if (happened(log)) break;
+    if (exited) {
+      waitingFor = null;
+      throw new Error(
+        `${event}: the child exited first (code ${child.exitCode}, signal ${child.signalCode}).\n` +
+          `log: ${JSON.stringify(log)}\nstderr:\n${spawnedStderr.get(child)?.() ?? ""}`,
+      );
+    }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error(`fixture setup was not logged within 20s:\n${JSON.stringify(await readLog(rootDir))}`);
+  waitingFor = null;
+}
+
+function waitForSetups(rootDir: string, child: ChildProcess, perFixture = 1): Promise<void> {
+  return waitForLog(rootDir, child, `${perFixture} setup(s) of tenant and of ledger`, (log) => {
+    const setups = log.filter((entry) => entry.phase === "setup");
+    const count = (fixture: string): number => setups.filter((entry) => entry.fixture === fixture).length;
+    return count("tenant") >= perFixture && count("ledger") >= perFixture;
+  });
+}
+
+function waitForTeardowns(rootDir: string, child: ChildProcess, count: number, fixture?: string): Promise<void> {
+  return waitForLog(rootDir, child, `${count} ${fixture ?? "fixture"} teardown(s) to start`, (log) =>
+    log.filter((entry) => entry.phase === "teardown" && (fixture === undefined || entry.fixture === fixture))
+      .length >= count,
+  );
 }
 
 async function readFixturePids(rootDir: string): Promise<number[]> {
@@ -95,12 +144,12 @@ function isAlive(pid: number): boolean {
   }
 }
 
-async function waitForGone(pids: readonly number[], timeoutMs: number): Promise<number[]> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline && pids.some(isAlive)) {
+async function waitForGone(pids: readonly number[]): Promise<void> {
+  waitingFor = `worker processes ${pids.join(", ")} to exit`;
+  while (pids.some(isAlive)) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  return pids.filter(isAlive);
+  waitingFor = null;
 }
 
 function collect(stream: NodeJS.ReadableStream | null): () => string {
@@ -111,16 +160,11 @@ function collect(stream: NodeJS.ReadableStream | null): () => string {
   return () => text;
 }
 
-function waitForClose(child: ChildProcess, timeoutMs: number): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`child ${child.pid} did not exit within ${timeoutMs}ms`));
-    }, timeoutMs);
-    child.once("close", (code, signal) => {
-      clearTimeout(timer);
-      resolve({ code, signal });
-    });
-  });
+async function waitForClose(child: ChildProcess): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  waitingFor = `child ${child.pid} to exit and close its output`;
+  const closed = await spawnedClose.get(child)!;
+  waitingFor = null;
+  return closed;
 }
 
 function stoppedBy(expected: NodeJS.Signals, code: number | null, signal: NodeJS.Signals | null): boolean {
@@ -141,11 +185,16 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       }
     }
     children.length = 0;
+    spawnedStderr.clear();
+    spawnedClose.clear();
     for (const pid of workerPids) {
       if (isAlive(pid)) process.kill(pid, "SIGKILL");
     }
     workerPids.length = 0;
     await removeTempDir(rootDir);
+    const unfinished = waitingFor;
+    waitingFor = null;
+    if (unfinished !== null) throw new Error(`the test ended while still waiting for ${unfinished}`);
   });
 
   it("tears both scopes down when nuka run finishes", async () => {
@@ -186,12 +235,12 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "--concurrency",
       "2",
     ]);
-    await waitForSetups(rootDir, 2);
+    await waitForSetups(rootDir, child, 2);
     const pids = await readFixturePids(rootDir);
     child.kill("SIGKILL");
-    await waitForClose(child, 5_000);
+    await waitForClose(child);
 
-    expect(await waitForGone(pids, 10_000), "worker processes still alive").toEqual([]);
+    await waitForGone(pids);
     const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
     expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
       "ledger:failed",
@@ -199,7 +248,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "tenant:failed",
       "tenant:failed",
     ]);
-  }, 40_000);
+  }, SPAWNED_TEST_TIMEOUT_MS);
 
   it("tears every worker's fixtures down when they write to stdout and stderr after the parent is killed with SIGKILL", async () => {
     const child = spawnNuka(
@@ -207,12 +256,12 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       ["run", "--no-check", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
       { ...process.env, TEARDOWN_WRITES: "1" },
     );
-    await waitForSetups(rootDir, 2);
+    await waitForSetups(rootDir, child, 2);
     const pids = await readFixturePids(rootDir);
     child.kill("SIGKILL");
-    await waitForClose(child, 5_000);
+    await waitForClose(child);
 
-    expect(await waitForGone(pids, 10_000), "worker processes still alive").toEqual([]);
+    await waitForGone(pids);
     const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
     expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
       "ledger:failed",
@@ -220,7 +269,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "tenant:failed",
       "tenant:failed",
     ]);
-  }, 40_000);
+  }, SPAWNED_TEST_TIMEOUT_MS);
 
   it("gives a step under nuka run --concurrency 2 an empty stdin", async () => {
     const child = spawnNuka(rootDir, [
@@ -234,7 +283,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
     ]);
     const stdout = collect(child.stdout);
     const stderr = collect(child.stderr);
-    const closed = await waitForClose(child, 20_000);
+    const closed = await waitForClose(child);
 
     expect(closed, stderr()).toEqual({ code: 0, signal: null });
     const records = stdout()
@@ -242,7 +291,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       .split("\n")
       .map((line) => JSON.parse(line) as { status: string });
     expect(records.map((record) => record.status)).toEqual(["passed", "passed"]);
-  }, 40_000);
+  }, SPAWNED_TEST_TIMEOUT_MS);
 
   it("exits nuka run --concurrency 2 when project code listens on the worker's IPC channel", async () => {
     const child = spawnNuka(
@@ -251,10 +300,10 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       { ...process.env, IPC_MESSAGE_LISTENER: "1" },
     );
     const stderr = collect(child.stderr);
-    const closed = await waitForClose(child, 20_000).finally(() => readFixturePids(rootDir));
+    const closed = await waitForClose(child).finally(() => readFixturePids(rootDir));
 
     expect(closed, stderr()).toEqual({ code: 0, signal: null });
-  }, 40_000);
+  }, SPAWNED_TEST_TIMEOUT_MS);
 
   it("names project code closing a worker's IPC channel, and tears that worker down", async () => {
     const child = spawnNuka(
@@ -263,7 +312,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       { ...process.env, DISCONNECT_IPC: "1" },
     );
     const stderr = collect(child.stderr);
-    const closed = await waitForClose(child, 20_000);
+    const closed = await waitForClose(child);
 
     expect(closed.code, stderr()).toBe(1);
     expect(
@@ -276,7 +325,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "tenant:failed",
       "tenant:failed",
     ]);
-  }, 40_000);
+  }, SPAWNED_TEST_TIMEOUT_MS);
 
   it("finishes a forwarded signal's teardown in every worker when the parent is then killed with SIGKILL", async () => {
     const child = spawnNuka(
@@ -284,18 +333,14 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       ["run", "--no-check", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
       { ...process.env, SIGNAL_TEARDOWN_HOLD_MS: "3000" },
     );
-    await waitForSetups(rootDir, 2);
+    await waitForSetups(rootDir, child, 2);
     const pids = await readFixturePids(rootDir);
     child.kill("SIGTERM");
-    const deadline = Date.now() + 20_000;
-    while ((await readLog(rootDir)).filter((entry) => entry.phase === "teardown").length < 2) {
-      if (Date.now() > deadline) throw new Error("tenant teardown did not start within 20s");
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
+    await waitForTeardowns(rootDir, child, 2);
     child.kill("SIGKILL");
-    await waitForClose(child, 5_000);
+    await waitForClose(child);
 
-    expect(await waitForGone(pids, 15_000), "worker processes still alive").toEqual([]);
+    await waitForGone(pids);
     const teardowns = (await readLog(rootDir)).filter((entry) => entry.phase === "teardown");
     expect(teardowns.map((entry) => `${entry.fixture}:${entry.outcome}`).sort()).toEqual([
       "ledger:failed",
@@ -303,7 +348,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "tenant:failed",
       "tenant:failed",
     ]);
-  }, 60_000);
+  }, SPAWNED_TEST_TIMEOUT_MS);
 
   it("names a signal that arrives after every scenario had a record under nuka run --concurrency 2", async () => {
     const child = spawnNuka(
@@ -313,35 +358,31 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
     );
     const stdout = collect(child.stdout);
     const stderr = collect(child.stderr);
-    const deadline = Date.now() + 20_000;
-    while ((await readLog(rootDir)).filter((entry) => entry.fixture === "ledger" && entry.phase === "teardown").length < 2) {
-      if (Date.now() > deadline) throw new Error(`ledger teardown did not start within 20s:\n${stderr()}`);
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
+    await waitForTeardowns(rootDir, child, 2, "ledger");
     const pids = await readFixturePids(rootDir);
     child.kill("SIGTERM");
-    const closed = await waitForClose(child, 20_000);
+    const closed = await waitForClose(child);
 
     expect(stoppedBy("SIGTERM", closed.code, closed.signal), stderr()).toBe(true);
-    expect(await waitForGone(pids, 5_000), "worker processes still alive").toEqual([]);
+    await waitForGone(pids);
     expect(stdout().trim().split("\n")).toHaveLength(2);
     expect(stderr()).toContain("SIGTERM arrived after every scenario had a record, so AfterAll hooks may not have run.\n");
     expect(stderr()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
-  }, 60_000);
+  }, SPAWNED_TEST_TIMEOUT_MS);
 
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     it(`tears both scopes down when nuka run receives ${signal}`, async () => {
       const child = spawnNuka(rootDir, ["run", "--no-check", "features/hold.feature", "--quiet"]);
-      await waitForSetups(rootDir);
+      await waitForSetups(rootDir, child);
       child.kill(signal);
-      const closed = await waitForClose(child, 10_000);
+      const closed = await waitForClose(child);
 
       expect(stoppedBy(signal, closed.code, closed.signal)).toBe(true);
       const log = await readLog(rootDir);
       const teardowns = log.filter((entry) => entry.phase === "teardown");
       expect(teardowns.map((entry) => entry.fixture)).toEqual(["tenant", "ledger"]);
       expect(teardowns.every((entry) => entry.outcome === "failed")).toBe(true);
-    });
+    }, SPAWNED_TEST_TIMEOUT_MS);
 
     it(`tears every worker's fixtures down when nuka run --concurrency 2 receives ${signal}`, async () => {
       const child = spawnNuka(rootDir, [
@@ -356,13 +397,13 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       ]);
       const stdout = collect(child.stdout);
       const stderr = collect(child.stderr);
-      await waitForSetups(rootDir, 2);
+      await waitForSetups(rootDir, child, 2);
       const pids = await readFixturePids(rootDir);
       child.kill(signal);
-      const closed = await waitForClose(child, 20_000);
+      const closed = await waitForClose(child);
 
       expect(stoppedBy(signal, closed.code, closed.signal), stderr()).toBe(true);
-      expect(await waitForGone(pids, 5_000), "worker processes still alive").toEqual([]);
+      await waitForGone(pids);
       const log = await readLog(rootDir);
       expect(
         log.filter((entry) => entry.phase === "setup").length,
@@ -378,42 +419,38 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       expect(stdout()).toBe("");
       expect(stderr()).toContain(`${signal} stopped this run before every scenario had a record, so it is incomplete.\n`);
       expect(stderr()).toMatch(/^0 scenarios: 0 passed, 0 failed/m);
-    }, 40_000);
+    }, SPAWNED_TEST_TIMEOUT_MS);
 
     it(`exits at once on a second ${signal} to nuka run --concurrency 2 and leaves no worker behind`, async () => {
       const child = spawnNuka(
         rootDir,
         ["run", "--no-check", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
-        { ...process.env, SIGNAL_TEARDOWN_HOLD_MS: "120000" },
+        { ...process.env, SIGNAL_TEARDOWN_HOLD_MS: String(5 * SPAWNED_TEST_TIMEOUT_MS) },
       );
-      await waitForSetups(rootDir, 2);
+      await waitForSetups(rootDir, child, 2);
       const pids = await readFixturePids(rootDir);
       child.kill(signal);
-      const deadline = Date.now() + 20_000;
-      while ((await readLog(rootDir)).filter((entry) => entry.phase === "teardown").length < 2) {
-        if (Date.now() > deadline) throw new Error("tenant teardown did not start within 20s");
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
+      await waitForTeardowns(rootDir, child, 2);
       child.kill(signal);
-      const closed = await waitForClose(child, 5_000);
+      const closed = await waitForClose(child);
 
       expect(stoppedBy(signal, closed.code, closed.signal)).toBe(true);
-      expect(await waitForGone(pids, 5_000), "worker processes still alive").toEqual([]);
+      await waitForGone(pids);
       const log = await readLog(rootDir);
       expect(log.filter((entry) => entry.fixture === "ledger" && entry.phase === "teardown")).toEqual([]);
-    }, 60_000);
+    }, SPAWNED_TEST_TIMEOUT_MS);
 
     it(`tears both scopes down when nuka do receives ${signal}`, async () => {
       const child = spawnNuka(rootDir, ["do", "hold-fixture", "--args", "{}"]);
-      await waitForSetups(rootDir);
+      await waitForSetups(rootDir, child);
       child.kill(signal);
-      const closed = await waitForClose(child, 10_000);
+      const closed = await waitForClose(child);
 
       expect(stoppedBy(signal, closed.code, closed.signal)).toBe(true);
       const log = await readLog(rootDir);
       const teardowns = log.filter((entry) => entry.phase === "teardown");
       expect(teardowns.map((entry) => entry.fixture)).toEqual(["tenant", "ledger"]);
       expect(teardowns.every((entry) => entry.outcome === "failed")).toBe(true);
-    });
+    }, SPAWNED_TEST_TIMEOUT_MS);
   }
 });

@@ -255,6 +255,23 @@ just until 0.1.
 
 ### Fixed
 
+- **Tests that a loaded machine failed now assert an ordering or an event instead of a duration.**
+  This changes the test suite only. The compat timeout tests in
+  `tests/compat-run-scope.test.ts` held their slow step or hook on a sleep
+  and bounded how long the run took. The step now waits on a promise only
+  the test settles, so the run returning at all, with the step still held,
+  shows the timeout cut it off. The bare `@serial` test in
+  `tests/run-concurrency.test.ts` now has every scenario wait until all
+  three have started, instead of comparing timestamps, and the
+  `--concurrency 1` comparison no longer compares each step's measured
+  duration. The spawned-process waits in
+  `tests/run-fixture-signal-teardown.test.ts` and
+  `tests/explore-fixture-scope.test.ts` drop their own 5 to 20 second
+  deadlines: each waits for its event, fails at once if the child exits
+  first, and leaves a hang to the test's timeout. The `nuka scaffold
+  --pattern` text property gets the five-minute budget its sibling
+  property already had.
+
 - **Discovery, the `.feature` walk, and the oath walk follow symbolic links.**
   A step file, a feature, or a directory linked into `featuresDir` (a
   monorepo's shared steps, for example) used to be skipped with no report,

@@ -341,6 +341,9 @@ describe("nuka scaffold --pattern: any text", () => {
     gs.text({ maxSize: 6 }),
   );
 
+  // Each of the 40 cases runs up to three commands, and a failing case is
+  // shrunk through many more, so the suite's one-test budget is too small.
+  // It gets the budget the property above has for the same commands.
   it("refuses with no file, or writes a step that imports with the exact pattern and passes nuka check", () =>
     hegel.testAsync(
       async (tc) => {
@@ -365,7 +368,7 @@ describe("nuka scaffold --pattern: any text", () => {
         }
       },
       { testCases: 40 },
-    ));
+    ), 300_000);
 });
 
 // Property: the Then body that `--then` writes for one capture runs for any

@@ -2,9 +2,9 @@ import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
 // Holds the process open long enough for a test to deliver SIGINT or
-// SIGTERM after both fixtures have logged setup. The wait is longer than
-// the test's own budget, so a run that ignores the signal cannot finish
-// the step and tear down on the normal path before the test gives up.
+// SIGTERM after both fixtures have logged setup. The wait is five times the
+// test's own budget, so a run that ignores the signal cannot finish the
+// step and tear down on the normal path before the test gives up.
 export default defineStep({
   pattern: "the fixture stays open",
   description: "Names tenant and ledger, then waits",
@@ -17,7 +17,7 @@ export default defineStep({
   async run({ tenant, ledger }: any) {
     void tenant;
     void ledger;
-    await new Promise((resolve) => setTimeout(resolve, 120_000));
+    await new Promise((resolve) => setTimeout(resolve, 600_000));
     return {};
   },
 });

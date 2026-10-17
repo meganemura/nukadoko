@@ -9,16 +9,21 @@ function record(label: string): void {
   g.__nukadokoRunAllHooksTimeoutLog = log;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Settles only when tests/compat-run-scope.test.ts releases it, after the
+// run has returned. A run that waited for this hook instead of cutting it
+// off at its timeout would never return, however fast or slow the machine.
+function heldUntilReleased(): Promise<void> {
+  const g = globalThis as Record<string, unknown>;
+  const held = (g.__nukadokoHeldSteps as Array<() => void> | undefined) ?? [];
+  g.__nukadokoHeldSteps = held;
+  return new Promise((resolve) => held.push(resolve));
 }
 
-// Registered first: outlives its own 20ms timeout (BeforeAll({ timeout },
-// fn)'s own timeout takes effect), recording its own start before the
-// sleep that outlives it.
+// Registered first: only its own 20ms timeout (BeforeAll({ timeout }, fn)'s
+// own timeout takes effect) can end it. It records its start first.
 BeforeAll({ timeout: 20 }, async function () {
   record("beforeAll-first");
-  await sleep(500);
+  await heldUntilReleased();
 });
 
 // Registered second: must never run at all (the first

@@ -111,9 +111,13 @@ describe("fixture scope under nuka explore", () => {
       { cwd: rootDir, stdio: ["ignore", "pipe", "pipe"] },
     );
     children.push(child);
-    const deadline = Date.now() + 20_000;
+    // No deadline: a loaded runner can take tens of seconds to start the
+    // CLI. A child that exits first fails here at once, and a hang is left
+    // to the test's own timeout.
     while (count(await readLog(rootDir), "ledger", "setup") === 0 || count(await readLog(rootDir), "tenant", "setup") === 0) {
-      if (Date.now() > deadline) throw new Error(`fixture setup was not logged within 20s: ${JSON.stringify(await readLog(rootDir))}`);
+      if (child.exitCode !== null || child.signalCode !== null) {
+        throw new Error(`the child exited before fixture setup was logged: ${JSON.stringify(await readLog(rootDir))}`);
+      }
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
     const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) =>

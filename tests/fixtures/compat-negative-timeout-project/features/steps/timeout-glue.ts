@@ -24,13 +24,22 @@ Given(
   },
 );
 
-// Own positive timeout wins over the negative default. 30ms is far under
-// the 400ms sleep, so a run that honors the option fails here, and a run
-// that treated every timeout as off would wait out the sleep.
+// Settles only when tests/compat-run-scope.test.ts releases it, after the
+// run has returned. A run that treated every timeout as off would never
+// return, however fast or slow the machine.
+function heldUntilReleased(): Promise<void> {
+  const g = globalThis as Record<string, unknown>;
+  const held = (g.__nukadokoHeldSteps as Array<() => void> | undefined) ?? [];
+  g.__nukadokoHeldSteps = held;
+  return new Promise((resolve) => held.push(resolve));
+}
+
+// Own positive timeout wins over the negative default, so only that 30ms
+// timeout can end this step.
 Given(
   "a legacy step whose own timeout is short sleeps too long",
   { timeout: 30 },
   async function () {
-    await sleep(400);
+    await heldUntilReleased();
   },
 );
