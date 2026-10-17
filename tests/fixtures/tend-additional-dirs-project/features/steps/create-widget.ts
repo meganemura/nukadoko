@@ -7,7 +7,6 @@ import { defineStep } from "../../nukadoko-shim.js";
 export default defineStep({
   pattern: "a widget {name:string} is created",
   description: "Creates a widget",
-  rationale: "Minimal identity step for this fixture; no config surface needed",
   args: z.object({ name: z.string().describe("the widget's name") }),
   returns: z.object({ id: z.string().describe("the created widget's id") }),
   async run({}, args) {

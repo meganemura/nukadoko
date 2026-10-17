@@ -28,11 +28,7 @@ export interface TendIssue {
   readonly fixture?: string;
 }
 
-/** How much of a countable thing typed steps declare vs. could declare —
- * shared shape for the two "declaration coverage" numbers below: exactly
- * two such numbers, `rationale` and `describe`,
- * kept to that shape rather than each spelling out its own field names so a
- * reader sees at a glance that both mean "declared out of total". */
+/** How much of a countable thing typed steps declare vs. could declare. */
 export interface TendDeclarationCoverage {
   readonly declared: number;
   readonly total: number;
@@ -44,14 +40,14 @@ export interface TendDeclarationCoverage {
  * steps still on disk is a normal state, so this never touches `errors`/
  * `notes` or the exit code.
  * Capped at the three numbers docs/spec.md's own two paragraphs name —
- * typed vs. compat, and the two declaration-coverage ratios — on purpose:
+ * typed vs. compat, and the declaration-coverage ratio — on purpose:
  * every additional number here dilutes the ones that matter.
  *
  * `compat_step_names` names every counted entity for `--json`'s reader: an
  * agent finds "these 8" more actionable than "compat is 8".
- * `rationale`/`describe` do *not* get an equivalent name list —
- * `missing-rationale.ts`/`missing-describe.ts`'s own notes already name
- * those steps/fields individually (with a `file`), so repeating the names
+ * `describe` does *not* get an equivalent name list —
+ * `missing-describe.ts`'s own notes already name
+ * those fields individually (with a `file`), so repeating the names
  * here would be the same information twice; only the migration breakdown is
  * new, because nothing else in this report currently names a compat step at
  * all.
@@ -71,7 +67,6 @@ export interface TendSummary {
   readonly typed_steps: number;
   readonly compat_steps: number;
   readonly compat_step_names: readonly string[];
-  readonly rationale: TendDeclarationCoverage;
   readonly describe: TendDeclarationCoverage;
   readonly scanned_feature_dirs: readonly string[];
   readonly read_only_steps: number;
@@ -104,9 +99,22 @@ export const TEND_CODES: ReadonlySet<string> = new Set(listTendCodes().map((entr
  * otherwise only learn that the code is gone, not what to gate on now. The
  * nine sign-off codes went away with `nuka accept`; the run summary that
  * `nuka run` writes, carried on the pull request, is what a person reads
- * instead. */
-export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map(
+ * instead. The two codes that repeated a `nuka check` finding now live only
+ * there, so `nuka check`'s exit code is the gate. */
+export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map([
   [
+    "step-rationale-missing",
+    "was removed with defineStep's `rationale` option. Delete the `rationale:` lines from your step files (docs/upgrading.md)",
+  ],
+  [
+    "additional-feature-dir-missing",
+    "is reported only by `nuka check` now, as an error, so a failing `nuka check` is the gate (docs/upgrading.md)",
+  ],
+  [
+    "import-failures-unseen",
+    "is reported only by `nuka check` now, as `step-file-import-failed`, so a failing `nuka check` is the gate (docs/upgrading.md)",
+  ],
+  ...[
     "feature-never-signed",
     "signed-feature-unscanned",
     "signoff-condition-mismatch",
@@ -119,5 +127,5 @@ export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map(
   ].map((code) => [
     code,
     "was removed with `nuka accept`. A person now reads the run summary `nuka run` writes, on the pull request, and approving the pull request is the sign-off (docs/upgrading.md)",
-  ]),
-);
+  ] as const),
+]);

@@ -9,11 +9,11 @@ that follows a navigation too closely: none of that stops a run, so
 `nuka check` never mentions it. `nuka tend` is what finds it, and it is
 not a step of the acceptance loop.
 
-A step file that failed to import is a different report. `nuka tend` adds
-the note `import-failures-unseen`, because that file's steps are missing
-from every count and finding it prints. `nuka check` names the cause as
-`step-file-import-failed`. Fix that import first; the rest of the tend
-report is not complete until it is. When the finding ends with `stands
+A step file that failed to import is `nuka check`'s report, not tend's.
+`nuka check` names it as `step-file-import-failed`, and `nuka tend` counts
+only the steps that imported, so its counts and findings leave that file's
+steps out. Fix that import first; the tend report is not complete until
+it is. When the finding ends with `stands
 for features/steps/<name>.ts, which does not exist`, a step file was
 renamed or deleted under an import that still names it: point the import
 in the file it names at the new file, or remove it.
@@ -43,12 +43,11 @@ invocation's exit code turns red. The code to pass is the one printed
 beside each finding, or one from `nuka tend --codes`, which lists every
 code with a one-line meaning before any of them has fired.
 
-By default it leaves out two declaration notes: `step-rationale-missing`
-(a typed step with no `rationale`) and `schema-field-undescribed` (a field
-with no `.describe()`). A gap there is a choice the project may keep, not
-something that rots, so the `declared:` line only counts it
-(`rationale 2/9`). `nuka tend --all` names each one, and naming one of the
-two codes in `--fail-on` reports that code too.
+By default it leaves out one declaration note: `schema-field-undescribed`
+(a field with no `.describe()`). A gap there is a choice the project may
+keep, not something that rots, so the `declared:` line only counts it
+(`describe 7/9`). `nuka tend --all` names each one, and naming the code in
+`--fail-on` reports it too.
 
 `step-description-todo` names a typed step whose description is still
 the `TODO: describe <name>` that `nuka scaffold` wrote without

@@ -434,22 +434,6 @@ failure's own step record can show you: a failed step's `used` entries
 carry each upstream step's full `result`, so whatever this step declined to
 return is exactly what stays missing from that step record too.
 
-## What `rationale` is for
-
-`description` says what the step does, and is what an agent reads to pick
-a step out of the vocabulary. `rationale` says why it is built this way
-and what was tried and rejected, and is what an agent reads before
-deciding it may rewrite the step. Only `nuka describe` shows it, and it
-never reaches a step record: it describes the contract, not one
-execution.
-
-Write it wherever a rewrite could destroy something a reader cannot see:
-a workaround for the system under test, an approach that was tried and
-failed, a constraint that lives outside the code. Leave it out when
-there is nothing to say: a placeholder is worse than none. `nuka tend`
-prints the ratio (`rationale 2/9`), and `nuka tend --all` names each typed
-step without one. It never fails a run.
-
 ## Chaining a value from an earlier step
 
 When a step needs a value an earlier step produced, reach for `from` first:

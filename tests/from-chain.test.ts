@@ -254,7 +254,7 @@ describe("nuka steps --json: from is exposed", () => {
     expect(archive?.from).toEqual({ projectId: { step: "create-project", key: "id" } });
 
     // A step with no `from` at all omits the field entirely (same "absent
-    // when empty" convention as `rationale`/`used`).
+    // when empty" convention as `timeout`/`used`).
     const create = report.steps.find((s) => s.name === "create-project");
     expect(create).not.toHaveProperty("from");
   });

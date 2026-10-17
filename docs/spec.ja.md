@@ -365,14 +365,6 @@ export default defineStep({
   典型的には、観測した値がすでに `from` を通じて args として届いている Then の step です。
   何かを観測する step は、それを返すことに変わりありません(前述)。
   `returns` を宣言した step の意味は変わりません: `run` はその schema が検証する値を返し、何も返さなければ step は失敗します。
-- `rationale` は任意で、デフォルト値を持ちません。
-  省略すると `Step.rationale` は `undefined` になり、`pattern` と同じ慣習です。
-  `description` とは別の問いに答えます。
-  `description` はその step が何をするかで、`nuka steps` が一覧するのはこの情報であり、agent はそれを見てどの step を呼ぶか選びます。
-  `rationale` はなぜこう実装したのか、何を試して何を捨てたのかで、agent が「この step を書き換えてよいか」を決める前に必要とする情報です。
-  `nuka steps` の一覧には決して現れず、表示するのは `nuka describe` だけです。
-  step record にも現れません。
-  step record は 1 回の実行を記録するものであり、rationale はその step のどの record でも同一になる契約の属性であって、実行が生み出したものではないからです。
 - `run` の本体は、自分が分割代入した fixture の上で自由に書ける TypeScript です。
   合成とは、別の step モジュールをインポートし、同じ fixture bag でその `run` を呼び出すことです。
   共有ヘルパーは通常のモジュール(例: `features/steps/lib/`)に置きます。
@@ -2589,7 +2581,7 @@ default export が無いファイル、または default export が Promise で�
 `additionalFeatureDirs` にそのディレクトリを名指しすれば、その feature が結び付ける step は `pattern-unbound` として報告される代わりに結び付けられていると数えられ、それでいてなお無人では実行されません。
 プロダクト自身の中核の経路を述べる feature は `featuresDir` へ移り、ここへのエントリは要りません。
 ディスク上に存在しないエントリは config の誤りであり、空のスキャン結果として素通りさせてよいものではありません。
-`nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` は同じ事実を注記として報告します。
+`nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` はそれを繰り返しません。
 
 この feature の走査は、`featuresDir` でも、各 `additionalFeatureDirs` エントリでも、`nuka run` に渡したディレクトリでも、どの深さでも `node_modules` と `.` で始まるディレクトリをスキップします。
 step discovery も同じディレクトリをスキップします。
@@ -3316,7 +3308,7 @@ nukadoko はすべての段階を記録します。
   最初に出力されるのは、件数はその範囲を読み手が知るまで何も意味しないからです。
 - `bed:` は、語彙のうちどれだけが compat ではなく型付けされているかを示します。
   加えて、いくつの型付き step が `mutates: false`(読み取り専用)を宣言しているかも示します。
-- `declared:` は、型付き step が宣言できることのうち、実際にどれだけが宣言されているか(`rationale`、各スキーマフィールドの `.describe()`)を示します。
+- `declared:` は、型付き step のスキーマフィールドのうち、いくつが `.describe()` を持つかを示します。
   その件数の元になる注記を既定の報告が外したときは(下記を参照)、`nuka tend --all` がそれぞれを名指すことをこの行が告げます。
 
 `--json` では、同じサマリーが `summary` オブジェクトになり、nukadoko が出力するほかの文書と同じく snake_case です。
@@ -3330,14 +3322,6 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 
 次の所見は、`tend` が何を調べているか、そしてそれぞれがなぜスタイルの問題ではなく腐敗なのかを示します。
 
-- **import に失敗した step ファイル。**
-  `tend` は `nuka check` と同じ寛容な step 発見を使います(「報告は寛容に、実行は速く失敗する」を参照)。
-  壊れた glue ファイルは run を止める代わりにスキップされます。
-  そのため、それが本来もたらしていたはずのものは、ここでのあらゆる件数と所見から静かに欠落します。
-  何も失敗していないから欠落しているのではありません。
-  run 全体で 1 件の注記であり、ファイルごとの 1 件ではありません。
-  壊れたファイル自身の原因は `nuka check` 自身の所見(`step-file-import-failed`)です。
-  そのため、この所見はただ何件の step が見えなかったかとそのファイル名だけを述べ、exit code には触れません。
 - **何にも行使されない `from` 宣言。**
   その step があらゆる feature 内で出現するたびに、そのキーは行から直接キャプチャされます。
   そのため、宣言された生産者は一度も何も供給しません。
@@ -3361,12 +3345,6 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   agent はその値を書きません。
   `nuka describe` が生産者を名指し、その生産者のフィールドが意味を説明します。
   同じ文をすべての消費者に書かせると、ずれていく写しが増えるだけです。
-- **`rationale` を持たない step。**
-  `description` はその step が何をするかを述べます。
-  それはその step を呼ぶには十分です。
-  `rationale` はなぜこう作られているのか、何が却下されたのかを述べます。
-  それは、agent がその step を書き換えてよいと決める前に必要とする情報です。
-  それが欠けていれば、あらゆる書き換えは根拠を欠いたまま行われます。
 - **description が scaffold の TODO のままの step**(`step-description-todo`)。
   `--description` なしの `nuka scaffold` は `TODO: describe <name>` を書きます。
   それは import でき、行に結び付き、実行もできるので、ほかに報告するものはありません。
@@ -3448,17 +3426,17 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 変わったのはそのジョブに対するチームの方針であって、所見の性質ではないからです。
 `tend` が報告しない code は最初に拒否されるので、打ち間違いが「決して発火しないフラグ」になることはありません。
 以前のリリースが報告していた code、たとえば `accept` コマンドとともに消えた sign-off の code は、名前を挙げて拒否され、何が置き換えたかが示されます(`docs/upgrading.ja.md` を参照)。
+未知の code を拒否するときは、すべての code を一覧する `nuka tend --codes` を案内します。
 これが、他の全員の `tend` を赤くせずに、PR のジョブが `pattern-unbound` でゲートを掛ける方法です。
 
-上の所見のうち 2 つは、求められたときだけ報告されます。
-`.describe()` を持たないスキーマフィールド(`schema-field-undescribed`)と、`rationale` を持たない step(`step-rationale-missing`)です。
-`nuka tend --all` はこの 2 つを報告します。
-`--fail-on` がどちらかの code を名指したときも、その code を報告します。
+上の所見のうち 1 つは、求められたときだけ報告されます。
+`.describe()` を持たないスキーマフィールド(`schema-field-undescribed`)です。
+`nuka tend --all` はそれを報告します。
+`--fail-on` がその code を名指したときも、それを報告します。
 自分の code を見られないゲートは、何も言わずに通ってしまうからです。
-どちらも宣言の欠けであって、宣言が記述対象からずれていく腐敗ではなく、プロジェクトはそれを抱えたままでいられます。
-毎回報告されていたころは、若いプロジェクトの `tend` が出力するもののほとんどがこの 2 つでした。
-チームはそれを黙らせるためにプレースホルダーの rationale を書き、それは rationale がないより悪い結果でした。
-`declared:` の行は引き続き両方を数えるので、step ごとの注記がなくても欠けは見えたままです。
+それは宣言の欠けであって、宣言が記述対象からずれていく腐敗ではなく、プロジェクトはそれを抱えたままでいられます。
+毎回報告されていたころは、若いプロジェクトの `tend` が出力するもののほとんどがこれでした。
+`declared:` の行は引き続きそれを数えるので、step ごとの注記がなくても欠けは見えたままです。
 既定の報告は、構造的に腐っているものを名指す所見をすべて残します。
 使われていない宣言、束ねられていない step、古くなった fixture です。
 
@@ -3740,8 +3718,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               any step's needs_error or from_errors is
                               present, output printed either way
 nuka describe <step>          full contract, schemas as JSON Schema, plus
-                              rationale and timeout when the step declared
-                              them, plus
+                              timeout when the step declared
+                              one, plus
                               import_failures beside it (same shape as nuka
                               steps' own). When args or returns cannot be
                               represented as JSON Schema, that side is null
@@ -3911,23 +3889,21 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               of it declares what it could, then notes, none
                               of which changes the exit code (--fail-on
                               <code> makes a named note exit non-zero, for
-                              that invocation; a removed sign-off code is
-                              refused by name): a step file
-                              that failed to import, a `from` nothing
+                              that invocation; a removed code is
+                              refused by name): a `from` nothing
                               exercises, a patterned step no
                               feature binds, a
                               configured parameter type no pattern uses, a
                               `defineParameterType` still registered from
                               support code, a secrets entry naming a key no
-                              envFile defines, a configured
-                              additionalFeatureDirs entry absent from disk,
+                              envFile defines,
                               a fixture no typed step requires, a fixture
                               reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
                               open with the same steps (measured, no advice);
                               --all adds a schema field with no
-                              `.describe()` and a step with no `rationale`,
-                              and --fail-on naming either code adds that one
+                              `.describe()`, and --fail-on naming that code
+                              adds it too
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               whether a plain run reports it or only --all
                               does, and a one-line description, instead of
@@ -4003,7 +3979,7 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 `nuka check` はその失敗を `step-file-import-failed` として名指しします。
 原因が相対パスの `.js`、`.mjs`、`.cjs` の import で、それが指す `.ts`、`.mts`、`.cts` ファイルが存在しない場合は、Node 自身の文の後ろに、そのファイルと import を直すべきファイルを、どちらもプロジェクトのルートからの相対パスで付け足します。
 `nuka steps`/`nuka describe` は同じ事実を(前述の)`import_failures` として運びます。
-`nuka tend` は読めなかったファイルの周りで静かに数を減らす代わりに、`import-failures-unseen` という 1 件だけの note を足します(「Tending(手入れ)」を参照)。
+`nuka tend` は import できたものだけを数え、`nuka check` の所見を繰り返さないので、読み手は `nuka check` を並べて実行します(「Tending(手入れ)」を参照)。
 `nuka run`、`nuka do`、`nuka init` はこれから step を実行しよう、あるいはこれから実行するプロジェクトを立ち上げようとしている道具なので、fail-fast のままです。
 同じ壊れたファイルは呼び出し全体をそのまま拒否します。
 なぜなら、その先へ進むことはこれから実行しようとしている何かにとって危険であり、報告するだけとは違うからです。

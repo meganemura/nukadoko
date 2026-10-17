@@ -80,8 +80,8 @@ just until 0.1.
   `code`, `default` or `--all`, and a one-line description; `--json` prints
   `{ schema_version, codes }`, each code `{ code, description,
   reportedByDefault }`. `reportedByDefault` is
-  false for `step-rationale-missing` and `schema-field-undescribed`, which a
-  run reports only under `--all` or when `--fail-on` names them. It answers
+  false for `schema-field-undescribed`, which a run reports only under
+  `--all` or when `--fail-on` names it. It answers
   before the project loads, so it works while the config is broken. The
   codes now live in one registry (`src/tend/codes.ts`), and a tend finding
   whose code is not registered fails to compile; `--fail-on` and `--all`
@@ -154,6 +154,26 @@ just until 0.1.
   that directory`. nukadoko still never reads a parent's config. stdout,
   `--json` output, and exit codes are unchanged, except for `scaffold`
   below. `init` prints no line.
+
+### Removed
+
+- **BREAKING: `defineStep`'s `rationale` option, and the tend codes that asked for it or repeated `nuka check`.**
+  Projects wrote `rationale` on every step only to quiet `nuka tend`, and
+  the one place it showed was `nuka describe`. `rationale` is gone from
+  `defineStep`'s input type and from `Step`, so a step file that still
+  passes it fails `tsc` with an excess-property error; at run time the
+  value is ignored. `nuka describe` prints no `rationale` key. `nuka
+  tend` drops `step-rationale-missing`, its `summary.rationale` in
+  `--json`, and the `rationale` count on the `declared:` line, which now
+  reads `declared: describe <n>/<total>`. It also drops
+  `additional-feature-dir-missing` and `import-failures-unseen`, which said
+  what `nuka check` already reports as `additional-feature-dir-missing` and
+  `step-file-import-failed`; both stay in `nuka check`. `nuka tend` reports
+  12 codes, and `--all` adds only `schema-field-undescribed`. `nuka tend
+  --fail-on` refuses each of the three removed codes by name, exit 1, with
+  what to do instead. The refusal of an unknown code now ends with
+  "`nuka tend --codes` lists every code." instead of listing the codes
+  inline. docs/upgrading.md says what to change.
 
 ### Packaging
 

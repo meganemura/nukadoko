@@ -91,7 +91,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   export されている TypeScript の型 `StepRecordOk` は `StepRecordPassed` になりました。
 - **`nuka tend --json` の summary のキーは snake_case になりました。**
   `typedSteps`、`compatSteps`、`compatStepNames`、`scannedFeatureDirs`、`readOnlySteps` は、`typed_steps`、`compat_steps`、`compat_step_names`、`scanned_feature_dirs`、`read_only_steps` になります。
-  `rationale` と `describe` の名前は変わりません。
+  `describe` の名前は変わりません。
 - **`nuka describe` は `from` を `nuka steps --json` と同じ形で示します。**
   producer が 1 つのキーは、文字列 `"create-project.id"` ではなく `{ "step": "create-project", "key": "id" }` になります。
   producer が複数のキーは、`"either of A or B"` ではなく、そのオブジェクトの配列になります。
@@ -123,6 +123,20 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   npm は、それより新しい 1.x の横にも `ERESOLVE` なしで nukadoko をインストールします。
   nukadoko のためだけに自分の `playwright` を 1.61.1 に固定していたプロジェクトは、新しい版へ進めて構いません。
   nukadoko がテストしている版は 1.61.1 のままで、`playwright-missing` のインストール行もその版を示します。
+- **`defineStep` は `rationale` を受け取らなくなりました。**
+  step ファイルから `rationale:` の行を消してください。
+  消すまでは、`tsc` がそれぞれを余分なプロパティとして報告します。
+  `nuka` は実行時にその値を無視するので、run は変わりません。
+  残す価値のある理由は、`defineStep` の上のコメントへ移せます。
+  `nuka describe` は `rationale` のキーを出力せず、`nuka tend --json` には `summary.rationale` がありません。
+- **`nuka tend` は `step-rationale-missing`、`additional-feature-dir-missing`、`import-failures-unseen` を報告しなくなりました。**
+  1 つ目は `rationale` とともになくなりました。
+  残りの 2 つは、`nuka check` がすでに `additional-feature-dir-missing`(エラー)と `step-file-import-failed` として報告することを述べていました。
+  代わりに `nuka check` の exit code でゲートを掛けてください。
+  この 3 つのどれかを渡した `nuka tend --fail-on` は exit 1 で終わり、代わりに何をするかを伝えます。
+  そのため、どれかを名指す CI ジョブは、書き換えるまで失敗します。
+  `declared:` の行は `declared: describe <n>/<total>` になります。
+  `rationale` の件数を読むスクリプトは、代わりに `describe` の件数を読みます。
 
 ## 0.15.0 から 0.16.1 へ
 

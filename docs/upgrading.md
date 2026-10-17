@@ -108,7 +108,7 @@ This part does not change release to release.
   `typedSteps`, `compatSteps`, `compatStepNames`, `scannedFeatureDirs`, and
   `readOnlySteps` become `typed_steps`, `compat_steps`,
   `compat_step_names`, `scanned_feature_dirs`, and `read_only_steps`.
-  `rationale` and `describe` keep their names.
+  `describe` keeps its name.
 - **`nuka describe` shows `from` in the shape `nuka steps --json` uses.**
   A key with one producer is `{ "step": "create-project", "key": "id" }`
   instead of the string `"create-project.id"`, and a key with several is
@@ -149,6 +149,21 @@ This part does not change release to release.
   `playwright` to 1.61.1 only for nukadoko can move it forward. nukadoko is
   still tested against 1.61.1, and the `playwright-missing` install line
   still names that version.
+- **`defineStep` no longer takes `rationale`.** Delete the `rationale:`
+  lines from your step files. Until you do, `tsc` reports each one as an
+  excess property, and `nuka` ignores the value at run time, so runs do
+  not change. A reason worth keeping can move into a comment above
+  `defineStep`. `nuka describe` prints no `rationale` key, and `nuka
+  tend --json` has no `summary.rationale`.
+- **`nuka tend` no longer reports `step-rationale-missing`,
+  `additional-feature-dir-missing`, or `import-failures-unseen`.** The
+  first went with `rationale`. The other two said what `nuka check` already
+  reports, as `additional-feature-dir-missing` (an error) and
+  `step-file-import-failed`, so gate on `nuka check`'s exit code instead.
+  `nuka tend --fail-on` with any of the three exits 1 and says what to do
+  instead, so a CI job that names one fails until it is edited. The
+  `declared:` line reads `declared: describe <n>/<total>`; a script that
+  reads the `rationale` count reads the `describe` count instead.
 
 ## 0.15.0 to 0.16.1
 

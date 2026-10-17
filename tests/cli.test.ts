@@ -53,7 +53,7 @@ describe("nuka steps", () => {
     expect(report.steps).toHaveLength(3);
   });
 
-  it("never includes rationale, even for a step that declares one", async () => {
+  it("never includes rationale, even for a step file that still passes one", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["steps", "--json"], {
@@ -133,7 +133,7 @@ describe("nuka describe", () => {
     expect(contract.args.additionalProperties).toBe(false);
   });
 
-  it("includes rationale for a step that declares one", async () => {
+  it("omits rationale for a step file that still passes one", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "create-project"], {
@@ -144,20 +144,7 @@ describe("nuka describe", () => {
 
     expect(exitCode).toBe(0);
     const contract = JSON.parse(stdout.text());
-    expect(contract.rationale).toBe("Fixture-only note: exercises describe's rationale field.");
-  });
-
-  it("omits rationale entirely (no empty field) for a step that declares none", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["describe", "list-projects"], {
-      rootDir: fixture("basic-project"),
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    const contract = JSON.parse(stdout.text());
+    expect(contract.description).toBe("Create a project and return its id");
     expect(contract).not.toHaveProperty("rationale");
   });
 

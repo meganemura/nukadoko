@@ -136,8 +136,7 @@ jobs:
       # sits on its own schedule rather than beside `check`/`run` above.
       # Every finding is a note, so it exits 0; `--fail-on <code>` turns
       # a chosen note red for a team that wants one to gate. `--all`
-      # adds the missing-rationale and missing-.describe() notes, which
-      # are left out by default.
+      # adds the missing-.describe() note, which is left out by default.
       - run: npx nuka tend
 ```
 

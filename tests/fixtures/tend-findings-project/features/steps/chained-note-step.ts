@@ -9,7 +9,6 @@ import createWidget from "./create-widget.js";
 export default defineStep({
   pattern: "the widget is finalized",
   description: "Finalize the widget created earlier in this scenario",
-  rationale: "Deliberately takes no capture so from.id is this step's only source for id, exercising the from-unused finding's negative case",
   args: z.object({ id: z.string().describe("the widget's id, filled by from") }),
   returns: z.object({ finalized: z.boolean().describe("always true") }),
   from: { id: [createWidget, "id"] },

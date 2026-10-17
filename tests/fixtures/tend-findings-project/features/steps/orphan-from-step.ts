@@ -10,7 +10,6 @@ import createWidget from "./create-widget.js";
 export default defineStep({
   pattern: "the widget {id:string} is inspected",
   description: "Inspect a widget by id",
-  rationale: "id is read straight off the line; from exists only as a do --use fallback, which is the point of this fixture",
   args: z.object({ id: z.string().describe("the widget's id") }),
   returns: z.object({ inspected: z.boolean().describe("always true") }),
   from: { id: [createWidget, "id"] },

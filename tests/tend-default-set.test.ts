@@ -8,12 +8,12 @@ import { DECLARATION_TEND_CODES, selectReportedNotes } from "../src/tend/note-se
 import { TEND_CODES } from "../src/tend/types.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: what `nuka tend` reports by default. The two declaration
-// codes (a missing `rationale`, a field with no `.describe()`) are left out
-// unless `--all` is given or `--fail-on` names one; every other code is
-// reported as before. The property tests pin the selection itself; the
-// example runs the real command on a project fresh from `init` and
-// `scaffold`, which is where the two codes used to be the only output.
+// Responsibility: what `nuka tend` reports by default. The declaration code
+// (a field with no `.describe()`) is left out unless `--all` is given or
+// `--fail-on` names it; every other code is reported as before. The
+// property tests pin the selection itself; the example runs the real
+// command on a project fresh from `init` and `scaffold`, which is where the
+// declaration code used to be the only output.
 
 const codes = gs.sampledFrom([...TEND_CODES].sort());
 const notes = gs.arrays(
@@ -38,7 +38,8 @@ describe("selectReportedNotes", () => {
       expect(kept).toEqual(expected);
     }));
 
-  it("is a subset of TEND_CODES, so --fail-on accepts both declaration codes", () => {
+  it("is schema-field-undescribed alone, a code --fail-on accepts", () => {
+    expect([...DECLARATION_TEND_CODES]).toEqual(["schema-field-undescribed"]);
     for (const code of DECLARATION_TEND_CODES) expect(TEND_CODES.has(code)).toBe(true);
   });
 });
@@ -61,7 +62,7 @@ describe("nuka tend on a freshly scaffolded project", () => {
     ).toBe(0);
     // A feature line binds the step and the description is not the TODO, so
     // pattern-unbound and step-description-todo have nothing to say and
-    // only the two declaration codes are left to report.
+    // only the declaration code is left to report.
     await mkdir(path.join(rootDir, "features"), { recursive: true });
     await writeFile(
       path.join(rootDir, "features", "greet.feature"),
@@ -78,36 +79,32 @@ describe("nuka tend on a freshly scaffolded project", () => {
     const stderr = createCaptureSink();
     expect(await runCli(["tend"], { rootDir, stdout, stderr })).toBe(0);
     expect(stdout.text()).not.toMatch(/^note\t/m);
-    expect(stdout.text()).toContain("declared: rationale 0/1, describe 0/1 (nuka tend --all names each one)\n");
+    expect(stdout.text()).toContain("declared: describe 0/1 (nuka tend --all names each one)\n");
     expect(stdout.text()).toContain("ok: nothing to tend\n");
   });
 
-  it("reports the two declaration notes under --all, in text and in --json", async () => {
+  it("reports the declaration note under --all, in text and in --json", async () => {
     const stdout = createCaptureSink();
     expect(await runCli(["tend", "--all"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
     const codesInText = [...stdout.text().matchAll(/^note\t([^\t]+)\t/gm)].map((match) => match[1]);
-    expect(codesInText.sort()).toEqual(["schema-field-undescribed", "step-rationale-missing"]);
-    expect(stdout.text()).toContain("declared: rationale 0/1, describe 0/1\n");
+    expect(codesInText).toEqual(["schema-field-undescribed"]);
+    expect(stdout.text()).toContain("declared: describe 0/1\n");
 
     const json = createCaptureSink();
     expect(await runCli(["tend", "--all", "--json"], { rootDir, stdout: json, stderr: createCaptureSink() })).toBe(0);
     const report = JSON.parse(json.text());
-    expect(report.notes.map((note: { code: string }) => note.code).sort()).toEqual([
-      "schema-field-undescribed",
-      "step-rationale-missing",
-    ]);
+    expect(report.notes.map((note: { code: string }) => note.code)).toEqual(["schema-field-undescribed"]);
   });
 
-  it("leaves both out of --json by default, and reports the one --fail-on names", async () => {
+  it("leaves it out of --json by default, and reports it when --fail-on names it", async () => {
     const json = createCaptureSink();
     expect(await runCli(["tend", "--json"], { rootDir, stdout: json, stderr: createCaptureSink() })).toBe(0);
     expect(JSON.parse(json.text()).notes).toEqual([]);
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    expect(await runCli(["tend", "--fail-on", "step-rationale-missing"], { rootDir, stdout, stderr })).toBe(1);
-    expect(stdout.text()).toMatch(/^note\tstep-rationale-missing\t/m);
-    expect(stdout.text()).not.toMatch(/^note\tschema-field-undescribed\t/m);
-    expect(stderr.text()).toContain("fail-on: step-rationale-missing reported 1 finding\n");
+    expect(await runCli(["tend", "--fail-on", "schema-field-undescribed"], { rootDir, stdout, stderr })).toBe(1);
+    expect(stdout.text()).toMatch(/^note\tschema-field-undescribed\tgreet\t/m);
+    expect(stderr.text()).toBe("fail-on: schema-field-undescribed reported 1 finding\n");
   });
 });

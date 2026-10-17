@@ -441,17 +441,6 @@ export default defineStep({
   args through `from`. A step that observes something still returns it
   (see above). A declared `returns` keeps its meaning: `run` returns the
   value that schema validates, and returning nothing fails the step.
-- `rationale` is optional with no default: omitted, `Step.rationale` is
-  `undefined`, the same convention as `pattern`. It answers a different
-  question than `description`: `description` is what the step does, the
-  information `nuka steps` lists so an agent can pick which step to call;
-  `rationale` is why it is implemented this way and what was tried and
-  rejected, the information an agent needs before deciding it may rewrite
-  the step. It never appears in `nuka steps`' listing (only
-  `nuka describe` shows it) and never in a step record: a step record
-  records one execution, and rationale is a property of the contract that
-  would be identical in every record for the step, not something that
-  execution produced.
 - The `run` body is free TypeScript on the fixtures it destructured.
   Composition is importing another step module and calling its `run` with
   the same fixture bag. Shared helpers live in ordinary modules (e.g.
@@ -3125,8 +3114,8 @@ landed, kept outside `featuresDir`, belongs in `additionalFeatureDirs` (see
 `pattern-unbound`, but the feature does not run unattended. A feature that
 describes a core product path moves into `featuresDir` and needs no
 additional entry. A missing entry
-is a config error. `nuka check` reports `additional-feature-dir-missing`, and
-`nuka tend` reports the same condition as a note.
+is a config error. `nuka check` reports `additional-feature-dir-missing`;
+`nuka tend` does not repeat it.
 
 That feature walk skips `node_modules` and any directory whose name starts
 with `.` at every depth, for `featuresDir`, for each `additionalFeatureDirs`
@@ -3867,9 +3856,8 @@ do need acting on):
 - `bed:` shows how much of the vocabulary is typed instead of compat,
   and how many typed steps declare `mutates: false`
   (read-only).
-- `declared:` shows how much of a typed step's available declaration
-  (`rationale`, a `.describe()` on each schema field) is actually
-  declared. When the default report left the notes behind those counts
+- `declared:` shows how many schema fields of typed steps carry a
+  `.describe()`. When the default report left the notes behind that count
   out (see below), the line says that `nuka tend --all` names each one.
 
 Under `--json`, the same summary is the `summary` object, in snake_case
@@ -3885,15 +3873,6 @@ command devoted to the bed's health makes the information visible.
 
 The following findings show what `tend` inspects and why each item is rot rather than style:
 
-- **A step file that failed to import.** `tend` uses the same tolerant
-  step discovery as `nuka check` (see "Tolerant reporting, fail-fast
-  execution"): a broken glue file is skipped rather than stopping the run,
-  so whatever it would have contributed is silently missing from every
-  count and finding here, not absent because nothing failed. One note for
-  the whole run, not one per file: a broken file's own cause is `nuka
-  check`'s own finding (`step-file-import-failed`), so this one only says
-  how many steps went unseen and names the files, and does not touch the
-  exit code.
 - **A `from` declaration that nothing exercises.** Every occurrence of the step
   across every feature captures that key from the line, so the declared
   producer never supplies anything. Reported as the fact it is (the
@@ -3918,10 +3897,6 @@ The following findings show what `tend` inspects and why each item is rot rather
   that `returns` field: the agent never writes that value, and `nuka
   describe` names the producer whose field explains it. Repeating the
   sentence on every consumer would only make copies that drift.
-- **A step with no `rationale`.** `description` says what the step does,
-  which is enough to call it. `rationale` says why it is built this way and
-  what was rejected, which is what an agent needs before deciding it may
-  rewrite the step. Without it, every rewrite is uninformed.
 - **A step whose description is still the scaffold's TODO**
   (`step-description-todo`). `nuka scaffold` without `--description`
   writes `TODO: describe <name>`, which imports, binds, and runs, so
@@ -4019,19 +3994,18 @@ the finding's nature. A code `tend` never reports is refused up front, so a
 typo cannot become a flag that never fires. A code an earlier release
 reported, such as the sign-off codes that went away with the `accept`
 command, is refused by name, with what replaced it (see
-`docs/upgrading.md`). This is how a PR job gates on `pattern-unbound`
+`docs/upgrading.md`). An unknown code's refusal points at `nuka tend
+--codes`, which lists every code. This is how a PR job gates on `pattern-unbound`
 without `tend` turning red for everyone else.
 
-Two of the findings above are reported only on request: a schema field
-with no `.describe()` (`schema-field-undescribed`) and a step with no
-`rationale` (`step-rationale-missing`). `nuka tend --all` reports them, and
-so does naming either code in `--fail-on`, since a gate that cannot see its
-own code would pass without saying so. Both are gaps in a declaration, not
-a declaration drifting away from what it describes, and a project may keep
-them. Reported on every run, they were most of what a young project's
-`tend` printed, and teams wrote placeholder rationale to make them stop,
-which is worse than none. The `declared:` line still counts both, so the
-gap stays in view without a note per step. The default report keeps every
+One of the findings above is reported only on request: a schema field
+with no `.describe()` (`schema-field-undescribed`). `nuka tend --all`
+reports it, and so does naming the code in `--fail-on`, since a gate that
+cannot see its own code would pass without saying so. It is a gap in a
+declaration, not a declaration drifting away from what it describes, and a
+project may keep it. Reported on every run, it was most of what a young
+project's `tend` printed. The `declared:` line still counts it, so the gap
+stays in view without a note per step. The default report keeps every
 finding that names something structurally rotting: an unused declaration,
 an unbound step, a stale fixture.
 
@@ -4326,8 +4300,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               any step's needs_error or from_errors is
                               present, output printed either way
 nuka describe <step>          full contract, schemas as JSON Schema, plus
-                              rationale and timeout when the step declared
-                              them, plus
+                              timeout when the step declared
+                              one, plus
                               import_failures beside it (same shape as nuka
                               steps' own). When args or returns cannot be
                               represented as JSON Schema, that side is null
@@ -4497,23 +4471,21 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               of it declares what it could, then notes, none
                               of which changes the exit code (--fail-on
                               <code> makes a named note exit non-zero, for
-                              that invocation; a removed sign-off code is
-                              refused by name): a step file
-                              that failed to import, a `from` nothing
+                              that invocation; a removed code is
+                              refused by name): a `from` nothing
                               exercises, a patterned step no
                               feature binds, a
                               configured parameter type no pattern uses, a
                               `defineParameterType` still registered from
                               support code, a secrets entry naming a key no
-                              envFile defines, a configured
-                              additionalFeatureDirs entry absent from disk,
+                              envFile defines,
                               a fixture no typed step requires, a fixture
                               reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
                               open with the same steps (measured, no advice);
                               --all adds a schema field with no
-                              `.describe()` and a step with no `rationale`,
-                              and --fail-on naming either code adds that one
+                              `.describe()`, and --fail-on naming that code
+                              adds it too
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               whether a plain run reports it or only --all
                               does, and a one-line description, instead of
@@ -4595,9 +4567,9 @@ project could still show. `nuka check` names the failure as
 `.cjs` import whose `.ts`, `.mts`, or `.cts` file does not exist, it
 appends that file and the file whose import to edit, both relative to the
 project root, after Node's own text. `nuka steps`/`nuka describe` carry the same fact
-as `import_failures` (above). `nuka tend` adds a single
-`import-failures-unseen` note instead of silently under-counting around the
-file it never read (see "Tending"). `nuka run`, `nuka do`, and `nuka init`
+as `import_failures` (above). `nuka tend` counts only what imported and
+does not repeat `nuka check`'s finding, so a reader runs `nuka check` beside
+it (see "Tending"). `nuka run`, `nuka do`, and `nuka init`
 are about to execute a step, or set up a project that is about to, so they
 stay fail-fast: the same broken file rejects the whole call outright,
 because continuing past it is dangerous for anything about to run, not

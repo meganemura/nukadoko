@@ -1062,8 +1062,8 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe:
-            "also report step-rationale-missing and schema-field-undescribed, which are left out by default " +
-            "(naming one in --fail-on reports it too)",
+            "also report schema-field-undescribed, which is left out by default " +
+            "(naming it in --fail-on reports it too)",
         })
         .option("fail-on", {
           type: "string",

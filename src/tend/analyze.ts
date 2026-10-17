@@ -3,14 +3,11 @@ import { loadConfig } from "../config/load-config.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
-import { findMissingAdditionalFeatureDirs } from "./additional-feature-dir-missing.js";
 import { findDescriptionTodos } from "./description-todo.js";
 import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
-import { findImportFailuresUnseen } from "./import-failures-unseen.js";
 import { analyzeFieldDescriptions } from "./missing-describe.js";
-import { findMissingRationale } from "./missing-rationale.js";
 import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { findPostNavigationReads } from "./post-navigation-read.js";
@@ -35,8 +32,8 @@ import type { TendIssue, TendReport } from "./types.js";
 // warnings that were later reclassified, on the same "does this have to be
 // known before the run" test docs/spec.md "Tending" states — their own
 // detection logic is untouched, only where a caller reads the finding from.
-// `findMissingAdditionalFeatureDirs` reports a configured-but-absent
-// `additionalFeatureDirs` entry.
+// A configured-but-absent `additionalFeatureDirs` entry is `nuka check`'s
+// error (`additional-feature-dir-missing`) and is not repeated here.
 //
 // `patterns` is built once, here, via src/check/binding-check.ts's own
 // `checkBindings` — the same parsed-pattern array src/check/feature-check.ts
@@ -51,11 +48,9 @@ import type { TendIssue, TendReport } from "./types.js";
 // true`, the same flag src/check/analyze.ts passes) so one unreadable step
 // file doesn't take down every other finding across the rest of the
 // project — the same migrating-suite reasoning that file's own header
-// gives. Per-file verdicts on *why* a file failed still stay `check`'s own
-// finding (`step-file-import-failed`); this module only says, once, that
-// some steps went unseen (`findImportFailuresUnseen` below) — silently
-// having fewer steps to look at, with nothing here saying so, would hide a
-// broken glue file inside every count this report prints. It is still called with
+// gives. A file that failed to import is `check`'s finding
+// (`step-file-import-failed`), and is not repeated here: a reader runs both
+// commands, and one fact reported twice reads as two problems. It is still called with
 // `config.featuresDir` alone, unchanged: only
 // `loadFeaturesFromDirs` below widens to include
 // `additionalFeatureDirs` — the vocabulary a step pattern is checked against
@@ -69,8 +64,8 @@ import type { TendIssue, TendReport } from "./types.js";
 // carried has somewhere to go without a breaking change.
 //
 // `summary` is built
-// from the same `vocabulary` plus `rationaleIssues`/`fieldDescriptions`,
-// both already computed above for `notes`, plus `scannedFeatureDirs` (the
+// from the same `vocabulary` plus `fieldDescriptions`, already computed
+// above for `notes`, plus `scannedFeatureDirs` (the
 // same `featuresDir` + `additionalFeatureDirs` list `loadFeaturesFromDirs`
 // was called with) — it is where the bed currently is, not a finding, so it
 // never feeds `errors` or `notes` and never changes the caller's exit code
@@ -89,7 +84,7 @@ import type { TendIssue, TendReport } from "./types.js";
 
 export async function analyzeTend(rootDir: string): Promise<TendReport> {
   const config = await loadConfig(rootDir);
-  const { vocabulary, compatParameterTypes, importFailures } = await discoverSteps(
+  const { vocabulary, compatParameterTypes } = await discoverSteps(
     rootDir,
     config.featuresDir,
     { tolerateImportFailures: true },
@@ -97,7 +92,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
 
   const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   const scannedFeatureDirs = [config.featuresDir, ...config.additionalFeatureDirs];
-  const { features, missingAdditionalDirs } = loadFeaturesFromDirs(
+  const { features } = loadFeaturesFromDirs(
     rootDir,
     config.featuresDir,
     config.additionalFeatureDirs,
@@ -107,31 +102,27 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
 
   const errors: TendIssue[] = [];
 
-  // Called once each, their results reused for both `notes` below and the
-  // summary's declaration-coverage numbers — never re-walked a second time
+  // Called once, its result reused for both `notes` below and the
+  // summary's declaration-coverage number — never re-walked a second time
   // just to count.
-  const rationaleIssues = findMissingRationale(vocabulary);
   const fieldDescriptions = analyzeFieldDescriptions(vocabulary);
   const fixtureGraph = buildFixtureGraph(config);
 
   const notes: TendIssue[] = [
-    ...findImportFailuresUnseen(importFailures),
     ...findUnusedFromDeclarations(vocabulary, occurrences),
     ...findUnboundPatternedSteps(vocabulary, occurrences, rootDir),
     ...findDescriptionTodos(vocabulary, rootDir),
     ...fieldDescriptions.issues,
-    ...rationaleIssues,
     ...findUnusedParameterTypes(vocabulary, config.parameterTypes),
     ...findSupportOriginParameterTypes(compatParameterTypes),
     ...findUnknownSecretsKeys(rootDir, config),
-    ...findMissingAdditionalFeatureDirs(missingAdditionalDirs),
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
     ...findPostNavigationReads(rootDir, config.stateDir),
     ...findRepeatedScenarioPrefixes(rootDir, config.stateDir),
   ];
 
-  const summary = buildTendSummary(vocabulary, rationaleIssues.length, fieldDescriptions, scannedFeatureDirs);
+  const summary = buildTendSummary(vocabulary, fieldDescriptions, scannedFeatureDirs);
 
   return { errors, notes, summary };
 }

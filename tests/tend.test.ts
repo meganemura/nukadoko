@@ -40,7 +40,6 @@ describe("nuka tend", () => {
       "typed_steps",
       "compat_steps",
       "compat_step_names",
-      "rationale",
       "describe",
       "scanned_feature_dirs",
       "read_only_steps",
@@ -48,10 +47,8 @@ describe("nuka tend", () => {
     expect(report.summary.typed_steps).toBe(2);
     expect(report.summary.compat_steps).toBe(0);
     expect(report.summary.compat_step_names).toEqual([]);
-    // Every typed step in this fixture carries a rationale, and every
-    // args/returns field carries a .describe() (tests/fixtures/tend-clean-
-    // project's own step files) — declared === total on both.
-    expect(report.summary.rationale).toEqual({ declared: 2, total: 2 });
+    // Every args/returns field carries a .describe() (tests/fixtures/tend-
+    // clean-project's own step files), so declared === total.
     expect(report.summary.describe).toEqual({ declared: 5, total: 5 });
     // featuresDir alone, since this fixture sets no additionalFeatureDirs
     // (schema default `[]`), and every step here defaults to
@@ -74,16 +71,16 @@ describe("nuka tend", () => {
     });
     const report = JSON.parse(stdout.text());
 
-    // tests/fixtures/tend-findings-project has 7 typed step files and
+    // tests/fixtures/tend-findings-project has 6 typed step files and
     // features/steps/compat-glue.ts's 2 Given() registrations.
-    expect(report.summary.typed_steps).toBe(7);
+    expect(report.summary.typed_steps).toBe(6);
     expect(report.summary.compat_steps).toBe(2);
     expect(report.summary.compat_step_names.slice().sort()).toEqual(
       ["compat: a compat thing that nobody calls happens", "compat: a shout {used-type} is heard"].sort(),
     );
   });
 
-  it("summary: rationale and describe coverage counts match this task's fixture exactly, not just non-zero", async () => {
+  it("summary: describe coverage counts match this task's fixture exactly, not just non-zero", async () => {
     const stdout = createCaptureSink();
     await runCli(["tend", "--json", "--all"], {
       rootDir: fixture("tend-findings-project"),
@@ -92,13 +89,11 @@ describe("nuka tend", () => {
     });
     const report = JSON.parse(stdout.text());
 
-    // Of 7 typed steps, only no-rationale-step.ts omits `rationale`.
-    expect(report.summary.rationale).toEqual({ declared: 6, total: 7 });
-    // Of the 15 args/returns fields across all 7 typed steps, only
+    // Of the 13 args/returns fields across all 6 typed steps, only
     // undescribed-field-step.ts's `args.label` has no .describe() — the
     // same fact tests/tend.test.ts's own schema-field-undescribed test
     // already checks by name, counted here rather than re-derived.
-    expect(report.summary.describe).toEqual({ declared: 14, total: 15 });
+    expect(report.summary.describe).toEqual({ declared: 12, total: 13 });
   });
 
   it("prints a human-readable ok line when there is nothing to tend", async () => {
@@ -133,7 +128,6 @@ describe("nuka tend", () => {
         "from-unused",
         "pattern-unbound",
         "schema-field-undescribed",
-        "step-rationale-missing",
         "parameter-type-unused",
       ].sort(),
     );
@@ -201,24 +195,6 @@ describe("nuka tend", () => {
     expect(steps).not.toContain("create-widget");
   });
 
-  it("step-rationale-missing: fires only for the step with no rationale", async () => {
-    const stdout = createCaptureSink();
-    await runCli(["tend", "--json", "--all"], {
-      rootDir: fixture("tend-findings-project"),
-      stdout,
-      stderr: createCaptureSink(),
-    });
-    const report = JSON.parse(stdout.text());
-
-    const missing = report.notes.filter((issue: { code: string }) => issue.code === "step-rationale-missing");
-    expect(missing).toHaveLength(1);
-    expect(missing[0].step).toBe("no-rationale-step");
-
-    const steps = report.notes.map((issue: { step?: string }) => issue.step);
-    expect(steps).not.toContain("create-widget");
-    expect(steps).not.toContain("log-note");
-  });
-
   it("parameter-type-unused: fires only for the entry no typed or compat pattern references", async () => {
     const stdout = createCaptureSink();
     await runCli(["tend", "--json", "--all"], {
@@ -269,7 +245,7 @@ describe("nuka tend", () => {
       expect(line).not.toMatch(/^(error|note)\t/);
     }
 
-    expect(noteLines).toHaveLength(5);
+    expect(noteLines).toHaveLength(4);
     for (const line of noteLines) {
       expect(line).toMatch(/^note\t/);
     }
@@ -296,7 +272,7 @@ describe("nuka tend", () => {
     expect(lines).toEqual([
       "scanned: features",
       "bed: typed 2, compat 0, read-only 0",
-      "declared: rationale 2/2, describe 5/5",
+      "declared: describe 5/5",
       "ok: nothing to tend",
     ]);
   });

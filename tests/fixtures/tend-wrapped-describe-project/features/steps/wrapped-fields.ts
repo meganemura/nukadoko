@@ -5,7 +5,6 @@ import { defineStep } from "../../nukadoko-shim.js";
 // `bare`, the control that must stay reported.
 export default defineStep({
   description: "Return the same described value under every wrapper",
-  rationale: "CLI-only vocabulary; target for schema-field-undescribed under wrappers",
   args: z.object({}),
   returns: z.object({
     optional_: z.string().describe("x").optional(),

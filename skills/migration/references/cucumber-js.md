@@ -113,11 +113,10 @@ vocabulary as you go rather than waiting for every file to import cleanly
 first; `nuka run <feature>` and `nuka do <step>` still refuse outright on
 an unreadable glue file, and the refusal names that file, on purpose,
 since they are about to execute. `nuka harvest` names the file the same way.
-`nuka tend` names the same unread files once, as the note
-`import-failures-unseen`, and does not report a cited step as missing
-from the vocabulary while any step file failed to import. That note does
-not change the exit code. Fix the import `nuka check` names
-(`step-file-import-failed`), then read tend again.
+`nuka check` does not report a cited step as missing from the vocabulary
+while any step file failed to import. `nuka tend` counts only the steps
+that imported and leaves the unread files to `nuka check`. Fix the import
+`nuka check` names (`step-file-import-failed`), then read tend again.
 
 Glue that compat cannot load or run fails loudly, at the import, as a
 `nuka check` finding, or on the first `nuka run`: the failure names what

@@ -7,7 +7,6 @@ import { defineStep } from "../../nukadoko-shim.js";
 export default defineStep({
   pattern: "a no-op happens",
   description: "Does nothing",
-  rationale: "Gives this fixture a non-empty vocabulary",
   args: z.object({}),
   returns: z.object({}),
   async run() {

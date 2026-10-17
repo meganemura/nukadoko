@@ -40,10 +40,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // fourth line, since it is counted in the exact same vocabulary walk as
 // `typed`/`compat` (src/tend/summary.ts).
 //
-// The two declaration codes (src/tend/note-selection.ts) are left out of
-// both text and `--json` unless `--all` is given or `--fail-on` names one.
-// The `declared:` line still counts them, and says `--all` names each one
-// when any was left out, so the gap stays visible without a note per step.
+// The declaration code (src/tend/note-selection.ts) is left out of both
+// text and `--json` unless `--all` is given or `--fail-on` names it. The
+// `declared:` line still counts it, and says `--all` names each one when
+// any was left out, so the gap stays visible without a note per field.
 
 export interface RunTendOptions {
   rootDir: string;
@@ -56,8 +56,8 @@ export interface RunTendOptions {
   /** `--fail-on`: codes whose presence turns this invocation's exit code
    * red. Empty by default, so a note stays a note (docs/spec.md "Tending"). */
   failOn: readonly string[];
-  /** `--all`: also report the declaration notes (missing `rationale`,
-   * missing `.describe()`), which are left out by default. */
+  /** `--all`: also report the declaration note (a schema field with no
+   * `.describe()`), which is left out by default. */
   all: boolean;
 }
 
@@ -93,8 +93,7 @@ function formatIssueLine(severity: "error" | "note", issue: TendIssue): string {
 // more useful than a count to whatever reads that machine-readable form.
 function formatSummaryLines(summary: TendSummary, declarationNotesLeftOut: boolean): string[] {
   const declared =
-    `declared: rationale ${summary.rationale.declared}/${summary.rationale.total}, ` +
-    `describe ${summary.describe.declared}/${summary.describe.total}`;
+    `declared: describe ${summary.describe.declared}/${summary.describe.total}`;
   return [
     `scanned: ${summary.scanned_feature_dirs.join(", ")}`,
     `bed: typed ${summary.typed_steps}, compat ${summary.compat_steps}, read-only ${summary.read_only_steps}`,
@@ -133,7 +132,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   if (unknown.length > 0) {
     stderr.write(
       `--fail-on: ${unknown.map((code) => `"${code}"`).join(", ")} ${unknown.length === 1 ? "is not a code" : "are not codes"} ` +
-        `nuka tend reports. The codes are: ${[...TEND_CODES].sort().join(", ")}.\n`,
+        `nuka tend reports. \`nuka tend --codes\` lists every code.\n`,
     );
     return 1;
   }

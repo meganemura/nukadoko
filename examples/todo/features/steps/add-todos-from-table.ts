@@ -1,14 +1,15 @@
 import { defineStep, z } from "nukadoko";
 
+// No named capture in this pattern, so the attached data table binds to the
+// one required args key left unconsumed: `todos`, one row per title, each row
+// a single-cell string[] (docs/spec.md "Typed steps": a table binds as
+// string[][], no header-row convention). The row's title is cast, not
+// validated, on the way out: whether it is a string is exactly what the
+// returns schema checks, which is the point of README.md Part 2. TypeScript
+// trusts the wire contract; zod catches it drifting.
 export default defineStep({
   pattern: "the following todos are added",
   description: "POST /todos once per table row and return the titles created",
-  rationale:
-    "No named capture in this pattern, so the attached data table binds to the one required args " +
-    "key left unconsumed: `todos`, one row per title, each row a single-cell string[] (docs/spec.md " +
-    "\"Typed steps\": a table binds as string[][], no header-row convention). The row's title is cast, " +
-    "not validated, on the way out: whether it is a string is exactly what the returns schema checks, " +
-    "which is the point of README.md Part 2. TypeScript trusts the wire contract; zod catches it drifting.",
   args: z.object({
     todos: z
       .array(z.array(z.string()))

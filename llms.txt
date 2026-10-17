@@ -108,11 +108,9 @@ Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` pri
 <!-- generated: nuka tend --codes --json -->
 | Code | Reported | Meaning |
 | --- | --- | --- |
-| `additional-feature-dir-missing` | default | An entry in additionalFeatureDirs does not exist on disk, so nothing under it is scanned. |
 | `fixture-touches-app` | default | A config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names. |
 | `fixture-unused` | default | No typed step requires a config.fixtures definition, directly or through another fixture. |
 | `from-unused` | default | A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture. |
-| `import-failures-unseen` | default | A step file failed to import, so its steps are absent from every count and finding in this report. nuka check names the file. |
 | `parameter-type-support-origin` | default | A compat defineParameterType call in support code still registers a parameter type; config.parameterTypes is where a typed project declares it. |
 | `parameter-type-unused` | default | No typed or compat pattern names a config.parameterTypes entry. |
 | `pattern-unbound` | default | A typed step has a pattern, and no feature line resolves to that step alone. |
@@ -122,5 +120,4 @@ Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` pri
 | `secrets-public-key-unknown` | default | A secrets.public entry names a key that no envFile defines. |
 | `secrets-redact-key-unknown` | default | A secrets.redact entry names a key that no envFile defines. |
 | `step-description-todo` | default | A typed step's description is still the placeholder nuka scaffold wrote. |
-| `step-rationale-missing` | --all | A typed step has no rationale, so an agent cannot tell why it is built this way before it changes the step. |
 <!-- /generated -->

@@ -33,8 +33,8 @@ describe("nuka tend --fail-on", () => {
   let rootDir: string;
 
   beforeEach(async () => {
-    // pure-step-project: three steps with no rationale, so
-    // step-rationale-missing fires three times and nothing here is red.
+    // pure-step-project: two steps with undescribed schema fields, so
+    // schema-field-undescribed fires twice and nothing here is red.
     rootDir = await copyFixtureToTempDir("pure-step-project");
   });
 
@@ -45,11 +45,11 @@ describe("nuka tend --fail-on", () => {
   it("exits 1 when a finding with the code is reported, says so on stderr, and keeps the finding a note", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--fail-on", "step-rationale-missing"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["tend", "--fail-on", "schema-field-undescribed"], { rootDir, stdout, stderr });
     expect(exitCode).toBe(1);
-    expect(stderr.text()).toMatch(/^fail-on: step-rationale-missing reported 3 findings$/m);
-    expect(stdout.text()).toMatch(/^note\tstep-rationale-missing\t/m);
-    expect(stdout.text()).not.toMatch(/^error\tstep-rationale-missing/m);
+    expect(stderr.text()).toBe("fail-on: schema-field-undescribed reported 2 findings\n");
+    expect(stdout.text()).toMatch(/^note\tschema-field-undescribed\t/m);
+    expect(stdout.text()).not.toMatch(/^error\t/m);
   });
 
   it("exits 0 when the code is valid but nothing reported it", async () => {
@@ -59,16 +59,36 @@ describe("nuka tend --fail-on", () => {
     expect(stderr.text()).not.toContain("fail-on:");
   });
 
-  it("refuses a code tend never reports, naming the codes it does", async () => {
+  it("refuses a code tend never reports, pointing at nuka tend --codes", async () => {
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--fail-on", "step-rationale-misng"], { rootDir, stdout: createCaptureSink(), stderr });
+    const exitCode = await runCli(["tend", "--fail-on", "pattern-unbond"], { rootDir, stdout: createCaptureSink(), stderr });
     expect(exitCode).toBe(1);
-    expect(stderr.text()).toContain('--fail-on: "step-rationale-misng" is not a code nuka tend reports.');
-    expect(stderr.text()).toContain("step-rationale-missing");
+    expect(stderr.text()).toBe('--fail-on: "pattern-unbond" is not a code nuka tend reports. `nuka tend --codes` lists every code.\n');
+  });
+
+  it("refuses the codes removed with rationale and with the check duplicates, naming what to do instead", async () => {
+    const expected: Record<string, string> = {
+      "step-rationale-missing":
+        '--fail-on: "step-rationale-missing" was removed with defineStep\'s `rationale` option. ' +
+        "Delete the `rationale:` lines from your step files (docs/upgrading.md).\n",
+      "additional-feature-dir-missing":
+        '--fail-on: "additional-feature-dir-missing" is reported only by `nuka check` now, as an error, ' +
+        "so a failing `nuka check` is the gate (docs/upgrading.md).\n",
+      "import-failures-unseen":
+        '--fail-on: "import-failures-unseen" is reported only by `nuka check` now, as `step-file-import-failed`, ' +
+        "so a failing `nuka check` is the gate (docs/upgrading.md).\n",
+    };
+    for (const [code, message] of Object.entries(expected)) {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      expect(await runCli(["tend", "--fail-on", code], { rootDir, stdout, stderr })).toBe(1);
+      expect(stdout.text()).toBe("");
+      expect(stderr.text()).toBe(message);
+    }
   });
 
   it("refuses a removed sign-off code by name and names what replaced it", async () => {
-    for (const code of REMOVED_TEND_CODES.keys()) {
+    for (const code of [...REMOVED_TEND_CODES.keys()].filter((key) => key.includes("sign"))) {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(["tend", "--fail-on", code], { rootDir, stdout, stderr });
@@ -84,27 +104,29 @@ describe("nuka tend --fail-on", () => {
   it("takes a comma-separated list and a repeated flag alike", async () => {
     const commaErr = createCaptureSink();
     expect(
-      await runCli(["tend", "--fail-on", "step-rationale-missing,schema-field-undescribed"], { rootDir, stdout: createCaptureSink(), stderr: commaErr }),
+      await runCli(["tend", "--fail-on", "repeated-scenario-prefix,schema-field-undescribed"], { rootDir, stdout: createCaptureSink(), stderr: commaErr }),
     ).toBe(1);
-    expect(commaErr.text()).toContain("fail-on: step-rationale-missing reported");
-    expect(commaErr.text()).toContain("fail-on: schema-field-undescribed reported");
+    expect(commaErr.text()).toBe("fail-on: schema-field-undescribed reported 2 findings\n");
 
     const repeatedErr = createCaptureSink();
     expect(
-      await runCli(["tend", "--fail-on", "step-rationale-missing", "--fail-on", "schema-field-undescribed"], {
+      await runCli(["tend", "--fail-on", "repeated-scenario-prefix", "--fail-on", "schema-field-undescribed"], {
         rootDir,
         stdout: createCaptureSink(),
         stderr: repeatedErr,
       }),
     ).toBe(1);
-    expect(repeatedErr.text()).toContain("fail-on: schema-field-undescribed reported");
+    expect(repeatedErr.text()).toBe("fail-on: schema-field-undescribed reported 2 findings\n");
   });
 
   it("keeps --json output parseable while the exit code turns red", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json", "--fail-on", "step-rationale-missing"], { rootDir, stdout, stderr: createCaptureSink() });
+    const exitCode = await runCli(["tend", "--json", "--fail-on", "schema-field-undescribed"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(1);
     const report = JSON.parse(stdout.text());
-    expect(report.notes.filter((issue: { code: string }) => issue.code === "step-rationale-missing")).toHaveLength(3);
+    expect(report.notes.map((issue: { code: string; step: string }) => [issue.code, issue.step])).toEqual([
+      ["schema-field-undescribed", "visitor-arrives"],
+      ["schema-field-undescribed", "visitor-greeted"],
+    ]);
   });
 });

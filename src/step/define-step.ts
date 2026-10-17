@@ -322,12 +322,6 @@ export interface StepDefinitionInput<
    * type system checks here versus what src/step/validate-from.ts's runtime
    * check backs it up with. */
   from?: TFrom;
-  /** Why this is implemented this way, and what was tried and rejected — the
-   * information an agent uses to judge whether it may rewrite the step.
-   * Not shown in `nuka steps` (that listing
-   * stays one-line-per-step); shown in `nuka describe`. No default — omit it
-   * and `Step.rationale` is `undefined`, same as omitting `pattern`. */
-  rationale?: string;
   /** How long this step's own `run` may take, in milliseconds, before the
    * execution is failed with `error.kind: "timeout"`. Omit it and the
    * project's `stepTimeout` applies (`nukadoko.config.ts`, default twenty
@@ -380,7 +374,6 @@ export interface Step<
    * has a `from`, never an optional one, so every reader can iterate it
    * unconditionally). */
   readonly from: StepFromMap;
-  readonly rationale: string | undefined;
   /** `undefined` when the step declares none, which is the common case: the
    * project's own `stepTimeout` is what applies then. Never resolved to a
    * number here: the config this step will run under is not known at
@@ -527,7 +520,6 @@ export function defineStep<
     // is a `readonly [Step, string]` tuple; a rejected entry never compiles
     // to begin with.
     from: (definition.from ?? {}) as StepFromMap,
-    rationale: definition.rationale,
     timeout: definition.timeout,
     parts: definition.parts ?? [],
     run: definition.run,

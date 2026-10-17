@@ -232,7 +232,7 @@ interface FromRendering<TRendered> {
 }
 
 /** `nuka steps --json`'s and `nuka describe`'s rendering of a step's `from` — one entry per
- * key, `undefined` (hence omitted, `rationale`'s own convention) when the
+ * key, `undefined` (hence omitted, `timeout`'s own convention) when the
  * step declares no `from` at all, or when every key it declares turned out
  * to be unreadable (`errors` on the same `FromRendering` is where that
  * shows instead). A key with exactly one candidate keeps the original
@@ -616,12 +616,6 @@ export interface TypedStepContract {
   readonly mutates: boolean;
   /** Same field and presence rule as `StepSummary.timeout`. */
   readonly timeout?: number;
-  /** Why this step is implemented this way, and what was rejected
-   * (`defineStep`'s own `rationale`) — present only when the step declared
-   * one (omitted, not an empty string, same convention as `used` on a
-   * step record). Deliberately absent from `StepSummary`/`summarize` below —
-   * `nuka steps` stays one line per step. */
-  readonly rationale?: string;
   /** The same shape as `StepSummary.from`, so a reader of `nuka steps
    * --json` and of `nuka describe` parses one form. Omitted, not `{}`, when
    * the step declares no `from` at all. */
@@ -635,7 +629,7 @@ export interface TypedStepContract {
    * per part naming it and repeating its own `description` — the same
    * "no reverse index" scope `partsHumanReadable`'s own doc comment
    * explains. Omitted, not `[]`, when the step declares no parts at all —
-   * same convention as `rationale`/`from` just above. */
+   * same convention as `timeout`/`from` just above. */
   readonly parts?: ReadonlyArray<{ readonly name: string; readonly description: string }>;
   /** The fixture names this step's own `run()` destructures — same field,
    * same computation (`needsFields`, shared with `summarize` below), and
@@ -738,10 +732,6 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
     description: entry.step.description,
     mutates: entry.step.mutates,
     timeout: entry.step.timeout,
-    // `rationale` is `string | undefined` on `Step`; `JSON.stringify` drops
-    // an `undefined`-valued key on its own, so a step with none simply has
-    // no "rationale" key in the output.
-    rationale: entry.step.rationale,
     from: fromResult.rendered,
     from_errors: fromResult.errors,
     parts: partsHumanReadable(entry.step, stepNames),

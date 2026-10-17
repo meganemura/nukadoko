@@ -58,16 +58,15 @@ describe("additionalFeatureDirs", () => {
       expect(unbound.map((issue) => issue.step)).not.toContain("create-widget");
     });
 
-    it("reports additional-feature-dir-missing for a configured-but-absent directory", async () => {
+    it("leaves a configured-but-absent directory to nuka check, which reports it once", async () => {
       const { report } = await runTend(fixture("tend-additional-dirs-project"));
-
-      const missing = report.notes.filter((issue) => issue.code === "additional-feature-dir-missing");
-      expect(missing).toHaveLength(1);
-      expect(missing[0]!.file).toBe("ghost-dir");
-      expect(missing[0]!.message).toContain("ghost-dir");
-      // A note, not an error — a missing additionalFeatureDirs entry must
-      // not fail `nuka tend`'s exit code.
+      expect(report.notes.map((issue) => issue.code)).not.toContain("additional-feature-dir-missing");
       expect(report.errors).toEqual([]);
+
+      const { report: checked } = await runCheck(fixture("tend-additional-dirs-project"));
+      expect(checked.errors.filter((issue) => issue.code === "additional-feature-dir-missing").map((issue) => issue.file)).toEqual([
+        "ghost-dir",
+      ]);
     });
 
     it("bed line: names the scanned directories and counts read-only steps, in text and --json", async () => {

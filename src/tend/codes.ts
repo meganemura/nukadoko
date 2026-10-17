@@ -16,10 +16,6 @@ export interface TendCodeInfo {
 }
 
 const TEND_CODE_INFO = {
-  "additional-feature-dir-missing": {
-    description: "An entry in additionalFeatureDirs does not exist on disk, so nothing under it is scanned.",
-    reportedByDefault: true,
-  },
   "fixture-touches-app": {
     description:
       "A config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.",
@@ -32,11 +28,6 @@ const TEND_CODE_INFO = {
   "from-unused": {
     description:
       "A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture.",
-    reportedByDefault: true,
-  },
-  "import-failures-unseen": {
-    description:
-      "A step file failed to import, so its steps are absent from every count and finding in this report. nuka check names the file.",
     reportedByDefault: true,
   },
   "parameter-type-support-origin": {
@@ -77,10 +68,6 @@ const TEND_CODE_INFO = {
   "step-description-todo": {
     description: "A typed step's description is still the placeholder nuka scaffold wrote.",
     reportedByDefault: true,
-  },
-  "step-rationale-missing": {
-    description: "A typed step has no rationale, so an agent cannot tell why it is built this way before it changes the step.",
-    reportedByDefault: false,
   },
 } as const satisfies Record<string, TendCodeInfo>;
 

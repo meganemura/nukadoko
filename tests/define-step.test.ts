@@ -115,9 +115,10 @@ describe("defineStep", () => {
     expect(step.patterns).toEqual([]);
   });
 
-  it("carries an explicit rationale onto Step.rationale", () => {
+  it("ignores a leftover rationale at run time, while tsc rejects it", () => {
     const step = defineStep({
       description: "does a thing",
+      // @ts-expect-error `rationale` is no longer a defineStep option.
       rationale: "chose X over Y because Y rejects malformed input",
       args: z.object({}),
       returns: z.object({}),
@@ -125,19 +126,7 @@ describe("defineStep", () => {
         return {};
       },
     });
-    expect(step.rationale).toBe("chose X over Y because Y rejects malformed input");
-  });
-
-  it("leaves rationale undefined when omitted (no default)", () => {
-    const step = defineStep({
-      description: "no explicit rationale",
-      args: z.object({}),
-      returns: z.object({}),
-      async run() {
-        return {};
-      },
-    });
-    expect(step.rationale).toBeUndefined();
+    expect(Object.keys(step)).not.toContain("rationale");
   });
 
   it("does not consider an arbitrary object a step", () => {

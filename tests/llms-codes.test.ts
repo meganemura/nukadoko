@@ -43,12 +43,9 @@ describe("llms.txt code tables", () => {
     expect(rows, regenerate).toEqual(expected);
   });
 
-  it("names the two tend codes only --all reports", () => {
+  it("names the one tend code only --all reports", () => {
     const rows = parseTable(readGenerated(llms, tendTable([]).marker));
-    expect(rows.filter((row) => row[1] === "--all").map((row) => row[0])).toEqual([
-      "`schema-field-undescribed`",
-      "`step-rationale-missing`",
-    ]);
+    expect(rows.filter((row) => row[1] === "--all").map((row) => row[0])).toEqual(["`schema-field-undescribed`"]);
   });
 });
 
@@ -60,12 +57,12 @@ describe("nuka tend --codes", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const lines = stdout.text().trimEnd().split("\n");
-    expect(lines).toHaveLength(15);
+    expect(lines).toHaveLength(12);
     expect(lines[0]).toBe(
-      "additional-feature-dir-missing\tdefault\tAn entry in additionalFeatureDirs does not exist on disk, so nothing under it is scanned.",
+      "fixture-touches-app\tdefault\tA config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.",
     );
-    expect(lines.find((line) => line.startsWith("step-rationale-missing\t"))).toBe(
-      "step-rationale-missing\t--all\tA typed step has no rationale, so an agent cannot tell why it is built this way before it changes the step.",
+    expect(lines.find((line) => line.startsWith("schema-field-undescribed\t"))).toBe(
+      "schema-field-undescribed\t--all\tA field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.",
     );
   });
 
@@ -80,7 +77,7 @@ describe("nuka tend --codes", () => {
     const document = JSON.parse(stdout.text()) as { schema_version: number; codes: Array<{ code: string }> };
     expect(Object.keys(document)).toEqual(["schema_version", "codes"]);
     const entries = document.codes;
-    expect(entries).toHaveLength(15);
+    expect(entries).toHaveLength(12);
     expect(entries.find((entry) => entry.code === "pattern-unbound")).toEqual({
       code: "pattern-unbound",
       description: "A typed step has a pattern, and no feature line resolves to that step alone.",
