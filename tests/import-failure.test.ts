@@ -50,6 +50,16 @@ describe("describeImportFailure", () => {
     });
   });
 
+  it("keeps the message line of Node 23's framed report and claims no location", () => {
+    const error = Object.assign(
+      new SyntaxError("  x TypeScript enum is not supported in strip-only mode\n   ,-[3:1]\n 3 | export enum Color { Red }\n   `----\n"),
+      { code: "ERR_INVALID_TYPESCRIPT_SYNTAX", stack: "SyntaxError [ERR_INVALID_TYPESCRIPT_SYNTAX]:   x TypeScript enum" },
+    );
+    expect(describeImportFailure(error, stepFile, rootDir, nowhere)).toEqual({
+      message: `TypeScript enum is not supported in strip-only mode${STRIP_ONLY_SENTENCE}`,
+    });
+  });
+
   it("asks the child probe only for a syntax error with no code and no location", () => {
     const asked: string[] = [];
     const locate = (file: string) => {

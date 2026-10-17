@@ -29,6 +29,14 @@ export const STRIP_ONLY_SENTENCE =
 
 const LOCATION_HEAD = /^(file:\/\/[^\r\n]*?|\/[^\r\n]*?):(\d+)\r?\n/;
 
+// Node 23.x's stripper reports in its own frame (`  x <message>`, then a
+// `,-[line:col]` code frame) under ERR_INVALID_TYPESCRIPT_SYNTAX, for
+// erasure failures too, and names no file anywhere, so only the message
+// line is kept and no location is claimed. Later releases report the
+// one-line message with the file at the stack's head.
+const FRAMED_MESSAGE = /^\s*x (.+?)\r?\n\s*,-\[\d+:\d+\]/s;
+const STRIP_ONLY_REFUSAL = /not supported in strip-only mode/;
+
 /** The file and line at the head of a stack or of Node's uncaught-error
  * output, or `undefined` when it starts with anything else. */
 export function headLocation(text: string): { readonly path: string; readonly line: number } | undefined {
@@ -62,13 +70,15 @@ export function describeImportFailure(
   rootDir: string,
   locate: (filePath: string) => { readonly path: string; readonly line: number } | undefined = locateInChild,
 ): ImportFailureDetail {
-  const message = withoutNamespace(error instanceof Error ? error.message : String(error));
+  const raw = withoutNamespace(error instanceof Error ? error.message : String(error));
+  const message = FRAMED_MESSAGE.exec(raw)?.[1] ?? raw;
   const code = (error as { code?: unknown } | null)?.code;
   const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : "";
   const location =
     headLocation(stack) ??
     (error instanceof Error && error.name === "SyntaxError" && code === undefined ? locate(filePath) : undefined);
-  const sentence = code === UNSUPPORTED_TYPESCRIPT_SYNTAX ? STRIP_ONLY_SENTENCE : "";
+  const sentence =
+    code === UNSUPPORTED_TYPESCRIPT_SYNTAX || (message !== raw && STRIP_ONLY_REFUSAL.test(message)) ? STRIP_ONLY_SENTENCE : "";
   if (location === undefined) return { message: message + sentence };
   // In the message even when it is this file: two step files that import
   // one broken module get the same error, and check groups them by text.

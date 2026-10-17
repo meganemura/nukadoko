@@ -50,6 +50,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka check` は `step-file-import-failed` を、ファイル、行、代わりに書くものと一緒に報告します。
   enum は `as const` を付けたオブジェクトに、パラメータプロパティはコンストラクタで代入するフィールドになります。
   `tsconfig.json` に `"erasableSyntaxOnly": true`(TypeScript 5.8 以降)を設定すると、nuka より先に `tsc` がそれぞれを報告します。
+  Node 23.x では、この finding は行を示しません。
+  そこでの Node の報告がファイルを示さないからです。
 - **`type` を付けずに import した型は読み込みに失敗します。**
   Node は `import { Options } from "./options.ts"` が型だけを指していると判断できません。
   そのため import は "does not provide an export named 'Options'" で失敗します。

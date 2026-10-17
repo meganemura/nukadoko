@@ -57,7 +57,9 @@ This part does not change release to release.
   instead: an enum becomes an object with `as const`, and a parameter
   property becomes a field assigned in the constructor. Set
   `"erasableSyntaxOnly": true` (TypeScript 5.8 and later) in
-  `tsconfig.json`, and `tsc` reports each one before nuka does.
+  `tsconfig.json`, and `tsc` reports each one before nuka does. On Node
+  23.x the finding names no line, because Node's report there names no
+  file.
 - **A type imported without `type` fails to load.** Node cannot tell that
   `import { Options } from "./options.ts"` names only a type, so the import
   fails with "does not provide an export named 'Options'". Write

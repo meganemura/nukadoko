@@ -31,7 +31,9 @@ just until 0.1.
   caught error, is located by importing the same file in a child process
   that evaluates nothing. Syntax that type stripping refuses
   (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`) gets a sentence that says what to
-  write instead and to set `"erasableSyntaxOnly": true`. The code is
+  write instead and to set `"erasableSyntaxOnly": true`; on Node 23.x,
+  whose report frames the message and names no file, the message line and
+  the sentence are kept and no line is claimed. The code is
   unchanged. A config that fails to import gets the same location and
   sentence. The sentence that says to rename a `.ts` file to `.mts` is now
   added only when `package.json` says `"type": "commonjs"`, and names that
