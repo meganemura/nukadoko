@@ -79,6 +79,38 @@ function firstVisibleLine(text: string): string | undefined {
   return firstLine;
 }
 
+// The lines of a Playwright `expect` message that say what was compared:
+// `Locator:`, `Expected:`, `Received:`, and an `Error:` such as "element(s)
+// not found". The first line alone ("expect(locator).toHaveText(expected)
+// failed") names the matcher and leaves out both values, which is the part
+// a reader of stderr needs to tell a wrong page from a wrong expectation.
+// The `Call log:` that follows is long and stays in the step record.
+const ASSERTION_FIRST_LINE = /^(?:Error: )?expect\(/;
+const ASSERTION_DETAIL = /^(?:Locator|Expected|Received|Error)\b[^:]*:/;
+const MAX_ASSERTION_DETAIL_LINES = 4;
+const MAX_ASSERTION_DETAIL_LENGTH = 200;
+
+/** The `Locator:`/`Expected:`/`Received:`/`Error:` lines of an `expect`
+ * message, trimmed, before its `Call log:`, at most four, each cut to 200
+ * characters. `[]` for a message whose first visible line is not an
+ * `expect(...)` call, so any other error keeps its one line. */
+export function assertionDetailLines(message: string): string[] {
+  const lines = message.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/);
+  const first = lines.findIndex((line) => line.trim().length > 0);
+  if (first === -1 || !ASSERTION_FIRST_LINE.test(lines[first]!.trim())) return [];
+  const details: string[] = [];
+  for (const line of lines.slice(first + 1)) {
+    const trimmed = line.trim();
+    if (trimmed === "Call log:") break;
+    if (!ASSERTION_DETAIL.test(trimmed)) continue;
+    details.push(
+      trimmed.length > MAX_ASSERTION_DETAIL_LENGTH ? `${trimmed.slice(0, MAX_ASSERTION_DETAIL_LENGTH)}...` : trimmed,
+    );
+    if (details.length === MAX_ASSERTION_DETAIL_LINES) break;
+  }
+  return details;
+}
+
 /** A step the failed step read from, whose result was a process that
  * exited nonzero. */
 export interface ExitedProducer {
@@ -115,11 +147,12 @@ export interface StepFailure {
 }
 
 /** The lines that say why one step failed, unindented: the error's first
- * line, then one line per producer that exited nonzero, then where its step
+ * line, then what an `expect` compared (`assertionDetailLines`), then one
+ * line per producer that exited nonzero, then where its step
  * record is. Kept apart from the stderr writer so a run summary in another
  * format can say the same thing the same way. */
 export function formatStepFailure(failure: StepFailure): string[] {
-  const lines = [firstErrorLine(failure.errorMessage ?? "")];
+  const lines = [firstErrorLine(failure.errorMessage ?? ""), ...assertionDetailLines(failure.errorMessage ?? "")];
   for (const producer of exitedProducers(failure.used)) lines.push(formatExitedProducer(producer));
   if (failure.recordPath !== null) lines.push(`record  ${failure.recordPath}`);
   return lines;

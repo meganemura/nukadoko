@@ -1842,6 +1842,9 @@ step の行は、その成否を step record と同じ語で示します: `passe
 失敗した step の行の後には、字下げした 2 行が続きます。
 1 行目はエラーメッセージの最初の行で、端末の色コードを除いたものです。
 2 行目はその step record のパス(`<stateDir>/records/steps/<id>`)です。
+1 行目が Playwright の `expect(...)` の呼び出しであるときは、何を比べたかを示すその後の行が 1 行目に続きます。
+`Locator:`、`Expected:`、`Received:`、そして `element(s) not found` のような `Error:` で、最大 4 行、各行は 200 文字で切られ、`Call log:` からは取りません。
+matcher の名前だけでは、ページが間違っているのか期待が間違っているのかを区別できず、2 つの値ならそれができます。
 始まらなかった step には step record がないため、エラーの行だけが付きます。
 この 2 行の間には、`result` が 0 以外で終わったプロセスである `used` のエントリごとに、もう 1 行が入ります。
 そのような `result` とは、0 以外の数値の `exitCode` と文字列の `stderr` を持つオブジェクトで、`runCommand` が返す形です。
@@ -3458,7 +3461,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. A failed step's line is followed by its
-                              error's first line, a used line for each step
+                              error's first line (and an expect's Locator,
+                              Expected, and Received lines), a used line for each step
                               it read from whose process exited nonzero
                               (its exit code and first stderr line), and its
                               step record path.

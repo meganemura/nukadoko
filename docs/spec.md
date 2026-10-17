@@ -2173,7 +2173,12 @@ A step's line names its outcome with the word a step record uses:
 and summary still appear because the flag makes the terminal quieter, not
 silent. A failed step's line is followed by two indented lines: the first
 line of its error message, without terminal color codes, and the path of
-its step record (`<stateDir>/records/steps/<id>`). A step that never began
+its step record (`<stateDir>/records/steps/<id>`). When that first line is a
+Playwright `expect(...)` call, the lines after it that say what was
+compared follow it: `Locator:`, `Expected:`, `Received:`, and an `Error:`
+such as `element(s) not found`, at most four, each cut to 200 characters,
+and none from the `Call log:`. The matcher's name alone does not tell a
+wrong page from a wrong expectation; the two values do. A step that never began
 has no step record and gets the error line only. Between the two, one more
 line names each `used` entry whose `result` is a process that exited
 nonzero: an object with a number `exitCode` other than 0 and a string
@@ -4037,7 +4042,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               gets per-step/per-scenario progress as it runs,
                               then every location this run wrote and a summary
                               line. A failed step's line is followed by its
-                              error's first line, a used line for each step
+                              error's first line (and an expect's Locator,
+                              Expected, and Received lines), a used line for each step
                               it read from whose process exited nonzero
                               (its exit code and first stderr line), and its
                               step record path.

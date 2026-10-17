@@ -36,6 +36,12 @@ just until 0.1.
   `page-override-unowned` count it as a browser fixture. `ctx.page()`
   is unchanged. docs/spec.md "Context API" records the shapes that were
   refused and why.
+- **A failed step's lines on stderr name what an `expect` compared.**
+  The first line of a Playwright assertion names the matcher and leaves
+  out both values (`expect(locator).toHaveText(expected) failed`), so the
+  reason was only in the step record. Its `Locator:`, `Expected:`,
+  `Received:`, and `Error:` lines now follow, at most four, each cut to
+  200 characters, and the `Call log:` stays in the step record.
 
 ## 0.17.0 — 2026-10-17
 
