@@ -4,7 +4,7 @@ import { messagesRunOutputPath } from "./messages-output.js";
 import { compareNewestFirst, groupRunsNewestFirst, type RunStart } from "./newest-run.js";
 import type { ScenarioRecord } from "./scenario-record.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
-import { readRunMarker } from "./run-marker.js";
+import { runEnded } from "./run-result.js";
 
 // Responsibility: what leaves the state directory on its own, and when.
 // Two rules, applied at the end of every `nuka run` (src/cli/run.ts):
@@ -61,10 +61,10 @@ import { readRunMarker } from "./run-marker.js";
 //
 // A second `nuka run` in flight at the same time is safe because the run
 // rule only removes a run that proves it ended. `nuka run` writes a
-// completion marker (src/record/run-marker.ts) into the run's directory as
+// completion marker, run.json (src/record/run-result.ts), into the run's directory as
 // its last act, and a run whose marker is missing is removed only once its
 // newest record is older than `retention.adHocDays`: a run still writing,
-// a run killed mid-way, and a run from before the marker existed all look
+// a run killed mid-way, and a run from before run.json existed all look
 // alike, and removing what cannot be proven finished is the one thing this
 // module does not do. The invocation that is applying retention also never
 // removes its own run, however many newer runs have finished since it began.
@@ -257,7 +257,7 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
   const cutoff = now.getTime() - policy.adHocDays * 24 * 60 * 60 * 1000;
   const droppable = (runId: string): boolean => {
     if (runId === currentRunId) return false;
-    if (readRunMarker(rootDir, stateDir, runId) !== null) return true;
+    if (runEnded(rootDir, stateDir, runId)) return true;
     const dates = (runs.get(runId)?.records ?? []).flatMap((record) => {
       const at = recordDate(record as unknown as Record<string, unknown>);
       return at === null ? [] : [at];

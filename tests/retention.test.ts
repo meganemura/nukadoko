@@ -17,7 +17,7 @@ import {
   type RunSummary,
 } from "../src/record/retention.js";
 import { readExportsManifest, runExportsManifestPath } from "../src/record/run-exports.js";
-import { runMarkerPath, writeRunMarker } from "../src/record/run-marker.js";
+import { buildRunResult, runResultPath, writeRunResult } from "../src/record/run-result.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir, sourceNodeArgs } from "./helpers/fixtures.js";
 
 // Responsibility: what retention removes and what it must never touch.
@@ -97,6 +97,14 @@ describe("applyRetention", () => {
     return path.join(rootDir, ...segments);
   }
 
+  function writeEnded(runId: string, at: Date): void {
+    writeRunResult(
+      rootDir,
+      stateDir,
+      buildRunResult({ nukadoko: "0.0.0-test", runId, verdict: "passed", startedAt: at, finishedAt: at, environment: "default", scenarios: [], summary: null }),
+    );
+  }
+
   /** One run: `count` scenario records, each citing one step record, one
    * manifest naming one export file per scenario, and one messages stream. */
   async function seedRun(runId: string, startedAt: string, count = 1, marked = true): Promise<void> {
@@ -126,7 +134,7 @@ describe("applyRetention", () => {
       manifestLines.push(exportFile);
     }
     await writeFile(manifestPath, `${manifestLines.join("\n")}\n`);
-    if (marked) writeRunMarker(rootDir, stateDir, runId, "passed", 0, new Date(startedAt));
+    if (marked) writeEnded(runId, new Date(startedAt));
     await writeFile(messagesRunOutputPath(abs(messagesOutputRel), runId), "line\n");
   }
 
@@ -186,7 +194,7 @@ describe("applyRetention", () => {
     await seedRun("run-older", "2026-08-31T00:00:00Z");
     await seedRun("run-newest", "2026-09-01T00:00:00Z");
     await seedRun("run-undated", "not a date", 1, false);
-    writeRunMarker(rootDir, stateDir, "run-undated", "passed", 0, now);
+    writeEnded("run-undated", now);
 
     const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
 
@@ -224,7 +232,7 @@ describe("applyRetention", () => {
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-old-0"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-young-0"))).toBe(true);
     expect(existsSync(abs(stateDir, "export", "allure-results", "run-young-0-result.json"))).toBe(true);
-    expect(existsSync(runMarkerPath(rootDir, stateDir, "run-new"))).toBe(true);
+    expect(existsSync(runResultPath(rootDir, stateDir, "run-new"))).toBe(true);
   });
 
   it("never removes the run that applies retention, however many newer runs ended", async () => {

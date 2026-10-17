@@ -134,8 +134,9 @@ questions: "what happens if this is deleted" and "who gets to change it":
   scenario record whose `started_at` does not parse as one whose
   `record.json` cannot be read: it belongs to no run. A run that may still be
   writing is never removed. When a run ends, `nuka run` writes
-  `records/runs/<run_id>/complete.json`, holding the run's verdict
-  (`passed` or `failed`), how many scenarios failed, and the time it ended. Retention removes a run
+  `records/runs/<run_id>/run.json`, its result (see "Scenarios (the
+  scripted path)"), holding the run's verdict (`passed` or `failed`), its
+  counts, and the time it ended. Retention removes a run
   without that file only once its newest record is older than
   `retention.adHocDays`: a run still in flight, a run that was killed, and a
   run written before the file existed look alike, and nothing here removes
@@ -2042,7 +2043,7 @@ blockquote or a fence.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2190,7 +2191,8 @@ machine can run at once is a fact about that machine, and a committed
 config file is the wrong place to keep it.
 
 Each run uses two output channels for two readers. stdout contains only NDJSON,
-with one scenario record per line for scripts to parse. It is written when
+with one scenario record per line for scripts to parse, or under `--json`
+the one run result described below. The stream is written when
 stdout is not a terminal (a pipe, a file, an agent's shell, a CI log), and
 in a terminal only under `--records`. A person at a terminal reads stderr,
 the records are on disk either way, and the `scenarios` line names their
@@ -2229,6 +2231,51 @@ and name, and follows each with a `rerun` line: `nuka run <feature>:<line>`,
 plus `--env <name>` when the run was given one, quoted for a POSIX shell
 where a word needs it. These lines appear for serial and concurrent runs,
 and `--quiet` keeps them.
+
+The run's result for a machine is `records/runs/<run_id>/run.json`, written
+when the run ends, after its last record and its run summary, for serial
+and concurrent runs alike:
+
+```json
+{
+  "schema_version": 1,
+  "nukadoko": "...",
+  "run_id": "run-20260801-143022-a1b2",
+  "verdict": "failed",
+  "started_at": "...",
+  "finished_at": "...",
+  "environment": "default",
+  "counts": { "scenarios": 2, "passed": 1, "failed": 1 },
+  "scenarios": [
+    {
+      "scenario_record_id": "scn-20260801-143023-c3d4",
+      "feature": "features/greet.feature",
+      "line": 5,
+      "scenario": "wrong expectation",
+      "status": "failed",
+      "record": ".nukadoko/records/scenarios/scn-20260801-143023-c3d4/record.json",
+      "rerun": "nuka run features/greet.feature:5"
+    }
+  ],
+  "summary": ".nukadoko/records/runs/run-20260801-143022-a1b2/summary.md"
+}
+```
+
+`scenarios` has one entry per scenario record the run wrote, in the order
+written (the example shows one of two), and `rerun` is the same command the
+stderr `rerun` line prints. `verdict` is the exit code's: it also counts a
+BeforeAll or AfterAll failure that no scenario record carries, so it can be
+`failed` while `counts.failed` is 0. `summary` is `null` when the run
+summary could not be written. Every path is relative to the project root.
+The paths line on stderr names it as `run`. A run that selects no scenario
+writes no record and no `run.json`. A run that was killed has none either,
+which is how retention tells it from a run that ended.
+
+`--json` prints that same object on stdout as the one JSON document there,
+instead of one scenario record per line, so a script reads the whole
+result with one parse. It also prints for a run that selected no scenario,
+with empty `scenarios`. A refusal before anything runs prints nothing on
+stdout, as without `--json`. stderr is unchanged.
 
 The paths line names an `allure` or `messages` location only while that
 emitter is on, which is while its config key is present (see "Allure
@@ -3235,7 +3282,7 @@ for separate purposes (see "Artifacts"):
   processes do). It is what lets a run's export output leave with the run
   (see "Artifacts"). It carries no status or timing: every scenario record
   already carries its run's `run_id` and `started_at`. The same directory
-  holds `complete.json`, the run's verdict, and `summary.md`, its run
+  holds `run.json`, the run's result, and `summary.md`, its run
   summary (see "Records")
 - `cache/sessions/<env>/<name>.json`: storageState; live credentials in
   plaintext, created with restricted permissions
@@ -4189,7 +4236,12 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               progress lines only, except a failed step's.
                               stdout is NDJSON, one record per scenario,
                               when it is not a terminal; in a terminal
-                              only under --records. Text project code (a step, a hook, a
+                              only under --records. --json prints run.json
+                              (run id, verdict, counts, each scenario's
+                              record path and rerun command, the summary
+                              path) as the one document on stdout instead;
+                              run.json is written to records/runs/<run_id>/
+                              either way. Text project code (a step, a hook, a
                               fixture) writes through console.log or
                               process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
@@ -4493,7 +4545,8 @@ Text output (no `--json`) is formatted for a human reading a terminal.
 
 Every JSON document nukadoko writes or prints starts with
 `schema_version`, an integer that belongs to that kind of document: the
-step record, the scenario record, and the output of `check --json`,
+step record, the scenario record, `run.json` (which `run --json` prints),
+and the output of `check --json`,
 `check --codes --json` (`{ schema_version, codes }`), `steps --json`,
 `describe`, `tend --json`, `tend --codes --json` (`{ schema_version,
 codes }`), `clean --json`, `explore --json`, and `session list --json`

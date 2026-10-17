@@ -103,6 +103,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `{ "schema_version": 1, "codes": [...] }` と `{ "schema_version": 1, "sessions": [...] }` です。
   jq のフィルタ `.[]` は `.codes[]` または `.sessions[]` になります。
   ほかの文書は先頭に `schema_version` キーが加わっただけで、step record と scenario record にはさらに `nukadoko` が加わりました。
+- **`records/runs/<run_id>/complete.json` は `run.json` になりました。**
+  run の完了の印が、run の結果全体になりました。
+  `complete.json` が `verdict`、`finished_at`、`failed_scenarios` として持っていたものは、`verdict`、`finished_at`、`counts.failed` にあります。
+  その横に、run の id、record と再実行のコマンドを伴うすべての scenario、サマリのパスが並びます。
+  `complete.json` を読んでいたスクリプトは `run.json` を読むか、`nuka run --json` を実行して stdout を読みます。
+  0.16.1 以前が書いた run には `complete.json` しかありません。
+  retention はもうそれを run が終わった証拠として読まないので、そうした run は `retention.adHocDays` より古くなるまで残ります。
+  `nuka clean --records` を使えば今すぐ消せます。
 
 ## 0.15.0 から 0.16.1 へ
 

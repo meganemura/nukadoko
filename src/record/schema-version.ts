@@ -12,6 +12,7 @@
 export const SCHEMA_VERSIONS = {
   step_record: 1,
   scenario_record: 1,
+  run_result: 1,
   check_report: 1,
   check_codes: 1,
   steps: 1,

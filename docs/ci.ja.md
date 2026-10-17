@@ -208,7 +208,7 @@ jobs:
 
 ## チームがその上に足すもの
 
-上の workflow がチームに委ねているものが 3 つあります。
+上の workflow がチームに委ねているものが 4 つあります。
 どれも小さいものです。
 
 - **pull request のコメントとしての run サマリ。**
@@ -238,6 +238,10 @@ jobs:
   suite を走らせるジョブが pull request に書き込めるようになります。
   fork からの pull request は読み取り専用のトークンを受け取るので、そこではこの step は失敗します。
   fork からの pull request を受け付けるチームは、この step を別のジョブに移します。
+- **run の結果に基づいて動くスクリプト。**
+  失敗した scenario ごとに issue を作る step や、それらを再実行する step は、stderr ではなく `run.json` を読みます。
+  `nuka run features/ --json > run.json` がそれを出力し、run はどちらの場合も同じファイルを `.nukadoko/records/runs/<run_id>/run.json` に書きます。
+  その `scenarios` のエントリは、各 scenario の status、record のパス、`rerun` コマンドを持ちます(docs/spec.ja.md の「Scenario(スクリプト化された経路)」を参照)。
 - **`tend` のジョブへの通知 step。**
   `tend` の finding はどれも note です。
   出力が Actions のタブに留まる週次のジョブは、誰も読まないジョブです。

@@ -122,6 +122,16 @@ This part does not change release to release.
   `.codes[]` or `.sessions[]`. Every other document only gained the
   `schema_version` key in front, and the step and scenario records also
   gained `nukadoko`.
+- **`records/runs/<run_id>/complete.json` is now `run.json`.** The run's
+  completion marker grew into its whole result: `verdict`, `finished_at`,
+  and `counts.failed` hold what `complete.json` held as `verdict`,
+  `finished_at`, and `failed_scenarios`, beside the run id, every scenario
+  with its record and rerun command, and the summary path. A script that
+  read `complete.json` reads `run.json`, or runs `nuka run --json` and
+  reads stdout. Runs written by 0.16.1 or earlier have only `complete.json`, which
+  retention no longer reads as proof that they ended, so it keeps them
+  until they are older than `retention.adHocDays`; `nuka clean --records`
+  removes them now.
 
 ## 0.15.0 to 0.16.1
 

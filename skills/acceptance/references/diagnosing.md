@@ -6,6 +6,9 @@
 `FAIL` line, the first line of its error and the path of its step record
 (`record  <stateDir>/records/steps/<id>`), and after the summary, a `rerun`
 line per failed scenario with the command that runs that scenario alone.
+The same list is in the run's `run.json` (`nuka run --json` prints it):
+each entry of `scenarios` with `status: "failed"` names its record and
+its `rerun` command.
 When the failed step read from a step whose program exited nonzero, a
 `used    <step>  exit <code>  <first stderr line>` line sits between the
 two: a Then step that got an empty stdout usually failed there, because

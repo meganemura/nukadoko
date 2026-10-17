@@ -134,7 +134,7 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   `nuka tend` が最新の run を名指すときの規則と同じなので、2 つのコマンドが「どの run か」で食い違うことはありません。
   どちらも、`started_at` を日時として解釈できない scenario record を、`record.json` が読めない record と同じに扱い、どの run にも属させません。
   まだ書いている可能性のある run は消されません。
-  run が終わると、`nuka run` は `records/runs/<run_id>/complete.json` を書き、run の断定(`passed` か `failed`)、失敗した scenario の数、終了時刻を入れます。
+  run が終わると、`nuka run` はその結果である `records/runs/<run_id>/run.json` を書き(「Scenario(スクリプト化された経路)」を参照)、run の断定(`passed` か `failed`)、件数、終了時刻を入れます。
   このファイルのない run は、最も新しい record が `retention.adHocDays` より古くなって初めて retention が消します。
   実行中の run、強制終了された run、このファイルができる前に書かれた run は見分けがつかず、終わったと証明できないものは消しません。
   retention を適用する run 自身は、より新しい run が先に終わっていても、自分の適用で消されることはありません。
@@ -1767,7 +1767,7 @@ scenario は見出しか `---` で分け、narration は引用かフェンスに
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1881,7 +1881,8 @@ session は、ログイン状態を 1 つの scenario から次の scenario へ�
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
 stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJSON として出力します。
-これは stdout が端末でないとき(パイプ、ファイル、エージェントのシェル、CI のログ)に出力され、端末では `--records` を渡したときだけ出力されます。
+`--json` のときは、代わりに下で述べる 1 つの run の結果を出力します。
+この列は stdout が端末でないとき(パイプ、ファイル、エージェントのシェル、CI のログ)に出力され、端末では `--records` を渡したときだけ出力されます。
 端末の前にいる人は stderr を読み、record はどちらの場合もディスクにあり、`scenarios` の行がそのディレクトリを示します。
 そのため、端末に scenario ごとの JSON の行を出すのは雑音になります。
 疑似端末を通して stdout を読むツールは `--records` を渡します。
@@ -1913,6 +1914,51 @@ exit code は結果であって、失敗ではないからです。
 `rerun` 行は `nuka run <feature>:<line>` で、run に `--env <name>` が与えられていればそれも付きます。
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
 この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
+
+機械向けの run の結果は `records/runs/<run_id>/run.json` です。
+run が終わったとき、最後の record と run サマリの後に、直列実行でも並行実行でも書かれます。
+
+```json
+{
+  "schema_version": 1,
+  "nukadoko": "...",
+  "run_id": "run-20260801-143022-a1b2",
+  "verdict": "failed",
+  "started_at": "...",
+  "finished_at": "...",
+  "environment": "default",
+  "counts": { "scenarios": 2, "passed": 1, "failed": 1 },
+  "scenarios": [
+    {
+      "scenario_record_id": "scn-20260801-143023-c3d4",
+      "feature": "features/greet.feature",
+      "line": 5,
+      "scenario": "wrong expectation",
+      "status": "failed",
+      "record": ".nukadoko/records/scenarios/scn-20260801-143023-c3d4/record.json",
+      "rerun": "nuka run features/greet.feature:5"
+    }
+  ],
+  "summary": ".nukadoko/records/runs/run-20260801-143022-a1b2/summary.md"
+}
+```
+
+`scenarios` には、run が書いた scenario record ごとに 1 件のエントリが、書いた順に入ります(例は 2 件のうち 1 件を示しています)。
+`rerun` は、stderr の `rerun` 行が出すのと同じコマンドです。
+`verdict` は終了コードの断定です。
+どの scenario record も持たない BeforeAll や AfterAll の失敗も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
+`summary` は、run サマリを書けなかったときは `null` です。
+パスはすべてプロジェクトのルートからの相対パスです。
+stderr の書き込み先の行は、これを `run` として示します。
+scenario を 1 つも選ばなかった run は record を書かず、`run.json` も書きません。
+強制終了された run にもありません。
+retention は、それによって終わった run と見分けます。
+
+`--json` は、同じオブジェクトを stdout の唯一の JSON 文書として、1 行 1 件の scenario record の代わりに出力します。
+スクリプトは 1 回の解析で結果全体を読めます。
+scenario を 1 つも選ばなかった run でも、空の `scenarios` とともに出力します。
+何かが実行される前の拒否では、`--json` なしのときと同じく stdout に何も出力しません。
+stderr は変わりません。
 
 書き込み先の行が `allure` や `messages` の場所を出すのは、その emitter が有効なとき、つまり config にそのキーがあるときだけです(「Allure emitter」と「Messages emitter」を参照)。
 何も書かなかった emitter の行は、読み手を存在しないパスへ送ってしまいます。
@@ -2685,7 +2731,7 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   これがあるので、run の export 出力は run と一緒に消えます(「成果物」を参照)。
   状態や時刻は持ちません。
   各 scenario record が自分の run の `run_id` と `started_at` を既に持っているからです。
-  同じディレクトリには、run の断定である `complete.json` と、run サマリである `summary.md` も置かれます(「Records」を参照)。
+  同じディレクトリには、run の結果である `run.json` と、run サマリである `summary.md` も置かれます(「Records」を参照)。
 - `cache/sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
 - `export/allure-results/`(emitter の出力。
   `records/` が持つのと同じ run を持ちます。
@@ -3609,7 +3655,12 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               progress lines only, except a failed step's.
                               stdout is NDJSON, one record per scenario,
                               when it is not a terminal; in a terminal
-                              only under --records. Text project code (a step, a hook, a
+                              only under --records. --json prints run.json
+                              (run id, verdict, counts, each scenario's
+                              record path and rerun command, the summary
+                              path) as the one document on stdout instead;
+                              run.json is written to records/runs/<run_id>/
+                              either way. Text project code (a step, a hook, a
                               fixture) writes through console.log or
                               process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
@@ -3914,7 +3965,7 @@ nuka experimental webmcp-tools <url> [--json]
 
 nukadoko が書く、または出力する JSON の文書はすべて `schema_version` で始まります。
 これはその種類の文書に固有の整数です。
-対象は step record、scenario record と、`check --json`、`check --codes --json`(`{ schema_version, codes }`)、`steps --json`、`describe`、`tend --json`、`tend --codes --json`(`{ schema_version, codes }`)、`clean --json`、`explore --json`、`session list --json`(`{ schema_version, sessions }`)の出力です。
+対象は step record、scenario record、`run.json`(`run --json` が出力します)と、`check --json`、`check --codes --json`(`{ schema_version, codes }`)、`steps --json`、`describe`、`tend --json`、`tend --codes --json`(`{ schema_version, codes }`)、`clean --json`、`explore --json`、`session list --json`(`{ schema_version, sessions }`)の出力です。
 この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
 フィールドが追加されただけでは上がりません。
 読み手は、形を信頼する前にこの番号を確かめます。

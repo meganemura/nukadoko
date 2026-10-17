@@ -228,7 +228,7 @@ export default {
         "record-id.ts",
         "retention.ts",
         "run-exports.ts",
-        "run-marker.ts",
+        "run-result.ts",
         "scenario-record.ts",
         "schema-version.ts",
         "types.ts",

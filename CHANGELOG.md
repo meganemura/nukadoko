@@ -108,6 +108,22 @@ just until 0.1.
   from its first release. Breaking for a reader of those two: see
   docs/upgrading.md. The experimental MCP and WebMCP tool lists are the
   server's own shape and stay as they were.
+- **`nuka run` writes `run.json`, and `nuka run --json` prints it.**
+  The run id, the failed scenarios, their rerun commands, and the summary
+  path were prose on stderr only, and the run's own marker held three
+  fields. Every run that selects a scenario now writes
+  `records/runs/<run_id>/run.json`: `schema_version`, `nukadoko`,
+  `run_id`, `verdict`, `started_at`, `finished_at`, `environment`,
+  `counts` (`scenarios`, `passed`, `failed`), `scenarios` (each with its
+  `scenario_record_id`, `feature`, `line`, `scenario`, `status`, root-relative
+  `record` path, and the same `rerun` command stderr prints), and the
+  `summary` path. Serial and concurrent runs write it the same way, as the
+  run's last write before retention. The new `--json` flag prints that one
+  document on stdout in place of the scenario record stream; stderr is
+  unchanged, and its paths block gains a `run` line naming the file. It
+  replaces `complete.json`, whose fields it carries, so there is one file
+  that says a run ended rather than two that could disagree. Breaking for
+  a reader of `complete.json`: see docs/upgrading.md.
 
 ### Packaging
 

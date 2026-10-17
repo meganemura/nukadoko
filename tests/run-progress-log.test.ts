@@ -183,6 +183,7 @@ describe("nuka run: progress output", () => {
         "allure    .nukadoko/export/allure-results/",
         "messages  .nukadoko/export/messages.<run>.ndjson",
         "summary   .nukadoko/records/runs/<run>/summary.md",
+        "run       .nukadoko/records/runs/<run>/run.json",
         "1 scenario: 0 passed, 1 failed  (<duration>)",
         "failed  features/failing.feature:3  an operation fails partway through",
         "  rerun  nuka run features/failing.feature:3",

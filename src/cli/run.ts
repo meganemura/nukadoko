@@ -39,13 +39,20 @@ import {
   writeScenarioBoundary,
   writeRepeatTallies,
   createRepeatTally,
+  formatRerunCommand,
 } from "../run/progress-log.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
 import { createRunSummaryCollector, renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { readOwnVersion } from "../version.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
-import { writeRunMarker } from "../record/run-marker.js";
+import {
+  buildRunResult,
+  runResultRelativePath,
+  writeRunResult,
+  type RunResultScenario,
+} from "../record/run-result.js";
+import type { ScenarioRecord } from "../record/scenario-record.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
 import {
   doneCallbackMessage,
@@ -235,7 +242,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // written, by this file at concurrency 1 and through `onRecord` above it,
 // and the summary is written once, after AfterAll and process fixture
 // teardown, so its verdict is the exit code's. It is written before the
-// output locations so that list can name it, and before the run marker,
+// output locations so that list can name it, and before run.json,
 // which stays the run's last write.
 //
 // `--concurrency` above 1 diverts to src/run/run-concurrent.ts, in one
@@ -282,6 +289,9 @@ export interface RunRunOptions {
   /** `--records`: write the scenario records to stdout when it is a
    * terminal as well. Off a terminal they are written either way. */
   records: boolean;
+  /** `--json`: print run.json on stdout at the end, and no scenario
+   * record stream, so stdout holds exactly one JSON document. */
+  json: boolean;
   /** `--concurrency`'s raw value; default 1 (cli/run-cli.ts's own `??`). At
    * 1, every other paragraph in this file's own header describes what
    * happens — the branch near this function's own `restoreAllureRuntime`
@@ -333,7 +343,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // so every machine reader still gets the stream without asking. A driver
   // that reads stdout through a pseudo-terminal passes `--records`.
   const stdout: WritableSink =
-    options.records || options.stdout.isTTY !== true ? options.stdout : { write: () => true };
+    !options.json && (options.records || options.stdout.isTTY !== true) ? options.stdout : { write: () => true };
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a
@@ -637,9 +647,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // A rerun line has to land in the same environment the failure came from.
     const rerunFlags = env === null ? [] : ["--env", env];
     const summary = createRunSummaryCollector(rootDir, config.stateDir);
+    const runScenarios: RunResultScenario[] = [];
+    const noteRecord = (record: ScenarioRecord): void => {
+      summary.note(record);
+      runScenarios.push({
+        scenario_record_id: record.scenario_record_id,
+        feature: record.feature,
+        line: record.line,
+        scenario: record.scenario,
+        status: record.status,
+        record: path.join(config.stateDir, "records", "scenarios", record.scenario_record_id, "record.json"),
+        rerun: formatRerunCommand(record, rerunFlags),
+      });
+    };
     // Written after every record and hook of the run, before the output
     // locations so that list can name it. A run with no pickle wrote no
-    // record and gets no summary, the same rule as the run marker. Returns
+    // record and gets no summary, the same rule as run.json. Returns
     // the root-relative path of the run directory's copy, or `null`.
     const emitRunSummary = (verdict: "passed" | "failed"): string | null => {
       if (flatPickles.length === 0) return null;
@@ -665,22 +688,44 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       for (const warning of result.warnings) stderr.write(`${warning}\n`);
       return result.runSummaryPath;
     };
-    const summaryLocation = (relativePath: string | null) =>
-      relativePath === null ? [] : [{ label: "summary", relativePath, kind: "file" as const }];
+    const summaryLocation = (relativePath: string | null) => [
+      ...(relativePath === null ? [] : [{ label: "summary", relativePath, kind: "file" as const }]),
+      ...(flatPickles.length === 0
+        ? []
+        : [{ label: "run", relativePath: runResultRelativePath(config.stateDir, runId), kind: "file" as const }]),
+    ];
 
     // Retention (src/record/retention.ts) runs last in both branches
     // below, after this run's own records and export files are complete,
-    // so the marker below can say the run ended. Another `nuka run` may have
+    // so run.json can say the run ended. Another `nuka run` may have
     // finished meanwhile and ranked this one older, which is why retention is
     // told which run is this one and never removes it. Its line goes out under `--quiet` too: a deletion is worth
     // a line to the person whose state directory just shrank. A failure
     // here never changes the exit code, which is the run's own verdict.
-    const pruneAfterRun = async (verdict: "passed" | "failed", failedScenarioCount: number): Promise<void> => {
+    const finishRun = async (verdict: "passed" | "failed", runSummaryPath: string | null): Promise<void> => {
+      const result = buildRunResult({
+        nukadoko: readOwnVersion(),
+        runId,
+        verdict,
+        startedAt: invocationStartedAt,
+        finishedAt: new Date(),
+        environment: resolvedEnv.name,
+        scenarios: runScenarios,
+        summary: runSummaryPath,
+      });
+      if (options.json) options.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      // run.json is the run's last write before retention: it says the run
+      // ended and how (src/record/run-result.ts). A run with no pickle wrote
+      // no records and gets none. A failed write is a warning, as a failed
+      // summary is: the exit code is the run's verdict either way.
+      if (flatPickles.length > 0) {
+        try {
+          writeRunResult(rootDir, config.stateDir, result);
+        } catch (error) {
+          stderr.write(`Warning: run.json was not written: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
+      }
       try {
-        // The marker is the run's last write: it says the run ended and how
-        // (src/record/run-marker.ts). A run with no pickle wrote no records
-        // and gets none.
-        if (flatPickles.length > 0) writeRunMarker(rootDir, config.stateDir, runId, verdict, failedScenarioCount, new Date());
         const outcome = await applyRetention({
           rootDir,
           stateDir: config.stateDir,
@@ -805,7 +850,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           flatPickles,
           allureResultsDirRel,
           messagesOutputRel,
-          onRecord: (record) => summary.note(record),
+          onRecord: noteRecord,
           stdout,
           stderr,
         });
@@ -844,7 +889,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // An interrupted run prunes nothing, as at `--concurrency 1`, where
       // the signal handler exits before the prune.
       if (interruptedBy !== null) return exitCodeForSignal(interruptedBy);
-      await pruneAfterRun(allPassed ? "passed" : "failed", failedScenarios.length);
+      await finishRun(allPassed ? "passed" : "failed", runSummaryPath);
 
       return allPassed ? 0 : 1;
     }
@@ -1152,7 +1197,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // finishes; everything else about
           // this run goes to stderr, never stdout.
           stdout.write(`${JSON.stringify(record)}\n`);
-          summary.note(record);
+          noteRecord(record);
           scenariosWritten += 1;
           if (record.status === "passed") {
             scenariosPassed += 1;
@@ -1276,7 +1321,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       });
       writeFailedScenarios(stderr, failedScenarios, rerunFlags);
       writeRepeatTallies(stderr, repeatTally.list());
-      await pruneAfterRun(allPassed ? "passed" : "failed", failedScenarios.length);
+      await finishRun(allPassed ? "passed" : "failed", runSummaryPath);
 
       return allPassed ? 0 : 1;
     } finally {

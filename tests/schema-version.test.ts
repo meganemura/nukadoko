@@ -9,8 +9,8 @@ import { readOwnVersion } from "../src/version.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: every document kind in SCHEMA_VERSIONS, produced the way a
-// user produces it, starts with its own `schema_version`, and the two
-// records also name the nukadoko version that wrote them.
+// user produces it, starts with its own `schema_version`, and the records
+// and run.json also name the nukadoko version that wrote them.
 
 async function cli(rootDir: string, argv: string[]): Promise<string> {
   const stdout = Object.assign(createCaptureSink(), { isTTY: false });
@@ -45,6 +45,7 @@ describe("schema_version", () => {
     await cli(runProject, ["clean", "--records"]);
     const runStdout = await cli(runProject, ["run", "--no-check", "features/basic/a.feature"]);
     documents.set("scenario_record", parse(runStdout.trim().split("\n")[0]!));
+    documents.set("run_result", parse(await cli(runProject, ["run", "--no-check", "--json", "features/basic/b.feature"])));
     documents.set("clean_plan", parse(await cli(runProject, ["clean", "--dry-run", "--json"])));
     documents.set(
       "explore_result",
@@ -67,10 +68,11 @@ describe("schema_version", () => {
     expect(document.schema_version).toBe(1);
   });
 
-  it("names the nukadoko version on a step record and a scenario record, on stdout and on disk", () => {
+  it("names the nukadoko version on the step record, the scenario record, and run.json", () => {
     const version = readOwnVersion();
     expect(documents.get("step_record")!.nukadoko).toBe(version);
     expect(documents.get("scenario_record")!.nukadoko).toBe(version);
+    expect(documents.get("run_result")!.nukadoko).toBe(version);
     const onDisk = onlyRecord(runProject, "scenarios");
     expect([onDisk.schema_version, onDisk.nukadoko]).toEqual([1, version]);
   });

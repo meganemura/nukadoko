@@ -244,7 +244,7 @@ of the above; these four are what changes.
 
 ## What a team adds on top
 
-Three things the workflow above leaves to the team, each small.
+Four things the workflow above leaves to the team, each small.
 
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
@@ -277,6 +277,13 @@ Three things the workflow above leaves to the team, each small.
   suite can then write to the pull request. A pull request from a fork gets
   a read-only token, so the step fails there; a team that takes fork pull
   requests moves it to a separate job.
+- **A script that acts on the run's result.** A step that files an issue
+  for each failed scenario, or reruns them, reads `run.json` instead of
+  stderr: `nuka run features/ --json > run.json` prints it, and the run
+  writes the same file to `.nukadoko/records/runs/<run_id>/run.json`
+  either way. Its `scenarios` entries carry each scenario's status, its
+  record path, and the `rerun` command (see "Scenarios (the scripted
+  path)" in [docs/spec.md](spec.md)).
 - **A notification step on the `tend` job.** Its findings are notes, and
   a weekly job whose output stays in the Actions tab is a job nobody reads;
   post its output somewhere a person looks, or add `--fail-on <code>` for

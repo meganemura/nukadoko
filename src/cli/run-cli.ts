@@ -117,6 +117,8 @@ interface RunArgs {
   quiet?: boolean;
   /** Writes the scenario records to stdout when stdout is a terminal too. */
   records?: boolean;
+  /** Prints run.json on stdout instead of the scenario record stream. */
+  json?: boolean;
   /** Same `NaN`/fraction caveat as `concurrency` below; run.ts refuses
    * anything but a whole number of 1 or more. */
   repeat?: number;
@@ -591,6 +593,13 @@ export async function runCli(
             "write one JSON scenario record per line to stdout even when stdout is a terminal " +
             "(they are written there whenever stdout is a pipe or a file)",
         })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe:
+            "print the run's result (run.json: run id, verdict, counts, each scenario's record and rerun command) " +
+            "on stdout as one JSON document, instead of one scenario record per line",
+        })
         .option("concurrency", {
           type: "number",
           default: 1,
@@ -624,6 +633,7 @@ export async function runCli(
         env: args.env ?? null,
         quiet: args.quiet ?? false,
         records: args.records ?? false,
+        json: args.json ?? false,
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
         summaryPath: args.summary ?? null,

@@ -1055,7 +1055,9 @@ target leaves out.
 `nuka run` also prints its own progress and where it wrote to stderr as it
 goes (`--quiet` quiets the progress only). stdout carries one JSON
 scenario record per line when it is not a terminal (a pipe, a file, a CI
-log), and in a terminal only under `--records`.
+log), and in a terminal only under `--records`. `nuka run --json`
+prints one document instead, the run's `run.json`: its verdict, its
+counts, and each scenario's status, record path, and rerun command.
 A failed step prints the first line of its error and the path of its step
 record under its progress line, so a CI log says why it failed. When the
 failed step read from a step whose program exited nonzero, a `used` line
