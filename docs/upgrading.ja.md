@@ -27,6 +27,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   複数のファイルに当てはまる finding(たとえば `step-file-import-failed`)は、メッセージを 1 回だけ出し、その後にソートされたファイル一覧を続けます。
   ファイルごとに繰り返しはしません。
 - **順番**: パッケージを上げる → `nuka check` を実行する → 指摘を直す → `nuka run` を実行する → 両方 green になるまで繰り返す。
+- **いくつものリリースをまたぐときは、自分のバージョンから上の節をすべて読み、新しい節を優先します。**
+  下の各節は、そのリリースが出たときの姿を書いています。
+  古い節が名指すコマンド、フラグ、終了コードは、後のリリースで削除されたり変わったりしていることがあります。
+  最新のリリースでは、拒否は 2 で終了し、`nuka clean` は `--records`、`--cache`、`--export` を受け付けません。
 
 ## 0.16.1 から次のリリースへ
 
@@ -131,7 +135,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `complete.json` を読んでいたスクリプトは `run.json` を読むか、`nuka run --json` を実行して stdout を読みます。
   0.16.1 以前が書いた run には `complete.json` しかありません。
   retention はもうそれを run が終わった証拠として読まないので、そうした run は `retention.adHocDays` より古くなるまで残ります。
-  `nuka clean --records` を使えば今すぐ消せます。
+  `nuka clean` を使えば今すぐ消せます。
+  cache と export も一緒に消えるので、残したいものは先にコピーしてください。
 - **`nuka scaffold` は、config を持つディレクトリより下では書き込みを拒否します。**
   `nukadoko.config.ts` も `nukadoko.config.mts` も無く、`.git` を持つ最も近いディレクトリまでの親ディレクトリに config がある場所では、`Refusing to scaffold:` とその config への相対パスを出して終了コード 2 で終わります。
   以前は、その config が読まない step ファイルを書いていました。
@@ -241,6 +246,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   古い綴りは終了コード 1 で終わり、新しい綴りを示します。
   そのため、`nuka mcp-tools -- <command>` を実行していた script は `nuka experimental mcp-tools -- <command>` に変えてください。
   `experimental` の下にあるため、その形は後のリリースで、非推奨の告知なしに変わることがあります。
+  次のリリースはどちらの綴りも削除します。
+  「0.16.1 から次のリリースへ」を参照してください。
 
 `nuka run` が `nuka check` の拒否するものを拒否するようになりました。
 `check` が error を報告する feature を実行しているプロジェクトは、対応が必要です。
@@ -312,12 +319,13 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
 
 - **スクリプトと CI から `nuka accept` を取り除きます。**
   コマンドはもう存在しないので、`nuka accept <feature>` は yargs の unknown argument のエラーで 1 を返して終わります。
+  0.16.1 の次のリリースからは、すべての拒否と同じく 2 を返します。
   green の `nuka run` の後でジョブがそれを実行していたところでは、代わりに run サマリを投稿します。
   `nuka run <features> --summary <path>` を実行し、そのファイルを pull request にコメントする step を続けます([docs/ci.ja.md](ci.ja.md) の workflow にあります)。
 - **feature に sign-off の記録があるかを見る PR の検査を置き換えます。**
   変更された各 feature の隣に `<feature>.*.md` のファイルを探すジョブや、`nuka tend --fail-on feature-never-signed` を実行するジョブには、もう確かめるものがありません。
   レビュアーは差分の中の `.feature` と pull request 上の run サマリを読み、pull request の承認が sign-off になります。
-  削除された code(`feature-never-signed`、`signed-feature-unscanned`、`signoff-condition-mismatch`、`signoff-feature-changed`、`signoff-feature-missing`、`signoff-record-old-format`、`signoff-record-unreadable`、`signoff-result-invalid`、`signoff-step-missing`)のどれかを付けた `nuka tend --fail-on` は、何も解析する前に 1 で終わります。
+  削除された code(`feature-never-signed`、`signed-feature-unscanned`、`signoff-condition-mismatch`、`signoff-feature-changed`、`signoff-feature-missing`、`signoff-record-old-format`、`signoff-record-unreadable`、`signoff-result-invalid`、`signoff-step-missing`)のどれかを付けた `nuka tend --fail-on` は、何も解析する前に 1 で終わります(0.16.1 の次のリリースからは 2 で終わります)。
   stderr はその code を名指し、run サマリが置き換えたと述べます。
   フラグを外すか、`nuka tend` がまだ報告する code でゲートしてください。
 - **古い `*.feature.*.md` の記録は何もしません。**
@@ -422,6 +430,7 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
   すでに `allure.resultsDir` や `messages.output` を設定しているプロジェクトは、キーがすでにあるので何も変える必要はありません。
   どちらも読まないプロジェクトは、`allurerc.mjs` と export ディレクトリを消して構いません。
   以前の run が書いたものは、今までどおり `nuka clean --export` で消せます。
+  0.16.1 の次のリリースからは `--export` は 2 で終了し、素の `nuka clean` が export を record と cache と一緒に消します。
 - **`nuka init` が書くものは減り、つなぐものは増えました。**
   `--allure` や `--env` で求めない限り、`allurerc.mjs`、result のディレクトリ、`.gitignore` の `.env` の行を書かなくなりました。
   また、`package.json` に `test:scenarios` script を追加します。
@@ -490,6 +499,7 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
 
   `nuka clean --export` はディレクトリ全体を空にします。
   上げてから保持している run のレポートも一緒に消えます。
+  (0.16.1 の次のリリースからは `--export` は 2 で終了し、素の `nuka clean` は record と cache も消します。)
   それを残したいなら、上げた日より古いものだけを消してください。
   どちらにせよ、それらを追跡しているものはありません。
 
@@ -502,6 +512,7 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
   `allure.resultsDir` が別のファイルシステムにあるときは、自動でコピーに戻ります。
 - **`nuka clean --records` は `.nukadoko/records/runs/` も消します。**
   パスを指定して clean をスクリプトにしているプロジェクトは、このディレクトリを含めてください。
+  0.16.1 の次のリリースからは `--records` は 2 で終了し、素の `nuka clean` が record、cache、export をまとめて消します。
 
 ## 0.10.0 から 0.10.1 へ
 

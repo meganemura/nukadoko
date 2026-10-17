@@ -32,6 +32,12 @@ This part does not change release to release.
   once per file.
 - **Order**: upgrade the package, run `nuka check`, fix what it names, run
   `nuka run`, repeat until both are green.
+- **Across several releases, read every section from yours up, and the
+  newest one wins.** Each section below describes its release as it
+  shipped. A command, a flag, or an exit code that an older section names
+  can have been removed or changed by a later one: in the newest release,
+  a refusal exits 2, and `nuka clean` takes no `--records`, `--cache`, or
+  `--export`.
 
 ## 0.16.1 to the next release
 
@@ -155,8 +161,9 @@ This part does not change release to release.
   read `complete.json` reads `run.json`, or runs `nuka run --json` and
   reads stdout. Runs written by 0.16.1 or earlier have only `complete.json`, which
   retention no longer reads as proof that they ended, so it keeps them
-  until they are older than `retention.adHocDays`; `nuka clean --records`
-  removes them now.
+  until they are older than `retention.adHocDays`; `nuka clean` removes
+  them now (it also removes the cache and the export, so copy out what you
+  keep first).
 - **`nuka scaffold` refuses to write below a directory that holds the
   config.** Run where neither `nukadoko.config.ts` nor
   `nukadoko.config.mts` exists, while a parent directory up to the nearest
@@ -291,7 +298,8 @@ This part does not change release to release.
   same output. The old spelling exits 1 and names the new one, so a
   script that ran `nuka mcp-tools -- <command>` becomes
   `nuka experimental mcp-tools -- <command>`. Under `experimental`, its
-  shape may change in a later release without a deprecation notice.
+  shape may change in a later release without a deprecation notice. The
+  next release removes both spellings; see "0.16.1 to the next release".
 
 `nuka run` now refuses what `nuka check` refuses, which a project that runs a feature `check` reports an error for has to act on.
 
@@ -362,7 +370,8 @@ how to post it on the pull request. What to do:
 
 - **Remove `nuka accept` from scripts and CI.** The command no longer
   exists, so `nuka accept <feature>` exits 1 with yargs' unknown-argument
-  error. Where a job ran it after a green `nuka run`, post the run summary
+  error (exit 2 from the release after 0.16.1 on, where every refusal
+  exits 2). Where a job ran it after a green `nuka run`, post the run summary
   instead: `nuka run <features> --summary <path>`, then a step that comments
   that file on the pull request (the workflow in [docs/ci.md](ci.md) has
   one).
@@ -375,8 +384,8 @@ how to post it on the pull request. What to do:
   `signed-feature-unscanned`, `signoff-condition-mismatch`,
   `signoff-feature-changed`, `signoff-feature-missing`,
   `signoff-record-old-format`, `signoff-record-unreadable`,
-  `signoff-result-invalid`, `signoff-step-missing`) exits 1 before
-  analyzing anything, and stderr names the code and says the run summary
+  `signoff-result-invalid`, `signoff-step-missing`) exits 1 (2 from the
+  release after 0.16.1 on) before analyzing anything, and stderr names the code and says the run summary
   replaced it. Drop the flag, or gate on a code `nuka tend` still reports.
 - **Old `*.feature.*.md` records are inert.** Nothing reads them any more:
   `nuka tend` says nothing about them, and they are not scenarios unless
@@ -482,6 +491,9 @@ has to look at those values before the next run.
   `messages.output` changes nothing, since the key is already there. A
   project that reads neither can delete `allurerc.mjs` and the export
   directory; `nuka clean --export` still removes what earlier runs wrote.
+  From the release after 0.16.1 on, `--export` exits 2 and plain
+  `nuka clean` removes the export together with the records and the
+  cache.
 - **`nuka init` writes less and wires more.** It no longer writes
   `allurerc.mjs`, the results directory, or the `.env` lines in
   `.gitignore` unless `--allure` or `--env` asks for them, and it adds a
@@ -559,7 +571,9 @@ on disk instead of twice.
   so what stays forever is only what was written before the upgrade.
 
   `nuka clean --export` empties the whole directory, which also drops the
-  reports of the runs kept since the upgrade. To keep those, delete only
+  reports of the runs kept since the upgrade. (From the release after
+  0.16.1 on, `--export` exits 2, and plain `nuka clean` also removes the
+  records and the cache.) To keep those, delete only
   what predates the upgrade instead, which nothing tracks either way:
 
   ```sh
@@ -572,6 +586,8 @@ on disk instead of twice.
   back to a copy on its own.
 - **`nuka clean --records` also removes `.nukadoko/records/runs/`.** A
   project that scripted a clean by path should include that directory.
+  From the release after 0.16.1 on, `--records` exits 2, and plain
+  `nuka clean` removes the records, the cache, and the export together.
 
 ## 0.10.0 to 0.10.1
 

@@ -525,6 +525,16 @@ just until 0.1.
   `Not enough arguments following: pattern` (exit 2) instead of
   `the pattern is empty`.
 
+- **docs/upgrading.md no longer tells a reader to run a `nuka clean` flag this release refuses.**
+  The `run.json` note said `nuka clean --records` removes old runs, while
+  the same section said `--records` exits 2; it now names `nuka clean`,
+  which also removes the cache and the export. The older sections a
+  project upgrading from 0.14.x reads on the same day say where their
+  `nuka clean --records`, `--export`, `nuka accept`, and `--fail-on` exit
+  codes changed since, and "How to upgrade, every time" says that the
+  newest section wins. A docs test fails when the newest section names a
+  removed command or flag in a bullet that does not say it is removed.
+
 - **docs/spec.md no longer lists a `rationale` key in the `nuka tend --json` summary.**
   The key went away with `defineStep`'s `rationale` option; the summary
   keeps `describe` as its one `{ declared, total }` count. The acceptance

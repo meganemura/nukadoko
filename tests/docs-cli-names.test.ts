@@ -340,6 +340,33 @@ function citesRemovedCommand(file: DocFile, invocation: string): boolean {
   );
 }
 
+// The newest upgrade section is the one a reader acts on today, so a removed
+// command or flag it names has to sit in a bullet that says it is removed or
+// refused. "`nuka clean --records` removes them now" once shipped there while
+// the same section said `--records` exits 2. Older sections describe their
+// release as it shipped; the note under "How to upgrade, every time" says
+// the newest section wins.
+const REMOVAL_WORDING = /\bremoved\b|\bexits? 2\b|\bis gone\b|削除|終了コード 2|2 で終了|なくなりました/;
+
+function newestSectionOf(text: string): string {
+  const sections = text.split(/^(?=## )/m).filter((section) => /^## \S*\d/.test(section));
+  return sections[0] ?? "";
+}
+
+function removedCitationsWithoutRemoval(file: DocFile): string[] {
+  const units = newestSectionOf(file.text)
+    .replace(fencePattern, "\n\n")
+    .split(/\n\s*\n|\n(?=- )/);
+  return units.flatMap((unit) => {
+    const cited = nukaInvocations({
+      relativePath: file.relativePath,
+      text: unit,
+    }).filter((invocation) => citesRemovedCommand(file, invocation));
+    if (cited.length === 0 || REMOVAL_WORDING.test(unit.replace(/\s+/g, " "))) return [];
+    return cited.map((invocation) => `\`nuka ${invocation}\` is named as if it still worked`);
+  });
+}
+
 describe("names in README.md, llms.txt, docs/, and skills/", () => {
   it("every `nuka ...` names a command and flags the CLI has", async () => {
     const tree = await readCommandTree();
@@ -352,6 +379,11 @@ describe("names in README.md, llms.txt, docs/, and skills/", () => {
         }),
       ),
     ).toEqual({});
+  });
+
+  it.each([...UPGRADE_NOTES])("the newest section of %s names a removed command only as removed", (relativePath) => {
+    const file = docFiles.find((candidate) => candidate.relativePath === relativePath)!;
+    expect(removedCitationsWithoutRemoval(file)).toEqual([]);
   });
 
   it("every finding code is one nuka check or nuka tend reports", () => {
@@ -430,6 +462,28 @@ describe("the extraction itself", () => {
         ),
       ),
     ).toEqual(["`fixture-rot` is not a check or tend code", "--fail-on step-missing is not a tend code"]);
+  });
+
+  it("reports a removed flag the newest upgrade section names as if it still worked", () => {
+    const text = [
+      "## How to upgrade, every time\n\n- `nuka clean --export` is fine here.\n",
+      "## 0.16.1 to the next release\n",
+      "- **`nuka clean` takes `--dry-run` and `--json` only.** `nuka clean --records` exits 2.",
+      "- **`run.json`.** Old runs stay; `nuka clean --records`\n  removes them now.",
+      "",
+      "## 0.10.1 to 0.11.0\n\n- `nuka clean --records` also removes runs.\n",
+    ].join("\n");
+    expect(removedCitationsWithoutRemoval(sample("docs/upgrading.md", text))).toEqual([
+      "`nuka clean --records` is named as if it still worked",
+    ]);
+    expect(
+      removedCitationsWithoutRemoval(
+        sample(
+          "docs/upgrading.ja.md",
+          "## 0.16.1 から次のリリースへ\n\n- `nuka clean --records` を使えば今すぐ消せます。\n",
+        ),
+      ),
+    ).toEqual(["`nuka clean --records` is named as if it still worked"]);
   });
 
   it("reports a quoted heading that the file it points at does not have", () => {
