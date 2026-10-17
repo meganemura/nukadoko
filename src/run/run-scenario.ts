@@ -58,6 +58,7 @@ import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.
 import type { SecretSet } from "../secrets/types.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
+import { parseStepReturns } from "../step/parse-returns.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
@@ -2127,10 +2128,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
                 stepIndex,
                 stepStartedAt,
               );
-              const returnsResult = entry.step.returns.safeParse(runResult);
+              const returnsResult = parseStepReturns(entry.step, runResult);
               if (!returnsResult.success) {
                 status = "failed";
-                errorMessage = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
+                errorMessage = returnsResult.message;
                 errorKind = "result_invalid";
               } else {
                 status = "passed";

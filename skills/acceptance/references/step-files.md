@@ -63,7 +63,8 @@ may return nothing. That fits a Then step whose observed values arrived
 as args through `from`, which is what `nuka scaffold --then` writes: the
 producer's step record already holds those values. A step that observes
 something itself (a page, a response, a file) returns what it observed
-(`checking-steps.md` says why).
+(`checking-steps.md` says why), and declares `returns` for it: without
+one, a returned key fails the step as `result_invalid`, naming the key.
 
 `run`'s first argument has to be written as an object destructuring
 pattern, every time, because nukadoko reads which fixtures to build from

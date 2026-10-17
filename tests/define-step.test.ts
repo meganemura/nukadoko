@@ -243,7 +243,7 @@ describe("defineStep", () => {
       }
     }));
 
-  it("gives a step without returns an empty-object schema that reads a run returning nothing as {}", async () => {
+  it("gives a step without returns a strict empty-object schema that reads a run returning nothing as {}", async () => {
     const step = defineStep({
       description: "asserts only",
       args: z.object({ sum: z.number() }),
@@ -255,7 +255,7 @@ describe("defineStep", () => {
     const returned = await step.run({} as never, { sum: 4 });
     expect(returned).toBeUndefined();
     expect(step.returns.safeParse(returned)).toEqual({ success: true, data: {} });
-    expect(step.returns.safeParse({ extra: 1 })).toEqual({ success: true, data: {} });
+    expect(step.returns.safeParse({ extra: 1 }).success).toBe(false);
     expect(step.returns.safeParse("text").success).toBe(false);
   });
 

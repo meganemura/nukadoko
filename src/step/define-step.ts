@@ -280,11 +280,14 @@ export function malformedFromEntryMessage(key: string, entry: unknown): string {
  * a later step to cite (most assertion steps) then needs neither the schema
  * line nor a `return {}`. A default rather than a wrapper around `run`,
  * because nukadoko reads fixture names from `run`'s own source text, and a
- * wrapper would hide it. */
-export type DefaultReturns = z.ZodDefault<z.ZodObject<Record<string, never>>>;
+ * wrapper would hide it. Strict, so a key `run` does return is refused
+ * rather than stripped: a value the author returned either reaches the
+ * step record or fails the step, and `nuka describe` already publishes
+ * this schema as `additionalProperties: false`. */
+export type DefaultReturns = z.ZodDefault<z.ZodObject<Record<string, never>, z.core.$strict>>;
 
 function defaultReturns(): DefaultReturns {
-  return z.object({}).default(() => ({}));
+  return z.strictObject({}).default(() => ({}));
 }
 
 /** What `run` may give back. A step without `returns` may return nothing,
@@ -395,6 +398,9 @@ export interface Step<
  * show. `nuka check` reads it, because only `defineStep` receives the
  * object a step file wrote. */
 export interface StepDeclaration {
+  /** False when the definition has no `returns`, so `Step.returns` is the
+   * default schema, which a reader cannot tell from one written by hand. */
+  readonly declaresReturns: boolean;
   /** Keys of the definition that `defineStep` does not read, in the order
    * written. Excess-property checking is a `tsc` error only, and some
    * projects never typecheck their step files, so without this a leftover
@@ -426,6 +432,12 @@ function ignoredOptions(definition: object): string[] {
 
 export function ignoredStepOptions(step: Step): readonly string[] {
   return step[STEP_DECLARATION]?.ignoredOptions ?? [];
+}
+
+/** True for a Step with no declaration, which then reads as one whose
+ * schema was written by hand: a failure message claims less that way. */
+export function declaresReturns(step: Step): boolean {
+  return step[STEP_DECLARATION]?.declaresReturns ?? true;
 }
 
 /**
@@ -561,7 +573,10 @@ export function defineStep<
     parts: definition.parts ?? [],
     run: definition.run,
     [STEP_BRAND]: true,
-    [STEP_DECLARATION]: { ignoredOptions: ignoredOptions(definition) },
+    [STEP_DECLARATION]: {
+      declaresReturns: definition.returns !== undefined,
+      ignoredOptions: ignoredOptions(definition),
+    },
   };
 }
 

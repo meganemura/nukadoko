@@ -158,6 +158,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka` は実行時にその値を無視するので、run は変わりません。
   残す価値のある理由は、`defineStep` の上のコメントへ移せます。
   `nuka describe` は `rationale` のキーを出力せず、`nuka tend --json` には `summary.rationale` がありません。
+- **`returns` のない step は、`run` がキーを持つオブジェクトを返すと失敗します。**
+  これまでは値が捨てられ、step が通る一方で step record には `{}` が残りました。
+  今は step が `result_invalid` で失敗し、メッセージがそのキーを挙げます。
+  値を record に残す価値があるなら、そのキーを持つ `returns` を宣言してください。
+  そうでなければ、返すのをやめてください。
+  `tsconfig.json` が step ファイルを含むなら `tsc` がすでにそうした return を拒否していたので、step ファイルを型チェックするプロジェクトには変化がありません。
 - **`nuka tend` は `step-rationale-missing`、`additional-feature-dir-missing`、`import-failures-unseen` を報告しなくなりました。**
   1 つ目は `rationale` とともになくなりました。
   残りの 2 つは、`nuka check` がすでに `additional-feature-dir-missing`(エラー)と `step-file-import-failed` として報告することを述べていました。

@@ -383,6 +383,8 @@ export default defineStep({
   これは、後の step が引用するものも、失敗の診断に使うものも持たない step に向いています。
   典型的には、観測した値がすでに `from` を通じて args として届いている Then の step です。
   何かを観測する step は、それを返すことに変わりありません(前述)。
+  キーを持つオブジェクトを返す `run` は、そのキーを挙げる `result_invalid` で step を失敗させます。
+  そうしなければ record には `{}` が残り、step が通る一方で値が失われるからです。
   `returns` を宣言した step の意味は変わりません: `run` はその schema が検証する値を返し、何も返さなければ step は失敗します。
 - `run` の本体は、自分が分割代入した fixture の上で自由に書ける TypeScript です。
   合成とは、別の step モジュールをインポートし、同じ fixture bag でその `run` を呼び出すことです。

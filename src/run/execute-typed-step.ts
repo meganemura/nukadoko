@@ -1,4 +1,5 @@
 import { formatValidationIssues } from "../issues/format-issues.js";
+import { parseStepReturns } from "../step/parse-returns.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContextHandle } from "../context/create-context.js";
 import type { FixtureGraph } from "../fixture/graph.js";
@@ -77,15 +78,12 @@ export async function executeTypedStep(input: ExecuteTypedStepInput): Promise<Ty
       name,
       step.timeout === undefined ? "config" : "step",
     );
-    const returnsResult = step.returns.safeParse(runResult);
+    const returnsResult = parseStepReturns(step, runResult);
     if (!returnsResult.success) {
       return {
         status: "failed",
         args: argsResult.data,
-        error: {
-          message: `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`,
-          kind: "result_invalid",
-        },
+        error: { message: returnsResult.message, kind: "result_invalid" },
         fixtureUsage,
       };
     }

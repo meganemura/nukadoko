@@ -240,6 +240,7 @@ export default {
         "fixture-names.ts",
         "fixture-types.ts",
         "infer-needs.ts",
+        "parse-returns.ts",
         "resolve-use.ts",
         "step-fixture-names.ts",
         "strict-args.ts",

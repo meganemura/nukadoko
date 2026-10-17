@@ -14,6 +14,21 @@ just until 0.1.
   summary line had moved to `passed` and `failed`, so a search of a CI log
   for the word a record uses found no step line. Breaking for a script
   that matches `FAIL` in that output: see docs/upgrading.md.
+- **BREAKING: a step with no `returns` fails when `run` returns an object with keys.**
+  The default schema stripped every key, so the step passed and its
+  record held `{}`: evidence a Then step returned (an envelope, a proof
+  that a read was valid) was gone with no message. The default is now a
+  strict empty object, the same `additionalProperties: false` that `nuka
+  describe` already published, and the step fails with `result_invalid`:
+  `this step declares no returns, so <keys> would be dropped from the step
+  record; declare returns with those keys, or stop returning them`.
+  Refusing was chosen over keeping the value under a loose default,
+  because a loose default would make the published contract and the
+  record disagree, and a key no schema declares cannot be cited by `from`
+  or checked by `nuka check`.
+  `nuka run`, `nuka do`, `nuka experimental explore`, and a part called
+  through `call` parse a step's return in one place now, so all four give
+  the same message. A `run` that returns nothing, or `{}`, still passes.
 - **BREAKING: nukadoko loads TypeScript through Node's own type stripping, needs Node `^22.18.0 || >=23.6.0`, and no longer depends on tsx.**
   These are the first Node releases that strip types with no flag. The
   config, the step files, and what they import load through a

@@ -191,6 +191,13 @@ This part does not change release to release.
   not change. A reason worth keeping can move into a comment above
   `defineStep`. `nuka describe` prints no `rationale` key, and `nuka
   tend --json` has no `summary.rationale`.
+- **A step with no `returns` fails when `run` returns an object with
+  keys.** The value used to be dropped and the step record held `{}`
+  while the step passed. Now the step fails with `result_invalid`, and
+  the message names the keys. Declare `returns` with those keys if the
+  value is worth keeping in the record, or stop returning it. `tsc`
+  already rejected such a return where `tsconfig.json` includes the step
+  files, so a project that typechecks them sees no change.
 - **`nuka tend` no longer reports `step-rationale-missing`,
   `additional-feature-dir-missing`, or `import-failures-unseen`.** The
   first went with `rationale`. The other two said what `nuka check` already

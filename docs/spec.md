@@ -468,7 +468,10 @@ export default defineStep({
   with nothing a later step cites and nothing a failure would be diagnosed
   from: typically a Then step whose observed values already arrived as
   args through `from`. A step that observes something still returns it
-  (see above). A declared `returns` keeps its meaning: `run` returns the
+  (see above). A `run` that returns an object with keys fails the step
+  with `result_invalid`, whose message names the keys: the record would
+  otherwise hold `{}` and the value would be lost while the step passed.
+  A declared `returns` keeps its meaning: `run` returns the
   value that schema validates, and returning nothing fails the step.
 - The `run` body is free TypeScript on the fixtures it destructured.
   Composition is importing another step module and calling its `run` with

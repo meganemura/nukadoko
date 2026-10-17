@@ -19,6 +19,7 @@ import type {
 import type { SecretSet } from "../secrets/types.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
+import { parseStepReturns } from "../step/parse-returns.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import type { StorageState } from "../session/storage-state.js";
 import { launchBrowserWithTracing, type BrowserEvidenceHandle } from "./browser-evidence.js";
@@ -845,9 +846,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     }
     const nested = calls.entriesOf(frame);
 
-    const returnsResult = part.returns.safeParse(runResult);
+    const returnsResult = parseStepReturns(part, runResult);
     if (!returnsResult.success) {
-      const message = `returns validation failed: ${formatValidationIssues(returnsResult.error.issues)}`;
+      const message = returnsResult.message;
       recordCallFailure(record, name, args, "result_invalid", message, startedAt, nested);
       throw new Error(message);
     }
