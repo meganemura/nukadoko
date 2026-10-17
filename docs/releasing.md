@@ -99,6 +99,11 @@ registers the trusted publisher.
    from that version. In `docs/upgrading.md` and `docs/upgrading.ja.md`, rename
    the heading that ends in "to the next release" (`から次のリリースへ`
    in Japanese) so it names this version, for example `0.14.1 to 0.15.0`.
+   Then run `git grep -n "<old heading text>"` once for each language and
+   change every quote of the old heading to the new one. A bullet that sends
+   the reader to that section quotes its heading, and
+   `tests/docs-cli-names.test.ts` fails on a quoted heading that the file no
+   longer has.
 
 2. Run `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check && npm run skill-examples`.
    `pack-check` installs the real tarball into a throwaway project

@@ -87,6 +87,9 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    workflow はその version から tag を作ります。
    `docs/upgrading.md` と `docs/upgrading.ja.md` では、「to the next release」(日本語では「から次のリリースへ」)で終わる見出しを、このバージョンを名指すように書き換えます。
    たとえば `0.14.1 to 0.15.0` です。
+   次に、英語と日本語の古い見出しの文言それぞれで `git grep -n "<古い見出しの文言>"` を実行し、その見出しの引用をすべて新しい見出しに書き換えます。
+   その節を参照する箇条書きは見出しを引用しています。
+   `tests/docs-cli-names.test.ts` は、そのファイルにもうない見出しの引用があると失敗します。
 
 2. `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check && npm run skill-examples` を実行します。
    `pack-check` は本物の tarball を、このリポジトリの外の捨てプロジェクトへインストールし、そこで CLI を動かします。
