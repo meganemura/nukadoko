@@ -61,7 +61,11 @@ step does in its place.
 shared the same opening steps. It also shows the measured time for that
 opening and its share of the run's summed scenario time. An opening ends
 before the first When, and two steps share it only when their docstring
-or table is the same too.
+or table is the same too. The note's pointer to a process-scope fixture
+fits only when the shared steps write nothing a later scenario reads: an
+opening that creates the record each scenario then reads by id stays in
+each scenario (`scenario-rules.md`, S8, and `examples/http-api.md`). Say
+that when you report the note.
 
 `post-navigation-read` is the one worth knowing the shape of, because
 there is a way to make it stop being true and only one. It reads every
@@ -74,8 +78,8 @@ retrying is not listed at all. Reaching for a direct browser wait instead
 does not help: that wait is itself a call right after the navigation, so
 the note comes back naming it, which reads as though nothing silences it.
 
-Once a feature has moved into `featuresDir` (see "What not to do" in
-`SKILL.md`), `nuka run` picks it up on every future commit, and each of
+Once a feature has moved into `featuresDir` (see "The loop" in
+`SKILL.md`, step 6), `nuka run` picks it up on every future commit, and each of
 those runs writes its own run summary. A feature kept outside
 `featuresDir` and listed in `additionalFeatureDirs` still counts for the
 steps it binds, so `pattern-unbound` and `fixture-unused` do not report

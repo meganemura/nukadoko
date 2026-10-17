@@ -1,0 +1,226 @@
+# Worked example: a command-line program
+
+A finished project for a program run from the command line, built with
+nukadoko 0.16.1 on Node 24.22.0. Every output block below is copied from
+a real run of that project. The rules it follows are in
+`../scenario-rules.md`.
+
+## The ticket
+
+`tally <file.csv> [--json]` sums amounts per category. The output is one
+`category: total` line per category, sorted by name. `--json` prints the
+same totals as one object. A file that cannot be read exits 2 with `tally:
+cannot read <file>`. A line that is not `category,amount` exits 3 with
+`tally: bad line: <line>`.
+
+## The feature
+
+`features/tally.feature`, written before the first `nuka run`. Every
+expected value comes from the ticket.
+
+```gherkin
+Feature: tally sums amounts per category
+
+  Acceptance criteria (from the request):
+  - Given a CSV of category,amount lines, tally prints one "category: total" line per category, sorted by name
+  - --json prints the same totals as one JSON object
+  - A file that cannot be read is an error with exit code 2
+  - A line that is not category,amount is an error with exit code 3
+
+  Scenario: totals per category, sorted by name
+    Given a file "input.csv" with these lines
+      """
+      rent,100
+      food,3
+      food,2.5
+      """
+    When I run tally with "input.csv"
+    Then it exits with 0
+    And the output is
+      """
+      food: 5.5
+      rent: 100
+      """
+
+  Scenario: --json prints one object
+    Given a file "input.csv" with these lines
+      """
+      rent,100
+      food,3
+      """
+    When I run tally with "input.csv --json"
+    Then it exits with 0
+    And the output is
+      """
+      {"food":3,"rent":100}
+      """
+
+  Scenario: a file that cannot be read
+    Given an empty directory
+    When I run tally with "missing.csv"
+    Then it exits with 2
+    And the error says "tally: cannot read missing.csv"
+
+  Scenario: a malformed line
+    Given a file "input.csv" with these lines
+      """
+      rent,100
+      oops
+      """
+    When I run tally with "input.csv"
+    Then it exits with 3
+    And the error says "tally: bad line: oops"
+```
+
+## The steps
+
+- `a-csv-file-with` (Given): writes the docstring to `{name}` in a new
+  `scratch.dir()` and returns `dir` and `bytes`.
+- `an-empty-directory` (Given): returns a new `scratch.dir()` as `dir`.
+- `run-tally` (When): `I run tally with {argv:string}`; reads `dir` from
+  either Given through `from` and runs `src/cli.ts` there with
+  `runCommand`.
+- `exits-with`, `output-is`, `error-says` (Then): each reads one key of
+  `run-tally` through `from` and compares it with `node:assert/strict`.
+
+Every step is `mutates: false`: the Givens write only inside the
+scenario's scratch directory, and `tally` writes nothing.
+
+`features/steps/run-tally.ts`, after the hand edits described under
+"Decisions":
+
+```ts
+import { defineStep, runCommand, z } from "nukadoko";
+import { resolve } from "node:path";
+import aCsvFileWith from "./a-csv-file-with.ts";
+import anEmptyDirectory from "./an-empty-directory.ts";
+
+const cli = resolve("src/cli.ts");
+
+export default defineStep({
+  description: "Run tally with these arguments in the directory an earlier step prepared",
+  pattern: "I run tally with {argv:string}",
+  args: z.object({
+    argv: z.string().describe("Arguments after `tally`, separated by spaces"),
+    dir: z.string().describe("Working directory, from the Given step"),
+  }),
+  from: {
+    dir: [[aCsvFileWith, "dir"], [anEmptyDirectory, "dir"]],
+  },
+  returns: z.object({
+    exitCode: z.number().nullable().describe("The process exit code"),
+    stdout: z.string().describe("Everything the process wrote to stdout"),
+    stderr: z.string().describe("Everything the process wrote to stderr"),
+  }),
+  // Runs the program under test in a scratch directory a Given step made.
+  mutates: false,
+  async run({}, { argv, dir }) {
+    const args = argv.trim() === "" ? [] : argv.split(/\s+/);
+    return await runCommand(process.execPath, [cli, ...args], { cwd: dir });
+  },
+});
+```
+
+`features/steps/output-is.ts`. The scaffold wrote the import, the `from`
+entry, and `mutates: false`; the `expected` key for the docstring and the
+assertion are by hand:
+
+```ts
+import { defineStep, z } from "nukadoko";
+import assert from "node:assert/strict";
+import runTally from "./run-tally.ts";
+
+export default defineStep({
+  description: "stdout is exactly the docstring, ignoring a trailing newline",
+  pattern: "the output is",
+  args: z.object({
+    expected: z.string().describe("The expected stdout, verbatim"),
+    stdout: runTally.returns.shape.stdout,
+  }),
+  from: {
+    stdout: [runTally, "stdout"],
+  },
+  mutates: false,
+  run({}, { expected, stdout }) {
+    const actual = stdout.trimEnd();
+    assert.equal(actual, expected.trimEnd(), `stdout: expected ${JSON.stringify(expected.trimEnd())}, got ${JSON.stringify(actual)}`);
+  },
+});
+```
+
+## The commands, in order
+
+A producer has to return its key before a consumer is scaffolded `--from`
+it. Scaffolding `run-tally` while `a-csv-file-with` was still a stub:
+
+```
+$ npx nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir
+Refusing to scaffold: a-csv-file-with does not return "dir"; it returns no keys
+do: nuka scaffold --help
+```
+
+`--from` takes one producer per key. Two producers for `dir` were refused,
+so the second one went into `from` by hand:
+
+```
+$ npx nuka scaffold run-tally ... --from a-csv-file-with.dir --from an-empty-directory.dir
+Refusing to scaffold: args key "dir" is filled twice (a capture or another --from), and one args field holds one value
+```
+
+`nuka scaffold output-is --pattern 'the output is' --then --from
+run-tally.stdout` leaves no key for the docstring, and `nuka check` said so:
+
+```
+error	table-docstring-key-mismatch	features/tally.feature:18	Step "output-is" has a table/docstring attached but every args key is already consumed by named captures or declared from
+  do: Leave exactly one args key that no capture fills, typed string[][] for a table or string for a docstring, or remove the attachment from the line.
+```
+
+A red run, with `rent: 101` in the docstring for the first scenario. The
+first line of the message carries both values:
+
+```
+  step 4/4  FAIL  0.0s  the output is
+      stdout: expected "food: 5.5\nrent: 101", got "food: 5.5\nrent: 100"
+      record  .nukadoko/records/steps/step-20261017-114020-t0lq
+```
+
+The run that passed:
+
+```
+$ npx nuka check
+ok: no issues found
+$ npx nuka run
+...
+4 scenarios: 4 passed, 0 failed  (2s)
+$ npx nuka tend
+scanned: features
+bed: typed 6, compat 0, read-only 6
+declared: describe 16/16
+ok: nothing to tend
+```
+
+Two probes, outside the feature, for the rules `nuka check` enforces. A
+scenario with no Then (S2):
+
+```
+warning	scenario-without-then	probe/no-then.feature:3	Scenario "a run with no claim" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.
+  do: Add a Then line that checks the outcome the scenario is for.
+```
+
+The action under test written as a Given, with no Given before it (S10):
+
+```
+error	from-order-violation	probe/given-run.feature:4	Step "run-tally"'s from.dir needs exactly one of its candidate producers ("a-csv-file-with", "an-empty-directory") to have already run earlier in this scenario, but none has: "a-csv-file-with" is never bound anywhere in this scenario; "an-empty-directory" is never bound anywhere in this scenario. This line would fail args validation with certainty
+```
+
+## Decisions
+
+| Date | Decision | Chosen | Why | Became |
+| --- | --- | --- | --- | --- |
+| 2026-10-16 | How the input file reaches the program's working directory | the Given returns `dir`, the When reads it through `from` and runs there | each `scratch.dir()` call is a new directory, and the scaffolded `--command` step runs in its own | Shapes: a program's input file |
+| 2026-10-16 | One capture per argument, or one for all | `{argv:string}`, split on spaces | one When step serves every flag and the missing-file path | Shapes: arguments |
+| 2026-10-16 | `mutates` on the `--command` step | `false`, with a comment | the scaffold writes the default `true`; `tally` writes nothing and runs in a scratch directory | SKILL.md "Before the first command" |
+| 2026-10-16 | Which assertion, with no Playwright installed | `node:assert/strict`, with both values in the message | `playwright/test` does not resolve in this project | S11 |
+| 2026-10-16 | Does `--json` also claim the exit code | yes, `Then it exits with 0` | a program that crashed after printing would pass without it | S1 |
+| 2026-10-16 | Does the output compare the trailing newline | no, both sides are trimmed at the end, and the description says so | the program ends its output with a newline that the docstring does not show | none |
+| 2026-10-17 | Order of scaffolding | Givens first, then the When, then the Thens | `--from` refuses a producer that does not return the key yet | SKILL.md "The loop" |

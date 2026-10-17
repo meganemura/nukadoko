@@ -1,10 +1,14 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { listCheckCodes } from "../src/check/codes.js";
 import { runCli } from "../src/cli/run-cli.js";
+import { TEND_CODES } from "../src/tend/types.js";
 import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -148,5 +152,124 @@ describe("nuka skill (process)", () => {
     } finally {
       await removeTempDir(rootDir);
     }
+  });
+});
+
+// The acceptance skill is read by an agent with a context budget, so its
+// size is a contract: SKILL.md is the order of work and stays at 120 lines,
+// each reference stays at 200, and a rule that does not fit replaces one
+// that is there. The worked examples are exempt because their output
+// blocks are copied from real runs, not written to a length.
+const SKILL_MD_BUDGET = 120;
+const REFERENCE_BUDGET = 200;
+
+function lineCount(text: string): number {
+  if (text === "") return 0;
+  const lines = text.split("\n");
+  return text.endsWith("\n") ? lines.length - 1 : lines.length;
+}
+
+function budgetProblems(skillDir: string): string[] {
+  const problems: string[] = [];
+  const skillLines = lineCount(readFileSync(path.join(skillDir, "SKILL.md"), "utf8"));
+  if (skillLines > SKILL_MD_BUDGET) problems.push(`SKILL.md has ${skillLines} lines, over ${SKILL_MD_BUDGET}`);
+  const referencesDir = path.join(skillDir, "references");
+  for (const entry of readdirSync(referencesDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const lines = lineCount(readFileSync(path.join(referencesDir, entry.name), "utf8"));
+    if (lines > REFERENCE_BUDGET) problems.push(`references/${entry.name} has ${lines} lines, over ${REFERENCE_BUDGET}`);
+  }
+  return problems;
+}
+
+describe("acceptance skill size budget", () => {
+  it("counts the lines wc -l counts", () => {
+    hegel.test((tc) => {
+      const lines = tc.draw(gs.arrays(gs.text({ alphabet: "ab \t`" }), { maxSize: 40 }));
+      expect(lineCount(lines.map((line) => `${line}\n`).join(""))).toBe(lines.length);
+      if (lines.length > 0 && lines.at(-1) !== "") expect(lineCount(lines.join("\n"))).toBe(lines.length);
+    });
+  });
+
+  it("keeps SKILL.md and every reference within budget", () => {
+    expect(budgetProblems(path.join(skillsDir, "acceptance"))).toEqual([]);
+  });
+
+  it("names a SKILL.md and a reference one line over budget, and leaves examples/ alone", async () => {
+    const skillDir = await createEmptyTempDir();
+    try {
+      await mkdir(path.join(skillDir, "references", "examples"), { recursive: true });
+      await writeFile(path.join(skillDir, "SKILL.md"), "line\n".repeat(121));
+      await writeFile(path.join(skillDir, "references", "at-budget.md"), "line\n".repeat(200));
+      await writeFile(path.join(skillDir, "references", "over.md"), "line\n".repeat(201));
+      await writeFile(path.join(skillDir, "references", "examples", "long.md"), "line\n".repeat(900));
+      expect(budgetProblems(skillDir)).toEqual([
+        "SKILL.md has 121 lines, over 120",
+        "references/over.md has 201 lines, over 200",
+      ]);
+    } finally {
+      await removeTempDir(skillDir);
+    }
+  });
+});
+
+// Each rule in scenario-rules.md shows the weak form, the strong form, and
+// what enforces it. A `Checked by:` line names finding codes, which must
+// exist, or says review: a rule that names a code nukadoko does not report
+// promises a check nobody runs.
+const registeredCodes: ReadonlySet<string> = new Set([...listCheckCodes().map((entry) => entry.code), ...TEND_CODES]);
+
+function ruleShapeProblems(text: string): string[] {
+  const problems: string[] = [];
+  const sections = text.split(/^(?=## )/m).filter((section) => /^## S\d/.test(section));
+  sections.forEach((section, index) => {
+    const heading = /^## (S\d+)\. /.exec(section);
+    const id = heading?.[1] ?? section.split("\n")[0]!;
+    if (id !== `S${index + 1}`) problems.push(`${id} is not numbered S${index + 1}`);
+    for (const label of ["Bad:", "Good:", "Checked by:"]) {
+      if (!new RegExp(`^${label}`, "m").test(section)) problems.push(`${id} has no ${label} line`);
+    }
+    const checkedBy = /^Checked by:([\s\S]*?)(?:\n\n|$)/m.exec(section)?.[1] ?? "";
+    const codes = [...checkedBy.matchAll(/`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`/g)].map((match) => match[1]!);
+    for (const code of codes) {
+      if (!registeredCodes.has(code)) problems.push(`${id} names \`${code}\`, which is not a check or tend code`);
+    }
+    if (codes.length === 0 && !/^\s*review\b/.test(checkedBy)) {
+      problems.push(`${id}'s Checked by: names no code and does not say review`);
+    }
+  });
+  if (sections.length === 0) problems.push("no rule sections");
+  return problems;
+}
+
+describe("scenario-rules.md rule shape", () => {
+  it("gives every rule a Bad:, a Good:, and a Checked by: line that names real codes or review", async () => {
+    const text = await readFile(path.join(skillsDir, "acceptance", "references", "scenario-rules.md"), "utf8");
+    expect(ruleShapeProblems(text)).toEqual([]);
+    expect(text.match(/^## S\d+\. /gm)).toHaveLength(12);
+  });
+
+  it("names a missing line, an unknown code, a bare Checked by:, and a numbering gap", () => {
+    const text = [
+      "# Rules",
+      "",
+      "## S1. one",
+      "",
+      "Bad: x",
+      "Checked by: `then-mutates` and `then-reads-nothing`.",
+      "",
+      "## S3. two",
+      "",
+      "Bad: x",
+      "Good: y",
+      "Checked by: a person.",
+      "",
+    ].join("\n");
+    expect(ruleShapeProblems(text)).toEqual([
+      "S1 has no Good: line",
+      "S1 names `then-reads-nothing`, which is not a check or tend code",
+      "S3 is not numbered S2",
+      "S3's Checked by: names no code and does not say review",
+    ]);
   });
 });

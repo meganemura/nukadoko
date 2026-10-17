@@ -45,7 +45,7 @@ A command that stops before it has anything to report (a bad flag, a missing tar
 
 ## Documentation
 
-- [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md): a requirement to a pull request a person approves. `references/` beside it holds each procedure: writing steps, writing the feature, running, diagnosing, exploring, models, fixtures, evidence, maintenance, and starting from prose.
+- [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md): a requirement to a pull request a person approves. `references/` beside it holds the rules a scenario follows (`scenario-rules.md`) and each procedure: writing steps, step files, steps that check something, parts, writing the feature, running, diagnosing, exploring, models, fixtures, evidence, maintenance, and starting from prose. `references/examples/` holds three finished projects (a CLI, an HTTP API, a stateful workflow) with the output of real runs.
 - [skills/migration/SKILL.md](skills/migration/SKILL.md): moving a cucumber-js or Playwright Test suite across, in two stages.
 - [docs/spec.md](docs/spec.md): the design. "Typed steps" for `defineStep`; "Running" for scenarios and single steps; "Records" for every file a run writes; "Sessions, environments, secrets"; "Review" for what a person reads; "Tending"; "Markdown oaths"; "Models and relations"; "CLI summary" for every command and flag; "Out of scope (honest limits)".
 - [docs/ci.md](docs/ci.md): the GitHub Actions job and the pull request comment.

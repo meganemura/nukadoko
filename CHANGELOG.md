@@ -287,6 +287,31 @@ just until 0.1.
 
 ### Changed
 
+- **The acceptance skill gains rules for a scenario that can be wrong, three worked examples, and a size budget.**
+  `skills/acceptance/references/scenario-rules.md` holds twelve rules
+  (S1 to S12), each with a weak form, a strong form, and a `Checked by:`
+  line that names the `check` or `tend` code that enforces it or says
+  `review`. `references/examples/` holds a CLI, an HTTP API, and a
+  stateful workflow project, each with its ticket, feature, steps, the
+  output of real `nuka check`, `nuka run`, and `nuka tend` runs, and a
+  dated table of the decisions taken. `SKILL.md` is cut to 120 lines and
+  every reference is kept to 200: `writing-steps.md` is split into
+  `writing-steps.md`, `step-files.md`, `checking-steps.md`, and
+  `parts.md`, and setup moves to `running.md`. Six places where the skill
+  disagreed with the CLI are fixed: `node:assert/strict` is the assertion
+  where Playwright is not installed; a Then whose values arrive through
+  `from` returns nothing, as `nuka scaffold --then` writes it; the
+  go-ahead before a `mutates: true` step depends on what the step reaches,
+  so a program run in a scratch directory needs none; the
+  `repeated-scenario-prefix` pointer to a process-scope fixture is
+  reported with the case where it does not fit; producers are scaffolded
+  before the steps that read `--from` them; and `/`, `(`, and `{` in a
+  pattern are escaped. The skill also says how a lesson from a run grows
+  into an example row, a rule, and a finding code. `tests/skill.test.ts`
+  fails when `SKILL.md` passes 120 lines or a reference passes 200, and
+  when a rule lacks one of its three lines or names a code nukadoko does
+  not report.
+
 - **`repeated-scenario-prefix` compares docstrings and tables, and stops at the first When.**
   It grouped steps by sentence text alone, so two scenarios whose steps
   took different docstrings counted as one opening, and the When an

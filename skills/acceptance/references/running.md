@@ -1,5 +1,31 @@
 # Running
 
+## Setting up
+
+Run every `nuka` command from the directory that holds the config; in a
+workspace, that is the package, not the root. When there is no config,
+`nuka init` writes it, `features/steps/`, `.gitignore` lines for
+`.nukadoko/` and `.env` files, and a `test:scenarios` script in
+`package.json`, so `npm run test:scenarios` runs `nuka run`, which checks
+`featuresDir` and then executes it. A
+`test:scenarios` script the project already has stays, and `init` says so
+on stderr; run `nuka run` directly then. It also adds the steps and the
+config to `tsconfig.json`'s `include`, and
+`"rewriteRelativeImportExtensions": true` to its `compilerOptions` so
+`tsc` accepts the `.ts` import names `nuka scaffold` writes, keeping its
+comments and trailing commas. When `compilerOptions` comes only through
+`extends`, `init` says on stderr what to add instead of editing.
+
+A CommonJS project (no `"type": "module"` in `package.json`) gets
+`nukadoko.config.mts`, and step files need `.mts` too. A hand-written
+`nukadoko.config.ts` there loads with a Node warning on every run (`nuka
+tend` reports it as `package-type-missing`), and fails to import under
+`"type": "commonjs"`, with an error that names the file.
+
+A flag that takes one string or one number is refused when it is given
+more than once, and the command writes nothing. `--use` and `--fail-on`
+are the repeatable flags. Each value is kept, in the order given.
+
 ## Environments
 
 `--env <name>` on `nuka do`, `nuka run`, and `nuka session clear`
@@ -38,8 +64,8 @@ only visible to `nuka run`. `nuka check --codes` names every
 finding code `check` can produce. Read the catalog there rather than from
 a list kept anywhere else.
 
-If the feature's directory is in `additionalFeatureDirs` (see "What not to
-do" in `SKILL.md`), a bare `nuka check` already covers it, the same as any
+If the feature's directory is in `additionalFeatureDirs` (see "The loop"
+in `SKILL.md`, step 6), a bare `nuka check` already covers it, the same as any
 feature under `featuresDir`. Otherwise pass the feature path directly,
 since without either the argument or the config entry the one file you care
 about is the one that goes unchecked. `nuka check` takes the targets
@@ -83,6 +109,8 @@ nothing.
    `--summary <path>` when a CI step posts it as a pull request comment. A compat World
    constructor that throws fails that scenario only: stderr gets one setup
    line, later scenarios still run, and the messages export is finalized.
+   There is no step record for that failure. With no target, `nuka run`
+   runs `featuresDir`, which is what `npm run test:scenarios` does.
    When a scenario fails, diagnose it before repeating the whole run
    (see `references/diagnosing.md`) rather than treating a full re-run as
    the default first move. `<feature>:<line>` is fine for narrowing this
@@ -103,7 +131,9 @@ Push the feature and its steps and open the pull request. CI runs the
 feature and posts the run summary on it (`docs/ci.md` in the nukadoko
 package has the workflow). A person reads the feature in the diff and the
 summary beside it, and approving the pull request is the sign-off. Nothing
-else is written or committed for it.
+else is written or committed for it. Whether the criteria still hold later
+is a question for the next CI run, not for the old summary, and a failed
+run that a later run fixed is history the pull request can show.
 
 ## What a run writes
 

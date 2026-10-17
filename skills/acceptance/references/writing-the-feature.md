@@ -16,7 +16,9 @@ Each scenario is those criteria translated into the vocabulary
 (`references/writing-steps.md`, "Reading the vocabulary"), whether they
 arrived straight from a ticket or through the requirements stage below.
 Where that translation is a judgment call, the judgment is what review of
-the feature is for.
+the feature is for. `scenario-rules.md` is what makes a scenario able to
+fail for the right reason: a Then that claims a value, an expected value
+taken from the criteria, a sentence that names what a user sees.
 
 ```gherkin
 @PROJ-123
@@ -90,7 +92,10 @@ own step records and its own pass or fail, never two cases sharing one
 verdict because they happened to share a scenario. Put a column in the
 Outline's name (`Scenario Outline: greets <name>`): with several rows and
 no column there, every row has the same name in the run summary, and
-`nuka check` warns `outline-rows-share-name`.
+`nuka check` warns `outline-rows-share-name`. Use an Outline when the
+rows differ only in values and share every sentence, and separate
+scenarios when a row needs a sentence of its own. A Background holds a
+Given that every scenario of the file shares, and nothing else.
 
 ## Choosing Given, When, or Then
 
@@ -98,7 +103,11 @@ Pick the keyword for what the line does for its reader. Given is what is
 already true, When is the action under test, Then is what has to be
 observable afterwards. Matching does not depend on the keyword at all: a
 line binds by its pattern alone, so the keyword is a claim to the reader
-rather than an instruction to the tool.
+rather than an instruction to the tool. The same step can be the When of
+one scenario and a Given of another: a registration is the action under
+test in "a short password" and the setup in "sign in before confirming".
+A step that can be refused returns the outcome instead of throwing, so a
+Then can claim the refusal (`examples/workflow.md`).
 
 The one place the keyword meets a step's contract is `mutates`. A step
 declaring `mutates: true` bound in Then position is a `nuka check`
@@ -121,5 +130,6 @@ but sits under Given or When belongs under Then instead.
 The same steps can be written in a Markdown file named in `oaths`
 (`nukadoko.config.ts`). `nuka check <file.md>` and `nuka run <file.md>`
 also read that path when it is not listed. A sentence that matches no
-pattern is `undefined-step`. The grammar, and what this slice does not
+pattern is `undefined-step`. A named directory is read for `*.md` files
+only; one with none (`.MD` does not count) is `feature-parse-error`. The grammar, and what this slice does not
 read, is docs/spec.md ("Markdown oaths").

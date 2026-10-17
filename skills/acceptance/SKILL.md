@@ -7,203 +7,114 @@ license: MIT
 
 # nukadoko acceptance loop
 
-## What this is for
-
-A person approves a change by reading two things on its pull request: the
-feature file in the diff, and the run summary CI posts beside it. The
-summary says that the scenarios ran green at one commit; approving the pull
-request is the sign-off. nukadoko writes no separate record of that
-approval. Whether the criteria still hold later is a question for the next
-CI run, not for the old summary.
-
-This skill is the path from whatever you start with (raw prose, general
-acceptance criteria, a scenario ready to write, or a path already
-explored one `nuka do` call at a time or through a Playwright MCP
-server) through that pull request and the
-placement decision that goes with it. Open the reference named on a step
-before doing that step. This file is the order, not the procedure.
-`node_modules/nukadoko/llms.txt` names every command, flag, and finding
-code in one file, for a lookup no step here covers.
+A person approves a change by reading the feature file in the pull
+request's diff and the run summary CI posts beside it; approving is the
+sign-off. The feature is written before the implementation it judges,
+from the criteria and never from the program's output, which is what
+makes a green run evidence rather than agreement. This file is the order
+of work: open the reference a step names when you reach it.
+`node_modules/nukadoko/llms.txt` names every command, flag, and code.
 
 ## Before the first command
 
-The person watching has not decided to trust this tool yet. Before the
-first command, say in two or three sentences what the loop is for and
-what it will touch. After that, name anything that costs time, changes
-state, or outlives the command, one line each:
+Say in two or three sentences what the loop is for and what it will
+touch, then one line for each of these that applies:
 
-- **`nuka do` on a `mutates: true` step** changes real state. That one
-  needs a go-ahead before the first run of that step, not a mention
-  afterwards, and not again on every retry
-  (`references/writing-steps.md`).
-- **A step that needs `page`** makes `nuka run` open a browser and take
-  minutes. Say so before the first run that includes one. Steps built on
-  `runCommand` or `request` open no browser.
-- **A step that needs `page`, `context`, or `request`** needs the
-  project's own `playwright`, an optional peer of nukadoko that a CLI
-  project does not have. Without it, `nuka check` reports
-  `playwright-missing` for that step with the
-  `npm install -D -E playwright@<version>` line to run. Adding it is a
-  dependency change: ask first.
-- **A Playwright MCP server**, when the loop explores a browser app whose
+- A `mutates: true` step that reaches past the project (a real service, a
+  shared database, a file outside `scratch`) gets a go-ahead before its
+  first `nuka do`, once, not on every retry. A step that writes only under
+  `scratch`, or only to a server a fixture started for the scenario, needs
+  none (`references/writing-steps.md`, "Asking before a step changes
+  something").
+- A step that needs `page`, `context`, or `request` needs the project's
+  own `playwright`; `nuka check` reports `playwright-missing` with the
+  install line. Adding it is a dependency change: ask first. A `page` step
+  makes `nuka run` open a browser and take minutes.
+- A Playwright MCP server, when the loop explores a browser app whose
   state cannot be repeated, drives the real application with whatever
   login it holds. A click that submits something there needs the same
-  go-ahead as a `mutates: true` step (`references/exploring.md`).
+  go-ahead (`references/exploring.md`).
 
-nukadoko itself makes no outbound network calls. What leaves the machine
-is what your own steps send to the application you pointed them at.
-Everything written at run time lands under `.nukadoko/`, gitignored by
-`nuka init`, holding live credentials in plaintext. Nothing here commits,
-pushes, or publishes on its own. Keep the narration short: a paragraph
-before every command is its own way of being hard to follow.
+Run-time output lands under `.nukadoko/`, gitignored, and can hold
+credentials in plaintext. nukadoko makes no outbound calls of its own and
+never commits, pushes, or publishes. Keep the narration short.
 
 ## Where to start
 
-Run every `nuka` command from the directory that holds the config; in a
-workspace, that is the package, not the root. If the project is not initialized, run `nuka init` first. It writes the
-config, `features/steps/`, `.gitignore` lines for `.nukadoko/` and `.env` files, and a `test:scenarios`
-script in `package.json`, so `npm run test:scenarios` runs `nuka run`,
-which checks `featuresDir` and then executes it. A `test:scenarios` script the
-project already has stays, and `init` says so on stderr; run `nuka run` directly then. It also adds the steps and the config to
-`tsconfig.json`'s `include`, and `"rewriteRelativeImportExtensions": true`
-to its `compilerOptions` so `tsc` accepts the `.ts` import names
-`nuka scaffold` writes, keeping its comments and trailing commas. When
-`compilerOptions` comes only through `extends`, `init` says on stderr
-what to add instead of editing. Add `--allure` only when someone reads Allure reports,
-and `--env` when the project keeps `.env` files; both report emitters are
-off until their config key (`allure: {}`, `messages: {}`) is present. A
-CommonJS project (no `"type": "module"` in `package.json`) gets
-`nukadoko.config.mts`, and step files need `.mts` too. A hand-written
-`nukadoko.config.ts` there loads with a Node warning on every run (`nuka
-tend` reports it as `package-type-missing`), and
-fails to import under `"type": "commonjs"`, with an error that names the
-file.
+Run `nuka` from the directory that holds the config, and `nuka init`
+first when there is none (`references/running.md`, "Setting up"). Then
+pick the one line that is true:
 
-A flag that takes one string or one number is refused when it is given
-more than once, and the command writes nothing. `--use` and `--fail-on`
-are the repeatable flags. Each value is kept, in the order given.
+1. **Prose only** (a ticket, a request, a conversation):
+   `references/from-prose.md`, then line 2.
+2. **Criteria sentences, no scenario yet**: `references/scenario-rules.md`
+   and `references/writing-the-feature.md`, then the loop.
+3. **A concrete scenario, or one you can write directly**: the loop.
+4. **A path already run** with `nuka do` or a Playwright MCP server:
+   write the scenario from what you ran (`references/exploring.md`, "Then
+   fix what you found"), then the loop at step 3.
+5. **A browser app whose state cannot be repeated** (an account that
+   opens once): drive it through the host's Playwright MCP server,
+   connected when its `browser_*` tools are listed; a Claude Code host
+   adds it with `claude mcp add playwright npx @playwright/mcp@latest`
+   once the person agrees. Then line 4 (`references/exploring.md`,
+   "Exploring state that cannot be repeated").
+6. **A model or a relation over request-only steps**:
+   `references/models.md` (`nuka experimental explore`, which can change
+   in any release), then the loop at step 3.
 
-1. **All you have is prose** (a ticket, a request, a conversation), nothing
-   that reads as a testable statement yet:
-   `references/from-prose.md`, then
-   `references/writing-the-feature.md`.
-2. **You already have general acceptance-criteria sentences** but no
-   scenario yet: `references/writing-the-feature.md` ("From requirements
-   to scenarios").
-3. **You already have, or can write directly, a concrete scenario**: "The
-   loop" below.
-4. **You already ran the path** with `nuka do`, or through a Playwright
-   MCP server, and want it fixed in a scenario: write the scenario from
-   what you ran (`references/exploring.md`, "Then fix what you found"),
-   then join the loop at step 3 (`nuka check`).
-5. **You need to explore a browser app whose state cannot be repeated**
-   (an account that opens once, an order that must not be placed twice):
-   drive it through the host's Playwright MCP server, connected when its
-   `browser_*` tools are listed. A Claude Code host adds it with
-   `claude mcp add playwright npx @playwright/mcp@latest`; ask the
-   person before adding it. Then write what you found as a scenario
-   and run `nuka check` (`references/exploring.md`, "Exploring state
-   that cannot be repeated").
-6. **You want sequences generated against a model, or two runs compared
-   by a relation**, with request-only steps: `references/models.md`
-   (`nuka experimental explore`, experimental: it can change in any
-   release), then paste what it prints and join the loop at step 3.
-
-If none of the six is true, ask what this is supposed to do before
-writing anything. A scenario started without knowing what it proves
-proves the wrong thing.
+If none is true, ask what this is supposed to do before writing anything.
 
 ## The loop
 
-The everyday loop is four things: a step per kind of line (`defineStep`),
-a `.feature` file, `nuka check`, and `nuka run`. Steps 1 to 4 below are
-those four; the rest carries the result to a person.
+1. **Feature first.** Write the `.feature` from the criteria, by
+   `references/scenario-rules.md`, and copy the criteria verbatim under
+   `Feature:` (`references/writing-the-feature.md`). Every expected value
+   is one the criteria state; a value they do not state is a question for
+   a person, not a guess and not a value read off the program.
+2. **Steps.** `nuka steps` lists the vocabulary and `nuka describe <step>`
+   one contract; reuse before scaffolding. `nuka scaffold --feature <file>`
+   writes a stub for each undefined line, or one at a time: `nuka scaffold
+   <name> --pattern "<line>" --description "<what it does>"`, with
+   `--then` for a Then, `--command <entry point>` for a When that runs a
+   program, and `--from <step>.<key>` for each value read from an earlier
+   step. `--from` needs the producer to return that key already, so
+   implement producers first. Run each step alone with `nuka do <step>
+   --args '<json>'` (`references/writing-steps.md`, which names the
+   references for the file, assertions, parts, and fixtures). Finished
+   projects: `references/examples/` (`cli.md`, `http-api.md`,
+   `workflow.md`).
+3. **`nuka check <feature>`.** Fix every error and read every warning: a
+   warning is a question about intent, not noise. Each finding names its
+   `file` and a `do:` line; run or apply it (`references/running.md`).
+4. **`nuka run <feature>`** until green. A failure names the step, the
+   first line of its error, its step record, and a `rerun` line; read the
+   record before running again (`references/diagnosing.md`). A red Then is
+   fixed in the implementation, or by asking the person; it is never
+   fixed by weakening the Then until it matches the output.
+5. **Commit before the run you report**, push, and open the pull
+   request; CI posts the run summary (`docs/ci.md` in the package).
+6. **Decide where the feature lives**, in the same pull request: the
+   product's core path moves into `featuresDir`, which `nuka run` runs on
+   every commit; a feature for one change stays outside it, named in
+   `additionalFeatureDirs` (`references/maintenance.md`).
 
-1. **Steps.** Read the vocabulary: `nuka steps --json`, then
-   `nuka describe <step>` for anything that looks relevant. When an
-   operation is missing: `nuka scaffold <name> --pattern "<line>"`
-   (`--then` for a Then step, `--command <entry point>` for a When step
-   that runs a program, `--from <step>.<key>` for each value it reads from an earlier
-   step, `--description "<what it does>"` so no TODO is left for
-   `nuka tend`), implement it, exercise it alone with
-   `nuka do`. When the feature is written first, `nuka scaffold --feature
-   <file>` writes one stub per line `check` calls undefined; rename each
-   `value` key and read any `note:` line it prints. `references/writing-steps.md` ("Reading the vocabulary",
-   "When the vocabulary has no step for it"). The same file: chaining
-   (`from`, "Chaining a value from an earlier step"), helper vs part vs
-   step ("Helper, part, or step?"), a second scenario that needs part of
-   a step ("Splitting a step a second scenario needs half of",
-   "Generalizing a step that is too concrete"). A step that runs a
-   program uses `runCommand`, in a directory from the builtin `scratch`
-   fixture.
-2. **Feature.** `references/writing-the-feature.md`. The same criteria
-   can live in a Markdown oath instead of a `.feature` file: name it in
-   `oaths`, or pass the `.md` path to `nuka check` and `nuka run`. A
-   sentence no pattern matches is `undefined-step`. A named directory is
-   read for `*.md` files only; one with none (`.MD` does not count) is
-   `feature-parse-error`. The grammar is in docs/spec.md ("Markdown
-   oaths"). A resource the scenario borrows, a temporary directory
-   (`scratch`), a wait for an effect that lands elsewhere (`poll`, whose
-   `timeout` is a budget for the whole call), or a required environment
-   variable: `references/fixtures.md`. `nuka check` reports
-   `fixture-structural-violation` for a config fixture whose
-   destructuring cannot be read, and that finding names the fixture.
-   Application-specific evidence: `references/evidence.md`.
-3. **`nuka check <feature>`**, or several files or a directory, the
-   targets step 4 runs. `references/running.md`. A schema that
-   coerces the capture is not `capture-type-mismatch`
-   (`references/writing-steps.md`). Compat glue that declares a done()
-   callback is `done-callback-arity`. Each finding names its `file` and a
-   `do:` line, the next command or edit; run or apply it. `nuka check
-   --codes` and `nuka tend --codes` list every code, meaning, and `do`.
-4. **`nuka run <feature>`** until green. It stops before executing on any
-   error step 3 would report; `--no-check` runs anyway.
-   `references/running.md`. When it fails, stderr names the failed step's
-   error, its step record path, and a `rerun` command per failed
-   scenario. Diagnose from that step record before repeating the run:
-   `references/diagnosing.md`. A compat World that throws while it is
-   constructed fails that scenario only: stderr gets one setup line, later
-   scenarios still run, and the messages export is finalized. There is no
-   step record for that failure. With no target, `run` runs
-   `featuresDir`, which is what `npm run test:scenarios` (written by
-   `nuka init`) does. Every run also writes a Markdown run summary for the
-   reviewer (`--summary <path>` for a copy a CI step posts on the pull
-   request). The summary states whether the tree had uncommitted changes,
-   so commit before the run you report.
-5. Push the feature and its steps, and open the pull request. CI runs
-   the feature and posts the run summary on it (`docs/ci.md` in the
-   nukadoko package). A person reads the feature in the diff and the
-   summary beside it; approving the pull request is the sign-off.
-6. Decide where the feature belongs. See "What not to do".
+A lesson from a run becomes an example row, then a rule, then a finding
+code (`references/scenario-rules.md`, "How this file grows").
 
 ## What not to do
 
-- **Decide where the feature belongs, in the same pull request.** A feature
-  describing the change stays outside `featuresDir`: name its directory
-  in `additionalFeatureDirs` in `nukadoko.config.ts` so `nuka check` and
-  `nuka tend` still see the steps it binds, instead of reporting them
-  unbound, without it ever running unattended. If you can't touch the
-  config, pass the feature path to `nuka check` instead
-  (`references/running.md`). A feature describing the product's own core
-  path moves into `featuresDir` instead, so `nuka run` picks it up on
-  every future commit; `references/maintenance.md` says what changes on
-  `nuka tend` once it does.
-- A `.feature` file inside `node_modules`, or inside a directory whose
-  name starts with `.`, is outside the walk. `nuka check`, `nuka tend`,
-  and `nuka run` do not see it, and the skip reports nothing
-  (`references/running.md`).
-- Don't fill in a requirement the source never stated. A missing slot is
-  a question for a person, never a guessed value
+- Don't write a Then from what the program printed, and don't edit a Then
+  after a red run without the person's word. Either is the implementation
+  grading itself.
+- Don't fill in a requirement the source never stated
   (`references/from-prose.md`).
-- Don't run a `mutates: true` step the first time without a go-ahead, and
-  don't keep fixing the same step past three cycles. Report where it
-  stands (`references/writing-steps.md`). A prompt that asks for a
-  different amount of patience overrides the three; it is not a config
-  setting.
-- Don't change a model or a relation only to make a failure
-  `nuka experimental explore` printed go away. A person reads the printed
-  scenario first (`references/models.md`).
-- Don't hand-edit a step record or a run summary. It exists because it was
-  measured, not claimed; editing it by hand turns it back into a claim.
-  A failed run that a later run fixed is history the pull request can
-  show, not something to hide.
+- Don't run a step that reaches past the project without a go-ahead, and
+  don't keep fixing one step past three cycles: report where it stands. A
+  prompt that gives a different budget overrides the three.
+- Don't hand-edit a step record or a run summary: it was measured, and
+  editing it turns it back into a claim.
+- Don't change a model or a relation only to make a failure that `nuka
+  experimental explore` printed go away (`references/models.md`).
+- Don't run `nuka tend` on every pull request, or act on its notes
+  unasked: report them (`references/maintenance.md`).
