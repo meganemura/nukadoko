@@ -140,7 +140,9 @@ describe("a project without playwright installed", () => {
 
   it("runs init, scaffold, check, and a CLI scenario", async () => {
     const init = await nuka(["init"]);
-    expect(init.stderr).toBe("");
+    expect(init.stderr).toBe(
+      `next: read ${path.join("node_modules", "nukadoko", "llms.txt")}, written for an agent: the loop, every command, and every finding code\n`,
+    );
     expect(init.code).toBe(0);
     const scaffold = await nuka(["scaffold", "unused-step", "--pattern", "nothing happens"]);
     expect(scaffold.code, scaffold.stderr).toBe(0);

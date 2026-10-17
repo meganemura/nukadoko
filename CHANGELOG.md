@@ -258,7 +258,12 @@ just until 0.1.
   --codes`, `nuka tend --fail-on` and `--all`, every `nuka run` flag), the
   other commands, the finding line and `--json` shape, links into the
   spec sections and the shipped docs, and the two generated code tables
-  last.
+  last. `nuka --help` ends with two lines naming
+  `node_modules/nukadoko/llms.txt`. `nuka init` writes one more stderr
+  line after a passing self-check, `next: read <path>, written for an
+  agent: ...`, with the path relative to the project when the package is
+  installed in it; stdout still lists only the paths init wrote. README
+  "Skills for coding agents" and the acceptance skill name the file.
 
 ### Changed
 

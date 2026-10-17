@@ -3992,6 +3992,7 @@ and what the scenario claims. Generated sequences that passed are not kept.
 ## CLI summary
 
 The npm package is `nukadoko`. The one command it installs is `nuka`.
+`nuka --help` ends by naming `node_modules/nukadoko/llms.txt`, the file an agent with no skill loaded reads first.
 
 ```
 nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>]
@@ -4305,7 +4306,8 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
                               file has comments. --allure turns the
                               Allure emitter on and writes allurerc.mjs;
                               --env-files adds .env, .env.*, !.env.example to
-                              .gitignore
+                              .gitignore. After a passing self-check, its last
+                              stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]

@@ -44,6 +44,11 @@ function skillsDir(): string {
   return path.join(packageRoot(), "skills");
 }
 
+/** This package's own llms.txt, beside `skills/` at the package root. */
+export function llmsTxtPath(): string {
+  return path.join(packageRoot(), "llms.txt");
+}
+
 export interface RunSkillPathOptions {
   stdout: WritableSink;
   stderr: WritableSink;

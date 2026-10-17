@@ -3418,6 +3418,7 @@ scenario はどの feature にも追加されません。
 ## CLI summary
 
 npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。
+`nuka --help` は最後に、skill を読み込んでいない agent が最初に読むファイル `node_modules/nukadoko/llms.txt` を示します。
 
 ```
 nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>]
@@ -3731,7 +3732,8 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
                               file has comments. --allure turns the
                               Allure emitter on and writes allurerc.mjs;
                               --env-files adds .env, .env.*, !.env.example to
-                              .gitignore
+                              .gitignore. After a passing self-check, its last
+                              stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]

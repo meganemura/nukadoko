@@ -7,7 +7,7 @@ import yargs from "yargs";
 // approximation, not a behavior mismatch.
 import type { Arguments, Argv, CommandModule } from "yargs";
 import { readOwnVersion } from "../version.js";
-import { HELP_WIDTH, type HelpGroup, helpLines, renderCommandGroups, withoutFlatListing } from "./help-groups.js";
+import { AGENT_ENTRY_POINT, HELP_WIDTH, type HelpGroup, helpLines, renderCommandGroups, withoutFlatListing } from "./help-groups.js";
 import {
   commandTookTheName,
   DEFAULT_EXPLORE_LENGTH,
@@ -1159,6 +1159,7 @@ export async function runCli(
       )}`,
     )
     .wrap(null)
+    .epilogue(AGENT_ENTRY_POINT)
     .command(removedHarvestCommand)
     .command(movedExploreCommand)
     .demandCommand(1)

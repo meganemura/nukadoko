@@ -6,6 +6,7 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { configSchema } from "../config/schema.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
+import { llmsTxtPath } from "./skill.js";
 import { ensureTsconfig } from "./tsconfig-edit.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -47,6 +48,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //     files are *not* rolled back — they are already visible on disk, and
 //     hiding a failure behind a rollback would only cost the user the
 //     ability to look at what init actually produced and fix it directly.
+//     When it passes, one stderr line names this package's llms.txt, the
+//     file an agent reads next; stderr, because stdout lists only the
+//     paths init wrote.
 //
 // featuresDir/stateDir fall back to `configSchema`'s own defaults
 // (`configSchema.parse({})`) rather than hard-coding "features"/".nukadoko"
@@ -486,5 +490,8 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     return 1;
   }
 
+  const llms = path.relative(rootDir, llmsTxtPath());
+  const shown = llms.startsWith("..") || path.isAbsolute(llms) ? llmsTxtPath() : llms;
+  stderr.write(`next: read ${shown}, written for an agent: the loop, every command, and every finding code\n`);
   return 0;
 }

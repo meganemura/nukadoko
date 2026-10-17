@@ -21,6 +21,10 @@ import {
   testsDir,
 } from "./helpers/fixtures.js";
 
+// The one line init writes to stderr when nothing else needs saying. These
+// tests run init from source, so the package is this checkout.
+const NEXT_LINE = `next: read ${path.join(repoRoot, "llms.txt")}, written for an agent: the loop, every command, and every finding code\n`;
+
 // Responsibility: `nuka init` — all
 // generated artifacts plus its self-check in an empty directory, --base-url
 // threading into the generated config, the all-or-nothing refusal when
@@ -120,7 +124,7 @@ describe("nuka init", () => {
     const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(stdout.text()).toBe("nukadoko.config.ts\nfeatures/steps\n.gitignore\npackage.json\n".replace(/\//g, path.sep));
     expect(await fileSet(rootDir)).toEqual([
       ".gitignore",
@@ -160,7 +164,7 @@ describe("nuka init", () => {
     const exitCode = await runCli(["init", "--allure"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(stdout.text().trim().split("\n")).toEqual([
       "nukadoko.config.ts",
       path.join("features", "steps"),
@@ -198,7 +202,8 @@ describe("nuka init", () => {
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("package.json");
     expect(stderr.text()).toBe(
-      'package.json already has a test:scenarios script ("cucumber-js"); nuka init left it as it is, so run "nuka run" directly or point that script at it\n',
+      'package.json already has a test:scenarios script ("cucumber-js"); nuka init left it as it is, so run "nuka run" directly or point that script at it\n' +
+        NEXT_LINE,
     );
     expect(await readFile(path.join(rootDir, "package.json"), "utf8")).toBe(own);
   });
@@ -213,7 +218,7 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("package.json");
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(await readFile(path.join(rootDir, "package.json"), "utf8")).toBe(own);
   });
 
@@ -262,7 +267,7 @@ describe("nuka init", () => {
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("package.json");
     expect(stderr.text()).toBe(
-      'No readable package.json, so no test:scenarios script was added; run "nuka run" directly\n',
+      'No readable package.json, so no test:scenarios script was added; run "nuka run" directly\n' + NEXT_LINE,
     );
   });
 
@@ -277,7 +282,7 @@ describe("nuka init", () => {
     const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(stdout.text()).toBe(
       "nukadoko.config.ts\nfeatures/steps\n.gitignore\npackage.json\ntsconfig.json\n".replace(/\//g, path.sep),
     );
@@ -313,7 +318,7 @@ describe("nuka init", () => {
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("tsconfig.json");
     expect(stderr.text()).toBe(
-      'tsconfig.json extends "./tsconfig.base.json", which nuka init could not read, so it did not check whether rewriteRelativeImportExtensions or allowImportingTsExtensions is set; tsc refuses the .ts imports nuka scaffold writes unless one of them is set\n',
+      'tsconfig.json extends "./tsconfig.base.json", which nuka init could not read, so it did not check whether rewriteRelativeImportExtensions or allowImportingTsExtensions is set; tsc refuses the .ts imports nuka scaffold writes unless one of them is set\n' + NEXT_LINE,
     );
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
@@ -334,7 +339,7 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("tsconfig.json");
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
 
@@ -351,7 +356,7 @@ describe("nuka init", () => {
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("tsconfig.json");
     expect(stderr.text()).toBe(
-      'tsconfig.json has no compilerOptions of its own, and no file it extends sets rewriteRelativeImportExtensions or allowImportingTsExtensions; tsc refuses the .ts imports nuka scaffold writes unless one of them is set, so add "rewriteRelativeImportExtensions": true to compilerOptions\n',
+      'tsconfig.json has no compilerOptions of its own, and no file it extends sets rewriteRelativeImportExtensions or allowImportingTsExtensions; tsc refuses the .ts imports nuka scaffold writes unless one of them is set, so add "rewriteRelativeImportExtensions": true to compilerOptions\n' + NEXT_LINE,
     );
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
@@ -366,7 +371,7 @@ describe("nuka init", () => {
     const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
 
@@ -380,7 +385,7 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).toContain("tsconfig.json\n");
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(
       '{\n  // the project\'s own sources\n  "include": ["src", "features/**/*", "nukadoko.config.ts",],\n}\n',
     );
@@ -396,7 +401,7 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.text()).not.toContain("tsconfig.json");
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
 
@@ -423,7 +428,7 @@ describe("nuka init", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
     expect(stdout.text().trim().split("\n")).toEqual([
       "nukadoko.config.ts",
       path.join("e2e", "steps"),
@@ -709,7 +714,8 @@ describe("nuka init: CommonJS projects", () => {
     // silently, per this file's own header.
     expect(stderr.text()).toContain(".mts");
     expect(stderr.text()).toMatch(/type.*module/);
-    expect(stderr.text().trim().split("\n")).toHaveLength(1);
+    expect(stderr.text().trim().split("\n")).toHaveLength(2);
+    expect(stderr.text().endsWith(NEXT_LINE)).toBe(true);
 
     // The self-check (loadConfig + discoverSteps) still passed above
     // (exitCode 0) — this is the further proof that a step file placed
@@ -757,7 +763,7 @@ describe("nuka init: CommonJS projects", () => {
     expect(stdout.text()).toContain("nukadoko.config.ts");
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
     expect(existsSync(path.join(rootDir, "nukadoko.config.mts"))).toBe(false);
-    expect(stderr.text()).toBe("");
+    expect(stderr.text()).toBe(NEXT_LINE);
   });
 
   it("refuses the whole command when nukadoko.config.mts already exists, the same as nukadoko.config.ts", async () => {

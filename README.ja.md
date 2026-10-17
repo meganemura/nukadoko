@@ -847,6 +847,10 @@ gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host
 nuka skill path                              # the copy matching your installed version
 ```
 
+skill を読み込んでいない agent は `node_modules/nukadoko/llms.txt` から始めます。
+インストールの事実、ループ、すべてのコマンド、すべての finding code が 1 つのファイルにあります。
+`nuka --help` の最後と `nuka init` の最後がこのファイルを指します。
+
 どちらの skill も、CLI が答えられる内容を書き写しません(語彙、契約、拒否の理由はすべて `nuka steps`、`nuka describe`、stderr から得られます)。
 それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
 

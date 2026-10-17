@@ -14,6 +14,11 @@
 
 import type { Argv, CommandModule } from "yargs";
 
+/** The last lines of `nuka --help`: an agent that only ran `--help` learns
+ * where the file written for it is. */
+export const AGENT_ENTRY_POINT =
+  "An agent starts at node_modules/nukadoko/llms.txt: the loop, every command,\nand every finding code. nuka skill path prints the skills beside it.";
+
 /** yargs wraps its own help at 80 columns on a wide terminal; the grouped list matches it. */
 export const HELP_WIDTH = 80;
 

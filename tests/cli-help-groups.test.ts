@@ -56,6 +56,14 @@ describe("nuka --help", () => {
     ]);
   });
 
+  it("ends by naming llms.txt, on the top-level screen only", async () => {
+    expect((await help([])).split("\n").slice(-2)).toEqual([
+      "An agent starts at node_modules/nukadoko/llms.txt: the loop, every command,",
+      "and every finding code. nuka skill path prints the skills beside it.",
+    ]);
+    expect(await help(["run"])).not.toContain("llms.txt");
+  });
+
   it("keeps a grouped command's own description on its own help screen", async () => {
     const text = await help(["init"]);
     expect(text.split("\n").slice(0, 3)).toEqual(["nuka init", "", "set up a project; ends with a self-check"]);

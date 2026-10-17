@@ -21,6 +21,8 @@ acceptance criteria, a scenario ready to write, or a path already
 explored one `nuka do` call at a time) through that pull request and the
 placement decision that goes with it. Open the reference named on a step
 before doing that step. This file is the order, not the procedure.
+`node_modules/nukadoko/llms.txt` names every command, flag, and finding
+code in one file, for a lookup no step here covers.
 
 ## Before the first command
 

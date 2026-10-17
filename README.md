@@ -920,6 +920,10 @@ gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host
 nuka skill path                              # the copy matching your installed version
 ```
 
+An agent with no skill loaded starts at `node_modules/nukadoko/llms.txt`:
+the install facts, the loop, every command, and every finding code, in one
+file. `nuka --help` ends by naming it, and so does `nuka init`.
+
 Neither skill writes down what the CLI can answer (vocabulary, contracts,
 refusal reasons all come from `nuka steps`, `nuka describe`, and stderr),
 because a skill that copies those starts lying the moment a command
