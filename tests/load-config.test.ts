@@ -310,7 +310,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
 
     const exitCode = await runCli(["steps"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
       `Could not import config at ${configPath}: Cannot use import statement outside a module (nukadoko.config.ts:1)${CJS_TS_HINT}\ndo: nuka steps --help\n`,

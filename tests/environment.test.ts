@@ -85,7 +85,7 @@ describe("nuka do --env: baseURL/envFiles layering", () => {
 });
 
 describe("nuka do --env: unknown environment", () => {
-  it("fails setup (exit 1, no step record directory) for an explicit unknown --env name", async () => {
+  it("fails setup (exit 2, no step record directory) for an explicit unknown --env name", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stderr = createCaptureSink();
@@ -94,7 +94,7 @@ describe("nuka do --env: unknown environment", () => {
         { rootDir, stdout: createCaptureSink(), stderr },
       );
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("no-such-env");
       expect(existsSync(`${rootDir}/.nukadoko`)).toBe(false);
     } finally {
@@ -104,7 +104,7 @@ describe("nuka do --env: unknown environment", () => {
 });
 
 describe("nuka do --env: policy: read-only", () => {
-  it("refuses a mutating step with exit 1 and no step record, naming the step, env, and policy", async () => {
+  it("refuses a mutating step with exit 2 and no step record, naming the step, env, and policy", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stderr = createCaptureSink();
@@ -113,7 +113,7 @@ describe("nuka do --env: policy: read-only", () => {
         { rootDir, stdout: createCaptureSink(), stderr },
       );
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("mutate");
       expect(stderr.text()).toContain("readonly");
       expect(stderr.text()).toContain("read-only");

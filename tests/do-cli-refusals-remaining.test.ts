@@ -12,7 +12,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 // tests/check-fixture-definitions.test.ts makes for the same reason.
 
 describe("nuka do: setup-phase refusals not yet covered by nuka run's own tests", () => {
-  it("propagates a config load failure as exit 1 with a stderr message", async () => {
+  it("propagates a config load failure as exit 2 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "whatever", "--args", "{}"], {
@@ -21,12 +21,12 @@ describe("nuka do: setup-phase refusals not yet covered by nuka run's own tests"
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("typo");
   });
 
-  it("propagates a discoverSteps failure (two files sharing a step name) as exit 1", async () => {
+  it("propagates a discoverSteps failure (two files sharing a step name) as exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "whatever", "--args", "{}"], {
@@ -35,7 +35,7 @@ describe("nuka do: setup-phase refusals not yet covered by nuka run's own tests"
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text().length).toBeGreaterThan(0);
   });
@@ -49,7 +49,7 @@ describe("nuka do: setup-phase refusals not yet covered by nuka run's own tests"
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toMatch(/fixture-cycle|cycle/i);
   });

@@ -18,7 +18,7 @@ describe("refuse", () => {
 
       const exitCode = refuse({ json, stdout, stderr }, error, "nuka check --help");
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       if (json) {
         expect(stderr.text()).toBe("");
         expect(stdout.text().endsWith("\n")).toBe(true);
@@ -136,7 +136,7 @@ describe("a --json command that cannot report prints { error, do } on stdout", (
 
     expect(result.stderr).toBe("");
     expect(JSON.parse(result.stdout)).toEqual({ schema_version: 1, error, do: next });
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
   });
 
   it.each([
@@ -151,7 +151,7 @@ describe("a --json command that cannot report prints { error, do } on stdout", (
     const report = JSON.parse(result.stdout) as { error: string; do: string };
     expect(report.error).toMatch(/^Invalid config at .*nukadoko\.config\.ts: /);
     expect(report.do).toBe(`nuka ${argv.filter((word) => !word.startsWith("-")).join(" ")} --help`);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
   });
 
   it("nuka tend --json --fail-on bogus", async () => {
@@ -161,7 +161,7 @@ describe("a --json command that cannot report prints { error, do } on stdout", (
     const report = JSON.parse(result.stdout) as { error: string; do: string };
     expect(report.error).toBe('--fail-on: "bogus" is not a code nuka tend reports. `nuka tend --codes` lists every code.');
     expect(report.do).toBe("nuka tend --codes");
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
   });
 });
 
@@ -177,6 +177,27 @@ describe("a refusal in text mode ends with a do: line", () => {
 
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(expected);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
+  });
+});
+
+describe("the exit code tells a red report from a refusal", () => {
+  it.each([
+    { argv: ["check"], root: "check-clean-project", exitCode: 0 },
+    { argv: ["check"], root: "check-errors-project", exitCode: 1 },
+    { argv: ["check", "nope.feature"], root: "check-clean-project", exitCode: 2 },
+    { argv: ["run"], root: "check-unbuilt-pattern-project", exitCode: 2 },
+    { argv: ["check", "--bogus"], root: "check-clean-project", exitCode: 2 },
+  ])("nuka $argv in $root exits $exitCode", async ({ argv, root, exitCode }) => {
+    const result = await cli(argv, fixture(root));
+
+    expect(result.exitCode).toBe(exitCode);
+  });
+
+  it("names the check command on the run it stopped", async () => {
+    const result = await cli(["run", "features"], fixture("check-unbuilt-pattern-project"));
+
+    expect(result.stderr.endsWith("Fix them, or pass --no-check to run anyway.\ndo: nuka check features\n")).toBe(true);
+    expect(result.exitCode).toBe(2);
   });
 });

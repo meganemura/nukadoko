@@ -14,13 +14,13 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 // (cli.test.ts) already proves for `steps` but not for `describe`.
 
 describe("nuka harvest, removed", () => {
-  it("exits 1 and names what replaced it, with or without arguments", async () => {
+  it("exits 2 and names what replaced it, with or without arguments", async () => {
     for (const argv of [["harvest"], ["harvest", "step-20260817-a1b2", "--unknown-flag"]]) {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(argv, { rootDir: fixture("basic-project"), stdout, stderr });
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toBe(
         "`nuka harvest` was removed; write the scenario from the steps you ran, then run `nuka check` " +
           "(see docs/upgrading.md in the nukadoko package)\n" +
@@ -41,7 +41,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs", () => 
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });
@@ -57,7 +57,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs", () => 
         stderr,
       });
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("unknown-flag");
       expect(existsSync(`${rootDir}/.nukadoko`)).toBe(false);
     } finally {
@@ -74,14 +74,14 @@ describe("nuka <command> --unknown-flag: the matched handler never runs", () => 
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });
 });
 
 describe("nuka describe: config load failure", () => {
-  it("refuses a ConfigError as JSON on stdout, exit 1", async () => {
+  it("refuses a ConfigError as JSON on stdout, exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "some-step"], {
@@ -90,7 +90,7 @@ describe("nuka describe: config load failure", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
     const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
     expect(refusal.error).toContain("typo");

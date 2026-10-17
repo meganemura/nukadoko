@@ -47,7 +47,7 @@ describe("nuka check: a feature argument that is not a missing file", () => {
     const rootDir = await copyFixtureToTempDir("check-step-line-project");
     try {
       const { exitCode, stdout, stderr } = await invoke("check", "features/probe.feature/extra", rootDir);
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stdout).toBe("");
       expect(stderr).toContain("ENOTDIR");
       expect(stderr).toContain("not a directory");
@@ -61,7 +61,7 @@ describe("nuka check: a feature argument that is not a missing file", () => {
     const rootDir = await copyFixtureToTempDir("check-step-line-project");
     try {
       const { exitCode, stdout, stderr } = await invoke("check", "features:2", rootDir);
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stdout).toBe("");
       expect(stderr).toContain(":line is not supported");
       expect(stderr).toContain("nuka check features");

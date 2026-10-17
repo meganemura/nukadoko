@@ -131,7 +131,7 @@ describe("nuka run: World + Before/After hooks", () => {
 });
 
 describe("nuka run: unsupported hook tag expression is a setup failure", () => {
-  it("exits 1 with a message naming the unsupported expression; nothing is written", async () => {
+  it("exits 2 with a message naming the unsupported expression; nothing is written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/noop.feature"], {
@@ -140,7 +140,7 @@ describe("nuka run: unsupported hook tag expression is a setup failure", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("@a and @b");
     expect(stderr.text()).toContain("Unsupported");

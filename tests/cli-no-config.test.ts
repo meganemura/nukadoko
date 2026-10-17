@@ -96,10 +96,10 @@ describe("a command run in a directory with no config", () => {
 
   it("a failed parse prints only its own error", async () => {
     const unknown = await nuka(dir, ["check", "--nope"]);
-    expect(unknown.code).toBe(1);
+    expect(unknown.code).toBe(2);
     expect(unknown.stderr).toBe("Unknown argument: nope\ndo: nuka check --help\n");
     const repeated = await nuka(dir, ["run", "features/a.feature", "--env", "a", "--env", "b"]);
-    expect(repeated.code).toBe(1);
+    expect(repeated.code).toBe(2);
     expect(repeated.stderr).toBe("--env was given more than once.\ndo: nuka run --help\n");
   });
 });
@@ -130,7 +130,7 @@ describe("a command run below a directory that has a config", () => {
 
   it("nuka scaffold refuses and writes nothing", async () => {
     const result = await nuka(cwd, ["scaffold", "stray", "--pattern", "something stray"]);
-    expect(result.code).toBe(1);
+    expect(result.code).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       `Refusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +
@@ -143,7 +143,7 @@ describe("a command run below a directory that has a config", () => {
   it("nuka scaffold --feature refuses the same way", async () => {
     await writeFile(path.join(cwd, "features", "b.feature"), "Feature: b\n\n  Scenario: s\n    When something new happens\n");
     const result = await nuka(cwd, ["scaffold", "--feature", "features/b.feature"]);
-    expect(result.code).toBe(1);
+    expect(result.code).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       `Refusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +

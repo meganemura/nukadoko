@@ -238,7 +238,7 @@ describe("nuka clean", () => {
 
     const stderr = createCaptureSink();
     const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr });
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("live1");
     expect(stderr.text()).toContain("nuka session stop live1");
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
@@ -250,7 +250,7 @@ describe("nuka clean", () => {
 
     const stderr = createCaptureSink();
     const exitCode = await runCli(["clean", "--records"], { rootDir, stdout: createCaptureSink(), stderr });
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("live2");
     expect(stderr.text()).toContain("staging");
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
@@ -297,7 +297,7 @@ describe("nuka clean", () => {
 
     const stderr = createCaptureSink();
     const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr });
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("refusing");
     expect(stderr.text()).toContain("project root");
     expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
@@ -315,7 +315,7 @@ describe("nuka clean", () => {
       stdout: createCaptureSink(),
       stderr,
     });
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("refusing");
     expect(stderr.text()).toContain("project root");
     expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
@@ -332,7 +332,7 @@ describe("nuka clean", () => {
       stdout: createCaptureSink(),
       stderr,
     });
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("refusing");
     expect(stderr.text()).toContain("project root");
     expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
@@ -353,7 +353,7 @@ describe("nuka clean", () => {
         stdout: createCaptureSink(),
         stderr,
       });
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("refusing");
       expect(stderr.text()).toContain("outside the project");
       expect(existsSync(path.join(outside, "keep.txt"))).toBe(true);
@@ -378,7 +378,7 @@ describe("nuka clean", () => {
         stdout: createCaptureSink(),
         stderr,
       });
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("refusing");
       expect(stderr.text()).toContain("outside the project");
       expect(existsSync(output)).toBe(true);
@@ -399,7 +399,7 @@ describe("nuka clean", () => {
       stdout: createCaptureSink(),
       stderr,
     });
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("refusing");
     expect(stderr.text()).toContain("state directory");
     expect(existsSync(path.join(rootDir, "bed", "keep.txt"))).toBe(true);
@@ -420,7 +420,7 @@ describe("nuka clean", () => {
         stdout: createCaptureSink(),
         stderr,
       });
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("outside the project");
       expect(existsSync(path.join(outside, "keep.txt"))).toBe(true);
       expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
@@ -444,7 +444,7 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
   });
 
-  it("an unknown flag fails setup: exit 1, nothing deleted (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+  it("an unknown flag fails setup: exit 2, nothing deleted (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
     await seedRecords(rootDir);
 
     const stderr = createCaptureSink();
@@ -454,7 +454,7 @@ describe("nuka clean", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
   });

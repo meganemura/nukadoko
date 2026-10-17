@@ -78,7 +78,7 @@ describe("nuka describe: compat entries", () => {
 });
 
 describe("nuka do: compat entries cannot be named", () => {
-  it("exits 1 with a promotion-guidance message and writes no step record", async () => {
+  it("exits 2 with a promotion-guidance message and writes no step record", async () => {
     const rootDir = await copyFixtureToTempDir("compat-project");
     try {
       const stdout = createCaptureSink();
@@ -93,7 +93,7 @@ describe("nuka do: compat entries cannot be named", () => {
         { rootDir, stdout, stderr },
       );
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toContain("compat step");
       expect(stderr.text()).toContain("defineStep");

@@ -26,7 +26,7 @@ async function check(featureArg: string): Promise<{ exitCode: number; stderr: st
 describe("nuka check: distinguishes an unsupported :line from a genuinely missing file", () => {
   it("names :line as unsupported, and names the real file, when the base file exists", async () => {
     const { exitCode, stderr } = await check("features/probe.feature:3");
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr).toContain(":line is not supported");
     expect(stderr).toContain("features/probe.feature");
     expect(stderr).toContain("nuka check features/probe.feature");
@@ -37,7 +37,7 @@ describe("nuka check: distinguishes an unsupported :line from a genuinely missin
 
   it("still reports feature file not found for a file that genuinely does not exist", async () => {
     const { exitCode, stderr } = await check("features/does-not-exist.feature");
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr).toContain("feature file not found: features/does-not-exist.feature");
     // The new wording must not leak into the genuinely-missing case: a
     // constant "not supported" message would otherwise pass this suite by
@@ -47,7 +47,7 @@ describe("nuka check: distinguishes an unsupported :line from a genuinely missin
 
   it("reports feature file not found (not the :line wording) when :line is given but the base file also does not exist", async () => {
     const { exitCode, stderr } = await check("features/does-not-exist.feature:9");
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr).toContain("feature file not found: features/does-not-exist.feature:9");
     expect(stderr).not.toContain(":line is not supported");
   });

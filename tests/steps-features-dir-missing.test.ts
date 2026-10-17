@@ -46,7 +46,7 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
 
     const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     // `{"steps": [], "import_failures": []}` here would read as success.
     // The refusal has no `steps` key at all, so no reader can mistake it.
     expect(JSON.parse(stdout.text())).toEqual({
@@ -85,7 +85,7 @@ describe("nuka describe and nuka do: featuresDir missing", () => {
 
     const exitCode = await runCli(["describe", "missing-step"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(JSON.parse(stdout.text())).toEqual({
       schema_version: 1,
       error: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,

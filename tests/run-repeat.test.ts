@@ -85,7 +85,7 @@ describe("nuka run --repeat", () => {
         stdout: createCaptureSink(),
         stderr,
       });
-      expect(exitCode, value).toBe(1);
+      expect(exitCode, value).toBe(2);
       expect(stderr.text()).toContain("--repeat must be a whole number of 1 or more");
     }
   });

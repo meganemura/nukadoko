@@ -505,7 +505,7 @@ describe("nuka init", () => {
 
     const exitCode = await runCli(["init", "--features-dir", ""], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("--features-dir");
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(false);
@@ -520,7 +520,7 @@ describe("nuka init", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).not.toBe("");
 
@@ -534,7 +534,7 @@ describe("nuka init", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["init", "--env"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain(
       "nuka init --env is now --env-files; --env names an environment on the other commands",
@@ -775,7 +775,7 @@ describe("nuka init: CommonJS projects", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["init"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).not.toBe("");
 

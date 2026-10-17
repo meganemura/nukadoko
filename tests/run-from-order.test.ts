@@ -112,7 +112,7 @@ describe("nuka run: from's scenario-order guard", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--no-check", "features/broken-from-bound.feature"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     // Setup-phase fatal, same family as ConfigError/DuplicateStepError
     // (closes a piece of wiring m6a left unfinished) — no scenario
     // record line is ever printed.

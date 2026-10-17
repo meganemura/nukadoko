@@ -152,7 +152,7 @@ describe("defineStep validation reaches nuka check and nuka do", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "bad-timeout", "--args", "{}"], { rootDir, stdout, stderr });
     const combined = `${stdout.text()}\n${stderr.text()}`;
-    expect(exitCode, combined).toBe(1);
+    expect(exitCode, combined).toBe(2);
     expect(combined).toContain("timeout must be a finite number of milliseconds");
     expect(combined).not.toContain("timed out after");
     expect(combined).not.toContain('"kind": "timeout"');

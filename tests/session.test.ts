@@ -164,12 +164,12 @@ describe("nuka do --session (request path)", () => {
       ["do", "whoami", "--args", "{}", "--session", "../x"],
       { rootDir, stdout: createCaptureSink(), stderr },
     );
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
     expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
   });
 
-  it("exits 1 without writing a step record when the session's lock is held by a live process", async () => {
+  it("exits 2 without writing a step record when the session's lock is held by a live process", async () => {
     const lockPath = path.join(sessionsDir(rootDir), "s2.lock");
     await mkdir(path.dirname(lockPath), { recursive: true });
     await writeFile(
@@ -183,7 +183,7 @@ describe("nuka do --session (request path)", () => {
       { rootDir, stdout: createCaptureSink(), stderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("s2");
     expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
   });
@@ -208,7 +208,7 @@ describe("nuka do --session (request path)", () => {
     expect(existsSync(lockPath)).toBe(false);
   });
 
-  it("fails setup (exit 1, no step record) when the session file is malformed JSON", async () => {
+  it("fails setup (exit 2, no step record) when the session file is malformed JSON", async () => {
     const sessionFile = path.join(sessionsDir(rootDir), "s4.json");
     await mkdir(path.dirname(sessionFile), { recursive: true });
     await writeFile(sessionFile, "{not json");
@@ -219,7 +219,7 @@ describe("nuka do --session (request path)", () => {
       { rootDir, stdout: createCaptureSink(), stderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("s4");
     expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
   });
@@ -302,7 +302,7 @@ describe("nuka session list/clear", () => {
     expect(existsSync(path.join(sessionsDir(rootDir), "alpha.json"))).toBe(false);
   });
 
-  it("an unknown flag fails setup: exit 1, stderr names it, the session is left untouched (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+  it("an unknown flag fails setup: exit 2, stderr names it, the session is left untouched (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
     await writeFakeSession("alpha");
 
     const stderr = createCaptureSink();
@@ -312,7 +312,7 @@ describe("nuka session list/clear", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(existsSync(path.join(sessionsDir(rootDir), "alpha.json"))).toBe(true);
   });

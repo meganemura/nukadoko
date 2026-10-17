@@ -218,7 +218,7 @@ describe("nuka check", () => {
     expect(exitCode).toBe(1);
   });
 
-  it("refuses a ConfigError under --json as one { error, do } object on stdout, exit 1", async () => {
+  it("refuses a ConfigError under --json as one { error, do } object on stdout, exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
@@ -227,7 +227,7 @@ describe("nuka check", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
     const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
     expect(refusal.error).toContain("typo");
@@ -309,7 +309,7 @@ describe("nuka check [feature..]", () => {
     expect(exitCode).toBe(1);
   });
 
-  it("a nonexistent feature path prints to stderr and exits 1, with no report", async () => {
+  it("a nonexistent feature path prints to stderr and exits 2, with no report", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["check", "acceptance/does-not-exist.feature"], {
@@ -318,7 +318,7 @@ describe("nuka check [feature..]", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("nuka check");
     expect(stderr.text()).toContain("acceptance/does-not-exist.feature");

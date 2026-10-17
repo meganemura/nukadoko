@@ -62,7 +62,7 @@ describe("nuka session start: refuses a too-long live-session socket path before
     await rm(path.join(fixture("basic-project"), ".nukadoko"), { recursive: true, force: true });
   });
 
-  it("exits 1, naming the predicted path, its byte length, and the platform limit", async () => {
+  it("exits 2, naming the predicted path, its byte length, and the platform limit", async () => {
     originalTmpdir = process.env.TMPDIR;
     // A long fake `TMPDIR` is the only thing left that can push a live
     // session's own socket path over this platform's own limit: it moved
@@ -83,7 +83,7 @@ describe("nuka session start: refuses a too-long live-session socket path before
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     // The same prediction `runSessionStart` itself makes (cli/session.ts):
     // `mkdtemp` appends exactly six characters after `LIVE_SOCK_DIR_PREFIX`,

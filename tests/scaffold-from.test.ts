@@ -186,7 +186,7 @@ describe("nuka scaffold --from", () => {
     const result = await cli(rootDir, ["scaffold", "broken", "--then", ...flags]);
 
     expect(result.stderr).toContain(`Refusing to scaffold: ${message}`);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "broken.ts"))).toBe(false);
   });
 

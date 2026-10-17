@@ -2485,6 +2485,16 @@ array identifies each step record by id, so either record leads to the other.
   `step_error`, since claiming a contract failure wrongly is worse than not
   claiming one. Hook records in the scenario record carry the same field.
 
+  | `error.kind` | The step failed because |
+  | --- | --- |
+  | `args_invalid` | its args failed the step's `args` schema |
+  | `result_invalid` | its returned value failed the step's `returns` schema |
+  | `binding_invalid` | a feature line's text, table, or doc string could not be bound into the step's args (`nuka run` only) |
+  | `world_invalid` | a write to a declared World key failed its `defineWorld` schema |
+  | `timeout` | a deadline fired before the step or hook settled |
+  | `unsupported` | a compat shape nukadoko does not implement: a `done` callback, or a `"pending"` or `"skipped"` return value |
+  | `step_error` | anything else: the step's or hook's own code threw |
+
 - `mutates` contains the step's declaration (`null` for a compat step, which
   has none to record, not `false`), sitting beside the `observed` counts
   so declared and measured can be compared without a second artifact.
@@ -4000,7 +4010,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before
-                              anything executes (exit 1, no record);
+                              anything executes (exit 2, no record);
                               --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
                               --env targets a named environment ("default"
@@ -4324,7 +4334,7 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
                               prints one object instead, on a pass too: the
                               verdict, the seed and counts, and on a failure
                               each step's result, the failure, and the
-                              scenario. Exits 1 on a failure or a refusal
+                              scenario. Exits 1 on a failure, 2 on a refusal
 ```
 
 A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do` and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
@@ -4376,6 +4386,33 @@ dependency, `nuka session stop <name>` for a live session in the way,
 `nuka check <file>` for a `:line` that `check` does not take. Otherwise it
 is the command's own `--help`. A finding, a failed scenario, or a failed
 step is a report, not a refusal, and keeps its own output.
+
+### Streams and exit codes
+
+stdout carries what a command was asked for, and stderr carries what a
+person watches it do. The exit code says which of three things happened,
+so a script tells "fix the suite" from "fix the invocation" without
+reading either stream.
+
+| Exit | Meaning | Examples |
+| --- | --- | --- |
+| 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run`, `nuka session stop` of a session that is already gone |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, `import_failures` on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported, a failed `nuka experimental explore` run, a session that did not start or stop, a session file that could not be removed |
+| 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
+| 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
+
+| Command | stdout | stderr |
+| --- | --- | --- |
+| `nuka run` | one scenario record per line when stdout is not a terminal | progress, failures, the locations written, the summary line |
+| `nuka do` | the step record, also for a failed step | session notices, warnings |
+| `nuka check`, `nuka tend` | the report, or with `--json` one JSON object | nothing, except a refusal without `--json` and `nuka tend`'s `fail-on` lines |
+| `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always JSON) | the step files that failed to import |
+| `nuka experimental explore` | the shrunk scenario, or with `--json` one JSON object | the verdict line and its rerun command |
+| `nuka clean`, `nuka session list` | one line per path or session, or with `--json` one JSON value | nothing, except a refusal without `--json` |
+
+A refusal under `--json` is the one exception to the stdout column: its
+`{ "schema_version", "error", "do" }` object replaces the report. A step record's
+`error.kind` is listed under "Records".
 
 ### Tolerant reporting, fail-fast execution
 

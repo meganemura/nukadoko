@@ -102,7 +102,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   producer が複数のキーは、`"either of A or B"` ではなく、そのオブジェクトの配列になります。
 - **`nuka init --env` は `nuka init --env-files` になりました。**
   `--env` は、ほかのすべてのコマンドで environment の名前を表します。
-  `nuka init --env` は新しいフラグを名指して終了コード 1 で終わり、何も書きません。
+  `nuka init --env` は新しいフラグを名指して終了コード 2 で終わり、何も書きません。
 - **`nuka check --codes --json` と `nuka session list --json` は、素の配列ではなくオブジェクトを出力します。**
   JSON の文書はすべて `schema_version` で始まるようになり、配列にはそれを置く場所がありません。
   一覧は 1 つのキーの下に移りました。
@@ -118,7 +118,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   retention はもうそれを run が終わった証拠として読まないので、そうした run は `retention.adHocDays` より古くなるまで残ります。
   `nuka clean --records` を使えば今すぐ消せます。
 - **`nuka scaffold` は、config を持つディレクトリより下では書き込みを拒否します。**
-  `nukadoko.config.ts` も `nukadoko.config.mts` も無く、`.git` を持つ最も近いディレクトリまでの親ディレクトリに config がある場所では、`Refusing to scaffold:` とその config への相対パスを出して終了コード 1 で終わります。
+  `nukadoko.config.ts` も `nukadoko.config.mts` も無く、`.git` を持つ最も近いディレクトリまでの親ディレクトリに config がある場所では、`Refusing to scaffold:` とその config への相対パスを出して終了コード 2 で終わります。
   以前は、その config が読まない step ファイルを書いていました。
   `nuka scaffold` は config があるディレクトリ、workspace ならそのパッケージで実行します。
   サブディレクトリで scaffold していたスクリプトは、`cd` の先を変えます。
@@ -138,12 +138,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   1 つ目は `rationale` とともになくなりました。
   残りの 2 つは、`nuka check` がすでに `additional-feature-dir-missing`(エラー)と `step-file-import-failed` として報告することを述べていました。
   代わりに `nuka check` の exit code でゲートを掛けてください。
-  この 3 つのどれかを渡した `nuka tend --fail-on` は exit 1 で終わり、代わりに何をするかを伝えます。
+  この 3 つのどれかを渡した `nuka tend --fail-on` は exit 2 で終わり、代わりに何をするかを伝えます。
   そのため、どれかを名指す CI ジョブは、書き換えるまで失敗します。
   `declared:` の行は `declared: describe <n>/<total>` になります。
   `rationale` の件数を読むスクリプトは、代わりに `describe` の件数を読みます。
 - **`nuka harvest` は削除されました。**
-  終了コード 1 で終わり、この注記を名指しします。
+  終了コード 2 で終わり、この注記を名指しします。
   実行した `nuka do` の呼び出しから scenario を書いてください。
   実行した順に step ごとに 1 行を、その pattern に合う文で書き、`Given`、`When`、`Then` は、その行が読み手に何を伝えるかで選びます。
   先行する step が生んだ値は行に書きません。
@@ -164,7 +164,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `--json` では `file` と `do` がフィールドで、それ以外は変わりません。
 - **`nuka explore` は `nuka experimental explore` になりました。**
   フラグも出力も同じです。
-  `nuka explore` は終了コード 1 で終わり、新しい綴りを示します。
+  `nuka explore` は終了コード 2 で終わり、新しい綴りを示します。
   そのため、`nuka explore features/explore/add-model.ts` を実行していた script は `nuka experimental explore features/explore/add-model.ts` に変えてください。
   model や relation のファイルは、名前の変わった関数を import します。
   `defineModel` は `experimental_defineModel`、`modelCommand` は `experimental_modelCommand`、`defineRelation` は `experimental_defineRelation`、`relationEntry` は `experimental_relationEntry` になりました。
@@ -182,6 +182,15 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `do` は次に実行するコマンドを示します。
   `nuka describe` は `--json` の有無にかかわらず、この形で答えます。
   `--json` なしの拒否は stderr のメッセージを保ち、最後に `do: <command>` の行を足します。
+- **拒否したコマンドは 1 ではなく 2 で終了します。**
+  これまで終了コード 1 は「suite が red」と「何も実行されなかった」の両方を意味していました。
+  今は前者だけを意味します。
+  `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka tend --fail-on` に当たった code です。
+  拒否(知らないフラグ、不正な config、存在しない対象、知らない step、入っていない peer dependency、`nuka check` が報告するエラーで止まった `nuka run`)は 2 で終了します。
+  `!= 0` を調べるスクリプトや CI の step はそのまま動きます。
+  「red」の意味で `== 1` を調べるものは、拒否を見逃すようになります。
+  「green でない」なら `!= 0` を、「呼び出し方を直す」なら `== 2` を調べてください。
+  表は docs/spec.ja.md の「ストリームと終了コード」にあります。
 
 ## 0.15.0 から 0.16.1 へ
 

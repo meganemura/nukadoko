@@ -48,7 +48,7 @@ describe("repeated singular flags", () => {
 
     const exitCode = await runCli([...argv], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(`${flag} was given more than once.\ndo: ${help}\n`);
     expect(stdout.text()).toBe("");
     expect(readdirSync(rootDir)).toEqual([]);
@@ -65,7 +65,7 @@ describe("repeated singular flags", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(withoutNoConfigLine(stderr.text())).toBe("Unknown step: step\ndo: nuka steps\n");
   });
@@ -80,7 +80,7 @@ describe("repeated singular flags", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(withoutNoConfigLine(stderr.text()).startsWith('--fail-on: "a", "b" are not codes nuka tend reports.')).toBe(true);
   });
@@ -91,7 +91,7 @@ describe("repeated singular flags", () => {
 
     const exitCode = await runCli(["steps", "--json", "--json"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
     expect(JSON.parse(stdout.text())).toEqual({
       schema_version: 1,

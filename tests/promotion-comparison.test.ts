@@ -216,7 +216,7 @@ describe("README claim 3: `nuka do` runs the typed step standalone and refuses t
         { rootDir, stdout, stderr },
       );
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toContain("compat step");
       expect(stderr.text()).toContain("defineStep");

@@ -271,7 +271,7 @@ describe("nuka run", () => {
     expect(stripRunProgressLines(stderr.text())).toBe("");
   });
 
-  it("an invalid :line is a setup failure: stderr + exit 1, nothing written", async () => {
+  it("an invalid :line is a setup failure: stderr + exit 2, nothing written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--no-check", "features/lines.feature:999"], {
@@ -280,13 +280,13 @@ describe("nuka run", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("999");
     expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
   });
 
-  it("a missing feature file is a setup failure: stderr + exit 1, nothing written", async () => {
+  it("a missing feature file is a setup failure: stderr + exit 2, nothing written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--no-check", "features/does-not-exist.feature"], {
@@ -295,7 +295,7 @@ describe("nuka run", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("does-not-exist.feature");
     expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
@@ -313,7 +313,7 @@ describe("nuka run", () => {
     expect(stderr.text()).toContain("tag");
   });
 
-  it("an unknown flag fails setup: exit 1, stderr names it, no record/step record written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+  it("an unknown flag fails setup: exit 2, stderr names it, no record/step record written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
@@ -321,7 +321,7 @@ describe("nuka run", () => {
       { rootDir, stdout, stderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("unknown-flag");
     expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);

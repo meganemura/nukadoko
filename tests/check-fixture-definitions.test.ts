@@ -52,7 +52,7 @@ describe("nuka check: fixture definition findings", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toMatch(/fixture-cycle|cycle/i);
   });
@@ -123,7 +123,7 @@ describe("nuka check / nuka run: auto: true is refused with its own dedicated me
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain('"auto"');
     // Names why: this is not a claim of deeper Playwright fixture
@@ -140,7 +140,7 @@ describe("nuka check / nuka run: auto: true is refused with its own dedicated me
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain('"auto"');
   });

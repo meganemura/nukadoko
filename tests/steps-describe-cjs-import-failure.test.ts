@@ -49,7 +49,7 @@ describe("nuka describe: CommonJS/.ts step-file-import-failed on stderr", () => 
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("Cannot use import statement outside a module");
     expect(stderr.text()).toContain('"type": "commonjs"');
     expect(stderr.text()).toContain("rename this file to .mts");

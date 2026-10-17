@@ -58,7 +58,7 @@ describe("nuka session start --idle-timeout", () => {
         stderr,
       });
 
-      expect(exitCode, stderr.text()).toBe(1);
+      expect(exitCode, stderr.text()).toBe(2);
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toContain("--idle-timeout");
       expect(stderr.text()).toContain("2147483");

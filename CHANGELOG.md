@@ -224,7 +224,7 @@ just until 0.1.
   what `nuka check` already reports as `additional-feature-dir-missing` and
   `step-file-import-failed`; both stay in `nuka check`. `nuka tend` reports
   12 codes, and `--all` adds only `schema-field-undescribed`. `nuka tend
-  --fail-on` refuses each of the three removed codes by name, exit 1, with
+  --fail-on` refuses each of the three removed codes by name, exit 2, with
   what to do instead. The refusal of an unknown code now ends with
   "`nuka tend --codes` lists every code." instead of listing the codes
   inline. docs/upgrading.md says what to change.
@@ -301,7 +301,7 @@ just until 0.1.
   (or an array of them), the shape `nuka steps --json` already used,
   instead of a `"step.key"` string. `nuka init --env` is renamed
   `--env-files`, since `--env` names an environment on every other
-  command; the old spelling exits 1 and names the new one. Breaking: see
+  command; the old spelling exits 2 and names the new one. Breaking: see
   docs/upgrading.md.
 - **`nuka explore` is now `nuka experimental explore`, and the model API
   carries the `experimental_` prefix.** The functions are
@@ -311,7 +311,7 @@ just until 0.1.
   command, the functions, and the four `explore-*` findings now carry no
   stability promise: they can change or go in any release without a
   deprecation notice, and the word is at every call site. `nuka explore`
-  exits 1 and names the new spelling. The flags, the output, and the
+  exits 2 and names the new spelling. The flags, the output, and the
   findings are unchanged. Breaking: see docs/upgrading.md.
 - **`undefined-step` names `nuka scaffold --feature <file>`.** The message
   ends with "run `nuka scaffold --feature <the line's feature file>` to
@@ -331,7 +331,7 @@ just until 0.1.
 - **`nuka scaffold` refuses to write when a parent directory has the config.**
   A step file written below the directory that holds the config is not
   one that config reads. The refusal names the directory and the relative
-  path to the config, exits 1, and writes nothing. Without a
+  path to the config, exits 2, and writes nothing. Without a
   parent config, `scaffold` writes as before and prints the stderr line.
 
 - **A command that refuses names the next command, and a `--json` command refuses in JSON.**
@@ -351,6 +351,24 @@ just until 0.1.
   codes are unchanged here. Breaking for a script that reads a `--json`
   refusal from stderr: see docs/upgrading.md.
 
+- **Exit 2 means the command refused and nothing ran; exit 1 means it ran and is red.**
+  Every command used to exit 0 or 1, so 1 meant both "the suite is red"
+  and "nothing ran", and a CI step could tell them apart only by parsing
+  stderr. Exit 1 now means a `nuka check` error, a failed scenario, a
+  failed `nuka do` step, `import_failures` on `nuka steps` or `nuka
+  describe`, a `nuka tend --fail-on` hit, a failed `nuka experimental
+  explore` run, or a failure while the command ran (a session that did
+  not start, a session file that could not be removed). Exit 2 is every refusal: an
+  unknown flag or command, a config that does not load, a missing
+  target, a `:line` on `nuka check`, a bad numeric flag, a missing peer
+  dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown
+  `--fail-on` code, an unknown step, and `nuka run` stopped by the errors
+  `nuka check` reports. docs/spec.md gains "Streams and exit codes" (what
+  each command writes to stdout and stderr, and the codes) and a table of
+  a step record's `error.kind` values under "Records"; llms.txt gains the
+  same section. Breaking for a script that tests `== 1`: see
+  docs/upgrading.md.
+
 ### Removed
 
 - **BREAKING: `nuka harvest` and the `recordStep` export are removed.**
@@ -358,7 +376,7 @@ just until 0.1.
   placeholders, and whose claims were blank. The agent that ran the `nuka
   do` sequence already knows each step and its args, and the claims are
   the part the draft could not supply. Write the scenario from the steps
-  that ran, then run `nuka check`. `nuka harvest` now exits 1 and names
+  that ran, then run `nuka check`. `nuka harvest` now exits 2 and names
   docs/upgrading.md. `recordStep` existed so a Playwright Test spec could
   write step records for `harvest`; it goes with it, together with its
   `RecordStepOptions`, `StepExecution`, and `UnsupportedExternalFixtureError`

@@ -60,7 +60,8 @@ nothing.
    Debugging against a dirty tree is fine.
 2. `nuka run <feature>`, repeat until every scenario is green. It first
    reports what `nuka check` reports for the selected scenarios and exits
-   1 before executing anything on an error; `--no-check` skips that check
+   2 before executing anything on an error (a failed scenario exits 1, so
+   2 always means nothing ran); `--no-check` skips that check
    to run a scenario `check` refuses. stderr
    prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary

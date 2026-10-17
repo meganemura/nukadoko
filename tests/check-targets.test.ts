@@ -95,7 +95,7 @@ describe("nuka check [target..]", () => {
   it("refuses an unknown path among known ones with one error that names it, and no report", async () => {
     const result = await check(rootDir, ["acceptance", "acceptance/missing.feature"]);
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe("nuka check: feature file not found: acceptance/missing.feature\ndo: nuka check --help\n");
   });
@@ -103,7 +103,7 @@ describe("nuka check [target..]", () => {
   it("refuses :line on a file named among other targets", async () => {
     const result = await check(rootDir, ["features", "acceptance/outside.feature:4"]);
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       "nuka check: acceptance/outside.feature:4: :line is not supported; " +

@@ -282,7 +282,7 @@ describe("nuka tend", () => {
     ]);
   });
 
-  it("refuses a config error under --json as { error, do } on stdout, exit 1", async () => {
+  it("refuses a config error under --json as { error, do } on stdout, exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--json", "--all"], {
@@ -291,7 +291,7 @@ describe("nuka tend", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
     const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
     expect(refusal.error).toContain("typo");

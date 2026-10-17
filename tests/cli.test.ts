@@ -69,7 +69,7 @@ describe("nuka steps", () => {
     }
   });
 
-  it("refuses a ConfigError under --json on stdout, exit 1", async () => {
+  it("refuses a ConfigError under --json on stdout, exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["steps", "--json"], {
@@ -78,7 +78,7 @@ describe("nuka steps", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
     expect((JSON.parse(stdout.text()) as { error: string }).error).toContain("typo");
   });
@@ -149,7 +149,7 @@ describe("nuka describe", () => {
     expect(contract).not.toHaveProperty("rationale");
   });
 
-  it("refuses an unknown step name as JSON on stdout, exit 1", async () => {
+  it("refuses an unknown step name as JSON on stdout, exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "no-such-step"], {
@@ -158,7 +158,7 @@ describe("nuka describe", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
     expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, error: "Unknown step: no-such-step", do: "nuka steps" });
   });
@@ -223,7 +223,7 @@ describe("nuka do", () => {
     }
   });
 
-  it("an unknown flag fails setup: exit 1, stderr names it, no step record written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
+  it("an unknown flag fails setup: exit 2, stderr names it, no step record written (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {
     const rootDir = await copyFixtureToTempDir("do-project");
     try {
       const stdout = createCaptureSink();
@@ -233,7 +233,7 @@ describe("nuka do", () => {
         { rootDir, stdout, stderr },
       );
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toContain("unknown-flag");
       expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
@@ -321,7 +321,7 @@ describe("nuka do", () => {
         stderr,
       });
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("no-such-step");
       expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
     } finally {
@@ -339,7 +339,7 @@ describe("nuka do", () => {
         stderr,
       });
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).not.toBe("");
       expect(existsSync(path.join(rootDir, ".nukadoko"))).toBe(false);
     } finally {

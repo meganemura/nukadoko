@@ -64,7 +64,7 @@ function deadPid(): number {
 }
 
 describe("nuka session list: setup failure", () => {
-  it("propagates a config load failure as exit 1 with a stderr message", async () => {
+  it("propagates a config load failure as exit 2 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "list"], {
@@ -73,7 +73,7 @@ describe("nuka session list: setup failure", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("typo");
     expect(stdout.text()).toBe("");
   });
@@ -99,12 +99,12 @@ describe("nuka session clear: setup failures", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
     expect(stdout.text()).toBe("");
   });
 
-  it("propagates a config load failure as exit 1 with a stderr message", async () => {
+  it("propagates a config load failure as exit 2 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "clear"], {
@@ -113,7 +113,7 @@ describe("nuka session clear: setup failures", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("typo");
   });
 
@@ -126,7 +126,7 @@ describe("nuka session clear: setup failures", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
       'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: nuka session clear --help\n',
     );
@@ -142,7 +142,7 @@ describe("nuka session clear: setup failures", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
       'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: nuka session clear --help\n',
     );
@@ -205,11 +205,11 @@ describe("nuka session start: setup failures and the fast lock refusal", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
   });
 
-  it("propagates a config load failure as exit 1 with a stderr message", async () => {
+  it("propagates a config load failure as exit 2 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "start", "alice"], {
@@ -218,7 +218,7 @@ describe("nuka session start: setup failures and the fast lock refusal", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("typo");
   });
 
@@ -231,7 +231,7 @@ describe("nuka session start: setup failures and the fast lock refusal", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
   });
 
@@ -249,7 +249,7 @@ describe("nuka session start: setup failures and the fast lock refusal", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain(`pid ${process.pid}`);
     expect(stderr.text()).toContain("nuka session stop alice");
     expect(stdout.text()).toBe("");
@@ -276,11 +276,11 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
   });
 
-  it("propagates a config load failure as exit 1 with a stderr message", async () => {
+  it("propagates a config load failure as exit 2 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "stop", "alice"], {
@@ -289,7 +289,7 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("typo");
   });
 
@@ -302,7 +302,7 @@ describe("nuka session stop: setup failures and every no-daemon outcome", () => 
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
   });
 

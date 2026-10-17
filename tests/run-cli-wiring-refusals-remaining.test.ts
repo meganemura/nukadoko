@@ -22,7 +22,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });
@@ -36,7 +36,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });
@@ -52,7 +52,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
         stderr,
       });
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("unknown-flag");
       expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(false);
     } finally {
@@ -71,7 +71,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
         stderr,
       });
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stderr.text()).toContain("unknown-flag");
       expect(existsSync(path.join(rootDir, "features", "steps", "brand-new-step.ts"))).toBe(false);
     } finally {
@@ -88,7 +88,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });
@@ -102,7 +102,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });
@@ -116,7 +116,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });
@@ -130,7 +130,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
     expect(stdout.text()).toBe("");
   });

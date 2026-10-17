@@ -51,10 +51,10 @@ describe("nuka run checks before it executes", () => {
     await removeTempDir(rootDir);
   });
 
-  it("refuses a feature with an undefined step: exit 1, the check finding on stderr, no record written", async () => {
+  it("refuses a feature with an undefined step: exit 2, the check finding on stderr, no record written", async () => {
     const result = await run(rootDir, ["run", "features/mixed.feature"]);
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       "error\tundefined-step\tfeatures/mixed.feature:9\t" +
@@ -165,7 +165,7 @@ describe("the findings nuka run reports before executing", () => {
           const expected = errorLines(checked.stdout);
           expect(errorLines(ran.stderr)).toEqual(expected);
           if (expected.length > 0) {
-            expect(ran.exitCode).toBe(1);
+            expect(ran.exitCode).toBe(2);
             expect(ran.stdout).toBe("");
           } else {
             expect(ran.exitCode).toBe(0);

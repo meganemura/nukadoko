@@ -2,8 +2,8 @@
 
 ## A command that refused
 
-A command that stopped before it ran anything ends its stderr with a
-`do:` line, and under `--json` it prints `{ "schema_version", "error", "do" }` on stdout.
+A command that stopped before it ran anything exits 2, not 1, and ends
+its stderr with a `do:` line, and under `--json` it prints `{ "schema_version", "error", "do" }` on stdout.
 Run that `do` command before you guess at a fix: it is the step list for
 an unknown step name, the install line for a missing package, or the
 command's own `--help` for a flag it does not accept.

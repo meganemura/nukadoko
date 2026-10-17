@@ -15,7 +15,11 @@ that `nuka run` never does on its own.
 A project set up with `nuka init` already has `npm run test:scenarios`,
 which runs `nuka run`. With no target, `nuka run` runs `featuresDir`, and
 before it executes anything it reports what `nuka check` reports for those
-scenarios and exits `1` when one is an error. One job is therefore the
+scenarios and exits `2` when one is an error, without running anything. A
+failed scenario exits `1`. A step in the job that has to tell the two
+apart reads `$?`: `2` means fix the invocation or the suite before it can
+run (a bad flag, an invalid config, a missing target, a `check` error),
+and `1` means it ran and something is red. One job is therefore the
 whole gate for a project whose steps never open a browser:
 
 ```yaml

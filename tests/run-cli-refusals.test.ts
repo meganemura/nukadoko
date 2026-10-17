@@ -24,7 +24,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("no-such-env");
   });
@@ -37,7 +37,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
       { rootDir: fixture("basic-project"), stdout, stderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).not.toBe("");
   });
@@ -60,7 +60,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
         { rootDir, stdout, stderr },
       );
 
-      expect(exitCode).toBe(1);
+      expect(exitCode).toBe(2);
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toContain(`pid ${process.pid}`);
     } finally {
@@ -68,7 +68,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
     }
   });
 
-  it("propagates a step discovery failure (a broken glue file) as exit 1 with a stderr message", async () => {
+  it("propagates a step discovery failure (a broken glue file) as exit 2 with a stderr message", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--no-check", "features/whatever.feature"], {
@@ -77,7 +77,7 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("require is not defined");
   });

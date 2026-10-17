@@ -200,7 +200,7 @@ describe("nuka do --use", () => {
     expect(archiveStepRecord.used).toBeUndefined();
   });
 
-  it("a failed step record passed to --use fails setup: stderr, exit 1, no step record written", async () => {
+  it("a failed step record passed to --use fails setup: stderr, exit 2, no step record written", async () => {
     const failedStdout = createCaptureSink();
     const failedExit = await runCli(["do", "create-project", "--args", "{}"], {
       rootDir,
@@ -218,7 +218,7 @@ describe("nuka do --use", () => {
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     // Setup-phase fatal, same family as an unregistered `from` upstream: no
     // step record is ever printed to stdout.
     expect(archiveStdout.text()).toBe("");
@@ -242,7 +242,7 @@ describe("nuka do --use", () => {
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(archiveStdout.text()).toBe("");
     expect(archiveStderr.text()).toContain(ownerStepRecord.step_record_id);
     expect(archiveStderr.text()).toContain("create-owner");
@@ -282,7 +282,7 @@ describe("nuka do --use", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["do", "archive-project"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("--args");
     expect(stderr.text()).toContain("--use");
@@ -296,7 +296,7 @@ describe("nuka do --use", () => {
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(archiveStdout.text()).toBe("");
     expect(archiveStderr.text()).toContain("step-20260101-000000-zzzz");
     expect(archiveStderr.text()).toContain("no such step record");

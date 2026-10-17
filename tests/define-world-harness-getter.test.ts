@@ -93,7 +93,7 @@ describe("defineWorld: page and request", () => {
         }).toEqual({
           checkExit: 1,
           importMessage: expect.stringContaining(refusal(field)),
-          runExit: 1,
+          runExit: 2,
           runText: expect.stringContaining(refusal(field)),
         });
         expect(importFailure?.message).toContain("harness getter");

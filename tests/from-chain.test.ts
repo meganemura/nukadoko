@@ -224,7 +224,7 @@ describe("from: unregistered upstream is a startup fatal under nuka do", () => {
       { rootDir, stdout, stderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     // Setup-phase fatal, same family as ConfigError/DuplicateStepError: no
     // step record is ever printed to stdout.
     expect(stdout.text()).toBe("");

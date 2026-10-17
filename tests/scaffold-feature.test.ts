@@ -237,7 +237,7 @@ describe("nuka scaffold --feature", () => {
     const result = await cli(rootDir, ["scaffold", "--feature", feature]);
 
     expect(result).toEqual({
-      exitCode: 1,
+      exitCode: 2,
       stdout: "",
       stderr:
         "Refusing to scaffold: 1 step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them); `nuka check` names them\n" +
@@ -250,7 +250,7 @@ describe("nuka scaffold --feature", () => {
     const result = await cli(rootDir, ["scaffold", "--feature", "features/nope.feature"]);
 
     expect(result).toEqual({
-      exitCode: 1,
+      exitCode: 2,
       stdout: "",
       stderr: "nuka scaffold --feature: feature file not found: features/nope.feature\ndo: nuka scaffold --help\n",
     });
@@ -259,7 +259,7 @@ describe("nuka scaffold --feature", () => {
   it("refuses a step name or a per-step option beside --feature", async () => {
     const result = await cli(rootDir, ["scaffold", "greet", "--then", "--feature", "features/greet.feature"]);
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stderr).toBe(
       "--feature names each stub and reads its pattern and outcome from its own line; leave out a step name, --then, or scaffold that step on its own with nuka scaffold <name>\n" +
         "do: nuka scaffold --help\n",
@@ -270,7 +270,7 @@ describe("nuka scaffold --feature", () => {
     const result = await cli(rootDir, ["scaffold"]);
 
     expect(result).toEqual({
-      exitCode: 1,
+      exitCode: 2,
       stdout: "",
       stderr: "Missing required argument: name (or --feature <path>)\ndo: nuka scaffold --help\n",
     });

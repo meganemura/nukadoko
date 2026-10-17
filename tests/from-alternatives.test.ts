@@ -256,7 +256,7 @@ describe("nuka do --use: either candidate fills the key", () => {
       { rootDir, stdout: archiveStdout, stderr: archiveStderr },
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     // Setup-phase fatal: no step record is ever printed to stdout.
     expect(archiveStdout.text()).toBe("");
     expect(archiveStderr.text()).toContain("projectId");

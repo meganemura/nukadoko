@@ -129,7 +129,7 @@ describe("nuka scaffold --pattern", () => {
   ])("refuses %s and writes nothing", async (_label, pattern, message) => {
     const result = await cli(rootDir, ["scaffold", "broken", "--pattern", pattern]);
 
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(result.stderr).toContain("Refusing to scaffold: ");
     expect(result.stderr).toContain(message);
     expect(existsSync(path.join(rootDir, "features", "steps", "broken.ts"))).toBe(false);
@@ -142,7 +142,7 @@ describe("nuka scaffold --pattern", () => {
       `Refusing to scaffold: the pattern names type "number", and this project registers none by that name; registered types: ${BUILTIN_TYPES}; did you mean {a:int} or {a:float}?\ndo: nuka scaffold --help\n`,
     );
     expect(result.stdout).toBe("");
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "run-sum.ts"))).toBe(false);
   });
 
@@ -151,7 +151,7 @@ describe("nuka scaffold --pattern", () => {
     expect(refused.stderr).toBe(
       `Refusing to scaffold: the pattern names type "duration", and this project registers none by that name; registered types: ${BUILTIN_TYPES}\ndo: nuka scaffold --help\n`,
     );
-    expect(refused.exitCode).toBe(1);
+    expect(refused.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "wait-for.ts"))).toBe(false);
 
     await registerTypes(rootDir, ["duration"]);
@@ -192,7 +192,7 @@ describe("nuka scaffold --pattern", () => {
 
     expect(result.stderr).toContain("typo");
     expect(result.stderr).not.toContain("Refusing to scaffold");
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "run-sum.ts"))).toBe(false);
   });
 
@@ -272,7 +272,7 @@ describe("nuka scaffold --pattern: any capture type", () => {
           const scaffold = await cli(rootDir, ["scaffold", name, "--pattern", pattern]);
           if (!expected) {
             expect(scaffold.stderr).toMatch(/^Refusing to scaffold: the pattern names type "[a-z]+", and this project registers none by that name; registered types: /);
-            expect(scaffold.exitCode).toBe(1);
+            expect(scaffold.exitCode).toBe(2);
             expect(existsSync(filePath)).toBe(false);
             return;
           }

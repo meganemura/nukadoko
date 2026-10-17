@@ -148,7 +148,7 @@ describe("nuka scaffold", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
     expect(existsSync(path.join(rootDir, "features", "steps", "Bad_Name.ts"))).toBe(false);
   });
@@ -169,12 +169,12 @@ describe("nuka scaffold", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).not.toBe("");
     expect(await readFile(filePath, "utf8")).toBe(original);
   });
 
-  it("exits 1 when the project's config fails to load", async () => {
+  it("exits 2 when the project's config fails to load", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["scaffold", "send-invite"], {
       rootDir: fixture("invalid-config-project"),
@@ -182,7 +182,7 @@ describe("nuka scaffold", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("typo");
   });
 });
@@ -258,7 +258,7 @@ describe("nuka scaffold: CommonJS projects", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("send-invite.mts");
     expect(await readFile(filePath, "utf8")).toBe(original);
   });
@@ -357,7 +357,7 @@ describe("nuka scaffold --description", () => {
     const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
 
     expect(result.stderr).toBe(`${message}do: nuka scaffold --help\n`);
-    expect(result.exitCode).toBe(1);
+    expect(result.exitCode).toBe(2);
     expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
   });
 });

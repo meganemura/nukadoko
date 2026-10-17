@@ -55,8 +55,9 @@ export function formatRefusal(refusal: Refusal, json: boolean): { stdout: string
   return { stdout: "", stderr: `${refusal.error}\ndo: ${refusal.do}\n` };
 }
 
-/** A refusal exits 1, the same code as a red report, for now. */
-export const REFUSED_EXIT_CODE = 1;
+/** Exit 2: nothing ran. A script tells "fix the invocation" from exit 1,
+ * "it ran and is red", without reading either stream. */
+export const REFUSED_EXIT_CODE = 2;
 /** Exit 1, for a command that started and then failed while it ran. */
 export const FAILED_EXIT_CODE = 1;
 

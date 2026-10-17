@@ -2092,6 +2092,16 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   確信が持てない分類器が `step_error` を返すのは、契約違反を誤って主張するほうが、主張しないより悪いからです。
   scenario record の中の hook record も同じフィールドを持ちます。
 
+  | `error.kind` | step が失敗した理由 |
+  | --- | --- |
+  | `args_invalid` | args が step の `args` スキーマに合わなかった |
+  | `result_invalid` | 返した値が step の `returns` スキーマに合わなかった |
+  | `binding_invalid` | feature の行のテキスト、テーブル、doc string を step の args に bind できなかった(`nuka run` のみ) |
+  | `world_invalid` | 宣言された World のキーへの書き込みが `defineWorld` のスキーマに合わなかった |
+  | `timeout` | step または hook が決着する前に期限が来た |
+  | `unsupported` | nukadoko が実装していない compat の形(`done` コールバック、または `"pending"` や `"skipped"` を返した) |
+  | `step_error` | それ以外で、step または hook 自身のコードが throw した |
+
 - `mutates` は step 自身の宣言を保持します(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)。
   `observed` のカウントと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
@@ -3426,7 +3436,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before
-                              anything executes (exit 1, no record);
+                              anything executes (exit 2, no record);
                               --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
                               --env targets a named environment ("default"
@@ -3750,7 +3760,7 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
                               prints one object instead, on a pass too: the
                               verdict, the seed and counts, and on a failure
                               each step's result, the failure, and the
-                              scenario. Exits 1 on a failure or a refusal
+                              scenario. Exits 1 on a failure, 2 on a refusal
 ```
 
 文字列または数値を 1 つ取るフラグを 2 回以上与えると、nuka はそのフラグを拒否し、そのコマンドは何も書き込みません。
@@ -3794,6 +3804,32 @@ discovery は、どのファイルが hook を登録したかを記録しない�
 知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、邪魔をしている live session には `nuka session stop <name>`、`check` が受け付けない `:line` には `nuka check <file>` です。
 それ以外では、そのコマンド自身の `--help` です。
 finding、失敗した scenario、失敗した step は報告であって拒否ではなく、それぞれの出力を保ちます。
+
+### ストリームと終了コード
+
+stdout は、コマンドに求められたものを出します。
+stderr は、コマンドが何をしているかを人が見るためのものを出します。
+終了コードは 3 つのうちどれが起きたかを示すので、スクリプトはどちらのストリームも読まずに「suite を直す」と「呼び出し方を直す」を区別できます。
+
+| 終了コード | 意味 | 例 |
+| --- | --- | --- |
+| 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run`、すでに無い session に対する `nuka session stop` |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` の `import_failures`、`nuka tend` が報告した `--fail-on` の code、失敗した `nuka experimental explore` の run、起動または停止しなかった session、削除できなかった session ファイル |
+| 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
+| 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
+
+| コマンド | stdout | stderr |
+| --- | --- | --- |
+| `nuka run` | stdout が端末でないとき、1 行に 1 つの scenario record | 進捗、失敗、書き込んだ場所、summary の行 |
+| `nuka do` | step record(失敗した step でも) | session の通知、警告 |
+| `nuka check`、`nuka tend` | 報告、`--json` なら 1 つの JSON オブジェクト | 何も出さない(`--json` なしの拒否と、`nuka tend` の `fail-on` の行を除く) |
+| `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に JSON) | import に失敗した step ファイル |
+| `nuka experimental explore` | 縮めた scenario、`--json` なら 1 つの JSON オブジェクト | 判定の行と、その rerun コマンド |
+| `nuka clean`、`nuka session list` | パスまたは session ごとに 1 行、`--json` なら 1 つの JSON 値 | 何も出さない(`--json` なしの拒否を除く) |
+
+`--json` のときの拒否は、stdout の列の唯一の例外です。
+その `{ "schema_version", "error", "do" }` オブジェクトが報告の代わりになります。
+step record の `error.kind` は「Records」に一覧があります。
 
 ### 報告は寛容に、実行は速く失敗する
 

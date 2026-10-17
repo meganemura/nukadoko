@@ -129,7 +129,7 @@ describe("markdown oaths", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "oaths-empty"], { rootDir, stdout, stderr });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
       `no Markdown file was found while scanning "oaths-empty" (resolved to ${path.join(rootDir, "oaths-empty")}); nothing can run\ndo: nuka run --help\n`,
     );

@@ -137,3 +137,13 @@ Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` pri
 | `secrets-redact-key-unknown` | default | A secrets.redact entry names a key that no envFile defines. | Define the key in an envFile, or remove it from secrets.redact. |
 | `step-description-todo` | default | A typed step's description is still the placeholder nuka scaffold wrote. | Replace the description with one sentence that says what the step does. |
 <!-- /generated -->
+
+## Streams and exit codes
+
+- stdout carries what was asked for: `run` one scenario record per line (when stdout is not a terminal), `do` one step record, `check`/`tend`/`steps`/`clean`/`session list`/`experimental explore` their report (one JSON value with `--json`), `describe` one JSON contract.
+- stderr carries what a person watches: `run` progress, failures, the paths it wrote, and the summary line; import failures; notices and warnings.
+- Exit 0: done, and the report or run is green.
+- Exit 1: it ran and is red (a `check` error, a failed scenario or `do` step, `import_failures`, a `tend --fail-on` hit, a failed `experimental explore`), or it failed while running.
+- Exit 2: refused, nothing ran (a bad flag, an invalid config, a missing target, an unknown step, a missing peer, `run` stopped by `check`). The refusal's last stderr line is `do: <command>`; under `--json` stdout is `{ "schema_version", "error", "do" }`.
+- Exit 128 + n: `run` or `do` stopped by signal n after teardown.
+- A step record's `error.kind`: `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`, `timeout`, `unsupported`, `step_error` (docs/spec.md "Records").

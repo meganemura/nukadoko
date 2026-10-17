@@ -162,7 +162,7 @@ describe("nuka experimental explore", () => {
   it("refuses a mutating step under a read-only environment before any step runs", async () => {
     const result = await explore(false, ["features/explore/add-model.ts", "--env", "staging"]);
     expect(result).toEqual({
-      exitCode: 1,
+      exitCode: 2,
       stdout: "",
       stderr:
         'Step "add-todo" mutates state but environment "staging" has policy "read-only"\n' +
@@ -411,7 +411,7 @@ describe("nuka experimental explore", () => {
   it("refuses a file that is not a model or a relation, before any step runs", async () => {
     const result = await explore(false, ["features/steps/add-todo.ts"]);
     expect(result).toEqual({
-      exitCode: 1,
+      exitCode: 2,
       stdout: "",
       stderr:
         "features/steps/add-todo.ts is not a model or a relation that discovery found under features. " +
@@ -427,7 +427,7 @@ describe("nuka explore", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["explore", "features/explore/add-model.ts", "--seed", "1"], { stdout, stderr });
     expect({ exitCode, stdout: stdout.text(), stderr: stderr.text() }).toEqual({
-      exitCode: 1,
+      exitCode: 2,
       stdout: "",
       stderr:
         "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n" +

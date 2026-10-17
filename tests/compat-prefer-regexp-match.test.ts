@@ -56,7 +56,7 @@ describe("nuka run: preferForRegexpMatch", () => {
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stripRunProgressLines(withoutNoConfigLine(stderr.text()))).toBe(
       'Custom parameter type "codeB" sets preferForRegexpMatch on /[A-Z]+/, which {codeA} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them\ndo: nuka run --help\n',

@@ -120,7 +120,7 @@ This part does not change release to release.
   instead of the string `"create-project.id"`, and a key with several is
   an array of those objects instead of `"either of A or B"`.
 - **`nuka init --env` is now `nuka init --env-files`.** `--env` names an
-  environment on every other command. `nuka init --env` exits 1 and names
+  environment on every other command. `nuka init --env` exits 2 and names
   the new flag, and writes nothing.
 - **`nuka check --codes --json` and `nuka session list --json` print an
   object, not a bare array.** Every JSON document now starts with
@@ -143,7 +143,7 @@ This part does not change release to release.
 - **`nuka scaffold` refuses to write below a directory that holds the
   config.** Run where neither `nukadoko.config.ts` nor
   `nukadoko.config.mts` exists, while a parent directory up to the nearest
-  `.git` has one, it exits 1 with `Refusing to scaffold:` and the relative
+  `.git` has one, it exits 2 with `Refusing to scaffold:` and the relative
   path to that config, where it used to write a step file the config never
   read. Run `nuka scaffold` from the directory that holds the config; in a
   workspace that is the package. A script that scaffolded from a
@@ -166,11 +166,11 @@ This part does not change release to release.
   first went with `rationale`. The other two said what `nuka check` already
   reports, as `additional-feature-dir-missing` (an error) and
   `step-file-import-failed`, so gate on `nuka check`'s exit code instead.
-  `nuka tend --fail-on` with any of the three exits 1 and says what to do
+  `nuka tend --fail-on` with any of the three exits 2 and says what to do
   instead, so a CI job that names one fails until it is edited. The
   `declared:` line reads `declared: describe <n>/<total>`; a script that
   reads the `rationale` count reads the `describe` count instead.
-- **`nuka harvest` is removed.** It exits 1 and names this note. Write
+- **`nuka harvest` is removed.** It exits 2 and names this note. Write
   the scenario from the `nuka do` calls you ran: one line per step in the
   order they ran, worded to match its pattern, with `Given`, `When`, or
   `Then` chosen by what the line tells a reader. Leave a value an earlier
@@ -196,7 +196,7 @@ This part does not change release to release.
   spaces, or reads `--json`, where `file` and `do` are fields and nothing
   else changed.
 - **`nuka explore` is now `nuka experimental explore`.** Same flags, same
-  output. `nuka explore` exits 1 and names the new spelling, so a script
+  output. `nuka explore` exits 2 and names the new spelling, so a script
   that ran `nuka explore features/explore/add-model.ts` becomes
   `nuka experimental explore features/explore/add-model.ts`. A model or a
   relation file imports the renamed functions: `defineModel` is
@@ -220,6 +220,16 @@ This part does not change release to release.
   and `do` names the command to run next. `nuka describe` always answers
   this way, with or without `--json`. A refusal without `--json` keeps
   its stderr message and adds a last line, `do: <command>`.
+- **A command that refused exits 2, not 1.** Exit 1 used to mean both
+  "the suite is red" and "nothing ran". It now means only the first: a
+  `nuka check` error, a failed scenario, a failed `nuka do` step, a
+  `nuka tend --fail-on` hit. A refusal (an unknown flag, an invalid
+  config, a missing target, an unknown step, a missing peer dependency,
+  and `nuka run` stopped by the errors `nuka check` reports) exits 2. A
+  script or CI step that tests `!= 0` keeps working. One that tests
+  `== 1` to mean "red" now misses a refusal: test `!= 0` for "not green",
+  or `== 2` for "fix the invocation". The table is in docs/spec.md
+  "Streams and exit codes".
 
 ## 0.15.0 to 0.16.1
 

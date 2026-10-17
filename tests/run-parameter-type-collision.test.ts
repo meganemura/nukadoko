@@ -12,7 +12,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 // runs read-only against the committed fixture.
 
 describe("nuka run: a config.parameterTypes entry colliding with a built-in type", () => {
-  it("fails setup with exit 1, naming the collision, before any scenario runs", async () => {
+  it("fails setup with exit 2, naming the collision, before any scenario runs", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/noop.feature"], {
@@ -21,7 +21,7 @@ describe("nuka run: a config.parameterTypes entry colliding with a built-in type
       stderr,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain('"int"');
     expect(stderr.text()).toContain("built-in");
