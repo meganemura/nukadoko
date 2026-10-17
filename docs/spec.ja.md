@@ -874,13 +874,11 @@ nukadoko は `needs_inferred` を fixture グラフ全体へ展開しません�
 
 ### MCP servers
 
-2 つのインターフェースが、stdio 経由で標準的な MCP サーバに到達します。
-どちらのインターフェースも `nuka steps` から分離されています。
-`nuka experimental mcp-tools -- <command> [args...]` は、サーバが宣言したツールを読み取って出力します。
-`"nukadoko/mcp"` の `connectMcpServer` と `callMcpTool` により、手書きの step がツールを呼べます。
-宣言されたツールは、人が step の `args` を手で書くために役立ちます。
+`"nukadoko/mcp"` の `connectMcpServer` と `callMcpTool` により、手書きの step は、標準的な MCP サーバが stdio 経由で宣言したツールを呼べます。
+このインターフェースは `nuka steps` から分離されています。
 このパッケージは、宣言されたツールを step または step 語彙に変換しません。
-`nuka steps` は MCP ツールを一覧にせず、これらのインターフェースも MCP ツールを生成しません。
+`nuka steps` は MCP ツールを一覧にせず、このインターフェースも MCP ツールを生成しません。
+サーバが宣言したツールを読むには、エージェント自身の MCP ホストか、MCP Inspector のような MCP クライアントを使ってください。
 
 fixture がサーバプロセスの寿命を制御します。
 `nukadoko.config.ts` には MCP 専用のフィールドがありません。
@@ -919,74 +917,6 @@ MCP はツール内の失敗を、`isError: true` を持つ成功レスポンス
 その失敗では Promise を reject しません。
 確認がなければ、step は失敗した呼び出しを成功した呼び出しとして記録する場合があります。
 `callMcpTool` は `isError` が true の場合に throw し、その他の結果フィールドを変更せずに返します。
-
-### WebMCP tools(実験的)
-
-3 つ目のインターフェースは、宣言されたツールを読み、`nuka steps` から分離したままにします。
-「MCP servers」のインターフェースも、stdio サーバに対して同じ分離を行います。
-WebMCP は異なるプロトコルとインターフェースを使います。
-WebMCP は、ページが JavaScript から `navigator.modelContext.registerTool` を通じてツールを宣言するブラウザ標準です。
-プロジェクトは、これらのツール用に別の接続を開きません。
-
-`nuka experimental webmcp-tools <url>` は、設定済みの新しいブラウザを起動して `url` に移動します。
-session の復元も evidence の収集も行いません。
-ページがすでに宣言したツールを読み、レポートを出力します。
-そのレポートが step 語彙になることはありません。
-`nuka steps` はこのインターフェースを読まず、このインターフェースも step discovery を読みません。
-この分離により、ページがプロジェクトの step 語彙の一部を選ぶことを防ぎます。
-固定された語彙は、生成された実装から受け入れ条件を保護します。
-
-手書きの typed step は、`"nukadoko"` から `experimental_callWebmcpTool` を import し、宣言済みツールを名前で呼べます。
-
-`experimental_callWebmcpTool` は fixture bag のメンバーではなく、素の import です。
-executor が注入するのは、fixture が運ぶ必要がある値だけです。
-この関数が必要とするのは `page` だけであり、step はすでに fixture として受け取ります。
-
-`poll` は別の理由で import から fixture bag へ移りました。
-記録がなければ、完了した待ちは step record 上で最初の試行の成功と同じに見えます。
-`poll` fixture はその計測の隙間を埋めます。
-WebMCP ツールの呼び出しには、同じ隙間がありません。
-その typed step が `args` と `returns` の schema を宣言します。
-step が値を生成した方法にかかわらず、run の境界がこれらの schema をバリデーションします。
-したがって、この関数が追加の記録を書かなくても、step record は戻り値を含みます。
-
-WebMCP ツールの呼び出しは信頼境界を越えます。
-ページはテスト対象であり、信頼できる相手ではありません。
-`args` を受け取るコードはページが宣言し、このプロジェクトは提供しません。
-`args` は JSON としてページに入り、ページの JavaScript が読みます。
-たとえば、step は `requireEnv` fixture を通じて機微な値を読めます。
-その値を `args` に入れると、テスト対象のページへ渡します。
-`experimental_callWebmcpTool` を通じて機微な値を渡さないでください。
-
-両方のインターフェースは、実行時フラグではなく名前で実験的という印を示します。
-関数は `experimental_` 接頭辞を使います。
-補完が step の書き手に関数を提示するときも、接頭辞は見えます。
-CLI は `experimental` を `webmcp-tools` の 1 段上のコマンドに置きます。
-どちらのインターフェースを使う場合も、呼び出し側はその印を入力する必要があります。
-
-`nuka experimental mcp-tools` も同じ語の下にありますが、理由は異なります。
-日常のループのどの step も、別のサーバのツール一覧を必要としません。
-そのため、トップレベルのヘルプは、このコマンドを初めて使う人の最初の画面に載せません。
-
-標準のドキュメントがこの利用方法を明確にサポートしていないため、この印は残ります。
-Chrome の WebMCP ドキュメントは、2026-08-13 に https://developer.chrome.com/docs/ai/webmcp から取得しました。
-そこには、headless での利用は動く可能性があるものの、API は主に人が関与するローカルのブラウザ作業を対象にするとあります。
-標準は引き続き活発な議論の対象であり、変更される可能性があるとも書かれています。
-
-同日に取得した日本語ページは、英語ページより強い主張をします。
-そこには、JavaScript のツール呼び出しには、目に見えるインターフェースを提供する開いたブラウザタブか webview が必要だとあります。
-そのため、agent または補助ツールからの headless 呼び出しをサポート対象外と説明します。
-`experimental_callWebmcpTool` は、Node から Playwright を通じてこの種類の呼び出しを行います。
-2 つの言語版は、同じ日にサポートについて食い違っていました。
-この食い違いにより、印のない依存は安全ではありません。
-テストは、現在 Chromium 149 でインターフェースが動くことを確認しています。
-その計測は、動作の継続を保証しません。
-
-関数とコマンドから実験的という印を外すには、2 つの条件が必要です。
-第一に、公式ドキュメントが補助的または headless な呼び出し側を明示的にサポートする必要があります。
-第二に、標準が変更される可能性があるという説明をやめる必要があります。
-1 文が削除されただけでは、どちらの条件も満たしません。
-言語版のページは、文の欠落だけでは現在の主張を特定できないことをすでに示しています。
 
 ### step の連鎖
 
@@ -3781,20 +3711,6 @@ nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
                               .gitignore
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
-nuka experimental mcp-tools [--json] -- <command> [args...]
-                              list the tools an MCP server declares over stdio,
-                              connecting just long enough to ask. A separate
-                              face from `nuka steps`; nothing this command
-                              reports is ever part of that vocabulary
-nuka experimental webmcp-tools <url> [--json]
-                              EXPERIMENTAL, may change or disappear without
-                              notice: list the WebMCP tools a page has already
-                              declared via navigator.modelContext.registerTool.
-                              The same separation from `nuka steps` that
-                              `mcp-tools` draws, over a different protocol;
-                              nested one command under `experimental` on
-                              purpose, so the word is unavoidable at the call
-                              site
 nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
                               run one model or relation file found under
                               featuresDir, request-only steps only, with no

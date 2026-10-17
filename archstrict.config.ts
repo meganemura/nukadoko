@@ -85,7 +85,6 @@ export default {
     { glob: "src/live/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/mcp/**", tags: ["layer:workflow", "pkghost:mcp"] },
     { glob: "src/tend/**", tags: ["layer:workflow", "pkghost:library"] },
-    { glob: "src/webmcp/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/cli/**", tags: ["layer:adapter", "pkghost:cli"] },
     { glob: "src/cli.ts", tags: ["layer:entry", "pkghost:cli"] },
     { glob: "src/index.ts", tags: ["layer:entry", "pkghost:library"] },
@@ -116,7 +115,7 @@ export default {
         targetNamespace: "pkg",
         deny: ["@modelcontextprotocol/client", "@cucumber/gherkin"],
         because:
-          "the CLI may parse argv with yargs. The MCP client stays behind a dynamic import of the mcp module, and feature files are parsed by the feature module.",
+          "the CLI may parse argv with yargs. The MCP client belongs to the mcp module, and feature files are parsed by the feature module.",
       },
       {
         source: "pkghost:mcp",
@@ -324,17 +323,8 @@ export default {
       name: "mcp",
       glob: "src/mcp/**",
       surface: ["index.ts"],
-      friends: [
-        {
-          file: "list-tools.ts",
-          from: "src/cli/**",
-          because:
-            "nuka experimental mcp-tools dynamic-imports this file so the optional MCP client stays off every other command. It is not part of the nukadoko/mcp package surface.",
-        },
-      ],
     },
     { name: "tend", glob: "src/tend/**", surface: ["analyze.ts", "record-parse.ts", "types.ts"] },
-    { name: "webmcp", glob: "src/webmcp/**", surface: ["call-tool.ts", "list-tools.ts"] },
     { name: "cli", glob: "src/cli/**", surface: ["run-cli.ts"] },
     { name: "bin", glob: "src/cli.ts", surface: "cli.ts" },
     { name: "entry", glob: "src/index.ts", surface: "index.ts" },

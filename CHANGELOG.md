@@ -200,6 +200,15 @@ just until 0.1.
   what to do instead. The refusal of an unknown code now ends with
   "`nuka tend --codes` lists every code." instead of listing the codes
   inline. docs/upgrading.md says what to change.
+- **`nuka experimental webmcp-tools`, `experimental_callWebmcpTool`, and
+  `nuka experimental mcp-tools` are gone.** No agent and no CI job used
+  them, and an agent's MCP host already lists a server's tools. A step
+  that wants a page's declared WebMCP tool can call
+  `page.evaluate(() => navigator.modelContext...)` itself. The
+  `WebmcpToolDescriptor` type goes with the function, and the hidden
+  `nuka mcp-tools` stub that named the `experimental` spelling goes with
+  the command. `nukadoko/mcp` (`connectMcpServer`, `callMcpTool`) stays.
+  `nuka experimental` now holds `explore` only.
 
 ### Packaging
 
@@ -260,7 +269,6 @@ just until 0.1.
   deprecation notice, and the word is at every call site. `nuka explore`
   exits 1 and names the new spelling. The flags, the output, and the
   findings are unchanged. Breaking: see docs/upgrading.md.
-
 - **`undefined-step` names `nuka scaffold --feature <file>`.** The message
   ends with "run `nuka scaffold --feature <the line's feature file>` to
   add one" instead of "run `nuka scaffold <name>` to add one". The code,

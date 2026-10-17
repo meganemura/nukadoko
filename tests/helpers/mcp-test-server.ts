@@ -4,7 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 
 // Responsibility: a real MCP server over stdio, for tests/mcp-client.test.ts
-// and tests/fixtures/mcp-tools-project's own `mcpClient` fixture to spawn
+// and tests/fixtures/mcp-client-project's own `mcpClient` fixture to spawn
 // as a genuine subprocess (via Node and nukadoko's loader, the same way tests/cli.test.ts already
 // spawns the real `nuka` CLI as a subprocess) and connect to — the actual
 // server half of the protocol, not a mock of the client-facing behavior

@@ -35,8 +35,6 @@ Upkeep:
 Experimental (may change without notice):
 
 - `nuka experimental explore <file> [--json]`: run a model or a relation against request-only steps; prints the shortest failing scenario, or one JSON object with `--json`
-- `nuka experimental mcp-tools -- <command>`: list the tools another MCP server declares over stdio (not nukadoko's own vocabulary)
-- `nuka experimental webmcp-tools <url>`: list the WebMCP tools a page declares
 
 Prefer `check` before `run`. Do not treat agent narrative as the step record.
 

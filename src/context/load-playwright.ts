@@ -4,8 +4,7 @@ import type * as Playwright from "playwright";
 // and the one error a project without it sees. Every other module imports
 // Playwright with `import type`, which erases, so no `nuka` command puts the
 // package on its load path until a step actually asks for `ctx.page()`,
-// `ctx.request()`, or a browser feature such as `nuka experimental
-// webmcp-tools`.
+// or `ctx.request()`.
 //
 // `playwright` is an optional peer dependency (package.json) because it and
 // `playwright-core` were most of the install size, and a project that drives

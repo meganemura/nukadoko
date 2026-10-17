@@ -201,6 +201,13 @@ This part does not change release to release.
   `experimental_relationEntry`. The type names do not change. Under
   `experimental`, the command and the functions can change shape or go in
   a later release without a deprecation notice.
+- **`nuka experimental webmcp-tools`, `experimental_callWebmcpTool`, and
+  `nuka experimental mcp-tools` are removed.** Each was experimental. To
+  list an MCP server's tools, use the agent's own MCP host or an MCP
+  client such as the MCP Inspector. A step that called
+  `experimental_callWebmcpTool` calls the page's tool itself through
+  `page.evaluate`. `connectMcpServer` and `callMcpTool` from
+  `nukadoko/mcp` are unchanged.
 
 ## 0.15.0 to 0.16.1
 

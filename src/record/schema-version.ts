@@ -4,10 +4,6 @@
 // it already had changes meaning, type, or name, or is removed; an added
 // field does not move it. Each kind has its own number, so a change to the
 // tend report does not tell a step record reader to look again.
-//
-// Experimental commands are not here: `experimental mcp-tools --json` and
-// `experimental webmcp-tools --json` print the server's own tool list, a
-// shape nukadoko does not own.
 
 export const SCHEMA_VERSIONS = {
   step_record: 1,

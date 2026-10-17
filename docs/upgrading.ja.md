@@ -165,6 +165,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `defineModel` は `experimental_defineModel`、`modelCommand` は `experimental_modelCommand`、`defineRelation` は `experimental_defineRelation`、`relationEntry` は `experimental_relationEntry` になりました。
   型の名前は変わりません。
   `experimental` の下にあるため、このコマンドと関数は、後のリリースで非推奨の告知なしに形が変わったりなくなったりすることがあります。
+- **`nuka experimental webmcp-tools`、`experimental_callWebmcpTool`、`nuka experimental mcp-tools` は削除されました。**
+  どれも実験的でした。
+  MCP サーバのツールを一覧にするには、エージェント自身の MCP ホストか、MCP Inspector のような MCP クライアントを使ってください。
+  `experimental_callWebmcpTool` を呼んでいた step は、`page.evaluate` を通じてページのツールを自分で呼びます。
+  `nukadoko/mcp` の `connectMcpServer` と `callMcpTool` は変わりません。
 
 ## 0.15.0 から 0.16.1 へ
 

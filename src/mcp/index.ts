@@ -7,10 +7,7 @@
 // for a project that never touches this surface, and a static import
 // anywhere on that path would make loading nukadoko itself, or running
 // `nuka check` on a project with no MCP fixture at all, depend on a
-// package that project never installed. The one CLI command that does need
-// it, `nuka experimental mcp-tools`, reaches src/mcp/list-tools.ts through a dynamic
-// `import()` inside its own handler instead (src/cli/mcp-tools.ts), for
-// exactly that reason.
+// package that project never installed.
 //
 // Which MCP protocol era a connection speaks (connect.ts's own header) is
 // `@modelcontextprotocol/client`'s own `versionNegotiation` setting to

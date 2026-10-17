@@ -19,8 +19,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
-// `clean`, `tend`, `skill path`, `experimental explore`,
-// `experimental mcp-tools`, `experimental webmcp-tools`)
+// `clean`, `tend`, `skill path`, `experimental explore`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
@@ -41,16 +40,6 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // same split, one command answering "can this run", the other "is this
 // still healthy" (docs/spec.md "Tending"); `skill`'s own path resolution logic lives in cli/skill.ts
 // (`install` removed — see that file's header), the same split;
-// `experimental webmcp-tools`'s own browser launch and tool-reading logic
-// lives in cli/webmcp.ts (thin wiring) and src/webmcp/list-tools.ts (the
-// actual work), nested one command under `experimental` rather than a
-// top-level command so the word is unavoidable at every call site;
-// `mcp-tools`'s own connect-list-close logic lives in cli/mcp-tools.ts
-// (thin wiring, reaching src/mcp/list-tools.ts through a dynamic
-// `import()` rather than a static one; that file's own header explains
-// why), under `experimental` too: it lists another server's tools, which
-// no step of the everyday loop needs, so the top-level help keeps it out
-// of a newcomer's first screen;
 // this module only wires their argv shapes and reports their
 // exit codes.
 //
@@ -203,20 +192,6 @@ interface CleanArgs {
   cache?: boolean;
   export?: boolean;
   json?: boolean;
-}
-
-interface WebmcpToolsArgs {
-  url: string;
-  json?: boolean;
-}
-
-interface McpToolsArgs {
-  json?: boolean;
-  /** Every token after `--` (`command` plus its own args), populated by
-   * `.parserConfiguration({ "populate--": true })` below — yargs' own
-   * `Arguments<T>` types this as `unknown` via its index signature, so the
-   * builder's own return type states the real shape here instead. */
-  "--"?: string[];
 }
 
 type SkillPathArgs = Record<string, never>;
@@ -1075,86 +1050,6 @@ export async function runCli(
     },
   };
 
-  const mcpToolsCommand: CommandModule<Record<string, never>, McpToolsArgs> = {
-    command: "mcp-tools",
-    describe:
-      "list the tools an MCP server declares over stdio: `nuka experimental mcp-tools -- <command> [args...]` " +
-      "connects to it just long enough to ask. A separate face from `nuka steps`; nothing this " +
-      "command reports is ever part of that vocabulary",
-    builder: (y: Argv) =>
-      y
-        .option("json", {
-          type: "boolean",
-          default: false,
-          describe: "machine-readable output; each tool's inputSchema exactly as the server declared it",
-        })
-        // Everything after `--` becomes the server's own command line
-        // rather than being parsed as this command's own flags — the same
-        // reason `npm run <script> -- --flag` needs it: without this, a
-        // flag meant for the server (say `--port`) would be consumed by
-        // yargs itself instead of reaching the server.
-        .parserConfiguration({ "populate--": true }) as Argv<McpToolsArgs>,
-    handler: async (args: Arguments<McpToolsArgs>) => {
-      if (argsFailed) return;
-      const rest = args["--"] ?? [];
-      const [command, ...serverArgs] = rest;
-      const { runMcpTools } = await import("./mcp-tools.js");
-      exitCode = await runMcpTools({
-        command,
-        args: serverArgs,
-        json: args.json ?? false,
-        stdout,
-        stderr,
-      });
-    },
-  };
-
-  const webmcpToolsCommand: CommandModule<Record<string, never>, WebmcpToolsArgs> = {
-    command: "webmcp-tools <url>",
-    describe:
-      "EXPERIMENTAL, may change or disappear without notice: list the WebMCP tools a page has " +
-      "declared via navigator.modelContext.registerTool. A separate face from `nuka steps`; " +
-      "nothing this command reports is ever part of that vocabulary",
-    builder: (y: Argv) =>
-      y
-        .positional("url", {
-          type: "string",
-          demandOption: true,
-          describe: "absolute URL to load and read declared tools from (no baseURL resolution)",
-        })
-        .option("json", {
-          type: "boolean",
-          default: false,
-          describe: "machine-readable output; each tool's inputSchema exactly as the page declared it",
-        }) as Argv<WebmcpToolsArgs>,
-    handler: async (args: Arguments<WebmcpToolsArgs>) => {
-      if (argsFailed) return;
-      const { runWebmcpTools } = await import("./webmcp.js");
-      exitCode = await runWebmcpTools({
-        rootDir,
-        url: args.url,
-        json: args.json ?? false,
-        stdout,
-        stderr,
-      });
-    },
-  };
-
-  // `mcp-tools` was a top-level command until it moved under
-  // `experimental`. The old spelling fails with the new one instead of
-  // yargs' bare "Unknown argument", so a script written against the old
-  // name says what to change. Hidden from the help: it runs nothing.
-  const movedMcpToolsCommand: CommandModule = {
-    command: "mcp-tools",
-    describe: false,
-    builder: (y: Argv) => y.strict(false).parserConfiguration({ "populate--": true }),
-    handler: () => {
-      if (argsFailed) return;
-      exitCode = 1;
-      stderr.write("`nuka mcp-tools` moved to `nuka experimental mcp-tools`; run that instead, with the same arguments\n");
-    },
-  };
-
   // `harvest` was removed. The old spelling names the upgrading note
   // instead of yargs' bare "Unknown argument", so a script that still
   // calls it learns what replaced it. Hidden from the help: it runs nothing.
@@ -1191,13 +1086,7 @@ export async function runCli(
     describe:
       "EXPERIMENTAL: commands this package is still trying out; any of them may change shape or " +
       "disappear release to release without the deprecation notice a stable command would get",
-    builder: (y: Argv) =>
-      y
-        .command(namingMissingConfig(exploreCommand))
-        .command(mcpToolsCommand)
-        .command(namingMissingConfig(webmcpToolsCommand))
-        .demandCommand(1)
-        .strict(),
+    builder: (y: Argv) => y.command(namingMissingConfig(exploreCommand)).demandCommand(1).strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
       // a subcommand, same pattern as `skillCommand`/`sessionCommand`.
@@ -1270,7 +1159,6 @@ export async function runCli(
       )}`,
     )
     .wrap(null)
-    .command(movedMcpToolsCommand)
     .command(removedHarvestCommand)
     .command(movedExploreCommand)
     .demandCommand(1)

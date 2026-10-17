@@ -69,10 +69,6 @@ export {
   experimental_relationEntry,
 } from "./step/define-explore.js";
 export type { Draw, Model, ModelCommand, Relation, RelationSource, RelationStep, SourceDraw } from "./step/define-explore.js";
-// EXPERIMENTAL: see call-tool.ts's own header for why the name carries the
-// mark, and the condition that would let it be dropped.
-export { experimental_callWebmcpTool } from "./webmcp/call-tool.js";
-export type { WebmcpToolDescriptor } from "./webmcp/list-tools.js";
 // `z` itself, not merely its type: `vocabulary.ts` calls
 // `z.toJSONSchema(entry.step.args)` and `strict-args.ts` reads a schema's
 // own `.type` property to decide whether to strictify it, both against

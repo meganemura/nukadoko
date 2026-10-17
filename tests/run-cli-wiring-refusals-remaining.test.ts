@@ -8,9 +8,8 @@ import { copyFixtureToTempDir, createCaptureSink, createEmptyTempDir, fixture, r
 // runs the matched handler, whose own `if (argsFailed) return;` guard is
 // what actually stops it" shape tests/run-cli-wiring-refusals.test.ts
 // already proves for session list/start/stop, extended
-// here to the nine remaining commands that guard reaches: steps, describe,
-// init, scaffold, check, tend, skill path, experimental mcp-tools, and experimental
-// webmcp-tools. Kept in its own file (a new file, not an edit to that one)
+// here to the remaining commands that guard reaches: steps, describe,
+// init, scaffold, check, tend, skill path, and experimental explore. Kept in its own file (a new file, not an edit to that one)
 // so the two never collide on the same lines.
 
 describe("nuka <command> --unknown-flag: the matched handler never runs (remaining commands)", () => {
@@ -122,27 +121,14 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
     expect(stdout.text()).toBe("");
   });
 
-  it("nuka experimental mcp-tools: never connects to a server", async () => {
+  it("nuka experimental explore: runs no model", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["experimental", "mcp-tools", "--unknown-flag"], {
+    const exitCode = await runCli(["experimental", "explore", "features/model.ts", "--unknown-flag"], {
       rootDir: fixture("basic-project"),
       stdout,
       stderr,
     });
-
-    expect(exitCode).toBe(1);
-    expect(stderr.text()).toContain("unknown-flag");
-    expect(stdout.text()).toBe("");
-  });
-
-  it("nuka experimental webmcp-tools: never launches a browser", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(
-      ["experimental", "webmcp-tools", "http://example.com/", "--unknown-flag"],
-      { rootDir: fixture("basic-project"), stdout, stderr },
-    );
 
     expect(exitCode).toBe(1);
     expect(stderr.text()).toContain("unknown-flag");

@@ -307,14 +307,15 @@ function commandOmissions(tree: CommandNode, file: DocFile): string[] {
 // A command or flag a release removed is still named by the upgrade notes
 // that say what replaced it, and by their history. Only those two files may
 // cite one.
-const REMOVED_COMMANDS = new Set(["accept", "explore", "harvest", "mcp-tools"]);
+const REMOVED_COMMANDS = new Set(["accept", "explore", "harvest", "mcp-tools", "experimental mcp-tools", "experimental webmcp-tools"]);
 const REMOVED_FLAGS = new Set(["init --env"]);
 const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
 
 function citesRemovedCommand(file: DocFile, invocation: string): boolean {
   if (!UPGRADE_NOTES.has(file.relativePath)) return false;
   const words = invocation.trim().split(/\s+/);
-  return REMOVED_COMMANDS.has(words[0]!) || REMOVED_FLAGS.has(words.slice(0, 2).join(" "));
+  const firstTwo = words.slice(0, 2).join(" ");
+  return REMOVED_COMMANDS.has(words[0]!) || REMOVED_COMMANDS.has(firstTwo) || REMOVED_FLAGS.has(firstTwo);
 }
 
 describe("names in README.md, llms.txt, docs/, and skills/", () => {
@@ -358,6 +359,8 @@ describe("the extraction itself", () => {
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.ja.md", text: "" }, "accept")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "accept features/a.feature")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "acceptx")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental webmcp-tools <url>")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental explore a.ts")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "init --env")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env-files")).toBe(false);
@@ -372,7 +375,7 @@ describe("the extraction itself", () => {
     const tree = await readCommandTree();
     expect(invocationProblem(tree, "skill install")).toBe('"nuka skill" has no command "install"');
     expect(invocationProblem(tree, "tend --fix")).toBe('"nuka tend" has no flag --fix');
-    expect(invocationProblem(tree, "experimental mcp-tools --json -- node server.js --port 1")).toBe(undefined);
+    expect(invocationProblem(tree, "experimental explore features/m.ts --json -- --port 1")).toBe(undefined);
     expect(invocationProblem(tree, "run features/ --no-quiet")).toBe(undefined);
   });
 
