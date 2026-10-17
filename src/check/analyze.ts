@@ -38,6 +38,7 @@ import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing, playwrightImportMissing } from "./playwright-check.js";
 import { checkCodeDo } from "./codes.js";
+import { importSuppressionDo } from "./suppressed-do.js";
 import type { CheckFinding, CheckIssue, CheckReport } from "./types.js";
 import {
   boundStepNames,
@@ -295,23 +296,25 @@ async function reportFor(
   // else they append nothing, so Node's message passes through exactly as
   // it came.
   const cjsProject = refusesEsmTs(rootDir);
+  const importFindings: CheckIssue[] = [];
   for (const failure of importFailures) {
     const playwright = playwrightImportMissing(failure);
     if (playwright !== undefined) {
-      errors.push(playwright);
+      importFindings.push(playwright);
       continue;
     }
     const message =
       failure.message +
       missingTsSourceSentence(failure.message, rootDir, existsSync) +
       cjsTsMismatchExplanation(cjsProject, failure.filePath);
-    errors.push({
+    importFindings.push({
       code: "step-file-import-failed",
       message,
       file: failure.filePath,
       line: failure.line,
     });
   }
+  errors.push(...importFindings);
 
   // Both findings below are
   // decidable from the walk alone (an extension check, a length check),
@@ -639,6 +642,7 @@ async function reportFor(
         code: "undefined-step-check-suppressed",
         message: `Suppressed ${suppressedCount} undefined-step ${suppressedCount === 1 ? "issue" : "issues"} because ${importFailures.length} step ${importFailures.length === 1 ? "file" : "files"} could not be read. undefined-step judgment is on hold until the unreadable glue is fixed`,
         file: importFailures[0]!.filePath,
+        do: importSuppressionDo(importFindings),
       });
     }
   } else {

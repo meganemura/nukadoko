@@ -290,7 +290,7 @@ const CHECK_CODES = {
     description:
       "A step file failed to import, or a line would match a step whose pattern has an unregistered parameter type, so the undefined-step finding that cause could explain is held back until it is fixed.",
     severity: "warning",
-    do: "Correct the step-file-import-failed error or the pattern error first, then run nuka check again.",
+    do: "Fix the step-file-import-failed or playwright-missing finding, or the pattern error, that held it back, then run nuka check again.",
   },
   "unfillable-required-key": {
     description:

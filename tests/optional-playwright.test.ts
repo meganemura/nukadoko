@@ -292,6 +292,49 @@ describe("a project without playwright installed", () => {
       await rm(path.join(steps, "expect-b.ts"), { force: true });
     }
   }, 60_000);
+
+  it("check holds back the undefined lines a playwright-importing step file defines and gives the install line", async () => {
+    const steps = path.join(projectDir, "features", "steps");
+    await writeFile(
+      path.join(steps, "expect-a.ts"),
+      [
+        'import { defineStep, z } from "nukadoko";',
+        'import { expect } from "playwright/test";',
+        "",
+        "export default defineStep({",
+        '  description: "Check a",',
+        '  pattern: "a is checked",',
+        "  args: z.object({}),",
+        "  mutates: false,",
+        "  run() {",
+        "    expect(1).toBe(1);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(projectDir, "features", "expect.feature"),
+      "Feature: expect\n\n  Scenario: checks\n    Then a is checked\n",
+    );
+    try {
+      const json = await nuka(["check", "--json", "features/expect.feature"]);
+      const report = JSON.parse(json.stdout) as { errors: { code: string }[]; warnings: unknown[] };
+      expect(report.errors.map((issue) => issue.code)).toEqual(["playwright-missing"]);
+      expect(report.warnings).toEqual([
+        {
+          code: "undefined-step-check-suppressed",
+          message:
+            "Suppressed 1 undefined-step issue because 1 step file could not be read. undefined-step judgment is on hold until the unreadable glue is fixed",
+          file: "features/steps/expect-a.ts",
+          do: `Run npm install -D -E playwright@${PLAYWRIGHT_VERSION} (see playwright-missing), then run nuka check again.`,
+        },
+      ]);
+    } finally {
+      await rm(path.join(steps, "expect-a.ts"), { force: true });
+      await rm(path.join(projectDir, "features", "expect.feature"), { force: true });
+    }
+  }, 60_000);
 });
 
 // `nuka init` puts the step files into the project's own `tsc`, and they

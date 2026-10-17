@@ -49,6 +49,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`undefined-step-check-suppressed` names the findings that held the undefined lines back.**
+  When the only step files that did not import lacked Playwright, the
+  warning's `do:` told the reader to correct a `step-file-import-failed`
+  error, but those files are reported as `playwright-missing`. The `do:`
+  now names the codes in the report: the install line for each missing
+  Playwright package (`Run npm install -D -E playwright@<version> (see
+  playwright-missing), then run nuka check again.`), the
+  `step-file-import-failed` errors, or both. The registry's own `do:` for
+  the code, which `llms.txt` lists, names `playwright-missing` too.
 - **`nuka scaffold --from` names the tsconfig file where its chain stops.** A
   tsconfig.json that does not parse, or an `extends` that names no file or
   a base that does not parse, made the chained import use the `.js` name,
