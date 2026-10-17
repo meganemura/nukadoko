@@ -344,6 +344,14 @@ just until 0.1.
   `step-file-import-failed` and a feature as a parse error, each naming the
   link.
 
+- **`nuka run` and `nuka check` select a file reached by two targets once.**
+  Two targets that reached one file by different paths, such as a linked
+  directory and the directory it points to, selected that file twice, so
+  `nuka run` ran each of its scenarios twice. Target resolution now tells
+  files apart by their real path, the same as discovery, and keeps the file
+  under the first path reached. A `:line` selection through one path and a
+  full-file selection through the other merge as they do for one path.
+
 - **`nuka check` and `nuka tend` read a feature reached by two paths once.**
   A feature linked into `featuresDir` and also present under an
   `additionalFeatureDirs` entry was parsed twice, so each of its findings

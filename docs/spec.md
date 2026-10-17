@@ -1935,7 +1935,9 @@ skips. The skip reports nothing: a `.feature` file inside one of those
 directories is not checked and is not run. The directory target also
 includes a configured oath that lives under that directory. The selected files form one
 deduplicated set, and a full-file selection includes any line selections for
-that file. All selected pickles belong to one invocation: one run_id, one
+that file. Files are told apart by their real path, so two targets that reach
+one file by different paths, such as a linked directory and the directory it
+points to, select it once, under the first path reached. All selected pickles belong to one invocation: one run_id, one
 summary, one exit code, one messages stream, and one Allure results tree.
 Files are visited in a fixed order, the repo-relative path
 compared byte by byte rather than by locale, so which scenario ran in which

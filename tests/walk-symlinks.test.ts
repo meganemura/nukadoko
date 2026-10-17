@@ -8,7 +8,8 @@ import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
 // featuresDir. Discovery and the feature walk read what a link points to,
 // enter a linked directory once even when a link points back up the tree,
 // pass a dangling link on to the import or read that names it, and read a
-// feature reached both through a link and directly as one file.
+// feature reached both through a link and directly as one file, in discovery
+// and among `nuka run` targets alike.
 
 function stepSource(pattern: string): string {
   return `import { z } from "zod";
@@ -146,6 +147,44 @@ describe("a feature linked into featuresDir and also under additionalFeatureDirs
     const { errors } = JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number }> };
     expect(errors.map((entry) => [entry.code, entry.file, entry.line])).toEqual([
       ["undefined-step", "features/linked.feature", 4],
+    ]);
+  });
+});
+
+describe("nuka run with a directory target and a link to it", () => {
+  let rootDir: string;
+
+  beforeAll(async () => {
+    rootDir = await createProject();
+    await symlink("features", path.join(rootDir, "alias"), "dir");
+  });
+
+  afterAll(async () => {
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
+  async function runFeatures(targets: readonly string[]): Promise<Array<[unknown, unknown]>> {
+    const stdout = createCaptureSink();
+    await runCli(["run", "--no-check", ...targets], { rootDir, stdout, stderr: createCaptureSink() });
+    return stdout
+      .text()
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as { feature: unknown; status: unknown })
+      .map((record) => [record.feature, record.status]);
+  }
+
+  it("runs each feature once, under the path the first target reached it by", async () => {
+    expect(await runFeatures(["features", "alias"])).toEqual([
+      ["features/a.feature", "passed"],
+      ["features/linked.feature", "failed"],
+    ]);
+  });
+
+  it("runs a file named directly and through a linked directory once", async () => {
+    expect(await runFeatures(["alias", "features/a.feature"])).toEqual([
+      ["alias/a.feature", "passed"],
+      ["alias/linked.feature", "failed"],
     ]);
   });
 });

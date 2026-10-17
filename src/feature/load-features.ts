@@ -13,7 +13,7 @@ export {
 } from "./scenario-shape.js";
 import { enterOnce, entryKind, realPathOrSelf } from "./walk-entry.js";
 
-export { enterOnce, entryKind, type EntryKind } from "./walk-entry.js";
+export { enterOnce, entryKind, realPathOrSelf, type EntryKind } from "./walk-entry.js";
 import {
   IdGenerator,
   type GherkinDocument,

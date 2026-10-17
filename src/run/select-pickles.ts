@@ -1,7 +1,12 @@
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
-import { parseFeatureSource, walkFeatureFiles, type FeatureParseError } from "../feature/load-features.js";
+import {
+  parseFeatureSource,
+  realPathOrSelf,
+  walkFeatureFiles,
+  type FeatureParseError,
+} from "../feature/load-features.js";
 import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
 import { isOathPath } from "../feature/resolve-oaths.js";
 import {
@@ -196,6 +201,19 @@ export function resolveFeatureTargets(
   oathDirectories: readonly string[] = [],
 ): ReadonlyArray<readonly [string, SelectedFileLines]> {
   const selections = new Map<string, Set<number> | null>();
+  // Two targets can reach one file by different paths, such as a linked
+  // directory and the directory it points to. Keying on the real path runs
+  // that file once, under the first path seen.
+  const firstPathByRealPath = new Map<string, string>();
+  const selectionKey = (relativePath: string): string => {
+    const realPath = realPathOrSelf(path.join(rootDir, relativePath));
+    const firstPath = firstPathByRealPath.get(realPath);
+    if (firstPath !== undefined) {
+      return firstPath;
+    }
+    firstPathByRealPath.set(realPath, relativePath);
+    return relativePath;
+  };
   const scannedDirectories: { readonly relativePath: string; readonly absolutePath: string }[] = [];
 
   for (const featureArg of featureArgs) {
@@ -215,27 +233,28 @@ export function resolveFeatureTargets(
       }
       scannedDirectories.push({ relativePath: target.relativePath, absolutePath });
       for (const relativePath of featureFilesInDirectory(rootDir, target.relativePath)) {
-        selections.set(relativePath, null);
+        selections.set(selectionKey(relativePath), null);
       }
       for (const relativePath of oathFiles) {
         if (isInsideDirectory(normalizedRelativePath, relativePath)) {
-          selections.set(relativePath, null);
+          selections.set(selectionKey(relativePath), null);
         }
       }
       continue;
     }
 
+    const key = selectionKey(normalizedRelativePath);
     if (target.line === null) {
-      selections.set(normalizedRelativePath, null);
+      selections.set(key, null);
       continue;
     }
 
-    if (selections.get(normalizedRelativePath) === null && selections.has(normalizedRelativePath)) {
+    if (selections.get(key) === null && selections.has(key)) {
       continue;
     }
-    const lines = selections.get(normalizedRelativePath) ?? new Set<number>();
+    const lines = selections.get(key) ?? new Set<number>();
     lines.add(target.line);
-    selections.set(normalizedRelativePath, lines);
+    selections.set(key, lines);
   }
 
   if (selections.size === 0) {
