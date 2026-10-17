@@ -32,7 +32,8 @@ its line, usually through a renamed sentence or a renamed pattern. Fix
 the line or the pattern instead of scaffolding a second step.
 
 When the feature already holds the lines, `nuka scaffold --feature
-<file>` writes one stub for each line `nuka check <file>` calls
+<file>` (the `do:` line of the `undefined-step` finding, with the file
+filled in) writes one stub for each line `nuka check <file>` calls
 undefined, with the pattern read from the line: a quoted value is
 `{value:string}`, an integer `{value:int}`, a decimal `{value:float}`, and
 a Then line gets `mutates: false`. A Then line with one value also gets

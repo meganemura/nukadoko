@@ -34,8 +34,14 @@ import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing } from "./playwright-check.js";
-import type { CheckIssue, CheckReport } from "./types.js";
-import { boundStepNames, findUnboundPatternedEntries, unboundPatternedSuffix } from "./unbound-patterned.js";
+import { checkCodeDo } from "./codes.js";
+import type { CheckFinding, CheckIssue, CheckReport } from "./types.js";
+import {
+  boundStepNames,
+  findUnboundPatternedEntries,
+  rootRelativeStepFile,
+  unboundPatternedSuffix,
+} from "./unbound-patterned.js";
 
 function withUnboundSuffix(issues: readonly CheckIssue[], suffix: () => string): CheckIssue[] {
   if (!issues.some((issue) => issue.code === "undefined-step")) {
@@ -556,14 +562,26 @@ async function reportFor(
       warnings.push({
         code: "undefined-step-check-suppressed",
         message: `Suppressed ${suppressedCount} undefined-step ${suppressedCount === 1 ? "issue" : "issues"} because ${importFailures.length} step ${importFailures.length === 1 ? "file" : "files"} could not be read. undefined-step judgment is on hold until the unreadable glue is fixed`,
+        file: importFailures[0]!.filePath,
       });
     }
   } else {
     errors.push(...featureErrors);
   }
 
+  // A step-scoped finding is raised with the step's name only; the file
+  // that defines the step is what an agent opens to fix it.
+  const finish = (issue: CheckIssue): CheckFinding => {
+    const entry = issue.file === undefined && issue.step !== undefined ? vocabulary.get(issue.step) : undefined;
+    return {
+      ...issue,
+      ...(entry !== undefined ? { file: rootRelativeStepFile(rootDir, entry) } : {}),
+      do: issue.do ?? checkCodeDo(issue.code),
+    };
+  };
+
   return {
-    report: { errors, warnings },
+    report: { errors: errors.map(finish), warnings: warnings.map(finish) },
     undefinedSteps: importFailures.length > 0 ? [] : featureResult.undefinedSteps,
   };
 }

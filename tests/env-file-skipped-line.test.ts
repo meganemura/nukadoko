@@ -57,12 +57,14 @@ describe("nuka check: env-file-skipped-line", () => {
         message: 'envFile ".env" line 4 was skipped, so nothing on it was loaded',
         file: ".env",
         line: 4,
+        do: "Rewrite the line as KEY=value, or start it with # to make it a comment.",
       },
       {
         code: "env-file-skipped-line",
         message: 'envFile ".env.staging" line 4 was skipped, so nothing on it was loaded',
         file: ".env.staging",
         line: 4,
+        do: "Rewrite the line as KEY=value, or start it with # to make it a comment.",
       },
     ]);
   });

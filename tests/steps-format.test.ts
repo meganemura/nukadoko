@@ -12,6 +12,7 @@ describe("formatVocabulary", () => {
       {
         name: "add-todo",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: ["a todo titled {title:string} is added"],
         description: "Create a todo via POST /todos and return the created record",
         mutates: true,
@@ -30,6 +31,7 @@ describe("formatVocabulary", () => {
       {
         name: "read-only-step",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: ["a pattern"],
         mutates: false,
       },
@@ -45,6 +47,7 @@ describe("formatVocabulary", () => {
       {
         name: "compat: a legacy project {string} exists",
         kind: "compat",
+        file: "features/steps/s.ts",
         patterns: ["a legacy project {string} exists"],
       },
     ];
@@ -59,6 +62,7 @@ describe("formatVocabulary", () => {
       {
         name: "multi",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: ["pattern one", "pattern two"],
         mutates: true,
       },
@@ -74,6 +78,7 @@ describe("formatVocabulary", () => {
       {
         name: "n",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: ["p"],
         mutates: true,
         description: "one two three four five",
@@ -94,6 +99,7 @@ describe("formatVocabulary", () => {
       {
         name: "n",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: ["p"],
         mutates: true,
         description: longWord,
@@ -112,6 +118,7 @@ describe("formatVocabulary", () => {
       {
         name: "no-pattern-step",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: [],
         mutates: true,
       },
@@ -124,8 +131,8 @@ describe("formatVocabulary", () => {
 
   it("separates multiple blocks with exactly one blank line and no trailing blank line", () => {
     const summaries: StepSummary[] = [
-      { name: "first", kind: "typed", patterns: ["p1"], mutates: true },
-      { name: "second", kind: "typed", patterns: ["p2"], mutates: false },
+      { name: "first", kind: "typed", file: "features/steps/s.ts", patterns: ["p1"], mutates: true },
+      { name: "second", kind: "typed", file: "features/steps/s.ts", patterns: ["p2"], mutates: false },
     ];
 
     expect(formatVocabulary(summaries, 80)).toBe(
@@ -142,6 +149,7 @@ describe("formatVocabulary", () => {
       {
         name: "opens-a-tab",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: ["p"],
         mutates: true,
         needs: ["context"],
@@ -156,6 +164,7 @@ describe("formatVocabulary", () => {
       {
         name: "api-only",
         kind: "typed",
+        file: "features/steps/s.ts",
         patterns: ["p"],
         mutates: true,
         needs: ["request"],

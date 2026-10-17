@@ -19,9 +19,20 @@ export interface CheckIssue {
   readonly file?: string;
   readonly line?: number;
   readonly step?: string;
+  /** Set where the finding is raised only when that place knows a more
+   * exact next step than the code's registry entry, such as the command
+   * with the file already filled in. */
+  readonly do?: string;
+}
+
+/** A finding as the report carries it. `do` is always present: the
+ * raised one, or the code's general text. `file` is filled from the step's
+ * own file for a finding raised with only `step`. */
+export interface CheckFinding extends CheckIssue {
+  readonly do: string;
 }
 
 export interface CheckReport {
-  readonly errors: readonly CheckIssue[];
-  readonly warnings: readonly CheckIssue[];
+  readonly errors: readonly CheckFinding[];
+  readonly warnings: readonly CheckFinding[];
 }

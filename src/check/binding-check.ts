@@ -401,6 +401,9 @@ export function checkBindings(
         message: `Multiple patterns normalize to the same text "${strippedPattern}": ${owners
           .map((o) => `${o.stepName} ("${o.pattern}")`)
           .join(", ")}`,
+        // The message names every owner; `step` (and so `file`) names the
+        // last one read, so the finding points at one file to reword.
+        step: owners.at(-1)!.stepName,
       });
     }
   }
@@ -411,6 +414,7 @@ export function checkBindings(
         message: `Multiple compat RegExp patterns are the same expression ${regexpText}: ${owners
           .map((o) => `${o.stepName}`)
           .join(", ")}`,
+        step: owners.at(-1)!.stepName,
       });
     }
   }

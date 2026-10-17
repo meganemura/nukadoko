@@ -68,6 +68,7 @@ describe("nuka check: explore declarations", () => {
         code: "explore-empty-model",
         message: "the model has no commands, so every sequence it builds is empty and passes",
         file: "features/explore/empty-model.ts",
+        do: "Add at least one command to the model.",
       },
       {
         code: "explore-unseeded-random",
@@ -75,6 +76,7 @@ describe("nuka check: explore declarations", () => {
           'command "add-todo" args calls Math.random(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
         file: "features/explore/random-model.ts",
         step: "add-todo",
+        do: "Draw the value with draw.int or draw.pick, so that the seed drives it.",
       },
       {
         code: "explore-unseeded-random",
@@ -82,6 +84,7 @@ describe("nuka check: explore declarations", () => {
           'command "add-todo" next calls Math.random(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
         file: "features/explore/random-model.ts",
         step: "add-todo",
+        do: "Draw the value with draw.int or draw.pick, so that the seed drives it.",
       },
     ]);
   });

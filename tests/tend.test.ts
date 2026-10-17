@@ -226,7 +226,7 @@ describe("nuka tend", () => {
     }
   });
 
-  it("prints one human-readable line per note, grouped by kind, when --json is omitted", async () => {
+  it("prints one human-readable line per note, each followed by its do line, grouped by kind, when --json is omitted", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend", "--all"], {
       rootDir: fixture("tend-findings-project"),
@@ -240,7 +240,8 @@ describe("nuka tend", () => {
     // and is visually distinct from a finding line: no leading
     // `error\t`/`note\t`.
     const summaryLines = allLines.slice(0, 3);
-    const noteLines = allLines.slice(3);
+    const noteLines = allLines.slice(3).filter((_, index) => index % 2 === 0);
+    const doLines = allLines.slice(3).filter((_, index) => index % 2 === 1);
     for (const line of summaryLines) {
       expect(line).not.toMatch(/^(error|note)\t/);
     }
@@ -248,6 +249,10 @@ describe("nuka tend", () => {
     expect(noteLines).toHaveLength(4);
     for (const line of noteLines) {
       expect(line).toMatch(/^note\t/);
+    }
+    expect(doLines).toHaveLength(4);
+    for (const line of doLines) {
+      expect(line).toMatch(/^  do: \S/);
     }
     // Grouped by kind: same code's lines (there is at most one per code in
     // this fixture) sit together, which — for a single-occurrence-per-code

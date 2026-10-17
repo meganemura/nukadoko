@@ -14,16 +14,20 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 
 const UNBOUND =
   '; patterned steps no scanned feature line binds: unknown-type-step ("an unknown type {value:frobnicate} thing", features/steps/unknown-type-step.ts)';
-const PROJECT_WIDE = "error\tunknown-parameter-type\tunknown-type-step\t";
+const PROJECT_WIDE = "error\tunknown-parameter-type\tfeatures/steps/unknown-type-step.ts\t";
+const PROJECT_WIDE_DO = "  do: Register the type in config.parameterTypes, or use a built-in type such as {key:string}.";
 const OUTSIDE =
   "error\tundefined-step\tacceptance/outside.feature:4\t" +
   'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold --feature acceptance/outside.feature` to add one' + UNBOUND;
+const OUTSIDE_DO = "  do: nuka scaffold --feature acceptance/outside.feature";
 const INSIDE =
   "error\tundefined-step\tfeatures/inside.feature:4\t" +
   'No step definition matches "this step is undefined inside featuresDir"; run `nuka scaffold --feature features/inside.feature` to add one' + UNBOUND;
+const INSIDE_DO = "  do: nuka scaffold --feature features/inside.feature";
 const EXTRA =
   "error\tundefined-step\tacceptance/nested/extra.feature:4\t" +
   'No step definition matches "this step is undefined in a nested file"; run `nuka scaffold --feature acceptance/nested/extra.feature` to add one' + UNBOUND;
+const EXTRA_DO = "  do: nuka scaffold --feature acceptance/nested/extra.feature";
 
 async function check(rootDir: string, argv: string[]) {
   const stdout = createCaptureSink();
@@ -62,21 +66,30 @@ describe("nuka check [target..]", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe("");
-    expect(reportLines(result.stdout)).toEqual([PROJECT_WIDE, EXTRA, OUTSIDE]);
+    expect(reportLines(result.stdout)).toEqual([PROJECT_WIDE, PROJECT_WIDE_DO, EXTRA, EXTRA_DO, OUTSIDE, OUTSIDE_DO]);
   });
 
   it("checks two files together", async () => {
     const result = await check(rootDir, ["features/inside.feature", "acceptance/outside.feature"]);
 
     expect(result.exitCode).toBe(1);
-    expect(reportLines(result.stdout)).toEqual([PROJECT_WIDE, OUTSIDE, INSIDE]);
+    expect(reportLines(result.stdout)).toEqual([PROJECT_WIDE, PROJECT_WIDE_DO, OUTSIDE, OUTSIDE_DO, INSIDE, INSIDE_DO]);
   });
 
   it("checks a file plus a directory, and a file inside that directory once", async () => {
     const result = await check(rootDir, ["features/inside.feature", "acceptance", "acceptance/outside.feature"]);
 
     expect(result.exitCode).toBe(1);
-    expect(reportLines(result.stdout)).toEqual([PROJECT_WIDE, EXTRA, OUTSIDE, INSIDE]);
+    expect(reportLines(result.stdout)).toEqual([
+      PROJECT_WIDE,
+      PROJECT_WIDE_DO,
+      EXTRA,
+      EXTRA_DO,
+      OUTSIDE,
+      OUTSIDE_DO,
+      INSIDE,
+      INSIDE_DO,
+    ]);
   });
 
   it("refuses an unknown path among known ones with one error that names it, and no report", async () => {
@@ -105,7 +118,7 @@ describe("nuka check [target..]", () => {
     expect(result.exitCode).toBe(1);
     const report = JSON.parse(result.stdout) as { errors: { code: string; file?: string }[] };
     expect(report.errors.map((issue) => [issue.code, issue.file])).toEqual([
-      ["unknown-parameter-type", undefined],
+      ["unknown-parameter-type", "features/steps/unknown-type-step.ts"],
       ["feature-parse-error", "acceptance/broken.feature"],
       ["undefined-step", "acceptance/nested/extra.feature"],
       ["undefined-step", "acceptance/outside.feature"],
@@ -125,6 +138,7 @@ describe("nuka check [target..]", () => {
         UNBOUND,
       file: "acceptance/outside.feature",
       line: 4,
+      do: "nuka scaffold --feature acceptance/outside.feature",
     });
   });
 });

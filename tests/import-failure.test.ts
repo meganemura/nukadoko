@@ -112,6 +112,7 @@ describe("nuka check: a step file with an enum", () => {
           file: "features/steps/paint.ts",
           line: 3,
           message: `TypeScript enum is not supported in strip-only mode (features/steps/paint.ts:3)${STRIP_ONLY_SENTENCE}`,
+          do: "Correct the import or the error that the message names in the file, then run nuka check again.",
         },
       ]);
       expect(exitCode).toBe(1);

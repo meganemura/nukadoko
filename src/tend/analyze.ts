@@ -1,5 +1,6 @@
 import { checkBindings } from "../check/binding-check.js";
-import { loadConfig } from "../config/load-config.js";
+import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
+import { rootRelativeStepFile } from "../check/unbound-patterned.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
@@ -16,7 +17,16 @@ import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { buildTendSummary } from "./summary.js";
 import { findUnusedParameterTypes } from "./unused-parameter-type.js";
-import type { TendIssue, TendReport } from "./types.js";
+import { tendCodeDo, type TendCode, type TendFinding, type TendIssue, type TendReport } from "./types.js";
+
+// Findings about a config entry, which name the config file.
+const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
+  "fixture-touches-app",
+  "fixture-unused",
+  "parameter-type-unused",
+  "secrets-public-key-unknown",
+  "secrets-redact-key-unknown",
+]);
 
 // Responsibility: the one function `nuka tend` runs — load the project the
 // same way `nuka check` does (loadConfig, discoverSteps, loadFeaturesFromDirs)
@@ -124,5 +134,21 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
 
   const summary = buildTendSummary(vocabulary, fieldDescriptions, scannedFeatureDirs);
 
-  return { errors, notes, summary };
+  // Every finding names a file to open. A step finding names the step's
+  // file. Fixtures, parameter types, and secrets are config entries.
+  const configFile = resolveConfigFileName(rootDir);
+  const fileFor = (issue: TendIssue): string | undefined => {
+    if (issue.file !== undefined) return issue.file;
+    if (issue.step !== undefined) {
+      const entry = vocabulary.get(issue.step);
+      return entry === undefined ? undefined : rootRelativeStepFile(rootDir, entry);
+    }
+    return CONFIG_ENTRY_CODES.has(issue.code) ? configFile : undefined;
+  };
+  const finish = (issue: TendIssue): TendFinding => {
+    const file = fileFor(issue);
+    return { ...issue, ...(file !== undefined ? { file } : {}), do: issue.do ?? tendCodeDo(issue.code) };
+  };
+
+  return { errors: errors.map(finish), notes: notes.map(finish), summary };
 }

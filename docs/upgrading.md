@@ -180,6 +180,15 @@ This part does not change release to release.
   then depends only on Playwright again (docs/migration-playwright-test.md,
   "Share the implementation, not the runner"). Records `recordStep` wrote
   stay on disk with `kind: "external"` until retention removes them.
+- **The text output of `nuka check` and `nuka tend` prints a `do:` line
+  under each finding, and names the step file of a step finding.** The
+  line starts with two spaces (`  do: nuka scaffold --feature
+  features/greet.feature`). For a finding about one step, the third column
+  now holds the step file, not the step name; the message still names the
+  step. `--codes` text has a fourth column, the code's general `do`. A
+  script that reads text output skips the lines that start with two
+  spaces, or reads `--json`, where `file` and `do` are fields and nothing
+  else changed.
 
 ## 0.15.0 to 0.16.1
 

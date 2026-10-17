@@ -97,6 +97,7 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
           'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold --feature features/greet.feature` to add one; patterned steps no scanned feature line binds: output-says ("the output says {text:string}", features/steps/output-says.ts)',
         file: "features/greet.feature",
         line: 5,
+        do: "nuka scaffold --feature features/greet.feature",
       },
     ]);
   });
@@ -154,6 +155,7 @@ describe("nuka tend: pattern-unbound carries the step file", () => {
           'Step "output-says" declares a pattern, but no feature line under the scanned directories binds it. It has no place in any scenario right now.',
         file: "features/steps/output-says.ts",
         step: "output-says",
+        do: "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
       },
     ]);
 

@@ -32,6 +32,7 @@ describe("nuka check: a pattern that cannot be built", () => {
         message: `"${(line - 1) / 3} items are added" would match step "add-items" once its pattern builds. Fix the pattern error reported for that step`,
         file: "features/items.feature",
         line,
+        do: "Correct the step-file-import-failed error or the pattern error first, then run nuka check again.",
       })),
     );
   });

@@ -267,7 +267,8 @@ describe("nuka scaffold --feature", () => {
     const result = await cli(rootDir, ["check", feature]);
 
     expect(result.stdout).toContain(
-      'error\tundefined-step\tfeatures/greet.feature:3\tNo step definition matches "nothing defines this"; run `nuka scaffold --feature features/greet.feature` to add one\n',
+      'error\tundefined-step\tfeatures/greet.feature:3\tNo step definition matches "nothing defines this"; run `nuka scaffold --feature features/greet.feature` to add one\n' +
+        "  do: nuka scaffold --feature features/greet.feature\n",
     );
   });
 });

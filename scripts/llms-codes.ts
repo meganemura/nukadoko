@@ -84,27 +84,34 @@ interface CheckCodeEntry {
   readonly code: string;
   readonly severity?: string;
   readonly description: string;
+  readonly do: string;
 }
 
 interface TendCodeEntry {
   readonly code: string;
   readonly reportedByDefault: boolean;
   readonly description: string;
+  readonly do: string;
 }
 
 export function checkTable(entries: readonly CheckCodeEntry[]): CodeTable {
   return {
     marker: "<!-- generated: nuka check --codes --json -->",
-    header: ["Code", "Severity", "Meaning"],
-    rows: entries.map((entry) => [`\`${entry.code}\``, entry.severity ?? "-", entry.description]),
+    header: ["Code", "Severity", "Meaning", "Do"],
+    rows: entries.map((entry) => [`\`${entry.code}\``, entry.severity ?? "-", entry.description, entry.do]),
   };
 }
 
 export function tendTable(entries: readonly TendCodeEntry[]): CodeTable {
   return {
     marker: "<!-- generated: nuka tend --codes --json -->",
-    header: ["Code", "Reported", "Meaning"],
-    rows: entries.map((entry) => [`\`${entry.code}\``, entry.reportedByDefault ? "default" : "--all", entry.description]),
+    header: ["Code", "Reported", "Meaning", "Do"],
+    rows: entries.map((entry) => [
+      `\`${entry.code}\``,
+      entry.reportedByDefault ? "default" : "--all",
+      entry.description,
+      entry.do,
+    ]),
   };
 }
 

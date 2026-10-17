@@ -41,7 +41,9 @@ block on one of them passes `--fail-on <code>` (for instance
 `pattern-unbound`); the finding stays a note in the output, and only that
 invocation's exit code turns red. The code to pass is the one printed
 beside each finding, or one from `nuka tend --codes`, which lists every
-code with a one-line meaning before any of them has fired.
+code with a one-line meaning before any of them has fired. Each note also
+names a `file` and a `do:` line: what to open, and the change to make if
+the note calls for one.
 
 By default it leaves out one declaration note: `schema-field-undescribed`
 (a field with no `.describe()`). A gap there is a choice the project may

@@ -43,7 +43,7 @@ export function findUnboundPatternedEntries(
 
 /** The step file as a reader opens it: relative to the project root, with
  * `/` separators so the text is the same on every platform. */
-export function rootRelativeStepFile(rootDir: string, entry: TypedVocabularyEntry): string {
+export function rootRelativeStepFile(rootDir: string, entry: { readonly filePath: string }): string {
   return path.relative(rootDir, path.resolve(rootDir, entry.filePath)).split(path.sep).join("/");
 }
 

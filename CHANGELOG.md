@@ -51,6 +51,23 @@ just until 0.1.
 
 ### Added
 
+- **Every `nuka check` and `nuka tend` finding carries `file` and `do`.**
+  `do` is the next step: a command with its values filled in where the
+  finding knows them (`undefined-step` gives `nuka scaffold --feature
+  <its file>`, `playwright-missing` the install line, `features-dir-missing`
+  the `mkdir` for the configured directory), and otherwise the code's
+  general text from the registry. A finding about one step, which used to
+  name only `step`, now also names the step file in `file`, root-relative.
+  A tend finding about a config entry (a fixture, a parameter type, a
+  secrets key) names the config file. Text output prints `  do: <text>`
+  under each finding line, and the third column of a step finding is now
+  the step file. `nuka check --codes` and `nuka tend --codes` add each
+  code's general `do` as a `do` field in `--json` and a fourth column in
+  text, and the llms.txt code tables gain a Do column. `nuka steps --json`
+  and `nuka describe` add `file`, the step file. A compat hook finding has
+  no `file`, because discovery does not record the file that registered a
+  hook. docs/upgrading.md says what a script reading text output does.
+
 - **`nuka scaffold --feature <path>` writes a stub for each undefined line of a feature.**
   A sentence used to be typed twice, once in the feature and once in
   `--pattern`. The command runs the analysis `nuka check <path>` runs and

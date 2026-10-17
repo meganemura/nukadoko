@@ -3660,8 +3660,9 @@ neglect.
 still healthy.
 
 `nuka tend --codes` lists every code a tend finding can carry, each with a
-one-line description and whether a run without `--all` reports it; with
-`--json` it prints the same list as JSON, under `codes`.
+one-line description, whether a run without `--all` reports it, and the
+code's general `do`; with `--json` it prints the same list as JSON, under
+`codes`.
 
 It is a separate command, rather than another set of `check` warnings,
 because the two commands are read at different times and have different meanings.
@@ -4106,7 +4107,8 @@ nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--j
                               each step's result, the failure, and the
                               scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates, timeout
+                              name, file (the step file, relative to the
+                              project root), patterns, description, mutates, timeout
                               when the step declared one, which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
@@ -4118,7 +4120,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               exiting 1 if import_failures is non-empty or
                               any step's needs_error or from_errors is
                               present, output printed either way
-nuka describe <step>          full contract, schemas as JSON Schema, plus
+nuka describe <step>          full contract, the step file as file,
+                              schemas as JSON Schema, plus
                               timeout when the step declared
                               one, plus
                               import_failures beside it (same shape as nuka
@@ -4265,8 +4268,8 @@ nuka check [feature..] [--json]
                               does not exist is named; any other failed read
                               keeps the error's own text
 nuka check --codes [--json]   list every finding code nuka check can produce,
-                              with a one-line description, instead of
-                              checking a project
+                              with a one-line description and the code's
+                              general do, instead of checking a project
 nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               delete accumulated records/cache/export under
                               the state directory; no category flag cleans
@@ -4307,8 +4310,8 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               adds it too
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               whether a plain run reports it or only --all
-                              does, and a one-line description, instead of
-                              tending a project
+                              does, a one-line description, and the code's
+                              general do, instead of tending a project
 nuka session list [--json]    list every session, across all environments;
                               --json prints { schema_version, sessions }
                               and names each one's environment
@@ -4373,6 +4376,17 @@ the number before it trusts the shape. Each number is 1 today, and a
 record without `schema_version` was written by nukadoko 0.16.1 or
 earlier. The `experimental` commands print the server's own tool list, a
 shape nukadoko does not own, so they carry no number.
+
+Every finding of `nuka check` and `nuka tend` carries `file` and `do`.
+`file` is relative to the project root: for a finding about one step, it is
+the step file that defines the step; for `duplicate-pattern`, which names
+several steps, it is the file of the last one named; for a finding about a
+config entry, it is the config file. `line` is set where the finding knows it. `do` is the
+next step: a command with its values filled in where the finding knows them
+(`nuka scaffold --feature features/greet.feature`), and otherwise the
+code's general text, which `--codes` lists. In text output, a line
+`  do: <text>` follows each finding line. A finding about a compat hook has
+no `file`, because discovery does not record which file registered a hook.
 
 ### Tolerant reporting, fail-fast execution
 

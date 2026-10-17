@@ -78,11 +78,13 @@ describe("nuka tend: findings moved from nuka check", () => {
         code: "parameter-type-support-origin",
         message: `Custom parameter type "codeA" is registered from compat ("support") code at ${file}, not from config.parameterTypes: config is the typed-era home for parameter type registrations; both share one registry today, so moving this one is a safe, meaning-preserving step whenever it's convenient`,
         file,
+        do: "Move the defineParameterType call into config.parameterTypes, unless a RegExp step needs its preferForRegexpMatch.",
       },
       {
         code: "parameter-type-support-origin",
         message: `Custom parameter type "codeB" is registered from compat ("support") code at ${file} with preferForRegexpMatch: keep it in support code while a RegExp step relies on that preference; config.parameterTypes rejects the key, and without it a RegExp group that another type also matches fails again`,
         file,
+        do: "Move the defineParameterType call into config.parameterTypes, unless a RegExp step needs its preferForRegexpMatch.",
       },
     ]);
     expect(exitCode).toBe(0);

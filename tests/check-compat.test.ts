@@ -106,6 +106,7 @@ describe("nuka check: compat integration", () => {
         message:
           'Custom parameter type "codeB" sets preferForRegexpMatch on /[A-Z]+/, which {codeA} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
         file: path.join("features", "steps", "code-glue.ts"),
+        do: "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch.",
       },
     ]);
     expect(exitCode).toBe(1);
@@ -128,6 +129,7 @@ describe("nuka check: compat integration", () => {
         message:
           'Custom parameter type "count" sets preferForRegexpMatch on /-?\\d+/, which {int} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
         file: path.join("features", "steps", "count-glue.ts"),
+        do: "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch.",
       },
     ]);
     expect(exitCode).toBe(1);

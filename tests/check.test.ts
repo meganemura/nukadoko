@@ -138,7 +138,7 @@ describe("nuka check", () => {
     }
   });
 
-  it("prints one human-readable line per issue when --json is omitted", async () => {
+  it("prints one human-readable line per issue, each followed by its do line, when --json is omitted", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check"], {
       rootDir: fixture("check-errors-project"),
@@ -147,10 +147,10 @@ describe("nuka check", () => {
     });
 
     expect(exitCode).toBe(1);
-    const lines = stdout.text().trim().split("\n");
+    const lines = stdout.text().trimEnd().split("\n");
     expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) {
-      expect(line).toMatch(/^error\t/);
+    for (const [index, line] of lines.entries()) {
+      expect(line).toMatch(index % 2 === 0 ? /^error\t/ : /^  do: \S/);
     }
   });
 

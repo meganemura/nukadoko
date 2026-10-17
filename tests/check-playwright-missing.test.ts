@@ -70,6 +70,7 @@ describe("findPlaywrightMissing", () => {
         file: "features/a.feature",
         line: 3,
         step: "fetch",
+        do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
       },
     ]);
   });

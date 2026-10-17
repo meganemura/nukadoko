@@ -3137,7 +3137,7 @@ nukadoko はすべての段階を記録します。
 この語彙と、それが生み出した記録は、いまも健全か、です。
 
 `nuka tend --codes` は、tend の所見が持ちうるコードをすべて一覧にします。
-各コードには 1 行の説明と、`--all` なしで報告されるかどうかが付きます。
+各コードには 1 行の説明、`--all` なしで報告されるかどうか、そのコードの一般的な `do` が付きます。
 `--json` を付けると、同じ一覧を `codes` の下に JSON で出力します。
 
 これが `check` への警告の追加ではなく別のコマンドである理由は、この 2 つが異なる瞬間に読まれ、異なる意味を持つからです。
@@ -3544,7 +3544,8 @@ nuka explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--j
                               each step's result, the failure, and the
                               scenario. Exits 1 on a failure or a refusal
 nuka steps [--json]           list the whole vocabulary, typed and compat:
-                              name, patterns, description, mutates, timeout
+                              name, file (the step file, relative to the
+                              project root), patterns, description, mutates, timeout
                               when the step declared one, which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
@@ -3556,7 +3557,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               exiting 1 if import_failures is non-empty or
                               any step's needs_error or from_errors is
                               present, output printed either way
-nuka describe <step>          full contract, schemas as JSON Schema, plus
+nuka describe <step>          full contract, the step file as file,
+                              schemas as JSON Schema, plus
                               timeout when the step declared
                               one, plus
                               import_failures beside it (same shape as nuka
@@ -3703,8 +3705,8 @@ nuka check [feature..] [--json]
                               does not exist is named; any other failed read
                               keeps the error's own text
 nuka check --codes [--json]   list every finding code nuka check can produce,
-                              with a one-line description, instead of
-                              checking a project
+                              with a one-line description and the code's
+                              general do, instead of checking a project
 nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               delete accumulated records/cache/export under
                               the state directory; no category flag cleans
@@ -3745,8 +3747,8 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               adds it too
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               whether a plain run reports it or only --all
-                              does, and a one-line description, instead of
-                              tending a project
+                              does, a one-line description, and the code's
+                              general do, instead of tending a project
 nuka session list [--json]    list every session, across all environments;
                               --json prints { schema_version, sessions }
                               and names each one's environment
@@ -3806,6 +3808,19 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 読み手は、形を信頼する前にこの番号を確かめます。
 どの番号も現在は 1 で、`schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
 `experimental` のコマンドは、nukadoko が持たない形であるサーバー自身の tool 一覧を出力するので、番号を持ちません。
+
+`nuka check` と `nuka tend` のすべての所見は `file` と `do` を持ちます。
+`file` はプロジェクトのルートからの相対パスです。
+1 つの step についての所見では、その step を定義する step ファイルです。
+複数の step を挙げる `duplicate-pattern` では、最後に挙げた step のファイルです。
+config のエントリについての所見では、config ファイルです。
+所見が行を知っているときは `line` も付きます。
+`do` は次の一手です。
+所見が値を知っているときは、その値を埋めたコマンドです(`nuka scaffold --feature features/greet.feature`)。
+それ以外のときは、`--codes` が一覧にするコードの一般的な文です。
+テキスト出力では、各所見の行の次に `  do: <text>` の行が続きます。
+compat の hook についての所見は `file` を持ちません。
+discovery は、どのファイルが hook を登録したかを記録しないからです。
 
 ### 報告は寛容に、実行は速く失敗する
 

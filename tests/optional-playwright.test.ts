@@ -158,7 +158,8 @@ describe("a project without playwright installed", () => {
     expect(check.stdout).toContain(
       "error\tplaywright-missing\tfeatures/browser.feature:4\t" +
         `ctx.page() in "Given a blank page is open" needs "playwright", and this project has not installed it. ` +
-        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}` +
+        `\n  do: npm install -D -E playwright@${PLAYWRIGHT_VERSION}\n`,
     );
   }, 60_000);
 
@@ -176,6 +177,7 @@ describe("a project without playwright installed", () => {
           file: "features/http.feature",
           line: 4,
           step: "fetch-url",
+          do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
         },
       ],
       warnings: [],

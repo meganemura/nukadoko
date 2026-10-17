@@ -385,6 +385,7 @@ agent の探索ループも、この呼び出しから始まります。
 
 ```
 error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold --feature features/todo.feature` to add one
+  do: nuka scaffold --feature features/todo.feature
 ```
 
 pattern を宣言した step のうち、走査する feature ディレクトリのどの行にも結び付けられていないものがあれば、同じメッセージの末尾に `patterned steps no scanned feature line binds:` が付き、その step と pattern とファイルを名指しします。
@@ -415,6 +416,7 @@ step B が `from` を宣言して step A の返り値を読むとして、この
 
 ```
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
+  do: Put a line that runs the producer step earlier in the scenario, or remove the from entry for the key.
 ```
 
 この 2 つのケースは一例にすぎません。

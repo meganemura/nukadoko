@@ -150,6 +150,13 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   step の `run` が呼んでいる共有関数を spec から直接呼び、`nukadoko` の import を削除してください。
   そうすると spec は再び Playwright だけに依存します(docs/migration-playwright-test.ja.md の「共有するのは runner ではなく実装」)。
   `recordStep` が書いた record は、retention が削除するまで `kind: "external"` のままディスクに残ります。
+- **`nuka check` と `nuka tend` のテキスト出力は、各所見の下に `do:` の行を出し、step の所見ではその step ファイルを示します。**
+  その行は 2 つの空白で始まります(`  do: nuka scaffold --feature features/greet.feature`)。
+  1 つの step についての所見では、3 列目は step の名前ではなく step ファイルになりました。
+  メッセージは引き続き step を名指します。
+  `--codes` のテキストには 4 列目として、そのコードの一般的な `do` が加わりました。
+  テキスト出力を読むスクリプトは、2 つの空白で始まる行を読み飛ばすか、`--json` を読みます。
+  `--json` では `file` と `do` がフィールドで、それ以外は変わりません。
 
 ## 0.15.0 から 0.16.1 へ
 

@@ -1,4 +1,4 @@
-import { PlaywrightMissingError } from "../context/load-playwright.js";
+import { PLAYWRIGHT_VERSION, PlaywrightMissingError } from "../context/load-playwright.js";
 import { closeFixtureNames, type FixtureGraph } from "../fixture/graph.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
@@ -82,6 +82,7 @@ export function findPlaywrightMissing(
       file: bound.file,
       ...(bound.line !== undefined ? { line: bound.line } : {}),
       step: bound.stepName,
+      do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
     });
   }
   return issues;

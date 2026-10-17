@@ -276,6 +276,11 @@ export function checkFeatures(
             message: `No step definition matches "${step.text}"; run \`nuka scaffold --feature ${feature.relativePath}\` to add one${hintSuffix}`,
             file: feature.relativePath,
             line,
+            do: escapeHint
+              ? `Escape the bare ( ) and / in the pattern of step "${escapeHint.stepName}" as \\( \\) and \\/.`
+              : quoteHint
+                ? `Rewrite the line as: ${gherkinKeyword(step.type)} ${quoteHint.rewrittenText}`
+                : `nuka scaffold --feature ${feature.relativePath}`,
           });
           undefinedSteps.push({ file: feature.relativePath, line, text: step.text, type: step.type });
           continue;

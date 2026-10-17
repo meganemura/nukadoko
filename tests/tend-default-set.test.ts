@@ -104,7 +104,7 @@ describe("nuka tend on a freshly scaffolded project", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     expect(await runCli(["tend", "--fail-on", "schema-field-undescribed"], { rootDir, stdout, stderr })).toBe(1);
-    expect(stdout.text()).toMatch(/^note\tschema-field-undescribed\tgreet\t/m);
+    expect(stdout.text()).toMatch(/^note\tschema-field-undescribed\tfeatures\/steps\/greet\.ts\t/m);
     expect(stderr.text()).toBe("fail-on: schema-field-undescribed reported 1 finding\n");
   });
 });

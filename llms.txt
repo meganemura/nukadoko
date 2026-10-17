@@ -44,79 +44,79 @@ Every JSON document nukadoko writes or prints (records, `--json` output, `nuka d
 
 ## Findings
 
-Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` print the same lists, and `--json` prints them as JSON. A tend code marked `--all` is reported only under `nuka tend --all`, or when `--fail-on` names it.
+Each finding names its `file` and a `do`: the next command or edit, with known values filled in. Text output prints it as a `  do:` line under the finding. Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` print the same lists with each code's general `do`, and `--json` prints them as JSON. A tend code marked `--all` is reported only under `nuka tend --all`, or when `--fail-on` names it.
 
 ### `nuka check`
 
 <!-- generated: nuka check --codes --json -->
-| Code | Severity | Meaning |
-| --- | --- | --- |
-| `additional-feature-dir-missing` | error | An entry in additionalFeatureDirs does not exist on disk. |
-| `alias-key-mismatch` | error | A step has more than one pattern, and the patterns bind different sets of keys. |
-| `ambiguous-step` | error | A line in a feature file matches more than one step definition. |
-| `args-not-object` | error | A step has a pattern, but its args schema is not a z.object, so there is no key to check that pattern's captures against. |
-| `capture-type-mismatch` | error | A pattern captures a key with a built-in type whose JS value is a number, string, or bigint, but the args schema declares that key as a different primitive (number, string, boolean, or bigint) and does not coerce the captured value. |
-| `done-callback-arity` | error | A compat hook or a matched compat step declares more parameters than nukadoko passes, which cucumber-js reads as a done() callback. |
-| `duplicate-capture-key` | error | A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value. |
-| `duplicate-pattern` | error | Two or more patterns, once capture names are stripped, normalize to the same text, so one step text could match more than one step. |
-| `env-file-missing` | warning | A configured envFile does not exist on disk, so nothing in it is ever loaded. |
-| `env-file-skipped-line` | warning | A line in a configured envFile is not a blank line, a comment, or a binding, so nothing on it was loaded. |
-| `environment-env-file-missing` | warning | An entry in one environment's own envFiles does not exist on disk. |
-| `explore-browser-step` | error | A model command or a relation sequence entry names a step that needs a browser (page or context). Explore does not run that step. |
-| `explore-empty-model` | error | A model declares no commands, so every sequence it builds is empty and passes. |
-| `explore-unknown-step` | error | A model command or a relation sequence entry names a step that is not in the vocabulary. |
-| `explore-unseeded-random` | error | A model command's args, pre, or next, or a relation's drawn source, calls Math.random directly. The seed does not drive that value, so a run cannot be replayed or shrunk. |
-| `feature-parse-error` | error | A .feature file or a Markdown oath could not be parsed, so nothing in it was checked. |
-| `features-dir-missing` | error | The configured featuresDir does not exist on disk, so no feature or step file under it can load. |
-| `fixture-cycle` | error | config.fixtures definitions depend on each other in a cycle, so none of them can ever resolve. |
-| `fixture-scope-violation` | error | A config.fixtures definition scoped to run once per process depends on one scoped to run once per scenario. |
-| `fixture-structural-violation` | error | A step's run(), or a config.fixtures definition's own function, is not a plain object-destructuring parameter, or destructures a fixture name nukadoko does not know. A fixture that destructures call is the same finding: call is only available inside a step's run(). |
-| `from-order-violation` | error | A step declares from for a key, and the step or steps it names have not run earlier in the same scenario, or (when the key names more than one candidate) more than one candidate has. |
-| `from-structural-violation` | error | A step's from names a value that is not a registered step, or is otherwise structurally malformed. |
-| `invalid-capture-key` | error | A pattern capture's name is not a valid identifier: a capture key must start with a letter or underscore and contain only letters, digits, and underscores. |
-| `no-step-files-found` | error | featuresDir exists, but no .ts/.mts/.js/.mjs step file was found while scanning it, so no step can ever be registered. |
-| `outline-does-not-run` | error | A scenario outline has no Examples row that will run, so the boundary the feature names is absent from the run. |
-| `page-override-unowned` | error | A config.fixtures definition overrides page, but owns neither page nor context. |
-| `parameter-type-invalid` | error | A custom parameter type takes the name of a built-in type, two parameter types share the same name (from config.parameterTypes or a compat defineParameterType call), or a type sets preferForRegexpMatch on a regexp that another type, built-in or custom, already prefers. |
-| `part-cycle` | error | A step's parts form a cycle: the step reaches itself, directly or through other steps' own parts. |
-| `part-mutates-contradiction` | error | A step declares mutates: false, but declares a part that declares mutates: true. |
-| `part-structural-violation` | error | A step's parts names a value that is not a registered step, or is otherwise structurally malformed. |
-| `pattern-error` | error | A step's pattern could not be parsed, for a reason other than an unnamed, invalid, or unterminated capture. |
-| `pattern-syntax-error` | error | A pattern failed to build into a cucumber expression, for a reason cucumber-expressions itself reports (not an unknown parameter type). |
-| `playwright-missing` | error | A feature line binds a step whose fixtures build page, context, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs. |
-| `secrets-redact-key-too-short` | warning | A secrets.redact key's value is shorter than the minimum length build-secret-set.ts will actually redact, so it never gets redacted. |
-| `serial-tag-on-scenario` | error | A @nukadoko:serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there. |
-| `step-file-import-failed` | error | A step file under featuresDir failed to import, so any step it defines never reaches the vocabulary. |
-| `step-file-unsupported-extension` | error | Discovery found a .cjs or .cts step file; nukadoko is ESM-only and never imports it. |
-| `table-docstring-key-mismatch` | error | A step's table or docstring is attached to a line, but zero, or more than one, of its args keys is left unconsumed by pattern captures (exactly one must be left for the attachment to fill), or the one key it fills is of a type the attachment can never satisfy (a table is string[][], a docstring is a string). |
-| `then-compat-step` | warning | A compat step is bound in Then position; compat has no mutates declaration to check that position against. |
-| `then-mutates` | warning | A step bound in Then position declares mutates: true, so its declaration and its position are in tension. |
-| `tracked-secret-looking-key` | warning | An envFile tracked by git defines a key that looks like a secret by name, but that key is not in secrets.redact. |
-| `undefined-step` | error | No step definition matches a line in a feature file. |
-| `undefined-step-check-suppressed` | warning | A step file failed to import, or a line would match a step whose pattern has an unregistered parameter type, so the undefined-step finding that cause could explain is held back until it is fixed. |
-| `unfillable-required-key` | error | A step's args key is required, but nothing on this line (no pattern capture, no table/docstring attachment, and no declared from) can ever fill it. |
-| `unknown-capture-key` | error | A pattern captures a key that is not a key of the step's args schema. |
-| `unknown-parameter-type` | error | A pattern names a parameter type this project has not registered, such as {custom} with no matching config.parameterTypes entry. |
-| `unnamed-capture` | error | A step's pattern has a capture with no name, such as {int} instead of {key:int}; every capture must name the args key it fills. |
-| `unsupported-hook-tag-expression` | error | A compat hook's tag expression could not be parsed, so nukadoko cannot tell which scenarios it applies to. |
-| `unterminated-capture` | error | A pattern has an opening { with no matching closing }, so the pattern cannot be parsed. |
+| Code | Severity | Meaning | Do |
+| --- | --- | --- | --- |
+| `additional-feature-dir-missing` | error | An entry in additionalFeatureDirs does not exist on disk. | Create the directory, or remove the entry from additionalFeatureDirs in the config file. |
+| `alias-key-mismatch` | error | A step has more than one pattern, and the patterns bind different sets of keys. | Edit the step's patterns so that each one captures the same set of keys. |
+| `ambiguous-step` | error | A line in a feature file matches more than one step definition. | Reword the feature line, or edit one of the matching patterns, so that exactly one step matches. nuka steps lists each pattern. |
+| `args-not-object` | error | A step has a pattern, but its args schema is not a z.object, so there is no key to check that pattern's captures against. | Declare the step's args as a z.object whose keys the pattern captures fill. |
+| `capture-type-mismatch` | error | A pattern captures a key with a built-in type whose JS value is a number, string, or bigint, but the args schema declares that key as a different primitive (number, string, boolean, or bigint) and does not coerce the captured value. | Make the capture type and the args field type agree: change the {key:type} in the pattern, or declare the field with z.coerce. |
+| `done-callback-arity` | error | A compat hook or a matched compat step declares more parameters than nukadoko passes, which cucumber-js reads as a done() callback. | Remove the done callback parameter, and return a promise from the function instead. |
+| `duplicate-capture-key` | error | A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value. | Rename one of the captures, so that each key occurs once in the pattern. |
+| `duplicate-pattern` | error | Two or more patterns, once capture names are stripped, normalize to the same text, so one step text could match more than one step. | Reword one of the patterns, so that the two texts differ when the capture names are removed. |
+| `env-file-missing` | warning | A configured envFile does not exist on disk, so nothing in it is ever loaded. | Create the file, or remove it from envFiles in the config file. |
+| `env-file-skipped-line` | warning | A line in a configured envFile is not a blank line, a comment, or a binding, so nothing on it was loaded. | Rewrite the line as KEY=value, or start it with # to make it a comment. |
+| `environment-env-file-missing` | warning | An entry in one environment's own envFiles does not exist on disk. | Create the file, or remove it from that environment's envFiles in the config file. |
+| `explore-browser-step` | error | A model command or a relation sequence entry names a step that needs a browser (page or context). Explore does not run that step. | Remove the step from the model or the relation. Explore runs only steps that need no browser. |
+| `explore-empty-model` | error | A model declares no commands, so every sequence it builds is empty and passes. | Add at least one command to the model. |
+| `explore-unknown-step` | error | A model command or a relation sequence entry names a step that is not in the vocabulary. | Correct the step name, or add the step. nuka steps lists the names in the vocabulary. |
+| `explore-unseeded-random` | error | A model command's args, pre, or next, or a relation's drawn source, calls Math.random directly. The seed does not drive that value, so a run cannot be replayed or shrunk. | Draw the value with draw.int or draw.pick, so that the seed drives it. |
+| `feature-parse-error` | error | A .feature file or a Markdown oath could not be parsed, so nothing in it was checked. | Correct the Gherkin at the line that the message names, then run nuka check on the file again. |
+| `features-dir-missing` | error | The configured featuresDir does not exist on disk, so no feature or step file under it can load. | Create the featuresDir directory, or correct featuresDir in the config file. |
+| `fixture-cycle` | error | config.fixtures definitions depend on each other in a cycle, so none of them can ever resolve. | Remove one dependency from the cycle in config.fixtures. |
+| `fixture-scope-violation` | error | A config.fixtures definition scoped to run once per process depends on one scoped to run once per scenario. | Scope the dependent fixture per scenario, or scope the fixture that it depends on per process. |
+| `fixture-structural-violation` | error | A step's run(), or a config.fixtures definition's own function, is not a plain object-destructuring parameter, or destructures a fixture name nukadoko does not know. A fixture that destructures call is the same finding: call is only available inside a step's run(). | Give the function one object-destructuring parameter that names only known fixtures. The message names the name that is not known. |
+| `from-order-violation` | error | A step declares from for a key, and the step or steps it names have not run earlier in the same scenario, or (when the key names more than one candidate) more than one candidate has. | Put a line that runs the producer step earlier in the scenario, or remove the from entry for the key. |
+| `from-structural-violation` | error | A step's from names a value that is not a registered step, or is otherwise structurally malformed. | Make each from entry name a step that a step file registers. |
+| `invalid-capture-key` | error | A pattern capture's name is not a valid identifier: a capture key must start with a letter or underscore and contain only letters, digits, and underscores. | Rename the capture: a letter or an underscore first, then only letters, digits, and underscores. |
+| `no-step-files-found` | error | featuresDir exists, but no .ts/.mts/.js/.mjs step file was found while scanning it, so no step can ever be registered. | Add a step file under featuresDir. nuka scaffold writes one. |
+| `outline-does-not-run` | error | A scenario outline has no Examples row that will run, so the boundary the feature names is absent from the run. | Add an Examples row for each case that must run, or remove the empty Examples table. |
+| `page-override-unowned` | error | A config.fixtures definition overrides page, but owns neither page nor context. | Make the fixture that overrides page own page or context, or remove the override. |
+| `parameter-type-invalid` | error | A custom parameter type takes the name of a built-in type, two parameter types share the same name (from config.parameterTypes or a compat defineParameterType call), or a type sets preferForRegexpMatch on a regexp that another type, built-in or custom, already prefers. | Rename the parameter type, or remove the second registration or the second preferForRegexpMatch. |
+| `part-cycle` | error | A step's parts form a cycle: the step reaches itself, directly or through other steps' own parts. | Remove one part from the chain, so that no step reaches itself. |
+| `part-mutates-contradiction` | error | A step declares mutates: false, but declares a part that declares mutates: true. | Declare mutates: true on the step, or remove the part that declares mutates: true. |
+| `part-structural-violation` | error | A step's parts names a value that is not a registered step, or is otherwise structurally malformed. | Make each parts entry a step that a step file registers. |
+| `pattern-error` | error | A step's pattern could not be parsed, for a reason other than an unnamed, invalid, or unterminated capture. | Correct the pattern at the position that the message names. |
+| `pattern-syntax-error` | error | A pattern failed to build into a cucumber expression, for a reason cucumber-expressions itself reports (not an unknown parameter type). | Correct the pattern at the position that the message names. Escape a literal ( ) or / as \\( \\) or \\/. |
+| `playwright-missing` | error | A feature line binds a step whose fixtures build page, context, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs. | Install playwright in the project, at the version that the message names. |
+| `secrets-redact-key-too-short` | warning | A secrets.redact key's value is shorter than the minimum length build-secret-set.ts will actually redact, so it never gets redacted. | Use a longer value for the key, or remove the key from secrets.redact. |
+| `serial-tag-on-scenario` | error | A @nukadoko:serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there. | Move @nukadoko:serial to the Feature line. |
+| `step-file-import-failed` | error | A step file under featuresDir failed to import, so any step it defines never reaches the vocabulary. | Correct the import or the error that the message names in the file, then run nuka check again. |
+| `step-file-unsupported-extension` | error | Discovery found a .cjs or .cts step file; nukadoko is ESM-only and never imports it. | Write the file as an ES module with a .ts, .mts, .js, or .mjs extension. |
+| `table-docstring-key-mismatch` | error | A step's table or docstring is attached to a line, but zero, or more than one, of its args keys is left unconsumed by pattern captures (exactly one must be left for the attachment to fill), or the one key it fills is of a type the attachment can never satisfy (a table is string[][], a docstring is a string). | Leave exactly one args key that no capture fills, typed string[][] for a table or string for a docstring, or remove the attachment from the line. |
+| `then-compat-step` | warning | A compat step is bound in Then position; compat has no mutates declaration to check that position against. | Promote the step to defineStep with mutates: false, or move the line out of Then position. |
+| `then-mutates` | warning | A step bound in Then position declares mutates: true, so its declaration and its position are in tension. | Declare mutates: false if the step only reads, or move the line to Given or When. |
+| `tracked-secret-looking-key` | warning | An envFile tracked by git defines a key that looks like a secret by name, but that key is not in secrets.redact. | Add the key to secrets.redact, or move it to an envFile that git does not track. |
+| `undefined-step` | error | No step definition matches a line in a feature file. | Run nuka scaffold --feature with the feature file to write a stub for each undefined line, or reword the line to match a step that exists. |
+| `undefined-step-check-suppressed` | warning | A step file failed to import, or a line would match a step whose pattern has an unregistered parameter type, so the undefined-step finding that cause could explain is held back until it is fixed. | Correct the step-file-import-failed error or the pattern error first, then run nuka check again. |
+| `unfillable-required-key` | error | A step's args key is required, but nothing on this line (no pattern capture, no table/docstring attachment, and no declared from) can ever fill it. | Capture the key in the pattern, attach a table or a docstring, declare from for the key, or make the key optional. |
+| `unknown-capture-key` | error | A pattern captures a key that is not a key of the step's args schema. | Rename the capture to a key of the args schema, or add the key to the schema. |
+| `unknown-parameter-type` | error | A pattern names a parameter type this project has not registered, such as {custom} with no matching config.parameterTypes entry. | Register the type in config.parameterTypes, or use a built-in type such as {key:string}. |
+| `unnamed-capture` | error | A step's pattern has a capture with no name, such as {int} instead of {key:int}; every capture must name the args key it fills. | Name the capture after the args key that it fills, as {key:type}. |
+| `unsupported-hook-tag-expression` | error | A compat hook's tag expression could not be parsed, so nukadoko cannot tell which scenarios it applies to. | Rewrite the hook's tags as a tag expression that nukadoko parses, such as @a and not @b. |
+| `unterminated-capture` | error | A pattern has an opening { with no matching closing }, so the pattern cannot be parsed. | Close the capture with }, or escape a literal { as \\{. |
 <!-- /generated -->
 
 ### `nuka tend`
 
 <!-- generated: nuka tend --codes --json -->
-| Code | Reported | Meaning |
-| --- | --- | --- |
-| `fixture-touches-app` | default | A config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names. |
-| `fixture-unused` | default | No typed step requires a config.fixtures definition, directly or through another fixture. |
-| `from-unused` | default | A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture. |
-| `parameter-type-support-origin` | default | A compat defineParameterType call in support code still registers a parameter type; config.parameterTypes is where a typed project declares it. |
-| `parameter-type-unused` | default | No typed or compat pattern names a config.parameterTypes entry. |
-| `pattern-unbound` | default | A typed step has a pattern, and no feature line resolves to that step alone. |
-| `post-navigation-read` | default | A step's trace shows a call shortly after a navigation, and nothing shows that the page had finished rendering. The note gives the gap and makes no judgment. |
-| `repeated-scenario-prefix` | default | Scenarios in the latest run open with the same steps. The note reports the measured repetition and recommends no fix. |
-| `schema-field-undescribed` | --all | A field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means. |
-| `secrets-public-key-unknown` | default | A secrets.public entry names a key that no envFile defines. |
-| `secrets-redact-key-unknown` | default | A secrets.redact entry names a key that no envFile defines. |
-| `step-description-todo` | default | A typed step's description is still the placeholder nuka scaffold wrote. |
+| Code | Reported | Meaning | Do |
+| --- | --- | --- | --- |
+| `fixture-touches-app` | default | A config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names. | If a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary. |
+| `fixture-unused` | default | No typed step requires a config.fixtures definition, directly or through another fixture. | Remove the fixture from config.fixtures, or keep it for nuka do. |
+| `from-unused` | default | A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture. | Remove the from entry for the key, or keep it for nuka do --use. |
+| `parameter-type-support-origin` | default | A compat defineParameterType call in support code still registers a parameter type; config.parameterTypes is where a typed project declares it. | Move the defineParameterType call into config.parameterTypes, unless a RegExp step needs its preferForRegexpMatch. |
+| `parameter-type-unused` | default | No typed or compat pattern names a config.parameterTypes entry. | Remove the entry from config.parameterTypes, or use it in a pattern. |
+| `pattern-unbound` | default | A typed step has a pattern, and no feature line resolves to that step alone. | Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step. |
+| `post-navigation-read` | default | A step's trace shows a call shortly after a navigation, and nothing shows that the page had finished rendering. The note gives the gap and makes no judgment. | If the read can run before the page renders, wait for the element, or retry the read with ctx.poll. |
+| `repeated-scenario-prefix` | default | Scenarios in the latest run open with the same steps. The note reports the measured repetition and recommends no fix. | No change is necessary. If the shared steps set up the same state each time, a Background or a fixture can hold them. |
+| `schema-field-undescribed` | --all | A field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means. | Add a .describe() that says what the field means to each field that the message names. |
+| `secrets-public-key-unknown` | default | A secrets.public entry names a key that no envFile defines. | Define the key in an envFile, or remove it from secrets.public. |
+| `secrets-redact-key-unknown` | default | A secrets.redact entry names a key that no envFile defines. | Define the key in an envFile, or remove it from secrets.redact. |
+| `step-description-todo` | default | A typed step's description is still the placeholder nuka scaffold wrote. | Replace the description with one sentence that says what the step does. |
 <!-- /generated -->

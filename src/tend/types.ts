@@ -26,6 +26,16 @@ export interface TendIssue {
   /** Set instead of `step` on a finding about a `config.fixtures` entry, so a
    * fixture and a step of the same name stay distinguishable in `--json`. */
   readonly fixture?: string;
+  /** Set where the finding is raised only when that place knows a more
+   * exact next step than the code's registry entry. */
+  readonly do?: string;
+}
+
+/** A finding as the report carries it: `do` always present, and `file`
+ * filled from the step's own file, or the config file for a finding about
+ * config, when the finding was raised without one. */
+export interface TendFinding extends TendIssue {
+  readonly do: string;
 }
 
 /** How much of a countable thing typed steps declare vs. could declare. */
@@ -73,8 +83,8 @@ export interface TendSummary {
 }
 
 export interface TendReport {
-  readonly errors: readonly TendIssue[];
-  readonly notes: readonly TendIssue[];
+  readonly errors: readonly TendFinding[];
+  readonly notes: readonly TendFinding[];
   readonly summary: TendSummary;
 }
 
@@ -85,7 +95,7 @@ export { DECLARATION_TEND_CODES, selectReportedNotes, type NoteSelection } from 
 // read it from here.
 export { DESCRIPTION_TODO_PREFIX } from "./description-todo.js";
 
-export { listTendCodes, type TendCode, type TendCodeEntry, type TendCodeInfo } from "./codes.js";
+export { listTendCodes, tendCodeDo, type TendCode, type TendCodeEntry, type TendCodeInfo } from "./codes.js";
 
 /** Every code a `nuka tend` finding can carry. `nuka tend --fail-on <code>`
  * refuses a code outside this set, so a typo cannot become a flag that

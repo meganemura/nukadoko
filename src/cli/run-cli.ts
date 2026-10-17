@@ -362,7 +362,7 @@ export async function runCli(
         assertFeaturesDirExists(rootDir, config);
         const stepNames = buildStepNames(vocabulary);
         const graph = buildFixtureGraph(config);
-        const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames, graph));
+        const summaries = [...vocabulary.values()].map((entry) => summarize(entry, stepNames, rootDir, graph));
         const importFailureSummaries = toImportFailureSummaries(importFailures);
         if (args.json) {
           // Top-level shape change from a bare array to `{ steps,
@@ -457,7 +457,7 @@ export async function runCli(
         // without it, `describe`'s "full contract" would fall back to a
         // builtins-only guess instead of this project's real fixture graph.
         const graph = buildFixtureGraph(config);
-        const contract = describeContract(entry, buildStepNames(vocabulary), graph);
+        const contract = describeContract(entry, buildStepNames(vocabulary), rootDir, graph);
         stdout.write(
           `${JSON.stringify(versioned("describe", { ...contract, import_failures: importFailureSummaries }), null, 2)}\n`,
         );

@@ -3,7 +3,7 @@ import { statSync } from "node:fs";
 import path from "node:path";
 import { analyzeProject, analyzeRunSelection } from "../check/analyze.js";
 import { listCheckCodes } from "../check/codes.js";
-import type { CheckIssue, CheckReport } from "../check/types.js";
+import type { CheckFinding, CheckIssue, CheckReport } from "../check/types.js";
 import { loadConfig } from "../config/load-config.js";
 import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
 import { resolveOathPaths } from "../feature/resolve-oaths.js";
@@ -76,12 +76,18 @@ function formatLocation(issue: CheckIssue): string {
 // A message can itself contain newlines (e.g. cucumber-expressions' own
 // error messages include a multi-line "^----^" pointer at the offending
 // column) — collapsed to single spaces here so the human-readable format's
-// "one line per issue" holds even then. `--json` never does this: JSON
+// one line per issue, plus its do line, holds even then. `--json` never does this: JSON
 // string encoding already handles embedded newlines faithfully, so the raw
 // message survives there.
-function formatIssueLine(severity: "error" | "warning", issue: CheckIssue): string {
+function formatIssueLine(severity: "error" | "warning", issue: CheckFinding): string {
   const singleLineMessage = issue.message.replace(/\s*\n\s*/g, " ");
-  return `${severity}\t${issue.code}\t${formatLocation(issue)}\t${singleLineMessage}`;
+  return `${severity}\t${issue.code}\t${formatLocation(issue)}\t${singleLineMessage}\n${formatDoLine(issue.do)}`;
+}
+
+// Indented like the file list of an import-failure group, so a reader
+// that splits on the tab-separated finding lines can skip it by prefix.
+function formatDoLine(text: string): string {
+  return `  do: ${text.replace(/\s*\n\s*/g, " ")}`;
 }
 
 const STEP_FILE_IMPORT_FAILED_CODE = "step-file-import-failed";
@@ -137,22 +143,22 @@ function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMa
 // whole group the same way naming one of them as "the" root cause already
 // isn't done above (groupImportFailuresByMessage's own comment) — `line` is
 // read only in the `files.length <= 1` branch below, on purpose.
-function formatImportFailureGroup(message: string, files: readonly string[], line: number | undefined): string {
-  const singleLineMessage = message.replace(/\s*\n\s*/g, " ");
+function formatImportFailureGroup(issue: CheckFinding, files: readonly string[]): string {
+  const singleLineMessage = issue.message.replace(/\s*\n\s*/g, " ");
   if (files.length <= 1) {
-    return `error\t${STEP_FILE_IMPORT_FAILED_CODE}\t${formatFileAndLine(files[0], line)}\t${singleLineMessage}`;
+    return `error\t${STEP_FILE_IMPORT_FAILED_CODE}\t${formatFileAndLine(files[0], issue.line)}\t${singleLineMessage}\n${formatDoLine(issue.do)}`;
   }
   const fileLines = files.map((file) => `  ${file}`).join("\n");
-  return `error\t${STEP_FILE_IMPORT_FAILED_CODE}\t(${files.length} files)\t${singleLineMessage}\n${fileLines}`;
+  return `error\t${STEP_FILE_IMPORT_FAILED_CODE}\t(${files.length} files)\t${singleLineMessage}\n${fileLines}\n${formatDoLine(issue.do)}`;
 }
 
 // One line per code, tab-separated (same column style `formatIssueLine`
-// already uses for a report line), code then severity then description —
-// severity is printed as `-` for a code this registry does not fix to one
+// already uses for a report line): code, severity, description, then the
+// code's general do. Severity is printed as `-` for a code this registry does not fix to one
 // side, rather than left out, so every line has the same column count to
 // parse against.
 function formatCodeLine(entry: ReturnType<typeof listCheckCodes>[number]): string {
-  return `${entry.code}\t${entry.severity ?? "-"}\t${entry.description}`;
+  return `${entry.code}\t${entry.severity ?? "-"}\t${entry.description}\t${entry.do}`;
 }
 
 export async function runCheck(options: RunCheckOptions): Promise<number> {
@@ -232,8 +238,8 @@ export async function readCheckTargets(
  * the same whichever command found it.
  */
 export function writeCheckIssueLines(
-  errors: readonly CheckIssue[],
-  warnings: readonly CheckIssue[],
+  errors: readonly CheckFinding[],
+  warnings: readonly CheckFinding[],
   sink: WritableSink,
 ): void {
   const importFailureGroups = groupImportFailuresByMessage(errors);
@@ -249,7 +255,7 @@ export function writeCheckIssueLines(
       }
       printedImportFailureMessages.add(issue.message);
       const files = importFailureGroups.get(issue.message) ?? [];
-      sink.write(`${formatImportFailureGroup(issue.message, files, issue.line)}\n`);
+      sink.write(`${formatImportFailureGroup(issue, files)}\n`);
       continue;
     }
     sink.write(`${formatIssueLine("error", issue)}\n`);

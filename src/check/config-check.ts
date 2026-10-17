@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { loadEnvFiles, parseEnvFile } from "../context/env.js";
 import { skippedEnvFileLines } from "../env/parse-env-file.js";
+import { resolveConfigFileName } from "../config/load-config.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
@@ -100,12 +101,15 @@ export async function checkConfig(
 ): Promise<ConfigCheckResult> {
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
+  const configFile = resolveConfigFileName(rootDir);
 
   const featuresRoot = path.join(rootDir, config.featuresDir);
   if (!existsSync(featuresRoot)) {
     errors.push({
       code: "features-dir-missing",
       message: `featuresDir "${config.featuresDir}" does not exist at ${featuresRoot}`,
+      file: configFile,
+      do: `mkdir -p ${path.posix.join(config.featuresDir, "steps")}, or correct featuresDir in ${configFile}`,
     });
   }
 
@@ -190,6 +194,7 @@ export async function checkConfig(
       warnings.push({
         code: "secrets-redact-key-too-short",
         message: `secrets.redact names "${key}", but its value is shorter than ${MIN_REDACTABLE_LENGTH} characters, so build-secret-set.ts will never actually redact it`,
+        file: configFile,
       });
     }
   }

@@ -5,6 +5,7 @@ import {
   REMOVED_TEND_CODES,
   selectReportedNotes,
   TEND_CODES,
+  type TendFinding,
   type TendIssue,
   type TendSummary,
 } from "../tend/types.js";
@@ -77,11 +78,11 @@ function formatLocation(issue: TendIssue): string {
 // Same newline-collapsing as cli/check.ts's own `formatIssueLine` — a
 // message can carry embedded newlines (e.g. a from-unused message quoting
 // another tool's own multi-line output), and text output's "one line per
-// issue" only holds if those are flattened; `--json` never does this, JSON
+// issue", plus its do line, only holds if those are flattened; `--json` never does this, JSON
 // string encoding already carries a raw newline faithfully.
-function formatIssueLine(severity: "error" | "note", issue: TendIssue): string {
+function formatIssueLine(severity: "error" | "note", issue: TendFinding): string {
   const singleLineMessage = issue.message.replace(/\s*\n\s*/g, " ");
-  return `${severity}\t${issue.code}\t${formatLocation(issue)}\t${singleLineMessage}`;
+  return `${severity}\t${issue.code}\t${formatLocation(issue)}\t${singleLineMessage}\n  do: ${issue.do}`;
 }
 
 // Two lines, matching docs/spec.md's own CLI summary phrasing for `nuka
@@ -110,7 +111,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
       stdout.write(`${JSON.stringify(versioned("tend_codes", { codes: entries }), null, 2)}\n`);
     } else {
       for (const entry of entries) {
-        stdout.write(`${entry.code}\t${entry.reportedByDefault ? "default" : "--all"}\t${entry.description}\n`);
+        stdout.write(`${entry.code}\t${entry.reportedByDefault ? "default" : "--all"}\t${entry.description}\t${entry.do}\n`);
       }
     }
     return 0;

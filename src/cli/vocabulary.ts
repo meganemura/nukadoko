@@ -11,6 +11,7 @@ import {
   type VocabularyEntry,
 } from "../discover/discover-steps.js";
 import { formatVocabularyError } from "../discover/format-vocabulary-error.js";
+import { rootRelativeStepFile } from "../check/unbound-patterned.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
@@ -320,6 +321,8 @@ function partsHumanReadable(
 export interface StepSummary {
   readonly name: string;
   readonly kind: "typed" | "compat";
+  /** The step file that defines the step, root-relative. */
+  readonly file: string;
   readonly patterns: readonly string[];
   readonly description?: string;
   readonly mutates?: boolean;
@@ -475,11 +478,18 @@ function needsFields(
  * (`needs_browser` falls back to `stepNeeds`'s own direct membership
  * check) — `nuka steps --json`'s own handler (run-cli.ts) is the one
  * caller that builds and passes one. */
-export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: FixtureGraph): StepSummary {
+export function summarize(
+  entry: VocabularyEntry,
+  stepNames: StepNames,
+  rootDir: string,
+  graph?: FixtureGraph,
+): StepSummary {
+  const file = rootRelativeStepFile(rootDir, entry);
   if (entry.kind === "compat") {
     return {
       name: entry.name,
       kind: "compat",
+      file,
       patterns: [entry.compat.patternSource],
     };
   }
@@ -487,6 +497,7 @@ export function summarize(entry: VocabularyEntry, stepNames: StepNames, graph?: 
   return {
     name: entry.name,
     kind: "typed" as const,
+    file,
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
@@ -611,6 +622,8 @@ export type JsonSchema = Record<string, unknown>;
 export interface TypedStepContract {
   readonly kind: "typed";
   readonly name: string;
+  /** Same field as `StepSummary.file`. */
+  readonly file: string;
   readonly patterns: readonly string[];
   readonly description: string;
   readonly mutates: boolean;
@@ -673,6 +686,7 @@ export interface TypedStepContract {
 export interface CompatStepContract {
   readonly kind: "compat";
   readonly name: string;
+  readonly file: string;
   readonly pattern: string;
   readonly message: string;
 }
@@ -712,11 +726,18 @@ function schemaSide(
  * (run-cli.ts) is the caller that builds and passes one, the same
  * `buildFixtureGraph(config)` call `nuka steps --json`'s handler already
  * makes. */
-export function describeContract(entry: VocabularyEntry, stepNames: StepNames, graph?: FixtureGraph): StepContract {
+export function describeContract(
+  entry: VocabularyEntry,
+  stepNames: StepNames,
+  rootDir: string,
+  graph?: FixtureGraph,
+): StepContract {
+  const file = rootRelativeStepFile(rootDir, entry);
   if (entry.kind === "compat") {
     return {
       kind: "compat",
       name: entry.name,
+      file,
       pattern: entry.compat.patternSource,
       message:
         'compat steps have no type contract; promote this pattern to defineStep to add one (docs/spec.md "Compat steps (the migration door)")',
@@ -728,6 +749,7 @@ export function describeContract(entry: VocabularyEntry, stepNames: StepNames, g
   return {
     kind: "typed",
     name: entry.name,
+    file,
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,

@@ -27,18 +27,24 @@ const llms = readFileSync(path.join(repoRoot, "llms.txt"), "utf8");
 const regenerate = "run `npm run build && node scripts/llms-codes.ts`";
 
 describe("llms.txt code tables", () => {
-  it("lists every nuka check code with its severity and description", () => {
+  it("lists every nuka check code with its severity, description, and do", () => {
     const rows = parseTable(readGenerated(llms, checkTable([]).marker));
-    const expected = listCheckCodes().map((entry) => [`\`${entry.code}\``, entry.severity ?? "-", entry.description]);
+    const expected = listCheckCodes().map((entry) => [
+      `\`${entry.code}\``,
+      entry.severity ?? "-",
+      entry.description,
+      entry.do,
+    ]);
     expect(rows, regenerate).toEqual(expected);
   });
 
-  it("lists every nuka tend code with when it is reported and its description", () => {
+  it("lists every nuka tend code with when it is reported, its description, and do", () => {
     const rows = parseTable(readGenerated(llms, tendTable([]).marker));
     const expected = listTendCodes().map((entry) => [
       `\`${entry.code}\``,
       entry.reportedByDefault ? "default" : "--all",
       entry.description,
+      entry.do,
     ]);
     expect(rows, regenerate).toEqual(expected);
   });
@@ -59,10 +65,10 @@ describe("nuka tend --codes", () => {
     const lines = stdout.text().trimEnd().split("\n");
     expect(lines).toHaveLength(12);
     expect(lines[0]).toBe(
-      "fixture-touches-app\tdefault\tA config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.",
+      "fixture-touches-app\tdefault\tA config.fixtures definition reaches page or context, directly or through another fixture, so it can set up a precondition that no feature line names.\tIf a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary.",
     );
     expect(lines.find((line) => line.startsWith("schema-field-undescribed\t"))).toBe(
-      "schema-field-undescribed\t--all\tA field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.",
+      "schema-field-undescribed\t--all\tA field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.\tAdd a .describe() that says what the field means to each field that the message names.",
     );
   });
 
@@ -82,6 +88,7 @@ describe("nuka tend --codes", () => {
       code: "pattern-unbound",
       description: "A typed step has a pattern, and no feature line resolves to that step alone.",
       reportedByDefault: true,
+      do: "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
     });
   });
 });

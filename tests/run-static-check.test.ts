@@ -17,8 +17,13 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
+/** One entry per finding: its line joined to the do line under it. */
+function findingLines(text: string): string[] {
+  return nonEmptyLines(text.replace(/\n  do: /g, "\tdo: "));
+}
+
 function errorLines(text: string): string[] {
-  return nonEmptyLines(text).filter((line) => line.startsWith("error\t"));
+  return findingLines(text).filter((line) => line.startsWith("error\t"));
 }
 
 async function run(rootDir: string, argv: string[]) {
@@ -54,6 +59,7 @@ describe("nuka run checks before it executes", () => {
     expect(result.stderr).toBe(
       "error\tundefined-step\tfeatures/mixed.feature:9\t" +
         'No step definition matches "this line matches no step"; run `nuka scaffold --feature features/mixed.feature` to add one\n' +
+        "  do: nuka scaffold --feature features/mixed.feature\n" +
         "nuka run did not start: nuka check reports 1 error for these scenarios. " +
         "Fix them, or pass --no-check to run anyway.\n",
     );
@@ -239,7 +245,7 @@ describe("nuka check with several targets", () => {
 
           // "ok: no issues found" stands for an empty report, not a finding.
           const findings = async (targets: string[]) =>
-            nonEmptyLines((await run(rootDir, ["check", ...targets])).stdout).filter((line) => !line.startsWith("ok: "));
+            findingLines((await run(rootDir, ["check", ...targets])).stdout).filter((line) => !line.startsWith("ok: "));
           const both = await findings([a, b]);
           const onlyA = await findings([a]);
           const onlyB = await findings([b]);
