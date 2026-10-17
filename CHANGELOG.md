@@ -531,6 +531,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A failed step's line and its `used` line name a crashed Node program's error.**
+  Node writes where an uncaught error was thrown, that source line, and a
+  line of carets before the error itself, so both lines read
+  `node:internal/modules/cjs/loader:1568` for a missing build or an
+  uncaught throw. They now skip exactly that header and show the
+  `Error: ...` line after it, keeping any text before the location; any
+  other text keeps its first line.
 - **`nuka scaffold --pattern` and `--description` take a value that starts with a dash.**
   The parser read a word such as `-` or `-x` after the flag as a flag of
   its own, so `nuka scaffold dash --pattern -` refused with

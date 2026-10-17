@@ -56,12 +56,27 @@ export function firstErrorLine(message: string): string {
   return firstVisibleLine(message) ?? "(no message)";
 }
 
+// What Node writes to stderr for an uncaught error before the error itself:
+// where it was thrown (an absolute path, a file URL, or a `node:` module,
+// then `:<line>`), that source line, and a line of carets under it. A step
+// that puts a program's stderr in its message prefixes it (`<cmd> exited 1:
+// <stderr>`), so the location may follow a `: `. The three lines together
+// are the only shape matched, because any other first line already says
+// something about the failure and must stay.
+const NODE_THROW_LOCATION = /^(?:(.*?): )?(?:node:|file:\/\/|\/|[A-Za-z]:[\\/]).*:\d+$/;
+const CARETS = /^\s*\^+\s*$/;
+
 function firstVisibleLine(text: string): string | undefined {
-  for (const line of text.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/)) {
-    const trimmed = line.trim();
-    if (trimmed.length > 0) return trimmed;
+  const lines = text.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/);
+  const first = lines.findIndex((line) => line.trim().length > 0);
+  if (first === -1) return undefined;
+  const firstLine = lines[first]!.trim();
+  const location = NODE_THROW_LOCATION.exec(firstLine);
+  if (location !== null && first + 2 < lines.length && CARETS.test(lines[first + 2]!)) {
+    const error = firstVisibleLine(lines.slice(first + 3).join("\n"));
+    if (error !== undefined) return location[1] === undefined ? error : `${location[1]}: ${error}`;
   }
-  return undefined;
+  return firstLine;
 }
 
 /** A step the failed step read from, whose result was a process that

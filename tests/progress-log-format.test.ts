@@ -76,6 +76,65 @@ describe("firstErrorLine", () => {
   });
 });
 
+// The header Node writes before an uncaught error: where it was thrown,
+// that source line, and carets under it.
+const nodeLocation = gs.oneOf(
+  gs.sampledFrom(["node:internal/modules/cjs/loader", "node:internal/modules/esm/resolve"]),
+  gs.text({ minSize: 1, maxSize: 20, alphabet: "abc/._- " }).map((rest) => `/${rest}.js`),
+  gs.text({ minSize: 1, maxSize: 20, alphabet: "abc/._-" }).map((rest) => `file:///${rest}.mjs`),
+  gs.text({ minSize: 1, maxSize: 20, alphabet: "abc\\._- " }).map((rest) => `C:\\${rest}.js`),
+);
+const nodeHeader = gs.tuples(
+  nodeLocation,
+  gs.integers({ minValue: 1, maxValue: 99999 }),
+  gs.text({ maxSize: 30, alphabet: "abc(){};= \"'^:" }),
+  gs.integers({ minValue: 0, maxValue: 8 }),
+  gs.integers({ minValue: 1, maxValue: 6 }),
+).map(([location, line, source, indent, carets]) => `${location}:${line}\n${source}\n${" ".repeat(indent)}${"^".repeat(carets)}`);
+const nodeHeaderEnd = gs.sampledFrom(["\n\n", "\n"]);
+const messageWithText = gs.text({ maxSize: 60 }).filter((text) => firstErrorLine(text) !== "(no message)");
+
+describe("firstErrorLine: a Node uncaught-error header", () => {
+  it("reads past the header to the line after it", () =>
+    hegel.test((tc) => {
+      const message = tc.draw(messageWithText);
+      const header = tc.draw(nodeHeader);
+      expect(firstErrorLine(header + tc.draw(nodeHeaderEnd) + message)).toBe(firstErrorLine(message));
+    }));
+
+  it("keeps a prefix that comes before the header's location", () =>
+    hegel.test((tc) => {
+      const prefix = tc.draw(gs.text({ minSize: 1, maxSize: 20, alphabet: "abc123" }));
+      const message = tc.draw(messageWithText);
+      const header = tc.draw(nodeHeader);
+      expect(firstErrorLine(`${prefix}: ${header}${tc.draw(nodeHeaderEnd)}${message}`)).toBe(
+        `${prefix}: ${firstErrorLine(message)}`,
+      );
+    }));
+
+  it("names the error Node printed for a missing module", () => {
+    const stderr = [
+      "node:internal/modules/cjs/loader:1568",
+      "  throw err;",
+      "  ^",
+      "",
+      "Error: Cannot find module '/repo/dist/cli.js'",
+      "    at Module._resolveFilename (node:internal/modules/cjs/loader:1564:15)",
+      "",
+      "Node.js v24.22.0",
+    ].join("\n");
+    expect(firstErrorLine(`stow init exited 1: ${stderr}`)).toBe("stow init exited 1: Error: Cannot find module '/repo/dist/cli.js'");
+    expect(
+      formatStepFailure({ errorMessage: "exit: expected 0, got 1", recordPath: null, used: [{ step: "run-missing", result: { exitCode: 1, stderr } }] }),
+    ).toEqual(["exit: expected 0, got 1", "used    run-missing  exit 1  Error: Cannot find module '/repo/dist/cli.js'"]);
+  });
+
+  it("keeps a location line that no caret line follows", () => {
+    expect(firstErrorLine("/repo/src/a.ts:12\nexpected 1, got 2")).toBe("/repo/src/a.ts:12");
+    expect(firstErrorLine("node:internal/x:3\n  throw err;\n")).toBe("node:internal/x:3");
+  });
+});
+
 describe("formatStepFailure", () => {
   it("names the error line, then the step record when there is one", () => {
     expect(

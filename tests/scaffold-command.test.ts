@@ -397,6 +397,24 @@ describe("nuka scaffold --command", () => {
     );
   });
 
+  it("names the error, not Node's throw location, when the producer's program crashed", async () => {
+    await mkdir(path.join(rootDir, "src"));
+    await writeFile(path.join(rootDir, "src", "greet.cjs"), 'require("../dist/cli.js");\n');
+    const entry = path.join(rootDir, "src", "greet.cjs");
+    await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", entry]);
+    await cli(rootDir, ["scaffold", "exit-is", "--pattern", "it exits {code:int}", "--then", "--from", "run-greet.exitCode"]);
+    await writeFile(
+      path.join(rootDir, "features", "exit.feature"),
+      ["Feature: exit", "  Scenario: exits zero", '    When I run greet with "Ada"', "    Then it exits 0", ""].join("\n"),
+    );
+
+    const run = await cli(rootDir, ["run", "features/exit.feature"]);
+    expect(run.exitCode).toBe(1);
+    expect(run.stderr).toContain(
+      "\n      code: expected 0, got 1\n      used    run-greet  exit 1  Error: Cannot find module '../dist/cli.js'\n",
+    );
+  });
+
   it("runs a real program green with the entry point named on the command line, with no edit to the When step", async () => {
     await mkdir(path.join(rootDir, "src"));
     await writeFile(path.join(rootDir, "src", "greet.mjs"), 'process.stdout.write(`Hello, ${process.argv[2]}!\\n`);\n');

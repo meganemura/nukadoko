@@ -2096,7 +2096,12 @@ line names each `used` entry whose `result` is a process that exited
 nonzero: an object with a number `exitCode` other than 0 and a string
 `stderr`, the shape `runCommand` returns. The line reads `used    <step>
 exit <code>  <first line of stderr>`, or `(no stderr)` when the process
-wrote nothing visible, in `used` order. It says why a Then step read an
+wrote nothing visible, in `used` order. The error line and this line skip the header
+Node writes before an uncaught error (the location it was thrown from,
+that source line, and a line of carets) and take the first visible line
+after it, such as `Error: Cannot find module '../dist/cli.js'`, so a
+crashed Node program is named by its error. Text before the location and
+a `: ` is kept. Any other text keeps its own first line. It says why a Then step read an
 empty stdout: the program it ran did not start, or failed, and the step
 that ran it still passed, because an exit code is a result, not a failure.
 The text comes from the step record, so a secret in it is already
