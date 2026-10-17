@@ -453,6 +453,12 @@ just until 0.1.
   to downgrade. The peer is the range `^1.61.1`, and the guide now says
   that npm refuses only a Playwright outside it.
 
+- **A reader that closes stdout early no longer makes `nuka` print a Node stack.**
+  `nuka check --codes | head -3` printed a 20-line `write EPIPE` stack on
+  stderr, because nothing listened for errors on stdout. The CLI now
+  ignores EPIPE on stdout and stderr and exits with the code the command
+  already decided. Any other stream error still surfaces.
+
 ## 0.16.1 — 2026-10-17
 
 ### Fixed

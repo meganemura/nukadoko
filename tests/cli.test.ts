@@ -509,6 +509,26 @@ describe("nuka (process)", () => {
     }
   });
 
+  it.each([
+    { args: ["check", "--codes"], cwd: repoRoot },
+    { args: ["steps", "--json"], cwd: fixture("basic-project") },
+  ])("exits 0 with nothing on stderr when the stdout reader of `nuka $args` closes early", async ({ args, cwd }) => {
+    const cliPath = path.join(repoRoot, "src", "cli.ts");
+    const child = spawn(process.execPath, [...sourceNodeArgs, cliPath, ...args], { cwd, stdio: ["ignore", "pipe", "pipe"] });
+    child.stdout.destroy();
+    const stderrChunks: Buffer[] = [];
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrChunks.push(chunk);
+    });
+    const exitCode = await new Promise<number | null>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", (code) => resolve(code));
+    });
+
+    expect(withoutNoConfigLine(Buffer.concat(stderrChunks).toString("utf8"))).toBe("");
+    expect(exitCode).toBe(0);
+  });
+
   it("prints one stderr line and exits 1 when a command handler throws", async () => {
     // Node prints the uncaught-exception dump after cli.ts's top-level
     // await rejects. A runCli() call in this process can catch that
