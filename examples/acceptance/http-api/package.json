@@ -1,0 +1,8 @@
+{
+  "name": "example-http-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:scenarios": "nuka run"
+  }
+}

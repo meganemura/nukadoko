@@ -41,6 +41,7 @@ build and the tests were measured without it.
 | `npm run archstrict` | Checks module boundaries against the package exports |
 | `npm run coverage` | Builds, then runs the tests with coverage |
 | `npm run build` | Compiles `src/` to `dist/` |
+| `npm run skill-examples` | Builds, packs, and runs the acceptance skill's worked examples from the tarball |
 
 Every command above that needs a build runs it in its own body rather than
 through npm's `pretest` hook, because `ignore-scripts` turns those hooks off

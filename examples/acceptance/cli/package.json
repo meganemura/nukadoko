@@ -1,0 +1,8 @@
+{
+  "name": "example-cli",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:scenarios": "nuka run"
+  }
+}

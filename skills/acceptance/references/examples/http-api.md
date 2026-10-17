@@ -2,7 +2,9 @@
 
 A finished project for an API on `node:http`, built with nukadoko 0.16.1
 on Node 24.22.0. Every output block below is copied from a real run of
-that project. The rules it follows are in `../scenario-rules.md`.
+that project, which is `examples/acceptance/http-api/` in the nukadoko
+repository; CI runs it. The rules it follows are in
+`../scenario-rules.md`.
 
 ## The ticket
 
@@ -222,7 +224,9 @@ ok: no issues found
 $ npx nuka run
 ...
 scenario 4/7  features/items.feature:50  a bad request body: not json answers 400
+...
 scenario 5/7  features/items.feature:51  a bad request body: {} answers 422
+...
 scenario 6/7  features/items.feature:52  a bad request body: {"name":""} answers 422
 ...
 7 scenarios: 7 passed, 0 failed  (1s)

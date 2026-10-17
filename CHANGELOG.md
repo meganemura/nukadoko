@@ -252,6 +252,21 @@ just until 0.1.
 
 ### Packaging
 
+- **The acceptance skill's worked examples run in CI.**
+  Each example's project is now in the repository under
+  `examples/acceptance/` (`cli`, `http-api`, `workflow`), outside the
+  tarball; the Markdown under `skills/acceptance/references/examples/`
+  still ships. `tests/skill-examples.test.ts` fails when a gherkin or ts
+  block in that Markdown is not the whole content of one of the project's
+  files, or when a feature file is not quoted. `npm run skill-examples`
+  packs the checkout, installs the tarball into a copy of each project
+  outside the repository, runs `nuka check`, `nuka run`, and `nuka tend`,
+  and compares their output with the Markdown's transcripts: durations
+  are masked, a finding line is compared up to its file, and a `...` line
+  stands for any run of lines. CI's packed-tarball job and the publish
+  workflow run it. The HTTP API example's
+  `nuka run` transcript gains the `...` lines it had left out between
+  scenarios.
 - **A test keeps the tarball's agent-facing files shipped and their links live.**
   `tests/package-files.test.ts` reads `npm pack --dry-run --json` and fails
   when llms.txt, a skill file, or one of the docs an agent is pointed at is

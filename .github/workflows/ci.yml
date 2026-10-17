@@ -77,3 +77,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: node --version
       - run: node scripts/pack-check.mjs
+      # The acceptance skill's worked examples, each run from a copy of its
+      # project under examples/acceptance/ against the same kind of install,
+      # and compared with the transcripts its Markdown quotes.
+      - run: node scripts/skill-examples.ts

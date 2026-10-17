@@ -1,0 +1,8 @@
+{
+  "name": "example-workflow",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:scenarios": "nuka run"
+  }
+}

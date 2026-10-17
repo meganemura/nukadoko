@@ -34,7 +34,8 @@
     "selftest": "npm run build && node selftest-suite/run-selftest.mjs",
     "prepublishOnly": "npm run build",
     "coverage": "npm run build && vitest run --coverage",
-    "pack-check": "npm run build && node scripts/pack-check.mjs"
+    "pack-check": "npm run build && node scripts/pack-check.mjs",
+    "skill-examples": "npm run build && node scripts/skill-examples.ts"
   },
   "keywords": [
     "cucumber",

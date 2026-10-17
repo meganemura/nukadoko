@@ -2,8 +2,9 @@
 
 A finished project for a sign-up flow whose steps call the module under
 test directly, built with nukadoko 0.16.1 on Node 24.22.0. Every output
-block below is copied from a real run of that project. The rules it
-follows are in `../scenario-rules.md`.
+block below is copied from a real run of that project, which is
+`examples/acceptance/workflow/` in the nukadoko repository; CI runs it.
+The rules it follows are in `../scenario-rules.md`.
 
 ## The ticket
 

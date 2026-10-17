@@ -121,6 +121,7 @@ jobs:
       - run: npm test
       - run: npm run selftest
       - run: npm run pack-check
+      - run: node scripts/skill-examples.ts
 
       - name: Refuse unexpected changes to tracked files
         run: |

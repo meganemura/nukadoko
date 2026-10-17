@@ -2,7 +2,8 @@
 
 A finished project for a program run from the command line, built with
 nukadoko 0.16.1 on Node 24.22.0. Every output block below is copied from
-a real run of that project. The rules it follows are in
+a real run of that project, which is `examples/acceptance/cli/` in the
+nukadoko repository; CI runs it. The rules it follows are in
 `../scenario-rules.md`.
 
 ## The ticket
