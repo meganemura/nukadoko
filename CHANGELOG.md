@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.17.0 — 2026-10-17
+
 ### Breaking
 
 - **`nuka run`'s step lines on stderr say `passed`, `failed`, and `skipped`.**

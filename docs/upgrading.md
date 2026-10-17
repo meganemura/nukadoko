@@ -39,7 +39,7 @@ This part does not change release to release.
   a refusal exits 2, and `nuka clean` takes no `--records`, `--cache`, or
   `--export`.
 
-## 0.16.1 to the next release
+## 0.16.1 to 0.17.0
 
 - **`nuka run` writes no scenario record to stdout when stdout is a
   terminal.** A pipe, a file, a CI log, and a shell an agent drives through
@@ -315,8 +315,8 @@ This part does not change release to release.
   same output. The old spelling exits 1 and names the new one, so a
   script that ran `nuka mcp-tools -- <command>` becomes
   `nuka experimental mcp-tools -- <command>`. Under `experimental`, its
-  shape may change in a later release without a deprecation notice. The
-  next release removes both spellings; see "0.16.1 to the next release".
+  shape may change in a later release without a deprecation notice. 0.17.0
+  removes both spellings; see "0.16.1 to 0.17.0".
 
 `nuka run` now refuses what `nuka check` refuses, which a project that runs a feature `check` reports an error for has to act on.
 
