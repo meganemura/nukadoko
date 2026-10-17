@@ -1,48 +1,62 @@
 # nukadoko
 
-Typed Gherkin / step contracts with tool-measured step records. Scenarios can fail statically before run; every run writes a Markdown run summary that a pull request carries. Declaration (contracts, `mutates`) is separate from observation (what the tool recorded).
+> Typed step contracts for Gherkin. `nuka check` tells a scenario wrong before it runs. `nuka run` executes it and writes step records the tool measured, not ones an agent reported, plus a Markdown run summary a pull request carries. A person approves the pull request, and that is the sign-off.
 
-It is not an untyped free-form agent runner, and it is not a substitute for human review: a person reads the `.feature` in the diff and the run summary, and approving the pull request is the sign-off.
+It is not an untyped free-form agent runner, and it is not a substitute for human review: a person reads the `.feature` in the diff and the run summary.
 
-Agent skills: [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md), [skills/migration/SKILL.md](skills/migration/SKILL.md). Each entry says when to use it and which `references/` file beside it holds the procedure. `nuka skill path` prints the skills directory.
+Declaration is separate from observation. A step declares `mutates`, its `args` and `returns` schemas, and what it chains `from`; the record holds what the tool saw.
 
-Installed package: `node_modules/nukadoko/skills/...` (this file at `node_modules/nukadoko/llms.txt`).
+## Install
 
-## Commands
+- `npm install -D nukadoko` installs the `nuka` CLI. It installs no browser. Playwright is an optional peer, needed only by a step whose fixtures build `page`, `context`, or `request`; `nuka check` reports `playwright-missing` for such a step when Playwright does not resolve. README.md "Install" names the Node and Playwright versions.
+- `npx nuka init` writes `nukadoko.config.ts` (`nukadoko.config.mts` in a project whose `package.json` has no `"type": "module"`, and step files are then `.mts` too, which it says on stderr), creates `features/steps/`, adds a `test:scenarios` script, adds `.nukadoko/` to `.gitignore`, and, when `tsconfig.json` exists, adds the steps and the config to its `include` and `rewriteRelativeImportExtensions` to its `compilerOptions`. stdout lists each path it wrote; a failed self-check exits 1. Flags: `nuka init --base-url <url> --features-dir <dir> --allure --env-files`.
+- Run `nuka` from the directory that holds the config. Elsewhere every command says on stderr that no config was found, names one in a parent directory if there is one, and runs on the defaults; `nuka scaffold` refuses there.
+- Commit `features/` and the config. `.nukadoko/` is the state directory (records, sessions, cache) and stays out of git. Never edit a record by hand, and never delete one to get a cleaner run.
+- A step is a file under `features/steps/` that starts with `import { defineStep, z } from "nukadoko"`. An existing cucumber-js suite comes in through `nukadoko/compat`.
+- Skills, for any Agent Skills host: `gh skill install meganemura/nukadoko --all`. The copy that matches the installed version is in `node_modules/nukadoko/skills/`, and `nuka skill path` prints that directory. This file is `node_modules/nukadoko/llms.txt`.
 
-The everyday loop is four things: a `.feature` file, a `defineStep` per kind of line, `nuka check`, and `nuka run`. README.md "Beside your unit tests" walks through it for a CLI project.
+## The loop
 
-Everyday:
+Run them in this order. Exit 0 is the only pass.
 
-- `nuka init`: project setup with self-check; adds `.nukadoko/` to `.gitignore`, a `test:scenarios` script, the steps and the config to `tsconfig.json`'s `include`, and `rewriteRelativeImportExtensions` to its `compilerOptions`
-- `nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>]] [--from <step>.<key>] [--description <text>]`: a step stub that fails until implemented; `--description` writes the step's description, which is otherwise a TODO `nuka tend` reports as `step-description-todo`; `--from` writes the chain to an earlier step's returned value; `--then` with one capture and at most one `--from` writes a body that compares `actual` (the `--from` value, or `undefined` under a TODO) with the capture through `node:assert/strict`, with a message naming both values; `--command` writes a When step that runs a program and returns `exitCode`, `stdout`, and `stderr`; its value is the entry point, which must be an existing file that plain `node` can start (a `.ts` entry point importing an absent `./x.js` beside an `x.ts` is refused), and without one the step throws `fill in the entry point: <file>:<line>` until that line is filled in
-- `nuka scaffold --feature <path>`: one stub for each line `nuka check <path>` calls `undefined-step`, the pattern read from the line (`{value:string}`, `{value:int}`, `{value:float}`) and `mutates: false` for a Then line; a line that reads more than one way, or whose reading would match another line, keeps its text as the pattern with no capture and gets a `note:` line on stderr
-- `nuka check [feature..]`: static checks before run, for the files `nuka run` would select for the same targets (several files or a directory); the whole project with no target; a step that needs `playwright` the project has not installed is an error here
-- `nuka run [feature..]`: execute scenarios, featuresDir with no target; first refuses what `check` refuses for its scenarios (`--no-check` skips that); records on stdout when it is not a terminal (`--records` writes them to a terminal too; `--json` prints the run's `run.json` instead: verdict, counts, each scenario's record and `rerun` command), progress and failures on stderr, a Markdown run summary (`--summary <path>` for a PR comment)
-- `nuka steps` / `nuka describe <name>`: the vocabulary and one step's contract
+- `nuka steps [--json]`: the whole vocabulary, typed and compat: name, patterns, description, `mutates`.
+- `nuka describe <name>`: one step's full contract, schemas as JSON Schema.
+- `nuka scaffold <name> --pattern <text> [--then | --command [<entry point>]] [--from <step>.<key>] [--description <text>]`: a step file that fails until implemented. `--then` writes `mutates: false` and no `returns`; with one capture and at most one `--from`, its body compares `actual` (the `--from` value, or `undefined` under a TODO) with the capture through `node:assert/strict`, with a message naming both values. `--command` writes a When step that runs a program and returns `exitCode`, `stdout`, and `stderr`; its value must be an existing file that plain `node` can start, and without one the step throws `fill in the entry point: <file>:<line>` until that line is filled in. `--from` chains a key of an earlier step's `returns` into `args`, and repeats. Without `--description`, `nuka tend` reports `step-description-todo`.
+- `nuka scaffold --feature <path>`: one stub for each line `nuka check <path>` reports as `undefined-step`, the pattern read from the line (`{value:string}`, `{value:int}`, `{value:float}`) and `mutates: false` for a Then line. A line that reads more than one way keeps its text as the pattern, with no capture, and gets a `note:` line on stderr.
+- `nuka check [feature..] [--json]`: static checks for the files `nuka run` would select (a file, several, a directory, or every feature with no target). Exit 1 on any error; warnings alone exit 0. `nuka check --codes` prints every code it can report; the table under "Findings" is that list.
+- `nuka run [feature..] [--no-check] [--env <name>] [--session <name>] [--quiet] [--concurrency <n>] [--repeat <n>] [--summary <path>] [--records] [--json]`: runs `check` first for the selected scenarios and refuses on an error (`--no-check` runs anyway). `<file>:<line>` runs one scenario. Progress, failures, and the paths it wrote go to stderr. Scenario records, one JSON line each, go to stdout when stdout is not a terminal; `--records` writes them to a terminal too, and `--json` prints the run's `run.json` instead (verdict, counts, each scenario's record and `rerun` command). The Markdown run summary is always written under `.nukadoko/` and appended to `$GITHUB_STEP_SUMMARY` when that is set; `--summary <path>` writes a copy for a pull request comment. On a failure, copy the `rerun` line it prints.
+- `nuka tend [--json] [--all] [--fail-on <code>]`: what is rotting, not what is broken. Every finding is a note, and the exit code is 0 unless `--fail-on` names a code it reports. `--all` adds the codes marked `--all` in the table. `nuka tend --codes` prints every code.
 
-Exploring:
+Exploring one step at a time, when the path is not known yet:
 
-- `nuka do <name>`: execute one typed step under its contract; step record on stdout
-- `nuka session`: list, clear, start, or stop sessions
+- `nuka do <name> --args <json> [--use <step record id>] [--session <name>] [--env <name>]`: one typed step under its contract; the step record goes to stdout with its id. `--use` fills the step's `from` keys from an earlier record and repeats; `--args` may be left out only when `--use` supplies every key.
 
-Upkeep:
+## Other commands
 
-- `nuka tend`: rot signals, never a gate by default
-- `nuka clean`: delete accumulated records and cache under the state directory
-- `nuka skill path`: where the bundled skills live
-
-Experimental (may change without notice):
-
-- `nuka experimental explore <file> [--json]`: run a model or a relation against request-only steps; prints the shortest failing scenario, or one JSON object with `--json`
-
-Prefer `check` before `run`. Do not treat agent narrative as the step record.
+- `nuka session list [--json]`, `nuka session clear [name] [--env <name>]`, `nuka session start <name> [--env <name>] [--idle-timeout <seconds>]`, `nuka session stop <name> [--env <name>]`: a session carries login state across `nuka do --session` and `nuka run --session` calls. `start` holds one `ctx` open in a detached process until `stop`, or until it has been idle for `--idle-timeout` seconds (default 900).
+- `nuka clean [--dry-run] [--records] [--cache] [--export] [--json]`: delete accumulated records, cache, and exports under the state directory. It refuses while a session is live.
+- `nuka skill path`: the skills directory, one absolute path.
+- Experimental, may change shape or disappear without notice: `nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]` runs a model or relation file against request-only steps. On a failure, the shortest scenario found and the command that reruns it go to stdout. The seed is printed when omitted; pass it back to replay.
 
 Every JSON document nukadoko writes or prints (records, `--json` output, `nuka describe`) starts with `schema_version`, one integer per kind of document; test it before trusting the shape. Step and scenario records also carry `nukadoko`, the version that wrote them.
 
+## Documentation
+
+- [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md): a requirement to a pull request a person approves. `references/` beside it holds each procedure: writing steps, writing the feature, running, diagnosing, exploring, models, fixtures, evidence, maintenance, and starting from prose.
+- [skills/migration/SKILL.md](skills/migration/SKILL.md): moving a cucumber-js or Playwright Test suite across, in two stages.
+- [docs/spec.md](docs/spec.md): the design. "Typed steps" for `defineStep`; "Running" for scenarios and single steps; "Records" for every file a run writes; "Sessions, environments, secrets"; "Review" for what a person reads; "Tending"; "Markdown oaths"; "Models and relations"; "CLI summary" for every command and flag; "Out of scope (honest limits)".
+- [docs/ci.md](docs/ci.md): the GitHub Actions job and the pull request comment.
+- [docs/upgrading.md](docs/upgrading.md): what a project changes between releases.
+- [docs/migration.md](docs/migration.md) and [docs/migration-playwright-test.md](docs/migration-playwright-test.md): the two migration doors in full.
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release.
+
+Prefer `check` before `run`. Do not treat agent narrative as the step record. Stop after three failed repair attempts and report where things stand.
+
 ## Findings
 
-Each finding names its `file` and a `do`: the next command or edit, with known values filled in. Text output prints it as a `  do:` line under the finding. Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` print the same lists with each code's general `do`, and `--json` prints them as JSON. A tend code marked `--all` is reported only under `nuka tend --all`, or when `--fail-on` names it.
+A finding is a line `<severity>\t<code>\t<file>[:<line>]\t<message>`, where the severity is `error` or `warning` from `check` and `note` from `tend`, followed by a `  do:` line: the next command or edit, with the known values filled in (`nuka scaffold --feature features/greet.feature` for an `undefined-step`). With `--json`, `check` prints `{ "schema_version", "errors", "warnings" }` and `tend` prints `{ "schema_version", "errors", "notes", "summary" }`; each finding has `code`, `message`, `file`, and `do`, and `line` and `step` when they are known (`fixture` on a tend note about a fixture). Switch on `code`, and do what `do` says.
+
+Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` print the same lists with each code's general `do`, and `--json` prints them as JSON. A tend code marked `--all` is reported only under `nuka tend --all`, or when `--fail-on` names it.
 
 ### `nuka check`
 

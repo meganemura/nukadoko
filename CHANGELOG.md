@@ -247,7 +247,18 @@ just until 0.1.
   Markdown file lands outside the packed files. The two links from
   `docs/releasing.md` to the publish workflow are the named exception: that
   page is read from a checkout. `tests/docs-cli-names.test.ts` also fails
-  when llms.txt stops naming a top-level `nuka` command.
+  when llms.txt stops naming a `nuka` command or any of its subcommands
+  (`nuka session stop`, `nuka skill path`).
+
+- **llms.txt is written for an agent that starts from an empty context, and the CLI points at it.**
+  The file now opens with a one-paragraph summary, then says how to
+  install (the config file name and its `.mts` case, the `.nukadoko/`
+  state directory, what to commit), the loop in the order an agent runs
+  it with the flags each call needs (`nuka do --args`, `nuka check
+  --codes`, `nuka tend --fail-on` and `--all`, every `nuka run` flag), the
+  other commands, the finding line and `--json` shape, links into the
+  spec sections and the shipped docs, and the two generated code tables
+  last.
 
 ### Changed
 
