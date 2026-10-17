@@ -137,7 +137,7 @@ path to watch a run live shows nothing until that run finishes; use
 stays on disk for as long as its run does: `nuka run` keeps the newest
 `retention.runs` runs (default 20) and removes older ones, records and
 export files alike, at the end of every run, printing one `retention:`
-line when it did. `nuka clean [--export]` removes all of them at once
+line when it did. `nuka clean` removes all of them at once
 along with the configured path's own copy, when that path stays inside
 the project. It refuses, and removes nothing, when `messages.output` or
 `allure.resultsDir` resolves to the project root, to a path outside the

@@ -100,9 +100,24 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **`nuka describe` は `from` を `nuka steps --json` と同じ形で示します。**
   producer が 1 つのキーは、文字列 `"create-project.id"` ではなく `{ "step": "create-project", "key": "id" }` になります。
   producer が複数のキーは、`"either of A or B"` ではなく、そのオブジェクトの配列になります。
-- **`nuka init --env` は `nuka init --env-files` になりました。**
-  `--env` は、ほかのすべてのコマンドで environment の名前を表します。
-  `nuka init --env` は新しいフラグを名指して終了コード 2 で終わり、何も書きません。
+- **`nuka run --session` はなくなりました。**
+  終了コード 2 で終わり、何も書きません。
+  ログイン状態が必要な scenario は、その feature が名指す fixture か Given step から得ます。
+  そのため各 scenario は、前に何が動いたかにも `--concurrency` にも関係なく、クリーンに始まります。
+  `scope: "process"` の fixture でログインすれば、ログインは scenario ごとではなくプロセスごとに 1 回です。
+  `nuka do --session <name>` は変わりません。
+- **`nuka init` が受け付けるのは `--allure` だけです。**
+  `--base-url`、`--features-dir`、`--env` は、代わりになるものを名指して終了コード 2 で終わり、何も書きません。
+  `baseURL` は `init` のあとで、生成された config に設定してください。
+  `features/` 以外の features ディレクトリを使うときは、config に `featuresDir` を設定し、`features/steps/` をそこへ移してください。
+  `init` は `.gitignore` に `.env`、`.env.*`、`!.env.example` を必ず追加するようになりました。
+  プロジェクトが意図して `.env` をコミットしているなら、その行を消してください。
+  `--env` はこのリリースの前に一時期 `--env-files` という名前でした。
+  その名前も同じように拒否されます。
+- **`nuka clean` が受け付けるのは `--dry-run` と `--json` だけです。**
+  `--records`、`--cache`、`--export` は終了コード 2 で終わり、何も消しません。
+  `nuka clean` は record、cache、export を必ずまとめて消します。
+  どれかを残したいときは、先に `.nukadoko/` の外へコピーするか、毎回の `nuka run` の終わりに retention が古い run を消すのに任せてください。
 - **`nuka check --codes --json` と `nuka session list --json` は、素の配列ではなくオブジェクトを出力します。**
   JSON の文書はすべて `schema_version` で始まるようになり、配列にはそれを置く場所がありません。
   一覧は 1 つのキーの下に移りました。

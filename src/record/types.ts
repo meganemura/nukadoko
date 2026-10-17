@@ -632,9 +632,10 @@ export interface StepRecordBase {
    * "Sessions, environments, secrets": default is just the name of an
    * environment that may or may not itself be configured. */
   environment: string;
-  /** The `--session` name this run carried, or `null` when none was given
-   * (docs/spec.md "Sessions, environments, secrets": no `--session` means a clean start, never
-   * an implicit shared session). */
+  /** The `nuka do --session` name this execution carried, or `null` when
+   * none was given. Always `null` for `kind: "run"`: `nuka run` takes no
+   * session, so every scenario starts clean (docs/spec.md "Sessions,
+   * environments, secrets"). */
   session: string | null;
   /** The owning scenario record's id for a `run`-originated step record
    * (`kind: "run"`); always `null` for a `do`- or `external`-originated

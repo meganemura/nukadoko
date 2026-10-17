@@ -207,20 +207,38 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(stateDir(rootDir), "export", "other.ndjson"))).toBe(true);
   });
 
-  it("--records cleans only records, leaving cache and export untouched", async () => {
+  it.each(["--records", "--cache", "--export"])("refuses %s by name, says clean removes every category, and deletes nothing", async (flag) => {
     await seedRecords(rootDir);
     await seedCache(rootDir);
     await seedExport(rootDir);
 
-    const exitCode = await runCli(["clean", "--records"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-    expect(exitCode).toBe(0);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(false);
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["clean", flag], { rootDir, stdout, stderr });
+    expect(exitCode).toBe(2);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      `nuka clean ${flag} is removed: nuka clean always removes records, cache, and export together; ` +
+        "nuka clean --dry-run lists what it would remove.\ndo: nuka clean --help\n",
+    );
+    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
+  });
+
+  it("refuses a removed flag as one JSON object under --json", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["clean", "--cache", "--json"], { rootDir, stdout, stderr });
+    expect(exitCode).toBe(2);
+    expect(stderr.text()).toBe("");
+    expect(JSON.parse(stdout.text())).toEqual({
+      schema_version: 1,
+      error:
+        "nuka clean --cache is removed: nuka clean always removes records, cache, and export together; " +
+        "nuka clean --dry-run lists what it would remove.",
+      do: "nuka clean --help",
+    });
   });
 
   it("removes a stale lock whose own pid is dead", async () => {
@@ -245,7 +263,7 @@ describe("nuka clean", () => {
     await writeFile(path.join(resultsDir, "some-result.json"), "{}");
     await writeFile(path.join(rootDir, "reports", "keep.txt"), "keep");
 
-    const exitCode = await runCli(["clean", "--export"], {
+    const exitCode = await runCli(["clean"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),
@@ -277,7 +295,7 @@ describe("nuka clean", () => {
     await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
 
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["clean", "--dry-run", "--export"], {
+    const exitCode = await runCli(["clean", "--dry-run"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -294,7 +312,7 @@ describe("nuka clean", () => {
     await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
 
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["clean", "--export"], {
+    const exitCode = await runCli(["clean"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -315,7 +333,7 @@ describe("nuka clean", () => {
       await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
 
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["clean", "--export"], {
+      const exitCode = await runCli(["clean"], {
         rootDir,
         stdout: createCaptureSink(),
         stderr,
@@ -340,7 +358,7 @@ describe("nuka clean", () => {
       await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
 
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["clean", "--export"], {
+      const exitCode = await runCli(["clean"], {
         rootDir,
         stdout: createCaptureSink(),
         stderr,
@@ -361,7 +379,7 @@ describe("nuka clean", () => {
     await writeFile(path.join(rootDir, "bed", "keep.txt"), "keep");
 
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["clean", "--export"], {
+    const exitCode = await runCli(["clean"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -382,7 +400,7 @@ describe("nuka clean", () => {
       await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
 
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["clean", "--export"], {
+      const exitCode = await runCli(["clean"], {
         rootDir,
         stdout: createCaptureSink(),
         stderr,
@@ -394,21 +412,6 @@ describe("nuka clean", () => {
     } finally {
       await removeTempDir(outside);
     }
-  });
-
-  it("still cleans records when resultsDir is the project root and export is not selected", async () => {
-    await writeExportConfig(rootDir, { allureResultsDir: "." });
-    await seedRecords(rootDir);
-    await writeFile(path.join(rootDir, "keep-me.txt"), "keep");
-
-    const exitCode = await runCli(["clean", "--records"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-    expect(exitCode).toBe(0);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(false);
-    expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
   });
 
   it("an unknown flag fails setup: exit 2, nothing deleted (yargs runs the matched handler after .fail() unless run-cli.ts guards it)", async () => {

@@ -10,9 +10,9 @@ Playwright Test に対して直接書かれたスイートには、差し替え�
 
 nukadoko 自身のインストールと設定は、どちらの扉を使っても同じであり、その手順のどこにも cucumber 固有のものはありません。
 パッケージをインストールし、プロジェクトルートから `nuka init` を実行してください。
-フラグの一覧は `nuka init --help` が表示します(`--base-url` と `--features-dir` を含みます)。
 `nuka init` は `nukadoko.config.ts` を書きます。
-CommonJS のプロジェクト(`package.json` に `"type": "module"` が無い場合。既存のスイートはこうなっていることもあります)では `nukadoko.config.mts` を書きます:
+CommonJS のプロジェクト(`package.json` に `"type": "module"` が無い場合で、既存のスイートはこうなっていることもあります)では `nukadoko.config.mts` を書きます。
+そこに `baseURL` を足し、feature が `features/` に無いときは `featuresDir` も足してください:
 
 ```ts
 import { defineConfig } from "nukadoko";

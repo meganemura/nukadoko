@@ -26,8 +26,8 @@ import {
 const NEXT_LINE = `next: read ${path.join(repoRoot, "llms.txt")}, written for an agent: the loop, every command, and every finding code\n`;
 
 // Responsibility: `nuka init` — all
-// generated artifacts plus its self-check in an empty directory, --base-url
-// threading into the generated config, the all-or-nothing refusal when
+// generated artifacts plus its self-check in an empty directory, the
+// refusal of each removed flag by name, the all-or-nothing refusal when
 // nukadoko.config.ts already exists, and the .gitignore append (both the
 // "file doesn't exist yet" and the "line is already there" branches).
 // `ensureNukadokoShim` stands in for the not-yet-published "nukadoko"
@@ -144,7 +144,7 @@ describe("nuka init", () => {
         "",
       ].join("\n"),
     );
-    expect(await readFile(path.join(rootDir, ".gitignore"), "utf8")).toBe(".nukadoko/\n");
+    expect(await readFile(path.join(rootDir, ".gitignore"), "utf8")).toBe(".nukadoko/\n.env\n.env.*\n!.env.example\n");
     expect(JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8"))).toEqual({
       name: "esm-project",
       private: true,
@@ -237,23 +237,6 @@ describe("nuka init", () => {
         null,
         4,
       )}\n`,
-    );
-  });
-
-  it("leaves the --features-dir directory to the config, which a bare nuka run reads", async () => {
-    const exitCode = await runCli(["init", "--features-dir", "e2e/acceptance"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-
-    expect(exitCode).toBe(0);
-    const manifest = JSON.parse(await readFile(path.join(rootDir, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    expect(manifest.scripts["test:scenarios"]).toBe("nuka run");
-    expect(await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8")).toContain(
-      'featuresDir: "e2e/acceptance",',
     );
   });
 
@@ -405,89 +388,7 @@ describe("nuka init", () => {
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(text);
   });
 
-  it("reflects --base-url in the generated config", async () => {
-    const exitCode = await runCli(["init", "--base-url", "https://example.com"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-    expect(exitCode).toBe(0);
-
-    const config = await loadConfig(rootDir);
-    expect(config.baseURL).toBe("https://example.com");
-  });
-
-  it("creates <featuresDir>/steps, records featuresDir in the config, and the self-check discovers under it", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-
-    const exitCode = await runCli(["init", "--features-dir", "e2e"], {
-      rootDir,
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe(NEXT_LINE);
-    expect(stdout.text().trim().split("\n")).toEqual([
-      "nukadoko.config.ts",
-      path.join("e2e", "steps"),
-      ".gitignore",
-      "package.json",
-    ]);
-
-    expect(existsSync(path.join(rootDir, "e2e", "steps"))).toBe(true);
-    expect(existsSync(path.join(rootDir, "features"))).toBe(false);
-
-    const configContent = await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8");
-    expect(configContent).toContain('featuresDir: "e2e"');
-
-    const config = await loadConfig(rootDir);
-    expect(config.featuresDir).toBe("e2e");
-
-    // A typed step placed under the non-default featuresDir is what proves
-    // the self-check (and later `nuka steps`/`nuka do`) actually discover
-    // from `config.featuresDir` rather than the schema's own default
-    // ("features") — the self-check looks at that
-    // directory.
-    await writeFile(
-      path.join(rootDir, "e2e", "steps", "ping.ts"),
-      [
-        'import { defineStep } from "nukadoko";',
-        'import { z } from "zod";',
-        "export default defineStep({",
-        '  description: "ping",',
-        "  args: z.object({}),",
-        "  returns: z.object({}),",
-        "  run() {",
-        "    return {};",
-        "  },",
-        "});",
-        "",
-      ].join("\n"),
-    );
-    const stepsStdout = createCaptureSink();
-    const stepsExitCode = await runCli(["steps"], {
-      rootDir,
-      stdout: stepsStdout,
-      stderr: createCaptureSink(),
-    });
-    expect(stepsExitCode).toBe(0);
-    expect(stepsStdout.text()).toContain("ping");
-  });
-
-  it("creates <stateDir>/export/allure-results at the default location even when --features-dir is given", async () => {
-    const exitCode = await runCli(["init", "--allure", "--features-dir", "e2e"], {
-      rootDir,
-      stdout: createCaptureSink(),
-      stderr: createCaptureSink(),
-    });
-
-    expect(exitCode).toBe(0);
-    expect(existsSync(path.join(rootDir, ".nukadoko", "export", "allure-results"))).toBe(true);
-  });
-
-  it("omits featuresDir from the generated config when --features-dir wasn't given (default stays undeclared)", async () => {
+  it("omits featuresDir from the generated config, so the default stays undeclared", async () => {
     const exitCode = await runCli(["init"], {
       rootDir,
       stdout: createCaptureSink(),
@@ -497,18 +398,6 @@ describe("nuka init", () => {
 
     const configContent = await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8");
     expect(configContent).not.toContain("featuresDir");
-  });
-
-  it("rejects an empty --features-dir before writing anything", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-
-    const exitCode = await runCli(["init", "--features-dir", ""], { rootDir, stdout, stderr });
-
-    expect(exitCode).toBe(2);
-    expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("--features-dir");
-    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(false);
   });
 
   it("refuses the whole command when nukadoko.config.ts already exists, writing nothing", async () => {
@@ -529,24 +418,31 @@ describe("nuka init", () => {
     expect(existsSync(path.join(rootDir, ".gitignore"))).toBe(false);
   });
 
-  it("refuses --env by name, says --env-files replaced it, and writes nothing", async () => {
+  const ENV_LINES = "init always adds .env, .env.*, and !.env.example to .gitignore.";
+  it.each([
+    [["--base-url", "https://example.com"], "nuka init --base-url is removed: set baseURL in the generated config after init."],
+    [
+      ["--features-dir", "e2e"],
+      "nuka init --features-dir is removed: init creates features/steps; for another directory, set featuresDir in the generated config after init and move steps/ there.",
+    ],
+    [["--env-files"], `nuka init --env-files is removed: ${ENV_LINES}`],
+    [["--env"], `nuka init --env is removed: ${ENV_LINES}`],
+  ])("refuses %j by name, says what replaces it, and writes nothing", async (flags, message) => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["init", "--env"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["init", ...flags], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain(
-      "nuka init --env is now --env-files; --env names an environment on the other commands",
-    );
+    expect(stderr.text()).toBe(`${message}\ndo: nuka init --help\n`);
     expect(await fileSet(rootDir)).toEqual(["package.json"]);
   });
 
-  it("with --env-files, appends .nukadoko/, .env, .env.*, and !.env.example to an existing .gitignore", async () => {
+  it("appends .nukadoko/, .env, .env.*, and !.env.example to an existing .gitignore", async () => {
     await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n");
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init", "--env-files"], {
+    const exitCode = await runCli(["init"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -565,7 +461,7 @@ describe("nuka init", () => {
     );
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init", "--env-files"], {
+    const exitCode = await runCli(["init"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -582,7 +478,7 @@ describe("nuka init", () => {
   it.each([".nukadoko", "/.nukadoko/", ".nukadoko/**", "/.nukadoko"])(
     "takes an existing %s line for the state directory and leaves .gitignore byte-identical",
     async (line) => {
-      const text = `node_modules/\n${line}\n`;
+      const text = `node_modules/\n${line}\n.env\n.env.*\n!.env.example\n`;
       await writeFile(path.join(rootDir, ".gitignore"), text);
       const stdout = createCaptureSink();
 
@@ -604,7 +500,7 @@ describe("nuka init", () => {
 
       expect(exitCode).toBe(0);
       expect(stdout.text()).toContain(".gitignore");
-      expect(await readFile(path.join(rootDir, ".gitignore"), "utf8")).toBe(`${line}\n.nukadoko/\n`);
+      expect(await readFile(path.join(rootDir, ".gitignore"), "utf8")).toBe(`${line}\n.nukadoko/\n.env\n.env.*\n!.env.example\n`);
     },
   );
 
@@ -615,14 +511,15 @@ describe("nuka init", () => {
     hegel.testAsync(
       async (tc) => {
         const accepted = [".nukadoko", "/.nukadoko", ".nukadoko/", "/.nukadoko/", ".nukadoko/**", "/.nukadoko/**"];
+        const envLines = [".env", ".env.*", "!.env.example"];
         const other = gs
           .fromRegex("[a-z*!/.-]{1,10}", { fullmatch: true })
-          .filter((line) => !accepted.includes(line));
+          .filter((line) => !accepted.includes(line) && !envLines.includes(line));
         const lines = tc.draw(gs.arrays(other, { maxSize: 5 }));
         const spelling = tc.draw(gs.oneOf(gs.just(null), gs.sampledFrom(accepted)));
         const at = tc.draw(gs.integers({ minValue: 0, maxValue: lines.length }));
         const all = spelling === null ? lines : [...lines.slice(0, at), spelling, ...lines.slice(at)];
-        const text = all.map((line) => `${line}\n`).join("");
+        const text = [...all, ...envLines].map((line) => `${line}\n`).join("");
         const dir = await mkdtemp(path.join(rootDir, "case-"));
         await writeFile(path.join(dir, "package.json"), ESM_PACKAGE_JSON);
         await writeFile(path.join(dir, ".gitignore"), text);
@@ -639,7 +536,7 @@ describe("nuka init", () => {
   it("appends .env, .env.*, and !.env.example (in that order) to a fresh .gitignore", async () => {
 
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["init", "--env-files"], {
+    const exitCode = await runCli(["init"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -660,7 +557,7 @@ describe("nuka init", () => {
   it("does not duplicate an already-present .env line, and still adds the other two", async () => {
     await writeFile(path.join(rootDir, ".gitignore"), "node_modules/\n.env\n");
 
-    const exitCode = await runCli(["init", "--env-files"], {
+    const exitCode = await runCli(["init"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr: createCaptureSink(),

@@ -669,8 +669,8 @@ project loads with a warning, and fails to import under
 `"type": "commonjs"`. That error names the file and the cause, and says to
 rename it to `nukadoko.config.mts`. `nuka init` writes
 `nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
-`.gitignore` yourself because `nuka init` does that. `nuka init --env-files` also
-adds `.env` and `.env.*`, and leaves `.env.example` tracked. Traces and
+`.gitignore` yourself because `nuka init` does that. It also adds `.env`
+and `.env.*`, and leaves `.env.example` tracked. Traces and
 screenshots inside the state directory are not redacted, so it contains
 sensitive data.
 
@@ -865,8 +865,8 @@ snapshot mechanics and the live retry display.
 
 Completed files in `allure-results/` are never rewritten. A run's files
 leave with the run once it is older than the newest `retention.runs` runs
-(default 20), so a report shows that many runs; `nuka clean --export`
-empties the directory at once. Temporary `*-progress-result.json` files
+(default 20), so a report shows that many runs; `nuka clean` empties the
+directory at once, together with the records and the cache. Temporary `*-progress-result.json` files
 are removed when their scenario ends and when the next run starts.
 
 ## Self-healing, with the deviation on the record

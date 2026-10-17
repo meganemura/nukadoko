@@ -42,7 +42,7 @@ import { runEnded } from "./run-result.js";
 //
 // Export files are removed only through a manifest. A results directory
 // can be shared with another tool's Allure output, so a file nothing here
-// wrote is never touched, however old; `nuka clean --export` is the
+// wrote is never touched, however old; `nuka clean` is the
 // operation for a directory that predates manifests. A manifest line that
 // resolves outside the project root is skipped as well: `allure.resultsDir`
 // can point above the project, and a removal that leaves the project is

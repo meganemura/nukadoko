@@ -66,11 +66,6 @@ import { parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
-import { acquireLock, releaseLock } from "../session/lock.js";
-import { validateSessionName } from "../session/name.js";
-import { sessionFilePath, sessionLockPath } from "../session/paths.js";
-import { readSessionFile } from "../session/store.js";
-import type { StorageState } from "../session/storage-state.js";
 import {
   formatFixtureDefinitionIssues,
   formatFixtureIssues,
@@ -90,8 +85,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //
 //   1. Setup. A malformed feature target (missing file, invalid `:line`,
 //      a parse failure: src/run/select-pickles.ts), a config or discovery
-//      error, an unknown `--env` name, or an invalid `--session` name or a
-//      lock held by another live process. None of these write anything: the
+//      error, or an unknown `--env` name. None of these write anything: the
 //      run never started, so there is nothing to attest to. An error
 //      `nuka check` reports for the selected scenarios is a setup failure
 //      too (src/check/analyze.ts's `analyzeRunSelectionKeepingSteps`),
@@ -100,12 +94,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //      the run executes, so a step file is imported once either way.
 //   2. Execution. From the first pickle onward, every pickle that begins
 //      executing gets a scenario record no matter what happens inside it
-//      (src/run/run-scenario.ts). A malformed session file discovered before
-//      a later scenario's own start is a failure before that scenario's
-//      execution began, so no record is written for it, while earlier
-//      scenarios' output stands. storageState is re-read from the session
-//      file at each scenario's own start, so an earlier scenario's save in
-//      the same run is visible to a later one.
+//      (src/run/run-scenario.ts). Every scenario starts with no browser
+//      state: one that needs login state gets it from a fixture or a Given
+//      step its feature names.
 //
 // Computed once, at the top of the execution phase, and shared by every
 // scenario and step record in the run: the version probe, `ctx.env`, the
@@ -113,10 +104,6 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // The set is built before the probe's warning is written. That warning is
 // the probe function's own text and can carry a value loaded from an
 // untracked env file, and it goes to stderr, not into a scenario record.
-// The session lock, when `--session` is given, is acquired once for the
-// whole run and released in `finally`, covering every scenario rather than
-// one lock per scenario.
-//
 // `resolvedEnv.policy` is passed into every `runScenario` call.
 // src/run/run-scenario.ts owns the refusal and the backstop, because both
 // need a per-step, per-position view this module does not have.
@@ -124,8 +111,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // `registerAllureRuntime()` runs once, at the top of the execution phase,
 // never in setup: a setup failure writes nothing, so there is no pickle for
 // it to matter to yet. Its restore callback runs in that phase's own
-// `finally`, nested inside the lock's own `finally`. Every pickle shares
-// that one registered `TestRuntime`. src/run/run-scenario.ts repoints which
+// `finally`, nested inside the outer `finally` that stops the signal
+// handlers. Every pickle shares that one registered `TestRuntime`. src/run/run-scenario.ts repoints which
 // collector is active per pickle and per step or hook boundary.
 //
 // Each pickle carries its own feature's `gherkinDocument`
@@ -248,10 +235,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // branch after every setup-phase check (bindings, from, fixtures, tag
 // expressions) and before `registerAllureRuntime`. Those checks still run
 // once, project-wide, so a higher concurrency refuses the same broken
-// project concurrency 1 would, before spawning a worker. Two cases drop
-// concurrency back to 1 instead of refusing: a live `--session`, and a
-// target that names one feature file (the comment above that branch says
-// why). From there, the execution-phase code below is what a concurrency-1
+// project concurrency 1 would, before spawning a worker. A target that
+// names one feature file drops concurrency back to 1 instead of refusing
+// (the comment above that branch says why). From there, the execution-phase code below is what a concurrency-1
 // run always takes.
 
 /** The `nuka check` codes that mean a step's pattern did not build at all
@@ -279,7 +265,6 @@ export interface RunRunOptions {
   /** `false` under `--no-check`: skip the static check this run otherwise
    * performs over its own selection before it executes anything. */
   check: boolean;
-  session: string | null;
   env: string | null;
   /** Suppresses the per-step and per-scenario progress lines — the
    * output-location and summary lines at the
@@ -335,7 +320,7 @@ function exportLocations(
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
+  const { rootDir, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
   const refused = (error: unknown): number => refuse({ json: options.json, stdout: options.stdout, stderr }, error, helpFor("run"));
   // A person at a terminal reads stderr; the records are on disk and the
   // `scenarios` line names them, so a line of JSON per scenario there is
@@ -380,26 +365,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     return refused(error);
   }
 
-  let lockPath: string | null = null;
   // Installed only for the serial execution path, once that path's process
   // cache exists. A signal before that still takes the default action:
   // nothing has been built. `stop()` in the `finally` below removes it
   // on a normal return.
   let processSignal: ProcessSignal | undefined;
-  if (session !== null) {
-    try {
-      validateSessionName(session);
-    } catch (error) {
-      return refused(error);
-    }
-    lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, session);
-    try {
-      await acquireLock(lockPath, session);
-    } catch (error) {
-      return refused(error);
-    }
-  }
-
   try {
     const select = (): ReturnType<typeof selectPickles> | { refused: unknown } => {
       try {
@@ -737,8 +707,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // Only `baseURL` is overridden from the resolved environment, same as
     // cli/do.ts: every other config field has no per-environment counterpart.
     const runConfig = { ...config, baseURL: resolvedEnv.baseURL };
-    const thisSessionFilePath =
-      session !== null ? sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, session) : null;
 
     // Runs one BeforeAll/AfterAll
     // registration, in isolation — `label` is only ever "BeforeAll" or
@@ -786,22 +754,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // function's own `return`.
     const { allureResultsDir: allureResultsDirRel, messagesOutput: messagesOutputRel } = emitterTargets(config);
 
-    // `--concurrency` above 1 has two disqualifying cases, each dropping it
-    // straight back to 1 with a one-line, `--quiet`-proof reason (docs/
-    // spec.md "Scenarios (the scripted path)", same category as the paths
-    // line): a live session hands storageState from one scenario to the
-    // next, which cannot happen across worker processes, and a target
-    // naming one file has nothing to distribute across more than one
-    // worker in the first place. Checked, and dropped, before any worker
-    // is ever spawned.
+    // A target naming one file has nothing to distribute across more than
+    // one worker, so `--concurrency` drops back to 1 with a one-line,
+    // `--quiet`-proof reason (docs/spec.md "Scenarios (the scripted path)",
+    // same category as the paths line), before any worker is spawned.
     let effectiveConcurrency = concurrency;
-    if (session !== null && effectiveConcurrency > 1) {
-      effectiveConcurrency = 1;
-      stderr.write(
-        "--session drops --concurrency to 1: a session hands off state from one scenario to the next, " +
-          "which cannot happen across worker processes.\n",
-      );
-    } else if (effectiveConcurrency > 1 && selected.features.length <= 1) {
+    if (effectiveConcurrency > 1 && selected.features.length <= 1) {
       effectiveConcurrency = 1;
       stderr.write("--concurrency has nothing to distribute: this run selects one feature file.\n");
     }
@@ -884,8 +842,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // location lines near this function's own `return` —
       // `scenariosWritten`/`scenariosPassed`
       // count actual `stdout.write`s below, never `flatPickles.length`:
-      // a BeforeAll failure or a mid-loop storageState read failure can
-      // leave this run with fewer scenario records than pickles selected,
+      // a BeforeAll failure can leave this run with fewer scenario records than pickles selected,
       // and the summary line must say what actually happened, not what was
       // asked for. `stepRecordsWritten` sums every step across every one of
       // those records whose own `record` is non-null.
@@ -924,13 +881,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       });
       processSignal.setProcessCleanup(tearDownProcessFixtures);
-      // `process.exit` from the signal handler does not run the `finally`
-      // that releases this invocation's session lock.
-      processSignal.setSignalFinalizer(async () => {
-        if (lockPath !== null) {
-          await releaseLock(lockPath);
-        }
-      });
 
       // `allureResultsDirRel`/`messagesOutputRel` are computed once, above
       // the `--concurrency` branch this block sits after — the exact
@@ -1041,37 +991,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // boundary lines across every pass (1..total), not per pass.
       const repeatTally = createRepeatTally();
       if (hasPickles && !beforeAllFailed) {
-        iterations: for (let iteration = 0; iteration < repeat; iteration += 1) {
+        for (let iteration = 0; iteration < repeat; iteration += 1) {
         for (const [pickleIndex, { feature, pickle }] of flatPickles.entries()) {
           const executionIndex = iteration * flatPickles.length + pickleIndex;
-          let storageState: StorageState | null = null;
-          if (session !== null) {
-            try {
-              // Read fresh for every scenario: an earlier scenario in this
-              // same run may have just saved a
-              // new storageState, and the file is the single source of truth
-              // for that hand-off. A failure here means this scenario's own
-              // execution has not begun yet, so it gets no record — the same
-              // "never began" guarantee a missing feature file gets in setup.
-              storageState = await readSessionFile(thisSessionFilePath!, session);
-            } catch (error) {
-              stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-              // Leave the iteration loop, not only this pass's pickle loop.
-              // BeforeAll has already run, so this is `break` rather than
-              // `return 1`: AfterAll still has to run. A later pass must not
-              // start after this read has failed, or it could run scenarios
-              // once `allPassed` is already false.
-              allPassed = false;
-              break iterations;
-            }
-          }
-
-          // This pickle's own boundary line — right before its execution
-          // actually begins, not
-          // before the storageState read above: a scenario whose
-          // storageState read failed never begins at all (see that catch's
-          // own comment), so it gets no boundary line either, the same
-          // "never began" shape a missing feature file already gets.
+          // This pickle's own boundary line, right before its execution
+          // actually begins.
           if (!quiet) {
             writeScenarioBoundary(stderr, {
               index: executionIndex + 1,
@@ -1117,7 +1041,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
                   pickle,
                   relativeFeaturePath: feature.relativePath,
                   environment: resolvedEnv.name,
-                  session,
+                  session: null,
                   targetVersion,
                   runId,
                 });
@@ -1154,11 +1078,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             environment: resolvedEnv.name,
             policy: resolvedEnv.policy,
             targetVersion,
-            session,
             env: envVars,
             secrets,
-            storageState,
-            sessionFilePath: thisSessionFilePath,
             instantiateCompatWorld,
             onWorldSetupFailure: (message) => {
               stderr.write(`${message}\n`);
@@ -1310,11 +1231,5 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
   } finally {
     processSignal?.stop();
-    // Released regardless of which path above returned: acquired once for
-    // the whole run, released in `finally`. The signal path releases it
-    // too, before `process.exit`, because this `finally` does not run then.
-    if (lockPath !== null) {
-      await releaseLock(lockPath);
-    }
   }
 }

@@ -625,7 +625,7 @@ nukadoko は ESM だけをサポートします。
 代わりに `nuka init` は `nukadoko.config.mts` を書きます。
 `.nukadoko/` を自分で `.gitignore` に追加する必要はありません。
 `nuka init` が追加します。
-`nuka init --env-files` は `.env` と `.env.*` も追加し、`.env.example` は追跡されたままにします。
+`.env` と `.env.*` も追加し、`.env.example` は追跡されたままにします。
 state directory の中の trace とスクリーンショットは redact されないため、state directory には機密データが含まれます。
 
 </details>
@@ -799,7 +799,7 @@ snapshot の仕組みとライブ視聴中のリトライ表示は [Allure emitt
 
 `allure-results/` にある完了済みのファイルは書き換えられません。
 run のファイルは、その run が最新 `retention.runs` 回(既定 20)より古くなった時点で run と一緒に消えるので、レポートに載るのはその回数ぶんの run です。
-`nuka clean --export` はディレクトリを一度に空にします。
+`nuka clean` は record と cache とあわせて、このディレクトリを一度に空にします。
 一時的な `*-progress-result.json` は scenario の終了時と次の run の開始時に削除されます。
 
 ## Self-healing, with the deviation on the record

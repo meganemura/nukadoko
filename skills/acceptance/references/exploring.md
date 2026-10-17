@@ -140,13 +140,13 @@ record aged out is refused with those numbers in the message, so an id
 that resolved last week and does not today is that, not a typo. Chain
 within the window, or raise `adHocDays` for a longer exploration.
 
-`nuka clean [--records] [--cache] [--export] [--dry-run]` is the wider
+`nuka clean [--dry-run]` is the wider
 version of the same idea, once you are done exploring rather than mid-way
 through it: it removes every step/scenario record, session cache file, and
 the Allure/messages export output at once, all disposable by design
-(see "Artifacts" in `docs/spec.md`). No category flag cleans all three;
-`--dry-run` prints the same plan the real run would act on without
-removing anything. It refuses, before removing anything, when `allure.resultsDir` or
+(see "Artifacts" in `docs/spec.md`). `--dry-run` prints the same plan the
+real run would act on without removing anything. It refuses, before
+removing anything, when `allure.resultsDir` or
 `messages.output` resolves to the project root, to a path outside the
 project, or to a parent of the state directory. `--dry-run` refuses those
 paths too. A results directory inside the project is still removed, unless

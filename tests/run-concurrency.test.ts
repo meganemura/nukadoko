@@ -281,21 +281,6 @@ describe("nuka run --concurrency", () => {
     ]);
   });
 
-  it("--session drops --concurrency to 1 and says so on stderr, even under --quiet", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(
-      ["run", "--no-check", "features/basic/", "--concurrency", "2", "--session", "concurrency-test", "--quiet"],
-      { rootDir, stdout, stderr },
-    );
-
-    expect(exitCode).toBe(0);
-    expect(stderr.text()).toContain("--session drops --concurrency to 1");
-    const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
-    expect(records).toHaveLength(2);
-    expect(records.every((r) => r.session === "concurrency-test")).toBe(true);
-  });
-
   it("a target naming one feature file has nothing to distribute: runs normally and says so on stderr", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

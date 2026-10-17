@@ -56,8 +56,6 @@ import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.j
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
-import { writeSessionFile } from "../session/store.js";
-import type { StorageState } from "../session/storage-state.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
@@ -338,18 +336,8 @@ export interface RunScenarioOptions {
    * where a wrong one stays visible instead. */
   readonly policy: "read-only" | undefined;
   readonly targetVersion: string | undefined;
-  readonly session: string | null;
   readonly env: Readonly<Record<string, string>>;
   readonly secrets: SecretSet;
-  /** This scenario's starting storageState, already read from the session
-   * file by the caller (read at each
-   * scenario's own start, so an earlier scenario's save in the same run is
-   * visible to a later one) — `null` for no `--session` or a session's
-   * first-ever use. */
-  readonly storageState: StorageState | null;
-  /** Where to persist this scenario's ending storageState, or `null` when
-   * `--session` wasn't given (nothing is read or written). */
-  readonly sessionFilePath: string | null;
   /** Constructs this pickle's own World (src/discover/discover-steps.ts's
    * `DiscoveryResult.instantiateCompatWorld`), already wrapped for
    * measurement + this run's own `defineWorld`
@@ -900,6 +888,12 @@ function buildHookParameter(
   };
 }
 
+// A scenario never carries a session: login state comes from a fixture or
+// a Given step the feature names, so every scenario starts clean. The
+// records keep the field because `nuka do --session` step records share
+// their shape.
+const session = null;
+
 export async function runScenario(options: RunScenarioOptions): Promise<ScenarioRecord> {
   const {
     rootDir,
@@ -915,11 +909,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     environment,
     policy,
     targetVersion,
-    session,
     env,
     secrets,
-    storageState,
-    sessionFilePath,
     instantiateCompatWorld,
     onWorldSetupFailure,
     compatHooks,
@@ -1062,7 +1053,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     rootDir,
     env,
     secrets,
-    storageState: storageState ?? undefined,
     resultOf: readChain,
     isRegisteredStep: (step) => stepNameOf.has(step),
     stepNameOf: (step) => stepNameOf.get(step),
@@ -2572,20 +2562,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // settled outcome rather than the provisional `"failed"`.
   scenarioOutcome = scenarioFailed ? "failed" : "passed";
   await tearDownScenario();
-  const {
-    evidence: browserEvidence,
-    storageState: storageStateToPersist,
-    browser: browserInfo,
-  } = disposeResult;
-
-  if (sessionFilePath !== null && storageStateToPersist !== undefined) {
-    try {
-      await writeSessionFile(sessionFilePath, storageStateToPersist);
-    } catch {
-      // Persisting the session must not cost the scenario record, mirroring
-      // cli/do.ts's own fault tolerance.
-    }
-  }
+  const { evidence: browserEvidence, browser: browserInfo } = disposeResult;
 
   const record: ScenarioRecord = {
     schema_version: SCHEMA_VERSIONS.scenario_record,

@@ -94,7 +94,6 @@ interface RunArgs {
   feature?: string[];
   /** `false` under `--no-check` (yargs' own boolean negation). */
   check?: boolean;
-  session?: string;
   env?: string;
   /** Suppresses the per-step/per-scenario progress lines — the
    * output-location and summary lines still print; run.ts's own header
@@ -137,10 +136,7 @@ interface SessionClearArgs {
 }
 
 interface InitArgs {
-  baseUrl?: string;
-  featuresDir?: string;
   allure?: boolean;
-  envFiles?: boolean;
 }
 
 interface ScaffoldArgs {
@@ -172,9 +168,6 @@ interface TendArgs {
 
 interface CleanArgs {
   dryRun?: boolean;
-  records?: boolean;
-  cache?: boolean;
-  export?: boolean;
   json?: boolean;
 }
 
@@ -217,6 +210,25 @@ function rejectRepeatedFlags(flags: readonly string[]) {
     }
     return true;
   };
+}
+
+const INIT_WRITES_ENV_LINES = "init always adds .env, .env.*, and !.env.example to .gitignore.";
+const CLEAN_REMOVES_EVERY_CATEGORY =
+  "nuka clean always removes records, cache, and export together; nuka clean --dry-run lists what it would remove.";
+
+// A removed flag is refused by name, with what replaces it, rather than
+// left to `.strict()`: "Unknown argument: session" says what is wrong with
+// an older command but not what to write instead. Hidden, so --help lists
+// only what works.
+function refuseRemovedFlags(y: Argv, removed: Readonly<Record<string, string>>): Argv {
+  const withOptions = Object.keys(removed).reduce((acc, flag) => acc.option(flag, { hidden: true }), y);
+  return withOptions.check((args) => {
+    const record = args as unknown as Record<string, unknown>;
+    for (const [flag, message] of Object.entries(removed)) {
+      if (record[flag] !== undefined) throw new Error(message);
+    }
+    return true;
+  });
 }
 
 function firstWord(command: string | readonly string[] | undefined): string {
@@ -528,7 +540,11 @@ export async function runCli(
     describe:
       "check, then execute scenarios from a feature file, a Markdown oath, or a directory of them (featuresDir when none is given); step records + scenario records",
     builder: (y: Argv) =>
-      y
+      refuseRemovedFlags(y, {
+        session:
+          "nuka run --session is removed: a scenario that needs login state gets it from a fixture or a Given step " +
+          "its feature names. nuka do --session <name> still carries state across do calls.",
+      })
         .positional("feature", {
           type: "string",
           array: true,
@@ -543,10 +559,6 @@ export async function runCli(
           describe:
             "before executing, report what nuka check reports for the selected scenarios and stop on an error; " +
             "--no-check skips it to run a scenario check refuses",
-        })
-        .option("session", {
-          type: "string",
-          describe: "carry login state across calls via a named session",
         })
         .option("env", {
           type: "string",
@@ -576,7 +588,7 @@ export async function runCli(
           default: 1,
           describe:
             "run n worker processes at once, one whole feature file per worker (default 1; has nothing to do " +
-            "for a target naming one file, and drops back to 1 under --session)",
+            "for a target naming one file)",
         })
         .option("repeat", {
           type: "number",
@@ -592,7 +604,7 @@ export async function runCli(
             "also write the Markdown run summary to this path, for a CI step that posts it on a pull request " +
             "(it is always written to the run's directory, and appended to $GITHUB_STEP_SUMMARY when that is set)",
         })
-        .check(rejectRepeatedFlags(["session", "env", "concurrency", "repeat", "summary"])) as Argv<RunArgs>,
+        .check(rejectRepeatedFlags(["env", "concurrency", "repeat", "summary"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
@@ -600,7 +612,6 @@ export async function runCli(
         rootDir,
         featureArgs: args.feature ?? [],
         check: args.check ?? true,
-        session: args.session ?? null,
         env: args.env ?? null,
         quiet: args.quiet ?? false,
         records: args.records ?? false,
@@ -723,43 +734,24 @@ export async function runCli(
     command: "init",
     describe: "set up a project; ends with a self-check",
     builder: (y: Argv) =>
-      y
-        .option("base-url", {
-          type: "string",
-          describe: "baseURL to record in the generated config",
-        })
-        .option("features-dir", {
-          type: "string",
-          describe: "featuresDir to use instead of the default, recorded in the generated config",
-        })
+      refuseRemovedFlags(y, {
+        "base-url": "nuka init --base-url is removed: set baseURL in the generated config after init.",
+        "features-dir":
+          "nuka init --features-dir is removed: init creates features/steps; for another directory, " +
+          "set featuresDir in the generated config after init and move steps/ there.",
+        "env-files": `nuka init --env-files is removed: ${INIT_WRITES_ENV_LINES}`,
+        env: `nuka init --env is removed: ${INIT_WRITES_ENV_LINES}`,
+      })
         .option("allure", {
           type: "boolean",
           describe: "turn the Allure emitter on in the generated config and write allurerc.mjs",
-        })
-        .option("env-files", {
-          type: "boolean",
-          describe: "add .env, .env.*, and !.env.example to .gitignore, for a project that keeps env files",
-        })
-        // `--env` names an environment on every other command, so init's
-        // boolean moved to `--env-files`; the old spelling is refused by
-        // name rather than read as an unknown flag.
-        .option("env", { hidden: true })
-        .check((argv) => {
-          if (argv.env !== undefined) {
-            throw new Error("nuka init --env is now --env-files; --env names an environment on the other commands");
-          }
-          return true;
-        })
-        .check(rejectRepeatedFlags(["base-url", "features-dir"])) as Argv<InitArgs>,
+        }) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
       if (argsFailed) return;
       const { runInit } = await import("./init.js");
       exitCode = await runInit({
         rootDir,
-        baseUrl: args.baseUrl ?? null,
-        featuresDir: args.featuresDir ?? null,
         allure: args.allure ?? false,
-        envFiles: args.envFiles ?? false,
         stdout,
         stderr,
       });
@@ -885,26 +877,15 @@ export async function runCli(
     describe:
       "delete accumulated records/cache/export under the state directory; refuses an allure.resultsDir or messages.output that is the project root, outside the project, or a parent of the state directory",
     builder: (y: Argv) =>
-      y
+      refuseRemovedFlags(y, {
+        records: `nuka clean --records is removed: ${CLEAN_REMOVES_EVERY_CATEGORY}`,
+        cache: `nuka clean --cache is removed: ${CLEAN_REMOVES_EVERY_CATEGORY}`,
+        export: `nuka clean --export is removed: ${CLEAN_REMOVES_EVERY_CATEGORY}`,
+      })
         .option("dry-run", {
           type: "boolean",
           default: false,
           describe: "list what would be removed without removing it",
-        })
-        .option("records", {
-          type: "boolean",
-          default: false,
-          describe: "clean only step/scenario records (default: every category, when none of --records/--cache/--export is given)",
-        })
-        .option("cache", {
-          type: "boolean",
-          default: false,
-          describe: "clean only session cache files (default: every category, when none of --records/--cache/--export is given)",
-        })
-        .option("export", {
-          type: "boolean",
-          default: false,
-          describe: "clean only allure-results, messages.ndjson, and each run's own messages.<run_id>.ndjson (default: every category, when none of --records/--cache/--export is given)",
         })
         .option("json", {
           type: "boolean",
@@ -917,9 +898,6 @@ export async function runCli(
       exitCode = await runClean({
         rootDir,
         dryRun: args.dryRun ?? false,
-        records: args.records ?? false,
-        cache: args.cache ?? false,
-        exportArtifacts: args.export ?? false,
         json: args.json ?? false,
         stdout,
         stderr,

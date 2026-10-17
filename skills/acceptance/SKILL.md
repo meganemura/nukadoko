@@ -61,7 +61,7 @@ before every command is its own way of being hard to follow.
 
 Run every `nuka` command from the directory that holds the config; in a
 workspace, that is the package, not the root. If the project is not initialized, run `nuka init` first. It writes the
-config, `features/steps/`, a `.gitignore` entry, and a `test:scenarios`
+config, `features/steps/`, `.gitignore` lines for `.nukadoko/` and `.env` files, and a `test:scenarios`
 script in `package.json`, so `npm run test:scenarios` runs `nuka run`,
 which checks `featuresDir` and then executes it. A `test:scenarios` script the
 project already has stays, and `init` says so on stderr; run `nuka run` directly then. It also adds the steps and the config to

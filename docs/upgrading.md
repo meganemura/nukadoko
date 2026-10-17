@@ -119,9 +119,26 @@ This part does not change release to release.
   A key with one producer is `{ "step": "create-project", "key": "id" }`
   instead of the string `"create-project.id"`, and a key with several is
   an array of those objects instead of `"either of A or B"`.
-- **`nuka init --env` is now `nuka init --env-files`.** `--env` names an
-  environment on every other command. `nuka init --env` exits 2 and names
-  the new flag, and writes nothing.
+- **`nuka run --session` is gone.** It exits 2 and writes nothing. A
+  scenario that needs login state gets it from a fixture or a Given step
+  its feature names, so each scenario starts clean whatever ran before it
+  and at any `--concurrency`. A fixture that signs in with `scope: "process"`
+  logs in once per process, not once per scenario. `nuka do
+  --session <name>` is unchanged.
+- **`nuka init` takes `--allure` only.** `--base-url`, `--features-dir`,
+  and `--env` exit 2, name what replaces them, and write nothing. Set
+  `baseURL` in the generated config after `init`. For a features
+  directory other than `features/`, set `featuresDir` in the config and
+  move `features/steps/` there. `init` now always adds `.env`, `.env.*`,
+  and `!.env.example` to `.gitignore`; delete those lines if the project
+  commits a `.env` on purpose. (`--env` was briefly spelled
+  `--env-files` before this release; that spelling is refused the same
+  way.)
+- **`nuka clean` takes `--dry-run` and `--json` only.** `--records`,
+  `--cache`, and `--export` exit 2 and remove nothing. `nuka clean`
+  always removes records, cache, and export together. To keep one of
+  them, copy it out of `.nukadoko/` first, or let retention remove old
+  runs on its own at the end of every `nuka run`.
 - **`nuka check --codes --json` and `nuka session list --json` print an
   object, not a bare array.** Every JSON document now starts with
   `schema_version`, and an array has no place for it. The list moved under

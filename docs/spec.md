@@ -168,11 +168,9 @@ questions: "what happens if this is deleted" and "who gets to change it":
   is removed only through a run's own manifest, never by age: a results
   directory can be shared with another tool's Allure output, and a file
   nukadoko did not write is not nukadoko's to remove.
-  `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` is the
-  whole-category operation that remains. With no category flag, it cleans
-  all three categories. One category flag limits the operation to that
-  category. `--dry-run` prints the same plan that the real run would use,
-  but removes nothing. An `allure.resultsDir` or
+  `nuka clean [--dry-run] [--json]` is the whole-category operation that
+  remains. It cleans all three categories together. `--dry-run` prints the
+  same plan that the real run would use, but removes nothing. An `allure.resultsDir` or
   `messages.output` that resolves to the project root, to a path outside the
   project, or to a parent of the state directory is refused before anything
   is removed. `--dry-run` refuses those paths too. `clean` still removes a
@@ -1912,7 +1910,7 @@ blockquote or a fence.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--json] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2051,11 +2049,10 @@ until their own scenario finishes and are then written together, because
 lines from several scenarios interleaved are lines nobody can read.
 Neither changes what a record contains.
 
-`--session` does not combine with a concurrency above 1. A session hands
-login state from one scenario to the next, so each scenario starts from
-what the one before it left. `nuka run` drops to one worker and says so on
-stderr, in the same category as the paths it writes, which `--quiet` never
-suppresses.
+`nuka run` takes no `--session`. Every scenario starts with no browser
+state, so a scenario never depends on what the one before it left, and any
+concurrency gives the same answer. A scenario that needs login state gets
+it from a fixture or a Given step its feature names.
 
 `--concurrency` is a flag and never a config key. How many scenarios a
 machine can run at once is a fact about that machine, and a committed
@@ -2789,8 +2786,9 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 
 - **Sessions** carry login state across CLI calls as Playwright storageState.
   Nukadoko stores each session by environment and uses an advisory lock to
-  limit it to one run at a time. Without `--session`, each run starts clean
-  and has no implicit shared state. A saved session is a storageState file and
+  limit it to one command at a time. `nuka do --session <name>` reads and
+  saves it. `nuka run` takes no session: each scenario starts clean and has
+  no implicit shared state. A saved session is a storageState file and
   needs no daemon.
 - **Environments** name deployment targets. Each environment can define a
   `baseURL`, `envFiles`, `policy: "read-only"`, and an optional `version` probe.
@@ -3095,9 +3093,8 @@ for separate purposes (see "Artifacts"):
 
 The routine removal is retention, which `nuka run` applies itself at the end
 of every run (see "Artifacts").
-`nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` deletes data
-across all three directories at once. With no category flag, it deletes every
-category. One category flag limits deletion to that category. It is also the
+`nuka clean [--dry-run] [--json]` deletes data across all three directories
+at once. It is also the
 operation for an `allure-results/` directory written before runs kept a
 manifest of their files, which retention never touches.
 It refuses, before removing anything, when `allure.resultsDir` or
@@ -3426,7 +3423,7 @@ zero pickles.
   run live is Allure's job (`npx allure watch`), not this stream's.
 - Each invocation file remains beside the configured path for as long as
   its run does, under the retention rule "Artifacts" gives for every other
-  measurement artifact; `nuka clean [--export]` removes all of them at once
+  measurement artifact; `nuka clean` removes all of them at once
   along with the configured path's own copy.
 - This emitter has the inverse role of the Allure emitter. Allure exposes
   nukadoko's measurement surplus, while this emitter preserves compat
@@ -3903,7 +3900,7 @@ The npm package is `nukadoko`. The one command it installs is `nuka`.
 `nuka --help` ends by naming `node_modules/nukadoko/llms.txt`, the file an agent with no skill loaded reads first.
 
 ```
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before
@@ -3911,8 +3908,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
                               --env targets a named environment ("default"
-                              when omitted); --session carries login state
-                              across calls via a named session.
+                              when omitted).
                               :line runs one scenario, for iteration only;
                               its summary covers only that scenario. Each target
                               can be a file, file:line, or directory. Targets
@@ -3956,7 +3952,6 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               Above 1, stdout lands in completion order and the
                               progress lines are held per scenario. A file
                               tagged @nukadoko:serial runs while no other file runs.
-                              --session drops it back to 1 and says so.
                               --repeat <n> (default 1) runs every selected
                               scenario n times in this one invocation, each
                               execution its own record under the one run_id;
@@ -3968,7 +3963,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               <path> writes one more copy there
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
                               execute one typed step; step record to stdout.
-                              --env and --session as on nuka run.
+                              --env as on nuka run; --session carries login
+                              state across do calls via a named session.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
                               delivered on stderr.
@@ -4142,10 +4138,9 @@ nuka check [feature..] [--json]
 nuka check --codes [--json]   list every finding code nuka check can produce,
                               with a one-line description and the code's
                               general do, instead of checking a project
-nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
+nuka clean [--dry-run] [--json]
                               delete accumulated records/cache/export under
-                              the state directory; no category flag cleans
-                              all three, one flag narrows to it; --dry-run
+                              the state directory, all three together; --dry-run
                               prints the same plan the real run would act on
                               without removing anything; refuses, before
                               removing anything, an
@@ -4191,18 +4186,18 @@ nuka session list [--json]    list every session, across all environments;
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given
-nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
+nuka init [--allure]
                               set up a project; ends with a self-check.
-                              Writes nukadoko.config.ts, <featuresDir>/steps/,
-                              .nukadoko/ in .gitignore, and a package.json
+                              Writes nukadoko.config.ts, features/steps/,
+                              .nukadoko/, .env, .env.*, and !.env.example in
+                              .gitignore, and a package.json
                               "test:scenarios" script ("nuka run") unless one
                               exists; appends the steps and the config to
                               tsconfig.json's include when it leaves them out,
                               or prints one stderr line naming them when the
                               file has comments. --allure turns the
-                              Allure emitter on and writes allurerc.mjs;
-                              --env-files adds .env, .env.*, !.env.example to
-                              .gitignore. After a passing self-check, its last
+                              Allure emitter on and writes allurerc.mjs.
+                              After a passing self-check, its last
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko

@@ -86,10 +86,9 @@ A migration repeats that loop far more than a finished suite ever runs
 `nuka run` again. `nuka run` keeps only the newest `retention.runs` runs
 (default 20) and removes older records and export files itself, so
 `.nukadoko/` stays that size on its own; session cache files are the part
-it never touches. `nuka clean [--records] [--cache] [--export] [--dry-run]`
-removes everything at once; giving no category flag cleans all three,
-`--dry-run` previews the same plan it would act on without removing
-anything. It refuses, before removing anything,
+it never touches. `nuka clean [--dry-run]` removes records, cache, and
+export at once; `--dry-run` previews the same plan it would act on without
+removing anything. It refuses, before removing anything,
 when `allure.resultsDir` or `messages.output` resolves to the project
 root, to a path outside the project, or to a parent of the state
 directory, and `--dry-run` refuses those paths too. A results directory

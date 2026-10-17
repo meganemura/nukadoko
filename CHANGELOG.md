@@ -210,6 +210,19 @@ just until 0.1.
 
 ### Removed
 
+- **BREAKING: `nuka run --session`, `nuka init --base-url`, `--features-dir`, and `--env`, and `nuka clean --records`, `--cache`, and `--export`.**
+  Each one is refused by name, exit 2 with `{ error, do }` under `--json`,
+  and the message says what replaces it. A scenario that needs login state
+  gets it from a fixture or a Given step its feature names, so every
+  scenario under `nuka run` starts clean and no scenario depends on the one
+  before it; `nuka do --session` still carries state across `do` calls.
+  `nuka init` always adds `.env`, `.env.*`, and `!.env.example` to
+  `.gitignore`, so the opt-in flag (`--env`, briefly `--env-files`) is gone;
+  `baseURL` and `featuresDir` are config keys to set after `init`. `nuka
+  clean` always removes records, cache, and export together; `--dry-run`
+  lists what it would remove. `nuka run --repeat` stays. Scenario records
+  keep their `session` key, now always `null`. docs/upgrading.md says what
+  to change.
 - **BREAKING: `defineStep`'s `rationale` option, and the tend codes that asked for it or repeated `nuka check`.**
   Projects wrote `rationale` on every step only to quiet `nuka tend`, and
   the one place it showed was `nuka describe`. `rationale` is gone from
@@ -298,10 +311,7 @@ just until 0.1.
   `compat_step_names`, `scanned_feature_dirs`, `read_only_steps`), like
   every other document. `nuka describe` shows `from` as `{ step, key }`
   (or an array of them), the shape `nuka steps --json` already used,
-  instead of a `"step.key"` string. `nuka init --env` is renamed
-  `--env-files`, since `--env` names an environment on every other
-  command; the old spelling exits 2 and names the new one. Breaking: see
-  docs/upgrading.md.
+  instead of a `"step.key"` string. Breaking: see docs/upgrading.md.
 - **`nuka explore` is now `nuka experimental explore`, and the model API
   carries the `experimental_` prefix.** The functions are
   `experimental_defineModel`, `experimental_modelCommand`,

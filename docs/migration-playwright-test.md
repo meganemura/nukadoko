@@ -8,10 +8,11 @@ starts from cucumber-js; if that is not your suite, start here instead.
 
 Getting nukadoko itself installed and configured is the same regardless of
 which door you use, and none of it is cucumber-specific: install the
-package, then run `nuka init` from the project root (`nuka init --help`
-lists its flags, including `--base-url` and `--features-dir`). It writes
+package, then run `nuka init` from the project root. It writes
 `nukadoko.config.ts`, or `nukadoko.config.mts` in a CommonJS project (no
-`"type": "module"` in `package.json`, which an existing suite can be):
+`"type": "module"` in `package.json`, which an existing suite can be).
+Add `baseURL` to it, and `featuresDir` when your features do not live in
+`features/`:
 
 ```ts
 import { defineConfig } from "nukadoko";

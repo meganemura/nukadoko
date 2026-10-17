@@ -321,14 +321,23 @@ const REMOVED_COMMANDS = new Set([
   "session start",
   "session stop",
 ]);
-const REMOVED_FLAGS = new Set(["init --env"]);
+const REMOVED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["init", new Set(["--env", "--env-files", "--base-url", "--features-dir"])],
+  ["run", new Set(["--session"])],
+  ["clean", new Set(["--records", "--cache", "--export"])],
+]);
 const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
 
 function citesRemovedCommand(file: DocFile, invocation: string): boolean {
   if (!UPGRADE_NOTES.has(file.relativePath)) return false;
   const words = invocation.trim().split(/\s+/);
   const firstTwo = words.slice(0, 2).join(" ");
-  return REMOVED_COMMANDS.has(words[0]!) || REMOVED_COMMANDS.has(firstTwo) || REMOVED_FLAGS.has(firstTwo);
+  const removedFlags = REMOVED_FLAGS.get(words[0]!);
+  return (
+    REMOVED_COMMANDS.has(words[0]!) ||
+    REMOVED_COMMANDS.has(firstTwo) ||
+    words.slice(1).some((word) => removedFlags?.has(word) === true)
+  );
 }
 
 describe("names in README.md, llms.txt, docs/, and skills/", () => {
@@ -376,7 +385,10 @@ describe("the extraction itself", () => {
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental explore a.ts")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "init --env")).toBe(false);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env-files")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env-files")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "run features/a.feature --session alice")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "do open-cart --session alice")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --allure")).toBe(false);
   });
 
   // Positive controls: each drift named in this file's header, written as

@@ -91,7 +91,7 @@ describe("nuka run: run.json", () => {
 
   it("prints run.json under --json as the one document on stdout, also at --concurrency 2", async () => {
     for (const extra of [[], ["--concurrency", "2"]]) {
-      await runCli(["clean", "--records"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+      await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
       const stdout = pipeSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(["run", "--no-check", "--json", ...extra, "features/basic/"], { rootDir, stdout, stderr });

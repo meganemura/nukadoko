@@ -373,11 +373,8 @@ async function main(): Promise<void> {
           environment: resolvedEnv.name,
           policy: resolvedEnv.policy,
           targetVersion,
-          session: null,
           env: envVars,
           secrets,
-          storageState: null,
-          sessionFilePath: null,
           instantiateCompatWorld,
           onWorldSetupFailure: (message) => {
             noteSink.write(`${message}\n`);

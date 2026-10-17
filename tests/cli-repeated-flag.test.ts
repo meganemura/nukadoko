@@ -15,9 +15,6 @@ import {
 // A boolean given twice stays that boolean.
 
 const REPEATED: ReadonlyArray<{ readonly flag: string; readonly argv: readonly string[]; readonly help: string }> = [
-  { flag: "--base-url", argv: ["init", "--base-url", "http://a", "--base-url", "http://b"], help: "nuka init --help" },
-  { flag: "--features-dir", argv: ["init", "--features-dir", "e2e", "--features-dir", "specs"], help: "nuka init --help" },
-  { flag: "--session", argv: ["run", "features/x.feature", "--session", "a", "--session", "b"], help: "nuka run --help" },
   { flag: "--env", argv: ["run", "features/x.feature", "--env", "a", "--env", "b"], help: "nuka run --help" },
   { flag: "--concurrency", argv: ["run", "features/x.feature", "--concurrency", "2", "--concurrency", "3"], help: "nuka run --help" },
   { flag: "--repeat", argv: ["run", "features/x.feature", "--repeat", "2", "--repeat", "3"], help: "nuka run --help" },

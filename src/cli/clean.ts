@@ -65,15 +65,6 @@ export interface RunCleanOptions {
   rootDir: string;
   /** List what would be removed without removing it. */
   dryRun: boolean;
-  /** Category selection — when every one of `records`/`cache`/`export` is
-   * `false` (no `--records`/`--cache`/`--export` given at all), every
-   * category runs; giving any one of them narrows the clean to only the
-   * ones given, the same "no filter means everything, any filter narrows
-   * it" rule `nuka steps`'s own vocabulary listing never needed but a
-   * destructive command does. */
-  records: boolean;
-  cache: boolean;
-  exportArtifacts: boolean;
   json: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
@@ -279,7 +270,7 @@ function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: Writ
 }
 
 export async function runClean(options: RunCleanOptions): Promise<number> {
-  const { rootDir, dryRun, records, cache, exportArtifacts, json, stdout, stderr } = options;
+  const { rootDir, dryRun, json, stdout, stderr } = options;
 
   const sinks = { json, stdout, stderr };
   let config;
@@ -289,33 +280,17 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
     return refuse(sinks, error, helpFor("clean"));
   }
 
-  // No `--records`/`--cache`/`--export` given at all means every category
-  // runs — the same "no filter, no narrowing" default `nuka check`/`nuka
-  // tend` already use for their own whole-project scope.
-  const anySelected = records || cache || exportArtifacts;
-  const selection = anySelected
-    ? { records, cache, export: exportArtifacts }
-    : { records: true, cache: true, export: true };
-
-  const plan: CleanPlan = { records: [], cache: [], export: [] };
-  let exportPlan: ExportPlan | null = null;
-
-  if (selection.records) {
-    plan.records = await buildRecordsPlan(rootDir, config.stateDir);
+  const built = await buildExportPlan(rootDir, config.stateDir, config.allure?.resultsDir, config.messages?.output);
+  // Before writePlan and before any rm.
+  if (built.refusal !== null) {
+    return refuse(sinks, built.refusal, helpFor("clean"));
   }
-  if (selection.cache) {
-    plan.cache = await buildCachePlan(rootDir, config.stateDir);
-  }
-  if (selection.export) {
-    const built = await buildExportPlan(rootDir, config.stateDir, config.allure?.resultsDir, config.messages?.output);
-    // Before writePlan and before any rm. A refusal here has not deleted
-    // records or cache either: those plans are still only in memory.
-    if (built.refusal !== null) {
-      return refuse(sinks, built.refusal, helpFor("clean"));
-    }
-    exportPlan = built.plan;
-    plan.export = exportPlan.paths;
-  }
+  const exportPlan = built.plan;
+  const plan: CleanPlan = {
+    records: await buildRecordsPlan(rootDir, config.stateDir),
+    cache: await buildCachePlan(rootDir, config.stateDir),
+    export: exportPlan.paths,
+  };
 
   // The plan printed here is exactly what the execution phase below acts
   // on — one code path decides what gets deleted, this function only
@@ -332,18 +307,15 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   for (const relativePath of plan.cache) {
     await rm(path.join(rootDir, relativePath), { force: true });
   }
-  if (exportPlan) {
-    // Removed and recreated empty, not just removed, regardless of
-    // whether it existed beforehand (cli/init.ts does the same
-    // unconditional creation): this file's own header explains why (an
-    // `allure watch` already pointed at this directory must keep finding
-    // it).
-    await rm(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true, force: true });
-    await mkdir(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true });
-    await rm(path.join(rootDir, exportPlan.messagesOutputRelative), { force: true });
-    for (const relativePath of exportPlan.messagesRunOutputsRelative) {
-      await rm(path.join(rootDir, relativePath), { force: true });
-    }
+  // Removed and recreated empty, not just removed, regardless of whether
+  // it existed beforehand (cli/init.ts does the same unconditional
+  // creation): this file's own header explains why (an `allure watch`
+  // already pointed at this directory must keep finding it).
+  await rm(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true, force: true });
+  await mkdir(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true });
+  await rm(path.join(rootDir, exportPlan.messagesOutputRelative), { force: true });
+  for (const relativePath of exportPlan.messagesRunOutputsRelative) {
+    await rm(path.join(rootDir, relativePath), { force: true });
   }
 
   return 0;

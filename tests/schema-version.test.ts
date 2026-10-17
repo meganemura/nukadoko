@@ -43,7 +43,7 @@ describe("schema_version", () => {
     documents.set("refusal", parse(await cli(runProject, ["check", "--json", "features/nope.feature"])));
     documents.set("sessions", parse(await cli(runProject, ["session", "list", "--json"])));
     documents.set("step_record", parse(await cli(runProject, ["do", "thing-exists", "--args", '{"name":"widget"}'])));
-    await cli(runProject, ["clean", "--records"]);
+    await cli(runProject, ["clean"]);
     const runStdout = await cli(runProject, ["run", "--no-check", "features/basic/a.feature"]);
     documents.set("scenario_record", parse(runStdout.trim().split("\n")[0]!));
     documents.set("run_result", parse(await cli(runProject, ["run", "--no-check", "--json", "features/basic/b.feature"])));

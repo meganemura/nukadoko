@@ -24,7 +24,7 @@ import { exitCodeForSignal, HANDLED_SIGNALS } from "./process-signal.js";
 import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 
 // Responsibility: `nuka run --concurrency <n>`'s own parent-side
-// orchestration (n > 1, more than one feature file, no `--session` — every
+// orchestration (n > 1 and more than one feature file: every
 // disqualifying case is decided by src/cli/run.ts before this module is
 // ever called, so this file only ever runs the shape docs/spec.md
 // "Scenarios (the scripted path)" describes for `--concurrency` above 1).

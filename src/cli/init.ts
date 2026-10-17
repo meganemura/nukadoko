@@ -40,9 +40,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //     (diagnostics go to stderr: an agent parses stdout, so it carries
 //     only paths). The default targets a CLI or API project: the Allure
 //     and messages emitters are off, so nothing Allure-shaped is written
-//     unless `--allure` asks for it, and the `.env*` ignore lines are
-//     written only under `--env-files`. Every adopter of the earlier
-//     always-written set deleted those files by hand.
+//     unless `--allure` asks for it.
 //   - Finish with a self-check: load the config just written and discover
 //     its vocabulary for real, the same two calls `nuka steps`/`nuka do`
 //     make. A failure here is reported (stderr + exit 1) but the generated
@@ -56,61 +54,17 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // featuresDir/stateDir fall back to `configSchema`'s own defaults
 // (`configSchema.parse({})`) rather than hard-coding "features"/".nukadoko"
 // here a second time, so this module can never drift from schema.ts's
-// source of truth for what "the default project layout" means. `--features-
-// dir` is the one way to override `featuresDir` specifically: without it,
-// this stays exactly as it was.
-//
-// When `--features-dir` is given, its (normalized) value drives both the
-// steps directory `mkdir` below *and* the generated config's own
-// `featuresDir` field — the two must never diverge, since divergence is
-// exactly the bug this option exists to fix (a hand-edited config's
-// `featuresDir` no longer matching where `init` actually created `steps/`).
-// It is deliberately left out of the config template when omitted
-// (`featuresDirOverride` stays `null`, see `configTemplate` below): baking
-// schema.ts's current default into every generated config would leave that
-// default frozen in every existing project's config the day schema.ts's own
-// default ever changes.
+// source of truth for what "the default project layout" means. Neither is
+// written into the generated config: baking schema.ts's current default
+// into every generated config would freeze it in every existing project
+// the day schema.ts's own default changes.
 
 export interface RunInitOptions {
   rootDir: string;
-  /** `--base-url`'s value, or `null` when the flag was omitted. */
-  baseUrl: string | null;
-  /** `--features-dir`'s value, or `null` when the flag was omitted. */
-  featuresDir: string | null;
   /** `--allure`: write `allurerc.mjs` and turn the Allure emitter on. */
   allure: boolean;
-  /** `--env-files`: ignore `.env` files, for a project that keeps one. */
-  envFiles: boolean;
   stdout: WritableSink;
   stderr: WritableSink;
-}
-
-/**
- * Normalizes `--features-dir`'s raw value relative to `rootDir`, the same
- * `path.relative(rootDir, path.resolve(rootDir, arg))` idiom `nuka check`
- * already uses for its own path argument (src/check/analyze.ts's
- * `loadSingleFeature`), rather than inventing a new convention here.
- * Reusing that exact idiom means an absolute value or one containing `..`
- * is accepted as-is here too, same as it already is for check's
- * own feature argument (see src/check/analyze.ts's own comment: "absolute
- * paths accepted as-is").
- *
- * Empty is the one case that convention doesn't already answer for *this*
- * command: a feature-file argument that normalizes to nothing simply fails
- * to `readFileSync` downstream and is reported as "not found" by those
- * commands, but `init` *creates* `<featuresDir>/steps`
- * (`mkdir(..., { recursive: true })`) rather than reading anything, so
- * there is no such natural failure here to fall back on — an empty or
- * self-referencing value (`""`, `"."`, and `"./"` all normalize to `""`)
- * would otherwise silently make `featuresDir` the project root itself.
- * `runInit` below rejects that explicitly, before touching the filesystem
- * (`null` returned in place of throwing, since — unlike scaffold.ts's own
- * `name` check — this needs the *original* raw value for the error
- * message).
- */
-function normalizeFeaturesDirArg(rootDir: string, raw: string): string | null {
-  const normalized = path.relative(rootDir, path.resolve(rootDir, raw));
-  return normalized === "" ? null : normalized;
 }
 
 // Every field this comment could name (featuresDir, environments,
@@ -121,23 +75,8 @@ function normalizeFeaturesDirArg(rootDir: string, raw: string): string | null {
 const CONFIG_KEYS_COMMENT =
   '  // Every config key nukadoko reads, one line each: docs/spec.md, "Sessions, environments, secrets"';
 
-interface ConfigFields {
-  baseUrl: string | null;
-  featuresDir: string | null;
-  allure: boolean;
-}
-
-function configTemplate({ baseUrl, featuresDir, allure }: ConfigFields): string {
-  const fields: string[] = [];
-  if (featuresDir !== null) {
-    fields.push(`  featuresDir: ${JSON.stringify(featuresDir)},`);
-  }
-  if (baseUrl !== null) {
-    fields.push(`  baseURL: ${JSON.stringify(baseUrl)},`);
-  }
-  if (allure) {
-    fields.push("  allure: {},");
-  }
+function configTemplate(allure: boolean): string {
+  const fields = allure ? ["  allure: {},"] : [];
   const body = `{\n${[CONFIG_KEYS_COMMENT, ...fields].join("\n")}\n}`;
   return [
     'import { defineConfig } from "nukadoko";',
@@ -379,7 +318,7 @@ async function ensureScenariosScript(rootDir: string, stderr: WritableSink): Pro
 }
 
 export async function runInit(options: RunInitOptions): Promise<number> {
-  const { rootDir, baseUrl, featuresDir, allure, envFiles, stdout, stderr } = options;
+  const { rootDir, allure, stdout, stderr } = options;
 
   const existingConfigPaths = CONFIG_FILE_NAMES.map((fileName) => path.join(rootDir, fileName)).filter(
     (candidate) => existsSync(candidate),
@@ -397,23 +336,11 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   const configFileName = isCjs ? "nukadoko.config.mts" : CONFIG_FILE_NAME;
   const configPath = path.join(rootDir, configFileName);
 
-  let featuresDirOverride: string | null = null;
-  if (featuresDir !== null) {
-    featuresDirOverride = normalizeFeaturesDirArg(rootDir, featuresDir);
-    if (featuresDirOverride === null) {
-      return refuse(
-        { json: false, stdout, stderr },
-        `Invalid --features-dir "${featuresDir}": resolves to the project root itself, which can't hold a nested steps directory`,
-        helpFor("init"),
-      );
-    }
-  }
-
   const defaults = configSchema.parse({});
-  const featuresDirRelative = featuresDirOverride ?? defaults.featuresDir;
+  const featuresDirRelative = defaults.featuresDir;
   const stepsDirRelative = path.join(featuresDirRelative, "steps");
 
-  await writeFile(configPath, configTemplate({ baseUrl, featuresDir: featuresDirOverride, allure }));
+  await writeFile(configPath, configTemplate(allure));
   stdout.write(`${configFileName}\n`);
   if (isCjs) {
     stderr.write(
@@ -424,11 +351,8 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   await mkdir(path.join(rootDir, stepsDirRelative), { recursive: true });
   stdout.write(`${stepsDirRelative}\n`);
 
-  // `.env` files are ignored only under `--env-files`: three of eight early
-  // adopters removed these lines, since a CLI or API project often keeps no
-  // env file at all. A project that does keep one asks for them. They are
-  // ignored because a tracked env file that matches HEAD is plain
-  // configuration, not a secret source (src/secrets/classify-env-files.ts):
+  // `.env` files are ignored because a tracked env file that matches HEAD
+  // is plain configuration, not a secret source (src/secrets/classify-env-files.ts):
   // those committed values are read into ctx.env like any other config and
   // are not redacted from a run's own records. An uncommitted edit is a
   // secret source. Committing .env by mistake is still the path that writes
@@ -438,7 +362,9 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   // only re-includes a path an earlier pattern already excluded.
   const gitignoreWritten = await ensureGitignoreEntries(rootDir, [
     `${defaults.stateDir}/`,
-    ...(envFiles ? [".env", ".env.*", "!.env.example"] : []),
+    ".env",
+    ".env.*",
+    "!.env.example",
   ]);
   if (gitignoreWritten) {
     stdout.write(".gitignore\n");
@@ -453,9 +379,8 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     // Allure's own CLI (`watch`/`generate`) refuses to start against a
     // results directory that doesn't exist yet, but an empty one is enough
     // (verified against allure 3.14.3: `watch` serves and `generate`
-    // produces an empty report). Creating it here, always at the schema
-    // default since `--features-dir` never touches `stateDir`, lets
-    // `allure watch` already be running before the first `nuka run`.
+    // produces an empty report). Creating it here lets `allure watch`
+    // already be running before the first `nuka run`.
     const allureResultsDirRelative = path.join(defaults.stateDir, "export", "allure-results");
     await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
     stdout.write(`${allureResultsDirRelative}\n`);

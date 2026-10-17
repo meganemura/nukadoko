@@ -62,7 +62,7 @@ function writeAtomic(filePath: string, data: Buffer | string): void {
 // 9.0 GB of trace zips under `records/` and the same 9.0 GB again under
 // `allure-results/`. A hard link costs one directory entry, reads
 // identically to a copy from Allure's side (it opens the file by name and
-// never writes to it), and outlives `nuka clean --records` removing the
+// never writes to it), and outlives `nuka clean` removing the
 // original, since the link count, not the original path, keeps the bytes
 // alive. The link is made to the temp name and then renamed, so the
 // atomicity the header describes holds for links exactly as for writes.
