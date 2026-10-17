@@ -4,7 +4,7 @@ import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
-import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
+import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import { isPlaywrightInstalled } from "../context/load-playwright.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import {
@@ -89,45 +89,6 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
 // reason: one broken file must not stop every other feature's issues from
 // being reported.
 
-// esbuild's own transform-error format, measured directly rather than
-// guessed:
-// "Transform failed with N error(s):\n<path>:<line>:<col>: ERROR: <msg>",
-// one line per error. Matched against the *start* of a line (`^` + `m`) so
-// this never fires on a colon that happens to sit inside the error text
-// itself. Node's own ESM-loader errors (a missing named export, `require`
-// called from an ES module) carry no such prefix at all, so this simply
-// finds nothing on those and `line` is left unset — same as before this
-// task (CheckIssue.line already optional, src/check/types.ts).
-const IMPORT_FAILURE_LOCATION = /^(.+):(\d+):(\d+): ERROR: /m;
-
-// A module that fails to import can drag another file's failure into its
-// own message: Node's ESM loader caches a module that failed to load and
-// rethrows the identical error object to every later importer (the same
-// behavior tests/check-import-failure-grouping.test.ts exercises for a
-// location-less message). When that happens here, the location named in
-// the message is the file that actually failed to transform, not the file
-// this `importFailures` entry is attributed to — attaching it would point
-// a reader at the wrong file, so this returns `undefined` instead.
-// `path.resolve` against `rootDir` on both sides absorbs the absolute/
-// relative difference between them: the
-// message always carries the absolute path esbuild was given, while
-// `issueFile` is rootDir-relative (discover-steps.ts's own
-// `importFailures[].filePath`).
-function extractImportFailureLine(message: string, rootDir: string, issueFile: string): number | undefined {
-  const match = IMPORT_FAILURE_LOCATION.exec(message);
-  if (match === null) {
-    return undefined;
-  }
-  const [, rawPath, rawLine] = match;
-  if (rawPath === undefined || rawLine === undefined) {
-    return undefined;
-  }
-  if (path.resolve(rootDir, rawPath) !== path.resolve(rootDir, issueFile)) {
-    return undefined;
-  }
-  return Number(rawLine);
-}
-
 /** The report a `nuka check` with no target gives: every feature under
  * featuresDir and additionalFeatureDirs, and every configured oath. */
 export async function analyzeProject(rootDir: string): Promise<CheckReport> {
@@ -140,7 +101,6 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   const { report } = await analyze(
     rootDir,
     (config) => loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths),
-    false,
     false,
   );
   return report;
@@ -174,7 +134,7 @@ export async function analyzeRunSelection(
   selected: readonly SelectedFeatureForCheck[],
   parseErrors: LoadFeaturesResult["parseErrors"] = [],
 ): Promise<CheckReport> {
-  const { report } = await analyze(rootDir, runSelectionFeatures(selected, parseErrors), false, true);
+  const { report } = await analyze(rootDir, runSelectionFeatures(selected, parseErrors), true);
   return report;
 }
 
@@ -197,11 +157,9 @@ function runSelectionFeatures(
   });
 }
 
-/** A run-selection report, and the discovery it was built from with every
- * step file still registered. */
+/** A run-selection report, and the discovery it was built from. */
 export interface RunSelectionAnalysis {
   readonly report: CheckReport;
-  /** The caller owes `discovery.unregister()` once it is done with it. */
   readonly discovery: DiscoveryResult;
 }
 
@@ -219,7 +177,7 @@ export async function analyzeRunSelectionKeepingSteps(
   rootDir: string,
   selected: readonly SelectedFeatureForCheck[],
 ): Promise<RunSelectionAnalysis> {
-  return analyze(rootDir, runSelectionFeatures(selected, []), true, true);
+  return analyze(rootDir, runSelectionFeatures(selected, []), true);
 }
 
 type Config = Awaited<ReturnType<typeof loadConfig>>;
@@ -227,7 +185,6 @@ type Config = Awaited<ReturnType<typeof loadConfig>>;
 async function analyze(
   rootDir: string,
   loadFeatures: (config: Config) => LoadFeaturesResult,
-  keepRegistered: boolean,
   selection: boolean,
 ): Promise<RunSelectionAnalysis> {
   const config = await loadConfig(rootDir);
@@ -236,13 +193,8 @@ async function analyze(
   // rejecting this whole call the way `run --no-check`/`do`/`steps`/`init`
   // still do via their own plain `discoverSteps(rootDir, config.featuresDir)`
   // calls.
-  const discovery = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true, keepRegistered });
-  try {
-    return { report: await reportFor(rootDir, config, discovery, loadFeatures, selection), discovery };
-  } catch (error) {
-    await discovery.unregister();
-    throw error;
-  }
+  const discovery = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true });
+  return { report: await reportFor(rootDir, config, discovery, loadFeatures, selection), discovery };
 }
 
 async function reportFor(
@@ -280,7 +232,7 @@ async function reportFor(
   // (src/check/missing-ts-source.ts, src/config/module-kind.ts); everywhere
   // else they append nothing, so Node's message passes through exactly as
   // it came.
-  const cjsProject = isCommonJsProject(rootDir);
+  const cjsProject = refusesEsmTs(rootDir);
   for (const failure of importFailures) {
     const message =
       failure.message +
@@ -290,10 +242,7 @@ async function reportFor(
       code: "step-file-import-failed",
       message,
       file: failure.filePath,
-      // Extracted from Node's own message above, never re-derived some
-      // other way — the location, when present, is always in the part
-      // passed through verbatim.
-      line: extractImportFailureLine(failure.message, rootDir, failure.filePath),
+      line: failure.line,
     });
   }
 

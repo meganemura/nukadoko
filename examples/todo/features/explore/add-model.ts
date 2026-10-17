@@ -1,6 +1,6 @@
 import { defineModel, modelCommand } from "nukadoko";
-import addTodo from "../steps/add-todo.js";
-import completeTodo from "../steps/complete-todo.js";
+import addTodo from "../steps/add-todo.ts";
+import completeTodo from "../steps/complete-todo.ts";
 
 // A request-only model. `nuka check` reads the command keys and the steps.
 // `nuka explore features/explore/add-model.ts` runs it against the app.

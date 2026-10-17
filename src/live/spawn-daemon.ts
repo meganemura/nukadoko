@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { liveLockOwner } from "../session/lock.js";
+import { loaderUrl } from "../config/ts-loader.js";
 
 // Responsibility: `nuka session start`'s own detached child — picking the
 // right interpreter for daemon-entry.ts and turning "spawn it and return"
@@ -18,11 +19,8 @@ import { liveLockOwner } from "../session/lock.js";
 // `dist/`) is read off *this* module's own `import.meta.url` — the same
 // "two layouts have to both work" problem, and the same fix, as src/cli/
 // skill.ts's own header explains for locating a package resource from
-// either one. tsx is nukadoko's own direct dependency (package.json), so
-// `<package root>/node_modules/.bin/tsx` exists whether nukadoko is this
-// repository itself or a downstream project's `node_modules/nukadoko`
-// — the same reasoning cli.test.ts's own `tsxBin` already relies on for
-// spawning `nuka` as a real subprocess in a test.
+// either one. The `.ts` case preloads src/config/ts-loader.ts, for the
+// reason src/run/spawn-run-worker.ts gives.
 //
 // This entry point is never part of nukadoko's own CLI surface — argv here
 // is a private, positional contract this file and daemon-entry.ts alone
@@ -47,10 +45,6 @@ export interface SpawnDaemonOptions {
   readonly crashLogPath: string;
 }
 
-function packageRoot(here: string): string {
-  return path.resolve(path.dirname(here), "..", "..");
-}
-
 /**
  * Spawns this session's own daemon, detached (`detached: true`, `stdio:
  * "ignore"`, `unref()`'d immediately) so the caller's own process can exit
@@ -64,16 +58,11 @@ export function spawnDaemon(options: SpawnDaemonOptions): ChildProcess {
   const daemonEntry = path.join(path.dirname(here), `daemon-entry${ext}`);
   const args = [rootDir, env ?? "", name, String(idleTimeoutSeconds), crashLogPath];
 
-  const child =
-    ext === ".ts"
-      ? spawn(path.join(packageRoot(here), "node_modules", ".bin", "tsx"), [daemonEntry, ...args], {
-          detached: true,
-          stdio: "ignore",
-        })
-      : spawn(process.execPath, [daemonEntry, ...args], {
-          detached: true,
-          stdio: "ignore",
-        });
+  const preload = ext === ".ts" ? ["--import", loaderUrl] : [];
+  const child = spawn(process.execPath, [...preload, daemonEntry, ...args], {
+    detached: true,
+    stdio: "ignore",
+  });
   child.unref();
   return child;
 }

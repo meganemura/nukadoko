@@ -293,17 +293,9 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
     return 1;
   }
 
-  // Not `child.pid`: `spawnDaemon` launches tsx's own CLI, which — at least
-  // in this dev/test build, where daemon-entry.ts still runs from `.ts`
-  // source rather than a plain compiled script — re-execs the real
-  // long-running process as its own child rather than replacing itself, so
-  // the pid `spawn()` itself reports can differ from the one that process
-  // actually ends up running as (and therefore the one its own lock file,
-  // and everything else in this package that signals a session by pid,
-  // agrees on). The lock file is the authoritative source either way — by
-  // the time the socket exists (just confirmed above), the daemon has
-  // already acquired it — so this reads the pid back from there instead of
-  // trusting what `spawn()` returned.
+  // Read back from the lock rather than `child.pid`: the lock is what every
+  // other command in this package signals a session by, and by the time
+  // the socket exists (just confirmed above) the daemon has written it.
   const daemonOwner = await liveLockOwner(lockPath);
   stdout.write(`${name}\t${daemonOwner?.pid ?? child.pid}\n`);
   return 0;

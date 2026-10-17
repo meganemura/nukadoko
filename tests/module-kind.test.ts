@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cjsTsMismatchExplanation, isCommonJsProject } from "../src/config/module-kind.js";
+import { cjsTsMismatchExplanation, isCommonJsProject, refusesEsmTs } from "../src/config/module-kind.js";
 import { createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: isCommonJsProject's own truth table — the one fact `nuka
@@ -50,16 +50,41 @@ describe("isCommonJsProject", () => {
   });
 });
 
+// Responsibility: refusesEsmTs's own truth table, the narrower fact the
+// import-failure sentence below waits for.
+describe("refusesEsmTs", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await createEmptyTempDir();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it.each([
+    ["no package.json at all", undefined, false],
+    ['"type": "module"', JSON.stringify({ type: "module" }), false],
+    ["no type field, where Node reparses an ES module", JSON.stringify({ name: "x" }), false],
+    ['"type": "commonjs"', JSON.stringify({ type: "commonjs" }), true],
+    ["a package.json that is not valid JSON", "{ this is not json", false],
+  ])("answers %s", async (_label, packageJson, expected) => {
+    if (packageJson !== undefined) await writeFile(path.join(rootDir, "package.json"), packageJson);
+    expect(refusesEsmTs(rootDir)).toBe(expected);
+  });
+});
+
 // Responsibility: cjsTsMismatchExplanation's own truth table — the one
 // sentence both `nuka check`'s step-file-import-failed finding and
 // `formatImportFailuresStderr` (`nuka steps`/`nuka describe`) append, and
 // only when both conditions hold (src/config/module-kind.ts's own doc
 // comment on this function).
 describe("cjsTsMismatchExplanation", () => {
-  it('returns the rename sentence when the project is CommonJS and the file is ".ts"', () => {
-    const explanation = cjsTsMismatchExplanation(true, "features/steps/probe.ts");
-    expect(explanation).toContain('"type": "module"');
-    expect(explanation).toContain(".mts");
+  it('returns the rename sentence when the project is "type": "commonjs" and the file is ".ts"', () => {
+    expect(cjsTsMismatchExplanation(true, "features/steps/probe.ts")).toBe(
+      ' This project\'s package.json says "type": "commonjs", so Node reads .ts here as CommonJS; nukadoko is ESM-only, so rename this file to .mts.',
+    );
   });
 
   it("returns \"\" when the project is not CommonJS, even for a \".ts\" file", () => {

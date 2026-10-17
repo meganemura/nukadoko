@@ -7,6 +7,44 @@ just until 0.1.
 
 ## Unreleased
 
+### Breaking
+
+- **BREAKING: nukadoko loads TypeScript through Node's own type stripping, needs Node `^22.18.0 || >=23.6.0`, and no longer depends on tsx.**
+  These are the first Node releases that strip types with no flag. The
+  config, the step files, and what they import load through a
+  `module.registerHooks` resolve hook, which gives every load its own
+  module graph (the cache isolation tsx's namespaces gave) and maps a
+  relative `.js` import to the `.ts` file when no `.js` file exists. Run
+  workers and the session daemon start as plain `node --import` of that
+  hook. Installing the package no longer pulls in tsx and esbuild, so an
+  install with `--ignore-scripts` runs the whole walkthrough. What a
+  project sees: `enum`, `namespace`, and parameter properties fail to
+  load; a type imported without `type` fails to load; `tsconfig.json`
+  `paths` and `baseUrl` no longer resolve at run time; a `.ts` file in a
+  `package.json` with no `"type"` loads with Node's
+  `MODULE_TYPELESS_PACKAGE_JSON` warning instead of failing. docs/upgrading.md
+  says what to do about each.
+- **`step-file-import-failed` names the line and the cause of a syntax error.**
+  The message now carries `(<file>:<line>)` for any syntax error Node
+  locates, and `line` is set when that location is the step file itself. A
+  V8 compile error (a redeclared name), which carries no location in the
+  caught error, is located by importing the same file in a child process
+  that evaluates nothing. Syntax that type stripping refuses
+  (`ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`) gets a sentence that says what to
+  write instead and to set `"erasableSyntaxOnly": true`. The code is
+  unchanged. A config that fails to import gets the same location and
+  sentence. The sentence that says to rename a `.ts` file to `.mts` is now
+  added only when `package.json` says `"type": "commonjs"`, and names that
+  field; with no `"type"`, Node loads the file, so a failure there has
+  another cause.
+- **`nuka scaffold` writes relative imports with the `.ts` name** (`--command`'s
+  run file, `--then`'s upstream step), the spelling Node resolves without
+  nuka's hook. **`nuka init` adds `"rewriteRelativeImportExtensions": true`**
+  to a `tsconfig.json` that has `compilerOptions` of its own and names
+  neither that option nor `allowImportingTsExtensions`, in place, with the
+  same layout rules as the `include` edit, and prints `tsconfig.json` when
+  it wrote either edit.
+
 ### Changed
 
 - **`nuka run` writes its scenario records to stdout only when stdout is not a terminal, or under `--records`.**

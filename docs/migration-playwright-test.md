@@ -112,7 +112,7 @@ export const addItemReturns = z.object({ itemId: z.string(), cartId: z.string(),
 export async function addItem(request: APIRequestContext, cartId: string, sku: string) { ... }
 
 // features/steps/add-item.ts
-import openCartStep from "./open-cart.js";
+import openCartStep from "./open-cart.ts";
 
 export default defineStep({
   patterns: ["item {sku:string} is added to the cart"],

@@ -52,7 +52,7 @@ interface MeasuredPageContext {
 // declared.ts's own module-level "active collector" pointer the way the
 // allure-js runtime shim itself does (src/compat/allure-runtime.ts). That
 // distinction matters here specifically: this file is loaded through
-// discovery's own scoped tsx import (see the module-identity note below),
+// discovery's own namespaced import (see the module-identity note below),
 // which gives it its own separate instance of every module it transitively
 // imports, `declared.ts` included — so a plain top-level module-level
 // variable declared.ts exports would not be the *same* variable src/run/
@@ -68,10 +68,10 @@ interface MeasuredPageContext {
 // `runtimeByWorld` (the ctx bridge) is keyed by the constructed instance, in
 // a WeakMap private to *this* module — so whichever module instance a
 // user's `class MyWorld extends World` resolved "nukadoko/compat" to (src/
-// discover/discover-steps.ts's scoped tsx import during discovery) is the
+// discover/discover-steps.ts's namespaced import during discovery) is the
 // exact instance whose `openPage()`, `get page()`, and `set page()` close
 // over the matching WeakMaps. src/discover/discover-steps.ts captures
-// `instantiateWorldForPickle` itself through that same scoped import, rather
+// `instantiateWorldForPickle` itself through that same namespaced import, rather
 // than a plain top-level one, for exactly this reason — see that file's own
 // header for the mechanism this mirrors; `ctx` itself is threaded the same
 // directly-passed-parameter way `declaredCollector` now is, for the same
@@ -99,8 +99,8 @@ export interface WorldConstructorParams {
  * found `IWorldOptions` appears in 2/2 real-world repos' glue as a bare
  * type import, e.g. `import { type
  * IWorldOptions } from "nukadoko/compat"`). Without this alias that import
- * fails `tsc` while `nuka run`/`nuka check` stay silent — a type-only import
- * gets stripped by esbuild before either ever sees it — so this alias closes
+ * fails `tsc` while `nuka run`/`nuka check` stay silent (Node's type
+ * stripping erases a `type` import before either ever sees it), so this alias closes
  * a gap only the caller's own typechecker could see.
  *
  * Deliberately **not** generic, unlike cucumber-js's own
@@ -248,7 +248,7 @@ export interface InstantiatedWorld {
  * here, before any hook or step ever sees this instance. Called exactly
  * once per pickle (one World per pickle, sharing that pickle's own ctx) by
  * src/run/run-scenario.ts, through the reference
- * src/discover/discover-steps.ts captured via its own scoped tsx import —
+ * src/discover/discover-steps.ts captured via its own namespaced import —
  * see this file's header for why that indirection matters.
  *
  * @param declaredWorldSchemas This run's `defineWorld` registration (src/

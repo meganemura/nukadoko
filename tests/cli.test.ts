@@ -12,6 +12,7 @@ import {
   fixture,
   removeTempDir,
   repoRoot,
+  sourceNodeArgs,
 } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -389,11 +390,10 @@ describe("nuka do", () => {
 });
 
 describe("nuka (process)", () => {
-  it("runs end-to-end via tsx against a fixture project", async () => {
+  it("runs end-to-end from source against a fixture project", async () => {
     const cliPath = path.join(repoRoot, "src", "cli.ts");
-    const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
 
-    const { stdout, stderr } = await execFileAsync(tsxBin, [cliPath, "steps", "--json"], {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [...sourceNodeArgs, cliPath, "steps", "--json"], {
       cwd: fixture("basic-project"),
     });
 
@@ -406,15 +406,14 @@ describe("nuka (process)", () => {
     ]);
   });
 
-  it("runs `do` end-to-end via tsx against a fixture project, record.json included", async () => {
+  it("runs `do` end-to-end from source against a fixture project, record.json included", async () => {
     const cliPath = path.join(repoRoot, "src", "cli.ts");
-    const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
     const rootDir = await copyFixtureToTempDir("basic-project");
 
     try {
       const { stdout, stderr } = await execFileAsync(
-        tsxBin,
-        [cliPath, "do", "create-project", "--args", '{"name":"x"}'],
+        process.execPath,
+        [...sourceNodeArgs, cliPath, "do", "create-project", "--args", '{"name":"x"}'],
         { cwd: rootDir },
       );
 
@@ -480,8 +479,7 @@ describe("nuka (process)", () => {
       );
 
       const cliPath = path.join(repoRoot, "src", "cli.ts");
-      const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
-      const child = spawn(tsxBin, [cliPath, "steps", "--json"], {
+        const child = spawn(process.execPath, [...sourceNodeArgs, cliPath, "steps", "--json"], {
         cwd: rootDir,
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -535,8 +533,7 @@ describe("nuka (process)", () => {
       await writeFile(path.join(rootDir, "features", "steps"), "not a directory\n");
 
       const cliPath = path.join(repoRoot, "src", "cli.ts");
-      const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
-      const child = spawnSync(tsxBin, [cliPath, "scaffold", "fresh-step"], {
+        const child = spawnSync(process.execPath, [...sourceNodeArgs, cliPath, "scaffold", "fresh-step"], {
         cwd: rootDir,
         encoding: "utf8",
       });

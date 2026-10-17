@@ -41,6 +41,51 @@ This part does not change release to release.
   `nuka run` under a pseudo-terminal and parses its stdout passes
   `--records`, which writes them to a terminal too. The records on disk,
   the stderr lines, and `nuka do`'s stdout do not change.
+- **Node 22.18.0 or later on the 22 line, or 23.6.0 or later.**
+  `engines.node` is `^22.18.0 || >=23.6.0`. These are the first releases
+  in which Node strips TypeScript types with no flag, and nukadoko now
+  loads the config, the step files, and everything they import through
+  Node itself. It no longer depends on tsx. A CI job pinned to Node 20 or
+  to an earlier 22 moves to a supported version: `docs/ci.md` uses 24.
+  Node 23.6 to 23.x prints an `ExperimentalWarning` the first time it
+  loads a `.ts` file; 22.18 and 24 and later do not.
+- **Only TypeScript that erasing its types leaves intact loads.** An
+  `enum`, a `namespace` with values in it, and a constructor parameter
+  property have run-time behavior, so Node refuses the file. This holds
+  for a project file a step file imports too. `nuka check` reports
+  `step-file-import-failed` with the file, the line, and what to write
+  instead: an enum becomes an object with `as const`, and a parameter
+  property becomes a field assigned in the constructor. Set
+  `"erasableSyntaxOnly": true` (TypeScript 5.8 and later) in
+  `tsconfig.json`, and `tsc` reports each one before nuka does.
+- **A type imported without `type` fails to load.** Node cannot tell that
+  `import { Options } from "./options.ts"` names only a type, so the import
+  fails with "does not provide an export named 'Options'". Write
+  `import type { Options }` or `import { type Options }`. With
+  `"verbatimModuleSyntax": true`, `tsc` requires that spelling.
+- **`nuka scaffold` writes imports with the `.ts` name.** The `--command`
+  step imports `./run-greet.ts`, and `--then` imports its upstream step by
+  its `.ts` name. A step file that already imports by the `.js` name keeps
+  loading under nuka, which falls back to the `.ts` file when no `.js` file
+  exists, so renaming is optional. A plain `node` run of that file does not
+  fall back. For `tsc` to accept a `.ts` name, `tsconfig.json` needs
+  `"rewriteRelativeImportExtensions": true` (TypeScript 5.7 and later) or
+  `"allowImportingTsExtensions": true` (which `tsc` accepts only with
+  `noEmit`). `nuka init` now adds the first one to a `tsconfig.json` that
+  has `compilerOptions` of its own and names neither option. A project
+  initialized before this release adds it by hand.
+- **`paths` and `baseUrl` in `tsconfig.json` no longer resolve at run
+  time.** tsx read them; Node does not. A step file that imports
+  `@app/server` through `paths` fails to import. Use a relative path, or a
+  `#app/*` entry in `package.json`'s `imports`, which Node and `tsc` both
+  read.
+- **A `package.json` with no `"type"` now loads a `.ts` file written as an
+  ES module.** Node reparses it, and prints a `MODULE_TYPELESS_PACKAGE_JSON`
+  warning for each such file. `nuka init` still writes
+  `nukadoko.config.mts` there, and `.mts` step files load with no warning.
+  Add `"type": "module"` to `package.json` to keep `.ts` names with no
+  warning. With `"type": "commonjs"`, a `.ts` file still fails to import,
+  and the error says to rename it to `.mts`.
 
 ## 0.15.0 to 0.16.0
 

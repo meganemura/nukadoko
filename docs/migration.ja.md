@@ -133,11 +133,14 @@ glue はテキストとして読むだけで、実行はしていません。
   (`AfterStep`、`Status`、`BeforeAll`、`AfterAll`、`setDefaultTimeout` は監査を行った時点ではこのリストに含まれていましたが、今ではサポートされています。
   上記を参照してください。)
 - **同じ種類の名前でも、型としてしか使っていない場合**は別のケースであり、上のケースを小さくしたものではありません。
-  esbuild が型だけの import をコンパイル済み出力から取り除くため、その名前は実行時には実際には一度も import されません。
-  出荷される glue がそのまま実行されるものなので、`nuka check` も `nuka run` も何も問題を見つけません。
-  文句を言うのは `tsc` だけで、それは `tsc` の仕事であり nukadoko の仕事ではありません。
-  これは検出漏れではなく境界です。
-  実行時にはもう検出すべきものが何も残っていません。
+  結果は import の書き方で決まります。
+  Node は glue を型の除去で読み込み、`import type`(またはインラインの `type` の名前)を消し、それ以外の import はすべて残します。
+  `type` を付けて書けば、その名前は実行時には import されません。
+  `nuka check` も `nuka run` も何も問題を見つけず、文句を言うのは `tsc` だけで、それは `tsc` の仕事です。
+  `type` なしで書くと import が残り、そのファイルは Node の "does not provide an export named" エラーで失敗し、`nuka check` はそれを `step-file-import-failed` として報告します。
+  そのような import には `type` を付けてください。
+  `"verbatimModuleSyntax": true` にすると、`tsc` がすべての該当箇所を見つけます。
+  cucumber-js の glue は `IWorldOptions` を `World` と並べて `type` なしで import していることが多いので、最初の実行の前に検索しておく価値があります。
   (このカテゴリの監査自身の例だった `IWorldOptions` と `ITestCaseHookParameter` は、今では export されています。
   `WorldConstructorParams`/`HookParameter` のエイリアスとして、他の compat の名前と同じように typecheck を通ります。)
 - **CommonJS の glue**: nukadoko は ESM 専用です。

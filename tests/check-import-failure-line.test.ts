@@ -20,16 +20,13 @@ import {
 //
 // tests/fixtures/check-import-failure-location-project has one step file
 // (broken.ts) whose own fixture-bag name (`page`) is redeclared directly
-// under the function it's destructured into — an early ECMAScript error
-// esbuild's own transform catches before this step's `run()` body ever
-// executes (measured directly: "Transform failed with 1 error:\n<path>:
-// <line>:<col>: ERROR: The symbol \"page\" has already been declared").
-// `// @ts-nocheck` at that file's own top is what keeps the very same
-// redeclaration from *also* being a `tsc` error under `npm run typecheck`
-// (tsconfig.json's own include is "tests/**/*.ts", which reaches fixtures
-// too) — esbuild's own transform runs regardless of that pragma (measured
-// directly), so the import failure this fixture exists to produce survives
-// untouched.
+// under the function it's destructured into: an early ECMAScript error V8
+// raises while compiling the module, before this step's `run()` body ever
+// executes. Its stack names no location, so the line comes from the child
+// probe in src/discover/import-failure.ts. `// @ts-nocheck` at that file's
+// own top keeps the same redeclaration from *also* being a `tsc` error
+// under `npm run typecheck` (tsconfig.json's own include is
+// "tests/**/*.ts", which reaches fixtures too).
 //
 // tests/fixtures/check-import-failure-location-shared-project has the same
 // broken.ts plus a second file (via-import.ts) that only side-effect
@@ -43,7 +40,7 @@ import {
 // ESM-loader error carries no location at all.
 
 describe("nuka check: step-file-import-failed carries a line when the message has one", () => {
-  it("fills line from an esbuild transform error's own <path>:<line>:<col> location", async () => {
+  it("fills line from a compile error's location in the step file itself", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
       rootDir: fixture("check-import-failure-location-project"),
@@ -57,9 +54,8 @@ describe("nuka check: step-file-import-failed carries a line when the message ha
     const brokenIssue = report.errors.find((issue) => issue.code === "step-file-import-failed");
     expect(brokenIssue).toBeDefined();
     expect(brokenIssue?.file).toBe("features/steps/broken.ts");
-    expect(brokenIssue?.message).toContain('The symbol "page" has already been declared');
-    // Measured directly against this exact fixture file: line 22 is
-    // `const page = 1;`, the redeclaration esbuild's transform reports.
+    expect(brokenIssue?.message).toBe("Identifier 'page' has already been declared (features/steps/broken.ts:22)");
+    // Line 22 of this fixture file is `const page = 1;`.
     expect(brokenIssue?.line).toBe(22);
     expect(exitCode).toBe(1);
   });

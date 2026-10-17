@@ -597,6 +597,8 @@ async function typecheckSteps(files: Record<string, string>): Promise<{ code: nu
           noUnusedParameters: true,
           skipLibCheck: true,
           noEmit: true,
+          // What `nuka init` adds, so the `.ts` import names scaffold writes check.
+          rewriteRelativeImportExtensions: true,
           types: ["node"],
         },
         include: ["*.ts"],

@@ -103,7 +103,7 @@ describe("nuka scaffold --from", () => {
     expect(await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
-        'import runGreet from "./run-greet.js";',
+        'import runGreet from "./run-greet.ts";',
         "",
         "export default defineStep({",
         '  description: "TODO: describe output-says",',
@@ -143,8 +143,8 @@ describe("nuka scaffold --from", () => {
     expect(await readFile(path.join(rootDir, "features", "steps", "greet-wrote.ts"), "utf8")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
-        'import runGreet from "./run-greet.js";',
-        'import makeDir from "./make-dir.js";',
+        'import runGreet from "./run-greet.ts";',
+        'import makeDir from "./make-dir.ts";',
         "",
         "export default defineStep({",
         '  description: "TODO: describe greet-wrote",',
@@ -260,6 +260,8 @@ async function typecheckSteps(files: Record<string, string>): Promise<{ code: nu
           strict: true,
           skipLibCheck: true,
           noEmit: true,
+          // What `nuka init` adds, so the `.ts` import names scaffold writes check.
+          rewriteRelativeImportExtensions: true,
           types: ["node"],
         },
         include: ["**/*.ts"],
@@ -375,10 +377,10 @@ describe("scaffold --from helpers", () => {
     ]);
   });
 
-  it("imports a sibling .ts as .js, an .mts as .mjs, and a nested file by its relative path", () => {
-    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.ts")).toBe("./run-greet.js");
-    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.mts")).toBe("./run-greet.mjs");
-    expect(importSpecifier("/p/features/steps", "/p/features/steps/cli/run.ts")).toBe("./cli/run.js");
-    expect(importSpecifier("/p/features/steps", "/p/features/shared/run.ts")).toBe("../shared/run.js");
+  it("imports a sibling and a nested file by its relative path with its own extension", () => {
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.ts")).toBe("./run-greet.ts");
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/run-greet.mts")).toBe("./run-greet.mts");
+    expect(importSpecifier("/p/features/steps", "/p/features/steps/cli/run.ts")).toBe("./cli/run.ts");
+    expect(importSpecifier("/p/features/steps", "/p/features/shared/run.ts")).toBe("../shared/run.ts");
   });
 });

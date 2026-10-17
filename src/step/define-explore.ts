@@ -3,7 +3,7 @@ import type { Step } from "./define-step.js";
 
 // Responsibility: the `defineModel` and `defineRelation` declarations.
 // Discovery recognizes them the same way it recognizes a `Step`: a brand
-// that survives tsx's separate module graph (`Symbol.for`, same reason as
+// that survives discovery's separate module graph (`Symbol.for`, same reason as
 // src/step/brand.ts). This file stores the functions a later run will call.
 // It does not call them, and it does not look at the vocabulary. Whether a
 // named step exists, and whether that step needs a browser, is

@@ -18,8 +18,8 @@ step. Put the file anywhere under `featuresDir`, with a default export:
 
 ```ts
 import { defineModel, modelCommand } from "nukadoko";
-import addTodo from "../steps/add-todo.js";
-import completeTodo from "../steps/complete-todo.js";
+import addTodo from "../steps/add-todo.ts";
+import completeTodo from "../steps/complete-todo.ts";
 
 export default defineModel(() => ({ open: [] as string[] })).commands({
   "add-todo": modelCommand(addTodo)({
@@ -69,8 +69,8 @@ builds from it, and `relate` compares the two lists of results:
 
 ```ts
 import { defineRelation, relationEntry } from "nukadoko";
-import addTodo from "../steps/add-todo.js";
-import listIncludes from "../steps/todo-list-includes.js";
+import addTodo from "../steps/add-todo.ts";
+import listIncludes from "../steps/todo-list-includes.ts";
 
 export default defineRelation({
   name: "add then listed",

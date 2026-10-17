@@ -187,6 +187,29 @@ nukadoko は ESM-only です。
 `nuka check` は、そのファイルを `step-file-unsupported-extension` として報告します。
 この報告により、そのファイルの定義が説明のつかない `undefined-step` として再び現れることを防ぎます。
 
+config と step ファイルは、Node 自身が型の除去で読み込みます。
+Node は型注釈を空白に置き換え、残りを実行します。
+そのため Node の下限は、これをフラグなしで行う最初のリリースです(22 系は 22.18、それ以外は 23.6)。
+ここから 3 つの規則が出てきます。
+
+- step ファイルは、別の step ファイルを `.ts` まで含めたファイル名で import します(`import createProject from "./create-project.ts"`)。
+  `nuka scaffold --from` が書くのはこの綴りで、素の `node` が解決できるのもこの綴りです。
+  `tsc` は `rewriteRelativeImportExtensions` か `allowImportingTsExtensions` があれば受け付けます。
+  `tsconfig.json` がどちらも指定していないとき、`nuka init` は前者を追加します。
+  `"module": "nodenext"` で TypeScript が書く `.js` の綴り(`create-project.ts` に対する `./create-project.js`)も、`nuka` の下では引き続き読み込めます。
+  `.js` ファイルが無いときに `nuka` が `.ts` ファイルを試すからです。
+  ただし素の `node` で実行するプログラムでは読み込めません。
+- 実行時の振る舞いを持つ構文は読み込めません。
+  `enum`、`namespace`、コンストラクタのパラメータプロパティです。
+  `nuka check` はそのファイルを、Node が示す行で `step-file-import-failed` として報告し、書き換え方を示します。
+  `"erasableSyntaxOnly": true` を設定すると、`tsc` が同じ構文を報告します。
+- `type` なしで import した名前は、型の除去の後も import として残ります。
+  そのため型をこの形で import すると、Node の "does not provide an export named" エラーで失敗します。
+  `import type` を使えば避けられます(`"verbatimModuleSyntax": true` にすると `tsc` がそれを求めます)。
+
+discovery は 1 回ごとに、それ自身のモジュールグラフでファイルを読み込みます。
+そのため 2 回 discovery を行うプロセス(live session、MCP サーバー、テスト)では、各ファイルのトップレベルのコードが再び実行され、2 回の discovery がモジュールを共有することはありません。
+
 リポジトリのルートなどを `featuresDir` に設定すると、同じように歩く範囲が広がります。
 その木の中にあるビルド成果物も、名前が上記 4 つの拡張子のいずれかで終わる場合は glue になり得ます。
 `node_modules` とすべてのドットディレクトリは、`featuresDir` の設定にかかわらず除外されます。
@@ -974,7 +997,7 @@ feature ファイルは、その作業を読み手に示さなくなります。
 
 ```ts
 import { defineStep, z } from "nukadoko";
-import createProject from "./create-project.js";
+import createProject from "./create-project.ts";
 
 export default defineStep({
   pattern: "the project is archived",
@@ -1123,8 +1146,8 @@ step を分割して最初の scenario を書き換えると、合意済みの r
 
 ```ts
 import { defineStep, z } from "nukadoko";
-import createProject from "./parts/create-project.js";
-import inviteMember from "./parts/invite-member.js";
+import createProject from "./parts/create-project.ts";
+import inviteMember from "./parts/invite-member.ts";
 
 export default defineStep({
   pattern: "a project named {string} has {string} as a member",
@@ -3959,8 +3982,9 @@ nuka experimental webmcp-tools <url> [--json]
 
 ## 実装ノート
 
-- ランタイム依存: `@cucumber/gherkin`、`@cucumber/cucumber-expressions`、`@cucumber/messages`、`allure-js-commons`、`playwright`、`zod`、`tsx`(実行時の TS インポート)、`yargs`(CLI)。
-  Node は 20 以上。
+- ランタイム依存: `@cucumber/gherkin`、`@cucumber/cucumber-expressions`、`@cucumber/messages`、`allure-js-commons`、`playwright`、`zod`、`yargs`(CLI)。
+  TypeScript はローダーのパッケージを使わず、Node 自身の型の除去で読み込みます。
+  Node は `^22.18.0 || >=23.6.0`。
 - 形式やプロトコルに公式の SDK があるときは、nukadoko は形式を再実装せず、その SDK を通して書きます(allure-results は allure-js-commons の reporter 機構を、cucumber messages は `@cucumber/messages` を通して)。
   nukadoko 自身はその上の薄い写像層に留まります。
   公式機構の一部を上書きするのは、具体的な必要が現れたときに行う計測された判断であって、既定の選択ではありません。

@@ -6,7 +6,7 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { configSchema } from "../config/schema.js";
 import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
-import { ensureTsconfigInclude } from "./tsconfig-include.js";
+import { ensureTsconfig } from "./tsconfig-edit.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -24,15 +24,16 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //   - Which name gets written depends on the project's own module kind
 //     (isCommonJsProject, src/config/module-kind.ts): a project with no
 //     "type": "module" in package.json gets nukadoko.config.mts instead of
-//     nukadoko.config.ts, since tsx reads a plain .ts config the same
-//     CommonJS way Node would and that config would fail to load before a
-//     single line of it ran. A one-line stderr notice says so, and says
+//     nukadoko.config.ts, since Node reads a plain .ts config there as
+//     CommonJS (or reparses it, with a warning on every load, when
+//     package.json has no "type" at all). A one-line stderr notice says so, and says
 //     step files need the same .mts extension there — never silently,
 //     since a project that hits this without the notice would only see the
 //     step files it later writes fail to import, with no link back to why.
 //   - Otherwise, generate the config, the (empty) steps directory, the
 //     `.gitignore` entry, the package.json `test:scenarios` script, and
-//     the tsconfig.json `include` entries (src/cli/tsconfig-include.ts),
+//     the tsconfig.json `include` entries and `.ts` import option
+//     (src/cli/tsconfig-edit.ts),
 //     printing each path actually written to stdout as it happens
 //     (diagnostics go to stderr: an agent parses stdout, so it carries
 //     only paths). The default targets a CLI or API project: the Allure
@@ -469,7 +470,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     }
   }
 
-  const tsconfig = await ensureTsconfigInclude(rootDir, featuresDirPosix, configFileName);
+  const tsconfig = await ensureTsconfig(rootDir, featuresDirPosix, configFileName);
   if (tsconfig.kind === "written") {
     stdout.write("tsconfig.json\n");
   }

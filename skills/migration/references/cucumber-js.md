@@ -13,6 +13,12 @@ Change the one import each glue file uses:
 import { Given, When, Then } from "nukadoko/compat";
 ```
 
+Node loads glue by erasing types, so a name used only as a type needs
+`type` on its import (`import { type IWorldOptions, World } from
+"nukadoko/compat"`). Without it the import stays, and `nuka check` reports
+`step-file-import-failed` with "does not provide an export named". An
+`enum` in glue is refused the same way, at its line.
+
 A `defineParameterType` transformer keeps cucumber-js's `this`: the
 scenario World, the same object the step runs against. A Promise it
 returns is awaited before the step. `docs/spec.md` states that contract.

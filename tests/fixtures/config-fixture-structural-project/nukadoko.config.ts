@@ -1,9 +1,9 @@
 import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 
 // Each entry but `ok` is a config fixture `nuka check` must report by name,
-// in fixture wording. `beta`'s default is `undefined` on purpose: tsx's
-// esbuild transform rewrites that to `void 0`, and the finding must not
-// quote that rewritten text. `ok` is a well-formed fixture in the same
+// in fixture wording. `beta`'s default is `undefined` on purpose: a
+// loader that transforms rather than strips rewrites that to `void 0`, and
+// the finding must not quote rewritten text. `ok` is a well-formed fixture in the same
 // file, so a neighbor that is fine stays unreported.
 export default defineConfig({
   fixtures: defineFixtures({

@@ -5,7 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -124,7 +124,7 @@ for (const name of skillNames) {
 }
 
 describe("nuka skill (process)", () => {
-  it("resolves the same skill directory from dist/cli.js as from src/cli.ts via tsx", async () => {
+  it("resolves the same skill directory from dist/cli.js as from src/cli.ts", async () => {
     const cliPath = path.join(repoRoot, "dist", "cli.js");
     const rootDir = await createEmptyTempDir();
     try {
@@ -135,16 +135,15 @@ describe("nuka skill (process)", () => {
       );
       expect(distStderr).toBe("");
 
-      const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
-      const tsxCliPath = path.join(repoRoot, "src", "cli.ts");
-      const { stdout: tsxStdout, stderr: tsxStderr } = await execFileAsync(
-        tsxBin,
-        [tsxCliPath, "skill", "path"],
+      const sourceCliPath = path.join(repoRoot, "src", "cli.ts");
+      const { stdout: sourceStdout, stderr: sourceStderr } = await execFileAsync(
+        process.execPath,
+        [...sourceNodeArgs, sourceCliPath, "skill", "path"],
         { cwd: rootDir },
       );
-      expect(tsxStderr).toBe("");
+      expect(sourceStderr).toBe("");
 
-      expect(distStdout.trim()).toBe(tsxStdout.trim());
+      expect(distStdout.trim()).toBe(sourceStdout.trim());
       expect(distStdout.trim()).toBe(skillsDir);
     } finally {
       await removeTempDir(rootDir);

@@ -259,14 +259,14 @@ export function importIdentifiers(
   return identifiers;
 }
 
-/** The relative specifier one step file imports another by. A `.ts` file
- * is imported as `.js` (and `.mts` as `.mjs`): that is the spelling both
- * `tsc` under NodeNext and the runtime discovery uses resolve, while a
- * `.ts` specifier needs a compiler option a project may not set. */
+/** The relative specifier one step file imports another by: the file's
+ * own name, `.ts` included. Node resolves only a file that exists, so this
+ * is the spelling that loads under plain `node` as well as under nuka;
+ * `tsc` accepts it with `allowImportingTsExtensions`, which `nuka init`
+ * writes into tsconfig.json. */
 export function importSpecifier(fromDir: string, toFile: string): string {
   const relative = path.relative(fromDir, toFile).split(path.sep).join("/");
-  const withDot = relative.startsWith(".") ? relative : `./${relative}`;
-  return withDot.replace(/\.([mc]?)tsx?$/, ".$1js");
+  return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
 function argsLines(captures: readonly Capture[], chained: readonly ChainedField[]): string[] {

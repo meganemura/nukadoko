@@ -5,7 +5,7 @@ import { defineStep } from "../../nukadoko-shim.js";
 // `env` to `environment` — proves a rename, `{ env: environment }`, still
 // extracts correctly, matching Playwright's own fixture-renaming behavior),
 // no `nuka check`/`nuka run`/`nuka do` issue at all. This
-// is also this fixture project's tsx-loaded regression case
+// is also this fixture project's discovery-loaded regression case
 // (tests/fixture-names.test.ts): a representative step loaded through the
 // real discovery path, asserting `fixtureParameterNames` reads back exactly
 // `["page", "env"]` for it.

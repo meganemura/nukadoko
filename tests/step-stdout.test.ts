@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import { createEmptyTempDir, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { createEmptyTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -27,9 +27,8 @@ function nonEmptyLines(text: string): string[] {
 
 async function writeChattyProject(rootDir: string): Promise<void> {
   await mkdir(path.join(rootDir, "features", "steps"), { recursive: true });
-  // `"type": "module"` so tsx loads this project's .ts config and steps as
-  // ESM. A project with no package.json is read as CommonJS, and the config
-  // import fails before a step ever runs.
+  // `"type": "module"` so Node loads this project's .ts config and steps as
+  // ESM directly, with no reparse warning on the stderr this test reads.
   await writeFile(
     path.join(rootDir, "package.json"),
     `${JSON.stringify({ name: "chatty-stdout", private: true, type: "module" }, null, 2)}\n`,
@@ -89,10 +88,11 @@ async function runNuka(
   rootDir: string,
   args: readonly string[],
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
   const cliPath = path.join(repoRoot, "src", "cli.ts");
   try {
-    const { stdout, stderr } = await execFileAsync(tsxBin, [cliPath, ...args], { cwd: rootDir });
+    const { stdout, stderr } = await execFileAsync(process.execPath, [...sourceNodeArgs, cliPath, ...args], {
+      cwd: rootDir,
+    });
     return { stdout, stderr, exitCode: 0 };
   } catch (error) {
     const failed = error as { stdout?: string; stderr?: string; code?: number | string };

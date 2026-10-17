@@ -150,10 +150,8 @@ async function main(): Promise<void> {
   const config = await loadConfig(rootDir);
   const resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
 
-  // Left registered: the worker process ends when its features are done, and a
-  // step body may `await import()` a TypeScript file at any point before that.
   const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
-    await discoverSteps(rootDir, config.featuresDir, { keepRegistered: true });
+    await discoverSteps(rootDir, config.featuresDir);
 
   const bindings: readonly StepBinding[] = buildStepBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);

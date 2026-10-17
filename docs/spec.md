@@ -199,6 +199,33 @@ ESM-only. See "Compat steps" below for the same CommonJS decision. `nuka check`
 reports the file as `step-file-unsupported-extension`. This report prevents its
 definitions from resurfacing as unexplained `undefined-step` findings.
 
+Node loads the config and the step files itself, by type stripping: it
+replaces each type annotation with spaces and runs what is left, so the
+Node floor is the first release that does that without a flag (22.18 on the
+22 line, 23.6 otherwise). Three rules follow from it.
+
+- A step file imports another by its own file name, `.ts` included
+  (`import createProject from "./create-project.ts"`). That is the spelling
+  `nuka scaffold --from` writes and the one plain `node` resolves. `tsc`
+  accepts it with `rewriteRelativeImportExtensions` or
+  `allowImportingTsExtensions`; `nuka init` adds the first when
+  `tsconfig.json` names neither. The `.js` spelling TypeScript writes under
+  `"module": "nodenext"` (`./create-project.js` for `create-project.ts`)
+  still loads under `nuka`, which tries the `.ts` file when the `.js` one
+  is absent, but a program run with plain `node` does not.
+- Syntax with run-time behavior does not load: an `enum`, a `namespace`,
+  and a constructor parameter property. `nuka check` reports the file as
+  `step-file-import-failed` at the line Node names, with the rewrite to
+  make. `"erasableSyntaxOnly": true` makes `tsc` report the same syntax.
+- A name imported without `type` stays an import after stripping, so
+  importing a type that way fails with Node's "does not provide an export
+  named" error. `import type` (or `"verbatimModuleSyntax": true`, which
+  makes `tsc` require it) avoids that.
+
+Each discovery run loads its files in a module graph of its own, so a
+process that discovers twice (a live session, the MCP server, a test) runs
+every file's top-level code again, and two runs never share a module.
+
 A wide `featuresDir`, such as a repository root, widens the same walk. A build
 artifact anywhere in that tree can become glue when its name has one of the
 four supported extensions. `node_modules` and all dot-directories remain
@@ -1197,7 +1224,7 @@ The feature file would no longer show that work to a reviewer.
 
 ```ts
 import { defineStep, z } from "nukadoko";
-import createProject from "./create-project.js";
+import createProject from "./create-project.ts";
 
 export default defineStep({
   pattern: "the project is archived",
@@ -1348,8 +1375,8 @@ the `call` fixture runs one:
 
 ```ts
 import { defineStep, z } from "nukadoko";
-import createProject from "./parts/create-project.js";
-import inviteMember from "./parts/invite-member.js";
+import createProject from "./parts/create-project.ts";
+import inviteMember from "./parts/invite-member.ts";
 
 export default defineStep({
   pattern: "a project named {string} has {string} as a member",
@@ -4587,8 +4614,9 @@ would be running against glue it never actually read.
 
 - Runtime dependencies: `@cucumber/gherkin`,
   `@cucumber/cucumber-expressions`, `@cucumber/messages`,
-  `allure-js-commons`, `playwright`, `zod`, `tsx` (runtime TS import),
-  `yargs` (CLI). Node >= 20.
+  `allure-js-commons`, `playwright`, `zod`, `yargs` (CLI). TypeScript is
+  loaded by Node's own type stripping, with no loader package: Node
+  `^22.18.0 || >=23.6.0`.
 - When a format or protocol has an official SDK, nukadoko writes through it
   rather than reimplementing the format. Allure results go through
   allure-js-commons' reporter machinery; cucumber messages go through

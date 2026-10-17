@@ -100,6 +100,16 @@ a plain `.ts` file is read as CommonJS there, and nukadoko is ESM-only.
 (see the SKILL.md this file supports), so the same rule applies to every
 step file underneath it.
 
+Node runs a step file by erasing its types, so write TypeScript that
+erases cleanly. Import another step file by its own name, `.ts` included
+(`import openAccount from "./open-account.ts"`), the spelling `nuka
+scaffold --from` writes. Import a type with `import type`: a type imported
+without it stays an import and fails with "does not provide an export
+named". An `enum`, a `namespace`, or a constructor parameter property does
+not load at all; `nuka check` reports `step-file-import-failed` at its
+line. Write an object with `as const` and a field assigned in the
+constructor instead.
+
 ```ts
 // features/steps/set-product-out-of-stock.ts
 import { defineStep, z } from "nukadoko";
@@ -508,8 +518,8 @@ its body moves.
 the same way `from` names its producer:
 
 ```ts
-import openAccount from "./open-account.js";
-import sendWelcomeMail from "./send-welcome-mail.js";
+import openAccount from "./open-account.ts";
+import sendWelcomeMail from "./send-welcome-mail.ts";
 
 export default defineStep({
   // pattern, description, args and returns are exactly what they were

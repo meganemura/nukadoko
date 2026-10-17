@@ -114,17 +114,13 @@ export async function runExplore(options: RunExploreOptions): Promise<number> {
 
   let discovery;
   try {
-    discovery = await discoverSteps(rootDir, config.featuresDir, { keepRegistered: true });
+    discovery = await discoverSteps(rootDir, config.featuresDir);
     assertFeaturesDirExists(rootDir, config);
   } catch (error) {
     stderr.write(`${formatVocabularyError(error)}\n`);
     return 1;
   }
-  try {
-    return await exploreDiscovered(options, seed, config, resolvedEnv, discovery);
-  } finally {
-    await discovery.unregister();
-  }
+  return exploreDiscovered(options, seed, config, resolvedEnv, discovery);
 }
 
 async function exploreDiscovered(

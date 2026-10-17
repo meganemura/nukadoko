@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { loadConfig } from "../config/load-config.js";
-import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
+import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { BUILTIN_FIXTURE_NAMES } from "../step/context.js";
 import {
@@ -87,12 +87,14 @@ export async function loadVocabulary(
  * carries, matches that check's own wording so the same mistake reads
  * the same way from either command. */
 class FeaturesDirMissingError extends Error {
-  constructor(
-    readonly featuresDir: string,
-    readonly resolvedPath: string,
-  ) {
+  readonly featuresDir: string;
+  readonly resolvedPath: string;
+
+  constructor(featuresDir: string, resolvedPath: string) {
     super(`featuresDir "${featuresDir}" does not exist at ${resolvedPath}`);
     this.name = "FeaturesDirMissingError";
+    this.featuresDir = featuresDir;
+    this.resolvedPath = resolvedPath;
   }
 }
 
@@ -145,7 +147,7 @@ export function formatImportFailuresStderr(
   if (failures.length === 0) {
     return "";
   }
-  const cjsProject = isCommonJsProject(rootDir);
+  const cjsProject = refusesEsmTs(rootDir);
   const lines = failures.map((failure) => {
     const explanation = cjsTsMismatchExplanation(cjsProject, failure.file);
     return `  ${failure.file}: ${failure.message.replace(/\s*\n\s*/g, " ")}${explanation}`;

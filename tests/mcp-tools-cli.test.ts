@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, repoRoot, testsDir } from "./helpers/fixtures.js";
+import { createCaptureSink, testsDir } from "./helpers/fixtures.js";
 
 // Responsibility: the two `nuka mcp-tools` outcomes tests/mcp-client.test.ts
 // never exercises (its own header says it checks the JSON path, the
@@ -14,7 +14,6 @@ import { createCaptureSink, repoRoot, testsDir } from "./helpers/fixtures.js";
 // listing can be held to one line per tool while `--json` keeps the
 // description the server declared.
 
-const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
 const serverScript = path.join(testsDir, "helpers", "mcp-test-server.ts");
 const newlineServerScript = path.join(testsDir, "helpers", "mcp-newline-server.ts");
 
@@ -30,7 +29,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["experimental", "mcp-tools", "--", tsxBin, serverScript], { stdout, stderr });
+      const exitCode = await runCli(["experimental", "mcp-tools", "--", process.execPath, serverScript], { stdout, stderr });
 
       expect(exitCode).toBe(0);
       expect(stderr.text()).toBe("");
@@ -44,7 +43,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
       expect(stdout.text()).not.toContain("{");
     },
     // Same 30s allowance tests/mcp-client.test.ts already gives this same
-    // tsx-spawned server, rather than vitest's own 5s default.
+    // spawned server, rather than vitest's own 5s default.
     30_000,
   );
 
@@ -53,7 +52,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["experimental", "mcp-tools", "--", tsxBin, newlineServerScript], {
+      const exitCode = await runCli(["experimental", "mcp-tools", "--", process.execPath, newlineServerScript], {
         stdout,
         stderr,
       });
@@ -77,7 +76,7 @@ describe("nuka mcp-tools: CLI wiring", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["experimental", "mcp-tools", "--json", "--", tsxBin, newlineServerScript], {
+      const exitCode = await runCli(["experimental", "mcp-tools", "--json", "--", process.execPath, newlineServerScript], {
         stdout,
         stderr,
       });

@@ -4,10 +4,10 @@
 // context module: context already depends on secrets, and the reverse edge
 // was only this function.
 //
-// Node's util.parseEnv is not used. It was added in Node 20.12.0, and this
-// package accepts Node 20, so the function is missing on part of the
-// supported range. Calling it only when present would make one file parse
-// differently on two machines. The scanner below is the format docs/spec.md
+// Node's util.parseEnv is not used. It returns the bindings only, and nuka
+// check needs the lines it could not read (skippedEnvFileLines below), so
+// a second scan would be needed anyway, and two parsers can disagree about
+// one file. The scanner below is the format docs/spec.md
 // describes. It matches dotenv's default parser for comments, quotes,
 // backslash escapes, and values that span lines. The separator is "=" only.
 // A line that is not a blank, a comment, or part of a binding is returned

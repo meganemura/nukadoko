@@ -1,5 +1,5 @@
 import { Before } from "nukadoko/compat";
-import type { MigrationWorld } from "../support/world.js";
+import type { MigrationWorld } from "../support/world.ts";
 
 // The one Before hook this suite keeps (README.md's Stage 1: "the measured
 // door"). Before switching to nukadoko/compat, a hook like this one had to

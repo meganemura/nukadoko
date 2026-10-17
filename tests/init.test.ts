@@ -282,7 +282,7 @@ describe("nuka init", () => {
       "nukadoko.config.ts\nfeatures/steps\n.gitignore\npackage.json\ntsconfig.json\n".replace(/\//g, path.sep),
     );
     expect(await readFile(path.join(rootDir, "tsconfig.json"), "utf8")).toBe(
-      '{\n    "compilerOptions": { "strict": true },\n    "include": ["src/**/*", "test/**/*", "features/**/*", "nukadoko.config.ts"]\n}\n',
+      '{\n    "compilerOptions": { "strict": true, "rewriteRelativeImportExtensions": true },\n    "include": ["src/**/*", "test/**/*", "features/**/*", "nukadoko.config.ts"]\n}\n',
     );
   });
 
@@ -603,10 +603,10 @@ describe("nuka init", () => {
 });
 
 // Responsibility: the CJS door — a project whose own package.json has no
-// "type": "module" cannot load nukadoko.config.ts at all (tsx reads a
-// plain .ts file's module kind from that same field, the same rule Node
-// itself applies), so `nuka init` writes nukadoko.config.mts there
-// instead and says why on stderr. isCommonJsProject (src/config/
+// "type": "module" reads nukadoko.config.ts as CommonJS (Node takes a
+// plain .ts file's module kind from that field, and reparses it with a
+// warning on every load when the field is absent), so `nuka init` writes
+// nukadoko.config.mts there instead and says why on stderr. isCommonJsProject (src/config/
 // module-kind.ts) is the one place that decision is made; this only
 // exercises it through `nuka init` itself.
 describe("nuka init: CommonJS projects", () => {
@@ -887,8 +887,9 @@ describe("nuka init: the project's own tsc checks the steps and the config with 
   let rootDir: string;
 
   beforeEach(async () => {
-    // Under tests/ so "nukadoko" resolves to this package by its own name,
-    // and its types to the built dist/.
+    // Under tests/ so "nukadoko" resolves through the shim to this
+    // package's own src/, types included.
+    await ensureNukadokoShim();
     const parent = path.join(testsDir, ".tmp-fixtures");
     await mkdir(parent, { recursive: true });
     rootDir = await mkdtemp(path.join(parent, "init-tsconfig-"));
@@ -921,7 +922,7 @@ describe("nuka init: the project's own tsc checks the steps and the config with 
     await rm(rootDir, { recursive: true, force: true });
   });
 
-  it("puts the scaffolded step and nukadoko.config.ts in the program, and tsc passes", async () => {
+  it("puts the scaffolded step and nukadoko.config.ts in the program, accepts a .ts import, and tsc passes", async () => {
     expect(await runCli(["init"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
     expect(
       await runCli(["scaffold", "greet-someone", "--pattern", "I greet {name:string}"], {
@@ -930,6 +931,12 @@ describe("nuka init: the project's own tsc checks the steps and the config with 
         stderr: createCaptureSink(),
       }),
     ).toBe(0);
+
+    // The spelling scaffold writes for an import of the project's own code.
+    await writeFile(
+      path.join(rootDir, "features", "steps", "greeting.ts"),
+      'import { greet } from "../../src/greet.ts";\nexport const greeting: string = greet("nuka");\n',
+    );
 
     const tsc = path.join(repoRoot, "node_modules", ".bin", "tsc");
     const listed = await execFileAsync(tsc, ["-p", rootDir, "--listFilesOnly"]);

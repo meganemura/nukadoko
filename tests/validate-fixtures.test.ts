@@ -8,7 +8,7 @@ import { formatFixtureIssues, validateFixtureDefinitions, validateStepFixtures }
 
 // Responsibility: unit tests for src/fixture/validate-fixtures.ts's pure
 // functions — no discovery, no
-// tsx, no filesystem, mirroring tests/validate-from.test.ts's own shape for
+// loader, no filesystem, mirroring tests/validate-from.test.ts's own shape for
 // the same reasons that file's header gives: most cases here reach the
 // runtime check by bypassing the type system (`as any`/`as unknown as
 // Step`), exactly the way a step author's own escape hatch could, since

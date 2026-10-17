@@ -200,19 +200,14 @@ describe("a live-session socket path that reaches the daemon itself: EINVAL leav
     const name = "alice";
     const crashLogPath = sessionCrashLogPath(rootDir, "s", "default", name);
 
-    // Not `spawnDaemon` here, on purpose: this repository's own dev/test
-    // run spawns daemon-entry.ts through tsx's own CLI (spawn-daemon.ts's
-    // own header), and tsx's own bootstrap creates its own IPC pipe under
-    // `os.tmpdir()` before daemon-entry.ts ever loads — measured directly
-    // while writing this test, a long `TMPDIR` makes *that* pipe hit the
-    // exact same `EINVAL` first, for a path this package's own code never
-    // touches, so a spawned child never reaches the code this test exists
-    // to exercise at all. daemon-entry.ts is a plain top-level script, not
+    // Not `spawnDaemon` here, on purpose: the test drives the crash path
+    // in this same process, so the only socket path in play is the one
+    // daemon-entry.ts itself computes. daemon-entry.ts is a plain top-level script, not
     // an exported function (its own header: argv-driven on purpose, never
     // part of nukadoko's own CLI surface), so it is driven the same way
     // here: faking `process.argv` and importing it directly, in this same
-    // process, which reaches its own top-level `try`/`catch` without going
-    // through tsx's CLI at all.
+    // process, which reaches its own top-level `try`/`catch` with no child
+    // process in between.
     originalArgv = process.argv;
     process.argv = ["node", "daemon-entry.ts", rootDir, "", name, "60", crashLogPath];
     originalExitCode = process.exitCode;

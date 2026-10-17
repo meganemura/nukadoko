@@ -18,7 +18,9 @@ nukadoko は、型付き step の契約のもとで Gherkin の scenario を実�
 
 **インストール**
 
-Node 20+(`package.json` の `engines.node` は `">=20"`)。
+Node 22 系なら 22.18 以降、それ以外は 23.6 以降が必要です(`package.json` の `engines.node` は `"^22.18.0 || >=23.6.0"`)。
+フラグなしで `.ts` ファイルを実行できる最初のリリースです。
+nukadoko は config と step ファイルを Node 自身の型の除去で読み込むので、TypeScript のローダーを別途インストールしません。
 nukadoko は devDependency です:
 
 ```sh
@@ -63,7 +65,7 @@ tsconfig.json
 
 `init` は `.gitignore` に `.nukadoko/` を追加し、`package.json` に `test:scenarios` script を追加します。
 人も CI も、この 1 つのコマンドを実行します。
-`tsconfig.json` の `include` には、steps と config を追加します。
+`tsconfig.json` の `include` には steps と config を追加し、`.ts` ファイルを名指しする import を `tsc` が受け付けるためのコンパイラオプションも追加します。
 CommonJS の場合と、`--allure` と `--env` のフラグは [Setup details](#setup-details) にあります。
 
 When の step を scaffold します。
@@ -132,7 +134,7 @@ features/steps/output-says.ts
 ```ts
 // features/steps/output-says.ts
 import { defineStep, z } from "nukadoko";
-import runGreet from "./run-greet.js";
+import runGreet from "./run-greet.ts";
 
 export default defineStep({
   description: "The CLI printed exactly this line",
@@ -249,7 +251,7 @@ fixture がサーバを起動し、When の step は `fetch` でそのサーバ�
 ```ts
 // nukadoko.config.ts
 import { defineConfig, defineFixtures } from "nukadoko";
-import { startServer } from "./src/server.js";
+import { startServer } from "./src/server.ts";
 
 export default defineConfig({
   fixtures: defineFixtures({
@@ -544,8 +546,19 @@ API の形は [An HTTP API](#an-http-api) にあります。
 `tsconfig.json` の `include` が `features/` や config ファイルを外しているときは、足りないエントリを追加し、ファイルの残りはそのままにします。
 コメントや末尾のカンマも、そのまま残ります。
 `include` を持たない `tsconfig.json` は、もともとすべてのファイルを検査します。
+`compilerOptions` に `allowImportingTsExtensions` も `rewriteRelativeImportExtensions` も無いときは、`"rewriteRelativeImportExtensions": true` を追加します(TypeScript 5.7 以降)。
+これで `nuka scaffold --from` が書く `./run-greet.ts` の import を `tsc` が受け付けます。
+このオプションは出力するプロジェクトでもしないプロジェクトでも有効で、変わるのは `.ts` ファイルを名指しする import の出力だけです。
 2 つのフラグで書くものを増やせます。
 `--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
+
+Node は step ファイルの型を除去して実行するので、2 種類の TypeScript は読み込めません。
+実行時の振る舞いを持つ構文(`enum`、`namespace`、コンストラクタのパラメータプロパティ)は拒否され、`nuka check` はその行に `step-file-import-failed` を報告し、書き換え方を示します。
+型でしかない名前を `type` なしで import すると import として残り、Node の "does not provide an export named" エラーで失敗します。
+`compilerOptions` に `"erasableSyntaxOnly": true` と `"verbatimModuleSyntax": true` を設定すると、`nuka` を実行する前に `tsc` が両方を報告します。
+`.ts` ファイルの隣の `.js` ファイルを名指しする import(`run-greet.ts` に対する `./run-greet.js`)は、`nuka` の下では引き続き読み込めます。
+`nuka` が一方を他方に対応付けるからです。
+素の `node` は対応付けないので、scaffold は `.ts` の名前を書きます。
 
 nukadoko は `dist/` と並べて TypeScript のソースも同梱しているため、stack trace は実際のコードを指します。
 `node_modules` を読む agent は、型だけでなく「なぜそう動くか」も確認できます。
@@ -554,7 +567,9 @@ nukadoko は `dist/` と並べて TypeScript のソースも同梱している�
 ふつうの `npm init -y` もこの形を書きます。
 `nuka init` はそれでも動きます。
 `nukadoko.config.ts` の代わりに `nukadoko.config.mts` を書き、step ファイルも `.mts` にする必要があることを 1 行で伝えます。
-このようなプロジェクトでは、Node はふつうの `.ts` ファイルを CommonJS として読みますが、nukadoko は ESM だけをサポートします。
+nukadoko は ESM だけをサポートします。
+このようなプロジェクトでは、Node はふつうの `.ts` ファイルをまず CommonJS として読み、読み込むたびに警告を出して ES module として解析し直します。
+`"type": "commonjs"` のもとでは解析し直さず、そのファイルは import に失敗します。
 
 <details>
 <summary>まだ `package.json` がありませんか(Rails、Django など Node 以外のリポジトリ)?</summary>
@@ -570,7 +585,8 @@ nukadoko は `dist/` と並べて TypeScript のソースも同梱している�
 
 `"type": "module"` を付けると、生成されるファイルはすべて `.ts` のままになり、上の 2 つの経路のうち簡単な方を使えます。
 省略してもサポートされます(上の CommonJS の段落を参照)。
-ただし、このようなプロジェクトで `nukadoko.config.ts` を手で書くと、読み込みに失敗します。
+ただし、このようなプロジェクトで手で書いた `nukadoko.config.ts` は、警告付きで読み込まれます。
+`"type": "commonjs"` のもとでは読み込みに失敗します。
 そのエラーはそのファイルと原因を名指しし、`nukadoko.config.mts` へのリネームを案内します。
 代わりに `nuka init` は `nukadoko.config.mts` を書きます。
 `.nukadoko/` を自分で `.gitignore` に追加する必要はありません。

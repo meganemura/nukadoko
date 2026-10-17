@@ -9,7 +9,7 @@ import { getDefaultTimeoutMs, setDefaultTimeout } from "../src/compat/registry.j
 // default (vitest.config.ts sets no `isolate: false`), so this file's own
 // top-level `import` of registry.ts starts fresh regardless of what any
 // other test file in the same run already called — unlike a real discovery
-// run's own scoped tsx import (src/discover/discover-steps.ts), which gets
+// run's own namespaced import (src/discover/discover-steps.ts), which gets
 // its own fresh module instance on every `discoverSteps()` call; that
 // end-to-end behavior is covered separately in tests/compat-run-scope.test.ts.
 

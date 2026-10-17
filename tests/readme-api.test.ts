@@ -88,6 +88,8 @@ const TSCONFIG = `${JSON.stringify(
       strict: true,
       skipLibCheck: false,
       noEmit: true,
+      // What `nuka init` adds, so the `.ts` import names scaffold writes check.
+      rewriteRelativeImportExtensions: true,
       types: ["node"],
     },
     include: ["nukadoko.config.ts", "src", "features"],

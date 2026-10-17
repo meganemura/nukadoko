@@ -4,7 +4,7 @@ import { constants } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 // Responsibility: fixture lifetimes under `nuka explore`. A process-scope
 // fixture lasts the whole invocation, runs and shrink attempts included,
@@ -101,7 +101,7 @@ describe("fixture scope under nuka explore", () => {
     const child = spawn(
       process.execPath,
       [
-        path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"),
+        ...sourceNodeArgs,
         path.join(repoRoot, "src", "cli.ts"),
         "explore",
         "features/hold-model.ts",

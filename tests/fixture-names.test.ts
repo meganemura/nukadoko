@@ -10,12 +10,12 @@ import { fixture } from "./helpers/fixtures.js";
 
 // Responsibility: unit tests for src/step/fixture-names.ts's pure
 // extraction, plus a required regression test — a
-// representative step loaded through the real discovery path (tsx's
-// `register().import()`, not a plain in-process function) asserting the
-// names extracted from its real, esbuild-transformed `fn.toString()` match
+// representative step loaded through the real discovery path (Node's
+// own type stripping, not a plain in-process function) asserting the
+// names extracted from its real, stripped `fn.toString()` match
 // what was written. The in-process cases below (plain arrow functions
 // defined right here) exercise the extraction's own edge cases cheaply,
-// the same "in-memory first, one dedicated tsx-loaded test as the guard"
+// the same "in-memory first, one dedicated discovery-loaded test as the guard"
 // split tests/validate-from.test.ts's own header established for `from`.
 
 describe("fixtureParameterNames: in-process extraction", () => {
@@ -75,15 +75,15 @@ describe("fixtureParameterNames: in-process extraction", () => {
   });
 });
 
-describe("fixtureParameterNames: tsx-loaded regression", () => {
-  it("reads a representative step's own fixture names through the real tsx discovery path", async () => {
+describe("fixtureParameterNames: discovery-loaded regression", () => {
+  it("reads a representative step's own fixture names through the real discovery path", async () => {
     const { vocabulary } = await discoverSteps(fixture("fixture-bag-project"), "features");
     const entry = vocabulary.get("clean-step");
     expect(entry?.kind).toBe("typed");
     if (entry === undefined || entry.kind !== "typed") {
       throw new Error("unreachable: clean-step should be a typed vocabulary entry");
     }
-    // Guards against tsx's own default esbuild transform silently changing
+    // Guards against the loader's transform silently changing
     // fn.toString()'s own shape out from under src/step/fixture-names.ts —
     // this is the one place that dependency is actually exercised.
     expect(fixtureParameterNames(entry.step.run)).toEqual(["page", "env"]);

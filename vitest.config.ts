@@ -4,6 +4,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    // Node loads this file itself: its `import()` has to reach the resolve
+    // hook it installs, and a transformed copy's import goes through
+    // Vitest's own loader instead (the file's header).
+    server: { deps: { external: [/\/src\/config\/ts-loader\.ts$/] } },
     // `nuka run` appends its run summary to $GITHUB_STEP_SUMMARY, which
     // GitHub Actions sets for every step. Without this, every run a test
     // starts in CI would land in this repository's own job summary. Empty

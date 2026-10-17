@@ -1,6 +1,6 @@
 import { defineStep } from "nukadoko";
 import { z } from "zod";
-import createTodo from "./create-todo.js";
+import createTodo from "./create-todo.ts";
 
 // The consumer half of the promoted pair: reads the producer's validated
 // result through the `resultOf` fixture rather than a World bag write --

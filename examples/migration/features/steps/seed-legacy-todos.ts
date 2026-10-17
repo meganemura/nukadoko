@@ -1,5 +1,5 @@
 import { DataTable, Given } from "nukadoko/compat";
-import type { MigrationWorld } from "../support/world.js";
+import type { MigrationWorld } from "../support/world.ts";
 
 // Still cucumber-js-shaped glue (README.md's Stage 1: "the import is the
 // only line that moved"): a string pattern with no named capture, a

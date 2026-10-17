@@ -1,11 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { cjsTsMismatchExplanation, isCommonJsProject } from "../config/module-kind.js";
-// Before tsx: tsx-cache-off.ts says why the order matters.
-import "../config/tsx-cache-off.js";
-import { register } from "tsx/esm/api";
+import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
+import { importInNamespace, newNamespace } from "../config/ts-loader.js";
 import type { z } from "zod";
 import type { DeclaredCollector } from "../compat/declared.js";
 import type { HookRegistration } from "../compat/hooks.js";
@@ -24,6 +21,7 @@ import {
   DuplicateStepError,
   DuplicateWorldDefinitionError,
 } from "./errors.js";
+import { describeImportFailure } from "../config/import-failure.js";
 
 // Responsibility: walk `featuresDir`, import every `.ts`/`.mts`/`.js`/`.mjs`
 // file found -- skipping `node_modules` at any depth, any dot-directory
@@ -42,31 +40,20 @@ import {
 // pattern source for compat) must be unique, and a silent last-write-wins
 // would hide a real collision.
 //
-// Single `register({ namespace })` per discovery run, not per-file
-// `tsImport()`: tsx's `tsImport()` convenience wrapper mints a fresh
-// namespace/module registration on every call (confirmed by reading tsx's
-// own source), so loading each step file with its own `tsImport()` call
-// would put every file in its own isolated module graph. A step file's own
-// relative import of another step file would then resolve to a *different*
-// registration than this function's own direct load of that same file —
-// two distinct Step objects that are never `===`. `ctx.resultOf`
-// (docs/spec.md "Context API") keys its result chain on Step object
-// identity, so that would silently break `ctx.resultOf` for any chain
-// crossing a file boundary (tests/resultof.test.ts's empirical proof).
-// Calling tsx's `register({ namespace })` exactly once per discovery run
-// and reusing the scoped `.import()` it returns for every file instead
-// puts every load on one shared module graph, so the same file always
-// yields the same object however it's reached.
+// One namespace per discovery run (src/config/ts-loader.ts), not one per
+// file: a step file's relative import of another step file has to reach
+// the same module this function loads directly, or the two are distinct
+// Step objects that are never `===`, and `ctx.resultOf` (docs/spec.md
+// "Context API") keys its result chain on that identity
+// (tests/resultof.test.ts).
 //
-// This same one-namespace-per-run property is what makes compat's
-// registration buffer (src/compat/registry.ts) safe to read here: this
-// function loads that module through the *same* scoped `.import()` used for
-// every step file (never a plain top-level `import`), so this run's own
-// instance of the buffer is the one, and only one, this run's own step
-// files reach too — via "nukadoko/compat" -> ./index.js -> ./registry.js,
-// resolving to the identical absolute file this function loads directly.
-// A concurrent discovery run gets its own namespace and therefore its own,
-// independent instance (tests/compat-discover.test.ts's concurrent test).
+// The same namespace is what makes compat's registration buffer
+// (src/compat/registry.ts) safe to read here: this function loads that
+// module through the namespace too (never a plain top-level `import`), so
+// the instance it drains is the one this run's step files reach via
+// "nukadoko/compat" -> ./index.js -> ./registry.js. A concurrent discovery
+// run gets its own namespace and therefore its own instance
+// (tests/compat-discover.test.ts's concurrent test).
 
 export interface TypedVocabularyEntry {
   readonly kind: "typed";
@@ -128,9 +115,6 @@ export interface CompatParameterTypeEntry extends CompatParameterTypeRegistratio
 }
 
 export interface DiscoveryResult {
-  /** Tears down the registration `keepRegistered` left alive; a no-op when it
-   * was already torn down. */
-  readonly unregister: () => Promise<void>;
   readonly vocabulary: Vocabulary;
   readonly compatParameterTypes: readonly CompatParameterTypeEntry[];
   /** Constructs one pickle's own World — base `World`, or whatever this
@@ -144,8 +128,8 @@ export interface DiscoveryResult {
    * only forwarded: this closure has no object of its own, and the caller
    * passes `config.worldParameters`, the only place that object is
    * declared. Bound
-   * to the *exact* module instance this discovery run's own scoped tsx
-   * import loaded src/compat/world.ts through (see that file's header for
+   * to the *exact* module instance this discovery run's namespace loaded
+   * src/compat/world.ts through (see that file's header for
    * why identity matters here) — callers (src/run/run-scenario.ts) never
    * import world.js directly themselves. */
   readonly instantiateCompatWorld: (
@@ -174,15 +158,15 @@ export interface DiscoveryResult {
    * defaulted to cucumber-js's own 5000ms (see `setDefaultTimeout`'s own
    * comment for why). */
   readonly defaultTimeoutMs: number | undefined;
-  /** One entry per file whose `scoped.import()` threw, tolerant mode only —
+  /** One entry per file whose import threw, tolerant mode only —
    * always `[]` in the default (non-tolerant) mode, since that mode rejects
    * on the first such
    * file instead of collecting them. `filePath` is rootDir-relative, matching
    * every other `CheckIssue.file` this run's caller (src/check/analyze.ts)
    * already produces (src/feature/load-features.ts's `relativePath`,
-   * src/check/feature-check.ts's `file`). `message` is the importing error's
-   * own `.message`, unmodified — see the `catch` below for why. */
-  readonly importFailures: readonly { filePath: string; message: string }[];
+   * src/check/feature-check.ts's `file`). `message` and `line` come from
+   * src/discover/import-failure.ts. */
+  readonly importFailures: readonly { filePath: string; message: string; line?: number }[];
   /** rootDir-relative paths of every `.cjs` file this run's walk found
    * under `featuresDir` (skipping `node_modules` and any dot-directory, the
    * same walk every other file here goes through) and never attempted to
@@ -224,8 +208,8 @@ function compatPatternSource(pattern: string | RegExp): string {
 // since a declaration file's own name also ends in `.ts`/`.mts` -- checking
 // order matters here, the plain-extension check must never see one first.
 const DECLARATION_FILE_EXTENSIONS = [".d.ts", ".d.mts"];
-// tsx's `tsImport` reads all four directly (docs/spec.md "Implementation
-// notes"); `.cjs` is deliberately absent -- see `unsupportedExtensionFiles`
+// Node loads all four directly (docs/spec.md "Implementation notes");
+// `.cjs` is deliberately absent -- see `unsupportedExtensionFiles`
 // on `DiscoveryResult` for why it is walked and named, but never imported.
 const STEP_FILE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs"];
 const UNSUPPORTED_STEP_FILE_EXTENSION = ".cjs";
@@ -307,12 +291,6 @@ export interface DiscoverStepsOptions {
    * not a second copy of the loop — keeps this a single source of truth
    * (the migration-door rule: one mechanism, not a fork). */
   readonly tolerateImportFailures?: boolean;
-  /** Keep the tsx registration alive after discovery returns, so a step that
-   * runs later can `await import()` a TypeScript file from its body. The
-   * caller then owes a call to `unregister` once the run is over. Callers that
-   * only read the vocabulary leave this off and the registration is gone on
-   * return. */
-  readonly keepRegistered?: boolean;
 }
 
 export async function discoverSteps(
@@ -320,233 +298,196 @@ export async function discoverSteps(
   featuresDir: string,
   options: DiscoverStepsOptions = {},
 ): Promise<DiscoveryResult> {
-  const { tolerateImportFailures = false, keepRegistered = false } = options;
+  const { tolerateImportFailures = false } = options;
   const featuresRoot = path.join(rootDir, featuresDir);
   const { files, unsupportedExtensionFiles } = walkStepFiles(featuresRoot);
 
-  // One namespace per discovery run (random, not a counter or timestamp:
-  // this can run concurrently with other discovery runs, e.g. across test
-  // files, and namespaces must not collide) — every file below is loaded
-  // through this single registration's scoped `.import()`, and the
-  // registration is torn down in `finally` so a thrown DuplicateStepError/
-  // DuplicateCompatStepError or a broken step file's own throw never leaks
-  // it.
-  const scoped = register({ namespace: randomUUID() });
-  let succeeded = false;
-  try {
-    // Loaded through `scoped` itself (not a plain top-level `import`) so
-    // this run's own compat registration buffer is the one, and only the
-    // one, tsx's namespace isolation gives it (see this file's own header,
-    // and src/compat/registry.ts's) — a plain top-level import would
-    // instead share one instance across every discovery run in this
-    // process, defeating the isolation tests/compat-discover.test.ts's
-    // concurrent test depends on.
-    const compatRegistry = (await scoped.import(
-      new URL("../compat/registry.js", import.meta.url).href,
-      import.meta.url,
-    )) as typeof import("../compat/registry.js");
-    // Same identity reasoning as compatRegistry above, extended to World and
-    // Before/After: loaded through this run's own scoped import, never a
-    // plain top-level
-    // one, so `setWorldConstructor`/`Before`/`After` calls a step file makes
-    // via "nukadoko/compat" land in the exact instances captured here.
-    const compatWorld = (await scoped.import(
-      new URL("../compat/world.js", import.meta.url).href,
-      import.meta.url,
-    )) as typeof import("../compat/world.js");
-    const compatHooksModule = (await scoped.import(
-      new URL("../compat/hooks.js", import.meta.url).href,
-      import.meta.url,
-    )) as typeof import("../compat/hooks.js");
-    // Same identity reasoning again, for BeforeAll/AfterAll: loaded through
-    // this run's own scoped import so a step file's `BeforeAll`/`AfterAll`
-    // call via "nukadoko/compat" lands in the exact instance drained below.
-    const compatRunHooksModule = (await scoped.import(
-      new URL("../compat/run-hooks.js", import.meta.url).href,
-      import.meta.url,
-    )) as typeof import("../compat/run-hooks.js");
-    // Same identity reasoning again, for `defineWorld` —
-    // src/compat/define-world.ts's own registration buffer, loaded through
-    // this run's own scoped import so a step file's
-    // `defineWorld(...)` call via "nukadoko/compat" lands in the exact
-    // instance this function drains below.
-    const defineWorldModule = (await scoped.import(
-      new URL("../compat/define-world.js", import.meta.url).href,
-      import.meta.url,
-    )) as typeof import("../compat/define-world.js");
+  const namespace = newNamespace();
+  const loadOwn = async <T>(relative: string): Promise<T> =>
+    (await importInNamespace(new URL(relative, import.meta.url).href, namespace)) as T;
+  // Loaded through the namespace, never a plain top-level `import`: a plain
+  // import would share one instance across every discovery run in this
+  // process, and the registrations below would leak between runs.
+  const compatRegistry = await loadOwn<typeof import("../compat/registry.js")>("../compat/registry.js");
+  // Same identity reasoning as compatRegistry above, extended to World and
+  // Before/After: loaded through this run's namespace, never a
+  // plain top-level
+  // one, so `setWorldConstructor`/`Before`/`After` calls a step file makes
+  // via "nukadoko/compat" land in the exact instances captured here.
+  const compatWorld = await loadOwn<typeof import("../compat/world.js")>("../compat/world.js");
+  const compatHooksModule = await loadOwn<typeof import("../compat/hooks.js")>("../compat/hooks.js");
+  // Same identity reasoning again, for BeforeAll/AfterAll: loaded through
+  // this run's namespace so a step file's `BeforeAll`/`AfterAll`
+  // call via "nukadoko/compat" lands in the exact instance drained below.
+  const compatRunHooksModule = await loadOwn<typeof import("../compat/run-hooks.js")>("../compat/run-hooks.js");
+  // Same identity reasoning again, for `defineWorld` —
+  // src/compat/define-world.ts's own registration buffer, loaded through
+  // this run's namespace so a step file's
+  // `defineWorld(...)` call via "nukadoko/compat" lands in the exact
+  // instance this function drains below.
+  const defineWorldModule = await loadOwn<typeof import("../compat/define-world.js")>("../compat/define-world.js");
 
-    const vocabulary = new Map<string, VocabularyEntry>();
-    const models: { filePath: string; model: Model }[] = [];
-    const relations: { filePath: string; relation: Relation }[] = [];
-    const compatParameterTypes: CompatParameterTypeEntry[] = [];
-    // At most one file's worth of `defineWorld` schemas ever wins — a second
-    // registration, anywhere, is always an error, detected here rather than
-    // inside define-world.ts itself so both offending files can be named
-    // (DuplicateWorldDefinitionError), the same reasoning
-    // DuplicateCompatStepError already applies to a colliding compat step.
-    let declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>> = {};
-    let declaredWorldSchemasFilePath: string | undefined;
-    const importFailures: { filePath: string; message: string }[] = [];
+  const vocabulary = new Map<string, VocabularyEntry>();
+  const models: { filePath: string; model: Model }[] = [];
+  const relations: { filePath: string; relation: Relation }[] = [];
+  const compatParameterTypes: CompatParameterTypeEntry[] = [];
+  // At most one file's worth of `defineWorld` schemas ever wins — a second
+  // registration, anywhere, is always an error, detected here rather than
+  // inside define-world.ts itself so both offending files can be named
+  // (DuplicateWorldDefinitionError), the same reasoning
+  // DuplicateCompatStepError already applies to a colliding compat step.
+  let declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>> = {};
+  let declaredWorldSchemasFilePath: string | undefined;
+  const importFailures: { filePath: string; message: string; line?: number }[] = [];
 
-    for (const filePath of files) {
-      // Scope note: this only catches a file whose import itself throws. A
-      // name imported but used only as a type annotation, or imported and
-      // never referenced at all, is elided from the compiled output by
-      // esbuild/tsx and so never actually gets imported at run time — that
-      // file imports cleanly here even if the name it asked for doesn't
-      // exist on the compat surface. That is not a detection gap this loop
-      // is failing to close: a glue file esbuild elides the import from
-      // runs exactly as written, so there is nothing broken to report.
-      //
-      // Only the import call itself is inside this try — `isStep`, the
-      // drains below, and the duplicate checks they can throw all stay
-      // outside it, so they only
-      // ever run once this file's own import has actually succeeded. Putting
-      // them inside the same try would let a DuplicateStepError/
-      // DuplicateCompatStepError/DuplicateWorldDefinitionError — a cross-file
-      // authoring mistake, not an import failure — get caught here and
-      // misreported as this file's own import failing.
-      let mod: { default?: unknown };
-      try {
-        mod = await scoped.import(pathToFileURL(filePath).href, import.meta.url);
-      } catch (error) {
-        if (!tolerateImportFailures) {
-          // The tolerant path reports this failure through `importFailures`,
-          // which names the file and leaves Node's message unmodified. The
-          // CommonJS/.ts sentence is added later, by the caller. This path
-          // throws, and `nuka run`, `nuka do`, and `nuka harvest` print only
-          // `error.message`. A top-level throw's own message does not name
-          // the file, so the path relative to the project root has to be
-          // part of the message, and that sentence has to travel with it:
-          // those commands never see `importFailures`. The sentence is empty
-          // unless the project is CommonJS and the file is `.ts`.
-          const message = error instanceof Error ? error.message : String(error);
-          const relativePath = path.relative(rootDir, filePath);
-          const explanation = cjsTsMismatchExplanation(isCommonJsProject(rootDir), filePath);
-          throw new Error(`${relativePath}: ${message}${explanation}`, { cause: error });
-        }
-        // A file that dies partway through its own evaluation (CommonJS
-        // `require()` inside an ESM file throws mid-evaluation, not at ESM's
-        // earlier link phase) may already have called
-        // `Given`/`Before`/`defineWorld` before it threw, leaving those
-        // calls sitting in the shared buffers below. Draining and
-        // discarding them here, rather than leaving them for the *next*
-        // file's own drain, is what keeps this loop's per-file attribution
-        // (the comment above) from misattributing a dead file's partial
-        // registrations to whichever healthy file happens to import next.
-        compatRegistry.drainCompatSteps();
-        compatRegistry.drainCompatParameterTypes();
-        defineWorldModule.drainWorldSchemaRegistrations();
-        importFailures.push({
-          filePath: path.relative(rootDir, filePath),
-          // Passed through verbatim, not re-classified into a nukadoko code:
-          // Node's own message already names the missing
-          // export/subpath/package, and reparsing it here would only add a
-          // brittle dependency on Node's exact wording while
-          // losing information.
-          message: error instanceof Error ? error.message : String(error),
-        });
-        continue;
+  for (const filePath of files) {
+    // Node's type stripping removes only `import type` and inline `type`
+    // names; a name imported without `type` stays an import, so asking for
+    // a type the module does not export at run time fails here, as Node's
+    // "does not provide an export named" error.
+    //
+    // Only the import call itself is inside this try — `isStep`, the
+    // drains below, and the duplicate checks they can throw all stay
+    // outside it, so they only
+    // ever run once this file's own import has actually succeeded. Putting
+    // them inside the same try would let a DuplicateStepError/
+    // DuplicateCompatStepError/DuplicateWorldDefinitionError — a cross-file
+    // authoring mistake, not an import failure — get caught here and
+    // misreported as this file's own import failing.
+    let mod: { default?: unknown };
+    try {
+      mod = (await importInNamespace(pathToFileURL(filePath).href, namespace)) as { default?: unknown };
+    } catch (error) {
+      if (!tolerateImportFailures) {
+        // The tolerant path reports this failure through `importFailures`,
+        // which names the file and leaves Node's message unmodified. The
+        // CommonJS/.ts sentence is added later, by the caller. This path
+        // throws, and `nuka run`, `nuka do`, and `nuka harvest` print only
+        // `error.message`. A top-level throw's own message does not name
+        // the file, so the path relative to the project root has to be
+        // part of the message, and that sentence has to travel with it:
+        // those commands never see `importFailures`. The sentence is empty
+        // unless package.json says "type": "commonjs" and the file is `.ts`.
+        const { message, line } = describeImportFailure(error, filePath, rootDir);
+        const relativePath = path.relative(rootDir, filePath) + (line === undefined ? "" : `:${line}`);
+        const explanation = cjsTsMismatchExplanation(refusesEsmTs(rootDir), filePath);
+        throw new Error(`${relativePath}: ${message}${explanation}`, { cause: error });
       }
-
-      const candidate = mod.default;
-      if (isStep(candidate)) {
-        // `path.extname` rather than a hardcoded `".ts"`: `walkStepFiles`
-        // hands this loop a mix of
-        // `.ts`/`.mts`/`.js`/`.mjs` files, and each one's own extension is
-        // exactly what should come off its name, whichever one it is.
-        const name = path.basename(filePath, path.extname(filePath));
-        const existing = vocabulary.get(name);
-        if (existing) {
-          throw new DuplicateStepError(name, existing.filePath, filePath);
-        }
-        vocabulary.set(name, { kind: "typed", name, filePath, step: candidate });
-      } else if (isModel(candidate)) {
-        // Not a step name. The basename of a model file is not a command
-        // key. Command keys name step files, and check is what compares them.
-        models.push({ filePath, model: candidate });
-      } else if (isRelation(candidate)) {
-        relations.push({ filePath, relation: candidate });
-      }
-
-      // Attribute this file's own compat registrations: drained immediately
-      // after this file's own import completes, before the next file's
-      // import can add anything
-      // else, so whatever is in the buffer right here is exactly — and
-      // only — this file's own contribution.
-      for (const registration of compatRegistry.drainCompatSteps()) {
-        const patternSource = compatPatternSource(registration.pattern);
-        const compatName = `compat: ${patternSource}`;
-        const existingCompat = vocabulary.get(compatName);
-        if (existingCompat) {
-          throw new DuplicateCompatStepError(patternSource, existingCompat.filePath, filePath);
-        }
-        vocabulary.set(compatName, {
-          kind: "compat",
-          name: compatName,
-          filePath,
-          compat: {
-            keyword: registration.keyword,
-            pattern: registration.pattern,
-            patternSource,
-            fn: registration.fn,
-            timeoutMs: registration.timeoutMs,
-            registrationOrder: registration.registrationOrder,
-          },
-        });
-      }
-
-      for (const registration of compatRegistry.drainCompatParameterTypes()) {
-        // Relative, not the loop's own absolute `filePath` — see this
-        // interface's own comment above for why it must match
-        // `importFailures[].filePath`.
-        compatParameterTypes.push({ ...registration, filePath: path.relative(rootDir, filePath) });
-      }
-
-      // Same per-file attribution timing as compat steps above: drained
-      // right after this file's own import, before the next file's import
-      // can add anything else.
-      for (const registration of defineWorldModule.drainWorldSchemaRegistrations()) {
-        if (declaredWorldSchemasFilePath !== undefined) {
-          throw new DuplicateWorldDefinitionError(declaredWorldSchemasFilePath, filePath);
-        }
-        declaredWorldSchemas = registration.schemas;
-        declaredWorldSchemasFilePath = filePath;
-      }
+      // A file that dies partway through its own evaluation (CommonJS
+      // `require()` inside an ESM file throws mid-evaluation, not at ESM's
+      // earlier link phase) may already have called
+      // `Given`/`Before`/`defineWorld` before it threw, leaving those
+      // calls sitting in the shared buffers below. Draining and
+      // discarding them here, rather than leaving them for the *next*
+      // file's own drain, is what keeps this loop's per-file attribution
+      // (the comment above) from misattributing a dead file's partial
+      // registrations to whichever healthy file happens to import next.
+      compatRegistry.drainCompatSteps();
+      compatRegistry.drainCompatParameterTypes();
+      defineWorldModule.drainWorldSchemaRegistrations();
+      importFailures.push({
+        filePath: path.relative(rootDir, filePath),
+        // Not re-classified into a nukadoko code: Node's own message
+        // already names the missing export/subpath/package, and
+        // describeImportFailure only adds to it.
+        ...describeImportFailure(error, filePath, rootDir),
+      });
+      continue;
     }
 
-    succeeded = true;
-    return {
-      unregister: () => scoped.unregister(),
-      vocabulary,
-      compatParameterTypes,
-      // Read once, after every file's import has finished (this file's own
-      // header, on concurrent-discovery safety): a World constructor/hook isn't
-      // attributed to any one file, unlike a compat step, so there is
-      // nothing to drain per file — just this run's own final state.
-      // `declaredWorldSchemas` is curried in here so
-      // `instantiateWorldForPickle` never needs to reach
-      // back into src/compat/define-world.ts's own buffer itself.
-      instantiateCompatWorld: (
-        ctx: StepContext,
-        declaredCollector: DeclaredCollector,
-        parameters: Readonly<Record<string, unknown>>,
-      ) => compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector, parameters),
-      compatHooks: compatHooksModule.getRegisteredHooks(),
-      compatRunHooks: compatRunHooksModule.getRegisteredRunHooks(),
-      // Read through `compatRegistry` — already loaded above for the step
-      // buffer, and `setDefaultTimeout`'s own buffer lives in that same
-      // module (see registry.ts's own header for why).
-      defaultTimeoutMs: compatRegistry.getDefaultTimeoutMs(),
-      importFailures,
-      unsupportedExtensionFiles: unsupportedExtensionFiles.map((filePath) =>
-        path.relative(rootDir, filePath),
-      ),
-      walkedFiles: files.map((filePath) => path.relative(rootDir, filePath)),
-      models,
-      relations,
-    };
-  } finally {
-    if (!(keepRegistered && succeeded)) await scoped.unregister();
+    const candidate = mod.default;
+    if (isStep(candidate)) {
+      // `path.extname` rather than a hardcoded `".ts"`: `walkStepFiles`
+      // hands this loop a mix of
+      // `.ts`/`.mts`/`.js`/`.mjs` files, and each one's own extension is
+      // exactly what should come off its name, whichever one it is.
+      const name = path.basename(filePath, path.extname(filePath));
+      const existing = vocabulary.get(name);
+      if (existing) {
+        throw new DuplicateStepError(name, existing.filePath, filePath);
+      }
+      vocabulary.set(name, { kind: "typed", name, filePath, step: candidate });
+    } else if (isModel(candidate)) {
+      // Not a step name. The basename of a model file is not a command
+      // key. Command keys name step files, and check is what compares them.
+      models.push({ filePath, model: candidate });
+    } else if (isRelation(candidate)) {
+      relations.push({ filePath, relation: candidate });
+    }
+
+    // Attribute this file's own compat registrations: drained immediately
+    // after this file's own import completes, before the next file's
+    // import can add anything
+    // else, so whatever is in the buffer right here is exactly — and
+    // only — this file's own contribution.
+    for (const registration of compatRegistry.drainCompatSteps()) {
+      const patternSource = compatPatternSource(registration.pattern);
+      const compatName = `compat: ${patternSource}`;
+      const existingCompat = vocabulary.get(compatName);
+      if (existingCompat) {
+        throw new DuplicateCompatStepError(patternSource, existingCompat.filePath, filePath);
+      }
+      vocabulary.set(compatName, {
+        kind: "compat",
+        name: compatName,
+        filePath,
+        compat: {
+          keyword: registration.keyword,
+          pattern: registration.pattern,
+          patternSource,
+          fn: registration.fn,
+          timeoutMs: registration.timeoutMs,
+          registrationOrder: registration.registrationOrder,
+        },
+      });
+    }
+
+    for (const registration of compatRegistry.drainCompatParameterTypes()) {
+      // Relative, not the loop's own absolute `filePath` — see this
+      // interface's own comment above for why it must match
+      // `importFailures[].filePath`.
+      compatParameterTypes.push({ ...registration, filePath: path.relative(rootDir, filePath) });
+    }
+
+    // Same per-file attribution timing as compat steps above: drained
+    // right after this file's own import, before the next file's import
+    // can add anything else.
+    for (const registration of defineWorldModule.drainWorldSchemaRegistrations()) {
+      if (declaredWorldSchemasFilePath !== undefined) {
+        throw new DuplicateWorldDefinitionError(declaredWorldSchemasFilePath, filePath);
+      }
+      declaredWorldSchemas = registration.schemas;
+      declaredWorldSchemasFilePath = filePath;
+    }
   }
+
+  return {
+    vocabulary,
+    compatParameterTypes,
+    // Read once, after every file's import has finished (this file's own
+    // header, on concurrent-discovery safety): a World constructor/hook isn't
+    // attributed to any one file, unlike a compat step, so there is
+    // nothing to drain per file — just this run's own final state.
+    // `declaredWorldSchemas` is curried in here so
+    // `instantiateWorldForPickle` never needs to reach
+    // back into src/compat/define-world.ts's own buffer itself.
+    instantiateCompatWorld: (
+      ctx: StepContext,
+      declaredCollector: DeclaredCollector,
+      parameters: Readonly<Record<string, unknown>>,
+    ) => compatWorld.instantiateWorldForPickle(ctx, declaredWorldSchemas, declaredCollector, parameters),
+    compatHooks: compatHooksModule.getRegisteredHooks(),
+    compatRunHooks: compatRunHooksModule.getRegisteredRunHooks(),
+    // Read through `compatRegistry` — already loaded above for the step
+    // buffer, and `setDefaultTimeout`'s own buffer lives in that same
+    // module (see registry.ts's own header for why).
+    defaultTimeoutMs: compatRegistry.getDefaultTimeoutMs(),
+    importFailures,
+    unsupportedExtensionFiles: unsupportedExtensionFiles.map((filePath) =>
+      path.relative(rootDir, filePath),
+    ),
+    walkedFiles: files.map((filePath) => path.relative(rootDir, filePath)),
+    models,
+    relations,
+  };
 }

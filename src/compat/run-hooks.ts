@@ -2,7 +2,7 @@
 // counterpart of src/compat/hooks.ts's per-scenario Before/After. Same
 // module-level-buffer registration shape and
 // the same module-identity handoff to src/discover/discover-steps.ts's
-// scoped tsx import (see hooks.ts's own header for why that identity
+// namespaced import (see hooks.ts's own header for why that identity
 // matters); kept as its own module rather than folded into hooks.ts because
 // cucumber-js's own BeforeAll/AfterAll differ from Before/After in every
 // dimension that module's types encode: no `tags` (a tag

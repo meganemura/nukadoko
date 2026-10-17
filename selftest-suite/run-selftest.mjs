@@ -2,7 +2,7 @@
 import { execFile } from "node:child_process";
 import { rm } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 // Responsibility: run this suite's feature files (selftest-suite/features/*,
@@ -104,21 +104,17 @@ function fail(message) {
 
 async function runBaseline(suiteFeature) {
   // cucumber-js 13.2.0 only runs on Node 22, 24, or >=26 (its own
-  // package.json `engines`, enforced at startup, not just advisory) --
-  // narrower than nukadoko's own `>=20`. If the Node running this script
-  // does not satisfy that, this step fails with cucumber-js's own error
-  // message, which already names the constraint; run this script under a
-  // supported Node version rather than one this repository otherwise
-  // supports.
+  // package.json `engines`, enforced at startup, not just advisory). If the
+  // Node running this script does not satisfy that, this step fails with
+  // cucumber-js's own error message, which already names the constraint.
   //
-  // `--import tsx` (via NODE_OPTIONS, not cucumber-js's own `--loader`,
-  // which tsx explicitly refuses -- see tsx's own error if tried) makes
-  // relative `../steps/runtime.js`-style imports inside the suite's `.ts`
-  // step files resolve to their `.ts` files, the same extension-rewriting
-  // tsx already does for `nuka run`'s own discovery (src/discover/
-  // discover-steps.ts uses tsx directly); Node's native TS support has no
-  // such rewrite and fails to resolve those imports at all.
-  const env = { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import tsx`.trim() };
+  // nukadoko's own loader hook (dist/config/ts-loader.js), preloaded through
+  // NODE_OPTIONS, makes relative `../steps/runtime.js`-style imports inside
+  // the suite's `.ts` step files resolve to their `.ts` files, the same
+  // mapping `nuka run`'s own discovery uses; Node's type stripping alone
+  // resolves only a file that exists.
+  const loader = pathToFileURL(path.join(repoRoot, "dist", "config", "ts-loader.js")).href;
+  const env = { ...process.env, NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import ${loader}`.trim() };
 
   const { stdout } = await execFileAsync(
     process.execPath,

@@ -62,13 +62,12 @@ describe("discoverSteps", () => {
   });
 
   // Module identity: discoverSteps() loads
-  // every file through one shared tsx module registration for the whole
-  // discovery run, so a step file's own relative import of another step
+  // every file in one module graph for the whole discovery run, so a step file's own relative import of another step
   // file resolves to the exact same object discoverSteps() itself put in
   // the vocabulary — not a second, independent load. tests/fixtures/
   // module-identity-project/features/steps/consumer.ts's own relative
   // import of producer.ts stashes what it got on `globalThis` (the only
-  // channel that crosses tsx's per-namespace module cache from outside;
+  // channel that crosses the per-run module graph from outside;
   // see that file's own comment) so this test can compare it against
   // discoverSteps()'s vocabulary entry for producer.ts by `===`.
   it("gives the same Step object via the vocabulary and via another step file's relative import", async () => {

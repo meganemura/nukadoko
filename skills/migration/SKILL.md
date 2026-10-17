@@ -37,8 +37,9 @@ If the project is not initialized yet (no `nukadoko.config.ts` or
 `nukadoko.config.mts`), run `nuka init` first. An existing suite can be
 CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
 `nukadoko.config.mts` there instead, and step files need the same `.mts`
-extension. A hand-written `nukadoko.config.ts` there fails to import, and
-the error names the file. Both report emitters are off by default: a suite
+extension. A hand-written `nukadoko.config.ts` there loads with a Node
+warning on every run, and fails to import under `"type": "commonjs"`, with
+an error that names the file. Both report emitters are off by default: a suite
 whose existing formatter or JUnit-based CI reads cucumber messages turns
 the stream on with `messages: {}` in the config, and `allure: {}` (or
 `nuka init --allure`) does the same for Allure results.

@@ -134,9 +134,9 @@ registers the trusted publisher.
    `npm publish`. Actions are pinned to a full-length commit SHA, written
    `uses: action@<40-hex> # vX.Y.Z`, the same way `ci.yml` is. This
    repository has `sha_pinning_required` enabled, so a tag would be
-   refused before the job ran. The package `engines` field stays `>=20`.
-   Node 24 is the publish job, not a new requirement for people running
-   `nuka`.
+   refused before the job ran. The package `engines` field stays
+   `^22.18.0 || >=23.6.0`. Node 24 is the publish job, not a new
+   requirement for people running `nuka`.
 
 5. The workflow's `release` job creates the GitHub release after
    `npm publish`. It reads `CHANGELOG.md` from the commit the publish

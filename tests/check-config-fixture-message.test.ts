@@ -4,7 +4,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check`'s report for a broken `config.fixtures`
 // entry names that fixture, speaks about a fixture, and does not quote
-// source after tsx has rewritten it. Neighbor to
+// source after a loader has rewritten it. Neighbor to
 // tests/check-fixture-definitions.test.ts (cycles, scope, page override)
 // and tests/check-fixture-structural.test.ts (a step's own `run()`).
 

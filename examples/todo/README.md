@@ -34,7 +34,7 @@ Run `npm install` and `npm run build` once, from the repository root.
 Start it in its own terminal and leave it running:
 
 ```sh
-npx tsx app/server.ts
+node app/server.ts
 ```
 
 It listens on `http://localhost:4000` by default (`--port <n>` to change
@@ -260,7 +260,7 @@ the same committed state you did.
 Stop the app (`Ctrl-C`) and restart it as v2:
 
 ```sh
-npx tsx app/server.ts --v2
+node app/server.ts --v2
 ```
 
 Nothing else changed — not the feature file, not the typed steps, not their

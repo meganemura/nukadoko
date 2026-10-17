@@ -19,8 +19,11 @@ request is the sign-off.
 
 ## Install
 
-Node 20+ (`package.json`'s `engines.node` is `">=20"`). nukadoko is a
-devDependency:
+Node 22.18 or later on the 22 line, or 23.6 or later (`package.json`'s
+`engines.node` is `"^22.18.0 || >=23.6.0"`): the releases that run a `.ts`
+file without a flag. nukadoko loads the config and the step files with
+Node's own type stripping, so it installs no TypeScript loader of its own.
+nukadoko is a devDependency:
 
 ```sh
 npm install -D nukadoko
@@ -65,7 +68,8 @@ tsconfig.json
 
 `init` adds `.nukadoko/` to `.gitignore`, a `test:scenarios` script to
 `package.json` (the one command a person or CI runs), and the steps and the
-config to the `include` of `tsconfig.json`. The CommonJS case and the
+config to the `include` of `tsconfig.json`, with the compiler option that
+lets `tsc` accept an import that names a `.ts` file. The CommonJS case and the
 `--allure` and `--env` flags are in [Setup details](#setup-details).
 
 Scaffold the When step. `--command` writes a step that runs a program
@@ -137,7 +141,7 @@ Fill in its body. The feature line supplies `text`:
 ```ts
 // features/steps/output-says.ts
 import { defineStep, z } from "nukadoko";
-import runGreet from "./run-greet.js";
+import runGreet from "./run-greet.ts";
 
 export default defineStep({
   description: "The CLI printed exactly this line",
@@ -251,7 +255,7 @@ listens on a free port and resolves to `{ url, close() }`:
 ```ts
 // nukadoko.config.ts
 import { defineConfig, defineFixtures } from "nukadoko";
-import { startServer } from "./src/server.js";
+import { startServer } from "./src/server.ts";
 
 export default defineConfig({
   fixtures: defineFixtures({
@@ -568,10 +572,28 @@ When `tsconfig.json` has an `include` that leaves out `features/` or the
 config file, `init` appends the missing entries to it and keeps the rest of
 the file as it was, comments and trailing commas included. A
 `tsconfig.json` with no `include` of its own
-already checks every file. Two flags
+already checks every file. When its `compilerOptions` names neither
+`allowImportingTsExtensions` nor `rewriteRelativeImportExtensions`, `init`
+adds `"rewriteRelativeImportExtensions": true` (TypeScript 5.7 or later),
+so `tsc` accepts the `./run-greet.ts` import that `nuka scaffold --from`
+writes. That option is valid whether the project emits or not, and it
+changes only the output of an import that names a `.ts` file. Two flags
 add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
 (see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
 `!.env.example` to `.gitignore` for a project that keeps env files.
+
+Node runs the step files by erasing their types, so two kinds of
+TypeScript do not load. Syntax with run-time behavior (an `enum`, a
+`namespace`, a constructor parameter property) is refused, and `nuka check`
+reports `step-file-import-failed` at its line with the rewrite to make. A
+name imported without `type` that is only a type stays an import and fails
+with Node's "does not provide an export named" error. Setting
+`"erasableSyntaxOnly": true` and `"verbatimModuleSyntax": true` in
+`compilerOptions` makes `tsc` report both before `nuka` runs. An import
+that names a `.js` file next to a `.ts` file (`./run-greet.js` for
+`run-greet.ts`) still loads under `nuka`, which maps the one to the
+other; plain `node` does not, which is why the scaffold writes the `.ts`
+name.
 
 nukadoko ships its TypeScript source alongside `dist/`, so stack traces
 point to the actual code. An agent reading
@@ -580,8 +602,10 @@ point to the actual code. An agent reading
 If an existing `package.json` has no `"type": "module"`, the project uses
 CommonJS, as a plain `npm init -y` does. `nuka init` still works. It writes
 `nukadoko.config.mts` instead of `nukadoko.config.ts` and prints a one-line
-reminder that step files also need `.mts`. In such a project, Node reads a
-plain `.ts` file as CommonJS, while nukadoko supports only ESM.
+reminder that step files also need `.mts`. nukadoko supports only ESM. In
+such a project, Node first reads a plain `.ts` file as CommonJS, then
+reparses it as an ES module with a warning on every load. With
+`"type": "commonjs"`, it does not reparse, and the file fails to import.
 
 <details>
 <summary>No `package.json` yet (Rails, Django, and other non-Node repos)?</summary>
@@ -596,9 +620,10 @@ Writing the minimum by hand is more reliable:
 
 `"type": "module"` keeps every generated file as `.ts`, which is the simpler
 of the two paths above. Leaving it out is still supported (see the CommonJS
-paragraph above). However, manually writing `nukadoko.config.ts` in such a
-project fails to import. The error names that file and the cause, and says
-to rename it to `nukadoko.config.mts`. `nuka init` writes
+paragraph above). However, a hand-written `nukadoko.config.ts` in such a
+project loads with a warning, and fails to import under
+`"type": "commonjs"`. That error names the file and the cause, and says to
+rename it to `nukadoko.config.mts`. `nuka init` writes
 `nukadoko.config.mts` instead. You do not need to add `.nukadoko/` to
 `.gitignore` yourself because `nuka init` does that. `nuka init --env` also
 adds `.env` and `.env.*`, and leaves `.env.example` tracked. Traces and

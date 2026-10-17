@@ -238,9 +238,7 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     throw error;
   }
 
-  const { vocabulary, unregister: unregisterLoader } = await discoverSteps(rootDir, config.featuresDir, {
-    keepRegistered: true,
-  });
+  const { vocabulary } = await discoverSteps(rootDir, config.featuresDir);
   const stepNameOf = new Map<Step, string>(
     [...vocabulary.entries()].flatMap(([stepName, entry]) =>
       entry.kind === "typed" ? [[entry.step, stepName] as const] : [],
@@ -423,7 +421,6 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     // to.
     await rm(sockDir, { recursive: true, force: true });
     await releaseLock(lockPath);
-    await unregisterLoader();
     return teardownErrors.map((error) => fixtureTeardownWarning(error.fixture, error.message, secrets));
   }
 

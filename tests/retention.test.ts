@@ -18,7 +18,7 @@ import {
 } from "../src/record/retention.js";
 import { readExportsManifest, runExportsManifestPath } from "../src/record/run-exports.js";
 import { runMarkerPath, writeRunMarker } from "../src/record/run-marker.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, sourceNodeArgs } from "./helpers/fixtures.js";
 
 // Responsibility: what retention removes and what it must never touch.
 // The two planners are pure and get properties; `applyRetention` gets a
@@ -377,7 +377,7 @@ describe("nuka run applies retention", () => {
     const repoRoot = path.resolve(import.meta.dirname, "..");
     const { stderr } = await promisify(execFile)(
       process.execPath,
-      [path.join(repoRoot, "node_modules", "tsx", "dist", "cli.mjs"), path.join(repoRoot, "src", "cli.ts"), "run", "features/greeting.feature"],
+      [...sourceNodeArgs, path.join(repoRoot, "src", "cli.ts"), "run", "features/greeting.feature"],
       { cwd: rootDir },
     );
     expect(stderr).toContain("retention: removed 1 run older than the newest 1 (retention.runs)");

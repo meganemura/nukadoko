@@ -169,7 +169,7 @@ export interface RecordStepOptions {
    * (src/discover/discover-steps.ts). Required, not derived, because
    * discovery never runs here — the Playwright spec that imports `step`
    * loads it through its own module resolution, a different realm than
-   * tsx's `scoped.import` (create-context.ts's own header describes this
+   * discovery's namespaced import (create-context.ts's own header describes this
    * same trap for `resultOf`), so no identity-based lookup back to a
    * vocabulary entry is possible. `nuka harvest` joins a step record back
    * to its vocabulary entry by this exact string, so a name that does not

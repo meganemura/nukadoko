@@ -3,9 +3,9 @@ import { defineStep } from "../../nukadoko-shim.js";
 import producer from "./producer.js";
 
 // Captured on `globalThis`, not exported, because `globalThis` is the one
-// channel that crosses tsx's per-namespace module cache boundary from
+// channel that crosses the per-namespace module graph boundary from
 // outside: the test reading this capture runs under vitest's own module
-// system, not the tsx registration discoverSteps() used to load this file,
+// system, not the namespaced graph discoverSteps() used to load this file,
 // so a plain named export here would not be reachable the way the test
 // needs it to be. This is tests/discover-steps.test.ts's module-identity
 // test: it proves

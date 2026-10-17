@@ -29,7 +29,7 @@ interface ProcResult {
 }
 
 // NODE_OPTIONS is dropped from every spawn's own env, not just Playwright's:
-// run-selftest.mjs injects `--import tsx` into it for the baseline track's
+// run-selftest.mjs injects nukadoko's loader `--import` into it for the baseline track's
 // own cucumber-js process only (its own header comment), so forwarding it
 // unchanged would be the one thing this scenario's subprocesses inherit
 // differently between tracks. Neither `nuka` nor `playwright test` needs

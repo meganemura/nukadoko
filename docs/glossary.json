@@ -8,6 +8,11 @@
   ],
   "terms": [
     {
+      "en": ["type stripping", "strip-only"],
+      "ja": "型の除去",
+      "note": "Node が .ts を読むときに型注釈だけを消す仕組み。Node のエラー文 (strip-only mode) はそのまま英語で引用する"
+    },
+    {
       "en": ["acceptance criteria", "acceptance criterion"],
       "ja": "受け入れ基準",
       "note": "以前 受け入れ条件 と割れていたが統一済み"

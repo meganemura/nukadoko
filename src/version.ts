@@ -31,7 +31,7 @@ import { fileURLToPath } from "node:url";
 // walks up only one. Same mirroring principle, different depth because
 // this file's own location is different. Walking up one directory from
 // this file's own URL therefore lands on the package root whether the
-// process started via `npx tsx src/cli.ts` or `node dist/cli.js`.
+// process started via `node src/cli.ts` or `node dist/cli.js`.
 //
 // Reads via `readFileSync` + `JSON.parse`, not `createRequire(import.meta.
 // url)("../package.json")`: this codebase already reads package.json this

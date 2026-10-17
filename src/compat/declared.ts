@@ -21,7 +21,7 @@ import path from "node:path";
 // (`instantiateWorldForPickle`'s own `declaredCollector` argument) — a
 // directly-passed object reference has no module-identity concerns, unlike
 // a module-level variable would (world.ts is loaded through discovery's own
-// scoped tsx import, a *different* module graph than run-scenario.ts's plain
+// namespaced import, a *different* module graph than run-scenario.ts's plain
 // top-level one — see world.ts's own header for the empirical bug this
 // avoided). allure-runtime.ts, by contrast, is a process-wide singleton
 // registered once, with no per-pickle handle of its own to close over — it

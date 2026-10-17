@@ -1,22 +1,33 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-// Responsibility: making the project's own tsconfig.json `include` reach
-// the steps directory and the config file `nuka init` writes, so the
-// project's type check sees the step files. Reads and writes tsconfig.json
-// and nothing else.
+// Responsibility: the two tsconfig.json edits `nuka init` makes so the
+// project's type check reads the step files as nuka loads them: `include`
+// reaches the steps directory and the config file, and `compilerOptions`
+// accepts an import that names a `.ts` file (the spelling `nuka scaffold`
+// writes, because Node resolves only a file that exists). Reads and writes
+// tsconfig.json and nothing else.
 //
-// `init` appends the missing entries in place, so the array gains them in
-// its own layout and every other byte stays, comments and trailing commas
-// included: tsconfig.json is JSONC (`tsc --init` writes comments), and no
+// The option is `rewriteRelativeImportExtensions` (TypeScript 5.7 and
+// later). `allowImportingTsExtensions` also accepts the import, but tsc
+// refuses it unless `noEmit` is set, and a project that type checks with
+// `tsc --noEmit` on the command line has no `noEmit` in the file to read.
+// The rewrite option is valid with emit and without, and it changes only
+// the output of an import that names a `.ts` file. A file that already
+// names either option, to any value, has made the choice, and is left
+// alone.
+//
+// `init` appends what is missing in place, so the array or object gains it
+// in its own layout and every other byte stays, comments and trailing
+// commas included: tsconfig.json is JSONC (`tsc --init` writes comments), and no
 // rewrite through a JSON value keeps a comment. The parser and the edit
 // read the text through one scanner, so they agree on what is a comment.
 //
 // Every other case stays silent, because each is a claim that can end only
 // one way: an `include` entry with a wildcard in it counts as covering, a
-// tsconfig with no `include` of its own (TypeScript's default, or one
-// inherited through `extends`) is left alone, and so is a file that does
-// not parse. An edit nobody needed would teach people to distrust the
+// tsconfig with no `include` or no `compilerOptions` of its own
+// (TypeScript's default, or one inherited through `extends`) is left
+// alone, and so is a file that does not parse. An edit nobody needed would teach people to distrust the
 // ones they did.
 
 /** One span of JSONC text. Whitespace between spans is not a token;
@@ -141,10 +152,32 @@ export function missingIncludeEntries(
 export function appendIncludeEntries(text: string, entries: readonly string[]): string {
   if (entries.length === 0) return text;
   const tokens = scan(text);
-  const { open, close } = includeArraySpan(text, tokens);
+  const { open, close } = topLevelSpan(text, tokens, "include", "[");
+  return appendItems(text, tokens, open, close, entries.map((entry) => JSON.stringify(entry)));
+}
+
+/** Adds `key: true` as the last member of the top-level `compilerOptions`
+ * object of `text`, in the layout `appendIncludeEntries` keeps. */
+export function appendCompilerOption(text: string, key: string): string {
+  const tokens = scan(text);
+  const { open, close } = topLevelSpan(text, tokens, "compilerOptions", "{");
+  return appendItems(text, tokens, open, close, [`${JSON.stringify(key)}: true`]);
+}
+
+/** Whether `init` adds `TS_EXTENSION_OPTION` to this parsed tsconfig: it
+ * has a `compilerOptions` object of its own that names neither option. */
+export function needsTsExtensionOption(tsconfig: unknown): boolean {
+  if (typeof tsconfig !== "object" || tsconfig === null) return false;
+  const options = (tsconfig as { compilerOptions?: unknown }).compilerOptions;
+  if (typeof options !== "object" || options === null || Array.isArray(options)) return false;
+  return !("allowImportingTsExtensions" in options) && !("rewriteRelativeImportExtensions" in options);
+}
+
+export const TS_EXTENSION_OPTION = "rewriteRelativeImportExtensions";
+
+function appendItems(text: string, tokens: readonly Token[], open: number, close: number, quoted: readonly string[]): string {
   const openAt = tokens[open]?.end ?? 0;
   const closeAt = tokens[close]?.start ?? 0;
-  const quoted = entries.map((entry) => JSON.stringify(entry));
   const inside = tokens.slice(open + 1, close).filter((token) => token.kind !== "comment");
   if (inside.length === 0) {
     const rest = text.slice(openAt, closeAt).trim() === "" ? closeAt : openAt;
@@ -152,7 +185,7 @@ export function appendIncludeEntries(text: string, entries: readonly string[]): 
   }
   const trailing = isPunct(text, inside[inside.length - 1], ",");
   const last = inside[inside.length - (trailing ? 2 : 1)];
-  if (last === undefined) throw new Error("tsconfig.json's include array starts with a comma");
+  if (last === undefined) throw new Error("tsconfig.json has a list that starts with a comma");
   const lastEnd = last.end;
   const anchor = trailing ? (inside[inside.length - 1]?.end ?? lastEnd) : lastEnd;
   const before = text.slice(openAt, lastEnd);
@@ -196,9 +229,10 @@ function newlineStart(text: string, at: number): number {
   return text[at - 1] === "\r" ? at - 1 : at;
 }
 
-/** The indexes in `tokens` of the `[` and `]` of the top-level `include`
- * value. The last `include` key wins, as it does for JSON.parse. */
-function includeArraySpan(text: string, tokens: readonly Token[]): { open: number; close: number } {
+/** The indexes in `tokens` of the brackets of the top-level `key` value,
+ * which opens with `bracket`. The last `key` wins, as it does for
+ * JSON.parse. */
+function topLevelSpan(text: string, tokens: readonly Token[], key: string, bracket: "[" | "{"): { open: number; close: number } {
   const indexes = tokens.flatMap((token, index) => (token.kind === "comment" ? [] : [index]));
   const at = (k: number): Token | undefined => tokens[indexes[k] ?? -1];
   let depth = 0;
@@ -207,13 +241,13 @@ function includeArraySpan(text: string, tokens: readonly Token[]): { open: numbe
     const token = at(k);
     if (token === undefined) continue;
     if (token.kind === "string" && depth === 1 && isPunct(text, at(k + 1), ":")) {
-      if (JSON.parse(text.slice(token.start, token.end)) === "include") open = indexes[k + 2] ?? -1;
+      if (JSON.parse(text.slice(token.start, token.end)) === key) open = indexes[k + 2] ?? -1;
     }
     if (isPunct(text, token, "{") || isPunct(text, token, "[")) depth += 1;
     if (isPunct(text, token, "}") || isPunct(text, token, "]")) depth -= 1;
   }
-  if (!isPunct(text, tokens[open], "[")) throw new Error("tsconfig.json has no top-level include array");
-  return { open, close: matchingBracket(text, tokens, open) };
+  if (!isPunct(text, tokens[open], bracket)) throw new Error(`tsconfig.json has no top-level ${key} value opening with ${bracket}`);
+  return { open, close: matchingBracket(text, tokens, open, key) };
 }
 
 function stringEnd(text: string, start: number): number {
@@ -224,7 +258,7 @@ function stringEnd(text: string, start: number): number {
   return j + 1;
 }
 
-function matchingBracket(text: string, tokens: readonly Token[], open: number): number {
+function matchingBracket(text: string, tokens: readonly Token[], open: number, key: string): number {
   let depth = 0;
   for (let i = open; i < tokens.length; i += 1) {
     const token = tokens[i];
@@ -234,19 +268,20 @@ function matchingBracket(text: string, tokens: readonly Token[], open: number): 
       if (depth === 0) return i;
     }
   }
-  throw new Error("tsconfig.json's include array is not closed");
+  throw new Error(`tsconfig.json's ${key} value is not closed`);
 }
 
-/** What `init` did about tsconfig.json: wrote the entries, or nothing to
- * say (see this file's header for each silent case). */
-export type TsconfigIncludeOutcome = { kind: "written" } | { kind: "silent" };
+/** What `init` did about tsconfig.json: wrote one or both edits, or
+ * nothing to say (see this file's header for each silent case). */
+export type TsconfigEditOutcome = { kind: "written" } | { kind: "silent" };
 
-/** Adds the missing `include` entries to tsconfig.json in place. */
-export async function ensureTsconfigInclude(
+/** Adds the missing `include` entries and the `.ts` import option to
+ * tsconfig.json in place. */
+export async function ensureTsconfig(
   rootDir: string,
   featuresDir: string,
   configFileName: string,
-): Promise<TsconfigIncludeOutcome> {
+): Promise<TsconfigEditOutcome> {
   const tsconfigPath = path.join(rootDir, "tsconfig.json");
   let text: string;
   let parsed: unknown;
@@ -257,12 +292,13 @@ export async function ensureTsconfigInclude(
     return { kind: "silent" };
   }
   if (typeof parsed !== "object" || parsed === null) return { kind: "silent" };
+  let edited = text;
   const include = (parsed as { include?: unknown }).include;
-  if (!Array.isArray(include) || !include.every((entry): entry is string => typeof entry === "string")) {
-    return { kind: "silent" };
+  if (Array.isArray(include) && include.every((entry): entry is string => typeof entry === "string")) {
+    edited = appendIncludeEntries(edited, missingIncludeEntries(include, featuresDir, configFileName));
   }
-  const missing = missingIncludeEntries(include, featuresDir, configFileName);
-  if (missing.length === 0) return { kind: "silent" };
-  await writeFile(tsconfigPath, appendIncludeEntries(text, missing));
+  if (needsTsExtensionOption(parsed)) edited = appendCompilerOption(edited, TS_EXTENSION_OPTION);
+  if (edited === text) return { kind: "silent" };
+  await writeFile(tsconfigPath, edited);
   return { kind: "written" };
 }

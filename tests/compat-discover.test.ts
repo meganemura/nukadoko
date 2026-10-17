@@ -14,7 +14,7 @@ const execFileAsync = promisify(execFile);
 // in the vocabulary with `kind: "compat"`, attributed to the file that
 // registered them; two registrations sharing a pattern source collide
 // (DuplicateCompatStepError); and two concurrent discovery runs never
-// cross-contaminate each other's compat buffers (tsx namespace isolation,
+// cross-contaminate each other's compat buffers (namespace isolation,
 // src/compat/registry.ts's own header comment).
 
 describe("discoverSteps: compat registration", () => {
@@ -54,8 +54,8 @@ describe("discoverSteps: compat registration", () => {
     ).rejects.toBeInstanceOf(DuplicateCompatStepError);
   });
 
-  // tsx namespace isolation (src/compat/registry.ts's own header comment):
-  // each discoverSteps() call gets its own tsx `register({ namespace })`,
+  // Namespace isolation (src/compat/registry.ts's own header comment):
+  // each discoverSteps() call loads under its own namespace,
   // and therefore its own instance of the compat registration buffer. Two
   // concurrent runs against the exact same fixture register the exact same
   // pattern text "at the same time" — if the buffers were shared, that
@@ -87,8 +87,8 @@ describe("discoverSteps: compat registration", () => {
   // never committed, so `tsc -p tsconfig.json`'s "tests/**/*.ts" glob never
   // sees this "nukadoko/compat" import at all.
   //
-  // Run against the *built* `dist/cli.js` (via `node`, not `src/cli.ts` via
-  // tsx — mirroring tests/cli.test.ts's own "nuka (process)" describe block,
+  // Run against the *built* `dist/cli.js` (via `node`, not `src/cli.ts` under
+  // the loader — mirroring tests/cli.test.ts's own "nuka (process)" describe block,
   // one layer further down the stack): every temp project under
   // tests/.tmp-fixtures/ is nested inside this very package's own directory
   // tree, so Node's self-referencing package resolution

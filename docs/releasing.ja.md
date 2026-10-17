@@ -116,7 +116,7 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
    そのあと `npm publish` を実行します。
    action は commit id にピンされ、`ci.yml` と同じです。
    このリポジトリは設定でそのピンを要求していて、tag は実行前に拒否されます。
-   パッケージの `engines` は `>=20` のままです。
+   パッケージの `engines` は `^22.18.0 || >=23.6.0` のままです。
    Node 24 は publish ジョブであって、`nuka` を動かす人への新しい要件ではありません。
 
 5. workflow の `release` ジョブが、`npm publish` のあとに GitHub release を作ります。

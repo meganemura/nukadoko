@@ -6,7 +6,7 @@ import { defineConfig, defineFixtures } from "./nukadoko-shim.js";
 // A fixture module — every fixture here writes one JSON
 // line per lifecycle event to fixture-log.jsonl, right beside this file, so
 // tests/run-fixture-teardown.test.ts (and its sibling files) can read back
-// what actually happened without needing to see into a separately tsx-
+// what actually happened without needing to see into a separately
 // loaded module instance (this fixture project's own steps read from a
 // different discovery/import path than a test file does, so module-level
 // state here isn't otherwise observable from outside this one `nuka run`/

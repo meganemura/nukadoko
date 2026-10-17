@@ -207,7 +207,7 @@ describe("discoverSteps: defineWorld registration errors", () => {
 
   it("throws ReservedWorldKeyDeclaredError when a defineWorld schema names a reserved key", async () => {
     // Message match, not `toBeInstanceOf`: this error is thrown from inside
-    // src/compat/define-world.ts, loaded through discovery's own scoped tsx
+    // src/compat/define-world.ts, loaded through discovery's own namespaced
     // import (a separate module realm from this test file's plain top-level
     // import of the same source — see src/compat/registry.ts's own header
     // for why identity doesn't cross that boundary), the same reason

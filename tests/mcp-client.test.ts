@@ -6,7 +6,7 @@ import { formatClientMissingMessage } from "../src/cli/mcp-tools.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { callMcpTool } from "../src/mcp/call-tool.js";
 import { connectMcpServer } from "../src/mcp/connect.js";
-import { createCaptureSink, fixture, repoRoot, testsDir } from "./helpers/fixtures.js";
+import { createCaptureSink, fixture, testsDir } from "./helpers/fixtures.js";
 
 // Responsibility: this surface's own acceptance criteria, in one file. A
 // real MCP server (tests/helpers/mcp-test-server.ts) spawned over stdio,
@@ -32,7 +32,6 @@ import { createCaptureSink, fixture, repoRoot, testsDir } from "./helpers/fixtur
 // repo's own devDependencies, so a vitest run within this repo can never
 // observe the real "not installed" case the detection exists for.
 
-const tsxBin = path.join(repoRoot, "node_modules", ".bin", "tsx");
 const serverScript = path.join(testsDir, "helpers", "mcp-test-server.ts");
 const refusedScript = path.join(testsDir, "helpers", "mcp-handshake-refused.js");
 
@@ -51,7 +50,7 @@ describe("MCP client surface", () => {
     async () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["experimental", "mcp-tools", "--json", "--", tsxBin, serverScript], {
+      const exitCode = await runCli(["experimental", "mcp-tools", "--json", "--", process.execPath, serverScript], {
         stdout,
         stderr,
       });
@@ -68,7 +67,7 @@ describe("MCP client surface", () => {
       expect(addTool?.description).toBe("Adds two numbers");
       expect(addTool?.inputSchema).toBeTruthy();
 
-      const client = await connectMcpServer({ command: tsxBin, args: [serverScript] });
+      const client = await connectMcpServer({ command: process.execPath, args: [serverScript] });
       try {
         const result = await callMcpTool(client, "add", { a: 2, b: 3 });
         const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
@@ -97,7 +96,7 @@ describe("MCP client surface", () => {
       // what proves the argument actually reaches `Client`.
       await expect(
         connectMcpServer(
-          { command: tsxBin, args: [serverScript] },
+          { command: process.execPath, args: [serverScript] },
           { versionNegotiation: { mode: { pin: "2026-07-28" } } },
         ),
       ).rejects.toThrow(/did not offer pinned protocol version/);
@@ -147,7 +146,7 @@ describe("MCP client surface", () => {
     let client: Awaited<ReturnType<typeof connectMcpServer>> | undefined;
     try {
       client = await connectMcpServer({
-        command: tsxBin,
+        command: process.execPath,
         args: [serverScript],
         env: { NUKA_PID_FILE: pidFile },
       });

@@ -228,7 +228,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // progress has no TTY check. A CI log wants the same progress, and stderr
 // staying busy is invisible to stdout's NDJSON readers. The records on
 // stdout do have one: in a terminal they are left out unless `--records`
-// asks for them (see `runRunInner`).
+// asks for them (see `runRun`).
 //
 // The Markdown run summary (src/run/run-summary.ts) is the reader-facing
 // counterpart of those stderr lines. Every written record is noted as it is
@@ -309,15 +309,6 @@ export interface RunRunOptions {
   stderr: WritableSink;
 }
 
-export async function runRun(options: RunRunOptions): Promise<number> {
-  const unregisters: Array<() => Promise<void>> = [];
-  try {
-    return await runRunInner(options, unregisters);
-  } finally {
-    for (const unregister of unregisters) await unregister();
-  }
-}
-
 /** The output-location rows for the emitters that are on; a row for one
  * that is off would name a path nothing wrote. The messages row names this
  * run's own suffixed file, which a concurrent invocation cannot replace. */
@@ -334,7 +325,7 @@ function exportLocations(
   ];
 }
 
-async function runRunInner(options: RunRunOptions, unregisters: Array<() => Promise<void>>): Promise<number> {
+export async function runRun(options: RunRunOptions): Promise<number> {
   const { rootDir, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
   // A person at a terminal reads stderr; the records are on disk and the
   // `scenarios` line names them, so a line of JSON per scenario there is
@@ -444,7 +435,6 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
         stderr.write(`${formatVocabularyError(error)}\n`);
         return 1;
       }
-      unregisters.push(analysis.discovery.unregister);
       const { report } = analysis;
       if (report.errors.length > 0) {
         writeCheckIssueLines(report.errors, [], stderr);
@@ -458,12 +448,11 @@ async function runRunInner(options: RunRunOptions, unregisters: Array<() => Prom
       discovery = analysis.discovery;
     } else {
       try {
-        discovery = await discoverSteps(rootDir, config.featuresDir, { keepRegistered: true });
+        discovery = await discoverSteps(rootDir, config.featuresDir);
       } catch (error) {
         stderr.write(`${formatVocabularyError(error)}\n`);
         return 1;
       }
-      unregisters.push(discovery.unregister);
     }
     const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
       discovery;

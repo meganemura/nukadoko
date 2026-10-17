@@ -35,6 +35,46 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   疑似端末の下で `nuka run` を動かし、その stdout を解析するツールは `--records` を渡します。
   `--records` を渡すと、端末にも record が出力されます。
   ディスク上の record、stderr の行、`nuka do` の stdout は変わりません。
+- **Node は 22 系なら 22.18.0 以降、それ以外なら 23.6.0 以降が必要です。**
+  `engines.node` は `^22.18.0 || >=23.6.0` です。
+  これらは、Node がフラグなしで TypeScript の型を除去する最初のリリースです。
+  nukadoko は config、step ファイル、それらが import するすべてを、Node 自身を通して読み込むようになりました。
+  tsx にはもう依存しません。
+  Node 20 や、それより前の 22 に固定した CI ジョブは、対応するバージョンへ移ってください。
+  `docs/ci.ja.md` は 24 を使っています。
+  Node 23.6 から 23.x は、最初に `.ts` ファイルを読み込むときに `ExperimentalWarning` を出します。
+  22.18 と 24 以降は出しません。
+- **型を除去しても形が崩れない TypeScript だけが読み込めます。**
+  `enum`、値を持つ `namespace`、コンストラクタのパラメータプロパティは実行時の振る舞いを持つため、Node はそのファイルを拒否します。
+  step ファイルが import するプロジェクトのファイルにも同じことが当てはまります。
+  `nuka check` は `step-file-import-failed` を、ファイル、行、代わりに書くものと一緒に報告します。
+  enum は `as const` を付けたオブジェクトに、パラメータプロパティはコンストラクタで代入するフィールドになります。
+  `tsconfig.json` に `"erasableSyntaxOnly": true`(TypeScript 5.8 以降)を設定すると、nuka より先に `tsc` がそれぞれを報告します。
+- **`type` を付けずに import した型は読み込みに失敗します。**
+  Node は `import { Options } from "./options.ts"` が型だけを指していると判断できません。
+  そのため import は "does not provide an export named 'Options'" で失敗します。
+  `import type { Options }` か `import { type Options }` と書いてください。
+  `"verbatimModuleSyntax": true` を設定すると、`tsc` がこの書き方を求めます。
+- **`nuka scaffold` は `.ts` の名前で import を書きます。**
+  `--command` の step は `./run-greet.ts` を import し、`--then` は上流の step を `.ts` の名前で import します。
+  すでに `.js` の名前で import している step ファイルは、nuka のもとでは読み込まれ続けます。
+  `.js` ファイルがなければ、nuka は `.ts` ファイルにフォールバックするからです。
+  そのため、名前の書き換えは任意です。
+  そのファイルを素の `node` で実行した場合は、フォールバックしません。
+  `tsc` が `.ts` の名前を受け入れるには、`tsconfig.json` に `"rewriteRelativeImportExtensions": true`(TypeScript 5.7 以降)か `"allowImportingTsExtensions": true` が必要です。
+  後者を `tsc` が受け入れるのは `noEmit` のときだけです。
+  `nuka init` は、自身の `compilerOptions` を持ち、どちらのオプションも名指していない `tsconfig.json` に、前者を追加するようになりました。
+  このリリースより前に init したプロジェクトは、手で追加してください。
+- **`tsconfig.json` の `paths` と `baseUrl` は、実行時にはもう解決されません。**
+  tsx はそれを読みましたが、Node は読みません。
+  `paths` を通して `@app/server` を import する step ファイルは、import に失敗します。
+  相対パスか、`package.json` の `imports` にある `#app/*` のエントリを使ってください。
+  Node と `tsc` の両方がそれを読みます。
+- **`"type"` のない `package.json` のもとでも、ES module として書いた `.ts` ファイルが読み込まれるようになりました。**
+  Node はそのファイルを解析し直し、そうしたファイルごとに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
+  `nuka init` はそこでは引き続き `nukadoko.config.mts` を書き、`.mts` の step ファイルは警告なしで読み込まれます。
+  `.ts` の名前のまま警告をなくすには、`package.json` に `"type": "module"` を追加してください。
+  `"type": "commonjs"` のもとでは、`.ts` ファイルは引き続き import に失敗し、エラーは `.mts` に名前を変えるよう伝えます。
 
 ## 0.15.0 から 0.16.0 へ
 

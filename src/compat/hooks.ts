@@ -1,14 +1,14 @@
 // Responsibility: Before/After hook registration — the same registration-
 // buffer shape as src/compat/registry.ts's Given/When/Then (a step file's
 // top-level call pushes onto a module-level array; src/discover/discover-
-// steps.ts reads it back through the same scoped tsx import, for the same
+// steps.ts reads it back through the same namespaced import, for the same
 // module-identity reason that file's own header documents), except a hook
 // is never attributed to a file: a Before/After hook is a property of the
 // whole discovery/run, not of the vocabulary, so there is nothing here for
 // `nuka steps`/`nuka check` to list or duplicate-detect. `getRegisteredHooks()`
 // is read exactly once, at the very end of a discovery run; the buffer is
 // never drained mid-run — each discovery run gets its own module instance
-// (tsx's per-run namespace, same as registry.ts), so a fresh, empty buffer
+// (a namespace per run, src/config/ts-loader.ts, same as registry.ts), so a fresh, empty buffer
 // is what every run already starts with.
 //
 // `HookOptions.timeout` and `HookParameter` are added here (this module

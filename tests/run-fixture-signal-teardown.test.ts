@@ -2,7 +2,6 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { constants } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import {
@@ -10,6 +9,7 @@ import {
   createCaptureSink,
   removeTempDir,
   repoRoot,
+  sourceNodeArgs,
 } from "./helpers/fixtures.js";
 
 // Responsibility: SIGINT, SIGTERM, and SIGHUP during `nuka run` or `nuka
@@ -20,7 +20,7 @@ import {
 //
 // The signal cases spawn a real process. Delivering the signal to this
 // vitest process would tear the runner down, so the child is `src/cli.ts`
-// under tsx's loader with the fixture project as its cwd. The child is killed if a
+// under nukadoko's own loader with the fixture project as its cwd. The child is killed if a
 // case ends while it is still alive.
 //
 // Every `nuka run` here passes `--no-check`. These cases wait on fixture
@@ -56,12 +56,10 @@ const WORKER_DISCONNECTED_LINE =
   "(process.disconnect()). nukadoko reads a closed channel as the parent ending, so this worker " +
   "tears its fixtures down and stops.";
 
-// No tsx wrapper process in between: that wrapper relays only SIGINT and
-// SIGTERM, and a SIGKILL to it would miss the process that spawned the
-// workers.
+// The child is the CLI process itself, with no wrapper process in between:
+// a SIGKILL to a wrapper would miss the process that spawned the workers.
 function spawnNuka(rootDir: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): ChildProcess {
-  const loader = pathToFileURL(path.join(repoRoot, "node_modules", "tsx", "dist", "loader.mjs")).href;
-  const child = spawn(process.execPath, ["--import", loader, path.join(repoRoot, "src", "cli.ts"), ...args], {
+  const child = spawn(process.execPath, [...sourceNodeArgs, path.join(repoRoot, "src", "cli.ts"), ...args], {
     cwd: rootDir,
     stdio: ["ignore", "pipe", "pipe"],
     env,

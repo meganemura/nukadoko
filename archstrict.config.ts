@@ -191,10 +191,11 @@ export default {
         "define-config.ts",
         "emitter-targets.ts",
         "errors.ts",
+        "import-failure.ts",
         "load-config.ts",
         "module-kind.ts",
         "schema.ts",
-        "tsx-cache-off.ts",
+        "ts-loader.ts",
       ],
     },
     {

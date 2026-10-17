@@ -164,10 +164,8 @@ function stepOnlyBuiltinMessages(fixtureName: string, fn: FixtureConsumer): stri
 }
 
 // A config fixture has no `run()`. Reusing the step messages above would
-// tell the reader a step is broken, and would quote a default value's prop
-// after tsx's transform has rewritten it (`undefined` becomes `void 0`),
-// which is not the text in the config. These messages name the fixture and
-// leave that rewritten prop out. `call` is a known builtin a fixture still
+// tell the reader a step is broken. These messages name the fixture and
+// leave the prop out. `call` is a known builtin a fixture still
 // must not name; `stepOnlyBuiltinMessages` reports that on its own.
 function fixtureDefinitionStructuralMessages(
   fixtureName: string,

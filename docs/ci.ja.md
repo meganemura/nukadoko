@@ -23,10 +23,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 24
       - run: npm ci --ignore-scripts
       - run: npm run test:scenarios
 ```
+
+`node-version` には nukadoko が動くどのリリースでも指定できます。
+22 系なら 22.18 以降、それ以外は 23.6 以降で、フラグなしで `.ts` ファイルを読み込めるリリースです。
+これらのファイルでは長期サポートの系列である 24 を使います。
 
 ここではブラウザも Playwright 自体もインストールしません。
 `playwright` は nukadoko の optional な peer dependency なので、`npm ci` がそれを入れるのは、自分の `devDependencies` にそれを書いたプロジェクトだけです。
@@ -72,7 +76,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 24
       - run: npm ci --ignore-scripts
       # PR gate: static, seconds, no browser. Put this on every PR; it can
       # fail before anything runs.
@@ -88,7 +92,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 24
       - run: npm ci --ignore-scripts
       # `nuka run` opens a browser; install it here, not on the `check`
       # job above, which never launches one. `chromium` is
@@ -125,7 +129,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version: 24
       - run: npm ci --ignore-scripts
       # `nuka tend` reports what is rotting rather than what is broken
       # (docs/spec.md "Tending"); it never gates a PR, which is why it

@@ -1,5 +1,5 @@
 import { Then } from "nukadoko/compat";
-import type { MigrationWorld } from "../support/world.js";
+import type { MigrationWorld } from "../support/world.ts";
 
 // RegExp pattern, not a cucumber-expression -- legacy glue is often
 // regex-heavy, and the migration door has to admit it unchanged

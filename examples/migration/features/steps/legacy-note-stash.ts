@@ -1,5 +1,5 @@
 import { Given, Then } from "nukadoko/compat";
-import type { MigrationWorld } from "../support/world.js";
+import type { MigrationWorld } from "../support/world.ts";
 
 // The World-bag stash this migration hasn't reached yet (README.md calls
 // this out on purpose): `this.note` is an ordinary, undeclared own property

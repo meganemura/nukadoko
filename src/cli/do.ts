@@ -215,15 +215,6 @@ export interface RunDoOptions {
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {
-  const unregisters: Array<() => Promise<void>> = [];
-  try {
-    return await runDoInner(options, unregisters);
-  } finally {
-    for (const unregister of unregisters) await unregister();
-  }
-}
-
-async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promise<void>>): Promise<number> {
   const { rootDir, name, argsJson, session, env, use, stdout, stderr } = options;
 
   // --- Setup phase: any failure here writes nothing. ---
@@ -352,8 +343,7 @@ async function runDoInner(options: RunDoOptions, unregisters: Array<() => Promis
       // Compat-origin parameter types are
       // irrelevant to `nuka do`, which only ever names one step by its
       // vocabulary key.
-      const discovery = await discoverSteps(rootDir, config.featuresDir, { keepRegistered: true });
-      unregisters.push(discovery.unregister);
+      const discovery = await discoverSteps(rootDir, config.featuresDir);
       ({ vocabulary } = discovery);
       // Discovery treats a missing featuresDir as an empty vocabulary, so
       // the lookup below would report "Unknown step" for a directory that

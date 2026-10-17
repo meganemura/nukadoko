@@ -3,7 +3,7 @@ import { AfterAll, BeforeAll } from "../../nukadoko-compat-shim.js";
 // Captured on `globalThis`, not exported (same reasoning as
 // tests/fixtures/module-identity-project/features/steps/consumer.ts's own
 // header): the test reading this capture runs under vitest's own module
-// system, not the tsx registration discoverSteps() loads this file through,
+// system, not the namespaced module graph discoverSteps() loads this file into,
 // so a plain named export here would not be reachable the way the test
 // needs it to be. tests/compat-run-scope.test.ts resets this array before
 // each of its own `it()`s and reads it back after `runCli` returns, to

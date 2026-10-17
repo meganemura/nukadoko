@@ -32,7 +32,7 @@ import type { StepContext } from "../src/step/context.js";
 // the error classes all four throw). tests/compat-world.test.ts and
 // tests/compat-typed-world.test.ts already exercise the same mechanism end
 // to end through a compat glue file, but that file is loaded via
-// discovery's own scoped tsx import (world.ts's own header explains why) —
+// discovery's own namespaced import (world.ts's own header explains why) —
 // a separate module realm from this test file's plain top-level import.
 // Testing the exported functions directly here, through that plain
 // realm, reaches branches an end-to-end run's own realm boundary leaves

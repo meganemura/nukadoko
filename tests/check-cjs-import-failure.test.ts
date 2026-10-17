@@ -4,15 +4,15 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check` names the CJS/.ts mismatch when it is the
 // actual cause of a step-file-import-failed finding, instead of leaving
-// Node's own "Cannot find module '<path>?namespace=<uuid>'" standing on its
-// own — a message that reads like a missing file even though the file is
-// right there (src/check/analyze.ts's own header). The sentence is only
-// appended when both hold: the project is CommonJS (no "type": "module" in
-// package.json) and the failed file is itself .ts — never a guess
-// (CLAUDE.md: "a check that guesses is worse than no check").
+// Node's own "Cannot use import statement outside a module" standing on
+// its own, a message that reads like a mistake in the file rather than in
+// package.json. The sentence is only appended when both hold: package.json
+// says "type": "commonjs" and the failed file is itself .ts. With no
+// "type" at all, Node reparses the file as an ES module, so a failure there
+// has another cause and the sentence would be a guess.
 
 describe("nuka check: CommonJS/.ts step-file-import-failed", () => {
-  it("appends the CJS/.ts explanation when the project is CommonJS and the failed file is .ts", async () => {
+  it("appends the CJS/.ts explanation when package.json says \"type\": \"commonjs\" and the failed file is .ts", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
       rootDir: fixture("check-import-failure-cjs-project"),
@@ -28,8 +28,8 @@ describe("nuka check: CommonJS/.ts step-file-import-failed", () => {
     expect(failure).toBeDefined();
     // Node's own message is still there, verbatim, as the base of the
     // sentence appended to it.
-    expect(failure?.message).toContain("Cannot find module");
-    expect(failure?.message).toContain('"type": "module"');
+    expect(failure?.message).toContain("Cannot use import statement outside a module");
+    expect(failure?.message).toContain('"type": "commonjs"');
     expect(failure?.message).toContain(".mts");
   });
 
@@ -47,7 +47,7 @@ describe("nuka check: CommonJS/.ts step-file-import-failed", () => {
     };
     const failure = report.errors.find((issue) => issue.code === "step-file-import-failed");
     expect(failure).toBeDefined();
-    expect(failure?.message).not.toContain('"type": "module"');
+    expect(failure?.message).not.toContain('"type": "commonjs"');
     expect(failure?.message).not.toContain(".mts");
   });
 });

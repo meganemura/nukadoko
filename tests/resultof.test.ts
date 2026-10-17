@@ -18,18 +18,14 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // relative import of create-listing.ts is this suite's empirical proof of
 // decision 1's module-identity claim (identity is judged by the Step
 // object's own reference equality ... vocabulary discovery and imports
-// between step files land on the same tsImport module graph, so they
-// should coincide — this is what a test must prove). The two
-// tests below now pass because `src/discover/discover-steps.ts`
-// calls tsx's `register({ namespace })`
-// exactly once per discovery run and reuses the scoped `.import()` it
-// returns for every file, instead of tsx's `tsImport()` convenience wrapper,
-// which mints a fresh namespace/module registration on every call — that
-// per-call registration was this suite's original failure mode: a step
-// file's own relative import of another step file resolved under a
-// *different* registration than discovery's own direct load of that same
-// file, so the two never matched with `===`. See discover-steps.ts's own
-// header comment for the mechanism.
+// between step files land on the same module graph, so they should
+// coincide — this is what a test must prove). The two tests below pass
+// because `src/discover/discover-steps.ts` loads every file of one
+// discovery run under one namespace, which the loader's resolve hook
+// carries to each relative import, so a step file's import of another
+// step file and discovery's own load of that file are one module and match
+// with `===`. See discover-steps.ts's own header comment for the
+// mechanism.
 
 function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);

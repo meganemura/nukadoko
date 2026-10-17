@@ -8,7 +8,7 @@
 // catch site (src/run/run-scenario.ts): a
 // compat step's own defineWorld-declared write throws from inside src/
 // compat/world-instrumentation.ts, reached through src/compat/world.ts —
-// which discovery loads through its own scoped tsx import, a *different*
+// which discovery loads through its own namespaced import, a *different*
 // module instance of this exact file than the one run-scenario.ts's plain
 // top-level `import` resolves to (src/discover/discover-steps.ts's own
 // header). Same fix as src/step/brand.ts's own `STEP_BRAND`, verified the

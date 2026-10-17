@@ -27,8 +27,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // `<root>/src/cli/skill.ts` pre-build and `<root>/dist/cli/skill.js`
 // post-build: two directories below `<root>` either way. Walking up two
 // directories from this file's own URL therefore lands on the package root
-// whether the process started via `npx tsx src/cli.ts` or `node
-// dist/cli.js` — both of which need to work.
+// whether the process started via `node src/cli.ts` (with the loader
+// preloaded) or `node dist/cli.js`; both of which need to work.
 
 function packageRoot(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));

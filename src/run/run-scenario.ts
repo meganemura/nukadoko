@@ -129,8 +129,7 @@ import { writeScenarioRecord } from "./write-record.js";
 //
 // Object identity survives a step file importing another step file:
 // src/discover/discover-steps.ts loads
-// every file through one shared tsx module registration for the whole
-// discovery run, so a step file's own relative import of another step
+// every file through one namespace for the whole discovery run, so a step file's own relative import of another step
 // file's default export is the same object discovery put in this chain's
 // key space. See tests/resultof.test.ts's header comment for the
 // empirical proof this relies on.
@@ -846,7 +845,7 @@ export async function runWithHeartbeat<T>(
  * very module) and a `WorldWriteValidationError` (a declared World key's
  * write, src/compat/world-instrumentation.ts — checked via
  * `isWorldWriteValidationError`'s own brand, not `instanceof`, since that
- * error is reached through discovery's own scoped tsx import and
+ * error is reached through discovery's own namespaced import and
  * `instanceof` would silently miss it there; see that function's own header)
  * are identifiable this way; anything else — including a non-`Error` thrown
  * value — falls back to `"step_error"`, the default whenever classification

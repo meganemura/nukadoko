@@ -2,17 +2,20 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import {
+  appendCompilerOption,
   appendIncludeEntries,
   includeMayCover,
   missingIncludeEntries,
+  needsTsExtensionOption,
   parseJsonc,
-} from "../src/cli/tsconfig-include.js";
+} from "../src/cli/tsconfig-edit.js";
 
 // Responsibility: the pure half of `nuka init`'s tsconfig.json edit and
 // hint. The JSONC reader must give back what JSON.parse gives for the same
 // value with comments and trailing commas around it, the coverage rule must
 // never claim a path is left out when an entry could reach it, and the
 // in-place append must leave every byte outside the include array alone.
+// The compiler option edit holds to the same rule for compilerOptions.
 
 const segment = gs.fromRegex("[a-z]{1,6}", { fullmatch: true });
 const literalPaths = gs.arrays(segment, { minSize: 1, maxSize: 4 }).map((parts) => parts.join("/"));
@@ -269,5 +272,51 @@ describe("appendIncludeEntries on JSONC", () => {
       });
       expect(edited.startsWith(`${prefix}[`)).toBe(true);
       expect(edited.endsWith(`]${suffix}`)).toBe(true);
+    }));
+});
+
+describe("needsTsExtensionOption", () => {
+  it("asks for the option only when compilerOptions is an object that names neither option", () => {
+    expect(needsTsExtensionOption({ compilerOptions: { strict: true } })).toBe(true);
+    expect(needsTsExtensionOption({ compilerOptions: {} })).toBe(true);
+    expect(needsTsExtensionOption({ compilerOptions: { rewriteRelativeImportExtensions: false } })).toBe(false);
+    expect(needsTsExtensionOption({ compilerOptions: { allowImportingTsExtensions: true } })).toBe(false);
+    expect(needsTsExtensionOption({ extends: "./tsconfig.base.json" })).toBe(false);
+    expect(needsTsExtensionOption({ compilerOptions: [] })).toBe(false);
+    expect(needsTsExtensionOption({ compilerOptions: null })).toBe(false);
+    expect(needsTsExtensionOption([])).toBe(false);
+  });
+});
+
+describe("appendCompilerOption", () => {
+  it("adds the option after the last member of a one-line and a multi-line object", () => {
+    expect(appendCompilerOption('{ "compilerOptions": { "strict": true } }', "rewriteRelativeImportExtensions")).toBe(
+      '{ "compilerOptions": { "strict": true, "rewriteRelativeImportExtensions": true } }',
+    );
+    expect(appendCompilerOption('{\n  "compilerOptions": {\n    "strict": true, // on\n  }\n}\n', "x")).toBe(
+      '{\n  "compilerOptions": {\n    "strict": true, // on\n    "x": true,\n  }\n}\n',
+    );
+    expect(appendCompilerOption('{ "compilerOptions": {} }', "x")).toBe('{ "compilerOptions": {"x": true} }');
+  });
+
+  const gaps = gs.sampledFrom(["", " ", "\n    ", "\r\n\t", ' // "compilerOptions": { }\n', ' /* } */ ']);
+  it("adds the option to the parsed compilerOptions and keeps the text outside its braces, for any JSONC layout", () =>
+    hegel.test((tc) => {
+      const gap = () => tc.draw(gaps);
+      const keys = tc.draw(gs.arrays(gs.fromRegex("[a-z]{1,8}", { fullmatch: true }), { maxSize: 4, unique: true }));
+      const members = keys.map((key) => `${JSON.stringify(key)}${gap()}:${gap()}true`);
+      const trailing = members.length > 0 && tc.draw(gs.booleans()) ? `,${gap()}` : "";
+      const object = `{${gap()}${members.join(`${gap()},${gap()}`)}${gap()}${trailing}}`;
+      const prefix = `{${gap()}"include"${gap()}:${gap()}["src"]${gap()},${gap()}"compilerOptions"${gap()}:${gap()}`;
+      const suffix = `${gap()}}${gap()}`;
+
+      const edited = appendCompilerOption(`${prefix}${object}${suffix}`, "rewriteRelativeImportExtensions");
+
+      expect(parseJsonc(edited)).toEqual({
+        include: ["src"],
+        compilerOptions: { ...Object.fromEntries(keys.map((key) => [key, true])), rewriteRelativeImportExtensions: true },
+      });
+      expect(edited.startsWith(`${prefix}{`)).toBe(true);
+      expect(edited.endsWith(`}${suffix}`)).toBe(true);
     }));
 });

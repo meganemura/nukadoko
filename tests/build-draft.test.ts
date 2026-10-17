@@ -13,7 +13,7 @@ import type { StepRecordFailed, StepRecordOk } from "../src/record/types.js";
 // pattern that cannot render at all, and every round-trip disagreement other
 // than "undefined" (already covered there via the fixture's own
 // `flexible-widget` step). Every `Vocabulary`/`StepBinding` here is built by
-// hand, the same "no discovery, no tsx, no filesystem" approach
+// hand, the same "no discovery, no loader, no filesystem" approach
 // tests/validate-from.test.ts already uses for src/step/validate-from.ts, so
 // each case can force an exact vocabulary/record mismatch that a real
 // project on disk would take extra files and steps to reproduce.

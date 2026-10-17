@@ -114,7 +114,7 @@ function parseArgs(argv: readonly string[]): { port: number; v2: boolean } {
   return { port, v2 };
 }
 
-// Only starts a listening server when this file is run directly (`tsx
+// Only starts a listening server when this file is run directly (`node
 // app/server.ts`), never when `createTodoApp` is imported -- the smoke test
 // imports it to run the app in-process on an ephemeral port instead.
 const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];

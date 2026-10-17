@@ -33,8 +33,8 @@ const ENVIRONMENT_NAME_PATTERN = /^[a-z0-9_-]+$/;
 
 /** One named deployment target (docs/spec.md "Sessions, environments,
  * secrets"). `version` is a function rather than a URL+jsonPath DSL:
- * nukadoko.config.ts is already executable TypeScript (loaded via tsx's
- * tsImport), so a config author can call HTTP or exec directly instead of
+ * nukadoko.config.ts is already executable TypeScript (Node loads it by
+ * erasing its types), so a config author can call HTTP or exec directly instead of
  * learning a bespoke schema for the same thing. zod has no schema shape for
  * "a function with this signature", so
  * `z.custom` with a `typeof` check stands in here; the probe's actual return

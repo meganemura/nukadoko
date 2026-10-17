@@ -27,24 +27,16 @@ this one, in order, each with its own real command and its own real output.
   same reason (`dist/` is what the bare `"nukadoko"`/`"nukadoko/compat"`
   specifiers below resolve to, via Node's own
   [self-referencing package resolution](https://nodejs.org/api/packages.html#self-referencing-a-package-using-its-name)).
-- **Unlike examples/todo**, every `nuka ...` command below is shorthand for
-  `node ../../dist/cli.js ...`, not `npx tsx ../../src/cli.ts ...` -- run
-  from this directory (`examples/migration/`). This is a compat-specific,
-  pre-publish-only wrinkle, not a general nukadoko rule: this example's own
-  step files bare-import `"nukadoko/compat"`, which Node's self-reference
-  resolves straight to `dist/compat/index.js` regardless of how the CLI
-  itself was invoked -- and `Given`/`When`/`Then`/`Before`/`defineWorld`
-  registrations are ordinary module-closure state, not a `Symbol.for` brand
-  like a typed `defineStep` step carries, so they do not survive being split
-  across a `src` instance (if the CLI ran via `tsx src/cli.ts`) and a `dist`
-  instance (what the example's own import resolved to) of the same module --
-  they would silently vanish from the vocabulary discovery itself builds.
-  This is exactly why examples/todo, which is typed-only, can get away with
-  `tsx ../../src/cli.ts` and this example can't. Once nukadoko is actually
-  installed as a real dependency in a separate project there is only ever
-  one resolved copy of it, so this distinction disappears entirely; plain
-  `npx nuka ...` is correct there, same as examples/todo's own note about
-  publish.
+- Every `nuka ...` command below is `node ../../dist/cli.js ...`, run from
+  this directory (`examples/migration/`). The step files bare-import
+  `"nukadoko/compat"`, which Node's self-reference resolves to
+  `dist/compat/index.js`, and `Given`/`When`/`Then`/`Before`/`defineWorld`
+  registrations are module state, not a `Symbol.for` brand like a typed
+  `defineStep` step carries: a CLI started from `src/` would read a
+  different copy of that module than the one the step files filled, and the
+  registrations would vanish from the vocabulary. Once nukadoko is installed
+  as a real dependency in a separate project there is only one copy of it,
+  and plain `npx nuka ...` is correct there.
 
 ## The app
 
@@ -57,7 +49,7 @@ duplicate examples/todo's own one for nothing.
 Start it in its own terminal and leave it running:
 
 ```sh
-npx tsx app/server.ts
+node app/server.ts
 ```
 
 It listens on `http://localhost:4000`, matching the `baseURL` already in
@@ -174,7 +166,7 @@ And here is what this repository actually ships --
 ```ts
 // features/steps/hooks.ts
 import { Before } from "nukadoko/compat";
-import type { MigrationWorld } from "../support/world.js";
+import type { MigrationWorld } from "../support/world.ts";
 
 Before(async function (this: MigrationWorld) {
   await this.openRequest();
@@ -184,7 +176,7 @@ Before(async function (this: MigrationWorld) {
 ```ts
 // features/steps/seed-legacy-todos.ts
 import { DataTable, Given } from "nukadoko/compat";
-import type { MigrationWorld } from "../support/world.js";
+import type { MigrationWorld } from "../support/world.ts";
 
 Given("the following legacy todos are seeded:", async function (this: MigrationWorld, table: DataTable) {
   const rows = table.hashes();
@@ -342,7 +334,7 @@ export default defineStep({
 and [`features/steps/read-created-todo-id.ts`](features/steps/read-created-todo-id.ts):
 
 ```ts
-import createTodo from "./create-todo.js";
+import createTodo from "./create-todo.ts";
 
 export default defineStep({
   pattern: "the created todo id is read back via resultOf",

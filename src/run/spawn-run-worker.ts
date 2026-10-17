@@ -2,6 +2,7 @@ import { spawn, type ChildProcessByStdio } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Readable } from "node:stream";
+import { loaderUrl } from "../config/ts-loader.js";
 
 // Responsibility: turns "run run-worker-entry.ts against this argument
 // list" into an actual child process the parent keeps (never unref'd,
@@ -13,10 +14,9 @@ import type { Readable } from "node:stream";
 // run-worker-entry.ts's own file extension, read off *this* module's own
 // `import.meta.url`, is `.ts` in this repository's own dev/test run and
 // `.js` once tsconfig.build.json has mirrored `src/` onto `dist/`. The
-// `.ts` case runs under Node with tsx's loader (nukadoko's own direct
-// dependency) given to `--import`, never through the `tsx` command: that
-// command is a second process between the parent and the worker, and it
-// relays only SIGINT and SIGTERM.
+// `.ts` case preloads src/config/ts-loader.ts with `--import`, because
+// `src/` imports its own `.ts` files by their `.js` names and the loader's
+// resolve hook has to be in place before the entry's first import.
 //
 // `stdio: ["ignore", "pipe", "pipe", "ipc"]`. stdin is empty, so a step
 // that reads it gets end of file at once, as it would with no terminal.
@@ -67,7 +67,8 @@ export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessBySt
   const ext = path.extname(here);
   const workerEntry = path.join(path.dirname(here), `run-worker-entry${ext}`);
   const args = [rootDir, runId, env ?? "", quiet ? "1" : "0", featureListPath, String(repeat)];
-  const nodeArgs = ext === ".ts" ? ["--import", import.meta.resolve("tsx"), workerEntry] : [workerEntry];
+  const nodeArgs =
+    ext === ".ts" ? ["--import", loaderUrl, workerEntry] : [workerEntry];
 
   // `spawn`'s stdio-tuple overloads stop at three entries, so the fourth
   // ("ipc") drops the return type to a plain ChildProcess.

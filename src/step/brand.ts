@@ -4,8 +4,8 @@
 // a step does.
 //
 // Why Symbol.for (global registry) and not a plain module-local Symbol():
-// step files are loaded through tsx's tsImport, which resolves and executes
-// each file in its own module graph, separate from the one that loads this
+// step files are loaded in a module graph of their own per discovery run
+// (src/config/ts-loader.ts), separate from the one that loads this
 // package's own source. A plain `Symbol("nukadoko.step")` created here would
 // therefore not be `===` to the one a step file sees after importing
 // `defineStep` and calling it — two different instances of this very module

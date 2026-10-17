@@ -1,6 +1,6 @@
 import { defineRelation, relationEntry } from "nukadoko";
-import addTodo from "../steps/add-todo.js";
-import listIncludes from "../steps/todo-list-includes.js";
+import addTodo from "../steps/add-todo.ts";
+import listIncludes from "../steps/todo-list-includes.ts";
 
 // A request-only relation. Check reads `source`. It does not call `follow`
 // or `relate`, and it does not run either step.

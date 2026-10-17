@@ -161,12 +161,17 @@ lists the measured ones.
   (`AfterStep`, `Status`, `BeforeAll`, `AfterAll` and `setDefaultTimeout`
   were on this list when the audit ran and are now supported; see above.)
 - **The same kind of name, used only as a type** is a different case, not a
-  smaller version of the one above: esbuild elides a type-only import from
-  the compiled output, so nothing by that name is actually imported at run
-  time. Neither `nuka check` nor `nuka run` sees anything wrong, because the
-  glue that ships is exactly what runs; only `tsc` complains, and that is
-  `tsc`'s job, not nukadoko's. This is not a detection gap: there is
-  nothing left at run time to detect. (`IWorldOptions` and
+  smaller version of the one above, and it depends on how the import is
+  written. Node loads glue by type stripping, which erases an `import type`
+  (or an inline `type` name) and keeps every other import. Written with
+  `type`, nothing by that name is imported at run time: neither `nuka
+  check` nor `nuka run` sees anything wrong, and only `tsc` complains,
+  which is `tsc`'s job. Written without `type`, the import stays, and the
+  file fails with Node's "does not provide an export named" error, which
+  `nuka check` reports as `step-file-import-failed`. Add `type` to such an
+  import; `"verbatimModuleSyntax": true` makes `tsc` find every one.
+  cucumber-js glue often imports `IWorldOptions` beside `World` without
+  `type`, so this is worth a search before the first run. (`IWorldOptions` and
   `ITestCaseHookParameter`, the audit's own examples of this category, are
   now exported, aliases for `WorldConstructorParams`/`HookParameter`, and
   typecheck the same as any other compat name.)

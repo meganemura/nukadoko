@@ -1,6 +1,6 @@
 // Responsibility: the one error type config loading raises. Kept separate
 // from load.ts so callers (CLI, tests) can `instanceof` it without pulling in
-// the loader's tsImport dependency.
+// the loader and the module graph it starts.
 
 export class ConfigError extends Error {
   readonly configPath: string;

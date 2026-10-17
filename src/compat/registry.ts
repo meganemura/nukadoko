@@ -8,16 +8,16 @@
 // so src/discover/discover-steps.ts can import *this* file directly, by its
 // own relative path, and land on the exact same module instance a step file
 // reaches indirectly via "nukadoko/compat" -> ./registry.js: both
-// resolutions produce the identical absolute file URL, and tsx's per-
-// discovery-run namespace (register({ namespace }) in discover-steps.ts)
-// caches a module by that resolved URL — so the two paths converge on one
+// resolutions produce the identical absolute file URL, and the per-
+// discovery-run namespace (src/config/ts-loader.ts) keeps one module per
+// resolved URL — so the two paths converge on one
 // shared buffer for the whole discovery run (the compat module instance and
 // its buffer are independent per discovery run too, a module-identity
 // consequence already relied on for typed steps — see discover-steps.ts's
 // own header).
 // tests/compat-discover.test.ts's concurrent-discovery test is what
 // pins this down empirically: two `discoverSteps()` calls each get their own
-// tsx namespace and therefore their own instance of this module, so
+// namespace and therefore their own instance of this module, so
 // registering the exact same pattern text "at the same time" in both never
 // cross-contaminates either one's buffer.
 //
@@ -32,9 +32,9 @@
 // `setDefaultTimeout`/`getDefaultTimeoutMs` live here rather than in a
 // module of their own: they need the exact same module-identity handoff to
 // src/discover/discover-steps.ts's
-// scoped tsx import that this file's own step buffer already has (see
+// namespaced import that this file's own step buffer already has (see
 // above), and discover-steps.ts already loads this module directly for that
-// buffer — reusing that same load is simpler than adding a second scoped
+// buffer — reusing that same load is simpler than adding a second namespaced
 // import just to reach one more value. Unlike `stepBuffer`, this is a single
 // overwritable value, not a per-file buffer: see `setDefaultTimeout`'s own
 // comment for why "last call wins" rather than "queued and drained".

@@ -1,13 +1,12 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-// Before tsx: tsx-cache-off.ts says why the order matters.
-import "./tsx-cache-off.js";
-import { tsImport } from "tsx/esm/api";
 import { ZodArray, ZodDefault, ZodObject, ZodOptional, ZodRecord, type z } from "zod";
 import { ConfigError } from "./errors.js";
-import { cjsTsMismatchExplanation, isCommonJsProject } from "./module-kind.js";
+import { cjsTsMismatchExplanation, refusesEsmTs } from "./module-kind.js";
 import { configSchema, type NukadokoConfig } from "./schema.js";
+import { describeImportFailure } from "./import-failure.js";
+import { importInNamespace, newNamespace } from "./ts-loader.js";
 
 // The two names loadConfig ever reads, in preference order. Exported so
 // `nuka init` can check both for existence before generating anything (a
@@ -24,8 +23,8 @@ export const CONFIG_FILE_NAME: string = CONFIG_FILE_NAMES[0];
 
 // Responsibility: find a project's config file (nukadoko.config.ts or
 // nukadoko.config.mts — CONFIG_FILE_NAMES above) under a project root, load
-// it at run time (it is TypeScript, not something Node can import
-// unassisted — hence tsx's tsImport, per the spec), and turn its default
+// it at run time (TypeScript, which Node loads by erasing its types;
+// src/config/ts-loader.ts), and turn its default
 // export into a fully-defaulted, validated NukadokoConfig. Applying
 // defaults through the same schema used for validation (rather than a
 // second hard-coded literal) keeps "file absent" and "file present but
@@ -34,14 +33,15 @@ export const CONFIG_FILE_NAME: string = CONFIG_FILE_NAMES[0];
 // a Promise, is a ConfigError naming the file. Reading either as `{}`
 // would ignore every key the file stated, including secrets.redact. A
 // repeated load of the same root returns the already-parsed config while
-// the file is unchanged (`configByRoot`, below): a fresh tsImport per call
-// cannot be the implementation.
+// the file is unchanged (`configByRoot`, below): each load is a fresh
+// module graph, so a load per call cannot be the implementation.
 //
 // .mts exists for one reason: a project whose package.json has no
-// "type": "module" (CommonJS) cannot load nukadoko.config.ts at all — tsx
-// reads a plain .ts file's module kind from that same package.json field,
-// the same rule Node itself applies, so a CommonJS project's .ts config
-// is read as CommonJS and fails before a single line of it runs. .mts is
+// "type": "module" (CommonJS) reads a plain .ts file's module kind from
+// that same package.json field, so a `"type": "commonjs"` project's .ts
+// config is read as CommonJS and fails before a single line of it runs,
+// and a project with no "type" at all gets Node's reparse warning on
+// every load. .mts is
 // unambiguous ESM regardless of package.json, which is the one thing that
 // lets such a project load a config at all (docs/migration.md "Stage 0:
 // install and point nukadoko at your suite"). `nuka init` decides which
@@ -177,21 +177,14 @@ export function resolveConfigFileName(rootDir: string): string {
   return findConfigFile(rootDir)?.fileName ?? CONFIG_FILE_NAME;
 }
 
-// tsImport registers a fresh namespace on every call: an ESM loader through
-// module.register, and a CJS resolver on Module._resolveFilename. It never
-// unregisters either. Calling unregister afterwards only deactivates that
-// loader where Node has module.register but not yet
-// module.registerHooks().deregister(). package.json allows Node 20 and up,
-// and that deregister is absent on Node 20 and on Node 22.14, so the chain
-// is still walked. Measured on Node 22.14: 800 loads of one small config
-// grew from about 5ms to about 45ms, and the same 800 built on register
-// plus unregister in a finally grew the same way. recordStep calls
-// loadConfig once per step inside one process, so that growth is the cost
-// of the run. So the parsed result is kept per root, and the registration
+// Each load is a module graph of its own (src/config/ts-loader.ts), and
+// Node never frees a module it loaded. recordStep calls loadConfig once per
+// step inside one process, so a load per call would grow that process by a
+// graph per step. So the parsed result is kept per root, and the load
 // happens once for each version of the file. One process can outlive an
 // edit to the config (runCli called twice, a live session, the MCP server),
 // so the kept result is reused only while the same file name exists with
-// the same mtime and size; a stat per call costs far less than a tsImport.
+// the same mtime and size; a stat per call costs far less than a load.
 // A module the config imports is not part of that check. A failed load is
 // dropped, so the next call can see a file that has since been corrected.
 const configByRoot = new Map<string, { stamp: string; config: Promise<NukadokoConfig> }>();
@@ -227,24 +220,22 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const configPath = resolved?.path ?? path.join(rootDir, CONFIG_FILE_NAME);
 
   let raw: unknown = {};
-  // Empty unless a config file is present, the project is CommonJS, and
-  // that file is `.ts`. Appended on both failures below. An `export
-  // default {}` in a CommonJS project does not throw on import: tsx hands
-  // back an object whose only key is `default`, so the schema failure is
-  // where the sentence has to travel. A file that is not `.ts`, or a
-  // project that is not CommonJS, gets nothing appended.
+  // Empty unless a config file is present, package.json says "type":
+  // "commonjs", and that file is `.ts`. Appended on both failures below,
+  // since a CommonJS read can fail at import or come back as an object the
+  // schema refuses. Any other file or project gets nothing appended.
   const explanation =
-    resolved === null ? "" : cjsTsMismatchExplanation(isCommonJsProject(rootDir), configPath);
+    resolved === null ? "" : cjsTsMismatchExplanation(refusesEsmTs(rootDir), configPath);
   if (resolved !== null) {
     let mod: { default?: unknown };
     try {
-      mod = await tsImport(pathToFileURL(configPath).href, import.meta.url);
+      mod = (await importInNamespace(pathToFileURL(configPath).href, newNamespace())) as { default?: unknown };
     } catch (error) {
       // The CLI prints this error's message and nothing else. The raw
       // rejection does not name the config file: a missing export names
-      // nukadoko's package.json, and a transform error names a `.ts` path
-      // even when the file on disk is `.mts`.
-      const causeText = error instanceof Error ? error.message : String(error);
+      // nukadoko's package.json, and a syntax error names no file at all,
+      // so its location is added the way a step file's is.
+      const causeText = describeImportFailure(error, configPath, rootDir).message;
       throw new ConfigError(
         `Could not import config at ${configPath}: ${causeText}${explanation}`,
         configPath,

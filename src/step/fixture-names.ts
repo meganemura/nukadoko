@@ -31,15 +31,13 @@
 // once its name is destructured), so nothing legitimate is lost by
 // forbidding it.
 //
-// nukadoko only ever loads step files (and config) through tsx's own
-// `register().import()` (src/discover/discover-steps.ts) or `tsImport`
-// (src/config/load-config.ts) — never plain Node ESM/CJS loading — so this
-// file's only real dependency is tsx's own esbuild transform producing
-// `fn.toString()` text shaped the way this parser expects. The regression
+// nukadoko loads step files (and config) with Node's own type stripping
+// (src/config/ts-loader.ts), which replaces each type annotation with
+// spaces and leaves every other character where it was, so `fn.toString()`
+// is the author's source with blanks where the types were. The regression
 // test (tests/fixture-names.test.ts) loads a representative step through
-// that exact path and asserts the names extracted match — the guard against
-// tsx's own default transform changing shape silently out from under this
-// file.
+// that exact path and asserts the names extracted match, the guard against
+// that text changing shape out from under this file.
 
 /** Thrown when a step's `run` function's first argument is not an
  * object-destructuring pattern (`{ ... }`) at all — a bare identifier

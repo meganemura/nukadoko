@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 // Responsibility: the one place tests compute absolute paths to
@@ -14,12 +14,20 @@ export const testsDir = path.resolve(here, "..");
 export const repoRoot = path.resolve(testsDir, "..");
 export const fixturesDir = path.join(testsDir, "fixtures");
 
+/** Node arguments that run a file from `src/` directly: `src/` imports its
+ * own `.ts` files by their `.js` names, which only the loader's resolve
+ * hook maps back. */
+export const sourceNodeArgs: readonly string[] = [
+  "--import",
+  pathToFileURL(path.join(repoRoot, "src", "config", "ts-loader.ts")).href,
+];
+
 export function fixture(name: string): string {
   return path.join(fixturesDir, name);
 }
 
 // Deliberately *inside* the repo tree (under tests/, not the OS temp dir):
-// a copied fixture's step files still get loaded via tsx's tsImport, which
+// a copied fixture's step files are loaded by Node, which
 // resolves bare specifiers like "zod" the normal Node way — walking up
 // parent directories looking for node_modules. A copy under the system temp
 // dir has no such ancestor and every import fails; nested under tests/ it
@@ -122,7 +130,11 @@ export async function ensureNukadokoShim(): Promise<void> {
   const target = path.join(repoRoot, "src", "index.js");
   const relative = path.relative(nukadokoShimDir, target).split(path.sep).join("/");
   const specifier = relative.startsWith(".") ? relative : `./${relative}`;
-  await writeFile(path.join(nukadokoShimDir, "index.ts"), `export * from "${specifier}";\n`);
+  // A `.js` file, because the loader maps `.js` to `.ts` only for a path
+  // specifier and the package entry is reached by name; the `.d.ts` beside
+  // it gives tsc the same types through `src/`.
+  await writeFile(path.join(nukadokoShimDir, "index.js"), `export * from "${specifier}";\n`);
+  await writeFile(path.join(nukadokoShimDir, "index.d.ts"), `export * from "${specifier}";\n`);
 
   // "./compat" subpath (extending this
   // mechanism for it is explicitly permitted) — same re-export trick as the
@@ -134,10 +146,8 @@ export async function ensureNukadokoShim(): Promise<void> {
   const compatTarget = path.join(repoRoot, "src", "compat", "index.js");
   const compatRelative = path.relative(nukadokoShimDir, compatTarget).split(path.sep).join("/");
   const compatSpecifier = compatRelative.startsWith(".") ? compatRelative : `./${compatRelative}`;
-  await writeFile(
-    path.join(nukadokoShimDir, "compat.ts"),
-    `export * from "${compatSpecifier}";\n`,
-  );
+  await writeFile(path.join(nukadokoShimDir, "compat.js"), `export * from "${compatSpecifier}";\n`);
+  await writeFile(path.join(nukadokoShimDir, "compat.d.ts"), `export * from "${compatSpecifier}";\n`);
 }
 
 const execFileAsync = promisify(execFile);
