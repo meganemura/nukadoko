@@ -313,7 +313,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      `Could not import config at ${configPath}: Cannot use import statement outside a module (nukadoko.config.ts:1)${CJS_TS_HINT}\n`,
+      `Could not import config at ${configPath}: Cannot use import statement outside a module (nukadoko.config.ts:1)${CJS_TS_HINT}\ndo: nuka steps --help\n`,
     );
   });
 

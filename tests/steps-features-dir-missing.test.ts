@@ -39,21 +39,22 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
     expect(stderr.text()).toContain(path.join(rootDir, "features"));
   });
 
-  it("fails loudly when featuresDir does not exist on disk: same condition, --json stays silent on stdout too", async () => {
+  it("fails loudly when featuresDir does not exist on disk: --json answers with a refusal, not an empty vocabulary", async () => {
     rootDir = await createEmptyTempDir();
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
 
     const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr });
 
-    expect(exitCode).not.toBe(0);
-    // The bug this task fixes: `--json` used to print `{"steps": [],
-    // "import_failures": []}` here, an empty-but-shaped answer that reads as
-    // success. Failing must not gain a JSON error shape either — that would
-    // just be a different lie in the same spot.
-    expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("featuresDir");
-    expect(stderr.text()).toContain(path.join(rootDir, "features"));
+    expect(exitCode).toBe(1);
+    // `{"steps": [], "import_failures": []}` here would read as success.
+    // The refusal has no `steps` key at all, so no reader can mistake it.
+    expect(JSON.parse(stdout.text())).toEqual({
+      schema_version: 1,
+      error: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+      do: "nuka steps --help",
+    });
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
   });
 
   it("still succeeds when featuresDir exists but has zero steps in it: exit 0, an empty list, not an error", async () => {
@@ -77,18 +78,20 @@ describe("nuka describe and nuka do: featuresDir missing", () => {
     if (rootDir) await removeTempDir(rootDir);
   });
 
-  it("nuka describe names the missing featuresDir instead of the step: stderr names the resolved path, stdout stays empty", async () => {
+  it("nuka describe names the missing featuresDir instead of the step, in its JSON refusal", async () => {
     rootDir = await createEmptyTempDir();
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
 
     const exitCode = await runCli(["describe", "missing-step"], { rootDir, stdout, stderr });
 
-    expect(exitCode).not.toBe(0);
-    expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("featuresDir");
-    expect(stderr.text()).toContain(path.join(rootDir, "features"));
-    expect(stderr.text()).not.toContain("Unknown step");
+    expect(exitCode).toBe(1);
+    expect(JSON.parse(stdout.text())).toEqual({
+      schema_version: 1,
+      error: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+      do: "nuka describe --help",
+    });
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
   });
 
   it("nuka do names the missing featuresDir instead of the step: stderr names the resolved path, stdout stays empty", async () => {

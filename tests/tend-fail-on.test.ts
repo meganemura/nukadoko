@@ -63,7 +63,7 @@ describe("nuka tend --fail-on", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--fail-on", "pattern-unbond"], { rootDir, stdout: createCaptureSink(), stderr });
     expect(exitCode).toBe(1);
-    expect(stderr.text()).toBe('--fail-on: "pattern-unbond" is not a code nuka tend reports. `nuka tend --codes` lists every code.\n');
+    expect(stderr.text()).toBe('--fail-on: "pattern-unbond" is not a code nuka tend reports. `nuka tend --codes` lists every code.\ndo: nuka tend --codes\n');
   });
 
   it("refuses the codes removed with rationale and with the check duplicates, naming what to do instead", async () => {
@@ -83,7 +83,7 @@ describe("nuka tend --fail-on", () => {
       const stderr = createCaptureSink();
       expect(await runCli(["tend", "--fail-on", code], { rootDir, stdout, stderr })).toBe(1);
       expect(stdout.text()).toBe("");
-      expect(stderr.text()).toBe(message);
+      expect(stderr.text()).toBe(`${message}do: nuka tend --help\n`);
     }
   });
 
@@ -96,7 +96,8 @@ describe("nuka tend --fail-on", () => {
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toBe(
         `--fail-on: "${code}" was removed with \`nuka accept\`. A person now reads the run summary \`nuka run\` writes, ` +
-          "on the pull request, and approving the pull request is the sign-off (docs/upgrading.md).\n",
+          "on the pull request, and approving the pull request is the sign-off (docs/upgrading.md).\n" +
+          "do: nuka tend --help\n",
       );
     }
   });

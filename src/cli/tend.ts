@@ -9,7 +9,7 @@ import {
   type TendIssue,
   type TendSummary,
 } from "../tend/types.js";
-import { formatVocabularyError } from "./vocabulary.js";
+import { helpFor, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka tend`'s actual work, kept out of run-cli.ts the same
@@ -122,28 +122,27 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   // would read that silence as "nothing to fail on".
   // A removed code is refused too, but by name and with what replaced it,
   // so a CI job written against an earlier release learns where to go.
+  const sinks = { json, stdout, stderr };
   const removed = failOn.filter((code) => REMOVED_TEND_CODES.has(code));
   if (removed.length > 0) {
-    for (const code of removed) {
-      stderr.write(`--fail-on: "${code}" ${REMOVED_TEND_CODES.get(code)}.\n`);
-    }
-    return 1;
+    const lines = removed.map((code) => `--fail-on: "${code}" ${REMOVED_TEND_CODES.get(code)}.`);
+    return refuse(sinks, lines.join("\n"), helpFor("tend"));
   }
   const unknown = failOn.filter((code) => !TEND_CODES.has(code));
   if (unknown.length > 0) {
-    stderr.write(
+    return refuse(
+      sinks,
       `--fail-on: ${unknown.map((code) => `"${code}"`).join(", ")} ${unknown.length === 1 ? "is not a code" : "are not codes"} ` +
-        `nuka tend reports. \`nuka tend --codes\` lists every code.\n`,
+        `nuka tend reports. \`nuka tend --codes\` lists every code.`,
+      "nuka tend --codes",
     );
-    return 1;
   }
 
   let analyzed;
   try {
     analyzed = await analyzeTend(rootDir);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuse(sinks, error, helpFor("tend"));
   }
   const notes = selectReportedNotes(analyzed.notes, { all, failOn });
   const report = { ...analyzed, notes };

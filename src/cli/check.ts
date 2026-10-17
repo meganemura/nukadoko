@@ -8,15 +8,16 @@ import { loadConfig } from "../config/load-config.js";
 import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
 import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { readFeaturesForCheck, resolveFeatureTargets } from "../run/select-pickles.js";
-import { formatVocabularyError } from "./vocabulary.js";
+import { RefusalError, helpFor, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka check`'s actual work, kept out of run-cli.ts so
 // it's unit-testable without going through yargs
 // (same split as cli/do.ts, cli/init.ts, cli/scaffold.ts). The report itself
 // — human-readable lines or `--json` — is stdout-only; a failure to even
-// produce a report (config/discovery error) is stderr + exit 1, the same
-// convention every other command already uses via formatVocabularyError.
+// produce a report (config/discovery error) is a refusal (cli/refusal.ts):
+// `{ error, do }` on stdout under `--json`, the message and a `do:` line on
+// stderr otherwise.
 // Exit code is exactly "1 or more errors" (docs/spec.md "CLI summary":
 // warnings alone are exit 0).
 //
@@ -181,8 +182,7 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   try {
     report = targets.length === 0 ? await analyzeProject(rootDir) : await analyzeTargets(rootDir, targets);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuse({ json, stdout, stderr }, error, helpFor("check"));
   }
 
   if (json) {
@@ -218,7 +218,10 @@ export async function readCheckTargets(
     try {
       statSync(path.join(rootDir, relativePath));
     } catch (error) {
-      throw new Error(describeFailedFeatureRead(command, rootDir, relativePath, error).message);
+      const read = describeFailedFeatureRead(command, rootDir, relativePath, error);
+      throw read.basePath === undefined
+        ? new Error(read.message)
+        : new RefusalError(read.message, `${command} ${read.basePath}`);
     }
   }
   let selected;

@@ -38,7 +38,8 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 import { isModel, type RelationSource, type RelationStep } from "../step/define-explore.js";
 import type { Step } from "../step/define-step.js";
 import { toStoredForm } from "../stored-form/stored-form.js";
-import { assertFeaturesDirExists, formatVocabularyError } from "./vocabulary.js";
+import { helpFor, refuse } from "./refusal.js";
+import { assertFeaturesDirExists } from "./vocabulary.js";
 
 // Responsibility: `nuka experimental explore`'s wiring. Setup refuses before any step
 // runs: a file that is not a model or a relation, a finding `nuka check`
@@ -65,10 +66,12 @@ export interface RunExploreOptions {
   readonly stderr: WritableSink;
 }
 
-function positiveInteger(flag: string, value: number, stderr: WritableSink): boolean {
-  if (Number.isInteger(value) && value >= 1) return true;
-  stderr.write(`${flag} must be a whole number of 1 or more (got ${value}).\n`);
-  return false;
+function positiveIntegerRefusal(flag: string, value: number): string | null {
+  return Number.isInteger(value) && value >= 1 ? null : `${flag} must be a whole number of 1 or more (got ${value}).`;
+}
+
+function refuseExplore(options: RunExploreOptions, error: unknown): number {
+  return refuse(options, error, helpFor("experimental explore"));
 }
 
 /** A relation with a declared source has no seed. */
@@ -93,13 +96,12 @@ function plural(count: number, word: string): string {
 }
 
 export async function runExplore(options: RunExploreOptions): Promise<number> {
-  const { rootDir, stdout, stderr } = options;
-  if (!positiveInteger("--runs", options.runs, stderr) || !positiveInteger("--length", options.length, stderr)) {
-    return 1;
-  }
+  const { rootDir } = options;
+  const flagRefusal =
+    positiveIntegerRefusal("--runs", options.runs) ?? positiveIntegerRefusal("--length", options.length);
+  if (flagRefusal !== null) return refuseExplore(options, flagRefusal);
   if (options.seed !== null && !(Number.isInteger(options.seed) && options.seed >= 0 && options.seed < 2 ** 32)) {
-    stderr.write(`--seed must be a whole number from 0 to 4294967295 (got ${options.seed}).\n`);
-    return 1;
+    return refuseExplore(options, `--seed must be a whole number from 0 to 4294967295 (got ${options.seed}).`);
   }
   const seed = options.seed ?? Math.floor(Math.random() * 2 ** 32);
 
@@ -109,8 +111,7 @@ export async function runExplore(options: RunExploreOptions): Promise<number> {
     config = await loadConfig(rootDir);
     resolvedEnv = resolveEnvironment(config, options.env ?? DEFAULT_ENVIRONMENT_NAME, options.env !== null);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuseExplore(options, error);
   }
 
   let discovery;
@@ -118,8 +119,7 @@ export async function runExplore(options: RunExploreOptions): Promise<number> {
     discovery = await discoverSteps(rootDir, config.featuresDir);
     assertFeaturesDirExists(rootDir, config);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuseExplore(options, error);
   }
   return exploreDiscovered(options, seed, config, resolvedEnv, discovery);
 }
@@ -138,11 +138,11 @@ async function exploreDiscovered(
   const relation = relations.find((entry) => entry.filePath === target);
   if (model === undefined && relation === undefined) {
     const known = [...models, ...relations].map((entry) => path.relative(rootDir, entry.filePath)).sort();
-    stderr.write(
+    return refuseExplore(
+      options,
       `${options.file} is not a model or a relation that discovery found under ${config.featuresDir}. ` +
-        (known.length > 0 ? `Found: ${known.join(", ")}\n` : "Discovery found none.\n"),
+        (known.length > 0 ? `Found: ${known.join(", ")}` : "Discovery found none."),
     );
-    return 1;
   }
 
   const fixtureGraph = buildFixtureGraph(config);
@@ -154,13 +154,11 @@ async function exploreDiscovered(
     needsBrowser,
   });
   if (findings.length > 0) {
-    for (const finding of findings) stderr.write(`${finding.code}: ${finding.message}\n`);
-    return 1;
+    return refuseExplore(options, findings.map((finding) => `${finding.code}: ${finding.message}`).join("\n"));
   }
   const definitionIssues = validateFixtureDefinitions(config);
   if (definitionIssues.length > 0) {
-    stderr.write(`${formatFixtureDefinitionIssues(definitionIssues)}\n`);
-    return 1;
+    return refuseExplore(options, formatFixtureDefinitionIssues(definitionIssues));
   }
   const declaredSteps =
     model !== undefined
@@ -172,8 +170,7 @@ async function exploreDiscovered(
     return entry?.kind === "typed" ? validateStepFixtures(name, entry.step, knownFixtures) : [];
   });
   if (fixtureIssues.length > 0) {
-    stderr.write(`${formatFixtureIssues(fixtureIssues)}\n`);
-    return 1;
+    return refuseExplore(options, formatFixtureIssues(fixtureIssues));
   }
   if (resolvedEnv.policy === "read-only") {
     const mutating = [...new Set(declaredSteps)].filter((name) => {
@@ -181,10 +178,10 @@ async function exploreDiscovered(
       return entry?.kind === "typed" && entry.step.mutates;
     });
     if (mutating.length > 0) {
-      for (const name of mutating) {
-        stderr.write(`${new ReadOnlyEnvironmentError(name, resolvedEnv.name).message}\n`);
-      }
-      return 1;
+      return refuseExplore(
+        options,
+        mutating.map((name) => new ReadOnlyEnvironmentError(name, resolvedEnv.name).message).join("\n"),
+      );
     }
   }
 
@@ -192,8 +189,7 @@ async function exploreDiscovered(
   try {
     bindings = buildStepBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuseExplore(options, error);
   }
 
   const env = loadEnvFiles(rootDir, resolvedEnv.envFiles);

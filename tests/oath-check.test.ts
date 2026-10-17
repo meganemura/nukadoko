@@ -131,7 +131,7 @@ describe("markdown oaths", () => {
 
     expect(exitCode).toBe(1);
     expect(stderr.text()).toBe(
-      `no Markdown file was found while scanning "oaths-empty" (resolved to ${path.join(rootDir, "oaths-empty")}); nothing can run\n`,
+      `no Markdown file was found while scanning "oaths-empty" (resolved to ${path.join(rootDir, "oaths-empty")}); nothing can run\ndo: nuka run --help\n`,
     );
   });
 

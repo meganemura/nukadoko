@@ -166,7 +166,8 @@ describe("nuka experimental explore", () => {
       stdout: "",
       stderr:
         'Step "add-todo" mutates state but environment "staging" has policy "read-only"\n' +
-        'Step "complete-todo" mutates state but environment "staging" has policy "read-only"\n',
+        'Step "complete-todo" mutates state but environment "staging" has policy "read-only"\n' +
+        "do: nuka experimental explore --help\n",
     });
     expect(requests).toBe(0);
   });
@@ -414,7 +415,8 @@ describe("nuka experimental explore", () => {
       stdout: "",
       stderr:
         "features/steps/add-todo.ts is not a model or a relation that discovery found under features. " +
-        "Found: features/explore/add-model.ts, features/explore/add-relation.ts\n",
+        "Found: features/explore/add-model.ts, features/explore/add-relation.ts\n" +
+        "do: nuka experimental explore --help\n",
     });
   });
 });
@@ -427,7 +429,9 @@ describe("nuka explore", () => {
     expect({ exitCode, stdout: stdout.text(), stderr: stderr.text() }).toEqual({
       exitCode: 1,
       stdout: "",
-      stderr: "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n",
+      stderr:
+        "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n" +
+        "do: nuka experimental explore --help\n",
     });
   });
 });

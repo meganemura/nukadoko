@@ -82,7 +82,7 @@ import {
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { writeCheckIssueLines } from "./check.js";
-import { formatVocabularyError } from "./vocabulary.js";
+import { RefusalError, helpFor, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s work, kept out of run-cli.ts so it is
@@ -337,6 +337,7 @@ function exportLocations(
 
 export async function runRun(options: RunRunOptions): Promise<number> {
   const { rootDir, session, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
+  const refused = (error: unknown): number => refuse({ json: options.json, stdout: options.stdout, stderr }, error, helpFor("run"));
   // A person at a terminal reads stderr; the records are on disk and the
   // `scenarios` line names them, so a line of JSON per scenario there is
   // noise. A pipe, a file, an agent's shell, and a CI log are not terminals,
@@ -352,12 +353,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // "any failure here writes nothing" phase every other setup check below
   // already belongs to.
   if (!Number.isInteger(repeat) || repeat < 1) {
-    stderr.write(`--repeat must be a whole number of 1 or more (got ${options.repeat}).\n`);
-    return 1;
+    return refused(`--repeat must be a whole number of 1 or more (got ${options.repeat}).`);
   }
   if (!Number.isInteger(concurrency) || concurrency < 1) {
-    stderr.write(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).\n`);
-    return 1;
+    return refused(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).`);
   }
 
   // This whole invocation's own start — read
@@ -371,8 +370,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refused(error);
   }
   const featureArgs = options.featureArgs.length === 0 ? [config.featuresDir] : options.featureArgs;
 
@@ -390,8 +388,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   try {
     resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
   } catch (error) {
-    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    return refused(error);
   }
 
   let lockPath: string | null = null;
@@ -404,26 +401,23 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     try {
       validateSessionName(session);
     } catch (error) {
-      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-      return 1;
+      return refused(error);
     }
     lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, session);
     try {
       await acquireLock(lockPath, session);
     } catch (error) {
-      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-      return 1;
+      return refused(error);
     }
   }
 
   try {
-    const select = (): ReturnType<typeof selectPickles> | null => {
+    const select = (): ReturnType<typeof selectPickles> | { refused: unknown } => {
       try {
         const oaths = resolveOathPaths(rootDir, config.oaths);
         return selectPickles(rootDir, featureArgs, oaths.files, oaths.directories);
       } catch (error) {
-        stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-        return null;
+        return { refused: error };
       }
     };
 
@@ -436,32 +430,33 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     let selected: ReturnType<typeof selectPickles> | null = null;
     let discovery: DiscoveryResult;
     if (options.check) {
-      selected = select();
-      if (selected === null) return 1;
+      const selection = select();
+      if ("refused" in selection) return refused(selection.refused);
+      selected = selection;
       let analysis;
       try {
         analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features);
       } catch (error) {
-        stderr.write(`${formatVocabularyError(error)}\n`);
-        return 1;
+        return refused(error);
       }
       const { report } = analysis;
       if (report.errors.length > 0) {
         writeCheckIssueLines(report.errors, [], stderr);
         const count = report.errors.length;
-        stderr.write(
-          `nuka run did not start: nuka check reports ${count} ${count === 1 ? "error" : "errors"} ` +
-            "for these scenarios. Fix them, or pass --no-check to run anyway.\n",
+        return refused(
+          new RefusalError(
+            `nuka run did not start: nuka check reports ${count} ${count === 1 ? "error" : "errors"} ` +
+              "for these scenarios. Fix them, or pass --no-check to run anyway.",
+            ["nuka check", ...options.featureArgs].join(" "),
+          ),
         );
-        return 1;
       }
       discovery = analysis.discovery;
     } else {
       try {
         discovery = await discoverSteps(rootDir, config.featuresDir);
       } catch (error) {
-        stderr.write(`${formatVocabularyError(error)}\n`);
-        return 1;
+        return refused(error);
       }
     }
     const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
@@ -477,12 +472,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
     } catch (error) {
-      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-      return 1;
+      return refused(error);
     }
 
-    selected ??= select();
-    if (selected === null) return 1;
+    if (selected === null) {
+      const selection = select();
+      if ("refused" in selection) return refused(selection.refused);
+      selected = selection;
+    }
 
     // Flattened once, here, into the `{ feature, pickle }` pairs every use
     // below actually needs: `selected.
@@ -525,8 +522,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     try {
       bindings = buildStepBindings(vocabulary, config.parameterTypes, compatParameterTypes);
     } catch (error) {
-      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-      return 1;
+      return refused(error);
     }
 
     // The same check-time patterns `nuka check` builds (this file's own
@@ -582,8 +578,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         : [],
     );
     if (fromIssues.length > 0) {
-      stderr.write(`${formatFromIssues(fromIssues)}\n`);
-      return 1;
+      return refused(formatFromIssues(fromIssues));
     }
 
     // The fixture-bag counterpart to the `from` structural check just above
@@ -601,8 +596,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         : [],
     );
     if (fixtureIssues.length > 0) {
-      stderr.write(`${formatFixtureIssues(fixtureIssues)}\n`);
-      return 1;
+      return refused(formatFixtureIssues(fixtureIssues));
     }
 
     // The `config.fixtures` *definitions* themselves — cycles,
@@ -616,8 +610,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // touch" convention src/check/config-check.ts already follows.
     const fixtureDefinitionIssues = validateFixtureDefinitions(config);
     if (fixtureDefinitionIssues.length > 0) {
-      stderr.write(`${formatFixtureDefinitionIssues(fixtureDefinitionIssues)}\n`);
-      return 1;
+      return refused(formatFixtureDefinitionIssues(fixtureDefinitionIssues));
     }
 
     const envFiles = resolvedEnv.envFiles;

@@ -356,7 +356,7 @@ describe("nuka scaffold --description", () => {
   ])("refuses %j and writes nothing", async (flags, message) => {
     const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
 
-    expect(result.stderr).toBe(message);
+    expect(result.stderr).toBe(`${message}do: nuka scaffold --help\n`);
     expect(result.exitCode).toBe(1);
     expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
   });

@@ -282,7 +282,7 @@ describe("nuka tend", () => {
     ]);
   });
 
-  it("propagates a config error as stderr + exit 1, no report on stdout", async () => {
+  it("refuses a config error under --json as { error, do } on stdout, exit 1", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--json", "--all"], {
@@ -292,7 +292,9 @@ describe("nuka tend", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("typo");
+    expect(stderr.text()).toBe("");
+    const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
+    expect(refusal.error).toContain("typo");
+    expect(refusal.do).toBe("nuka tend --help");
   });
 });

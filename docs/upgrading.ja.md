@@ -175,6 +175,13 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   MCP サーバのツールを一覧にするには、エージェント自身の MCP ホストか、MCP Inspector のような MCP クライアントを使ってください。
   `experimental_callWebmcpTool` を呼んでいた step は、`page.evaluate` を通じてページのツールを自分で呼びます。
   `nukadoko/mcp` の `connectMcpServer` と `callMcpTool` は変わりません。
+- **`--json` を付けたコマンドが拒否すると、stdout に `{ "schema_version", "error", "do" }` を書きます。**
+  これまでは stderr に文を書き、stdout には何も書きませんでした。
+  終了コードが 0 のときだけ stdout を読むスクリプトには影響しません。
+  理由を stderr から読んでいたものは、JSON の行の `error` を読みます。
+  `do` は次に実行するコマンドを示します。
+  `nuka describe` は `--json` の有無にかかわらず、この形で答えます。
+  `--json` なしの拒否は stderr のメッセージを保ち、最後に `do: <command>` の行を足します。
 
 ## 0.15.0 から 0.16.1 へ
 

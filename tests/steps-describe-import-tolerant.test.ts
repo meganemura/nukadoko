@@ -119,8 +119,7 @@ describe("nuka describe: tolerant of a broken glue file", () => {
       stderr,
     });
 
-    expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("Unknown step: no-such-step");
+    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, error: "Unknown step: no-such-step", do: "nuka steps" });
     expect(stderr.text()).toContain("features/steps/broken.ts");
     expect(exitCode).toBe(1);
   });

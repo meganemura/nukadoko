@@ -18,7 +18,7 @@ import { liveLockOwner, readLockInfo } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionCrashLogPath, sessionFilePath, sessionLockPath, sessionsDir } from "../session/paths.js";
 import { MAX_IDLE_TIMEOUT_SECONDS } from "./option-defaults.js";
-import { formatVocabularyError } from "./vocabulary.js";
+import { RefusalError, failInShape, helpFor, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka session list`/`clear`/`start`/`stop`'s CLI-facing
@@ -60,8 +60,7 @@ export async function runSessionList(options: RunSessionListOptions): Promise<nu
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuse({ json, stdout, stderr }, error, helpFor("session list"));
   }
 
   const sessions = await listSessions(rootDir, config.stateDir);
@@ -107,15 +106,15 @@ async function environmentHasSessionFiles(
 }
 
 export async function runSessionClear(options: RunSessionClearOptions): Promise<number> {
-  const { rootDir, name, env, stderr } = options;
+  const { rootDir, name, env, stdout, stderr } = options;
   const environment = env ?? DEFAULT_ENVIRONMENT_NAME;
+  const sinks = { json: false, stdout, stderr };
 
   let config;
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuse(sinks, error, helpFor("session clear"));
   }
 
   try {
@@ -142,15 +141,19 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
         }
       }
     }
+    if (name !== null) validateSessionName(name);
+  } catch (error) {
+    return refuse(sinks, error, helpFor("session clear"));
+  }
+
+  try {
     if (name === null) {
       await clearAllSessions(rootDir, config.stateDir, environment);
     } else {
-      validateSessionName(name);
       await clearSession(rootDir, config.stateDir, environment, name);
     }
   } catch (error) {
-    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    return failInShape(sinks, error, helpFor("session clear"));
   }
 
   // Silent on success for a known environment, like `rm`: stdout is
@@ -195,6 +198,8 @@ export function idleTimeoutRefusal(seconds: number): string | null {
 
 export async function runSessionStart(options: RunSessionStartOptions): Promise<number> {
   const { rootDir, name, env, idleTimeoutSeconds, stdout, stderr } = options;
+  const sinks = { json: false, stdout, stderr };
+  const help = helpFor("session start");
 
   // Before config load and before spawn. A delay Node clamps to 1 ms would
   // start a daemon that stops itself the moment it listens, and the only
@@ -202,31 +207,17 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
   // naming neither this flag nor the limit.
   const refusal = idleTimeoutRefusal(idleTimeoutSeconds);
   if (refusal !== null) {
-    stderr.write(refusal);
-    return 1;
-  }
-
-  try {
-    validateSessionName(name);
-  } catch (error) {
-    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    return refuse(sinks, refusal.trimEnd(), help);
   }
 
   let config;
-  try {
-    config = await loadConfig(rootDir);
-  } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
-  }
-
   let resolvedEnv: ResolvedEnvironment;
   try {
+    validateSessionName(name);
+    config = await loadConfig(rootDir);
     resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
   } catch (error) {
-    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    return refuse(sinks, error, help);
   }
 
   const lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, name);
@@ -239,11 +230,12 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
   // to lose it.
   const owner = await liveLockOwner(lockPath);
   if (owner !== null) {
-    stderr.write(
-      `Session "${name}" already has a live process (pid ${owner.pid}); stop it first with ` +
-        `\`nuka session stop ${name}\`\n`,
+    const stop = `nuka session stop ${name}`;
+    return refuse(
+      sinks,
+      new RefusalError(`Session "${name}" already has a live process (pid ${owner.pid}); stop it first with \`${stop}\``, stop),
+      help,
     );
-    return 1;
   }
 
   // Refused here, loudly, before anything spawns. The socket no longer
@@ -260,13 +252,14 @@ export async function runSessionStart(options: RunSessionStartOptions): Promise<
   const predictedSockPath = path.join(os.tmpdir(), `${LIVE_SOCK_DIR_PREFIX}XXXXXX`, LIVE_SOCK_FILE_NAME);
   const lengthCheck = checkSockPathLength(predictedSockPath);
   if (!lengthCheck.ok) {
-    stderr.write(
+    return refuse(
+      sinks,
       `Session "${name}" cannot start: its own live-session socket path is ${lengthCheck.byteLength} bytes, over ` +
         `this platform's ${lengthCheck.limit}-byte limit on a socket path.\n` +
         `Path (mkdtemp fills XXXXXX in with 6 random characters): ${predictedSockPath}\n` +
-        "This is the OS's own temp directory, not this project's; a shorter TMPDIR is the only way around it.\n",
+        "This is the OS's own temp directory, not this project's; a shorter TMPDIR is the only way around it.",
+      help,
     );
-    return 1;
   }
 
   // A stale lock naming a socket from a daemon that crashed without
@@ -311,29 +304,16 @@ export interface RunSessionStopOptions {
 }
 
 export async function runSessionStop(options: RunSessionStopOptions): Promise<number> {
-  const { rootDir, name, env, stderr } = options;
-
-  try {
-    validateSessionName(name);
-  } catch (error) {
-    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
-  }
+  const { rootDir, name, env, stdout, stderr } = options;
 
   let config;
-  try {
-    config = await loadConfig(rootDir);
-  } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
-  }
-
   let resolvedEnv: ResolvedEnvironment;
   try {
+    validateSessionName(name);
+    config = await loadConfig(rootDir);
     resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
   } catch (error) {
-    stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    return refuse({ json: false, stdout, stderr }, error, helpFor("session stop"));
   }
 
   const lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, name);

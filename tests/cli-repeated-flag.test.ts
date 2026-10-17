@@ -14,21 +14,21 @@ import {
 // `--use` and `--fail-on` are arrays on purpose and stay repeatable.
 // A boolean given twice stays that boolean.
 
-const REPEATED: ReadonlyArray<{ readonly flag: string; readonly argv: readonly string[] }> = [
-  { flag: "--base-url", argv: ["init", "--base-url", "http://a", "--base-url", "http://b"] },
-  { flag: "--features-dir", argv: ["init", "--features-dir", "e2e", "--features-dir", "specs"] },
-  { flag: "--session", argv: ["run", "features/x.feature", "--session", "a", "--session", "b"] },
-  { flag: "--env", argv: ["run", "features/x.feature", "--env", "a", "--env", "b"] },
-  { flag: "--concurrency", argv: ["run", "features/x.feature", "--concurrency", "2", "--concurrency", "3"] },
-  { flag: "--repeat", argv: ["run", "features/x.feature", "--repeat", "2", "--repeat", "3"] },
-  { flag: "--args", argv: ["do", "step", "--args", "{}", "--args", "{}"] },
-  { flag: "--session", argv: ["do", "step", "--args", "{}", "--session", "a", "--session", "b"] },
-  { flag: "--env", argv: ["do", "step", "--args", "{}", "--env", "a", "--env", "b"] },
-  { flag: "--env", argv: ["session", "clear", "--env", "a", "--env", "b"] },
-  { flag: "--env", argv: ["session", "start", "s", "--env", "a", "--env", "b"] },
-  { flag: "--idle-timeout", argv: ["session", "start", "s", "--idle-timeout", "1", "--idle-timeout", "2"] },
-  { flag: "--env", argv: ["session", "stop", "s", "--env", "a", "--env", "b"] },
-  { flag: "--pattern", argv: ["scaffold", "step", "--pattern", "a", "--pattern", "b"] },
+const REPEATED: ReadonlyArray<{ readonly flag: string; readonly argv: readonly string[]; readonly help: string }> = [
+  { flag: "--base-url", argv: ["init", "--base-url", "http://a", "--base-url", "http://b"], help: "nuka init --help" },
+  { flag: "--features-dir", argv: ["init", "--features-dir", "e2e", "--features-dir", "specs"], help: "nuka init --help" },
+  { flag: "--session", argv: ["run", "features/x.feature", "--session", "a", "--session", "b"], help: "nuka run --help" },
+  { flag: "--env", argv: ["run", "features/x.feature", "--env", "a", "--env", "b"], help: "nuka run --help" },
+  { flag: "--concurrency", argv: ["run", "features/x.feature", "--concurrency", "2", "--concurrency", "3"], help: "nuka run --help" },
+  { flag: "--repeat", argv: ["run", "features/x.feature", "--repeat", "2", "--repeat", "3"], help: "nuka run --help" },
+  { flag: "--args", argv: ["do", "step", "--args", "{}", "--args", "{}"], help: "nuka do --help" },
+  { flag: "--session", argv: ["do", "step", "--args", "{}", "--session", "a", "--session", "b"], help: "nuka do --help" },
+  { flag: "--env", argv: ["do", "step", "--args", "{}", "--env", "a", "--env", "b"], help: "nuka do --help" },
+  { flag: "--env", argv: ["session", "clear", "--env", "a", "--env", "b"], help: "nuka session clear --help" },
+  { flag: "--env", argv: ["session", "start", "s", "--env", "a", "--env", "b"], help: "nuka session start --help" },
+  { flag: "--idle-timeout", argv: ["session", "start", "s", "--idle-timeout", "1", "--idle-timeout", "2"], help: "nuka session start --help" },
+  { flag: "--env", argv: ["session", "stop", "s", "--env", "a", "--env", "b"], help: "nuka session stop --help" },
+  { flag: "--pattern", argv: ["scaffold", "step", "--pattern", "a", "--pattern", "b"], help: "nuka scaffold --help" },
 ];
 
 describe("repeated singular flags", () => {
@@ -42,14 +42,14 @@ describe("repeated singular flags", () => {
     await removeTempDir(rootDir);
   });
 
-  it.each(REPEATED)("refuses a second $flag and writes nothing ($argv)", async ({ flag, argv }) => {
+  it.each(REPEATED)("refuses a second $flag and writes nothing ($argv)", async ({ flag, argv, help }) => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
 
     const exitCode = await runCli([...argv], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
-    expect(stderr.text()).toBe(`${flag} was given more than once.\n`);
+    expect(stderr.text()).toBe(`${flag} was given more than once.\ndo: ${help}\n`);
     expect(stdout.text()).toBe("");
     expect(readdirSync(rootDir)).toEqual([]);
   });
@@ -67,7 +67,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(1);
     expect(stdout.text()).toBe("");
-    expect(withoutNoConfigLine(stderr.text())).toBe("Unknown step: step\n");
+    expect(withoutNoConfigLine(stderr.text())).toBe("Unknown step: step\ndo: nuka steps\n");
   });
 
   it("keeps every --fail-on value", async () => {
@@ -92,7 +92,11 @@ describe("repeated singular flags", () => {
     const exitCode = await runCli(["steps", "--json", "--json"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
-    expect(stdout.text()).toBe("");
-    expect(withoutNoConfigLine(stderr.text())).toBe(`featuresDir "features" does not exist at ${path.join(rootDir, "features")}\n`);
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
+    expect(JSON.parse(stdout.text())).toEqual({
+      schema_version: 1,
+      error: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+      do: "nuka steps --help",
+    });
   });
 });

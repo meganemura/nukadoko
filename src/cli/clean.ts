@@ -7,7 +7,7 @@ import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js"
 import { isMessagesRunOutputFileName } from "../record/messages-output.js";
 import { liveLockOwner } from "../session/lock.js";
 import { sessionsDir, sessionsRootDir } from "../session/paths.js";
-import { formatVocabularyError } from "./vocabulary.js";
+import { RefusalError, helpFor, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka clean`'s actual work — delete the disposable half
@@ -344,12 +344,12 @@ function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: Writ
 export async function runClean(options: RunCleanOptions): Promise<number> {
   const { rootDir, dryRun, records, cache, exportArtifacts, json, stdout, stderr } = options;
 
+  const sinks = { json, stdout, stderr };
   let config;
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuse(sinks, error, helpFor("clean"));
   }
 
   // No `--records`/`--cache`/`--export` given at all means every category
@@ -367,11 +367,16 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   const live = await findLiveSession(rootDir, config.stateDir);
   if (live) {
     const envFlag = live.environment === DEFAULT_ENVIRONMENT_NAME ? "" : ` --env ${live.environment}`;
-    stderr.write(
-      `nuka clean: refusing, session "${live.name}" (environment "${live.environment}") is live (pid ${live.pid}); ` +
-        `stop it first with \`nuka session stop ${live.name}${envFlag}\`\n`,
+    const stop = `nuka session stop ${live.name}${envFlag}`;
+    return refuse(
+      sinks,
+      new RefusalError(
+        `nuka clean: refusing, session "${live.name}" (environment "${live.environment}") is live (pid ${live.pid}); ` +
+          `stop it first with \`${stop}\``,
+        stop,
+      ),
+      helpFor("clean"),
     );
-    return 1;
   }
 
   const plan: CleanPlan = { records: [], cache: [], export: [] };
@@ -388,8 +393,7 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
     // Before writePlan and before any rm. A refusal here has not deleted
     // records or cache either: those plans are still only in memory.
     if (built.refusal !== null) {
-      stderr.write(`${built.refusal}\n`);
-      return 1;
+      return refuse(sinks, built.refusal, helpFor("clean"));
     }
     exportPlan = built.plan;
     plan.export = exportPlan.paths;

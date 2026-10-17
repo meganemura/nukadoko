@@ -14,7 +14,7 @@ import type { RegisteredParameterType } from "../binding/parameter-type-config.j
 import { createParameterTypeRegistry } from "../binding/registry.js";
 import type { PrimitiveClass } from "../binding/schema-shape.js";
 import { availableParameterTypeNames, CAPTURED_CLASS } from "../check/binding-check.js";
-import { formatVocabularyError } from "./vocabulary.js";
+import { helpFor, refuse, type RefusalSinks } from "./refusal.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import { DESCRIPTION_TODO_PREFIX } from "../tend/types.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
@@ -26,7 +26,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // this command assumes a project already exists: it needs `featuresDir` from
 // a successfully loaded config, so a load
 // failure here is reported exactly like any other command that loads config
-// (cli/vocabulary.ts's `formatVocabularyError`), not a scaffold-specific
+// (a refusal through cli/refusal.ts), not a scaffold-specific
 // error.
 //
 // `name` becomes the generated file's name, so it is restricted to
@@ -642,44 +642,35 @@ async function unloadableImportRefusal(rootDir: string, entryPoint: string): Pro
 }
 
 /** Writes the refusal, or the missing-config line, for both scaffold
- * forms. True when scaffold must stop: a step file written below the
- * directory that holds the config is not one that config reads. */
-export function refusedBelowParentConfig(rootDir: string, stderr: WritableSink): boolean {
+ * forms. The exit code when scaffold must stop, and null otherwise: a step
+ * file written below the directory that holds the config is not one that
+ * config reads. */
+export function refusedBelowParentConfig(rootDir: string, sinks: RefusalSinks): number | null {
   const presence = locateConfig(rootDir);
   const refusal = scaffoldParentRefusal(rootDir, presence);
-  if (refusal !== null) {
-    stderr.write(`Refusing to scaffold: ${refusal}\n`);
-    return true;
-  }
+  if (refusal !== null) return refuse(sinks, `Refusing to scaffold: ${refusal}`, helpFor("scaffold"));
   const line = noConfigLine(rootDir, presence);
-  if (line !== null) stderr.write(`${line}\n`);
-  return false;
+  if (line !== null) sinks.stderr.write(`${line}\n`);
+  return null;
 }
 
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
   const { rootDir, name, pattern, then, command, entryPoint, description, from, stdout, stderr } = options;
+  const sinks = { json: false, stdout, stderr };
+  const help = helpFor("scaffold");
 
   if (!VALID_STEP_NAME.test(name)) {
-    stderr.write(
-      `Invalid step name "${name}": must match [a-z0-9-]+ (kebab-case; it becomes the step's file name)\n`,
-    );
-    return 1;
+    return refuse(sinks, `Invalid step name "${name}": must match [a-z0-9-]+ (kebab-case; it becomes the step's file name)`, help);
   }
 
   if (command && then) {
-    stderr.write(
-      "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false\n",
-    );
-    return 1;
+    return refuse(sinks, "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false", help);
   }
   const variant: Variant = command ? "command" : then ? "then" : "when";
   const variantShape = VARIANTS[variant];
 
   if (description === "") {
-    stderr.write(
-      "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports\n",
-    );
-    return 1;
+    return refuse(sinks, "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports", help);
   }
 
   if (entryPoint !== null) {
@@ -687,15 +678,13 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       (await entryPointRefusal(rootDir, entryPoint, options.commandBeforeName)) ??
       (await unloadableImportRefusal(rootDir, entryPoint));
     if (refusal !== null) {
-      stderr.write(`Refusing to scaffold: ${refusal}\n`);
-      return 1;
+      return refuse(sinks, `Refusing to scaffold: ${refusal}`, help);
     }
   }
 
   const read: ReadPattern | { refusal: string } = pattern === null ? { captures: [], projectTypes: [] } : readPattern(pattern);
   if ("refusal" in read) {
-    stderr.write(`Refusing to scaffold: ${read.refusal}\n`);
-    return 1;
+    return refuse(sinks, `Refusing to scaffold: ${read.refusal}`, help);
   }
   // The placeholder guard throws an `Error`, so an args key may not hide it.
   const shape: VariantShape =
@@ -709,18 +698,17 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
         : variantShape;
   const fromFlags = readFromFlags(from, read.captures, shape.bodyNames);
   if ("refusal" in fromFlags) {
-    stderr.write(`Refusing to scaffold: ${fromFlags.refusal}\n`);
-    return 1;
+    return refuse(sinks, `Refusing to scaffold: ${fromFlags.refusal}`, help);
   }
 
-  if (refusedBelowParentConfig(rootDir, stderr)) return 1;
+  const belowParent = refusedBelowParentConfig(rootDir, sinks);
+  if (belowParent !== null) return belowParent;
 
   let config;
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    stderr.write(`${formatVocabularyError(error)}\n`);
-    return 1;
+    return refuse(sinks, error, help);
   }
 
   // The same `isCommonJsProject` call `nuka init` already defers to
@@ -734,8 +722,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const filePath = path.join(rootDir, relativeFilePath);
 
   if (existsSync(filePath)) {
-    stderr.write(`Refusing to scaffold: ${relativeFilePath} already exists\n`);
-    return 1;
+    return refuse(sinks, `Refusing to scaffold: ${relativeFilePath} already exists`, help);
   }
 
   let chained: readonly ChainedField[] = [];
@@ -753,8 +740,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
         importFailures.length,
       );
       if (refusal !== null) {
-        stderr.write(`Refusing to scaffold: ${refusal}\n`);
-        return 1;
+        return refuse(sinks, `Refusing to scaffold: ${refusal}`, help);
       }
     }
     const typedSteps = new Map<string, TypedVocabularyEntry>();
@@ -770,8 +756,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       shape.moduleNames,
     );
     if ("refusal" in resolved) {
-      stderr.write(`Refusing to scaffold: ${resolved.refusal}\n`);
-      return 1;
+      return refuse(sinks, `Refusing to scaffold: ${resolved.refusal}`, help);
     }
     chained = resolved.chained;
   }

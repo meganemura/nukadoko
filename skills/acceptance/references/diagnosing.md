@@ -1,5 +1,13 @@
 # Diagnosing a failed run
 
+## A command that refused
+
+A command that stopped before it ran anything ends its stderr with a
+`do:` line, and under `--json` it prints `{ "schema_version", "error", "do" }` on stdout.
+Run that `do` command before you guess at a fix: it is the step list for
+an unknown step name, the install line for a missing package, or the
+command's own `--help` for a flag it does not accept.
+
 ## Work through the failed step first
 
 `nuka run`'s stderr already names where to start: under the failed step's

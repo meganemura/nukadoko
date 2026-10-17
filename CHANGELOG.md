@@ -334,6 +334,23 @@ just until 0.1.
   path to the config, exits 1, and writes nothing. Without a
   parent config, `scaffold` writes as before and prints the stderr line.
 
+- **A command that refuses names the next command, and a `--json` command refuses in JSON.**
+  A command that stopped before it had anything to report (an unknown
+  flag, an invalid config, a missing target, an unknown step, a
+  `--fail-on` code `nuka tend` does not know, a live session in the way)
+  wrote prose on stderr and nothing on stdout, even under `--json`. Every
+  such refusal now goes through one shape. Under `--json`, stdout carries
+  one line, `{ "schema_version": 1, "error": "<message>", "do":
+  "<command>" }`, and stderr carries nothing. `schema_version` comes
+  first, as in every other JSON document. `nuka run --json` refuses the
+  same way, and so does `nuka describe`, which has no text form, so its
+  refusal moves from stderr to stdout. Without `--json`, stderr keeps the
+  message and adds a `do: <command>` line. `do` is the next command when one is known
+  (`nuka steps`, an `npm install -D -E` line, `nuka session stop <name>`,
+  `nuka check <file>`), and the command's own `--help` otherwise. Exit
+  codes are unchanged here. Breaking for a script that reads a `--json`
+  refusal from stderr: see docs/upgrading.md.
+
 ### Removed
 
 - **BREAKING: `nuka harvest` and the `recordStep` export are removed.**

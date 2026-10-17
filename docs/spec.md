@@ -2484,6 +2484,7 @@ array identifies each step record by id, so either record leads to the other.
   discards return values cannot fill in; a classifier that isn't sure says
   `step_error`, since claiming a contract failure wrongly is worse than not
   claiming one. Hook records in the scenario record carry the same field.
+
 - `mutates` contains the step's declaration (`null` for a compat step, which
   has none to record, not `false`), sitting beside the `observed` counts
   so declared and measured can be compared without a second artifact.
@@ -4338,7 +4339,8 @@ and the output of `check --json`,
 `check --codes --json` (`{ schema_version, codes }`), `steps --json`,
 `describe`, `tend --json`, `tend --codes --json` (`{ schema_version,
 codes }`), `clean --json`, `explore --json`, and `session list --json`
-(`{ schema_version, sessions }`). The number moves
+(`{ schema_version, sessions }`), and a refusal under `--json`
+(`{ schema_version, error, do }`, see "Refusals"). The number moves
 when a field the document already has changes its meaning, its type, or
 its name, or is removed. An added field does not move it. A reader checks
 the number before it trusts the shape. Each number is 1 today, and a
@@ -4356,6 +4358,24 @@ next step: a command with its values filled in where the finding knows them
 code's general text, which `--codes` lists. In text output, a line
 `  do: <text>` follows each finding line. A finding about a compat hook has
 no `file`, because discovery does not record which file registered a hook.
+
+### Refusals
+
+A command refuses when it stops before it has anything to report: a flag
+yargs or the command does not accept, a config it cannot load, a target
+that does not exist, a step name it does not know, a session in the way,
+or, for `nuka run`, an error `nuka check` reports for the selected
+scenarios. Every refusal has two parts: the message, and `do`, the one
+command to run next. Under `--json`, stdout carries one JSON object on
+one line, `{ "schema_version": 1, "error": "<message>", "do":
+"<command>" }`, and stderr carries nothing. `nuka describe` has no text form, so it refuses the same
+way. Without `--json`, stderr carries the message and then one line,
+`do: <command>`. `do` names the next command when one is known: `nuka
+steps` for an unknown step, the install line for a missing peer
+dependency, `nuka session stop <name>` for a live session in the way,
+`nuka check <file>` for a `:line` that `check` does not take. Otherwise it
+is the command's own `--help`. A finding, a failed scenario, or a failed
+step is a report, not a refusal, and keeps its own output.
 
 ### Tolerant reporting, fail-fast execution
 

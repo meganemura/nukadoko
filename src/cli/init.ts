@@ -8,6 +8,7 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
 import { llmsTxtPath } from "./skill.js";
 import { ensureTsconfig } from "./tsconfig-edit.js";
+import { RefusalError, helpFor, refuse } from "./refusal.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -385,10 +386,11 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   );
   if (existingConfigPaths.length > 0) {
     const already = existingConfigPaths.length === 1 ? "already exists" : "already exist";
-    stderr.write(
-      `Refusing to init: ${existingConfigPaths.join(" and ")} ${already}; nothing was written\n`,
+    return refuse(
+      { json: false, stdout, stderr },
+      new RefusalError(`Refusing to init: ${existingConfigPaths.join(" and ")} ${already}; nothing was written`, "nuka check"),
+      helpFor("init"),
     );
-    return 1;
   }
 
   const isCjs = isCommonJsProject(rootDir);
@@ -399,10 +401,11 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   if (featuresDir !== null) {
     featuresDirOverride = normalizeFeaturesDirArg(rootDir, featuresDir);
     if (featuresDirOverride === null) {
-      stderr.write(
-        `Invalid --features-dir "${featuresDir}": resolves to the project root itself, which can't hold a nested steps directory\n`,
+      return refuse(
+        { json: false, stdout, stderr },
+        `Invalid --features-dir "${featuresDir}": resolves to the project root itself, which can't hold a nested steps directory`,
+        helpFor("init"),
       );
-      return 1;
     }
   }
 

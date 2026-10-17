@@ -18,6 +18,7 @@ export const SCHEMA_VERSIONS = {
   clean_plan: 1,
   explore_result: 1,
   sessions: 1,
+  refusal: 1,
 } as const;
 
 export type DocumentKind = keyof typeof SCHEMA_VERSIONS;

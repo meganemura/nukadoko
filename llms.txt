@@ -40,6 +40,8 @@ Exploring one step at a time, when the path is not known yet:
 
 Every JSON document nukadoko writes or prints (records, `--json` output, `nuka describe`) starts with `schema_version`, one integer per kind of document; test it before trusting the shape. Step and scenario records also carry `nukadoko`, the version that wrote them.
 
+A command that stops before it has anything to report (a bad flag, a missing target, an invalid config) refuses: stderr ends with `do: <command>`, the one command to run next, and under `--json` stdout carries `{ "schema_version": 1, "error": "<message>", "do": "<command>" }` instead.
+
 ## Documentation
 
 - [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md): a requirement to a pull request a person approves. `references/` beside it holds each procedure: writing steps, writing the feature, running, diagnosing, exploring, models, fixtures, evidence, maintenance, and starting from prose.

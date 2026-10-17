@@ -40,6 +40,7 @@ describe("schema_version", () => {
     documents.set("describe", parse(await cli(runProject, ["describe", "thing-exists"])));
     documents.set("tend_report", parse(await cli(runProject, ["tend", "--json"])));
     documents.set("tend_codes", parse(await cli(runProject, ["tend", "--codes", "--json"])));
+    documents.set("refusal", parse(await cli(runProject, ["check", "--json", "features/nope.feature"])));
     documents.set("sessions", parse(await cli(runProject, ["session", "list", "--json"])));
     documents.set("step_record", parse(await cli(runProject, ["do", "thing-exists", "--args", '{"name":"widget"}'])));
     await cli(runProject, ["clean", "--records"]);

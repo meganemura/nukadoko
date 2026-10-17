@@ -23,7 +23,8 @@ describe("nuka harvest, removed", () => {
       expect(exitCode).toBe(1);
       expect(stderr.text()).toBe(
         "`nuka harvest` was removed; write the scenario from the steps you ran, then run `nuka check` " +
-          "(see docs/upgrading.md in the nukadoko package)\n",
+          "(see docs/upgrading.md in the nukadoko package)\n" +
+          "do: nuka check\n",
       );
       expect(stdout.text()).toBe("");
     }
@@ -80,7 +81,7 @@ describe("nuka <command> --unknown-flag: the matched handler never runs", () => 
 });
 
 describe("nuka describe: config load failure", () => {
-  it("propagates a ConfigError as exit 1 with a stderr message", async () => {
+  it("refuses a ConfigError as JSON on stdout, exit 1", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "some-step"], {
@@ -90,7 +91,9 @@ describe("nuka describe: config load failure", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("typo");
+    expect(stderr.text()).toBe("");
+    const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
+    expect(refusal.error).toContain("typo");
+    expect(refusal.do).toBe("nuka describe --help");
   });
 });

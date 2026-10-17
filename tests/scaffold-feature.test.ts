@@ -240,7 +240,8 @@ describe("nuka scaffold --feature", () => {
       exitCode: 1,
       stdout: "",
       stderr:
-        "Refusing to scaffold: 1 step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them); `nuka check` names them\n",
+        "Refusing to scaffold: 1 step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them); `nuka check` names them\n" +
+        "do: nuka check\n",
     });
     expect(existsSync(path.join(rootDir, "features", "steps", "the-output-is.ts"))).toBe(false);
   });
@@ -251,7 +252,7 @@ describe("nuka scaffold --feature", () => {
     expect(result).toEqual({
       exitCode: 1,
       stdout: "",
-      stderr: "nuka scaffold --feature: feature file not found: features/nope.feature\n",
+      stderr: "nuka scaffold --feature: feature file not found: features/nope.feature\ndo: nuka scaffold --help\n",
     });
   });
 
@@ -260,14 +261,19 @@ describe("nuka scaffold --feature", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toBe(
-      "--feature names each stub and reads its pattern and outcome from its own line; leave out a step name, --then, or scaffold that step on its own with nuka scaffold <name>\n",
+      "--feature names each stub and reads its pattern and outcome from its own line; leave out a step name, --then, or scaffold that step on its own with nuka scaffold <name>\n" +
+        "do: nuka scaffold --help\n",
     );
   });
 
   it("names --feature when neither a name nor --feature is given", async () => {
     const result = await cli(rootDir, ["scaffold"]);
 
-    expect(result).toEqual({ exitCode: 1, stdout: "", stderr: "Missing required argument: name (or --feature <path>)\n" });
+    expect(result).toEqual({
+      exitCode: 1,
+      stdout: "",
+      stderr: "Missing required argument: name (or --feature <path>)\ndo: nuka scaffold --help\n",
+    });
   });
 
   it("puts the command in undefined-step's message", async () => {

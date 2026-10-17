@@ -155,7 +155,7 @@ describe("nuka scaffold --command", () => {
   ])("refuses %j and writes nothing", async (flags, message) => {
     const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
 
-    expect(result.stderr).toBe(message);
+    expect(result.stderr).toBe(`${message}do: nuka scaffold --help\n`);
     expect(result.exitCode).toBe(1);
     expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
   });
@@ -222,7 +222,7 @@ describe("nuka scaffold --command", () => {
     const result = await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", entry]);
 
     expect(result.stderr).toBe(
-      `Refusing to scaffold: entry point "${entry}" is not a file (looked at ${path.resolve(rootDir, entry)}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO\n`,
+      `Refusing to scaffold: entry point "${entry}" is not a file (looked at ${path.resolve(rootDir, entry)}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO\ndo: nuka scaffold --help\n`,
     );
     expect(result.stdout).toBe("");
     expect(result.exitCode).toBe(1);
@@ -242,7 +242,7 @@ describe("nuka scaffold --command", () => {
     const result = await cli(rootDir, ["scaffold", "--command", "run-y", "--pattern", "I run y", "other"]);
 
     expect(result.stderr).toBe(
-      `Refusing to scaffold: entry point "run-y" is not a file (looked at ${path.join(rootDir, "run-y")}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO; --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\n`,
+      `Refusing to scaffold: entry point "run-y" is not a file (looked at ${path.join(rootDir, "run-y")}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO; --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\ndo: nuka scaffold --help\n`,
     );
     expect(result.exitCode).toBe(1);
     expect(existsSync(stepPath(rootDir, "other"))).toBe(false);
@@ -255,6 +255,7 @@ describe("nuka scaffold --command", () => {
       [
         "Missing required argument: name (or --feature <path>)",
         '--command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value',
+        "do: nuka scaffold --help",
         "",
       ].join("\n"),
     );
@@ -731,7 +732,7 @@ describe("nuka scaffold --command <entry point>: the entry point's own imports",
     );
 
     expect(result.stderr).toBe(
-      'Refusing to scaffold: entry point "src/cli.ts" imports "./greet.js", which does not exist (src/greet.ts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "./greet.ts" with "rewriteRelativeImportExtensions": true in tsconfig.json\n',
+      'Refusing to scaffold: entry point "src/cli.ts" imports "./greet.js", which does not exist (src/greet.ts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "./greet.ts" with "rewriteRelativeImportExtensions": true in tsconfig.json\ndo: nuka scaffold --help\n',
     );
     expect(result.stdout).toBe("");
     expect(result.exitCode).toBe(1);
@@ -785,7 +786,7 @@ describe("nuka scaffold --command <entry point>: the entry point's own imports",
     );
 
     expect(result.stderr).toBe(
-      'Refusing to scaffold: entry point "src/bin/cli.mts" imports "../lib/run.mjs", which does not exist (src/lib/run.mts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "../lib/run.mts" with "rewriteRelativeImportExtensions": true in tsconfig.json\n',
+      'Refusing to scaffold: entry point "src/bin/cli.mts" imports "../lib/run.mjs", which does not exist (src/lib/run.mts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "../lib/run.mts" with "rewriteRelativeImportExtensions": true in tsconfig.json\ndo: nuka scaffold --help\n',
     );
     expect(result.exitCode).toBe(1);
     expect(written).toBe(false);

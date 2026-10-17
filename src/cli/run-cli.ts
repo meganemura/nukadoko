@@ -16,6 +16,7 @@ import {
   VALID_STEP_NAME,
 } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { RefusalError, commandPathOf, helpFor, refuse } from "./refusal.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
@@ -235,6 +236,11 @@ function rejectRepeatedFlags(flags: readonly string[]) {
   };
 }
 
+function firstWord(command: string | readonly string[] | undefined): string {
+  const text = typeof command === "string" ? command : (command?.[0] ?? "");
+  return text.split(" ")[0] ?? "";
+}
+
 export async function runCli(
   argv: readonly string[],
   options: RunCliOptions = {},
@@ -273,6 +279,7 @@ export async function runCli(
   // immediately, before doing anything else, so a failed parse has zero
   // side effects.
   let argsFailed = false;
+  const usageFailures: string[] = [];
 
   // Wraps a command that reads the config, so a directory without one is
   // named on stderr. In the handler rather than a yargs middleware: global
@@ -309,7 +316,6 @@ export async function runCli(
           buildStepNames,
           formatImportFailuresStderr,
           formatVocabulary,
-          formatVocabularyError,
           loadVocabulary,
           summarize,
           toImportFailureSummaries,
@@ -372,8 +378,7 @@ export async function runCli(
           exitCode = 1;
         }
       } catch (error) {
-        exitCode = 1;
-        stderr.write(`${formatVocabularyError(error)}\n`);
+        exitCode = refuse({ json: args.json ?? false, stdout, stderr }, error, helpFor("steps"));
       }
     },
   };
@@ -396,7 +401,6 @@ export async function runCli(
           buildStepNames,
           describeContract,
           formatImportFailuresStderr,
-          formatVocabularyError,
           loadVocabulary,
           toImportFailureSummaries,
         },
@@ -404,6 +408,10 @@ export async function runCli(
         import("../fixture/graph.js"),
         import("./vocabulary.js"),
       ]);
+      // `describe` has no text form: its stdout is always one JSON object,
+      // so a refusal is one too.
+      const sinks = { json: true, stdout, stderr };
+      const help = helpFor("describe");
       try {
         // Same tolerant mode as `steps` above, same reasoning — also the
         // one case where it matters most: the step this call is asking
@@ -421,8 +429,7 @@ export async function runCli(
         const importFailureSummaries = toImportFailureSummaries(importFailures);
         const entry = vocabulary.get(args.name);
         if (!entry) {
-          exitCode = 1;
-          stderr.write(`Unknown step: ${args.name}\n`);
+          exitCode = refuse(sinks, new RefusalError(`Unknown step: ${args.name}`, "nuka steps"), help);
           stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
           return;
         }
@@ -455,8 +462,7 @@ export async function runCli(
           exitCode = 1;
         }
       } catch (error) {
-        exitCode = 1;
-        stderr.write(`${formatVocabularyError(error)}\n`);
+        exitCode = refuse(sinks, error, help);
       }
     },
   };
@@ -1059,10 +1065,11 @@ export async function runCli(
     builder: (y: Argv) => y.strict(false),
     handler: () => {
       if (argsFailed) return;
-      exitCode = 1;
-      stderr.write(
+      exitCode = refuse(
+        { json: argv.includes("--json"), stdout, stderr },
         "`nuka harvest` was removed; write the scenario from the steps you ran, then run `nuka check` " +
-          "(see docs/upgrading.md in the nukadoko package)\n",
+          "(see docs/upgrading.md in the nukadoko package)",
+        "nuka check",
       );
     },
   };
@@ -1076,8 +1083,11 @@ export async function runCli(
     builder: (y: Argv) => y.strict(false),
     handler: () => {
       if (argsFailed) return;
-      exitCode = 1;
-      stderr.write("`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n");
+      exitCode = refuse(
+        { json: argv.includes("--json"), stdout, stderr },
+        "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments",
+        helpFor("experimental explore"),
+      );
     },
   };
 
@@ -1133,6 +1143,16 @@ export async function runCli(
     { heading: "Experimental", commands: [experimentalCommand] },
   ];
 
+  const commandNames = new Map<string, readonly string[]>(
+    helpGroups
+      .flatMap((group) => group.commands)
+      .concat(movedExploreCommand, removedHarvestCommand)
+      .map((command) => [firstWord(command.command), []]),
+  );
+  commandNames.set("session", [sessionListCommand, sessionClearCommand, sessionStartCommand, sessionStopCommand].map((c) => firstWord(c.command)));
+  commandNames.set("experimental", [firstWord(exploreCommand.command)]);
+  commandNames.set("skill", [firstWord(skillPathCommand.command)]);
+
   const parser = helpGroups
     .flatMap((group) => group.commands)
     .reduce((y: Argv, command) => y.command(withoutFlatListing(command)), yargs(argv))
@@ -1148,8 +1168,18 @@ export async function runCli(
     .exitProcess(false)
     .fail((msg: string | null, err: Error | undefined) => {
       argsFailed = true;
-      exitCode = 1;
-      stderr.write(`${err instanceof Error ? err.message : (msg ?? "unknown error")}\n`);
+      // yargs passes `msg: null` with the error only when a handler threw.
+      if (msg === null && err !== undefined) {
+        exitCode = 1;
+        stderr.write(`${err.message}\n`);
+        return;
+      }
+      // Anything else is the invocation itself: an unknown flag or command,
+      // a missing argument, or a `.check()` that refused. One parse can fail
+      // more than once (a missing name, then why it is missing), and all of
+      // them become one refusal after the parse, so `--json` still gets
+      // exactly one object.
+      usageFailures.push(err?.message ?? msg ?? "unknown error");
     })
     .usage(
       `nuka <command>\n\n${renderCommandGroups(
@@ -1184,6 +1214,13 @@ export async function runCli(
       exitCode = 1;
       stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
     }
+  }
+  if (usageFailures.length > 0) {
+    exitCode = refuse(
+      { json: argv.includes("--json"), stdout, stderr },
+      usageFailures.join("\n"),
+      helpFor(commandPathOf(argv, commandNames)),
+    );
   }
   return exitCode;
 }

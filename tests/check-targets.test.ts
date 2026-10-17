@@ -97,7 +97,7 @@ describe("nuka check [target..]", () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toBe("nuka check: feature file not found: acceptance/missing.feature\n");
+    expect(result.stderr).toBe("nuka check: feature file not found: acceptance/missing.feature\ndo: nuka check --help\n");
   });
 
   it("refuses :line on a file named among other targets", async () => {
@@ -107,7 +107,8 @@ describe("nuka check [target..]", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       "nuka check: acceptance/outside.feature:4: :line is not supported; " +
-        "check analyzes the whole file, not one scenario. Run: nuka check acceptance/outside.feature\n",
+        "check analyzes the whole file, not one scenario. Run: nuka check acceptance/outside.feature\n" +
+        "do: nuka check acceptance/outside.feature\n",
     );
   });
 

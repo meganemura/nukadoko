@@ -14,6 +14,7 @@ const rootDir = fixture("import-throw-project");
 const relativePath = path.join("features", "steps", "reads-url.ts");
 const thrownMessage = "Cannot read properties of undefined (reading 'url')";
 const reported = `${relativePath}: ${thrownMessage}\n`;
+const reportedWith = (next: string): string => `${reported}do: ${next}\n`;
 
 async function run(argv: readonly string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const stdout = createCaptureSink();
@@ -27,7 +28,7 @@ describe("a step file that throws on import", () => {
     const result = await run(["run", "--no-check", "features/a.feature"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toBe(reported);
+    expect(result.stderr).toBe(reportedWith("nuka run --help"));
     expect(result.stdout).toBe("");
   });
 
@@ -35,7 +36,7 @@ describe("a step file that throws on import", () => {
     const result = await run(["do", "anything", "--args", "{}"]);
 
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toBe(reported);
+    expect(result.stderr).toBe(reportedWith("nuka do --help"));
     expect(result.stdout).toBe("");
   });
 

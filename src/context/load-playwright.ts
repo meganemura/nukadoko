@@ -27,6 +27,8 @@ export type PlaywrightModule = typeof Playwright;
  * The message is one line: what needed it, and the command that fixes it. */
 export class PlaywrightMissingError extends Error {
   readonly neededBy: string;
+  /** The next command a CLI refusal names (src/cli/refusal.ts). */
+  readonly do = `npm install -D -E ${SPECIFIER}@${PLAYWRIGHT_VERSION}`;
 
   constructor(neededBy: string) {
     super(

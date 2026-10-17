@@ -213,6 +213,13 @@ This part does not change release to release.
   `experimental_callWebmcpTool` calls the page's tool itself through
   `page.evaluate`. `connectMcpServer` and `callMcpTool` from
   `nukadoko/mcp` are unchanged.
+- **A `--json` command that refuses writes `{ "schema_version", "error",
+  "do" }` on stdout.** It used to write prose on stderr and nothing on stdout. A
+  script that reads stdout only after a zero exit is unaffected. One that
+  reads stderr for the reason reads `error` from the JSON line instead,
+  and `do` names the command to run next. `nuka describe` always answers
+  this way, with or without `--json`. A refusal without `--json` keeps
+  its stderr message and adds a last line, `do: <command>`.
 
 ## 0.15.0 to 0.16.1
 

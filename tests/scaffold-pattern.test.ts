@@ -139,7 +139,7 @@ describe("nuka scaffold --pattern", () => {
     const result = await cli(rootDir, ["scaffold", "run-sum", "--pattern", "I add {a:number} and {b:number}"]);
 
     expect(result.stderr).toBe(
-      `Refusing to scaffold: the pattern names type "number", and this project registers none by that name; registered types: ${BUILTIN_TYPES}; did you mean {a:int} or {a:float}?\n`,
+      `Refusing to scaffold: the pattern names type "number", and this project registers none by that name; registered types: ${BUILTIN_TYPES}; did you mean {a:int} or {a:float}?\ndo: nuka scaffold --help\n`,
     );
     expect(result.stdout).toBe("");
     expect(result.exitCode).toBe(1);
@@ -149,7 +149,7 @@ describe("nuka scaffold --pattern", () => {
   it("refuses a type the project does not register, and writes it as z.unknown() once the config registers it", async () => {
     const refused = await cli(rootDir, ["scaffold", "wait-for", "--pattern", "I wait {d:duration}"]);
     expect(refused.stderr).toBe(
-      `Refusing to scaffold: the pattern names type "duration", and this project registers none by that name; registered types: ${BUILTIN_TYPES}\n`,
+      `Refusing to scaffold: the pattern names type "duration", and this project registers none by that name; registered types: ${BUILTIN_TYPES}\ndo: nuka scaffold --help\n`,
     );
     expect(refused.exitCode).toBe(1);
     expect(existsSync(path.join(rootDir, "features", "steps", "wait-for.ts"))).toBe(false);
@@ -163,7 +163,7 @@ describe("nuka scaffold --pattern", () => {
     // A second unknown type is still refused, with the project's type in the list.
     const second = await cli(rootDir, ["scaffold", "paint", "--pattern", "paint it {c:colour}"]);
     expect(second.stderr).toBe(
-      'Refusing to scaffold: the pattern names type "colour", and this project registers none by that name; registered types: bigdecimal, biginteger, byte, double, duration, float, int, long, short, string, word\n',
+      'Refusing to scaffold: the pattern names type "colour", and this project registers none by that name; registered types: bigdecimal, biginteger, byte, double, duration, float, int, long, short, string, word\ndo: nuka scaffold --help\n',
     );
   });
 

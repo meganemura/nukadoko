@@ -97,10 +97,10 @@ describe("a command run in a directory with no config", () => {
   it("a failed parse prints only its own error", async () => {
     const unknown = await nuka(dir, ["check", "--nope"]);
     expect(unknown.code).toBe(1);
-    expect(unknown.stderr).toBe("Unknown argument: nope\n");
+    expect(unknown.stderr).toBe("Unknown argument: nope\ndo: nuka check --help\n");
     const repeated = await nuka(dir, ["run", "features/a.feature", "--env", "a", "--env", "b"]);
     expect(repeated.code).toBe(1);
-    expect(repeated.stderr).toBe("--env was given more than once.\n");
+    expect(repeated.stderr).toBe("--env was given more than once.\ndo: nuka run --help\n");
   });
 });
 
@@ -134,7 +134,8 @@ describe("a command run below a directory that has a config", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       `Refusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +
-        "a step file written here is not one that config reads. Run nuka scaffold from that directory\n",
+        "a step file written here is not one that config reads. Run nuka scaffold from that directory\n" +
+        "do: nuka scaffold --help\n",
     );
     expect(existsSync(path.join(cwd, "features", "steps", "stray.ts"))).toBe(false);
   });
@@ -146,7 +147,8 @@ describe("a command run below a directory that has a config", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       `Refusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +
-        "a step file written here is not one that config reads. Run nuka scaffold from that directory\n",
+        "a step file written here is not one that config reads. Run nuka scaffold from that directory\n" +
+        "do: nuka scaffold --help\n",
     );
     expect(existsSync(path.join(cwd, "features", "steps", "something-new-happens.ts"))).toBe(false);
   });

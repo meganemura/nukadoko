@@ -69,7 +69,7 @@ describe("nuka steps", () => {
     }
   });
 
-  it("propagates a ConfigError as exit 1 with a stderr message", async () => {
+  it("refuses a ConfigError under --json on stdout, exit 1", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["steps", "--json"], {
@@ -79,7 +79,8 @@ describe("nuka steps", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(stderr.text()).toContain("typo");
+    expect(stderr.text()).toBe("");
+    expect((JSON.parse(stdout.text()) as { error: string }).error).toContain("typo");
   });
 });
 
@@ -148,7 +149,7 @@ describe("nuka describe", () => {
     expect(contract).not.toHaveProperty("rationale");
   });
 
-  it("exits 1 with a stderr message for an unknown step name", async () => {
+  it("refuses an unknown step name as JSON on stdout, exit 1", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "no-such-step"], {
@@ -158,8 +159,8 @@ describe("nuka describe", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("no-such-step");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
+    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, error: "Unknown step: no-such-step", do: "nuka steps" });
   });
 });
 

@@ -61,7 +61,8 @@ describe("nuka run checks before it executes", () => {
         'No step definition matches "this line matches no step"; run `nuka scaffold --feature features/mixed.feature` to add one\n' +
         "  do: nuka scaffold --feature features/mixed.feature\n" +
         "nuka run did not start: nuka check reports 1 error for these scenarios. " +
-        "Fix them, or pass --no-check to run anyway.\n",
+        "Fix them, or pass --no-check to run anyway.\n" +
+        "do: nuka check features/mixed.feature\n",
     );
     expect(existsSync(path.join(rootDir, ".nukadoko", "records"))).toBe(false);
   });

@@ -2091,6 +2091,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
   確信が持てない分類器が `step_error` を返すのは、契約違反を誤って主張するほうが、主張しないより悪いからです。
   scenario record の中の hook record も同じフィールドを持ちます。
+
 - `mutates` は step 自身の宣言を保持します(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)。
   `observed` のカウントと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
@@ -3760,7 +3761,7 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
 
 nukadoko が書く、または出力する JSON の文書はすべて `schema_version` で始まります。
 これはその種類の文書に固有の整数です。
-対象は step record、scenario record、`run.json`(`run --json` が出力します)と、`check --json`、`check --codes --json`(`{ schema_version, codes }`)、`steps --json`、`describe`、`tend --json`、`tend --codes --json`(`{ schema_version, codes }`)、`clean --json`、`explore --json`、`session list --json`(`{ schema_version, sessions }`)の出力です。
+対象は step record、scenario record、`run.json`(`run --json` が出力します)と、`check --json`、`check --codes --json`(`{ schema_version, codes }`)、`steps --json`、`describe`、`tend --json`、`tend --codes --json`(`{ schema_version, codes }`)、`clean --json`、`explore --json`、`session list --json`(`{ schema_version, sessions }`)の出力と、`--json` のときの拒否(`{ schema_version, error, do }`、「拒否」を参照)です。
 この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
 フィールドが追加されただけでは上がりません。
 読み手は、形を信頼する前にこの番号を確かめます。
@@ -3779,6 +3780,20 @@ config のエントリについての所見では、config ファイルです。
 テキスト出力では、各所見の行の次に `  do: <text>` の行が続きます。
 compat の hook についての所見は `file` を持ちません。
 discovery は、どのファイルが hook を登録したかを記録しないからです。
+
+### 拒否
+
+報告するものが何もないうちにコマンドが止まるとき、コマンドは拒否します。
+対象は、yargs またはコマンドが受け付けないフラグ、読み込めない config、存在しない対象、知らない step 名、邪魔をしている session、そして `nuka run` では、選んだ scenario について `nuka check` が報告するエラーです。
+拒否には 2 つの部分があります。
+メッセージと、次に実行する 1 つのコマンドである `do` です。
+`--json` のとき、stdout は 1 行の JSON オブジェクト `{ "schema_version": 1, "error": "<message>", "do": "<command>" }` を 1 つ出し、stderr は何も出しません。
+`nuka describe` にはテキスト形式がないので、同じ方法で拒否します。
+`--json` がないとき、stderr はメッセージを出し、続けて `do: <command>` の 1 行を出します。
+次のコマンドがわかっているとき、`do` はそれを名指しします。
+知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、邪魔をしている live session には `nuka session stop <name>`、`check` が受け付けない `:line` には `nuka check <file>` です。
+それ以外では、そのコマンド自身の `--help` です。
+finding、失敗した scenario、失敗した step は報告であって拒否ではなく、それぞれの出力を保ちます。
 
 ### 報告は寛容に、実行は速く失敗する
 
