@@ -91,7 +91,14 @@ function formatDoLine(text: string): string {
   return `  do: ${text.replace(/\s*\n\s*/g, " ")}`;
 }
 
-const STEP_FILE_IMPORT_FAILED_CODE = "step-file-import-failed";
+// The codes whose identical messages fold into one group: a step file that
+// did not import, and one that did not import because a Playwright package
+// is missing (one message for every such file, so one install line).
+const FOLDED_CODES: ReadonlySet<string> = new Set(["step-file-import-failed", "playwright-missing"]);
+
+function foldKey(issue: { readonly code: string; readonly message: string }): string {
+  return `${issue.code}\u0000${issue.message}`;
+}
 
 // Groups `step-file-import-failed` findings by exact message match, for
 // the human-readable rendering only: `CheckIssue`/`analyzeProject`'s own
@@ -109,14 +116,14 @@ const STEP_FILE_IMPORT_FAILED_CODE = "step-file-import-failed";
 function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMap<string, string[]> {
   const byMessage = new Map<string, string[]>();
   for (const issue of errors) {
-    if (issue.code !== STEP_FILE_IMPORT_FAILED_CODE) {
+    if (!FOLDED_CODES.has(issue.code)) {
       continue;
     }
-    const files = byMessage.get(issue.message) ?? [];
+    const files = byMessage.get(foldKey(issue)) ?? [];
     if (issue.file !== undefined) {
       files.push(issue.file);
     }
-    byMessage.set(issue.message, files);
+    byMessage.set(foldKey(issue), files);
   }
   for (const files of byMessage.values()) {
     files.sort((a, b) => a.localeCompare(b));
@@ -147,10 +154,10 @@ function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMa
 function formatImportFailureGroup(issue: CheckFinding, files: readonly string[]): string {
   const singleLineMessage = issue.message.replace(/\s*\n\s*/g, " ");
   if (files.length <= 1) {
-    return `error\t${STEP_FILE_IMPORT_FAILED_CODE}\t${formatFileAndLine(files[0], issue.line)}\t${singleLineMessage}\n${formatDoLine(issue.do)}`;
+    return `error\t${issue.code}\t${formatFileAndLine(files[0], issue.line)}\t${singleLineMessage}\n${formatDoLine(issue.do)}`;
   }
   const fileLines = files.map((file) => `  ${file}`).join("\n");
-  return `error\t${STEP_FILE_IMPORT_FAILED_CODE}\t(${files.length} files)\t${singleLineMessage}\n${fileLines}\n${formatDoLine(issue.do)}`;
+  return `error\t${issue.code}\t(${files.length} files)\t${singleLineMessage}\n${fileLines}\n${formatDoLine(issue.do)}`;
 }
 
 // One line per code, tab-separated (same column style `formatIssueLine`
@@ -252,12 +259,12 @@ export function writeCheckIssueLines(
   // file list already went out with the first.
   const printedImportFailureMessages = new Set<string>();
   for (const issue of errors) {
-    if (issue.code === STEP_FILE_IMPORT_FAILED_CODE) {
-      if (printedImportFailureMessages.has(issue.message)) {
+    if (FOLDED_CODES.has(issue.code)) {
+      if (printedImportFailureMessages.has(foldKey(issue))) {
         continue;
       }
-      printedImportFailureMessages.add(issue.message);
-      const files = importFailureGroups.get(issue.message) ?? [];
+      printedImportFailureMessages.add(foldKey(issue));
+      const files = importFailureGroups.get(foldKey(issue)) ?? [];
       sink.write(`${formatImportFailureGroup(issue, files)}\n`);
       continue;
     }

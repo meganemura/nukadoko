@@ -2,7 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { findPlaywrightMissing } from "../src/check/playwright-check.js";
+import { findPlaywrightMissing, playwrightImportMissing } from "../src/check/playwright-check.js";
 import type { BoundStepLine } from "../src/check/feature-check.js";
 import { PLAYWRIGHT_VERSION } from "../src/context/load-playwright.js";
 import type { Vocabulary, VocabularyEntry } from "../src/discover/discover-steps.js";
@@ -85,6 +85,19 @@ describe("findPlaywrightMissing", () => {
     expect(issues.map((issue) => issue.message.split(" needs ")[0])).toEqual([
       'ctx.page() in "When browse happens"',
       'ctx.page() and ctx.request() in "When both happens"',
+    ]);
+  });
+
+  it("reports a step once, at the first of the lines that bind it", () => {
+    const issues = findPlaywrightMissing(
+      [bound("fetch", 3), bound("browse", 5), bound("fetch", 9)],
+      vocabularyOf({ fetch: ["request"], browse: ["page"] }),
+      buildFixtureGraph({ fixtures: {} }),
+      () => false,
+    );
+    expect(issues.map((issue) => [issue.step, issue.line])).toEqual([
+      ["fetch", 3],
+      ["browse", 5],
     ]);
   });
 
@@ -205,4 +218,27 @@ describe("findPlaywrightMissing", () => {
       },
       { testCases: 200 },
     ));
+});
+
+describe("playwrightImportMissing", () => {
+  it("reports a step file whose own Playwright import is missing, with one message for every file", () => {
+    expect(playwrightImportMissing({ filePath: "e2e/steps/a.ts", missingPackage: "playwright" })).toEqual({
+      code: "playwright-missing",
+      message:
+        'the step file imports "playwright", and this project has not installed it, so the file does not import. ' +
+        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+      file: "e2e/steps/a.ts",
+      do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+    });
+    expect(playwrightImportMissing({ filePath: "e2e/steps/b.ts", line: 2, missingPackage: "@playwright/test" })).toMatchObject({
+      file: "e2e/steps/b.ts",
+      line: 2,
+      do: `npm install -D -E @playwright/test@${PLAYWRIGHT_VERSION}`,
+    });
+  });
+
+  it("leaves any other import failure alone", () => {
+    expect(playwrightImportMissing({ filePath: "a.ts" })).toBeUndefined();
+    expect(playwrightImportMissing({ filePath: "a.ts", missingPackage: "playwright-extra" })).toBeUndefined();
+  });
 });

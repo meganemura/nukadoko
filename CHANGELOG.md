@@ -363,6 +363,20 @@ just until 0.1.
   `nuka check` said nothing. A project with no `tsconfig.json`, or one
   that sets either option, still gets the `.ts` name and no note.
 
+- **A step file that imports a missing Playwright package is `playwright-missing`, and a step is reported once.**
+  A step file with `import { expect } from "playwright/test"` in a
+  project without `playwright` failed to import, and `nuka check`
+  reported one `step-file-import-failed` per file with Node's "Did you
+  mean to import playwright/test.js?" hint, which points at the wrong
+  fix; the install line came only from the files that did load, once per
+  feature line. Now the import failure of `playwright`,
+  `playwright-core`, or `@playwright/test` from the step file itself is
+  `playwright-missing` at that file, with the install line for that
+  package and one message for every file, so the text output folds them
+  into one group with one `do:` line (`--json` keeps one entry per file).
+  The `playwright-missing` finding for a bound step is reported once per
+  step, at the first line that binds it, as docs/spec.md already said.
+
 - **`repeated-scenario-prefix` names the same opening on every run, and offers a process-scope fixture only for an opening that declares it writes nothing.**
   Within a family of nested openings the note named the one with the
   most measured time, so on a fast suite it named a different opening

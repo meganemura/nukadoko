@@ -805,6 +805,12 @@ once for each step that a checked feature line binds and whose fixtures build
 It resolves `playwright` the way the run loads it and builds nothing, so
 `nuka run` stops before any step runs.
 A step defined in a step file that no checked line binds is not reported.
+A step file that imports `playwright`, `playwright-core`, or
+`@playwright/test` itself does not import at all when that package is
+missing. `nuka check` reports that file as `playwright-missing` too, in
+place of `step-file-import-failed`, with the install line for the package
+it imports and one message for every such file, so the text output prints
+them as one group with one install line.
 The type declarations follow the same rule: the three are typed as
 Playwright's own types when `playwright` is installed and as `any` when it
 is not, so a project's own `tsc` passes without it, `skipLibCheck: false`

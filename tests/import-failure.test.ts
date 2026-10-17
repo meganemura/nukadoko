@@ -5,7 +5,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { describeImportFailure, FRAMED_ELSEWHERE_SENTENCE, headLocation, STRIP_ONLY_SENTENCE } from "../src/config/import-failure.js";
+import { describeImportFailure, FRAMED_ELSEWHERE_SENTENCE, headLocation, missingPackageOf, STRIP_ONLY_SENTENCE } from "../src/config/import-failure.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
 describe("headLocation", () => {
@@ -127,5 +127,25 @@ describe("nuka check: a step file with an enum", () => {
     } finally {
       await removeTempDir(dir);
     }
+  });
+});
+
+describe("missingPackageOf", () => {
+  it("names the package a file imports itself, scoped or not, and nothing for another importer or code", () =>
+    hegel.test((tc) => {
+      const scope = tc.draw(gs.oneOf(gs.just(""), gs.fromRegex("@[a-z0-9-]{1,6}/")));
+      const name = `${scope}${tc.draw(gs.fromRegex("[a-z0-9][a-z0-9._-]{0,10}"))}`;
+      const file = `/${tc.draw(gs.arrays(gs.fromRegex("[a-z0-9 _-]{1,8}"), { minSize: 1, maxSize: 4 })).join("/")}.ts`;
+      const hint = tc.draw(gs.oneOf(gs.just(""), gs.just(`\nDid you mean to import "${name}/test.js"?`)));
+      const message = `Cannot find package '${name}' imported from ${file}${hint}`;
+      expect(missingPackageOf("ERR_MODULE_NOT_FOUND", message, file)).toBe(name);
+      expect(missingPackageOf("ERR_MODULE_NOT_FOUND", message, `${file}x`)).toBeUndefined();
+      expect(missingPackageOf("ERR_PACKAGE_PATH_NOT_EXPORTED", message, file)).toBeUndefined();
+    }));
+
+  it("names nothing for a relative file Node could not find", () => {
+    expect(
+      missingPackageOf("ERR_MODULE_NOT_FOUND", "Cannot find module '/p/features/steps/b.ts' imported from /p/features/steps/a.ts", "/p/features/steps/a.ts"),
+    ).toBeUndefined();
   });
 });

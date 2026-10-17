@@ -35,7 +35,7 @@ import { checkExploreDeclarations } from "./explore-check.js";
 import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
-import { findPlaywrightMissing } from "./playwright-check.js";
+import { findPlaywrightMissing, playwrightImportMissing } from "./playwright-check.js";
 import { checkCodeDo } from "./codes.js";
 import type { CheckFinding, CheckIssue, CheckReport } from "./types.js";
 import {
@@ -261,7 +261,10 @@ async function reportFor(
   // Node's own error message is the base of every entry below, unmodified:
   // it already names the missing export, subpath, or package, so re-parsing
   // it here would mean depending on Node's own wording while losing
-  // information rather than adding any. See this file's own header for why
+  // information rather than adding any. The one exception is a Playwright
+  // package the step file imports and the project lacks: that is
+  // `playwright-missing` (src/check/playwright-check.ts), because Node's
+  // "Did you mean" hint there points at the wrong fix. See this file's own header for why
   // a broken glue file is a report entry here rather than the fundamental
   // failure it still is for `run`/`do`/`steps`/`init`.
   //
@@ -273,6 +276,11 @@ async function reportFor(
   // it came.
   const cjsProject = refusesEsmTs(rootDir);
   for (const failure of importFailures) {
+    const playwright = playwrightImportMissing(failure);
+    if (playwright !== undefined) {
+      errors.push(playwright);
+      continue;
+    }
     const message =
       failure.message +
       missingTsSourceSentence(failure.message, rootDir, existsSync) +

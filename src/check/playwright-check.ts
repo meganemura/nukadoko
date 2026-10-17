@@ -18,6 +18,17 @@ import type { CheckIssue } from "./types.js";
 // never destructures `request` replaces the builtin, so no Playwright
 // request context is built, and no finding is reported for it.
 //
+// A step file that imports Playwright itself (`import { expect } from
+// "playwright/test"`) fails to import when the package is missing, before
+// any of the above can be read. That failure is the same finding, named at
+// the step file, with one message for every file, so `nuka check` prints
+// one group with one install line instead of one Node error per file whose
+// "Did you mean" hint points at the wrong fix.
+//
+// A step bound by many feature lines is reported once, at its first line:
+// the cause and the fix are the step's, and every further line would repeat
+// them.
+//
 // Only steps a selected feature line binds are judged. A step file that
 // defines a browser step nothing runs does not stop a run of a CLI
 // scenario, the same rule `analyzeRunSelection` applies to sibling
@@ -61,8 +72,10 @@ export function findPlaywrightMissing(
   playwrightInstalled: () => boolean,
 ): CheckIssue[] {
   const issues: CheckIssue[] = [];
+  const reported = new Set<string>();
   let installed: boolean | undefined;
   for (const bound of boundSteps) {
+    if (reported.has(bound.stepName)) continue;
     const entry = vocabulary.get(bound.stepName);
     if (entry?.kind !== "typed") continue;
     let names: readonly string[];
@@ -75,6 +88,7 @@ export function findPlaywrightMissing(
     if (builtins.length === 0) continue;
     installed ??= playwrightInstalled();
     if (installed) return [];
+    reported.add(bound.stepName);
     const calls = [...new Set(builtins.map((name) => PLAYWRIGHT_BUILTINS.get(name)!))].join(" and ");
     issues.push({
       code: "playwright-missing",
@@ -86,4 +100,28 @@ export function findPlaywrightMissing(
     });
   }
   return issues;
+}
+
+/** The packages a step file may import Playwright through. Each publishes
+ * the same version numbers, so the install line names the tested one. */
+const PLAYWRIGHT_PACKAGES: ReadonlySet<string> = new Set(["playwright", "playwright-core", "@playwright/test"]);
+
+/** The `playwright-missing` finding for a step file that did not import
+ * because it imports a Playwright package the project has not installed,
+ * or `undefined` for any other import failure. */
+export function playwrightImportMissing(failure: {
+  readonly filePath: string;
+  readonly line?: number;
+  readonly missingPackage?: string;
+}): CheckIssue | undefined {
+  const name = failure.missingPackage;
+  if (name === undefined || !PLAYWRIGHT_PACKAGES.has(name)) return undefined;
+  const install = `npm install -D -E ${name}@${PLAYWRIGHT_VERSION}`;
+  return {
+    code: "playwright-missing",
+    message: `the step file imports "${name}", and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`,
+    file: failure.filePath,
+    ...(failure.line !== undefined ? { line: failure.line } : {}),
+    do: install,
+  };
 }

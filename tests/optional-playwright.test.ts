@@ -227,6 +227,51 @@ describe("a project without playwright installed", () => {
     expect(run.code).not.toBe(0);
     expect(run.stderr).toContain(`ctx.request() in "When the URL "http://127.0.0.1:9/" is fetched" needs "playwright"`);
   }, 60_000);
+
+  it("check names step files that import playwright themselves once, with one install line", async () => {
+    const steps = path.join(projectDir, "features", "steps");
+    const importing = (name: string) =>
+      [
+        'import { defineStep, z } from "nukadoko";',
+        'import { expect } from "playwright/test";',
+        "",
+        "export default defineStep({",
+        `  description: "Check ${name}",`,
+        `  pattern: "${name} is checked",`,
+        "  args: z.object({}),",
+        "  mutates: false,",
+        "  run() {",
+        "    expect(1).toBe(1);",
+        "  },",
+        "});",
+        "",
+      ].join("\n");
+    await writeFile(path.join(steps, "expect-a.ts"), importing("a"));
+    await writeFile(path.join(steps, "expect-b.ts"), importing("b"));
+    try {
+      const message =
+        'the step file imports "playwright", and this project has not installed it, so the file does not import. ' +
+        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`;
+      const check = await nuka(["check", "features/cli.feature"]);
+      expect(check.code).toBe(1);
+      expect(check.stdout).toContain(
+        `error\tplaywright-missing\t(2 files)\t${message}\n` +
+          "  features/steps/expect-a.ts\n  features/steps/expect-b.ts\n" +
+          `  do: npm install -D -E playwright@${PLAYWRIGHT_VERSION}\n`,
+      );
+      expect(check.stdout).not.toContain("step-file-import-failed");
+      expect(check.stdout).not.toContain("Did you mean");
+      const json = await nuka(["check", "--json", "features/cli.feature"]);
+      const report = JSON.parse(json.stdout) as { errors: { code: string; file?: string; message: string }[] };
+      expect(report.errors).toEqual([
+        { code: "playwright-missing", message, file: "features/steps/expect-a.ts", do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}` },
+        { code: "playwright-missing", message, file: "features/steps/expect-b.ts", do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}` },
+      ]);
+    } finally {
+      await rm(path.join(steps, "expect-a.ts"), { force: true });
+      await rm(path.join(steps, "expect-b.ts"), { force: true });
+    }
+  }, 60_000);
 });
 
 // `nuka init` puts the step files into the project's own `tsc`, and they
