@@ -83,7 +83,9 @@ capture, so put the captures in by hand. Steps that need `--command` or
    record, before it ever touches a feature. Fix and re-run until it does
    what it's supposed to; only move on to the feature-level `nuka run` once
    every new step in the scenario has passed this way on its own. A mid-flow
-   step needs `nuka session start` instead (`references/exploring.md`).
+   step runs as a part of a step that reaches that point; when that state
+   cannot be repeated, explore it through a Playwright MCP server first
+   (`references/exploring.md`).
 
 `mutates` defaults to `true`, a new step is assumed to change state unless
 it says `mutates: false`, and `nuka describe <step>` tells you which before

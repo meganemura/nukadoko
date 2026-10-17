@@ -183,7 +183,7 @@ export function resolveConfigFileName(rootDir: string): string {
 // suite) calls it once per command, so a load per call would
 // grow that process by a graph per call. So the parsed result is kept per root, and the load
 // happens once for each version of the file. One process can outlive an
-// edit to the config (runCli called twice, a live session, the MCP server),
+// edit to the config (runCli called twice, the MCP server),
 // so the kept result is reused only while the same file name exists with
 // the same mtime and size; a stat per call costs far less than a load.
 // A module the config imports is not part of that check. A failed load is

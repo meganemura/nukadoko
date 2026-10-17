@@ -298,7 +298,7 @@ function summaryOmissions(tree: CommandNode, summary: string): string[] {
 }
 
 /** The commands no `nuka ...` in the file names, down to each subcommand
- * (`nuka session stop`, `nuka skill path`). llms.txt is the one file an
+ * (`nuka session clear`, `nuka skill path`). llms.txt is the one file an
  * agent may read alone, so it names each one. */
 function commandOmissions(tree: CommandNode, file: DocFile): string[] {
   const named = nukaInvocations(file).map((invocation) => invocation.trim().split(/\s+/));
@@ -311,7 +311,16 @@ function commandOmissions(tree: CommandNode, file: DocFile): string[] {
 // A command or flag a release removed is still named by the upgrade notes
 // that say what replaced it, and by their history. Only those two files may
 // cite one.
-const REMOVED_COMMANDS = new Set(["accept", "explore", "harvest", "mcp-tools", "experimental mcp-tools", "experimental webmcp-tools"]);
+const REMOVED_COMMANDS = new Set([
+  "accept",
+  "explore",
+  "harvest",
+  "mcp-tools",
+  "experimental mcp-tools",
+  "experimental webmcp-tools",
+  "session start",
+  "session stop",
+]);
 const REMOVED_FLAGS = new Set(["init --env"]);
 const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
 
@@ -428,16 +437,14 @@ describe("the extraction itself", () => {
     const sessionOnly = sample("llms.txt", "`nuka session list` and `nuka session`\n");
     expect(commandOmissions(tree, sessionOnly).filter((name) => name.startsWith("nuka session"))).toEqual([
       "nuka session clear",
-      "nuka session start",
-      "nuka session stop",
     ]);
   });
 
   it("reports a command or a flag the CLI summary leaves out", async () => {
     const tree = await readCommandTree();
     const summary = cliSummaryOf("docs/spec.md")
-      .replace(/^nuka session stop .*$/m, "")
-      .replaceAll("--idle-timeout", "");
-    expect(summaryOmissions(tree, summary)).toEqual(["nuka session start --idle-timeout", "nuka session stop"]);
+      .replace(/^nuka session clear .*$/m, "")
+      .replaceAll("--concurrency", "");
+    expect(summaryOmissions(tree, summary)).toEqual(["nuka run --concurrency", "nuka session clear"]);
   });
 });

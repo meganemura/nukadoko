@@ -79,8 +79,8 @@ export default defineConfig({
       //
       // The three named files after them are process entry points, where
       // importing the module *is* running it: `cli.ts` is the installed
-      // bin, `daemon-entry.ts` starts a live session's daemon, and
-      // `define-config.ts` is an identity helper that exists to give a
+      // bin, `run-worker-entry.ts` is one `nuka run --concurrency` worker,
+      // and `define-config.ts` is an identity helper that exists to give a
       // config literal a type and deliberately validates nothing. A test
       // that reached any of them would start a process or assert that an
       // identity function returns its argument, so their absence from the
@@ -92,7 +92,6 @@ export default defineConfig({
         "selftest-suite/**",
         "tests/**",
         "src/cli.ts",
-        "src/live/daemon-entry.ts",
         "src/run/run-worker-entry.ts",
         "src/config/define-config.ts",
       ],

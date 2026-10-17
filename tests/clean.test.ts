@@ -27,7 +27,7 @@ function deadPid(): number {
 // Responsibility: `nuka clean` — what it deletes (records/steps,
 // records/scenarios, cache/sessions/<env>/*, export/allure-results,
 // export/messages.ndjson), what it refuses to touch (`export/allure-
-// history.jsonl`, and everything, when any session anywhere is live), and
+// history.jsonl`), and
 // `--dry-run`/`--json`/category selection. Seeds `.nukadoko/` by hand
 // rather than by running real steps: this is a state-directory-shape test,
 // not a re-test of what `nuka do`/`nuka run` already write (session.test.ts,
@@ -70,15 +70,6 @@ async function seedCache(rootDir: string, environment = "default"): Promise<void
   const dir = path.join(stateDir(rootDir), "cache", "sessions", environment);
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, "alpha.json"), JSON.stringify({ cookies: [], origins: [] }));
-}
-
-async function seedLiveLock(rootDir: string, name: string, environment = "default"): Promise<void> {
-  const dir = path.join(stateDir(rootDir), "cache", "sessions", environment);
-  await mkdir(dir, { recursive: true });
-  await writeFile(
-    path.join(dir, `${name}.lock`),
-    JSON.stringify({ pid: process.pid, started_at: new Date().toISOString() }),
-  );
 }
 
 async function seedExport(rootDir: string): Promise<void> {
@@ -232,31 +223,7 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
   });
 
-  it("refuses the whole clean, records included, when any session anywhere is live", async () => {
-    await seedRecords(rootDir);
-    await seedLiveLock(rootDir, "live1");
-
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr });
-    expect(exitCode).toBe(2);
-    expect(stderr.text()).toContain("live1");
-    expect(stderr.text()).toContain("nuka session stop live1");
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
-  });
-
-  it("still refuses a --records-only clean when the live session is in a non-default environment", async () => {
-    await seedRecords(rootDir);
-    await seedLiveLock(rootDir, "live2", "staging");
-
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["clean", "--records"], { rootDir, stdout: createCaptureSink(), stderr });
-    expect(exitCode).toBe(2);
-    expect(stderr.text()).toContain("live2");
-    expect(stderr.text()).toContain("staging");
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
-  });
-
-  it("proceeds once the live lock's own pid is dead (stale, not live)", async () => {
+  it("removes a stale lock whose own pid is dead", async () => {
     await seedRecords(rootDir);
     const dir = path.join(stateDir(rootDir), "cache", "sessions", "default");
     await mkdir(dir, { recursive: true });

@@ -153,16 +153,12 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   既定値は判断です。
   これまでに測った最も重いスイートは run 1 回あたり約 50 MB なので、20 回で約 1 GB です。
   それより少ないと、数分おきに走るスイートでは 1 時間前に追っていた失敗が消えてしまいます。
-  live session が 1 つでもある間、retention は何もせず、そう告げます。
-  そのプロセスは動いている間ずっと record を書くからです。
   export ファイルは、run 自身の一覧を通してだけ消され、古さで消されることはありません。
   results ディレクトリは他のツールの Allure 出力と共有されることがあり、nukadoko が書いていないファイルは nukadoko が消してよいものではないからです。
   `nuka clean [--records] [--cache] [--export] [--dry-run] [--json]` は、カテゴリ丸ごとを消す操作として残ります。
   カテゴリのフラグを指定しなければ、3 つのカテゴリをすべて消します。
   カテゴリのフラグを 1 つ指定すると、操作をそのカテゴリだけに限定します。
   `--dry-run` は実際の run と同じ計画を出力しますが、何も消しません。
-  どこかに live な session が 1 つでもある場合、このコマンドはすべてのカテゴリについて操作全体を拒否します。
-  `nuka session clear` が live な lock を拒否するのと同じ理由です。
   `allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合、何も消す前に拒否します。
   `--dry-run` もそれらのパスを拒否します。
   プロジェクトの中にある results ディレクトリは、そのディレクトリが state directory の親である場合を除き、これまでどおり消します。
@@ -237,7 +233,7 @@ Node は型注釈を空白に置き換え、残りを実行します。
   ファイルは読み込めるので、これを報告するのは `nuka tend` で、`package-type-missing` として、`"type": "module"` を追加すべき `package.json` を名指します。
 
 discovery は 1 回ごとに、それ自身のモジュールグラフでファイルを読み込みます。
-そのため 2 回 discovery を行うプロセス(live session、MCP サーバー、テスト)では、各ファイルのトップレベルのコードが再び実行され、2 回の discovery がモジュールを共有することはありません。
+そのため 2 回 discovery を行うプロセス(MCP サーバー、テスト)では、各ファイルのトップレベルのコードが再び実行され、2 回の discovery がモジュールを共有することはありません。
 
 リポジトリのルートなどを `featuresDir` に設定すると、同じように歩く範囲が広がります。
 その木の中にあるビルド成果物も、名前が上記 4 つの拡張子のいずれかで終わる場合は glue になり得ます。
@@ -328,7 +324,7 @@ export default defineStep({
 - pattern、table/docstring、`from` のどれも埋めず、しかもスキーマが宣言していない args キーは、`nuka describe` がそのスキーマについて公開する契約に従います。
   `nuka describe` は各オブジェクトの `args` スキーマを `z.toJSONSchema` で公開します。
   素の `z.object(...)` は `additionalProperties: false` になり、step の `args` をバリデーション済みの値に変える経路はすべて、同じ閉じた形に対してパースします。
-  対象は `nuka do`、`nuka do --session <live>`、`nuka run`、part が呼ばれる `call` fixture です(「Parts」を参照)。
+  対象は `nuka do`、`nuka run`、part が呼ばれる `call` fixture です(「Parts」を参照)。
   宣言していないキーは、黙って捨てられるのではなく拒否されます。
   `nuka describe` はその閉じた args スキーマを、呼び出し側が渡さなければならない入力として描きます。
   そのため `required` に載るのは、呼び出し側が省略できないキーだけです。
@@ -559,7 +555,7 @@ fixture の名前:
   `copy` は `source` を新しいディレクトリにコピーし、そのディレクトリを返します。
   ディレクトリの中身はその直下に置かれ、ファイルはそのファイル自身の名前で置かれます。
   相対パスの `source` はプロジェクトのルートを基準に解決されます。
-  どのディレクトリも、scenario が終わるときに、成功でも失敗でも削除されます(`nuka do` では実行が終わるとき、live session では session が終わるときです)。
+  どのディレクトリも、scenario が終わるときに、成功でも失敗でも削除されます(`nuka do` では実行が終わるときです)。
   step record は、それぞれを `evidence.scratch` に記録します(「Records」を参照)。
   片付けが executor の役目なのは、scenario が終わったことを知っているのが executor だけだからです。
   step が自分でディレクトリを削除すると片付けが scenario に入り込み、削除を忘れると漏れます。
@@ -1530,7 +1526,7 @@ spec と step は 1 つの定義を import するため、両者の形は一致�
 
 この移行によって、nukadoko の 2 つの経路が開きます。
 `nuka run` は feature ファイルに経路を固定し、`nuka do` は各 step を単体で実行します。
-既存のスイートがすでに信頼する操作は、agent が探索に使う語彙になります(「単体 step」と「Live sessions」を参照)。
+既存のスイートがすでに信頼する操作は、agent が探索に使う語彙になります(「単体 step」を参照)。
 
 2 つのツリーは、1 つのリポジトリに置けます。
 チームは、両者を並べて配置できます。
@@ -1921,99 +1917,31 @@ nukadoko はその record がどの step のものかを読み、そこを指す
 `--session` は storageState を `do` の呼び出しをまたいで持ち運ぶことでこの差を狭めますが、それがカバーするのはログイン状態だけであり、それ以外の何ものでもありません: 実行がどこまで進んでいたかはそこには含まれません。
 これがいちばん厳しく効くのは、自分自身の setup が 2 回目の実行では no-op になってしまう step で、直すべきは engine ではなく feature の側です: 状態は step ごとに毎回立てるのではなく、それを行うと名前が言っている step の中で一度だけ立てます。
 
-### Live sessions(たどり着いた場所からの探索)
+### 繰り返せない状態
 
 ここまではすべて、何もない状態から始まります。
 `nuka do` は実行のたびに専用のブラウザとそれ以外のすべてを与え、それが 1 回の呼び出しを単独で読めるものにする一方、探索を高くつくものにもします: 20 番目に試したいことの前には、19 個のことが立ちはだかります。
 読み取りだけならこれは遅いだけで済みます。
 繰り返せない作業、たとえば一度しか開けないアカウントや二重に発行されてしまう請求書では、それすら不可能です。
 
-**live session** は、あるプロセスが開いたまま保持し続ける 1 つの `ctx` です。
-実行はそのたびに世界をゼロから組み立てる代わりに、次々とそこへ着地できます。
+nukadoko は、そのために世界を開いたまま保持することはしません。
+agent のホストはすでに Playwright MCP サーバを動かせます。
+このサーバは呼び出しをまたいで 1 つのブラウザを開いたまま保ち、agent は直前の呼び出しが残したページの上で操作できます。
+acceptance skill は、状態を繰り返せないブラウザのアプリについては agent をそちらへ向かわせ、そのサーバがつながっているかどうかの見分け方も示します。
+nukadoko 自身のプロセスで同じことをすると、管理すべき 2 つ目のブラウザ、生の認証情報を保持する socket、アイドルタイムアウトが増えます。
+それでいて、ホストのサーバがすでにしていること以上のものは何も得られません。
 
-```sh
-nuka session start alice
-nuka do open-cart --session alice
-nuka do add-item --session alice --args '{"sku":"S-1"}'
-nuka session stop alice
-```
+そのサーバがすることは何も evidence にはなりません。
+step record も scenario record も書きません。
+レビュアーが読む run サマリは scenario record から組み立てられます(「レビュー」を参照)。
+だから探索からそのサマリへの道は、誰かが書いた feature と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
+30 回の呼び出しを経た世界は、誰にも再現できません。
+だからこそ、探索から出てくるのは、それをもとに書かれ、`nuka check` で確かめられ、ゼロからもう一度実行される scenario です。
 
-持続するのはブラウザではなく context 全体です。
-ブラウザだけを持続させると、世界が半分だけ古いという状態になります。
-たとえば、この実行のために作り直された user fixture が、5 回分の実行を経たページのすぐ隣にあり、どちらがどちらなのかを示すものが何もありません。
-fixture bag をまるごと開いたまま保持すれば、この問いそのものが消えます。
-何であれ、その下で作り直されるものが一つもないからです。
-
-これは新しい寿命ではありません。
-scenario はすでに 1 つの `ctx` を組み立て、それに対していくつかの step を実行し、teardown します。
-live session はそれと同じ寿命であり、違いは step の並びが feature ファイルからではなく 1 つずつ届く点だけです。
-2 つの fixture のスコープに 3 つ目の値は要りません: `scenario` scope はその session の間続き、`process` scope はその session の process の間続きます(「Fixtures」を参照)。
-
-**lock file が待ち合わせ場所であり、それはすでに存在します。**
-session の `cache/sessions/<env>/<name>.lock` は `{ pid, started_at }` を保持し、今日すでに `process.kill(pid, 0)` と照合されています。
-死んだ pid の lock はすでに古びたものと定義されており、誰でも取って代わってよいことになっています。
-`nuka do --session alice` はそこで生きている pid を見つければその実行をそのプロセスへ渡し、見つからなければ今と完全に同じようにふるまいます。
-新しく見つけ出すべきことは何もなく、死んだ所有者の主張には価値がないという規則も、すでに効いているものと同じです。
-
-session を止めると、その storageState は session が昔から残してきたのと同じ `cache/sessions/<env>/<name>.json` に書かれます。
-つまり session が持つのは 2 つの意味ではなく 2 つの寿命です。
-生きている間は 1 つの process であり、生きなくなったあとはそれが保存した state です。
-
-`nuka session stop <name>` は、その名前を生きたプロセスが保持していないとき、exit 0 です。
-その名前に session ファイルも lock file もないとき、stderr は session と environment を `no session "<name>" in environment "<environment>"` と名指します。
-打ち間違えた名前が、session が止まったように見えてはいけません。
-本当のプロセスは、アイドルタイムアウトまでブラウザを持ち続けるからです。
-古びた lock file は今までどおり削除され、その片付けは静かです。
-live session を止めるとき、teardown に失敗した fixture は stderr に報告されます。
-報告は fixture ごとに `Warning: fixture "<name>" teardown failed: <message>` の 1 行で、message は redact されます。
-exit code は、`nuka do` と `nuka run` と同じく 0 のままです。
-environment の `version` probe に失敗した live session は、`nuka do` と同じ警告を、受け付けた `nuka do --session` のたびに繰り返します。
 `nuka session clear --env <name>` は、config が定義していない environment の下に session ファイルも lock file も残っていないとき、その environment を拒否します。
 拒否の文は、ほかのコマンドが未知の environment にすでに使っているものと同じです。
 config から外された environment の下に残っている session ファイルは、今までどおり削除されます。
 そのとき stderr はその environment を名指します。
-
-**live session から出た record は、まっさらな record と同じようには読めてはいけません。**
-誰も組み立て直せない世界に対する 30 番目の実行として通った step は、その step が単独で通ったのとは別のことを証明しています。
-この 2 種類を見分けられない green な record こそ、この機能が周囲のあらゆる record を静かに損ないかねない唯一の経路です。
-`session` はすでに step record に載っています。
-live session が付け加えるのは、それが live だったことと、この実行がその並びの中で何番目だったかです。
-
-session ごとに、同時に実行できるのは 1 回だけです。
-lock はすでに「今これを誰かが所有している」ことを意味するので、使用中の session に対する 2 回目の `do` はキューに積まれるのではなく拒否されます。
-探索を駆動するのは、直前の結果から次の呼び出しを決める何かであり、2 人の呼び出し元が同時に決めることはそれではありません。
-
-ここで起きることは何も evidence にはなりません。
-そして、そうあり続けるための新しい柵は要りません。
-live session は step record を生みますが、scenario record は生みません。
-レビュアーが読む run サマリは scenario record から組み立てられます(「レビュー」を参照)。
-だから探索からそのサマリへの道は、誰かが書いた feature と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
-
-`nuka run` は live session を見つけると、その名前と止め方とともに報告しますが、それを理由に何かを拒否することはありません。
-表に出す価値がある事実は、探索がそこに置いた state をアプリケーションがまだ保持しているかもしれないということであり、これはまさに、scenario が誰も書き残していない理由で通ってしまう類のことです。
-その session が実行しようとしている feature と何か関係があるかどうかは、ここからは分かりません。
-だからこれは事実として報告されるのであって、断定として報告されることは決してありません。
-
-live session が listen する socket は、storageState ファイルと同じ生の認証情報を保持しており、同じ理由から同じ制限されたパーミッションで作成されます(「State directory」を参照)。
-ただし、そのファイルの隣には置かれません。
-unix socket のパスの長さには、どのプラットフォームにも上限があります。
-プロジェクト自身のパスはいくらでも深くなりえます(worktree、monorepo の中のパッケージ、入れ子の checkout)。
-プロジェクトの置き場所のせいで超えてしまう上限は、session の名前を短くしても戻ってきません。
-そのため socket は、OS の一時ディレクトリの下に作られた専用のディレクトリの中に置かれます。
-こうすると長さがプロジェクトの置き場所に依存しなくなり、実際のパスは session の lock ファイルが名指しします。
-既定でアイドルタイムアウトが適用されます。
-中断された探索が残す普通の結果は忘れられた session であり、珍しい結果ではないからです。
-`nuka session list` は pid が消えている session を回収します。
-`nuka session start --idle-timeout <seconds>` がその待ち時間を秒で決めます。
-既定は 900 です。
-値は 0 より大きく 2147483 以下の有限な秒数でなければなりません。
-それ以外は session が始まる前に拒否されます。
-2147483 は、Node の `setTimeout` が待てる最大の整数秒です。
-有限でない値、0、負の数、それより大きい整数秒は 1 ミリ秒に切り詰められるので、session は listen を始めた瞬間に自分で止まってしまいます。
-
-正直な限界こそがこの機能の要点であり、欠陥ではありません。
-30 回の実行を経た世界は、それを保持しているプロセス自身を含め、誰にも再現できません。
-だからこそ、探索から出てくるのは run そのものではなく、それをもとに書かれてゼロからもう一度実行される scenario です。
 
 ## Records
 
@@ -2079,13 +2007,6 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
-- `session_execution`(数値)は、この実行が live session の `ctx` に対して走ったときだけ含まれます(「Live sessions」を参照)。
-  値はその session の中でこの実行が何番目かを 1 から数えたものです: session が受けた最初の `nuka do` なら `1`、30 番目なら `30` です。
-  `session` だけでは session の名前しか分からず、world がこの実行のために作られたのか、すでに 30 回の実行を経たものなのかは言えません。
-  このフィールドがあるので、live session の record が新しく始めた record のように読まれることはありません。
-  live session を使わない `nuka do` と、すべての `nuka run` の step record はこれを持ちません。
-  session が拒否した `do`(未知の step、解決できない `--use`、read-only な environment での mutate する step)は step record を書かず、番号も取りません。
-  `nuka do` は step が戻ったときに、この番号を stderr にも出します。
 - `error.kind` は閉じた集合を使い、人が読むメッセージの隣に置かれます: `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`step_error`。
   閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
   最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
@@ -2370,7 +2291,6 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   nukadoko は各 session を environment ごとに保存し、advisory lock によって同時に 1 つの run だけに制限します。
   `--session` を指定しないことはクリーンな開始を意味し、暗黙に共有される状態はありません。
   保存された session は storageState のファイルであり、daemon を必要としません。
-  例外は `nuka session start` で、1 つの context を開いたまま保つ分離されたプロセスを起動します(「Live sessions」を参照)。
 - **Environment** はデプロイ先に名前を付けます。
   各 environment は `baseURL`、`envFiles`、`policy: "read-only"`、任意の `version` プローブを定義できます。
   read-only policy は mutate する step を拒否します。
@@ -2645,9 +2565,7 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 カテゴリのフラグを 1 つ与えると、削除をそのカテゴリに限定します。
 run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。
 retention はそこに決して触れません。
-どこかで `nuka session` が 1 つでも live であれば、カテゴリを問わずコマンド全体を拒否します。
-その session 自身のプロセスが、いままさに `records/` と `export/` に書き込んでいるからです(理由の全体は「成果物」を参照)。
-`allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合も、何も消す前に拒否します。
+`allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合は、何も消す前に拒否します。
 `--dry-run` もそれらのパスを拒否します。
 プロジェクトの中にある results ディレクトリは、そのディレクトリが state directory の親である場合を除き、消します。
 カテゴリを問わず決して触れないファイルが 1 つあります。
@@ -3384,7 +3302,7 @@ process scope は、どれかの列が失敗したとき `"failed"` を受け取
 SIGINT、SIGTERM、SIGHUP のどれかを受けると、`nuka do` と同じく、開いている列の fixture、次に process scope の fixture を片付けてからプロセスが終了します。
 対象そのものはリセットされません。
 初期状態が空の対象を前提とするモデルには、その fixture が必要です。
-step は、`nuka do` と live session が使うのと同じ関数を通って実行されます。
+step は、`nuka do` が使うのと同じ関数を通って実行されます。
 args を検証し、fixture の袋を開き、step の期限の下で `run` を呼び、result を検証します。
 step record は書きません。
 1 回の実行は多くの列を試し、そのほとんどは成功します。
@@ -3497,9 +3415,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               <path> writes one more copy there
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
                               execute one typed step; step record to stdout.
-                              --env and --session as on nuka run; against a
-                              live session the step runs in that session's
-                              own ctx.
+                              --env and --session as on nuka run.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
                               delivered on stderr.
@@ -3678,9 +3594,8 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               the state directory; no category flag cleans
                               all three, one flag narrows to it; --dry-run
                               prints the same plan the real run would act on
-                              without removing anything; refuses outright,
-                              every category, while any session anywhere is
-                              live; refuses, before removing anything, an
+                              without removing anything; refuses, before
+                              removing anything, an
                               allure.resultsDir or messages.output that
                               resolves to the project root, outside the
                               project, or to a parent of the state
@@ -3723,15 +3638,6 @@ nuka session list [--json]    list every session, across all environments;
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given
-nuka session start <name> [--env <name>] [--idle-timeout <seconds>]
-                              start a live session: a detached process holding
-                              one ctx open across nuka do --session calls. It
-                              stops itself after --idle-timeout seconds with
-                              no execution (default 900; a finite number
-                              greater than 0 and at most 2147483)
-nuka session stop <name> [--env <name>]
-                              persist the session's storageState, then end
-                              its process
 nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, <featuresDir>/steps/,
@@ -3801,7 +3707,7 @@ discovery は、どのファイルが hook を登録したかを記録しない�
 `nuka describe` にはテキスト形式がないので、同じ方法で拒否します。
 `--json` がないとき、stderr はメッセージを出し、続けて `do: <command>` の 1 行を出します。
 次のコマンドがわかっているとき、`do` はそれを名指しします。
-知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、邪魔をしている live session には `nuka session stop <name>`、`check` が受け付けない `:line` には `nuka check <file>` です。
+知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、削除された live session のサブコマンドには `nuka do --help`、`check` が受け付けない `:line` には `nuka check <file>` です。
 それ以外では、そのコマンド自身の `--help` です。
 finding、失敗した scenario、失敗した step は報告であって拒否ではなく、それぞれの出力を保ちます。
 
@@ -3813,8 +3719,8 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
-| 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run`、すでに無い session に対する `nuka session stop` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` の `import_failures`、`nuka tend` が報告した `--fail-on` の code、失敗した `nuka experimental explore` の run、起動または停止しなかった session、削除できなかった session ファイル |
+| 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run`、保持されていない session に対する `nuka session clear` |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` の `import_failures`、`nuka tend` が報告した `--fail-on` の code、失敗した `nuka experimental explore` の run、削除できなかった session ファイル |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
@@ -3935,9 +3841,10 @@ step record の `error.kind` は「Records」に一覧があります。
   これはのちに削除されました。
   一連の呼び出しを実行した agent はその step をすでに知っており、下書きは scenario が述べるべき主張を空欄のまま残していたからです。
   探索によって見つかった経路は、今も探索した者が書くことで、1 つの文に固定された経路になります。
-- **M11(live sessions)**: `nuka session start`/`stop`、プロセス内で開いたまま保持する 1 つの `ctx` です。
-  これにより、`nuka do` はすでに途中まで進んだ world に降り立てます(「Live sessions」を参照)。
-  ここより前のすべては何もない状態から始まっており、それは読み取りにとっては単に遅いだけですが、繰り返せない作業にとっては不可能を意味します。
+- **M11(live sessions)**: `nuka session` の下の `start` と `stop`、プロセス内で開いたまま保持する 1 つの `ctx` でした。
+  これにより、`nuka do` はすでに途中まで進んだ world に降り立てました。
+  のちに削除されました。
+  agent のホストがすでに動かしている Playwright MCP サーバが、nukadoko 自身のプロセスも socket もアイドルタイムアウトもなしに、同じように呼び出しをまたいでブラウザを開いたまま保つからです(「繰り返せない状態」を参照)。
 - **M12(concurrency)**: `nuka run --concurrency <n>`、feature ファイルをまるごと持つ worker プロセス、単独で実行しなければならないファイルのための `@nukadoko:serial`、そしてそれらが動く間 run の identity を保つ親プロセスです(「Scenario」を参照)。
   すべての scenario は依然として同じ直列エンジンの下で実行されます。
   変わるのは、それらが一度に何個実行されるかだけです。

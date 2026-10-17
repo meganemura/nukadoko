@@ -86,54 +86,51 @@ than by chaining `do` calls through a browser. The cost of growing a
 composite that way is that each `do` runs it from the start, which is
 free for reads and fine for anything repeatable.
 
+## Exploring state that cannot be repeated
+
 For work that cannot be repeated, an account that opens once or an
 invoice that would be issued twice, running from the start is not an
-option, and that is what a live session is for:
+option. Explore that in a browser app through the host's Playwright MCP
+server instead of `nuka do`: its tools drive one browser that stays open
+between calls, so each call lands where the last one left off.
+
+The server is connected when its tools are in your tool list
+(`browser_navigate`, `browser_snapshot`, `browser_click`, and the rest,
+under the server's name, usually `playwright`). When they are not there,
+ask the person to add it; do not add it yourself. In Claude Code the
+command, from the `@playwright/mcp` README, is:
 
 ```sh
-nuka session start alice
-nuka do open-cart --session alice
-nuka do add-item --session alice --args '{"sku":"S-1"}'
-nuka session stop alice
+claude mcp add playwright npx @playwright/mcp@latest
 ```
 
-`nuka session start` holds one context open in a process, so `--session`
-now lands each call on the world the last one left rather than rebuilding
-it. Stopping saves that session's login state to the file `--session` has
-always used, so a session is a process while it lives and saved state
-once it does not.
+It takes effect in a new session. To start the browser from a login that
+`nuka do --session <name>` already saved, the server's `--isolated
+--storage-state=<file>` options load that session's file,
+`.nukadoko/cache/sessions/<env>/<name>.json`.
 
-Two things keep that readable. `nuka do --session` says on stderr which
-world it ran in, live or fresh, because a session that timed out or
-crashed underneath you is otherwise invisible until afterwards. And the
-step record carries `session_execution`, this call's position in that
-session, so a step that passed as the thirtieth execution against a world
-nobody can rebuild is never mistaken for one that passed on its own.
+Say before the first call that the browser acts on the real application
+with whatever login it holds. A click that submits a form there is the
+same as a `mutates: true` step: it needs a go-ahead first.
 
-Say what a live session is before starting one, and how to stop it. It
-outlives the command, holding a browser and live credentials until
-`nuka session stop` or its idle timeout. A fixture whose teardown fails
-is named on stderr when the session stops; the exit code stays 0. `--idle-timeout` sets that
-wait, in seconds, 900 when omitted. A value the process cannot keep is refused before a
-session starts. One execution runs at a time.
+A world many calls deep is not reproducible, by anyone, and nothing the
+MCP server did is a step record. What you found counts once it is a
+scenario: write the steps it needs, write the scenario from what you did
+("Then fix what you found" below), and run `nuka check` on it, then
+`nuka run` from nothing.
 
-A world many executions deep is not reproducible, by anyone, which is the
-reason to write a scenario from what you found and run it again from
-nothing rather than trusting the session itself.
+## Saved sessions
 
-A session left running, or left behind after the terminal that started it
-is gone, is easy to lose track of. `nuka session list` finds every one
-across every environment, live or only saved, each with its own name and
-whether it is still alive; `--json` also names which environment each one
-belongs to, which the plain listing leaves out. `nuka session clear
-[name]` deletes one by name, or, with no name, every session in `--env`'s
-environment (`default` when omitted); a live one refuses to clear until
-it is stopped first, since clearing only ever touches files, never a
-running process. An `--env` the config does not define is refused when
-nothing is left under it, and stderr names it. Files left under an
-environment removed from the config are still cleared, and stderr names
-that environment. `nuka session stop` of a name that was never a session
-exits 0 and names that session and its environment on stderr.
+`nuka session list` finds every saved session across every environment,
+each with its own name and whether a `nuka do --session` call still holds
+it; `--json` also names which environment each one belongs to, which the
+plain listing leaves out. `nuka session clear [name]` deletes one by
+name, or, with no name, every session in `--env`'s environment
+(`default` when omitted); one a running call still holds refuses to
+clear. An `--env` the config does not define is refused when nothing is
+left under it, and stderr names it. Files left under an environment
+removed from the config are still cleared, and stderr names that
+environment.
 
 A step record has a lifetime without anyone cleaning: `nuka run` keeps the
 newest `retention.runs` runs (default 20) and a record no run owns, which
@@ -149,16 +146,11 @@ through it: it removes every step/scenario record, session cache file, and
 the Allure/messages export output at once, all disposable by design
 (see "Artifacts" in `docs/spec.md`). No category flag cleans all three;
 `--dry-run` prints the same plan the real run would act on without
-removing anything. It refuses the whole command, every category, while
-any session anywhere is still live, the same rule `session clear` already
-applies to one, widened here because a live session's own process is
-still writing records and export output, not sitting idle. It also
-refuses, before removing anything, when `allure.resultsDir` or
+removing anything. It refuses, before removing anything, when `allure.resultsDir` or
 `messages.output` resolves to the project root, to a path outside the
 project, or to a parent of the state directory. `--dry-run` refuses those
 paths too. A results directory inside the project is still removed, unless
-that directory is a parent of the state directory. Stop every
-session first (`nuka session stop <name>`), then clean.
+that directory is a parent of the state directory.
 `export/allure-history.jsonl` survives regardless: it sits beside
 `allure-results/`, not inside it, and is the one export artifact no
 re-run can reproduce.

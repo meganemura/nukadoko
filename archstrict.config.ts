@@ -82,7 +82,6 @@ export default {
     { glob: "src/run/**", tags: ["layer:run", "pkghost:library"] },
     { glob: "src/draft/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/explore/**", tags: ["layer:workflow", "pkghost:library"] },
-    { glob: "src/live/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/mcp/**", tags: ["layer:workflow", "pkghost:mcp"] },
     { glob: "src/tend/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/cli/**", tags: ["layer:adapter", "pkghost:cli"] },
@@ -178,7 +177,7 @@ export default {
     {
       name: "session",
       glob: "src/session/**",
-      surface: ["live-sock.ts", "lock.ts", "manage.ts", "name.ts", "paths.ts", "storage-state.ts", "store.ts"],
+      surface: ["lock.ts", "manage.ts", "name.ts", "paths.ts", "storage-state.ts", "store.ts"],
     },
     { name: "sink", glob: "src/sink/**", surface: ["writable-sink.ts"] },
     {
@@ -314,11 +313,6 @@ export default {
     },
     { name: "draft", glob: "src/draft/**", surface: ["index.ts"] },
     { name: "explore", glob: "src/explore/**", surface: ["index.ts"] },
-    {
-      name: "live",
-      glob: "src/live/**",
-      surface: ["client.ts", "live-session-notice.ts", "spawn-daemon.ts"],
-    },
     {
       name: "mcp",
       glob: "src/mcp/**",

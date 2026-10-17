@@ -36,8 +36,8 @@ import { runEnded } from "./run-result.js";
 // runs inside its caller and lands as a `calls[]` entry on the caller's
 // own record (src/record/types.ts's `CallEntry`, which has no record id),
 // never as a `records/steps/<id>/` of its own, and a hook's evidence lives
-// inside the scenario's own directory. Only `nuka do` and a live session
-// write a step record no scenario cites, and those are what
+// inside the scenario's own directory. Only `nuka do` writes a step record
+// no scenario cites, and those are what
 // the age rule is for.
 //
 // Export files are removed only through a manifest. A results directory
@@ -47,16 +47,6 @@ import { runEnded } from "./run-result.js";
 // resolves outside the project root is skipped as well: `allure.resultsDir`
 // can point above the project, and a removal that leaves the project is
 // not one this tool makes on its own.
-//
-// Skipped entirely, and said so, while a live session (`nuka session
-// start`'s daemon) is up anywhere: that process writes records for as long
-// as it runs, and a rule that removes records has no business under it,
-// the same reason `nuka clean` refuses. The caller (src/cli/run.ts) is the
-// one that asks the live module whether anything is up and passes the
-// answer in. This module does not look. A lock with no socket is not a
-// live session in that sense: it is a `nuka run --session`/`nuka do
-// --session` holding the name for the length of one command, and at the
-// end of `nuka run` that command is the one running retention.
 //
 // A second `nuka run` in flight at the same time is safe because the run
 // rule only removes a run that proves it ended. `nuka run` writes a
@@ -189,24 +179,11 @@ export interface ApplyRetentionOptions {
   /** Root-relative `messages.ndjson` path, as `nuka run` resolves it,
    * so a run's own run-id-suffixed stream can be named beside it. */
   readonly messagesOutputRel: string;
-  /** Live sessions the caller already found. Retention does not look for
-   * them itself: discovering a daemon is the live module's job, and this
-   * module must not import it. An empty list means nothing is live. */
-  readonly liveSessions: readonly RetentionLiveSession[];
   /** The run that is applying retention. It is never removed. */
   readonly currentRunId: string;
 }
 
-/** The fields retention prints when it skips. Structural on purpose, so
- * this module does not import the live module's own session ref. */
-export interface RetentionLiveSession {
-  readonly environment: string;
-  readonly name: string;
-}
-
 export interface RetentionOutcome {
-  /** Non-null when nothing was examined at all. */
-  readonly skipped: { readonly liveSessions: readonly RetentionLiveSession[] } | null;
   readonly runsKept: number;
   readonly runsRemoved: number;
   /** Step records, scenario directories, and run directories the age rule
@@ -236,11 +213,7 @@ async function removeRunExports(
 }
 
 export async function applyRetention(options: ApplyRetentionOptions): Promise<RetentionOutcome> {
-  const { rootDir, stateDir, policy, now, messagesOutputRel, liveSessions, currentRunId } = options;
-
-  if (liveSessions.length > 0) {
-    return { skipped: { liveSessions }, runsKept: 0, runsRemoved: 0, unownedRemoved: 0 };
-  }
+  const { rootDir, stateDir, policy, now, messagesOutputRel, currentRunId } = options;
 
   const recordsDir = path.join(rootDir, stateDir, "records");
   const stepsDir = path.join(recordsDir, "steps");
@@ -323,7 +296,6 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
   }
 
   return {
-    skipped: null,
     runsKept: retained.length,
     runsRemoved: dropped.length,
     unownedRemoved,
@@ -335,14 +307,8 @@ function plural(count: number, singular: string, pluralForm: string): string {
 }
 
 /** One stderr line, or none when nothing happened: a run that removed
- * nothing keeps its output identical to before this rule existed. A skip
- * is always a line, since a person reading a growing state directory has
- * to be able to find out why. */
+ * nothing keeps its output identical to before this rule existed. */
 export function formatRetention(outcome: RetentionOutcome, policy: RetentionPolicy): string | null {
-  if (outcome.skipped !== null) {
-    const first = outcome.skipped.liveSessions[0]!;
-    return `retention: skipped, session "${first.name}" (environment "${first.environment}") is live; nothing is removed while a session can still write records`;
-  }
   const parts: string[] = [];
   if (outcome.runsRemoved > 0) {
     parts.push(`${plural(outcome.runsRemoved, "run", "runs")} older than the newest ${policy.runs} (retention.runs)`);

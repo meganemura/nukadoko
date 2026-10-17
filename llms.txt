@@ -29,12 +29,13 @@ Run them in this order. Exit 0 is the only pass.
 
 Exploring one step at a time, when the path is not known yet:
 
-- `nuka do <name> --args <json> [--use <step record id>] [--session <name>] [--env <name>]`: one typed step under its contract; the step record goes to stdout with its id. `--use` fills the step's `from` keys from an earlier record and repeats; `--args` may be left out only when `--use` supplies every key.
+- `nuka do <name> --args <json> [--use <step record id>] [--session <name>] [--env <name>]`: one typed step under its contract; the step record goes to stdout with its id. `--use` fills the step's `from` keys from an earlier record and repeats; `--args` may be left out only when `--use` supplies every key. Each call builds a fresh browser; `--session` carries only login state.
+- A browser app whose state cannot be repeated (an account that opens once, an order that must not be placed twice) is explored through the host's Playwright MCP server, not `nuka do`. It is connected when its `browser_*` tools are listed; a Claude Code host adds it with `claude mcp add playwright npx @playwright/mcp@latest`. Then write what was found as a scenario and run `nuka check` on it.
 
 ## Other commands
 
-- `nuka session list [--json]`, `nuka session clear [name] [--env <name>]`, `nuka session start <name> [--env <name>] [--idle-timeout <seconds>]`, `nuka session stop <name> [--env <name>]`: a session carries login state across `nuka do --session` and `nuka run --session` calls. `start` holds one `ctx` open in a detached process until `stop`, or until it has been idle for `--idle-timeout` seconds (default 900).
-- `nuka clean [--dry-run] [--records] [--cache] [--export] [--json]`: delete accumulated records, cache, and exports under the state directory. It refuses while a session is live.
+- `nuka session list [--json]`, `nuka session clear [name] [--env <name>]`: a session carries login state across `nuka do --session` and `nuka run --session` calls.
+- `nuka clean [--dry-run] [--records] [--cache] [--export] [--json]`: delete accumulated records, cache, and exports under the state directory.
 - `nuka skill path`: the skills directory, one absolute path.
 - Experimental, may change shape or disappear without notice: `nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]` runs a model or relation file against request-only steps. On a failure, the shortest scenario found and the command that reruns it go to stdout. The seed is printed when omitted; pass it back to replay.
 

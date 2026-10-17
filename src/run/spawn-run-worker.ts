@@ -5,9 +5,8 @@ import type { Readable } from "node:stream";
 import { loaderUrl } from "../config/ts-loader.js";
 
 // Responsibility: turns "run run-worker-entry.ts against this argument
-// list" into an actual child process the parent keeps (never unref'd,
-// unlike src/live/spawn-daemon.ts's own session daemon: `nuka run
-// --concurrency <n>` waits for every worker to finish before it can print
+// list" into an actual child process the parent keeps (never unref'd:
+// `nuka run --concurrency <n>` waits for every worker to finish before it can print
 // its own summary and exit, so the parent must keep each worker as a real
 // child it can await, not one it hands off and forgets).
 //
@@ -36,11 +35,10 @@ import { loaderUrl } from "../config/ts-loader.js";
 export interface SpawnRunWorkerOptions {
   readonly rootDir: string;
   readonly runId: string;
-  /** `--env`'s raw value, or `null` when it was omitted — the same
-   * unresolved-name contract src/live/spawn-daemon.ts's own `env` field
-   * already uses, so run-worker-entry.ts applies the exact same
-   * `resolveEnvironment` call `nuka run` itself does rather than trusting a
-   * name this module resolved on the parent's behalf. */
+  /** `--env`'s raw value, or `null` when it was omitted, so
+   * run-worker-entry.ts applies the exact same `resolveEnvironment` call
+   * `nuka run` itself does rather than trusting a name this module resolved
+   * on the parent's behalf. */
   readonly env: string | null;
   readonly quiet: boolean;
   /** Absolute path to a temp file, one repo-relative `.feature` path per

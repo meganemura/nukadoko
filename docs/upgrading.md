@@ -178,6 +178,26 @@ This part does not change release to release.
   run `nuka check`, which reads every line back against the vocabulary.
   The acceptance skill's "Where to start" route for an exploration says
   the same.
+- **Live sessions are removed: `nuka session start`, `nuka session stop`,
+  and `--idle-timeout`.** `nuka session start` and `nuka session stop`
+  exit 2 and name this note. `nuka do <step> --session <name>` still
+  carries login state across calls as a saved storageState file, and
+  `nuka session list` and `nuka session clear` still list and delete
+  those files. What a live session was for, exploring a browser app whose
+  state cannot be repeated, now goes through the agent host's Playwright
+  MCP server: a Claude Code host adds it with
+  `claude mcp add playwright npx @playwright/mcp@latest`, and the
+  acceptance skill says how to tell whether it is connected and how to
+  turn what it found into a scenario. Its `--isolated
+  --storage-state=<file>` options start it from a session that
+  `nuka do --session` saved. With live sessions gone, a step record no
+  longer carries `session_execution`, `nuka do --session` no longer
+  prints a line saying the session is not live, and `nuka run` no longer
+  reports a live session or skips retention for one. `nuka clean` no
+  longer refuses while a session lock is held. A script that started a
+  session, drove it with `nuka do --session`, and stopped it gets the
+  same login state from `nuka do --session` alone; state beyond login
+  does not carry across calls.
 - **`recordStep` is no longer exported, and neither are
   `RecordStepOptions`, `StepExecution`, or
   `UnsupportedExternalFixtureError`.** A Playwright Test spec that imports

@@ -1,9 +1,8 @@
 import { existsSync } from "node:fs";
 import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { removeLiveSockDir } from "./live-sock.js";
 import { SessionLockConflictError, SessionNotFoundError } from "./errors.js";
-import { liveLockOwner, readLockInfo } from "./lock.js";
+import { liveLockOwner } from "./lock.js";
 import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "./paths.js";
 
 // Responsibility: `nuka session list`/`clear`'s actual work — enumerate and
@@ -15,29 +14,20 @@ import { sessionFilePath, sessionLockPath, sessionsDir, sessionsRootDir } from "
 // all-environments clear, on purpose (accidental-deletion risk with no real
 // use case).
 //
-// A session's existence used to be defined by its .json file alone; a live
-// session (docs/spec.md "Live sessions") widens that, since a session that
-// has never been stopped has no .json yet — its storageState is only
-// written at `stop` — but is very much a session `list` should report,
-// alive, the moment `start` returns. `listSessions` below therefore reports
-// the union of every name with a .json *or* a live lock, and reaps a lock
-// (and its socket) whose own pid is dead exactly the way it always reaped
-// nothing at all for that case: a dead lock with no .json was debris before
-// this feature existed and still is, never itself a "session" worth
-// reporting — only a *live* lock earns a listing when there is no .json
-// behind it yet.
+// A session is reported when it has a .json or a live lock: a first
+// `nuka do --session <name>` still in flight holds the lock before its
+// storageState is written. A lock whose own pid is dead is debris and is
+// reaped, never itself reported.
 
 export interface SessionInfo {
   environment: string;
   name: string;
   /** ISO 8601 — the session file's own mtime when one exists, or the live
-   * lock's own `started_at` for a session that has never been stopped
-   * (hence has no .json yet). */
+   * lock's own `started_at` for a first execution still in flight (hence
+   * no .json yet). */
   updated_at: string;
-  /** Whether this name's own lock is currently held by a live process
-   * (docs/spec.md "Live sessions") — `false` for an ordinary, not-live
-   * session (every session before this feature existed, and any session
-   * between `stop`s), never an error condition on its own. */
+  /** Whether this name's own lock is currently held by a live process, a
+   * `nuka do --session` still running. */
   alive: boolean;
 }
 
@@ -61,7 +51,7 @@ async function entryNames(dir: string, suffix: string): Promise<string[]> {
  * filter here — `session list` always reports everything, unlike `clear`).
  * No sessions directory yet is a valid, if unhelpful, answer: an empty list,
  * not an error. Also reaps: any name whose lock's own pid is no longer
- * alive has its lock and socket removed before this returns (its .json, if
+ * alive has its lock removed before this returns (its .json, if
  * any, is left untouched — that is saved state, not debris).
  */
 export async function listSessions(rootDir: string, stateDir: string): Promise<SessionInfo[]> {
@@ -91,17 +81,7 @@ export async function listSessions(rootDir: string, stateDir: string): Promise<S
       const hasJson = jsonNames.includes(name);
 
       if (owner === null && lockNames.includes(name)) {
-        // A dead pid's lock is stale by definition (lock.ts's own header) —
-        // its socket (if any) is exactly as stale, since nothing is
-        // listening behind it any more. The socket's own path only ever
-        // lived in this lock file's own `sock` field (it moved out of
-        // `stateDir` entirely, so nothing else can derive it) — read here,
-        // before the lock itself is removed, or it is lost for good.
-        const staleInfo = await readLockInfo(lockPath);
         await rm(lockPath, { force: true });
-        if (staleInfo?.sock !== undefined) {
-          await removeLiveSockDir(staleInfo.sock);
-        }
       }
 
       let updatedAt: string;

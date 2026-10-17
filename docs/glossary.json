@@ -261,7 +261,7 @@
     {
       "en": ["idle timeout"],
       "ja": "アイドルタイムアウト",
-      "note": "live session が実行のないまま待つ秒数。フラグ名 `--idle-timeout` はコードスパンで英語のまま。地の文の仕組みの名は アイドルタイムアウト。docs/spec.ja.md の Live sessions 節がすでにこう書いていた"
+      "note": "削除された live session が実行のないまま待った秒数。フラグ名 `--idle-timeout` はコードスパンで英語のまま。地の文の仕組みの名は アイドルタイムアウト"
     },
     {
       "en": ["concurrency"],
@@ -316,7 +316,11 @@
     },
     {
       "term": "live session",
-      "why": "`nuka session start` が保つ、生きたプロセスとしての session。session が keep_english なのは `--session` / `nuka session` と直に対応するからで、live session はその上に立つ新しいドメイン語なので分解して live だけ訳すと対応が切れる。初出は太字で定義する(`**Session**` の先例と同じ)。見出しは `Live sessions(たどり着いた場所からの探索)` の形(`Compat steps(移行の扉)` と同じ)"
+      "why": "削除された `nuka session start` が保っていた、生きたプロセスとしての session。いまは docs/upgrading と CHANGELOG の履歴にだけ出る。session が keep_english なのは `--session` / `nuka session` と直に対応するからで、分解して live だけ訳すと対応が切れる"
+    },
+    {
+      "term": "Playwright MCP server",
+      "why": "acceptance skill が、繰り返せない状態の探索に使わせるホスト側の MCP サーバ。製品名 Playwright と MCP はそのまま残し、server だけを terms の サーバ に訳して Playwright MCP サーバ と書く"
     },
     {
       "term": "lock file",

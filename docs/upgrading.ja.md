@@ -150,6 +150,20 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   step の `from` がそれを供給するからです。
   そのあと `nuka check` を実行すると、すべての行が語彙に照らして読み戻されます。
   acceptance skill の「Where to start」で探索から始める道筋も同じことを述べています。
+- **live session は削除されました: `nuka session start`、`nuka session stop`、`--idle-timeout` です。**
+  `nuka session start` と `nuka session stop` は終了コード 2 で終わり、この注記を名指しします。
+  `nuka do <step> --session <name>` は、保存された storageState ファイルとして、今までどおり呼び出しをまたいでログイン状態を持ち運びます。
+  `nuka session list` と `nuka session clear` も、今までどおりそのファイルを一覧し、削除します。
+  live session の目的だった、状態を繰り返せないブラウザのアプリの探索は、agent のホストの Playwright MCP サーバを通すようになりました。
+  Claude Code のホストは `claude mcp add playwright npx @playwright/mcp@latest` で追加します。
+  そのサーバがつながっているかどうかの見分け方と、見つけたことを scenario にする方法は、acceptance skill が述べています。
+  サーバの `--isolated --storage-state=<file>` オプションを使うと、`nuka do --session` が保存した session から始められます。
+  live session がなくなったので、step record は `session_execution` を持たなくなりました。
+  `nuka do --session` は、session が live でないと告げる行を出さなくなりました。
+  `nuka run` は live session を報告せず、そのために retention を飛ばすこともなくなりました。
+  `nuka clean` は、session の lock file が保持されている間も拒否しなくなりました。
+  session を起動し、`nuka do --session` で動かし、停止していたスクリプトは、`nuka do --session` だけで同じログイン状態を得ます。
+  ログイン以外の状態は呼び出しをまたいで持ち越されません。
 - **`recordStep`、`RecordStepOptions`、`StepExecution`、`UnsupportedExternalFixtureError` は export されなくなりました。**
   `recordStep` を import している Playwright Test の spec はコンパイルに失敗します。
   step の `run` が呼んでいる共有関数を spec から直接呼び、`nukadoko` の import を削除してください。

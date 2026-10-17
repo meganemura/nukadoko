@@ -3,11 +3,9 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
-import { DEFAULT_ENVIRONMENT_NAME } from "../environment/resolve-environment.js";
 import { isMessagesRunOutputFileName } from "../record/messages-output.js";
-import { liveLockOwner } from "../session/lock.js";
 import { sessionsDir, sessionsRootDir } from "../session/paths.js";
-import { RefusalError, helpFor, refuse } from "./refusal.js";
+import { helpFor, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka clean`'s actual work — delete the disposable half
@@ -37,16 +35,6 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // leaves its own run-id-suffixed file beside it, which a project
 // accumulates one of per `nuka run` invocation, so `buildExportPlan` below
 // enumerates and removes those too, not only the stable path itself.
-//
-// A live session is refused before anything is deleted, for every
-// category, not only cache: src/live/daemon.ts is a long-running process
-// that writes step records the same way `nuka do`/`nuka run` do, and a
-// `nuka run --session <name>` against a live session emits Allure/messages
-// output too, so `records/` and `export/` are active write targets for as
-// long as that process runs, not cold storage — the same reason `nuka
-// session clear` already refuses on a live lock (src/session/manage.ts),
-// generalized here to every environment and every category at once rather
-// than one environment's cache alone.
 //
 // `export/allure-results/` is removed and immediately recreated empty,
 // mirroring cli/init.ts's own reasoning for creating it that way in the
@@ -97,54 +85,6 @@ interface CleanPlan {
   export: string[];
 }
 
-interface LiveSessionRef {
-  environment: string;
-  name: string;
-  pid: number;
-}
-
-/** The first live session found, across every environment under
- * `cache/sessions/`, or `null` if none is live. Scans every environment's
- * lock files in sorted order and returns on the first live one — the same
- * "first conflict wins, no need to enumerate every one" precedent
- * `clearAllSessions` (src/session/manage.ts) already sets for one
- * environment's own lock files, widened here to every environment because
- * a clean this coarse has no single environment to scope itself to. */
-async function findLiveSession(rootDir: string, stateDir: string): Promise<LiveSessionRef | null> {
-  const root = sessionsRootDir(rootDir, stateDir);
-  let envEntries;
-  try {
-    envEntries = await readdir(root, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-  const environments = envEntries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b));
-
-  for (const environment of environments) {
-    const dir = sessionsDir(rootDir, stateDir, environment);
-    let entries;
-    try {
-      entries = await readdir(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    const lockNames = entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".lock"))
-      .map((entry) => entry.name)
-      .sort((a, b) => a.localeCompare(b));
-    for (const lockName of lockNames) {
-      const owner = await liveLockOwner(path.join(dir, lockName));
-      if (owner) {
-        return { environment, name: lockName.slice(0, -".lock".length), pid: owner.pid };
-      }
-    }
-  }
-  return null;
-}
-
 /** Every step/scenario record id directory under `records/steps/` and
  * `records/scenarios/`, and every run's own directory under
  * `records/runs/` (its exports manifest, src/record/run-exports.ts),
@@ -176,10 +116,7 @@ async function buildRecordsPlan(rootDir: string, stateDir: string): Promise<stri
 }
 
 /** Every file under every environment's `cache/sessions/<env>/` directory,
- * rootDir-relative. Callable only after `findLiveSession` has already
- * confirmed nothing here is live — this function does not itself check
- * liveness, so calling it first would risk deleting a live session's own
- * `.lock`/`.sock` out from under its process. */
+ * rootDir-relative. */
 async function buildCachePlan(rootDir: string, stateDir: string): Promise<string[]> {
   const root = sessionsRootDir(rootDir, stateDir);
   let envEntries;
@@ -359,25 +296,6 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   const selection = anySelected
     ? { records, cache, export: exportArtifacts }
     : { records: true, cache: true, export: true };
-
-  // Checked before anything is deleted, and before either plan is even
-  // built, regardless of which categories were selected — this file's own
-  // header explains why a live session gates every category, not only
-  // cache.
-  const live = await findLiveSession(rootDir, config.stateDir);
-  if (live) {
-    const envFlag = live.environment === DEFAULT_ENVIRONMENT_NAME ? "" : ` --env ${live.environment}`;
-    const stop = `nuka session stop ${live.name}${envFlag}`;
-    return refuse(
-      sinks,
-      new RefusalError(
-        `nuka clean: refusing, session "${live.name}" (environment "${live.environment}") is live (pid ${live.pid}); ` +
-          `stop it first with \`${stop}\``,
-        stop,
-      ),
-      helpFor("clean"),
-    );
-  }
 
   const plan: CleanPlan = { records: [], cache: [], export: [] };
   let exportPlan: ExportPlan | null = null;

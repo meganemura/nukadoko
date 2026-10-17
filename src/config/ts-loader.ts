@@ -8,8 +8,8 @@ import { registerHooks } from "node:module";
 // `node --import` can preload it from `src/` as well as from `dist/`.
 //
 // Why a graph per load: Node keeps one module per URL for the life of the
-// process. A second discovery run in the same process (a test file, a live
-// session, the MCP server, a config edited under a running process) would
+// process. A second discovery run in the same process (a test file, the
+// MCP server, a config edited under a running process) would
 // get the first run's step modules back, with their top-level code already
 // run, so a compat `Given` would never register again. A load names a
 // namespace in the entry URL's query, and the hook copies that query onto

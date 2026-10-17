@@ -4,8 +4,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // (the parent, spawned by `nuka run --concurrency <n>`) and src/run/
 // run-worker-entry.ts (one worker's own process entry point). Never part of
 // nukadoko's own CLI surface — a user never invokes the worker entry
-// directly, the same "private, positional argv" status src/live/
-// daemon-entry.ts already has for `nuka session start`'s own child.
+// directly: its argv is private and positional.
 //
 // A worker cannot hand the parent its bindings, its fixture graph, or
 // anything else that closes over a function: none of that crosses a process

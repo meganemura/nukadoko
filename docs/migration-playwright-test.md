@@ -144,7 +144,7 @@ Both of nukadoko's own paths open at once, which is the point of entering
 here rather than rewriting. `nuka run` fixes a path in a feature file,
 and `nuka do` runs any of those steps alone, so the same operations an
 existing suite already trusts become the vocabulary an agent explores
-with (see docs/spec.md "Single steps" and "Live sessions").
+with (see docs/spec.md "Single steps").
 
 Both trees can sit in one repository, and either arrangement works. Side
 by side is the obvious one. The other is worth naming because it is the

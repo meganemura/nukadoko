@@ -11,9 +11,9 @@ import { classifyCaughtError, runWithTimeout } from "./run-scenario.js";
 
 // Responsibility: one typed step, run once in a ctx the caller already
 // holds. Validate the args, open the fixture bag, call `run` under the
-// step's deadline, and validate what it returned. `nuka do`, a live
-// session, and `nuka experimental explore` all run a step through this function, so the
-// three cannot disagree about what "the step passed" means. What happens
+// step's deadline, and validate what it returned. `nuka do` and
+// `nuka experimental explore` both run a step through this function, so the
+// two cannot disagree about what "the step passed" means. What happens
 // around it (setup refusals, records, evidence, teardown) stays with each
 // caller, because those differ.
 

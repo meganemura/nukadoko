@@ -448,8 +448,7 @@ export const configSchema = z
      * `runs`: the newest N `nuka run` invocations keep every record and
      * export file they wrote; at the end of each `nuka run`, an older run's
      * are removed. `adHocDays`: a record no run owns (`nuka do`,
-     * a live session's own `do`, a run that stopped before writing a
-     * scenario record) is removed once it is older than this many days,
+     * or a run that stopped before writing a scenario record) is removed once it is older than this many days,
      * since `nuka do --use` reads those across days by design. Neither has an "off" value: a project that
      * wants more history raises the number, and the measurement that
      * motivated the defaults (one heavy suite reached 19 GB in four days

@@ -132,7 +132,7 @@ export function redactString(input: string, secrets: SecretSet): string {
   return applyReplacements(input, buildReplacements(secrets));
 }
 
-/** The stderr warning `nuka do`, `nuka run`, and a live session share for a
+/** The stderr warning `nuka do` and `nuka run` share for a
  * fixture teardown that failed. The message is the fixture's own text, so it
  * is redacted here, once. No trailing newline: the caller frames the line. */
 export function fixtureTeardownWarning(fixture: string, message: string, secrets: SecretSet): string {

@@ -164,8 +164,7 @@ questions: "what happens if this is deleted" and "who gets to change it":
   The defaults are a judgment: the heaviest suite measured so far costs
   about 50 MB per run, so 20 runs is about 1 GB, and fewer would lose the
   failure a person was chasing an hour ago on a suite that runs every few
-  minutes. Retention is skipped, and says so, while a live session is up,
-  since that process writes records for as long as it runs. An export file
+  minutes. An export file
   is removed only through a run's own manifest, never by age: a results
   directory can be shared with another tool's Allure output, and a file
   nukadoko did not write is not nukadoko's to remove.
@@ -173,9 +172,7 @@ questions: "what happens if this is deleted" and "who gets to change it":
   whole-category operation that remains. With no category flag, it cleans
   all three categories. One category flag limits the operation to that
   category. `--dry-run` prints the same plan that the real run would use,
-  but removes nothing. If any session is live anywhere, the command
-  refuses the complete operation for every category, for the same reason
-  that `nuka session clear` refuses a live lock. An `allure.resultsDir` or
+  but removes nothing. An `allure.resultsDir` or
   `messages.output` that resolves to the project root, to a path outside the
   project, or to a parent of the state directory is refused before anything
   is removed. `--dry-run` refuses those paths too. `clean` still removes a
@@ -260,7 +257,7 @@ Node floor is the first release that does that without a flag (22.18 on the
   `"type": "module"` to.
 
 Each discovery run loads its files in a module graph of its own, so a
-process that discovers twice (a live session, the MCP server, a test) runs
+process that discovers twice (the MCP server, a test) runs
 every file's top-level code again, and two runs never share a module.
 
 A wide `featuresDir`, such as a repository root, widens the same walk. A build
@@ -387,7 +384,7 @@ export default defineStep({
   schema through `z.toJSONSchema`. A plain `z.object(...)` comes out as
   `additionalProperties: false`, and every path that turns a step's `args`
   into a validated value parses against that same closed shape (`nuka do`,
-  `nuka do --session <live>`, `nuka run`, and the `call`
+  `nuka run`, and the `call`
   fixture a part is invoked through, see "Parts"): an undeclared key is
   refused, not silently dropped. `nuka describe` renders that strict args
   schema as the input a caller must supply, so `required` names only keys
@@ -651,7 +648,7 @@ The fixture names:
   its top, a file lands in it under its own name. A relative `source`
   resolves against the project root. Every directory is removed when the
   scenario ends, whether it passed or failed (for `nuka do`, when the
-  execution ends; in a live session, when the session ends). The step
+  execution ends). The step
   record lists each one in `evidence.scratch` (see "Records"). Cleanup is
   the executor's job because only the executor knows when a scenario has
   ended; a step that removed its own directory would put cleanup into the
@@ -1792,7 +1789,7 @@ direction stays unchanged.
 This migration opens both nukadoko paths. `nuka run` fixes a path in a
 feature file, and `nuka do` runs each step alone. Operations that the
 existing suite already trusts become the vocabulary that an agent uses for
-exploration (see "Single steps" and "Live sessions").
+exploration (see "Single steps").
 
 Both trees can exist in one repository. A team can put them side by side.
 Alternatively, it can put `featuresDir` *inside* the directory that already
@@ -2276,7 +2273,7 @@ whose own setup is a no-op the second time it runs, and the fix is in the
 feature rather than in the engine: establish the state once, in the step
 whose name says it does, instead of once per step.
 
-### Live sessions (exploring from where you got to)
+### State that cannot be repeated
 
 Everything above starts from nothing. `nuka do` gives each execution its
 own browser and its own everything else, which is what makes one call
@@ -2285,114 +2282,28 @@ thing you want to try has nineteen things in front of it. For reads that
 is only slow. For work that cannot be repeated, an account that opens
 once or an invoice that would be issued twice, it is not possible at all.
 
-A **live session** is one `ctx` held open by a process, so executions can
-land on it one after another instead of each building a world from
-scratch.
+nukadoko does not hold a world open for that. An agent's host can already
+run a Playwright MCP server, which keeps one browser open across calls and
+lets the agent act on whatever page the last call left. The acceptance
+skill sends an agent there for a browser app whose state cannot be
+repeated, and says how to tell whether that server is connected. A
+process of nukadoko's own doing the same thing would add a second browser
+to manage, a socket holding live credentials, and an idle timeout, and
+buy nothing the host's server does not already do.
 
-```sh
-nuka session start alice
-nuka do open-cart --session alice
-nuka do add-item --session alice --args '{"sku":"S-1"}'
-nuka session stop alice
-```
+Nothing that server does is evidence. It writes no step record and no
+scenario record, and the run summary a reviewer reads is built from
+scenario records (see "Review"), so the path from an exploration to that
+summary runs through a feature someone wrote and a real `nuka run`, or it
+does not exist. A world thirty calls deep is not reproducible, by anyone,
+which is why what comes out of an exploration is a scenario written from
+it, checked with `nuka check`, and run again from nothing.
 
-What persists is the whole context, not the browser. Persisting only the
-browser would leave a world that is half old: a user fixture rebuilt for
-this execution sitting next to a page five executions deep, with nothing
-saying which parts are which. Holding the entire fixture bag open removes
-the question, because nothing is rebuilt underneath anything.
-
-That is not a new lifetime. A scenario already builds one `ctx`, runs
-several steps against it, and tears it down; a live session is the same
-lifetime with the list of steps arriving one at a time instead of from a
-feature file. The two fixture scopes need no third value: `scenario`
-scope lasts the session, and `process` scope lasts the session's process
-(see "Fixtures").
-
-**The lock file is the rendezvous, and it already exists.** A session's
-`cache/sessions/<env>/<name>.lock` holds `{ pid, started_at }` and is
-checked against `process.kill(pid, 0)` today, with a dead pid's lock
-already defined as stale and free to take over. `nuka do --session alice`
-finds a live pid there and hands its execution to that process; finds
-none and behaves exactly as it does now. Nothing new has to be
-discovered, and the rule that a dead owner's claim is worth nothing is
-already the one in force.
-
-Stopping a session writes its storageState to the same
-`cache/sessions/<env>/<name>.json` a session has always left behind. So a
-session has two lifetimes rather than two meanings: it is a process while
-it lives, and the state it saved once it does not.
-
-`nuka session stop <name>` exits 0 when no live process holds that name.
-When the name also has no session file and no lock, stderr names both,
-`no session "<name>" in environment "<environment>"`. A typo must not look
-like the session stopped, because the real process keeps its browser until
-the idle timeout. A stale lock is still removed, and that cleanup stays
-quiet. When a live session is stopped, a fixture whose teardown fails is
-reported on stderr, one `Warning: fixture "<name>" teardown failed: <message>`
-line each, with the message redacted. The exit code stays 0, as it does for
-`nuka do` and `nuka run`. A live session whose environment `version` probe
-failed repeats the `nuka do` warning on every `nuka do --session` that it
-serves. `nuka session clear --env <name>` refuses an environment the config
-does not define when no session file or lock is left under it, with the
-same message the other commands already use for an unknown environment.
+`nuka session clear --env <name>` refuses an environment the config does
+not define when no session file or lock is left under it, with the same
+message the other commands already use for an unknown environment.
 Session files left under an environment that has been removed from the
 config are still cleared, and stderr names that environment.
-
-**A record from a live session must not read like a record from a clean
-one.** A step that passed as the thirtieth execution against a world
-nobody else can rebuild has proved something different from the same step
-passing on its own, and a green record that cannot be told apart from the
-other kind is the one way this feature could quietly damage every record
-around it. `session` is already on a step record; what a live session adds
-is that it was live and where in the sequence this execution fell.
-
-One execution at a time per session. The lock already means "someone owns
-this right now", so a second `do` against a busy session is refused rather
-than queued: an exploration is driven by something deciding the next call
-from the last result, and two callers deciding at once is not that.
-
-Nothing here can become evidence, and no new fence is needed to keep it
-that way. A live session produces step records and no scenario record, and
-the run summary a reviewer reads is built from scenario records (see
-"Review"), so the path from an exploration to that summary runs through
-a feature someone wrote and a real `nuka run`, or it does not exist.
-
-`nuka run` reports a live session when it finds one,
-naming it and how to stop it, and refuse nothing on its account. The fact
-worth surfacing is that the application may be holding state an
-exploration put there, which is exactly the kind of thing that makes a
-scenario pass for a reason nobody wrote down. Whether that session has
-anything to do with the feature being run is not knowable from here,
-so this is reported as a fact and never as a verdict.
-
-The socket a live session listens on holds the same live credentials the
-storageState file does, and is created with the same restricted
-permissions for the same reason (see "The state directory"). It is not
-kept beside that file, though. Every platform caps how long a unix socket
-path may be, a project's own path can be arbitrarily deep (a worktree, a
-package inside a monorepo, a nested checkout), and a cap that a project's
-location can push past is one no amount of shortening a session's name
-gets back under. The socket lives in a private directory of its own under
-the operating system's temp directory instead, so its length does not
-depend on where the project sits, and the session's lock file names the
-path once it exists. An idle
-timeout applies by default, because a forgotten session is the normal
-outcome of an interrupted exploration rather than an unusual one, and
-`nuka session list` reaps the ones whose pid is gone.
-
-`nuka session start --idle-timeout <seconds>` sets that window. The
-default is 900. The value has to be a finite number of seconds greater
-than 0 and at most 2147483. Anything else is refused before a session
-starts. 2147483 is the largest whole number of seconds Node's timer can
-wait. A non-finite value, zero, a negative, or a larger whole number of
-seconds is clamped to 1 millisecond, so the session would stop itself
-the moment it began listening.
-
-The honest limit is the point of the feature rather than a flaw in it: a
-world thirty executions deep is not reproducible, by anyone, including
-the process holding it. That is why what comes out of an exploration is a
-scenario written from it and run again from nothing, not the run itself.
 
 ## Records
 
@@ -2464,17 +2375,6 @@ array identifies each step record by id, so either record leads to the other.
   which run one step record came from meant opening the scenario record
   beside it first; a step record answers that on its own now, the same way
   it already answers everything else about what this one execution did.
-- `session_execution` (a number, included only when this execution ran
-  against a live session's `ctx`, see "Live sessions") is this execution's
-  1-based position in that session's sequence: `1` for the first `nuka do`
-  the session served, `30` for the thirtieth. `session` alone names a
-  session and cannot say whether the world was built for this execution or
-  was already thirty executions deep; this field is what keeps a record from
-  a live session from reading like one from a clean start. A `nuka do`
-  without a live session and every `nuka run` step record omit it. A `do`
-  the session refused (an unknown step, a `--use` that does not resolve, a
-  mutating step on a read-only environment) writes no step record and takes no number. `nuka do` also
-  names the number on stderr when the step returns.
 - `error.kind` uses a closed set and sits beside the message a person reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
   `timeout`, `unsupported`, `step_error`. Closed because a report has to
@@ -2891,8 +2791,7 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   Nukadoko stores each session by environment and uses an advisory lock to
   limit it to one run at a time. Without `--session`, each run starts clean
   and has no implicit shared state. A saved session is a storageState file and
-  needs no daemon. `nuka session start` is the exception: it starts a detached
-  process that holds one context open (see "Live sessions").
+  needs no daemon.
 - **Environments** name deployment targets. Each environment can define a
   `baseURL`, `envFiles`, `policy: "read-only"`, and an optional `version` probe.
   The read-only policy refuses mutating steps. Each step record stores the
@@ -3200,10 +3099,8 @@ of every run (see "Artifacts").
 across all three directories at once. With no category flag, it deletes every
 category. One category flag limits deletion to that category. It is also the
 operation for an `allure-results/` directory written before runs kept a
-manifest of their files, which retention never touches. The command refuses
-all categories while any `nuka session` is live. That session process can
-still write to `records/` and `export/` (see "Artifacts" for the full reason).
-It also refuses, before removing anything, when `allure.resultsDir` or
+manifest of their files, which retention never touches.
+It refuses, before removing anything, when `allure.resultsDir` or
 `messages.output` resolves to the project root, to a path outside the
 project, or to a parent of the state directory. `--dry-run` refuses those
 paths too. A results directory inside the project is still removed, unless
@@ -3955,7 +3852,7 @@ process scope gets `"failed"` when any sequence did. SIGINT, SIGTERM, or
 SIGHUP tears down the open sequence's fixtures and then the process-scope ones
 before the process exits, as for `nuka do`. The target itself is not reset, and a
 model whose initial state assumes an empty target needs that fixture. A
-step runs through the same function `nuka do` and a live session use: the
+step runs through the same function `nuka do` uses: the
 args are validated, the fixture bag is opened, `run` is called under the
 step's deadline, and the result is validated. No step record is written. A
 run tries many sequences and most of them pass. The record of a failure is
@@ -4071,9 +3968,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--session <name>
                               <path> writes one more copy there
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
                               execute one typed step; step record to stdout.
-                              --env and --session as on nuka run; against a
-                              live session the step runs in that session's
-                              own ctx.
+                              --env and --session as on nuka run.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
                               delivered on stderr.
@@ -4252,9 +4147,8 @@ nuka clean [--records] [--cache] [--export] [--dry-run] [--json]
                               the state directory; no category flag cleans
                               all three, one flag narrows to it; --dry-run
                               prints the same plan the real run would act on
-                              without removing anything; refuses outright,
-                              every category, while any session anywhere is
-                              live; refuses, before removing anything, an
+                              without removing anything; refuses, before
+                              removing anything, an
                               allure.resultsDir or messages.output that
                               resolves to the project root, outside the
                               project, or to a parent of the state
@@ -4297,15 +4191,6 @@ nuka session list [--json]    list every session, across all environments;
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given
-nuka session start <name> [--env <name>] [--idle-timeout <seconds>]
-                              start a live session: a detached process holding
-                              one ctx open across nuka do --session calls. It
-                              stops itself after --idle-timeout seconds with
-                              no execution (default 900; a finite number
-                              greater than 0 and at most 2147483)
-nuka session stop <name> [--env <name>]
-                              persist the session's storageState, then end
-                              its process
 nuka init [--base-url <url>] [--features-dir <dir>] [--allure] [--env-files]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, <featuresDir>/steps/,
@@ -4382,7 +4267,7 @@ one line, `{ "schema_version": 1, "error": "<message>", "do":
 way. Without `--json`, stderr carries the message and then one line,
 `do: <command>`. `do` names the next command when one is known: `nuka
 steps` for an unknown step, the install line for a missing peer
-dependency, `nuka session stop <name>` for a live session in the way,
+dependency, `nuka do --help` for a removed live-session subcommand,
 `nuka check <file>` for a `:line` that `check` does not take. Otherwise it
 is the command's own `--help`. A finding, a failed scenario, or a failed
 step is a report, not a refusal, and keeps its own output.
@@ -4396,8 +4281,8 @@ reading either stream.
 
 | Exit | Meaning | Examples |
 | --- | --- | --- |
-| 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run`, `nuka session stop` of a session that is already gone |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, `import_failures` on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported, a failed `nuka experimental explore` run, a session that did not start or stop, a session file that could not be removed |
+| 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run`, `nuka session clear` of a session that is not held |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, `import_failures` on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported, a failed `nuka experimental explore` run, a session file that could not be removed |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
@@ -4558,11 +4443,12 @@ would be running against glue it never actually read.
   sequence already knew its steps, and the draft left blank the claims a
   scenario exists to state. A path found by exploring still becomes a path
   fixed in a sentence, written by whoever explored it.
-- **M11 (live sessions)**: `nuka session start`/`stop`, one `ctx` held
-  open in a process so `nuka do` can land on a world that is already
-  partway through (see "Live sessions"). Everything before this started
-  from nothing, which is merely slow for reads but impossible for work
-  that cannot be repeated.
+- **M11 (live sessions)**: `start` and `stop` under `nuka session`, one `ctx` held
+  open in a process so `nuka do` could land on a world already partway
+  through. It was removed later: a Playwright MCP server the agent's host
+  already runs keeps a browser open across calls the same way, with no
+  process, socket, or idle timeout of nukadoko's own (see "State that
+  cannot be repeated").
 - **M12 (concurrency)**: `nuka run --concurrency <n>`, worker processes
   each holding whole feature files, `@nukadoko:serial` for a file that has to run
   alone, and the parent that keeps the run's identity while they work (see

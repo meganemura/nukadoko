@@ -12,24 +12,21 @@ import {
   commandTookTheName,
   DEFAULT_EXPLORE_LENGTH,
   DEFAULT_EXPLORE_RUNS,
-  MAX_IDLE_TIMEOUT_SECONDS,
   VALID_STEP_NAME,
 } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { RefusalError, commandPathOf, helpFor, refuse } from "./refusal.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
-// `session list`/`clear`/`start`/`stop`, `init`, `scaffold`, `check`,
+// `session list`/`clear`, `init`, `scaffold`, `check`,
 // `clean`, `tend`, `skill path`, `experimental explore`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
 // That is `cli.ts`'s job, so this function stays callable directly from
 // tests. `do`'s own setup/execution split and step record writing lives in
-// cli/do.ts, including deciding whether `--session` reaches a live
-// session's own process (src/live/daemon.ts) or builds a fresh `ctx` the
-// way it always has; `run`'s own execution lives in cli/run.ts;
-// `session`'s own list/clear/start/stop logic lives in
+// cli/do.ts; `run`'s own execution lives in cli/run.ts;
+// `session`'s own list/clear logic lives in
 // cli/session.ts; `init`/`scaffold`'s own generation logic lives in
 // cli/init.ts and
 // cli/scaffold.ts; `check`'s own analysis lives in cli/check.ts (thin
@@ -136,20 +133,6 @@ interface SessionListArgs {
 
 interface SessionClearArgs {
   name?: string;
-  env?: string;
-}
-
-interface SessionStartArgs {
-  name: string;
-  env?: string;
-  /** yargs' `type: "number"` accepts NaN, 0, a negative, and a value past
-   * Node's 32-bit timer limit. `idleTimeoutRefusal` (session.ts) refuses
-   * those before a session starts. */
-  idleTimeout?: number;
-}
-
-interface SessionStopArgs {
-  name: string;
   env?: string;
 }
 
@@ -717,69 +700,24 @@ export async function runCli(
     },
   };
 
-  const sessionStartCommand: CommandModule<Record<string, never>, SessionStartArgs> = {
-    command: "start <name>",
-    describe: "start a live session: a detached process holding one ctx open across `nuka do --session` calls",
-    builder: (y: Argv) =>
-      y
-        .positional("name", {
-          type: "string",
-          demandOption: true,
-          describe: "session name (as later passed to `nuka do --session`)",
-        })
-        .option("env", {
-          type: "string",
-          describe: 'target a named environment (omit for the "default" environment)',
-        })
-        .option("idle-timeout", {
-          type: "number",
-          default: 900,
-          describe:
-            "seconds of no execution before the session stops itself " +
-            `(default 900; a finite number greater than 0 and at most ${MAX_IDLE_TIMEOUT_SECONDS})`,
-        })
-        .check(rejectRepeatedFlags(["env", "idle-timeout"])) as Argv<SessionStartArgs>,
-    handler: async (args: Arguments<SessionStartArgs>) => {
+  // `session start` and `session stop` were removed with live sessions.
+  // The old spellings name what replaced them instead of yargs' bare
+  // "Unknown argument". Hidden from the help: they run nothing.
+  const removedSessionCommands: CommandModule[] = ["start", "stop"].map((verb) => ({
+    command: verb,
+    describe: false,
+    builder: (y: Argv) => y.strict(false),
+    handler: () => {
       if (argsFailed) return;
-      const { runSessionStart } = await import("./session.js");
-      exitCode = await runSessionStart({
-        rootDir,
-        name: args.name,
-        env: args.env ?? null,
-        idleTimeoutSeconds: args.idleTimeout ?? 900,
-        stdout,
-        stderr,
-      });
+      exitCode = refuse(
+        { json: argv.includes("--json"), stdout, stderr },
+        `\`nuka session ${verb}\` was removed with live sessions; \`nuka do <step> --session <name>\` still carries ` +
+          "login state across calls, and a page whose state cannot be repeated is explored through a Playwright " +
+          "MCP server (see docs/upgrading.md in the nukadoko package)",
+        "nuka do --help",
+      );
     },
-  };
-
-  const sessionStopCommand: CommandModule<Record<string, never>, SessionStopArgs> = {
-    command: "stop <name>",
-    describe: "stop a live session: persists its storageState, then ends the process",
-    builder: (y: Argv) =>
-      y
-        .positional("name", {
-          type: "string",
-          demandOption: true,
-          describe: "session name, as given to `nuka session start`",
-        })
-        .option("env", {
-          type: "string",
-          describe: 'target a named environment (omit for the "default" environment)',
-        })
-        .check(rejectRepeatedFlags(["env"])) as Argv<SessionStopArgs>,
-    handler: async (args: Arguments<SessionStopArgs>) => {
-      if (argsFailed) return;
-      const { runSessionStop } = await import("./session.js");
-      exitCode = await runSessionStop({
-        rootDir,
-        name: args.name,
-        env: args.env ?? null,
-        stdout,
-        stderr,
-      });
-    },
-  };
+  }));
 
   const initCommand: CommandModule<Record<string, never>, InitArgs> = {
     command: "init",
@@ -945,7 +883,7 @@ export async function runCli(
   const cleanCommand: CommandModule<Record<string, never>, CleanArgs> = {
     command: "clean",
     describe:
-      "delete accumulated records/cache/export under the state directory; refuses while any session is live; refuses an allure.resultsDir or messages.output that is the project root, outside the project, or a parent of the state directory",
+      "delete accumulated records/cache/export under the state directory; refuses an allure.resultsDir or messages.output that is the project root, outside the project, or a parent of the state directory",
     builder: (y: Argv) =>
       y
         .option("dry-run", {
@@ -1105,18 +1043,18 @@ export async function runCli(
 
   const sessionCommand: CommandModule = {
     command: "session",
-    describe: "list|clear|start|stop sessions",
+    describe: "list|clear sessions",
     builder: (y: Argv) =>
-      y
-        .command(namingMissingConfig(sessionListCommand))
-        .command(namingMissingConfig(sessionClearCommand))
-        .command(namingMissingConfig(sessionStartCommand))
-        .command(namingMissingConfig(sessionStopCommand))
+      removedSessionCommands
+        .reduce(
+          (sub: Argv, command) => sub.command(command),
+          y.command(namingMissingConfig(sessionListCommand)).command(namingMissingConfig(sessionClearCommand)),
+        )
         .demandCommand(1)
         .strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // one of `list`/`clear`/`start`/`stop`, so this bare handler only
+      // one of `list`/`clear`, so this bare handler only
       // exists to satisfy yargs' CommandModule shape.
     },
   };
@@ -1149,7 +1087,7 @@ export async function runCli(
       .concat(movedExploreCommand, removedHarvestCommand)
       .map((command) => [firstWord(command.command), []]),
   );
-  commandNames.set("session", [sessionListCommand, sessionClearCommand, sessionStartCommand, sessionStopCommand].map((c) => firstWord(c.command)));
+  commandNames.set("session", [sessionListCommand, sessionClearCommand, ...removedSessionCommands].map((c) => firstWord(c.command)));
   commandNames.set("experimental", [firstWord(exploreCommand.command)]);
   commandNames.set("skill", [firstWord(skillPathCommand.command)]);
 

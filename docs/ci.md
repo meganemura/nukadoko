@@ -306,7 +306,7 @@ CLI project with a freshly installed tarball of this package, and every
 `npx nuka ...` command in it (including
 `nuka run features/`, the directory form used above, not just a single
 feature file) was run against a real, freshly `npm install`ed copy of
-this package, including the live-session refusal on `nuka clean`. The
+this package. The
 pull request comment step under "What a team adds on top" was not run
 either: its `gh pr comment` flags were read from `gh`'s own help, not
 exercised against a real pull request.

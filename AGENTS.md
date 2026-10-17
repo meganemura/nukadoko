@@ -55,10 +55,11 @@ is what makes a reuse granularity smaller than a scenario line possible.
 M10 (harvesting) was built and then removed: `nuka harvest` drafted a
 feature from a named `do` sequence but left every claim blank, and the
 agent that ran the sequence can write the scenario itself, claims
-included. M11 (live sessions) is in: `nuka session
-start` holds one `ctx` open in a process so `nuka do` can land on a world
-that is already partway through, which is what makes exploring possible
-for work that cannot be repeated. M12 (concurrency) is in: `nuka run
+included. M11 (live sessions) was built and then removed: `nuka session
+start` held one `ctx` open in a process so `nuka do` could land on a world
+already partway through, and a Playwright MCP server the agent's host
+already runs does the same exploring with no process of nukadoko's own;
+the acceptance skill says how. M12 (concurrency) is in: `nuka run
 --concurrency <n>` distributes whole feature files to worker processes,
 and `@nukadoko:serial` declares a feature that has to run alone. Still
 unimplemented: the AI-assisted glue converter.

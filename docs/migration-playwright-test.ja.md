@@ -133,7 +133,7 @@ export default defineStep({
 ## 1 つのリポジトリに 2 つの木
 
 nukadoko 自身の 2 つの経路がどちらも同時に開き、それこそが書き直すのではなくここから入る意味です。
-`nuka run` は feature ファイルの中に経路を固定し、`nuka do` はそのどの step も単独で実行できるので、既存のスイートがすでに信頼している同じ操作が、agent が探索するときの語彙になります(参照: docs/spec.ja.md の「単体 step」と「Live sessions」)。
+`nuka run` は feature ファイルの中に経路を固定し、`nuka do` はそのどの step も単独で実行できるので、既存のスイートがすでに信頼している同じ操作が、agent が探索するときの語彙になります(参照: docs/spec.ja.md の「単体 step」)。
 
 2 つの木は 1 つのリポジトリに同居でき、どちらの配置でも動きます。
 並べて置くのが分かりやすい方です。

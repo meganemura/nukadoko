@@ -229,7 +229,7 @@ export function mergeTruncated(
 
 /** The optional `EvidenceMeta` fields a step boundary's snapshot fills, each
  * present only when non-empty. One function, so every executor that writes
- * a step record (`nuka run`, `nuka do`, a live session) adds
+ * a step record (`nuka run`, `nuka do`) adds
  * the same fields the same way. */
 export function evidenceMetaFields(snapshot: EvidenceSnapshot): Pick<EvidenceMeta, "attachments" | "scratch"> {
   return {

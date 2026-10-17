@@ -3,47 +3,21 @@ import path from "node:path";
 import { SessionLockConflictError } from "./errors.js";
 
 // Responsibility: the advisory lock file at cache/sessions/<env>/<name>.lock
-// — `{ pid, started_at, sock? }` JSON. "Advisory" is deliberate: this is
-// fs-only by design (no OS-level flock), so it stops nukadoko's own
-// concurrent processes from colliding, not an arbitrary process bypassing
-// it. A lock file whose pid is no longer alive is stale by definition (the
-// process that would still care about it is gone), so it may be silently
-// taken over rather than treated as a conflict.
+// — `{ pid, started_at }` JSON. "Advisory" is deliberate: this is fs-only by
+// design (no OS-level flock), so it stops nukadoko's own concurrent
+// processes from colliding, not an arbitrary process bypassing it. A lock
+// file whose pid is no longer alive is stale by definition (the process
+// that would still care about it is gone), so it may be silently taken over
+// rather than treated as a conflict.
 //
-// What the lock's own pid means now depends on who is holding it. A plain
 // `nuka do --session <name>` acquires it in setup (before any step record
-// is written) and always releases it in `finally` — the pid it writes is
+// is written) and always releases it in `finally`, so the pid it writes is
 // that one execution's own, alive only for as long as that single call
-// runs. A live session (docs/spec.md "Live sessions") acquires it once, in
-// its own daemon process (src/live/daemon.ts), and holds it for that
-// process's whole life — the pid it writes is the daemon's own, and the
-// lock's meaning widens from "an execution is in progress" to "this
-// session is currently owned by a live process", checked the same way
-// either time: `liveLockOwner` below neither knows nor cares which of the
-// two it is looking at, since a live process either way is exactly what a
-// stale (dead-pid) lock is not.
-//
-// `sock` is what turns "a live process holds this lock" into "and here is
-// its socket": a live session daemon's own unix socket lives under the OS's
-// own temp directory now (session/live-sock.ts), a path this file's own reader
-// has no other way to reach, since nothing about a project's own layout
-// determines it any more. `LockInfo.sock`'s own doc comment (below) is the
-// full contract; every reader that needs to reach a live session goes
-// through it rather than deriving a path itself.
+// runs.
 
 export interface LockInfo {
   pid: number;
   started_at: string;
-  /** The live session daemon's own unix socket path, written together with
-   * `pid`/`started_at` in the same `acquireLock` call — present exactly
-   * while a live session daemon holds this lock, absent for the plain,
-   * one-execution-long lock a non-live `nuka do --session` also acquires
-   * (session/paths.ts no longer derives a socket path at all; this field is
-   * the only place one is ever recorded). Every reader in this package that
-   * needs to reach a live session's socket reads it from here rather than
-   * deriving it, since a directory mkdtemp names cannot be derived from
-   * anything but its own creation. */
-  sock?: string;
 }
 
 /**
@@ -64,20 +38,14 @@ export function isProcessAlive(pid: number): boolean {
 }
 
 /**
- * Reads and parses a lock file's `{ pid, started_at, sock? }`. Returns
- * `null` for a missing, unreadable, or malformed lock file — deliberately
- * not distinguished from "no lock at all", since either way there is no
+ * Reads and parses a lock file's `{ pid, started_at }`. Returns `null` for a
+ * missing, unreadable, or malformed lock file — deliberately not
+ * distinguished from "no lock at all", since either way there is no
  * identifiable live owner to conflict with (a lock file this process itself
  * writes is always well-formed; malformed content can only be left over from
- * something else, e.g. manual editing). Exported (unlike the rest of this
- * file's own internals) because a stale lock's `sock` field is the only
- * place its socket's own directory can still be read from once its own
- * owner is gone — `liveLockOwner` below deliberately discards that
- * information for a dead pid, so a caller that wants to reap the directory
- * a dead daemon left behind (session/manage.ts, cli/do.ts, cli/session.ts)
- * has to call this instead.
+ * something else, e.g. manual editing).
  */
-export async function readLockInfo(lockPath: string): Promise<LockInfo | null> {
+async function readLockInfo(lockPath: string): Promise<LockInfo | null> {
   let content: string;
   try {
     content = await readFile(lockPath, "utf8");
@@ -90,9 +58,7 @@ export async function readLockInfo(lockPath: string): Promise<LockInfo | null> {
       typeof parsed === "object" &&
       parsed !== null &&
       typeof (parsed as { pid?: unknown }).pid === "number" &&
-      typeof (parsed as { started_at?: unknown }).started_at === "string" &&
-      ((parsed as { sock?: unknown }).sock === undefined ||
-        typeof (parsed as { sock?: unknown }).sock === "string")
+      typeof (parsed as { started_at?: unknown }).started_at === "string"
     ) {
       return parsed as LockInfo;
     }
@@ -116,15 +82,9 @@ export async function liveLockOwner(lockPath: string): Promise<LockInfo | null> 
 /**
  * Acquires the lock for `sessionName`, stealing a stale (dead-pid) or
  * missing one silently. Throws `SessionLockConflictError` when another live
- * process already holds it. `sock`, when given, is a live session daemon's
- * own socket path (session/live-sock.ts), written into the lock in the same
- * call that writes `pid`/`started_at` — the two never exist one without the
- * other, so a reader never has to guess whether a lock mid-write is safe to
- * treat as a live session's own. Omitted by every non-live caller (a plain
- * `nuka do --session`), which is what leaves `LockInfo.sock` `undefined`
- * for that lock's own lifetime.
+ * process already holds it.
  */
-export async function acquireLock(lockPath: string, sessionName: string, sock?: string): Promise<void> {
+export async function acquireLock(lockPath: string, sessionName: string): Promise<void> {
   const owner = await liveLockOwner(lockPath);
   if (owner) {
     throw new SessionLockConflictError(sessionName, owner.pid);
@@ -134,22 +94,16 @@ export async function acquireLock(lockPath: string, sessionName: string, sock?: 
   // to directories it actually creates, so a pre-existing cache/sessions/default/
   // keeps whatever mode it already had.
   await mkdir(path.dirname(lockPath), { recursive: true, mode: 0o700 });
-  const info: LockInfo = {
-    pid: process.pid,
-    started_at: new Date().toISOString(),
-    ...(sock !== undefined ? { sock } : {}),
-  };
+  const info: LockInfo = { pid: process.pid, started_at: new Date().toISOString() };
   await writeFile(lockPath, `${JSON.stringify(info)}\n`, { mode: 0o600 });
 }
 
 /**
- * Releases a lock this process holds. A non-live `do --session` calls this
- * from its own `finally` regardless of how the run ended; a live session's
- * daemon (src/live/daemon.ts) calls it once, from its own cleanup, when the
- * session stops or its idle timeout fires. Either way a failure here (e.g.
+ * Releases a lock this process holds. `do --session` calls this from its
+ * own `finally` regardless of how the run ended, so a failure here (e.g.
  * the file was already removed by `session clear`) must not itself fail
- * whatever this process was already reporting, so it is swallowed rather
- * than thrown.
+ * whatever this process was already reporting: it is swallowed rather than
+ * thrown.
  */
 export async function releaseLock(lockPath: string): Promise<void> {
   try {

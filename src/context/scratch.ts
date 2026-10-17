@@ -16,7 +16,7 @@ import { InvalidScratchPrefixError } from "./errors.js";
 // Every project that ran filesystem scenarios used to write this fixture
 // for itself in its config, together with a `StepFixtures` module
 // augmentation. It needs nothing from a browser or a server, so it is
-// built for every executor (`nuka run`, `nuka do`, and a live session) the
+// built for every executor (`nuka run` and `nuka do`) the
 // same way.
 
 const DEFAULT_PREFIX = "nukadoko-scratch";

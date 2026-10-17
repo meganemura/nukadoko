@@ -1,6 +1,5 @@
 import { SCHEMA_VERSIONS } from "../record/schema-version.js";
 import { readOwnVersion } from "../version.js";
-import { existsSync } from "node:fs";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { executeTypedStep } from "../run/execute-typed-step.js";
 import path from "node:path";
@@ -20,8 +19,6 @@ import {
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
-import { sendLiveRequest } from "../live/client.js";
-import { removeLiveSockDir } from "../session/live-sock.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { retentionNote } from "../record/retention.js";
@@ -30,7 +27,7 @@ import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact, fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
-import { acquireLock, liveLockOwner, readLockInfo, releaseLock } from "../session/lock.js";
+import { acquireLock, releaseLock } from "../session/lock.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionFilePath, sessionLockPath } from "../session/paths.js";
 import { readSessionFile, writeSessionFile } from "../session/store.js";
@@ -101,17 +98,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // The evidence-collecting side of ctx (browser/http/trace) is created and
 // disposed here, never handed to the step itself — see
 // context/create-context.ts's header for why that split exists. Sessions
-// follow the same rule: this module is the only place a *non-live*
-// session's file is actually read or written; `--session`'s lock is
-// acquired right after it passes setup's name/config checks and is always
-// released in `finally`, covering every return path below it.
-//
-// A `--session` naming a live session (docs/spec.md "Live sessions") never
-// reaches any of that: `delegateToLiveSession`, below, is checked for right
-// where the lock would otherwise be acquired, and on a live owner with a
-// socket, this file's own setup/execution phases never run at all — the
-// whole rest of this module exists only for the fresh-`ctx` path, live or
-// not.
+// follow the same rule: this module is the only place a session's file is
+// actually read or written; `--session`'s lock is acquired right after it
+// passes setup's name/config checks and is always released in `finally`,
+// covering every return path below it.
 //
 // This is also the one place a run's SecretSet is built and the one place a
 // step record gets redacted:
@@ -121,77 +111,6 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // once, as a whole object, before either record.json or the stdout copy is
 // written from it — never twice, independently, which could let the two
 // drift apart.
-
-/**
- * Hands one execution to a live session's own daemon instead of building a
- * fresh `ctx` (docs/spec.md "Live sessions") — the *entire* rest of this
- * file's own setup/execution phases are skipped for this call: the daemon
- * already discovered its own vocabulary at `session start` and re-validates
- * everything this file's own setup phase would (unknown step, compat step,
- * `from`/fixture/`--use` issues, read-only policy) against it, so nothing
- * here is checked twice. `sessionPid` only ever appears in this function's
- * own transport-failure message — a rejection the daemon itself sends back
- * (`response.status === "rejected"`) needs no pid, since it already came
- * from the right process; a pid is only worth naming when the *connection
- * itself* failed and the caller has nothing else to point at.
- */
-async function delegateToLiveSession(
-  sockPath: string,
-  sessionPid: number,
-  sessionName: string,
-  stepName: string,
-  args: unknown,
-  use: readonly string[],
-  stdout: WritableSink,
-  stderr: WritableSink,
-): Promise<number> {
-  const outcome = await sendLiveRequest(sockPath, {
-    kind: "do",
-    step: stepName,
-    args,
-    ...(use.length > 0 ? { use } : {}),
-  });
-
-  if (!outcome.ok) {
-    const reason =
-      outcome.kind === "reply"
-        ? `sent an unrecognized reply: ${outcome.message}`
-        : `connecting to it failed: ${outcome.message}`;
-    stderr.write(`Session "${sessionName}" is live (pid ${sessionPid}) but ${reason}\n`);
-    return 1;
-  }
-
-  const { response } = outcome;
-  switch (response.status) {
-    case "record":
-      for (const warning of response.warnings ?? []) {
-        stderr.write(`${warning}\n`);
-      }
-      // The one line saying which world this ran in (docs/spec.md "Live
-      // sessions": "a record from a live session must not read like a
-      // record from a clean one") — said here, at the moment the caller can
-      // still act on it, not left for a later read of `session_execution`
-      // on the record itself. stdout stays the step record's JSON alone, so
-      // a caller piping stdout to `jq` never has to filter this line out.
-      stderr.write(
-        `Session "${sessionName}" is live (pid ${sessionPid}); this step ran against it as execution #${response.record.session_execution}\n`,
-      );
-      stdout.write(`${JSON.stringify(response.record, null, 2)}\n`);
-      return response.record.status === "passed" ? 0 : 1;
-    case "rejected":
-      stderr.write(
-        `Session "${sessionName}" is live (pid ${sessionPid}) but refused this request: ${response.message}\n`,
-      );
-      return 1;
-    case "stopped":
-      // Unreachable in practice — a `kind: "do"` request never gets a
-      // `"stopped"` response (only `cli/session.ts`'s own `kind: "stop"`
-      // does). Handled anyway so this switch stays exhaustive rather than
-      // silently falling through if protocol.ts's own union ever changes.
-      stderr.write(`Session "${sessionName}" stopped instead of executing "${stepName}"\n`);
-      return 1;
-  }
-}
 
 export interface RunDoOptions {
   rootDir: string;
@@ -270,54 +189,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     }
     lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, session);
 
-    // A live session's own daemon (docs/spec.md "Live sessions") holds this
-    // lock for as long as it runs, not just for one execution's own
-    // duration the way a plain `--session` lock below already does — a
-    // live owner *with* a `sock` (session/lock.ts's own field, written only
-    // by that daemon) is that daemon, and this execution is handed to it
-    // instead of building a fresh `ctx`. A live owner with no `sock` is the
-    // pre-existing case this file always had (another `do --session`
-    // mid-flight, whose own one-execution-long lock never names a socket at
-    // all): falling through to `acquireLock` below reproduces that exact
-    // conflict, unchanged.
-    const owner = await liveLockOwner(lockPath);
-    if (owner !== null && owner.sock !== undefined && existsSync(owner.sock)) {
-      return await delegateToLiveSession(owner.sock, owner.pid, session, name, parsedArgs, use, stdout, stderr);
-    }
-    if (owner === null) {
-      // No live owner: a stale lock, if one is still on disk, might still
-      // name a socket from a daemon that is gone (idle timeout, crash)
-      // without cleaning up after itself. That is evidence worth saying out
-      // loud, not just fixing quietly — a socket nobody is listening on any
-      // more is the trace of an exploration that stopped existing without
-      // anyone telling this caller (docs/spec.md "Live sessions": "clean
-      // them up before proceeding down the existing path"). The stale lock
-      // *file* itself is already handled by `acquireLock` below (session/
-      // lock.ts), so only its socket's own directory needs clearing here.
-      const staleInfo = await readLockInfo(lockPath);
-      if (staleInfo?.sock !== undefined && existsSync(staleInfo.sock)) {
-        stderr.write(
-          `Session "${session}"'s socket is left over from a session that is no longer live (idle timeout or crash); removing it\n`,
-        );
-        await removeLiveSockDir(staleInfo.sock);
-      }
-    }
-
     try {
       await acquireLock(lockPath, session);
     } catch (error) {
       return refuse(sinks, error, help);
     }
-
-    // The other half of "which world did this run in" (see
-    // `delegateToLiveSession`'s own stderr line for the live half): said
-    // here, once the fresh path is actually committed to (after the lock
-    // acquisition above succeeds), so a caller mid-exploration is never
-    // left assuming a session is still live when it silently stopped being
-    // one.
-    stderr.write(
-      `Session "${session}" is not live; running this step in a fresh browser, from its saved state\n`,
-    );
   }
 
   try {

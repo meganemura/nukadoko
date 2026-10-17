@@ -1,7 +1,6 @@
-import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: two shapes of run-cli.ts's own wiring that session.test.ts
 // already proves for `session clear` (its own "an unknown flag fails
@@ -36,39 +35,6 @@ describe("nuka <command> --unknown-flag: the matched handler never runs", () => 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "list", "--unknown-flag"], {
-      rootDir: fixture("basic-project"),
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(2);
-    expect(stderr.text()).toContain("unknown-flag");
-    expect(stdout.text()).toBe("");
-  });
-
-  it("nuka session start: never spawns a daemon", async () => {
-    const rootDir = await copyFixtureToTempDir("basic-project");
-    try {
-      const stdout = createCaptureSink();
-      const stderr = createCaptureSink();
-      const exitCode = await runCli(["session", "start", "alice", "--unknown-flag"], {
-        rootDir,
-        stdout,
-        stderr,
-      });
-
-      expect(exitCode).toBe(2);
-      expect(stderr.text()).toContain("unknown-flag");
-      expect(existsSync(`${rootDir}/.nukadoko`)).toBe(false);
-    } finally {
-      await removeTempDir(rootDir);
-    }
-  });
-
-  it("nuka session stop: leaves any lock/socket untouched", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["session", "stop", "alice", "--unknown-flag"], {
       rootDir: fixture("basic-project"),
       stdout,
       stderr,

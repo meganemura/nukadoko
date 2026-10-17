@@ -15,8 +15,7 @@ just until 0.1.
   `module.registerHooks` resolve hook, which gives every load its own
   module graph (the cache isolation tsx's namespaces gave) and maps a
   relative `.js` import to the `.ts` file when no `.js` file exists. Run
-  workers and the session daemon start as plain `node --import` of that
-  hook. Installing the package no longer pulls in tsx and esbuild, so an
+  workers start as plain `node --import` of that hook. Installing the package no longer pulls in tsx and esbuild, so an
   install with `--ignore-scripts` runs the whole walkthrough. What a
   project sees: `enum`, `namespace`, and parameter properties fail to
   load; a type imported without `type` fails to load; `tsconfig.json`
@@ -385,6 +384,25 @@ just until 0.1.
   since `nuka do --use` still reads ad-hoc records across days. A step
   record that `recordStep` wrote keeps `kind: "external"` on disk until
   retention removes it. Breaking: see docs/upgrading.md.
+- **BREAKING: live sessions are removed: `nuka session start`, `nuka session stop`, and `--idle-timeout`.**
+  A live session held one `ctx` open in a detached process so `nuka do
+  --session` could land on a world already partway through. A Playwright
+  MCP server on the agent's host keeps a browser open across calls the
+  same way, with no process, socket, or idle timeout of nukadoko's own, so
+  the acceptance skill and llms.txt now send an agent there to explore a
+  browser app whose state cannot be repeated: they say how to tell that
+  the server is connected (its `browser_*` tools are listed), that a
+  Claude Code host adds it with `claude mcp add playwright npx
+  @playwright/mcp@latest`, and to write what was found as a scenario and
+  run `nuka check`. `nuka session start` and `nuka session stop` exit 2
+  and name `nuka do --session` and docs/upgrading.md (`{ error, do }` under
+  `--json`). `nuka do --session <name>` and `nuka session list|clear` stay.
+  With the daemon gone, a step record no longer carries
+  `session_execution`, the session lock no longer has a `sock` field,
+  `nuka do --session` no longer prints its "is not live" line, `nuka run`
+  no longer reports a live session or skips retention for one, and `nuka
+  clean` no longer refuses while a session lock is held. Breaking: see
+  docs/upgrading.md.
 
 ### Fixed
 

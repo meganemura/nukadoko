@@ -14,7 +14,6 @@ import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import { probeVersion } from "../environment/probe-version.js";
-import { findLiveSessions, formatLiveSessionNotice } from "../live/live-session-notice.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
   resolveEnvironment,
@@ -374,16 +373,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   }
   const featureArgs = options.featureArgs.length === 0 ? [config.featuresDir] : options.featureArgs;
 
-  // A live session (docs/spec.md "Live sessions") is reported, never
-  // refused — see live-session-notice.ts's own header for why this stays a
-  // fact rather than a verdict. Checked across every environment, ahead of
-  // `resolveEnvironment` below, so it fires even for a run this invocation's
-  // own `--env` never touches.
-  const liveSessionNotice = formatLiveSessionNotice(await findLiveSessions(rootDir, config.stateDir));
-  if (liveSessionNotice !== null) {
-    stderr.write(`${liveSessionNotice}\n`);
-  }
-
   let resolvedEnv: ResolvedEnvironment;
   try {
     resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
@@ -725,7 +714,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           policy: config.retention,
           now: new Date(),
           messagesOutputRel: messagesOutputPath(config),
-          liveSessions: await findLiveSessions(rootDir, config.stateDir),
           currentRunId: runId,
         });
         const line = formatRetention(outcome, config.retention);

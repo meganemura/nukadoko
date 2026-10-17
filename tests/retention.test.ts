@@ -161,8 +161,8 @@ describe("applyRetention", () => {
     // A shared file: written by every run, listed by none.
     await writeFile(abs(stateDir, "export", "allure-results", "environment.properties"), "x=y\n");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
-    expect(outcome).toEqual({ skipped: null, runsKept: 2, runsRemoved: 1, unownedRemoved: 0 });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
+    expect(outcome).toEqual({ runsKept: 2, runsRemoved: 1, unownedRemoved: 0 });
 
     for (const gone of [
       abs(stateDir, "records", "scenarios", "scn-run-a-0"),
@@ -196,9 +196,9 @@ describe("applyRetention", () => {
     await seedRun("run-undated", "not a date", 1, false);
     writeEnded("run-undated", now);
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, currentRunId: "run-current" });
 
-    expect(outcome).toEqual({ skipped: null, runsKept: 1, runsRemoved: 1, unownedRemoved: 0 });
+    expect(outcome).toEqual({ runsKept: 1, runsRemoved: 1, unownedRemoved: 0 });
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-older-0"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-newest-0"))).toBe(true);
     // Unreadable records leave by age, from their directory's own mtime.
@@ -215,7 +215,7 @@ describe("applyRetention", () => {
     );
     await seedRun("run-short", "2026-09-01T01:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, currentRunId: "run-current" });
     expect(outcome.runsRemoved).toBe(1);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-short-0"))).toBe(true);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-long-late"))).toBe(false);
@@ -227,7 +227,7 @@ describe("applyRetention", () => {
     await seedRun("run-new", "2026-09-01T00:00:00Z");
     const oneRun = { runs: 1, adHocDays: 7 };
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: oneRun, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: oneRun, now, messagesOutputRel, currentRunId: "run-current" });
     expect(outcome.runsRemoved).toBe(1);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-old-0"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-young-0"))).toBe(true);
@@ -245,7 +245,7 @@ describe("applyRetention", () => {
       policy: { runs: 1, adHocDays: 7 },
       now,
       messagesOutputRel,
-      liveSessions: [],
+     
       currentRunId: "run-self",
     });
     expect(outcome.runsRemoved).toBe(0);
@@ -257,8 +257,8 @@ describe("applyRetention", () => {
     await seedAdHocStep("step-old-do", "2026-08-20T00:00:00Z");
     await seedAdHocStep("step-new-do", "2026-09-01T00:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
-    expect(outcome).toEqual({ skipped: null, runsKept: 1, runsRemoved: 0, unownedRemoved: 1 });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
+    expect(outcome).toEqual({ runsKept: 1, runsRemoved: 0, unownedRemoved: 1 });
     expect(existsSync(abs(stateDir, "records", "steps", "step-old-do"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "steps", "step-new-do"))).toBe(true);
     expect(formatRetention(outcome, policy)).toBe(
@@ -281,7 +281,7 @@ describe("applyRetention", () => {
     await writeFile(manifestPath, `${path.join(stateDir, "export", "allure-results", "crashed-result.json")}\n`);
     await utimes(path.dirname(manifestPath), old, old);
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
     expect(outcome.unownedRemoved).toBe(2);
     expect(existsSync(brokenDir)).toBe(false);
     expect(existsSync(path.join(resultsDir, "crashed-result.json"))).toBe(false);
@@ -299,37 +299,16 @@ describe("applyRetention", () => {
       await writeFile(manifestPath, `${path.relative(rootDir, victim)}\n`);
       await utimes(path.dirname(manifestPath), old, old);
 
-      await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
+      await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
       expect(existsSync(victim)).toBe(true);
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }
   });
 
-  it("skips everything, and says which session, while a session is live", async () => {
-    await seedRun("run-a", "2026-09-01T00:00:00Z");
-    await seedRun("run-b", "2026-09-01T01:00:00Z");
-    await seedRun("run-c", "2026-09-01T02:00:00Z");
-    // Discovery of a live daemon lives in src/live/live-session-notice.ts
-    // and is passed in by `nuka run`. Retention only decides what to do
-    // with the list it was given.
-    const outcome = await applyRetention({
-      rootDir,
-      stateDir,
-      policy,
-      now,
-      messagesOutputRel,
-      liveSessions: [{ environment: "default", name: "alpha" }],
-      currentRunId: "run-current",
-    });
-    expect(outcome.skipped?.liveSessions.map((session) => session.name)).toEqual(["alpha"]);
-    expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-a-0"))).toBe(true);
-    expect(formatRetention(outcome, policy)).toContain('session "alpha" (environment "default") is live');
-  });
-
   it("says nothing when nothing was removed", async () => {
     await seedRun("run-a", "2026-09-01T00:00:00Z");
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, liveSessions: [], currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
     expect(formatRetention(outcome, policy)).toBeNull();
   });
 });

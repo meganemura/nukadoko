@@ -1,6 +1,6 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a model or relation of request-only steps that `nuka experimental explore` should run.
+description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first, or a model or relation of request-only steps that `nuka experimental explore` should run.
 compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka experimental explore, nuka check, nuka run, nuka tend).
 license: MIT
 ---
@@ -18,7 +18,8 @@ CI run, not for the old summary.
 
 This skill is the path from whatever you start with (raw prose, general
 acceptance criteria, a scenario ready to write, or a path already
-explored one `nuka do` call at a time) through that pull request and the
+explored one `nuka do` call at a time or through a Playwright MCP
+server) through that pull request and the
 placement decision that goes with it. Open the reference named on a step
 before doing that step. This file is the order, not the procedure.
 `node_modules/nukadoko/llms.txt` names every command, flag, and finding
@@ -44,11 +45,10 @@ state, or outlives the command, one line each:
   `playwright-missing` for that step with the
   `npm install -D -E playwright@<version>` line to run. Adding it is a
   dependency change: ask first.
-- **`nuka session start`**, once the loop reaches it, leaves a process
-  holding a browser and live credentials. Say `nuka session stop <name>`
-  with it. `--idle-timeout` sets how long it waits, in seconds (900 when
-  omitted). A value the process cannot keep is refused before it starts
-  (`references/exploring.md`).
+- **A Playwright MCP server**, when the loop explores a browser app whose
+  state cannot be repeated, drives the real application with whatever
+  login it holds. A click that submits something there needs the same
+  go-ahead as a `mutates: true` step (`references/exploring.md`).
 
 nukadoko itself makes no outbound network calls. What leaves the machine
 is what your own steps send to the application you pointed them at.
@@ -92,16 +92,24 @@ are the repeatable flags. Each value is kept, in the order given.
    to scenarios").
 3. **You already have, or can write directly, a concrete scenario**: "The
    loop" below.
-4. **You already ran the path** with `nuka do` and want it fixed in a
-   scenario: write the scenario from the steps you ran
-   (`references/exploring.md`, "Then fix what you found"), then join the
-   loop at step 3 (`nuka check`).
-5. **You want sequences generated against a model, or two runs compared
+4. **You already ran the path** with `nuka do`, or through a Playwright
+   MCP server, and want it fixed in a scenario: write the scenario from
+   what you ran (`references/exploring.md`, "Then fix what you found"),
+   then join the loop at step 3 (`nuka check`).
+5. **You need to explore a browser app whose state cannot be repeated**
+   (an account that opens once, an order that must not be placed twice):
+   drive it through the host's Playwright MCP server, connected when its
+   `browser_*` tools are listed. A Claude Code host adds it with
+   `claude mcp add playwright npx @playwright/mcp@latest`; ask the
+   person before adding it. Then write what you found as a scenario
+   and run `nuka check` (`references/exploring.md`, "Exploring state
+   that cannot be repeated").
+6. **You want sequences generated against a model, or two runs compared
    by a relation**, with request-only steps: `references/models.md`
    (`nuka experimental explore`, experimental: it can change in any
    release), then paste what it prints and join the loop at step 3.
 
-If none of the five is true, ask what this is supposed to do before
+If none of the six is true, ask what this is supposed to do before
 writing anything. A scenario started without knowing what it proves
 proves the wrong thing.
 

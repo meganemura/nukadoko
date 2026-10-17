@@ -260,7 +260,7 @@ jobs:
 このリポジトリの中では、それを実行する手段が無いからです。
 代わりに確かめたのは次のことです。
 `npm run test:scenarios` は、本パッケージの tarball を新しくインストールした CLI のプロジェクトで、green と red の両方を実行しました。
-この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したこと(`nuka clean` の live session 拒否も含めて)です。
+この YAML は妥当な YAML としてパースできること、そしてこの中の `npx nuka ...` コマンドはすべて(上で使っているディレクトリ形式の `nuka run features/` も、1 つの feature ファイルだけでなく)、実際に `npm install` した本パッケージのコピーに対して実行したことです。
 「チームがその上に足すもの」にある pull request のコメント step も実行していません。
 その `gh pr comment` のフラグは `gh` 自身のヘルプから読んだもので、実際の pull request に対して試してはいません。
 `npx playwright install --with-deps chromium` は自身の `--dry-run` で確かめただけで、最後まで実行してはいません。

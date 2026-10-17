@@ -2,8 +2,8 @@
 
 ## Environments
 
-`--env <name>` on `nuka do`, `nuka run`, and `nuka session start`/`stop`/
-`clear` targets one of the environments named in `nukadoko.config.ts`'s
+`--env <name>` on `nuka do`, `nuka run`, and `nuka session clear`
+targets one of the environments named in `nukadoko.config.ts`'s
 own `environments` key; omitting it targets `default`, which needs no
 entry there. Each entry can override `baseURL`, append its own `envFiles`
 after the top-level list, and set `policy: "read-only"`.
