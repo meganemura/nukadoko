@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { existsSync, readdirSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { runCli } from "../src/cli/run-cli.js";
@@ -25,6 +25,10 @@ const ISO_TIMESTAMP_PATTERN = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\b/g
 // exactly: an optional "<N>h ", an optional "<N>m ", then a mandatory
 // "<N>s", all inside parens.
 const SUMMARY_DURATION_PATTERN = /\((?:\d+h )?(?:\d+m )?\d+s\)/g;
+// A step progress line's own measured duration, src/run/progress-log.ts's
+// `formatStepDuration`: one decimal of seconds, so a loaded machine turns
+// one run's 0.0s into the other's 0.1s.
+const STEP_DURATION_PATTERN = /^( {2}step \d+\/\d+ {2}\S+ {2})\d+\.\ds(?= {2})/gm;
 
 /** Replaces every id/timestamp this test's own two invocations cannot
  * possibly share (each generates its own run id, its own record ids, its
@@ -37,7 +41,8 @@ function normalizeVolatile(text: string): string {
     .replace(SCN_ID_PATTERN, "<scn-id>")
     .replace(STEP_ID_PATTERN, "<step-id>")
     .replace(ISO_TIMESTAMP_PATTERN, "<timestamp>")
-    .replace(SUMMARY_DURATION_PATTERN, "(<duration>)");
+    .replace(SUMMARY_DURATION_PATTERN, "(<duration>)")
+    .replace(STEP_DURATION_PATTERN, "$1<duration>");
 }
 
 function nonEmptyLines(text: string): string[] {
@@ -60,14 +65,43 @@ async function delayFixtureSteps(rootDir: string): Promise<void> {
   );
 }
 
+/** Makes every scenario's step record its thing's name under `started/`,
+ * then wait until the test writes `release`. Seeing every name under
+ * `started/` at once is what proves the scenarios were in flight together,
+ * with no clock involved. */
+async function holdFixtureStepsUntilReleased(rootDir: string): Promise<{ startedDir: string; releasePath: string }> {
+  const startedDir = path.join(rootDir, "started");
+  const releasePath = path.join(rootDir, "release");
+  await mkdir(startedDir);
+  await replaceFixtureText(
+    path.join(rootDir, "features/steps/thing-exists.ts"),
+    "async run({}, args) {",
+    [
+      "async run({}, args) {",
+      '    const { existsSync, writeFileSync } = await import("node:fs");',
+      `    writeFileSync(${JSON.stringify(startedDir)} + "/" + args.name, "");`,
+      `    while (!existsSync(${JSON.stringify(releasePath)})) {`,
+      "      await new Promise((resolve) => setTimeout(resolve, 25));",
+      "    }",
+    ].join("\n"),
+  );
+  return { startedDir, releasePath };
+}
+
 describe("nuka run --concurrency", () => {
   let rootDir: string;
+  let heldRun: { releasePath: string; exit: Promise<number> } | null = null;
 
   beforeEach(async () => {
     rootDir = await copyFixtureToTempDir("run-concurrency-project");
   });
 
   afterEach(async () => {
+    if (heldRun !== null) {
+      await writeFile(heldRun.releasePath, "");
+      await heldRun.exit;
+      heldRun = null;
+    }
     await removeTempDir(rootDir);
   });
 
@@ -207,7 +241,7 @@ describe("nuka run --concurrency", () => {
   });
 
   it("a bare @serial Feature tag neither serializes the file nor produces a check finding", async () => {
-    await delayFixtureSteps(rootDir);
+    const { startedDir, releasePath } = await holdFixtureStepsUntilReleased(rootDir);
     const serialFeaturePath = path.join(rootDir, "features/serial/z-only.feature");
     await replaceFixtureText(serialFeaturePath, "@nukadoko:serial", "@serial");
     const badTagPath = path.join(rootDir, "features/check-badtag/bad.feature");
@@ -218,19 +252,33 @@ describe("nuka run --concurrency", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/serial/", "--concurrency", "3"], {
-      rootDir,
-      stdout,
-      stderr,
-    });
+    heldRun = {
+      releasePath,
+      exit: runCli(["run", "--no-check", "features/serial/", "--concurrency", "3"], {
+        rootDir,
+        stdout,
+        stderr,
+      }),
+    };
+
+    // A serialized file would start only after the other two finished, and
+    // they cannot finish before the release, so this wait would never end
+    // and the test's own timeout would fail it.
+    while ((await readdir(startedDir)).length < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect((await readdir(startedDir)).sort()).toEqual(["serial-a", "serial-b", "serial-only"]);
+    await writeFile(releasePath, "");
+    const exitCode = await heldRun.exit;
+    heldRun = null;
 
     expect(exitCode, stderr.text()).toBe(0);
     const records = nonEmptyLines(stdout.text()).map((line) => JSON.parse(line));
-    const formerlySerialRecord = records.find((r) => r.feature === "features/serial/z-only.feature");
-    const otherRecords = records.filter((r) => r.feature !== "features/serial/z-only.feature");
-    expect(formerlySerialRecord).toBeDefined();
-    const earliestOtherFinish = Math.min(...otherRecords.map((r) => Date.parse(r.finished_at)));
-    expect(Date.parse(formerlySerialRecord.started_at)).toBeLessThan(earliestOtherFinish);
+    expect(records.map((r) => r.feature).sort()).toEqual([
+      "features/serial/a.feature",
+      "features/serial/b.feature",
+      "features/serial/z-only.feature",
+    ]);
   });
 
   it("--session drops --concurrency to 1 and says so on stderr, even under --quiet", async () => {
