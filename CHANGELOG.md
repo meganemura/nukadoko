@@ -9,6 +9,11 @@ just until 0.1.
 
 ### Breaking
 
+- **`nuka run`'s step lines on stderr say `passed`, `failed`, and `skipped`.**
+  They said `ok`, `FAIL`, and `skip` after the step records and the
+  summary line had moved to `passed` and `failed`, so a search of a CI log
+  for the word a record uses found no step line. Breaking for a script
+  that matches `FAIL` in that output: see docs/upgrading.md.
 - **BREAKING: nukadoko loads TypeScript through Node's own type stripping, needs Node `^22.18.0 || >=23.6.0`, and no longer depends on tsx.**
   These are the first Node releases that strip types with no flag. The
   config, the step files, and what they import load through a

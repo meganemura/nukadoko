@@ -116,6 +116,10 @@ This part does not change release to release.
   --use` and the emitters read it as `"passed"`, so it can
   stay until retention removes it. The exported TypeScript type
   `StepRecordOk` is now `StepRecordPassed`.
+- **`nuka run`'s step lines on stderr say `passed`, `failed`, and
+  `skipped`, not `ok`, `FAIL`, and `skip`.** They now use the word the
+  step record uses for the same outcome. A script that searches a CI log
+  for `  FAIL  ` searches for `  failed  `.
 - **`nuka tend --json` names its summary keys in snake_case.**
   `typedSteps`, `compatSteps`, `compatStepNames`, `scannedFeatureDirs`, and
   `readOnlySteps` become `typed_steps`, `compat_steps`,

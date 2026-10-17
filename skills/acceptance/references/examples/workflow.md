@@ -125,9 +125,9 @@ ok: no issues found
 $ npx nuka run
 ...
 scenario 3/5  features/signup.feature:20  the same email twice
-  step 1/3  ok  0.0s  a registration for "ada@example.com" with password "correct horse" is submitted
-  step 2/3  ok  0.0s  a registration for "ada@example.com" with password "other secret" is submitted
-  step 3/3  ok  0.0s  the registration is refused because "email already registered"
+  step 1/3  passed  0.0s  a registration for "ada@example.com" with password "correct horse" is submitted
+  step 2/3  passed  0.0s  a registration for "ada@example.com" with password "other secret" is submitted
+  step 3/3  passed  0.0s  the registration is refused because "email already registered"
 ...
 5 scenarios: 5 passed, 0 failed  (0s)
 ```

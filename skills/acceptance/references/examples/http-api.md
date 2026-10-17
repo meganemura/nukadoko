@@ -204,10 +204,10 @@ With the `server` fixture changed to `{ scope: "process" }`, two
 scenarios read items an earlier scenario created (S8):
 
 ```
-  step 4/4  FAIL  0.0s  the response body is
+  step 4/4  failed  0.0s  the response body is
       body: got {"id":2,"name":"lamp"}
 ...
-  step 5/5  FAIL  0.0s  the response body is
+  step 5/5  failed  0.0s  the response body is
       body: got [{"id":1,"name":"lamp"},{"id":2,"name":"lamp"},{"id":3,"name":"lamp"},{"id":4,"name":"desk"}]
 ...
 7 scenarios: 5 passed, 2 failed  (1s)

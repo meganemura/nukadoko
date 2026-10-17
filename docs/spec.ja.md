@@ -1771,6 +1771,7 @@ stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJS
 `--concurrency` の worker プロセスでも同じです。
 worker の stdout は、親プロセスが読む envelope の列です。
 run を見守る人向けの出力は stderr に置きます: 各 pickle の前の境界、各 step の後の 1 行、run が書いたパス、1 行のサマリです。
+step の行は、その成否を step record と同じ語で示します: `passed`、`failed`、`skipped` のいずれかです。
 `--quiet` は step ごとと scenario ごとの進捗行を抑止します。
 このフラグは端末を静かにしますが、無音にはしないため、パスとサマリは表示されます。
 失敗した step の行の後には、字下げした 2 行が続きます。

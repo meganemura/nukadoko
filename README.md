@@ -191,8 +191,8 @@ npm run test:scenarios
 > nuka run
 
 scenario 1/1  features/greet.feature:4  greets by name
-  step 1/2  ok  0.1s  I run greet with "Ada"
-  step 2/2  ok  0.0s  the output says "Hello, Ada!"
+  step 1/2  passed  0.1s  I run greet with "Ada"
+  step 2/2  passed  0.0s  the output says "Hello, Ada!"
 steps     .nukadoko/records/steps/      2
 scenarios .nukadoko/records/scenarios/  1
 summary   .nukadoko/records/runs/run-20261016-123947-b4q6/summary.md
@@ -208,8 +208,8 @@ and the command that reruns it. Here the feature expects `"Hi, Ada!"`:
 
 ```text
 scenario 1/1  features/greet.feature:4  greets by name
-  step 1/2  ok  0.1s  I run greet with "Ada"
-  step 2/2  FAIL  0.0s  the output says "Hi, Ada!"
+  step 1/2  passed  0.1s  I run greet with "Ada"
+  step 2/2  failed  0.0s  the output says "Hi, Ada!"
       text: expected "Hi, Ada!", got "Hello, Ada!"
       record  .nukadoko/records/steps/step-20261016-123950-kjs1
 steps     .nukadoko/records/steps/      2
@@ -1094,7 +1094,7 @@ summary, each failed scenario gets a `rerun` line with the command that runs
 it again. `--quiet` keeps all of these.
 
 ```text
-  step 2/2  FAIL  0.0s  the sum is 5
+  step 2/2  failed  0.0s  the sum is 5
       expected 5, got 4
       record  .nukadoko/records/steps/<id>
 ...

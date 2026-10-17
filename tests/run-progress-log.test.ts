@@ -95,12 +95,9 @@ describe("nuka run: progress output", () => {
     // scenario record; this only checks the progress line reads the same
     // way. Each status word is unique, so no two of the three lines could
     // be mistaken for each other.
-    expect(lines[0]).toContain("step 1/3");
-    expect(lines[0]).not.toMatch(/FAIL|skip/);
-    expect(lines[1]).toContain("step 2/3");
-    expect(lines[1]).toContain("FAIL");
-    expect(lines[2]).toContain("step 3/3");
-    expect(lines[2]).toContain("skip");
+    expect(lines[0]).toMatch(/^ {2}step 1\/3 {2}passed {2}/);
+    expect(lines[1]).toMatch(/^ {2}step 2\/3 {2}failed {2}/);
+    expect(lines[2]).toMatch(/^ {2}step 3\/3 {2}skipped {2}/);
   });
 
   it("every step line carries a duration, so a slow step reads differently from a stuck one", async () => {
@@ -173,11 +170,11 @@ describe("nuka run: progress output", () => {
     expect(normalizeRun(stderr.text())).toBe(
       [
         "scenario 1/1  features/failing.feature:3  an operation fails partway through",
-        "  step 1/3  ok  <d>s  a thing \"widget\" exists",
-        "  step 2/3  FAIL  <d>s  the operation fails",
+        "  step 1/3  passed  <d>s  a thing \"widget\" exists",
+        "  step 2/3  failed  <d>s  the operation fails",
         "      operation failed on purpose",
         "      record  .nukadoko/records/steps/<id>",
-        "  step 3/3  skip  <d>s  this step never runs",
+        "  step 3/3  skipped  <d>s  this step never runs",
         "steps     .nukadoko/records/steps/      2",
         "scenarios .nukadoko/records/scenarios/  1",
         "allure    .nukadoko/export/allure-results/",
@@ -200,7 +197,7 @@ describe("nuka run: progress output", () => {
     expect(exitCode).toBe(1);
     const lines = nonEmptyLines(normalizeRun(stderr.text()));
     expect(lines.slice(0, 3)).toEqual([
-      "  step 2/3  FAIL  <d>s  the operation fails",
+      "  step 2/3  failed  <d>s  the operation fails",
       "      operation failed on purpose",
       "      record  .nukadoko/records/steps/<id>",
     ]);

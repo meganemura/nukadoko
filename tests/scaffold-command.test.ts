@@ -379,7 +379,7 @@ describe("nuka scaffold --command", () => {
     expect(failed).toMatch(
       new RegExp(
         [
-          "step 2/2  FAIL  \\d+\\.\\ds  the output says \"Hello, Ada!\"",
+          "step 2/2  failed  \\d+\\.\\ds  the output says \"Hello, Ada!\"",
           '      text: expected "Hello, Ada!", got ""',
           "      used    run-greet  exit 1  Error \\[ERR_MODULE_NOT_FOUND\\]: Cannot find module greet\\.js, token \\{\\{secret\\.TOKEN\\}\\}",
           "      record  \\.nukadoko/records/steps/step-",

@@ -42,7 +42,7 @@ describe("scripts/skill-examples.ts", () => {
   });
 
   it("masks durations and cuts a finding after its file", () => {
-    expect(normalizeLine("  step 2/4  ok  0.1s  I run tally")).toBe("  step 2/4  ok  N.Ns  I run tally");
+    expect(normalizeLine("  step 2/4  passed  0.1s  I run tally")).toBe("  step 2/4  passed  N.Ns  I run tally");
     expect(normalizeLine("4 scenarios: 4 passed, 0 failed  (12s)")).toBe("4 scenarios: 4 passed, 0 failed  (Ns)");
     expect(normalizeLine("note\trepeated-scenario-prefix\tfeatures/a.feature\t2 scenarios took 0 seconds")).toBe(
       "note\trepeated-scenario-prefix\tfeatures/a.feature",

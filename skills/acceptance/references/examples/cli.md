@@ -183,7 +183,7 @@ A red run, with `rent: 101` in the docstring for the first scenario. The
 first line of the message carries both values:
 
 ```
-  step 4/4  FAIL  0.0s  the output is
+  step 4/4  failed  0.0s  the output is
       stdout: expected "food: 5.5\nrent: 101", got "food: 5.5\nrent: 100"
       record  .nukadoko/records/steps/step-20261017-114020-t0lq
 ```

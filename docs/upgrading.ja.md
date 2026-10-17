@@ -98,6 +98,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   nukadoko 0.16.1 以前が書いた record は、ディスク上では `"ok"` のままです。
   `nuka do --use` と各 emitter はそれを `"passed"` として読むので、retention が削除するまで残しておけます。
   export されている TypeScript の型 `StepRecordOk` は `StepRecordPassed` になりました。
+- **`nuka run` が stderr に書く step の行は、`ok`、`FAIL`、`skip` ではなく `passed`、`failed`、`skipped` と書きます。**
+  同じ結果に step record と同じ語を使うようになりました。
+  CI のログから `  FAIL  ` を探すスクリプトは、`  failed  ` を探すようにします。
 - **`nuka tend --json` の summary のキーは snake_case になりました。**
   `typedSteps`、`compatSteps`、`compatStepNames`、`scannedFeatureDirs`、`readOnlySteps` は、`typed_steps`、`compat_steps`、`compat_step_names`、`scanned_feature_dirs`、`read_only_steps` になります。
   `describe` の名前は変わりません。

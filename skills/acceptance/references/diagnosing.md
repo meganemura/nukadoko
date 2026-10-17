@@ -11,7 +11,7 @@ command's own `--help` for a flag it does not accept.
 ## Work through the failed step first
 
 `nuka run`'s stderr already names where to start: under the failed step's
-`FAIL` line, the first line of its error and the path of its step record
+`failed` line, the first line of its error and the path of its step record
 (`record  <stateDir>/records/steps/<id>`), and after the summary, a `rerun`
 line per failed scenario with the command that runs that scenario alone.
 The same list is in the run's `run.json` (`nuka run --json` prints it):

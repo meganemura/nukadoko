@@ -126,23 +126,6 @@ export function formatStepDuration(durationMs: number): string {
   return `${(Math.max(0, durationMs) / 1000).toFixed(1)}s`;
 }
 
-/** `"ok"` / `"FAIL"` / `"skip"` — three words, not `ScenarioStepStatus`'s
- * five verbatim (passed/failed/skipped must be told apart at a glance).
- * `undefined`/`ambiguous` both fold into `"FAIL"` here: both are "never
- * began, and this scenario is now failing" outcomes as far as a progress
- * line reader needs to know; their own detail still lands on the scenario
- * record unabridged. */
-function formatStepStatusWord(status: StepProgressInfo["status"]): string {
-  switch (status) {
-    case "passed":
-      return "ok";
-    case "skipped":
-      return "skip";
-    case "failed":
-      return "FAIL";
-  }
-}
-
 /** Builds this run's own step-progress callback — one instance per `nuka
  * run` invocation, built once by cli/run.ts and threaded unchanged into
  * every `runScenario` call, the same "build once, pass a callback" shape
@@ -157,8 +140,10 @@ export function createStepProgressLogger(
 ): (info: StepProgressInfo) => void {
   return (info: StepProgressInfo): void => {
     if (options.quiet && info.status !== "failed") return;
+    // The status is the word a step record uses for the same outcome, so a
+    // search of stderr for `failed` finds the step its record calls failed.
     let text =
-      `  step ${info.stepIndex}/${info.totalSteps}  ${formatStepStatusWord(info.status)}  ` +
+      `  step ${info.stepIndex}/${info.totalSteps}  ${info.status}  ` +
       `${formatStepDuration(info.durationMs)}  ${info.text}\n`;
     if (info.status === "failed") {
       const failure = formatStepFailure({

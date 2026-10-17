@@ -2084,6 +2084,8 @@ whose stdout is the one step record, and for a worker process under
 stderr contains the
 output for a person who watches the run: a boundary before each pickle, one
 line after each step, the paths written by the run, and a one-line summary.
+A step's line names its outcome with the word a step record uses:
+`passed`, `failed`, or `skipped`.
 `--quiet` suppresses the per-step and per-scenario progress lines. The paths
 and summary still appear because the flag makes the terminal quieter, not
 silent. A failed step's line is followed by two indented lines: the first
