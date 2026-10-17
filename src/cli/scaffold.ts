@@ -18,7 +18,7 @@ import { helpFor, refuse, type RefusalSinks } from "./refusal.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import { DESCRIPTION_TODO_PREFIX } from "../tend/types.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
-import { tsExtensionImportsAccepted } from "./tsconfig-edit.js";
+import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -854,7 +854,8 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   // A project whose tsc refuses `./x.ts` gets the `.js` name instead, so the
   // file this command writes passes the project's own type check as it
   // stands. With no tsconfig.json there is no tsc setting to follow.
-  const spelling: ImportSpelling = tsExtensionImportsAccepted(rootDir) === false ? "js" : "ts";
+  const tsImports = tsExtensionImports(rootDir);
+  const spelling: ImportSpelling = tsImports.kind === "refused" || tsImports.kind === "unread" ? "js" : "ts";
   let chained: readonly ChainedField[] = [];
   if (fromFlags.requests.length > 0 || read.projectTypes.length > 0) {
     // Tolerant, as `nuka check` is: an unrelated broken step file must not
@@ -918,8 +919,13 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   );
 
   stdout.write(`${relativeFilePath}\n`);
-  if (spelling === "js" && chained.length > 0) stderr.write(`note: ${JS_IMPORT_NOTE}\n`);
+  if (spelling === "js" && chained.length > 0) stderr.write(`note: ${jsImportNote(tsImports)}\n`);
   return 0;
+}
+
+function jsImportNote(tsImports: TsExtensionImports): string {
+  if (tsImports.kind !== "unread") return JS_IMPORT_NOTE;
+  return `the import names the .js file, because the tsconfig chain stops at ${tsImports.file} (${tsImports.detail}), so nothing in it says tsc accepts a .ts name; nuka loads the .ts file under that name. Once ${tsImports.file} is fixed and the chain sets "rewriteRelativeImportExtensions": true, scaffold imports by the .ts name`;
 }
 
 export const JS_IMPORT_NOTE =

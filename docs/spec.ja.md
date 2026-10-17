@@ -208,6 +208,7 @@ Node は型注釈を空白に置き換え、残りを実行します。
   `nuka scaffold --from` が書くのはこの綴りで、素の `node` が解決できるのもこの綴りです。
   ただし `tsconfig.json` が `extends` の連鎖を通しても下の 2 つのオプションのどちらも true にしていないとき、`scaffold --from` は代わりに `.js` の名前を書き、そのことを stderr の 1 行の `note:` で伝えます。
   こうして書いたファイルは、プロジェクト自身の `tsc` をそのまま通ります。
+  連鎖の中に読めないファイル(パースできないファイル、どのファイルも指さない `extends`)があるときも `.js` の名前になり、`note:` がそのファイルと理由を示します。
   `tsc` は `rewriteRelativeImportExtensions` か `allowImportingTsExtensions` があれば受け付けます。
   `tsconfig.json` がどちらも指定していないとき、`nuka init` は前者を追加します。
   そのとき `init` は `extends` をたどります。

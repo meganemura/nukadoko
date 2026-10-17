@@ -11,7 +11,7 @@ import {
   missingIncludeEntries,
   needsTsExtensionOption,
   parseJsonc,
-  tsExtensionImportsAccepted,
+  tsExtensionImports,
 } from "../src/cli/tsconfig-edit.js";
 
 // Responsibility: the pure half of `nuka init`'s tsconfig.json edit and
@@ -325,55 +325,72 @@ describe("appendCompilerOption", () => {
     }));
 });
 
-describe("tsExtensionImportsAccepted", () => {
-  function accepted(files: Record<string, string>): boolean | undefined {
+describe("tsExtensionImports", () => {
+  function reading(files: Record<string, string>): ReturnType<typeof tsExtensionImports> {
     const dir = mkdtempSync(path.join(tmpdir(), "nuka-ts-ext-"));
     try {
       for (const [name, text] of Object.entries(files)) writeFileSync(path.join(dir, name), text);
-      return tsExtensionImportsAccepted(dir);
+      return tsExtensionImports(dir);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   }
 
   it("answers from the value where TypeScript takes it: the file's own options, then the last base that sets it", () => {
-    expect(accepted({})).toBe(undefined);
-    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "module": "nodenext" } }' })).toBe(false);
-    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }' })).toBe(true);
-    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "allowImportingTsExtensions": true, "noEmit": true } }' })).toBe(true);
-    expect(accepted({ "tsconfig.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }' })).toBe(false);
+    expect(reading({})).toEqual({ kind: "no-tsconfig" });
+    expect(reading({ "tsconfig.json": '{ "compilerOptions": { "module": "nodenext" } }' })).toEqual({ kind: "refused" });
+    expect(reading({ "tsconfig.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }' })).toEqual({ kind: "accepted" });
+    expect(reading({ "tsconfig.json": '{ "compilerOptions": { "allowImportingTsExtensions": true, "noEmit": true } }' })).toEqual({ kind: "accepted" });
+    expect(reading({ "tsconfig.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }' })).toEqual({ kind: "refused" });
     expect(
-      accepted({
+      reading({
         "base.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
         "tsconfig.json": '// comment\n{ "extends": "./base", }',
       }),
-    ).toBe(true);
+    ).toEqual({ kind: "accepted" });
     expect(
-      accepted({
+      reading({
         "base.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
         "tsconfig.json": '{ "extends": "./base.json", "compilerOptions": { "rewriteRelativeImportExtensions": false } }',
       }),
-    ).toBe(false);
+    ).toEqual({ kind: "refused" });
     expect(
-      accepted({
+      reading({
         "a.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
         "b.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }',
         "tsconfig.json": '{ "extends": ["./a.json", "./b.json"] }',
       }),
-    ).toBe(false);
+    ).toEqual({ kind: "refused" });
     expect(
-      accepted({
+      reading({
         "a.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": false } }',
         "b.json": '{ "extends": "./c.json" }',
         "c.json": '{ "compilerOptions": { "rewriteRelativeImportExtensions": true } }',
         "tsconfig.json": '{ "extends": ["./a.json", "./b.json"] }',
       }),
-    ).toBe(true);
+    ).toEqual({ kind: "accepted" });
   });
 
-  it("counts a file it cannot read as not accepting, and ends an extends cycle", () => {
-    expect(accepted({ "tsconfig.json": "{ not json" })).toBe(false);
-    expect(accepted({ "tsconfig.json": '{ "extends": "./missing.json" }' })).toBe(false);
-    expect(accepted({ "a.json": '{ "extends": "./tsconfig.json" }', "tsconfig.json": '{ "extends": "./a.json" }' })).toBe(false);
+  it("names the file in the chain it cannot read, and ends an extends cycle", () => {
+    expect(reading({ "tsconfig.json": "{ not json" })).toEqual({ kind: "unread", file: "tsconfig.json", detail: "it does not parse as JSON" });
+    expect(reading({ "tsconfig.json": '{ "extends": "./missing.json" }' })).toEqual({
+      kind: "unread",
+      file: "tsconfig.json",
+      detail: 'its extends "./missing.json" names no file',
+    });
+    expect(reading({ "base.json": "{ not json", "tsconfig.json": '{ "extends": "./base.json" }' })).toEqual({
+      kind: "unread",
+      file: "base.json",
+      detail: "it does not parse as JSON",
+    });
+    expect(reading({ "tsconfig.json": '{ "extends": 1 }' })).toEqual({
+      kind: "unread",
+      file: "tsconfig.json",
+      detail: "its extends is neither a string nor a list of strings",
+    });
+    expect(
+      reading({ "base.json": "{ not json", "tsconfig.json": '{ "extends": "./base.json", "compilerOptions": { "allowImportingTsExtensions": true } }' }),
+    ).toEqual({ kind: "accepted" });
+    expect(reading({ "a.json": '{ "extends": "./tsconfig.json" }', "tsconfig.json": '{ "extends": "./a.json" }' })).toEqual({ kind: "refused" });
   });
 });

@@ -404,49 +404,58 @@ export async function ensureTsconfig(
   return notice === undefined ? { written } : { written, notice };
 }
 
-type OptionValue = { kind: "set"; value: unknown } | { kind: "unset" } | { kind: "unread" };
+/** A file in the tsconfig chain that could not be read, and why. */
+type Unread = { kind: "unread"; file: string; detail: string };
+
+type OptionValue = { kind: "set"; value: unknown } | { kind: "unset" } | Unread;
 
 /** The value TypeScript takes for one compiler option: the file's own
  * `compilerOptions`, else the last `extends` entry that sets it, as a later
  * base overrides an earlier one. */
-function effectiveOption(tsconfig: unknown, fromDir: string, key: string, seen: Set<string>): OptionValue {
+function effectiveOption(tsconfig: unknown, fromFile: string, key: string, seen: Set<string>): OptionValue {
   const options = ownCompilerOptions(tsconfig);
   if (options !== undefined && key in options) return { kind: "set", value: (options as Record<string, unknown>)[key] };
   const specifiers = extendsSpecifiers(tsconfig);
-  if (specifiers === undefined) return { kind: "unread" };
+  if (specifiers === undefined) return { kind: "unread", file: fromFile, detail: "its extends is neither a string nor a list of strings" };
   for (const specifier of [...specifiers].reverse()) {
-    const file = resolveExtends(specifier, fromDir);
-    if (file === undefined) return { kind: "unread" };
+    const file = resolveExtends(specifier, path.dirname(fromFile));
+    if (file === undefined) return { kind: "unread", file: fromFile, detail: `its extends ${JSON.stringify(specifier)} names no file` };
     if (seen.has(file)) continue;
     let base: unknown;
     try {
       base = parseJsonc(readFileSync(file, "utf8"));
     } catch {
-      return { kind: "unread" };
+      return { kind: "unread", file, detail: "it does not parse as JSON" };
     }
-    const inherited = effectiveOption(base, path.dirname(file), key, new Set([...seen, file]));
+    const inherited = effectiveOption(base, file, key, new Set([...seen, file]));
     if (inherited.kind !== "unset") return inherited;
   }
   return { kind: "unset" };
 }
 
 /** Whether the project's `tsc` accepts a relative import that names a `.ts`
- * file: tsconfig.json, through its `extends` chain, sets
+ * file. */
+export type TsExtensionImports = { kind: "no-tsconfig" } | { kind: "accepted" } | { kind: "refused" } | Unread;
+
+/** Whether tsconfig.json, through its `extends` chain, sets
  * `rewriteRelativeImportExtensions` or `allowImportingTsExtensions` to true.
- * `undefined` when there is no tsconfig.json to read. A file that does not
- * parse, or an `extends` that cannot be read, counts as not accepting,
- * because nothing then says tsc does. */
-export function tsExtensionImportsAccepted(rootDir: string): boolean | undefined {
+ * A file in the chain that cannot be read is reported with its path relative
+ * to `rootDir`, so a caller that falls back to the `.js` name can say which
+ * file made it fall back. */
+export function tsExtensionImports(rootDir: string): TsExtensionImports {
   const tsconfigPath = path.join(rootDir, "tsconfig.json");
-  if (!existsSync(tsconfigPath)) return undefined;
+  if (!existsSync(tsconfigPath)) return { kind: "no-tsconfig" };
   let parsed: unknown;
   try {
     parsed = parseJsonc(readFileSync(tsconfigPath, "utf8"));
   } catch {
-    return false;
+    return { kind: "unread", file: "tsconfig.json", detail: "it does not parse as JSON" };
   }
-  return [TS_EXTENSION_OPTION, "allowImportingTsExtensions"].some((key) => {
-    const option = effectiveOption(parsed, rootDir, key, new Set([tsconfigPath]));
-    return option.kind === "set" && option.value === true;
-  });
+  const options = [TS_EXTENSION_OPTION, "allowImportingTsExtensions"].map((key) =>
+    effectiveOption(parsed, tsconfigPath, key, new Set([tsconfigPath])),
+  );
+  if (options.some((option) => option.kind === "set" && option.value === true)) return { kind: "accepted" };
+  const unread = options.find((option): option is Unread => option.kind === "unread");
+  if (unread === undefined) return { kind: "refused" };
+  return { ...unread, file: path.relative(rootDir, unread.file).split(path.sep).join("/") };
 }

@@ -22,8 +22,8 @@ Node runs a step file by erasing its types, so write TypeScript that
 erases cleanly. Import another step file by its own name, `.ts` included
 (`import openAccount from "./open-account.ts"`), the spelling `nuka
 scaffold --from` writes. When `tsconfig.json` sets neither
-`rewriteRelativeImportExtensions` nor `allowImportingTsExtensions`,
-scaffold writes `./open-account.js` and a `note:` line instead; `nuka`
+`rewriteRelativeImportExtensions` nor `allowImportingTsExtensions`, or a
+file in its `extends` chain cannot be read, scaffold writes `./open-account.js` and a `note:` line instead; `nuka`
 loads the `.ts` file under that name, so keep it. Import a type with `import type`: a type imported
 without it stays an import and fails with "does not provide an export
 named". An `enum`, a `namespace`, or a constructor parameter property does

@@ -387,6 +387,20 @@ describe("nuka scaffold --from in a project whose tsconfig.json accepts no .ts i
       'import runGreet from "./run-greet.ts";',
     );
   });
+
+  it("names the tsconfig file where the chain stops when it falls back to the .js name", async () => {
+    await writeFile(path.join(rootDir, "tsconfig.json"), '{ "extends": "./tsconfig.base.json" }\n');
+
+    const result = await cli(rootDir, ["scaffold", "output-says", "--then", "--from", "run-greet.stdout"]);
+
+    expect(result.stderr).toBe(
+      'note: the import names the .js file, because the tsconfig chain stops at tsconfig.json (its extends "./tsconfig.base.json" names no file), so nothing in it says tsc accepts a .ts name; nuka loads the .ts file under that name. Once tsconfig.json is fixed and the chain sets "rewriteRelativeImportExtensions": true, scaffold imports by the .ts name\n',
+    );
+    expect(result.exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8")).toContain(
+      'import runGreet from "./run-greet.js";',
+    );
+  });
 });
 
 const execFileAsync = promisify(execFile);

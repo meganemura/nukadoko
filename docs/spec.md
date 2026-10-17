@@ -225,7 +225,9 @@ Node floor is the first release that does that without a flag (22.18 on the
   `tsconfig.json`, through its `extends` chain, sets neither option below
   to true, `scaffold --from` writes the `.js` name instead and says so in
   one `note:` line on stderr, so the file it writes passes the project's
-  own `tsc` as it stands. `tsc`
+  own `tsc` as it stands. A file in that chain that cannot be read (it
+  does not parse, or an `extends` names no file) also leads to the `.js`
+  name, and the `note:` names that file and why. `tsc`
   accepts the `.ts` name with `rewriteRelativeImportExtensions` or
   `allowImportingTsExtensions`; `nuka init` adds the first when
   `tsconfig.json` names neither. It follows `extends` to ask: a base

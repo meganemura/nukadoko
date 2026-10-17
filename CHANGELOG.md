@@ -47,6 +47,16 @@ just until 0.1.
   200 characters (code points, so a cut never splits a surrogate pair),
   and the `Call log:` stays in the step record.
 
+### Fixed
+
+- **`nuka scaffold --from` names the tsconfig file where its chain stops.** A
+  tsconfig.json that does not parse, or an `extends` that names no file or
+  a base that does not parse, made the chained import use the `.js` name,
+  and the note on stderr said that tsconfig.json set neither
+  `rewriteRelativeImportExtensions` nor `allowImportingTsExtensions`. The
+  note now names the file and the reason the chain stops there, so a broken
+  `extends` is not mistaken for a missing option.
+
 ## 0.17.0 — 2026-10-17
 
 ### Breaking
