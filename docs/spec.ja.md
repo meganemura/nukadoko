@@ -3169,7 +3169,7 @@ nukadoko はすべての段階を記録します。
   その件数の元になる注記を既定の報告が外したときは(下記を参照)、`nuka tend --all` がそれぞれを名指すことをこの行が告げます。
 
 `--json` では、同じサマリーが `summary` オブジェクトになり、nukadoko が出力するほかの文書と同じく snake_case です。
-キーは `typed_steps`、`compat_steps`、`compat_step_names`、`read_only_steps`、`scanned_feature_dirs` と、それぞれ `{ declared, total }` の `rationale` と `describe` です。
+キーは `typed_steps`、`compat_steps`、`compat_step_names`、`read_only_steps`、`scanned_feature_dirs` と、`{ declared, total }` の `describe` です。
 
 このサマリーが存在するのは、この情報がすでにあったのに読まれていなかったからです。
 step record の `world` と `declared` の件数は、スイートが昇格するにつれて確かに縮みます。

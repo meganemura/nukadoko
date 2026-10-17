@@ -112,7 +112,9 @@ which is gherkin's own rule rather than a nukadoko choice, so an `And`
 under `Then` sits in Then position too. A `*` line has no position and is
 held to none of this. A scenario with a Given or a When of its own and
 no Then, in it or in the Background, passes whenever its steps run, so
-`nuka check` warns `scenario-without-then`.
+`nuka check` warns `scenario-without-then`. Add the Then line that names
+what the reader must observe afterwards; a step that checks something
+but sits under Given or When belongs under Then instead.
 
 ## A Markdown oath
 

@@ -3704,7 +3704,7 @@ do need acting on):
 Under `--json`, the same summary is the `summary` object, in snake_case
 like every other document nukadoko prints: `typed_steps`, `compat_steps`,
 `compat_step_names`, `read_only_steps`, `scanned_feature_dirs`, and
-`rationale` and `describe`, each `{ declared, total }`.
+`describe` as `{ declared, total }`.
 
 This summary exists because the information was already available but unread. A step
 record's `world` and `declared` counts do shrink as a suite promotes, which

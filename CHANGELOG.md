@@ -291,6 +291,12 @@ just until 0.1.
 
 ### Fixed
 
+- **docs/spec.md no longer lists a `rationale` key in the `nuka tend --json` summary.**
+  The key went away with `defineStep`'s `rationale` option; the summary
+  keeps `describe` as its one `{ declared, total }` count. The acceptance
+  skill now also says what to add when `nuka check` warns
+  `scenario-without-then`.
+
 - **Tests that a loaded machine failed now assert an ordering or an event instead of a duration.**
   This changes the test suite only. The compat timeout tests in
   `tests/compat-run-scope.test.ts` held their slow step or hook on a sleep
