@@ -235,6 +235,15 @@ just until 0.1.
   now names the file's own extension. Discovery also skips a `.d.cts` type
   declaration, as it already skips `.d.ts` and `.d.mts`.
 
+- **A drafted scenario whose docstring holds the text `\"\"\"` reads back as written.**
+  `nuka explore` and `nuka harvest` write each docstring between `"""`
+  fences, and @cucumber/gherkin turns the first `\"\"\"` on any line
+  inside those fences into `"""`. A docstring value that held that text
+  read back different, and its line was written with a comment saying
+  so. The draft now fences such a docstring with backticks. A
+  value that holds both `\"\"\"` and `` \`\`\` `` fits neither fence, and
+  its line still gets the read-back comment.
+
 ## 0.16.1 — 2026-10-17
 
 ### Fixed

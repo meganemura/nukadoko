@@ -37,22 +37,41 @@ async function failureFor(entry: LineEntry): Promise<string | undefined> {
 }
 
 const ALPHABET = 'ab "\\|#';
+const DOCSTRING_ALPHABET = `${ALPHABET}\``;
 
 describe("draft read-back", () => {
+  function noteEntry(body: string): LineEntry {
+    return {
+      kind: "line",
+      stepName: "write-note",
+      text: "a note is written",
+      attachment: { kind: "docstring", key: "body", value: body },
+      expectedInlineArgs: { body },
+      comments: [],
+    };
+  }
+
+  it('reads back a docstring line that holds the escape sequence \\"\\"\\"', async () => {
+    expect(await failureFor(noteEntry('\\"\\"\\"'))).toBe(undefined);
+  });
+
+  it("reports a docstring that holds both fence escapes", async () => {
+    expect(await failureFor(noteEntry('\\"\\"\\"\n\\`\\`\\`'))).toBe(
+      'this line does not read back to the same args: wrote {"body":"\\\\\\"\\\\\\"\\\\\\"\\n\\\\`\\\\`\\\\`"}; read back as {"body":"\\"\\"\\"\\n\\\\`\\\\`\\\\`"}',
+    );
+  });
+
   it("reads a docstring back to the text it was written from", () =>
     hegel.testAsync(async (tc) => {
-      const lines = tc.draw(gs.arrays(gs.text({ minSize: 1, maxSize: 6, alphabet: ALPHABET }), { minSize: 1, maxSize: 4 }));
+      const lines = tc.draw(gs.arrays(gs.text({ minSize: 1, maxSize: 6, alphabet: DOCSTRING_ALPHABET }), { minSize: 1, maxSize: 4 }));
       const body = lines.map((line) => line.trim()).filter((line) => line.length > 0).join("\n");
       if (body.length === 0) return;
-      const entry: LineEntry = {
-        kind: "line",
-        stepName: "write-note",
-        text: "a note is written",
-        attachment: { kind: "docstring", key: "body", value: body },
-        expectedInlineArgs: { body },
-        comments: [],
-      };
-      expect(await failureFor(entry)).toBe(undefined);
+      const failure = await failureFor(noteEntry(body));
+      if (body.includes('\\"\\"\\"') && body.includes("\\`\\`\\`")) {
+        expect(failure).toMatch(/^this line does not read back to the same args: /);
+      } else {
+        expect(failure).toBe(undefined);
+      }
     }));
 
   it("reads a table back to the rows it was written from", () =>

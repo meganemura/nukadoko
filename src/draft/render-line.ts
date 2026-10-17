@@ -93,26 +93,38 @@ export function renderPatternLine(pattern: string, args: PrimitiveArgs): Rendere
   return { ok: true, text, captures };
 }
 
-/** Escapes a docstring content line for the closing separator collision
- * @cucumber/gherkin's own reader guards against: a content line that,
- * once left-trimmed, starts with `"""` is read as the *closing* separator,
- * not content (GherkinClassicTokenMatcher's own `match_DocStringSeparator`
- * checks `startsWith`, not "contains"). The reader's own
- * `unescapeDocString` turns `\"\"\"` back into `"""`, one backslash before
- * each quote, so that is what the leading `"""` becomes. A single `\`
- * before all three would read back with the backslash still in it. A
- * `"""` occurring mid-line is left alone: it can never be mistaken
- * for the separator, and escaping it too would ask the reader's own
- * single, non-global unescape to undo two occurrences on one line, which it
- * does not.
- */
-function escapeDocStringLine(line: string): string {
+// @cucumber/gherkin reads a docstring content line in two steps. A line
+// that, once left-trimmed, starts with the open fence closes the block
+// (`match_DocStringSeparator` checks `startsWith`). Any other line has the
+// first occurrence of the fence's escape (`\"\"\"` or `\`\`\``) replaced
+// by the fence itself (`unescapeDocString`, a non-global `replace`, applied
+// anywhere in the line). So a line that already holds the escape sequence
+// as text cannot be written under that fence at all: the reader would turn
+// it into the fence. The renderer picks the fence whose escape the value
+// does not contain. A value that holds both escapes fits neither, and
+// readBack reports that line instead of writing a value that reads back
+// different.
+const DOCSTRING_FENCES = [
+  { fence: '"""', escape: '\\"\\"\\"' },
+  { fence: "```", escape: "\\`\\`\\`" },
+] as const;
+
+type DocStringFence = (typeof DOCSTRING_FENCES)[number];
+
+function chooseDocStringFence(value: string): DocStringFence {
+  return DOCSTRING_FENCES.find(({ escape }) => !value.includes(escape)) ?? DOCSTRING_FENCES[0];
+}
+
+// Only a leading fence is escaped. One mid-line would never be read as the
+// close, and escaping it too would ask the reader's single replace to undo
+// two occurrences on one line.
+function escapeDocStringLine(line: string, { fence, escape }: DocStringFence): string {
   const trimmed = line.replace(/^[ \t]+/, "");
-  if (!trimmed.startsWith('"""')) {
+  if (!trimmed.startsWith(fence)) {
     return line;
   }
   const leadingWhitespace = line.slice(0, line.length - trimmed.length);
-  return `${leadingWhitespace}\\"\\"\\"${trimmed.slice(3)}`;
+  return `${leadingWhitespace}${escape}${trimmed.slice(fence.length)}`;
 }
 
 /** Escapes one table cell for @cucumber/gherkin's own reader
@@ -147,8 +159,9 @@ export type Attachment = DocStringAttachment | TableAttachment;
  */
 export function renderAttachmentBlock(attachment: Attachment, indent: string): string[] {
   if (attachment.kind === "docstring") {
-    const lines = attachment.value.split("\n").map((line) => `${indent}${escapeDocStringLine(line)}`);
-    return [`${indent}"""`, ...lines, `${indent}"""`];
+    const fence = chooseDocStringFence(attachment.value);
+    const lines = attachment.value.split("\n").map((line) => `${indent}${escapeDocStringLine(line, fence)}`);
+    return [`${indent}${fence.fence}`, ...lines, `${indent}${fence.fence}`];
   }
   return attachment.value.map(
     (row) => `${indent}| ${row.map((cell) => escapeTableCell(cell)).join(" | ")} |`,

@@ -79,3 +79,17 @@ describe("renderAttachmentBlock: docstring content colliding with the closing fe
     ]);
   });
 });
+
+describe("renderAttachmentBlock: docstring content holding the triple-quote escape", () => {
+  it("fences the block with backticks and leaves the escape sequence as written", () => {
+    const attachment: DocStringAttachment = {
+      kind: "docstring",
+      key: "body",
+      value: '\\"\\"\\"\n```not a real close',
+    };
+
+    const block = renderAttachmentBlock(attachment, "  ");
+
+    expect(block).toEqual(["  ```", '  \\"\\"\\"', "  \\`\\`\\`not a real close", "  ```"]);
+  });
+});
