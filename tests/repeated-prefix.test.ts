@@ -1,4 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import type { PickleStepArgument } from "@cucumber/messages";
 import * as hegel from "@hegeldev/hegel";
@@ -15,6 +17,7 @@ interface StepInput {
   readonly text: string;
   readonly ms: number;
   readonly record?: boolean;
+  readonly mutates?: boolean | null;
 }
 
 interface ScenarioInput {
@@ -27,9 +30,9 @@ interface ScenarioInput {
   readonly steps: readonly StepInput[];
 }
 
-async function writeScenario(rootDir: string, input: ScenarioInput): Promise<void> {
+function writeScenario(rootDir: string, input: ScenarioInput): void {
   const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", input.id);
-  await mkdir(scenarioDir, { recursive: true });
+  mkdirSync(scenarioDir, { recursive: true });
 
   const steps = [];
   for (const [index, step] of input.steps.entries()) {
@@ -37,20 +40,21 @@ async function writeScenario(rootDir: string, input: ScenarioInput): Promise<voi
     steps.push({ text: step.text, status: "passed", step_record_id: stepId });
     if (stepId !== null) {
       const stepDir = path.join(rootDir, ".nukadoko", "records", "steps", stepId);
-      await mkdir(stepDir, { recursive: true });
+      mkdirSync(stepDir, { recursive: true });
       const startedAt = Date.parse(input.startedAt) + index * 1_000;
-      await writeFile(
+      writeFileSync(
         path.join(stepDir, "record.json"),
         JSON.stringify({
           started_at: new Date(startedAt).toISOString(),
           finished_at: new Date(startedAt + step.ms).toISOString(),
+          ...(step.mutates === undefined ? {} : { mutates: step.mutates }),
         }),
       );
     }
   }
 
   const startedAt = Date.parse(input.startedAt);
-  await writeFile(
+  writeFileSync(
     path.join(scenarioDir, "record.json"),
     JSON.stringify({
       scenario_record_id: input.id,
@@ -76,17 +80,17 @@ describe("nuka tend: repeated-scenario-prefix", () => {
     await removeTempDir(rootDir);
   });
 
-  it("collapses a three-level nested family to the prefix with the largest measured time", async () => {
+  it("collapses a three-level nested family to the prefix that covers the most step executions", async () => {
     const shared = [
       { text: "Given an account", ms: 1_000 },
       { text: "And the dashboard is open", ms: 2_000 },
       { text: "And the report is loaded", ms: 3_000 },
     ];
-    await writeScenario(rootDir, {
+    writeScenario(rootDir, {
       id: "scn-a", runId: "run-new", feature: "features/a.feature",
       startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000, steps: shared,
     });
-    await writeScenario(rootDir, {
+    writeScenario(rootDir, {
       id: "scn-b", runId: "run-new", feature: "features/b.feature",
       startedAt: "2026-08-30T00:00:01.000Z", durationMs: 10_000, steps: shared,
     });
@@ -106,7 +110,7 @@ describe("nuka tend: repeated-scenario-prefix", () => {
 
   it("does not report a repeated prefix below two percent of the run time", async () => {
     for (const id of ["scn-a", "scn-b"]) {
-      await writeScenario(rootDir, {
+      writeScenario(rootDir, {
         id, runId: "run-new", feature: `features/${id}.feature`,
         startedAt: `2026-08-30T00:00:0${id === "scn-a" ? 0 : 1}.000Z`,
         durationMs: 10_000, steps: [{ text: "Given a cheap opening", ms: 100 }],
@@ -117,14 +121,14 @@ describe("nuka tend: repeated-scenario-prefix", () => {
 
   it("uses only the most recent run", async () => {
     for (const id of ["old-a", "old-b"]) {
-      await writeScenario(rootDir, {
+      writeScenario(rootDir, {
         id, runId: "run-old", feature: `features/${id}.feature`,
         startedAt: "2026-08-29T00:00:00.000Z", durationMs: 20_000,
         steps: [{ text: "Given an old expensive opening", ms: 8_000 }],
       });
     }
     for (const id of ["new-a", "new-b"]) {
-      await writeScenario(rootDir, {
+      writeScenario(rootDir, {
         id, runId: "run-new", feature: `features/${id}.feature`,
         startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
         steps: [{ text: "Given a new opening", ms: 1_000 }],
@@ -144,7 +148,7 @@ describe("nuka tend: repeated-scenario-prefix", () => {
   });
 
   it("returns no notes when every prefix belongs to only one scenario", async () => {
-    await writeScenario(rootDir, {
+    writeScenario(rootDir, {
       id: "scn-a", runId: "run-new", feature: "features/a.feature",
       startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
       steps: [{ text: "Given a unique opening", ms: 5_000 }],
@@ -232,7 +236,7 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
 
   it("does not group a sentence whose docstring differs", async () => {
     for (const [id, line] of [["scn-alpha", 3], ["scn-beta", 11]] as const) {
-      await writeScenario(rootDir, {
+      writeScenario(rootDir, {
         id, runId: "run-new", feature: "features/shared.feature", line,
         startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000, steps: LIST_STEPS,
       });
@@ -242,7 +246,7 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
 
   it("groups the same sentence and docstring, up to the first When, and says the docstring is shared", async () => {
     for (const [id, line] of [["scn-alpha", 3], ["scn-again", 19]] as const) {
-      await writeScenario(rootDir, {
+      writeScenario(rootDir, {
         id, runId: "run-new", feature: "features/shared.feature", line,
         startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000, steps: LIST_STEPS,
       });
@@ -251,15 +255,15 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
     expect(notes.map((note) => note.message)).toEqual([
       "2 scenarios begin with the same 1 step, which took 6 seconds across them, 30% of this run's summed " +
         'scenario time. The shared steps: "a list". The shared steps take the same docstring or table. ' +
-        'The place to lift a shared opening into is a "process"-scope fixture (nukadoko.config.ts fixtures); ' +
-        "whether these scenarios can share what it builds depends on which of them write to that state, " +
-        "which this tool cannot see.",
+        '"a list" does not declare mutates: false, so a later scenario may read what this opening writes: ' +
+        'a "process"-scope fixture would share that state between scenarios. ' +
+        "A Background keeps the shared steps in one place and still runs them for each scenario.",
     ]);
   });
 
   it("does not report the When an outline's rows share", async () => {
     for (const [id, line] of [["row-a", 36], ["row-b", 37]] as const) {
-      await writeScenario(rootDir, {
+      writeScenario(rootDir, {
         id, runId: "run-new", feature: "features/shared.feature", line,
         startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
         steps: [
@@ -269,6 +273,97 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
       });
     }
     expect(await prefixNotes()).toEqual([]);
+  });
+});
+
+describe("nuka tend: repeated-scenario-prefix names an opening that timing does not decide", () => {
+  const permutations = (items: readonly string[]): string[][] =>
+    items.length === 0 ? [[]] : items.flatMap((item, index) =>
+      permutations([...items.slice(0, index), ...items.slice(index + 1)]).map((rest) => [item, ...rest]));
+  const recordIdOrders = permutations(["scn-1", "scn-2", "scn-3", "scn-4"]);
+  const stepMs = gs.integers({ minValue: 500, maxValue: 1_500 });
+
+  it("names the same opening and file whatever each step took and whatever order the records sort in", () =>
+    hegel.test((tc) => {
+      const ids = tc.draw(gs.sampledFrom(recordIdOrders));
+      const shapes: readonly { feature: string; line: number; texts: readonly string[] }[] = [
+        { feature: "features/b.feature", line: 3, texts: ["Given an account", "And a saved report", "When it is read"] },
+        { feature: "features/a.feature", line: 9, texts: ["Given an account", "And a saved report", "When it is shared"] },
+        { feature: "features/a.feature", line: 3, texts: ["Given an account", "When it is closed"] },
+        { feature: "features/c.feature", line: 3, texts: ["Given nothing", "When it starts"] },
+      ];
+      const rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-prefix-"));
+      try {
+        for (const [index, shape] of shapes.entries()) {
+          const steps = shape.texts.map((text) => ({ text, ms: tc.draw(stepMs) }));
+          writeScenario(rootDir, {
+            id: ids[index]!, runId: "run-new", feature: shape.feature, line: shape.line,
+            startedAt: `2026-08-30T00:00:0${index}.000Z`,
+            durationMs: steps.reduce((total, step) => total + step.ms, 0),
+            steps,
+          });
+        }
+        const notes = findRepeatedScenarioPrefixes(rootDir, ".nukadoko");
+        expect(notes.map((note) => [note.file, note.message.split(", which took")[0]])).toEqual([
+          ["features/a.feature", "2 scenarios begin with the same 2 steps"],
+        ]);
+        expect(notes[0]!.message).toContain('The shared steps: "Given an account", "And a saved report".');
+      } finally {
+        rmSync(rootDir, { recursive: true, force: true });
+      }
+    }));
+});
+
+describe("nuka tend: repeated-scenario-prefix reads each shared step's mutates declaration", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("check-clean-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  function writePair(mutates: readonly (boolean | null)[]): void {
+    for (const id of ["scn-a", "scn-b"]) {
+      writeScenario(rootDir, {
+        id, runId: "run-new", feature: `features/${id}.feature`,
+        startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
+        steps: [
+          { text: "Given the catalog is loaded", ms: 2_000, mutates: mutates[0]! },
+          { text: "And the dashboard is open", ms: 2_000, mutates: mutates[1]! },
+        ],
+      });
+    }
+  }
+
+  it("names a process-scope fixture when every shared step declares mutates: false", () => {
+    writePair([false, false]);
+    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko").map((note) => note.message)).toEqual([
+      "2 scenarios begin with the same 2 steps, which took 8 seconds across them, 40% of this run's summed " +
+        'scenario time. The shared steps: "Given the catalog is loaded", "And the dashboard is open". ' +
+        'Every shared step declares mutates: false, so a "process"-scope fixture (nukadoko.config.ts fixtures) ' +
+        "can build this opening once for all of them.",
+    ]);
+  });
+
+  it("names the first shared step that may write, and does not offer a process-scope fixture for it", () => {
+    writePair([false, true]);
+    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko").map((note) => note.message)).toEqual([
+      "2 scenarios begin with the same 2 steps, which took 8 seconds across them, 40% of this run's summed " +
+        'scenario time. The shared steps: "Given the catalog is loaded", "And the dashboard is open". ' +
+        '"And the dashboard is open" does not declare mutates: false, so a later scenario may read what this ' +
+        'opening writes: a "process"-scope fixture would share that state between scenarios. ' +
+        "A Background keeps the shared steps in one place and still runs them for each scenario.",
+    ]);
+  });
+
+  it("treats a compat step, which declares no mutates, as one that may write", () => {
+    writePair([null, false]);
+    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")[0]!.message).toContain(
+      '"Given the catalog is loaded" does not declare mutates: false',
+    );
   });
 });
 
