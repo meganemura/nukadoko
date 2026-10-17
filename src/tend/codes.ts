@@ -60,7 +60,7 @@ const TEND_CODE_INFO = {
   },
   "repeated-scenario-prefix": {
     description:
-      "Scenarios in the latest run open with the same steps. The note reports the measured repetition and recommends no fix.",
+      "Scenarios in the latest run open with the same steps, before the first When, with the same docstrings and tables. The note reports the measured repetition and recommends no fix.",
     reportedByDefault: true,
     do: "No change is necessary. If the shared steps set up the same state each time, a Background or a fixture can hold them.",
   },

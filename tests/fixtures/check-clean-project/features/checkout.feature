@@ -3,7 +3,7 @@ Feature: Projects
   Background:
     Given a project "shared" exists
 
-  Scenario Outline: create and look up a project
+  Scenario Outline: create and look up the project <name>
     Given a project "<name>" exists
     Then the project "<name>" can be looked up
 

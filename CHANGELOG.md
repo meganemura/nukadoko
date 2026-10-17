@@ -51,6 +51,15 @@ just until 0.1.
 
 ### Added
 
+- **`nuka check` warns `scenario-without-then` and `outline-rows-share-name`.**
+  A scenario with a Given or a When and no Then passed whenever its steps
+  ran without an error, and an outline whose name holds none of its
+  Examples columns put every row under one name in the run summary. Both
+  are read from the feature file alone and are warnings, so neither changes
+  the exit code. A `*` line counts as no position, and a scenario of only
+  `*` lines is left alone. `outline-rows-share-name`'s `do` names the
+  outline with its first column added.
+
 - **Every `nuka check` and `nuka tend` finding carries `file` and `do`.**
   `do` is the next step: a command with its values filled in where the
   finding knows them (`undefined-step` gives `nuka scaffold --feature
@@ -204,6 +213,16 @@ just until 0.1.
   when llms.txt stops naming a top-level `nuka` command.
 
 ### Changed
+
+- **`repeated-scenario-prefix` compares docstrings and tables, and stops at the first When.**
+  It grouped steps by sentence text alone, so two scenarios whose steps
+  took different docstrings counted as one opening, and the When an
+  outline's rows share counted as setup. Two steps now share an opening
+  only when their sentence and their docstring or table are the same, and
+  an opening ends before the first When or Then. The note adds "The shared
+  steps take the same docstring or table." when one is shared. The step
+  positions come from the scanned feature files; a record whose scenario
+  is no longer there with the same step texts is grouped by text as before.
 
 - **`nuka run` writes its scenario records to stdout only when stdout is not a terminal, or under `--records`.**
   In a terminal, one JSON line per scenario sat between a person and the

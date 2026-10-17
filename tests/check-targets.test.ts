@@ -53,7 +53,7 @@ describe("nuka check [target..]", () => {
     await mkdir(path.join(rootDir, "acceptance", "nested"));
     await writeFile(
       path.join(rootDir, "acceptance", "nested", "extra.feature"),
-      "Feature: Nested\n\n  Scenario: nested\n    Given this step is undefined in a nested file\n",
+      "Feature: Nested\n\n  Scenario: nested\n    Then this step is undefined in a nested file\n",
     );
   });
 

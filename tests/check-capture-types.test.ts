@@ -33,7 +33,9 @@ describe("nuka check: capture type against args schema", () => {
     const report = JSON.parse(stdout.text()) as { errors: CheckIssue[]; warnings: CheckIssue[] };
 
     expect(exitCode).toBe(1);
-    expect(report.warnings).toEqual([]);
+    // Each scenario is one Given line, and its steps declare mutates: true, so a
+    // Then line would raise then-mutates instead; this test is about capture types.
+    expect(report.warnings.filter((issue) => issue.code !== "scenario-without-then")).toEqual([]);
     expect(report.errors.map((issue) => issue.code)).toEqual(Array(11).fill("capture-type-mismatch"));
     expect(report.errors.map((issue) => issue.step)).toEqual([
       "bad-anon-number",

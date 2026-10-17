@@ -54,6 +54,16 @@ that as `outline-does-not-run`. The feature file keeps the rows. nukadoko
 does not generate them, and it does not run a property test. A property
 test of the decision stays in the project under test, on the function that
 decides. The feature's Examples rows are the boundaries nukadoko itself runs.
+Two shapes are warnings, not errors, because each can be what the author
+meant. A scenario with a Given or a When of its own and no Then is
+`scenario-without-then`: it passes whenever its steps run without an
+error, so nothing in it checks an outcome. A Then in the Background
+counts as the scenario's Then. A `*` line is neither a Then nor a Given,
+and a scenario of only `*` lines is left alone, even under a Background
+that holds a Given. An outline
+with more than one Examples row and no `<column>` in its name is
+`outline-rows-share-name`: every row runs under the same name, so the run
+summary shows rows that cannot be told apart.
 
 A nukadoko is the fermented rice-bran bed that turns cucumbers into pickles.
 It is alive. Daily care makes it mature, while neglect makes it die. This tool
@@ -4245,7 +4255,10 @@ nuka check [feature..] [--json]
                               unregistered or duplicate parameter type, an
                               undefined-step finding held back until such a cause
                               is fixed, a feature or oath that does not parse, a
-                              scenario outline with no Examples row that runs, a
+                              scenario outline with no Examples row that runs,
+                              warnings for a scenario with no Then and for an
+                              outline with several rows and no <column> in its
+                              name, a
                               fixture that destructures a name nukadoko does not
                               know, a model or relation naming an unknown or
                               browser-needing step, a step whose `parts` form a
@@ -4304,7 +4317,9 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
-                              open with the same steps (measured, no advice);
+                              open with the same steps up to the first When,
+                              docstrings and tables compared too (measured,
+                              no advice);
                               --all adds a schema field with no
                               `.describe()`, and --fail-on naming that code
                               adds it too

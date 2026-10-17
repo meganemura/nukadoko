@@ -59,7 +59,9 @@ step does in its place.
 
 `repeated-scenario-prefix` shows which scenarios in the most recent run
 shared the same opening steps. It also shows the measured time for that
-opening and its share of the run's summed scenario time.
+opening and its share of the run's summed scenario time. An opening ends
+before the first When, and two steps share it only when their docstring
+or table is the same too.
 
 `post-navigation-read` is the one worth knowing the shape of, because
 there is a way to make it stop being true and only one. It reads every

@@ -33,7 +33,8 @@ describe("nuka check: done-callback arity", () => {
       warnings: CheckIssue[];
     };
 
-    expect(report.warnings).toEqual([]);
+    // Its scenarios have no Then line, on purpose: moving the compat steps to Then would raise then-compat-step instead.
+    expect(report.warnings.filter((issue) => issue.code !== "scenario-without-then")).toEqual([]);
     expect([...new Set(report.errors.map((issue) => issue.code))].sort()).toEqual([
       "ambiguous-step",
       "done-callback-arity",

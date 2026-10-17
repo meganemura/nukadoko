@@ -7,7 +7,7 @@ Feature: a finding on a repeated line is reported once
   Scenario: first
     Then the count is checked
 
-  Scenario Outline: rows
+  Scenario Outline: row <n>
     Then the item is saved
     Given a note is added
       """

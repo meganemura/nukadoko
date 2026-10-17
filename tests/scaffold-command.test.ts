@@ -543,7 +543,10 @@ describe("nuka scaffold --command: any pattern", () => {
           expect(scaffold.exitCode).toBe(0);
           await writeFile(featurePath, `Feature: f\n  Scenario: s\n    When ${lineText}\n`);
           const check = await cli(rootDir, ["check"]);
-          expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+          // The feature is the one When line, so its only finding is the missing Then.
+          expect(check.stdout + check.stderr).toBe(
+            `warning\tscenario-without-then\tfeatures/${name}.feature:2\tScenario "s" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\n`,
+          );
           for (const key of ["stdout", "exitCode", "stderr"]) {
             const consumer = `${name}-${key.toLowerCase()}`;
             written.push(consumer);

@@ -104,7 +104,7 @@ describe("the do line in text output", () => {
     await writeFile(path.join(rootDir, "features", "steps", "broken.ts"), stepSource(STEP_SHAPES[1]));
     await writeFile(
       path.join(rootDir, "features", "greet.feature"),
-      "Feature: greet\n  Scenario: one\n    Given nothing defines this\n",
+      "Feature: greet\n  Scenario: one\n    Then nothing defines this\n",
     );
   });
 

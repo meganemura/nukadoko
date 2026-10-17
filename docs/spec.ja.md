@@ -53,6 +53,14 @@ Examples の行が無い scenario outline は、その一つです。
 nukadoko はその行を生成せず、property test も実行しません。
 判定そのものの property test は、検証対象のプロジェクトが、判定する関数に対して持ちます。
 nukadoko が実行するのは、feature の Examples に書いた境界の行です。
+2 つの形はエラーではなく警告です。
+どちらも作者の意図どおりであることがあるからです。
+自分の step に Given か When を持ち、Then を持たない scenario は `scenario-without-then` です。
+その scenario は step がエラーなく動けば必ず通るので、どの step も結果を確かめていません。
+Background の Then は、その scenario の Then に数えます。
+`*` の行は Then でも Given でもなく、`*` の行だけの scenario は、Given を持つ Background の下でも対象外です。
+Examples の行が 2 つ以上あり、名前に `<column>` を 1 つも含まない outline は `outline-rows-share-name` です。
+どの行も同じ名前で動くので、run の要約には見分けのつかない行が並びます。
 
 ぬか床とは、きゅうりを漬物に変える米ぬかの発酵床のことです。
 ぬか床は生きています。
@@ -3682,7 +3690,10 @@ nuka check [feature..] [--json]
                               unregistered or duplicate parameter type, an
                               undefined-step finding held back until such a cause
                               is fixed, a feature or oath that does not parse, a
-                              scenario outline with no Examples row that runs, a
+                              scenario outline with no Examples row that runs,
+                              warnings for a scenario with no Then and for an
+                              outline with several rows and no <column> in its
+                              name, a
                               fixture that destructures a name nukadoko does not
                               know, a model or relation naming an unknown or
                               browser-needing step, a step whose `parts` form a
@@ -3741,7 +3752,9 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page/context, a step that made a call soon
                               after its own navigation, and scenarios that
-                              open with the same steps (measured, no advice);
+                              open with the same steps up to the first When,
+                              docstrings and tables compared too (measured,
+                              no advice);
                               --all adds a schema field with no
                               `.describe()`, and --fail-on naming that code
                               adds it too

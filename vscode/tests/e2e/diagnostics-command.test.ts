@@ -101,6 +101,10 @@ describe("nukadoko.check: the one command allowed to run workspace code", () => 
           severity: 0, // DiagnosticSeverity.Error
           message: expect.stringContaining('No step definition matches "a step nothing in this project defines"'),
         }),
+        expect.objectContaining({
+          code: "scenario-without-then",
+          severity: 1, // DiagnosticSeverity.Warning
+        }),
       ]);
     },
     60_000,

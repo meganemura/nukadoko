@@ -1,4 +1,4 @@
 Feature: Greeting
 
   Scenario: greet someone
-    Given a greeting to "world"
+    Then a greeting to "world"

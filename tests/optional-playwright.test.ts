@@ -180,7 +180,16 @@ describe("a project without playwright installed", () => {
           do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
         },
       ],
-      warnings: [],
+      warnings: [
+        {
+          code: "scenario-without-then",
+          message:
+            'Scenario "fetches" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.',
+          file: "features/http.feature",
+          line: 3,
+          do: "Add a Then line that checks the outcome the scenario is for.",
+        },
+      ],
     });
   }, 60_000);
 

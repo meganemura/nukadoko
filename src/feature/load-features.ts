@@ -3,6 +3,14 @@ import path from "node:path";
 import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile, dialects } from "@cucumber/gherkin";
 import { OathParseError, parseOathSource } from "./parse-oath.js";
 import { resolveOathPaths } from "./resolve-oaths.js";
+import { findScenarioShapeFindings, type ScenarioShapeFinding } from "./scenario-shape.js";
+
+export {
+  findScenarioShapeFindings,
+  type OutlineRowsShareName,
+  type ScenarioShapeFinding,
+  type ScenarioWithoutThen,
+} from "./scenario-shape.js";
 import { enterOnce, entryKind } from "./walk-entry.js";
 
 export { enterOnce, entryKind, type EntryKind } from "./walk-entry.js";
@@ -97,6 +105,7 @@ export interface LoadFeaturesResult {
   readonly parseErrors: readonly FeatureParseError[];
   readonly serialTagOnScenario: readonly SerialTagOnScenario[];
   readonly outlinesThatDoNotRun: readonly OutlineDoesNotRun[];
+  readonly scenarioShapeFindings: readonly ScenarioShapeFinding[];
 }
 
 /** Exported for src/run/select-pickles.ts's own directory-target walk —
@@ -393,6 +402,7 @@ export function loadFeaturesFromDirs(
   const missingAdditionalDirs: string[] = [];
   const serialTagOnScenario: SerialTagOnScenario[] = [];
   const outlinesThatDoNotRun: OutlineDoesNotRun[] = [];
+  const scenarioShapeFindings: ScenarioShapeFinding[] = [];
   const seenAbsolutePaths = new Set<string>();
 
   const collect = (dir: string): void => {
@@ -419,6 +429,7 @@ export function loadFeaturesFromDirs(
         features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });
         serialTagOnScenario.push(...findSerialTagOnScenario(gherkinDocument, relativePath));
         outlinesThatDoNotRun.push(...findOutlinesThatDoNotRun(gherkinDocument, relativePath));
+        scenarioShapeFindings.push(...findScenarioShapeFindings(gherkinDocument, relativePath));
       } catch (error) {
         parseErrors.push({
           relativePath,
@@ -461,6 +472,7 @@ export function loadFeaturesFromDirs(
       features.push({ relativePath, pickles: attachStepLines(pickles, gherkinDocument) });
       serialTagOnScenario.push(...findSerialTagOnScenario(gherkinDocument, relativePath));
       outlinesThatDoNotRun.push(...findOutlinesThatDoNotRun(gherkinDocument, relativePath));
+      scenarioShapeFindings.push(...findScenarioShapeFindings(gherkinDocument, relativePath));
     } catch (error) {
       parseErrors.push({
         relativePath,
@@ -470,5 +482,12 @@ export function loadFeaturesFromDirs(
     }
   }
 
-  return { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun, missingAdditionalDirs };
+  return {
+    features,
+    parseErrors,
+    serialTagOnScenario,
+    outlinesThatDoNotRun,
+    scenarioShapeFindings,
+    missingAdditionalDirs,
+  };
 }

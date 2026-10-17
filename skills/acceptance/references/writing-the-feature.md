@@ -87,7 +87,10 @@ steps are folded into every pickle in that feature, run ahead of that
 scenario's steps. Writing an Outline row per case, rather than one
 scenario asserting several values in a row, is what keeps each case its
 own step records and its own pass or fail, never two cases sharing one
-verdict because they happened to share a scenario.
+verdict because they happened to share a scenario. Put a column in the
+Outline's name (`Scenario Outline: greets <name>`): with several rows and
+no column there, every row has the same name in the run summary, and
+`nuka check` warns `outline-rows-share-name`.
 
 ## Choosing Given, When, or Then
 
@@ -107,7 +110,9 @@ person's attention instead of deciding.
 `And` and `But` take the position of the primary keyword above them,
 which is gherkin's own rule rather than a nukadoko choice, so an `And`
 under `Then` sits in Then position too. A `*` line has no position and is
-held to none of this.
+held to none of this. A scenario with a Given or a When of its own and
+no Then, in it or in the Background, passes whenever its steps run, so
+`nuka check` warns `scenario-without-then`.
 
 ## A Markdown oath
 

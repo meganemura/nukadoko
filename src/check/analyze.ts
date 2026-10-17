@@ -10,10 +10,12 @@ import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.
 import {
   attachStepLines,
   findOutlinesThatDoNotRun,
+  findScenarioShapeFindings,
   findSerialTagOnScenario,
   loadFeaturesFromDirs,
   type LoadFeaturesResult,
   type OutlineDoesNotRun,
+  type ScenarioShapeFinding,
 } from "../feature/load-features.js";
 import { knownFixtureNames, validateFixtureDefinitions, validateStepFixtures } from "../fixture/validate-fixtures.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
@@ -49,6 +51,31 @@ function withUnboundSuffix(issues: readonly CheckIssue[], suffix: () => string):
   }
   const text = suffix();
   return issues.map((issue) => (issue.code === "undefined-step" ? { ...issue, message: issue.message + text } : issue));
+}
+
+function scenarioShapeWarning(finding: ScenarioShapeFinding): CheckIssue {
+  if (finding.code === "scenario-without-then") {
+    return {
+      code: finding.code,
+      message:
+        `Scenario "${finding.name}" has no Then step, so it passes whenever its steps run without an error, ` +
+        "and no step checks an outcome.",
+      file: finding.relativePath,
+      line: finding.line,
+    };
+  }
+  const columns = finding.columns.map((column) => `<${column}>`).join(", ");
+  return {
+    code: finding.code,
+    message:
+      `Scenario outline "${finding.name}" has ${finding.rows} Examples rows, and its name uses none of the ` +
+      `columns (${columns}), so every row is reported under the same name.`,
+    file: finding.relativePath,
+    line: finding.line,
+    ...(finding.columns[0] !== undefined
+      ? { do: `Add a column to the name, such as: ${finding.name} <${finding.columns[0]}>` }
+      : {}),
+  };
 }
 
 function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
@@ -159,6 +186,9 @@ function runSelectionFeatures(
     ),
     outlinesThatDoNotRun: selected.flatMap((feature) =>
       findOutlinesThatDoNotRun(feature.gherkinDocument, feature.relativePath),
+    ),
+    scenarioShapeFindings: selected.flatMap((feature) =>
+      findScenarioShapeFindings(feature.gherkinDocument, feature.relativePath),
     ),
   });
 }
@@ -481,7 +511,8 @@ async function reportFor(
     errors.push({ code: issue.code, message: issue.message, file: configFileName });
   }
 
-  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun } = loadFeatures(config);
+  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun, scenarioShapeFindings } =
+    loadFeatures(config);
   for (const parseError of parseErrors) {
     errors.push({
       code: "feature-parse-error",
@@ -514,6 +545,11 @@ async function reportFor(
       file: issue.relativePath,
       line: issue.line,
     });
+  }
+  // Warnings, not errors: a scenario with no Then can be a deliberate smoke
+  // test, and rows that share a name can be what the author wants to read.
+  for (const finding of scenarioShapeFindings) {
+    warnings.push(scenarioShapeWarning(finding));
   }
   const featureResult = checkFeatures(
     features,

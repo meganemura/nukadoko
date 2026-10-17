@@ -174,6 +174,12 @@ const CHECK_CODES = {
     severity: "error",
     do: "Add an Examples row for each case that must run, or remove the empty Examples table.",
   },
+  "outline-rows-share-name": {
+    description:
+      "A scenario outline has more than one Examples row, and its name holds no <column> of its Examples, so every row is reported under the same name.",
+    severity: "warning",
+    do: "Add an Examples column to the outline's name, such as <column>, so that each row has its own name.",
+  },
   "page-override-unowned": {
     description: "A config.fixtures definition overrides page, but owns neither page nor context.",
     severity: "error",
@@ -217,6 +223,12 @@ const CHECK_CODES = {
       "A feature line binds a step whose fixtures build page, context, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs.",
     severity: "error",
     do: "Install playwright in the project, at the version that the message names.",
+  },
+  "scenario-without-then": {
+    description:
+      "A scenario has a Given or When step of its own and no Then step, in it or in its Background, so it passes whenever its steps run without an error. A * line counts as neither.",
+    severity: "warning",
+    do: "Add a Then line that checks the outcome the scenario is for.",
   },
   "secrets-redact-key-too-short": {
     description:

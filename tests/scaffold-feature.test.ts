@@ -161,7 +161,12 @@ describe("nuka scaffold --feature", () => {
     const result = await cli(rootDir, ["scaffold", "--feature", feature]);
 
     expect(result.stdout).toBe("features/steps/i-add-2.ts\n");
-    expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
+    // The scenarios have no Then line, so the one warning left is that one.
+    expect(await cli(rootDir, ["check", feature])).toEqual({
+      exitCode: 0,
+      stdout: "warning\tscenario-without-then\tfeatures/add.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\nwarning\tscenario-without-then\tfeatures/add.feature:4\tScenario \"two\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\n",
+      stderr: "",
+    });
   });
 
   it("writes the line as written, with no capture, when a project type reads the same word, and says so", async () => {
@@ -180,7 +185,11 @@ describe("nuka scaffold --feature", () => {
         'note: features/cart.feature:3: "3 items in (the) cart" reads as "{int} items in \\\\(the) cart" or "{count} items in \\\\(the) cart" or "{float} items in \\\\(the) cart", so the stub\'s pattern is the line as written, with no capture; put a {key:type} capture in it by hand\n',
     });
     expect(await stepFile(rootDir, "3-items-in-the-cart")).toContain('  pattern: "3 items in \\\\(the) cart",\n  // Give');
-    expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
+    expect(await cli(rootDir, ["check", feature])).toEqual({
+      exitCode: 0,
+      stdout: "warning\tscenario-without-then\tfeatures/cart.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\n",
+      stderr: "",
+    });
   });
 
   it("writes the line as written when its reading would also match another line of the project", async () => {

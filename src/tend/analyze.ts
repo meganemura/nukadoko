@@ -129,7 +129,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findUnusedFixtures(vocabulary, fixtureGraph),
     ...findFixturesTouchingApp(fixtureGraph),
     ...findPostNavigationReads(rootDir, config.stateDir),
-    ...findRepeatedScenarioPrefixes(rootDir, config.stateDir),
+    ...findRepeatedScenarioPrefixes(rootDir, config.stateDir, features),
   ];
 
   const summary = buildTendSummary(vocabulary, fieldDescriptions, scannedFeatureDirs);

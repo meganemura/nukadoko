@@ -1,8 +1,11 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type { PickleStepArgument } from "@cucumber/messages";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { analyzeTend } from "../src/tend/analyze.js";
-import { findRepeatedScenarioPrefixes } from "../src/tend/repeated-prefix.js";
+import { findRepeatedScenarioPrefixes, stepPrefixKey } from "../src/tend/repeated-prefix.js";
 import { copyFixtureToTempDir, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: verify the measured repeated-prefix note at its record-file
@@ -18,6 +21,7 @@ interface ScenarioInput {
   readonly id: string;
   readonly runId: string;
   readonly feature: string;
+  readonly line?: number;
   readonly startedAt: string;
   readonly durationMs: number;
   readonly steps: readonly StepInput[];
@@ -52,6 +56,7 @@ async function writeScenario(rootDir: string, input: ScenarioInput): Promise<voi
       scenario_record_id: input.id,
       run_id: input.runId,
       feature: input.feature,
+      ...(input.line === undefined ? {} : { line: input.line }),
       scenario: input.id,
       started_at: input.startedAt,
       finished_at: new Date(startedAt + input.durationMs).toISOString(),
@@ -160,4 +165,128 @@ describe("nuka tend: repeated-scenario-prefix", () => {
     );
     expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")).toEqual([]);
   });
+});
+
+const SHARED_FEATURE = [
+  "Feature: shared openings",
+  "",
+  "  Scenario: alpha first",
+  "    Given a list",
+  '      """',
+  "      alpha",
+  '      """',
+  "    When the list is read",
+  "    Then it is shown",
+  "",
+  "  Scenario: beta",
+  "    Given a list",
+  '      """',
+  "      beta",
+  '      """',
+  "    When the list is read",
+  "    Then it is shown",
+  "",
+  "  Scenario: alpha again",
+  "    Given a list",
+  '      """',
+  "      alpha",
+  '      """',
+  "    When the list is read",
+  "    Then it is shown",
+  "",
+  "  Scenario Outline: posting",
+  "    When the body is posted",
+  '      """',
+  "      <body>",
+  '      """',
+  "    Then the status is <status>",
+  "",
+  "    Examples:",
+  "      | body | status |",
+  "      | a    | 200    |",
+  "      | b    | 400    |",
+  "",
+].join("\n");
+
+const LIST_STEPS = [
+  { text: "a list", ms: 3_000 },
+  { text: "the list is read", ms: 3_000 },
+  { text: "it is shown", ms: 1_000 },
+];
+
+describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("check-clean-project");
+    await writeFile(path.join(rootDir, "features", "shared.feature"), SHARED_FEATURE);
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  async function prefixNotes() {
+    return (await analyzeTend(rootDir)).notes.filter((note) => note.code === "repeated-scenario-prefix");
+  }
+
+  it("does not group a sentence whose docstring differs", async () => {
+    for (const [id, line] of [["scn-alpha", 3], ["scn-beta", 11]] as const) {
+      await writeScenario(rootDir, {
+        id, runId: "run-new", feature: "features/shared.feature", line,
+        startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000, steps: LIST_STEPS,
+      });
+    }
+    expect(await prefixNotes()).toEqual([]);
+  });
+
+  it("groups the same sentence and docstring, up to the first When, and says the docstring is shared", async () => {
+    for (const [id, line] of [["scn-alpha", 3], ["scn-again", 19]] as const) {
+      await writeScenario(rootDir, {
+        id, runId: "run-new", feature: "features/shared.feature", line,
+        startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000, steps: LIST_STEPS,
+      });
+    }
+    const notes = await prefixNotes();
+    expect(notes.map((note) => note.message)).toEqual([
+      "2 scenarios begin with the same 1 step, which took 6 seconds across them, 30% of this run's summed " +
+        'scenario time. The shared steps: "a list". The shared steps take the same docstring or table. ' +
+        'The place to lift a shared opening into is a "process"-scope fixture (nukadoko.config.ts fixtures); ' +
+        "whether these scenarios can share what it builds depends on which of them write to that state, " +
+        "which this tool cannot see.",
+    ]);
+  });
+
+  it("does not report the When an outline's rows share", async () => {
+    for (const [id, line] of [["row-a", 36], ["row-b", 37]] as const) {
+      await writeScenario(rootDir, {
+        id, runId: "run-new", feature: "features/shared.feature", line,
+        startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
+        steps: [
+          { text: "the body is posted", ms: 5_000 },
+          { text: `the status is ${id === "row-a" ? 200 : 400}`, ms: 1_000 },
+        ],
+      });
+    }
+    expect(await prefixNotes()).toEqual([]);
+  });
+});
+
+const argument = gs.oneOf<PickleStepArgument | undefined>(
+  gs.just(undefined),
+  gs.tuples(gs.oneOf(gs.just(undefined), gs.sampledFrom(["json", "text"])), gs.text({ maxSize: 6, alphabet: "ab\n\"" }))
+    .map(([mediaType, content]): PickleStepArgument => ({ docString: mediaType === undefined ? { content } : { mediaType, content } })),
+  gs.arrays(gs.arrays(gs.text({ maxSize: 3, alphabet: "ab|," }), { minSize: 1, maxSize: 2 }), { minSize: 1, maxSize: 3 })
+    .map((rows): PickleStepArgument => ({ dataTable: { rows: rows.map((cells) => ({ cells: cells.map((value) => ({ value })) })) } })),
+);
+const prefixStep = gs.tuples(gs.sampledFrom(["a list", "a list ", "the list"]), argument)
+  .map(([text, arg]) => (arg === undefined ? { text } : { text, argument: arg }));
+
+describe("stepPrefixKey", () => {
+  it("gives two steps the same key exactly when their text and argument are the same", () =>
+    hegel.test((tc) => {
+      const a = tc.draw(prefixStep);
+      const b = tc.draw(prefixStep);
+      expect(stepPrefixKey(a) === stepPrefixKey(b)).toBe(JSON.stringify(a) === JSON.stringify(b));
+    }));
 });
