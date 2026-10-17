@@ -60,7 +60,7 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
     const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(JSON.parse(stdout.text())).toEqual({ steps: [], import_failures: [] });
+    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, steps: [], import_failures: [] });
     expect(stderr.text()).toBe("");
   });
 });

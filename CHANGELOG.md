@@ -78,7 +78,8 @@ just until 0.1.
 - **`nuka tend --codes [--json]` lists every code a tend finding can carry.**
   It mirrors `nuka check --codes`: one line per code, code ascending, as
   `code`, `default` or `--all`, and a one-line description; `--json` prints
-  `[{ code, description, reportedByDefault }]`. `reportedByDefault` is
+  `{ schema_version, codes }`, each code `{ code, description,
+  reportedByDefault }`. `reportedByDefault` is
   false for `step-rationale-missing` and `schema-field-undescribed`, which a
   run reports only under `--all` or when `--fail-on` names them. It answers
   before the project loads, so it works while the config is broken. The
@@ -90,6 +91,23 @@ just until 0.1.
   `node scripts/llms-codes.ts` (after `npm run build`) rewrites them from
   the built CLI's `--codes --json`, and `tests/llms-codes.test.ts` fails
   while either table differs from its registry.
+- **Every JSON document starts with `schema_version`, and records name the nukadoko version that wrote them.**
+  No document said which shape it held, and `nuka steps --json` and a
+  step record's `used` had already changed shape with nothing an old
+  reader could test. Step records, scenario records, and the output of
+  `check --json`, `check --codes --json`, `steps --json`, `describe`,
+  `tend --json`, `tend --codes --json`, `clean --json`, `explore
+  --json`, and `session list --json` now begin with `"schema_version": 1`, one number per kind of
+  document, kept in `src/record/schema-version.ts`. A number moves when a
+  field changes meaning, type, or name, or is removed; an added field
+  does not move it. The step and scenario records also carry
+  `nukadoko`, the package version. `check --codes --json` and `session
+  list --json` printed bare arrays, which have no place for the key, so
+  they now print `{ schema_version, codes }` and `{ schema_version,
+  sessions }`, and `tend --codes --json` prints `{ schema_version, codes }`
+  from its first release. Breaking for a reader of those two: see
+  docs/upgrading.md. The experimental MCP and WebMCP tool lists are the
+  server's own shape and stay as they were.
 
 ### Packaging
 

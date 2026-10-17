@@ -1,3 +1,5 @@
+import { SCHEMA_VERSIONS } from "../record/schema-version.js";
+import { readOwnVersion } from "../version.js";
 import { existsSync } from "node:fs";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { executeTypedStep } from "../run/execute-typed-step.js";
@@ -782,6 +784,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const stepRecord: StepRecord =
       status === "passed"
         ? {
+            schema_version: SCHEMA_VERSIONS.step_record,
+            nukadoko: readOwnVersion(),
             step_record_id: recordId,
             step: name,
             kind: "do",
@@ -819,6 +823,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
+            schema_version: SCHEMA_VERSIONS.step_record,
+            nukadoko: readOwnVersion(),
             step_record_id: recordId,
             step: name,
             kind: "do",

@@ -1,3 +1,4 @@
+import { versioned } from "../record/schema-version.js";
 import { statSync } from "node:fs";
 import path from "node:path";
 import { analyzeProject, analyzeRunSelection } from "../check/analyze.js";
@@ -161,7 +162,7 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   if (codes) {
     const entries = listCheckCodes();
     if (json) {
-      stdout.write(`${JSON.stringify(entries, null, 2)}\n`);
+      stdout.write(`${JSON.stringify(versioned("check_codes", { codes: entries }), null, 2)}\n`);
     } else {
       for (const entry of entries) {
         stdout.write(`${formatCodeLine(entry)}\n`);
@@ -179,7 +180,7 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   }
 
   if (json) {
-    stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    stdout.write(`${JSON.stringify(versioned("check_report", report), null, 2)}\n`);
   } else {
     writeCheckIssueLines(report.errors, report.warnings, stdout);
     if (report.errors.length === 0 && report.warnings.length === 0) {

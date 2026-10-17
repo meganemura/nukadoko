@@ -27,7 +27,7 @@ describe("nuka check --codes", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const codes = JSON.parse(stdout.text()) as Array<{ code: string; description: string; severity?: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; description: string; severity?: string }>;
     expect(codes.some((entry) => entry.code === "step-file-import-failed")).toBe(true);
     expect(exitCode).toBe(0);
   });
@@ -40,7 +40,7 @@ describe("nuka check --codes", () => {
       stderr: createCaptureSink(),
     });
 
-    const codes = JSON.parse(stdout.text()) as Array<{ code: string; description: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; description: string }>;
     expect(codes.length).toBeGreaterThan(0);
     for (const entry of codes) {
       expect(typeof entry.description).toBe("string");
@@ -56,7 +56,7 @@ describe("nuka check --codes", () => {
       stderr: createCaptureSink(),
     });
 
-    const codes = JSON.parse(stdout.text()) as Array<{ code: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string }>;
     const sorted = [...codes].map((entry) => entry.code).sort((a, b) => a.localeCompare(b));
     expect(codes.map((entry) => entry.code)).toEqual(sorted);
   });
@@ -89,7 +89,7 @@ describe("nuka check --codes", () => {
 
     expect(stderr.text()).toBe("");
     expect(exitCode).toBe(0);
-    const codes = JSON.parse(stdout.text()) as Array<{ code: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string }>;
     expect(codes.some((entry) => entry.code === "step-file-import-failed")).toBe(true);
   });
 
@@ -104,7 +104,7 @@ describe("nuka check --codes", () => {
 
     expect(stderr.text()).toBe("");
     expect(exitCode).toBe(0);
-    const codes = JSON.parse(stdout.text()) as Array<{ code: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string }>;
     expect(codes.some((entry) => entry.code === "step-file-import-failed")).toBe(true);
   });
 

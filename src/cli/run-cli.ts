@@ -1,3 +1,4 @@
+import { versioned } from "../record/schema-version.js";
 import yargs from "yargs";
 // TODO(types): @types/yargs is pinned to the 17.x line (no 18.x types on
 // DefinitelyTyped yet); CommandModule/Argv here
@@ -361,7 +362,7 @@ export async function runCli(
           // exactly the "machine reader treats an incomplete list as
           // complete" failure this field exists to prevent.
           stdout.write(
-            `${JSON.stringify({ steps: summaries, import_failures: importFailureSummaries }, null, 2)}\n`,
+            `${JSON.stringify(versioned("steps", { steps: summaries, import_failures: importFailureSummaries }), null, 2)}\n`,
           );
         } else {
           // `stdout` here is the injected `WritableSink` (real process
@@ -449,7 +450,7 @@ export async function runCli(
         const graph = buildFixtureGraph(config);
         const contract = describeContract(entry, buildStepNames(vocabulary), graph);
         stdout.write(
-          `${JSON.stringify({ ...contract, import_failures: importFailureSummaries }, null, 2)}\n`,
+          `${JSON.stringify(versioned("describe", { ...contract, import_failures: importFailureSummaries }), null, 2)}\n`,
         );
         stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
         // Same rule as `steps` above, scoped to this one contract: an

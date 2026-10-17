@@ -101,7 +101,7 @@ describe("config.parameterTypes: from-dir folds the with/without location-clause
 
     expect(stderr.text()).toBe("");
     const report = JSON.parse(stdout.text());
-    expect(report).toEqual({ errors: [], warnings: [] });
+    expect(report).toEqual({ schema_version: 1, errors: [], warnings: [] });
     expect(exitCode).toBe(0);
   });
 

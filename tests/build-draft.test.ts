@@ -20,6 +20,8 @@ import type { StepRecordFailed, StepRecordPassed } from "../src/record/types.js"
 
 function makeRecord(id: string, step: string, args: unknown, overrides: Partial<StepRecordPassed> = {}): StepRecordPassed {
   return {
+    schema_version: 1,
+    nukadoko: "0.0.0-test",
     step_record_id: id,
     step,
     kind: "do",
@@ -45,6 +47,8 @@ function typedEntry(name: string, step: ReturnType<typeof defineStep>): Vocabula
 
 function makeFailedRecord(id: string, step: string, errorMessage: string): StepRecordFailed {
   return {
+    schema_version: 1,
+    nukadoko: "0.0.0-test",
     step_record_id: id,
     step,
     kind: "do",

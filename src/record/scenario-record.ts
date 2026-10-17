@@ -92,6 +92,7 @@
 // at all — see the field's own doc comment for why.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
+import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { ActionEntry, ErrorKind, ScreenshotEntry } from "./types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
@@ -175,6 +176,11 @@ export interface ScenarioEvidence {
 }
 
 export interface ScenarioRecord {
+  /** `SCHEMA_VERSIONS.scenario_record` (src/record/schema-version.ts). A
+   * record without it was written by nukadoko 0.16.1 or earlier. */
+  readonly schema_version: typeof SCHEMA_VERSIONS.scenario_record;
+  /** The version of nukadoko that wrote this record. */
+  readonly nukadoko: string;
   readonly scenario_record_id: string;
   /** This run's own id — every
    * scenario record one `nuka run` invocation writes shares the same value,

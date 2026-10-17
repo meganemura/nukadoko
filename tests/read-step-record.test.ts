@@ -18,6 +18,8 @@ describe("readStepRecord", () => {
 
   it("reads a valid record.json back", async () => {
     const stepRecord: StepRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       step_record_id: "step-20260801-143022-a1b2",
       step: "noop",
       kind: "do",

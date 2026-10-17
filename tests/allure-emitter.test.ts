@@ -138,6 +138,8 @@ describe("createAllureEmitter", () => {
       writeFileSync(path.join(recordDir, "http.jsonl"), '{"method":"GET","url":"https://x","status":200,"duration_ms":5}\n');
 
       const stepRecord1: StepRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         step_record_id: "step-1",
         step: "the cart has items",
         kind: "run",
@@ -164,6 +166,8 @@ describe("createAllureEmitter", () => {
       writeFileSync(path.join(rootDir, ".nukadoko", "records", "steps", "step-1", "step-trace.zip"), "step trace bytes");
 
       const stepRecord2: StepRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         step_record_id: "step-2",
         step: "the total is correct",
         kind: "run",
@@ -221,6 +225,8 @@ describe("createAllureEmitter", () => {
       );
 
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-1",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -404,6 +410,8 @@ describe("createAllureEmitter", () => {
     // would for a scenario with zero real pickle steps in practice.
     const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-hook-trace-1",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -455,6 +463,8 @@ describe("createAllureEmitter", () => {
         );
       });
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: scenarioId,
         run_id: runId,
         feature: "features/checkout.feature",
@@ -523,6 +533,8 @@ describe("createAllureEmitter", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-first",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -588,6 +600,8 @@ describe("createAllureEmitter", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
       const stepRecord: StepRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         step_record_id: "step-fail-1",
         step: "the cart has items",
         kind: "run",
@@ -607,6 +621,8 @@ describe("createAllureEmitter", () => {
       writeStepRecordFile(rootDir, stepRecord);
       const step: ScenarioStepEntry = { text: "the cart has items", status: "failed", step_record_id: "step-fail-1" };
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-fail-1",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -641,6 +657,8 @@ describe("createAllureEmitter", () => {
       const pickle = pickles[0]!;
       const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-pass-1",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -675,6 +693,8 @@ describe("createAllureEmitter", () => {
       };
       const step: ScenarioStepEntry = { text: "the cart has items", status: "skipped", step_record_id: null };
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-hook-fail-1",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -723,6 +743,8 @@ describe("createAllureEmitter", () => {
         error: { message: "refused before it ever ran" },
       };
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-missing-record",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -766,6 +788,8 @@ describe("createAllureEmitter", () => {
       );
       emitter.endScenario({
         record: {
+          schema_version: 1,
+          nukadoko: "0.0.0-test",
           scenario_record_id: "scn-healthy",
           run_id: "run-1",
           feature: "features/checkout.feature",
@@ -792,6 +816,8 @@ describe("createAllureEmitter", () => {
       // endScenario (this file's own header: every attachment write for the
       // whole scenario now happens inside that one call).
       const stepRecord: StepRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         step_record_id: "step-broken",
         step: "the cart has items",
         kind: "run",
@@ -813,6 +839,8 @@ describe("createAllureEmitter", () => {
 
       const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-broken" };
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-broken",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -850,6 +878,8 @@ describe("createAllureEmitter", () => {
       const pickle = pickles[0]!;
 
       const stepRecord: StepRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         step_record_id: "step-parts",
         step: "project-with-member",
         kind: "run",
@@ -887,6 +917,8 @@ describe("createAllureEmitter", () => {
       writeStepRecordFile(rootDir, stepRecord);
       const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-parts" };
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-parts",
         run_id: "run-1",
         feature: "features/checkout.feature",

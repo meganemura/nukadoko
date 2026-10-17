@@ -69,7 +69,7 @@ describe("nuka tend --codes", () => {
     );
   });
 
-  it("--json prints code, description, and reportedByDefault per code", async () => {
+  it("--json prints schema_version, then code, description, and reportedByDefault per code", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend", "--codes", "--json"], {
       rootDir: fixture("invalid-config-project"),
@@ -77,7 +77,9 @@ describe("nuka tend --codes", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    const entries = JSON.parse(stdout.text()) as Array<{ code: string }>;
+    const document = JSON.parse(stdout.text()) as { schema_version: number; codes: Array<{ code: string }> };
+    expect(Object.keys(document)).toEqual(["schema_version", "codes"]);
+    const entries = document.codes;
     expect(entries).toHaveLength(15);
     expect(entries.find((entry) => entry.code === "pattern-unbound")).toEqual({
       code: "pattern-unbound",

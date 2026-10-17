@@ -41,6 +41,8 @@ Experimental (may change without notice):
 
 Prefer `check` before `run`. Do not treat agent narrative as the step record.
 
+Every JSON document nukadoko writes or prints (records, `--json` output, `nuka describe`) starts with `schema_version`, one integer per kind of document; test it before trusting the shape. Step and scenario records also carry `nukadoko`, the version that wrote them.
+
 ## Findings
 
 Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` print the same lists, and `--json` prints them as JSON. A tend code marked `--all` is reported only under `nuka tend --all`, or when `--fail-on` names it.

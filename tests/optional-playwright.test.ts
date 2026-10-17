@@ -166,6 +166,7 @@ describe("a project without playwright installed", () => {
     const check = await nuka(["check", "--json", "features/http.feature"]);
     expect(check.code).toBe(1);
     expect(JSON.parse(check.stdout)).toEqual({
+      schema_version: 1,
       errors: [
         {
           code: "playwright-missing",

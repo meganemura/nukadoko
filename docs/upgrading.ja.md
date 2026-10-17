@@ -19,7 +19,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   合図になるのは `nuka check` が green になることです。
 - **`nuka steps` と `nuka describe` は、アップグレードの途中でも語彙を読めます。**
   1 つの step ファイルの import が失敗しても、どちらのコマンドも道連れにはなりません。
-  discovery が読めたものはそのまま返り、読めなかったものは stderr と `import_failures` に名指しされます(`nuka steps --json` のトップレベルは素の配列ではなく `{ steps, import_failures }` です)。
+  discovery が読めたものはそのまま返り、読めなかったものは stderr と `import_failures` に名指しされます(`nuka steps --json` のトップレベルは素の配列ではなく `{ schema_version, steps, import_failures }` です)。
 - **`needs_inferred` は、まだ誰も手を付けていない step からでも引けます。**
   `run()` が分割代入されていない第一引数を取ったままの step には、その引数自身のメンバアクセスから読み取ったベストエフォートの `needs_inferred` が付きます。
   アップグレードの途中で、fixture の棚卸しを手作業で組み立てる必要はありません。
@@ -97,6 +97,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **`nuka init --env` は `nuka init --env-files` になりました。**
   `--env` は、ほかのすべてのコマンドで environment の名前を表します。
   `nuka init --env` は新しいフラグを名指して終了コード 1 で終わり、何も書きません。
+- **`nuka check --codes --json` と `nuka session list --json` は、素の配列ではなくオブジェクトを出力します。**
+  JSON の文書はすべて `schema_version` で始まるようになり、配列にはそれを置く場所がありません。
+  一覧は 1 つのキーの下に移りました。
+  `{ "schema_version": 1, "codes": [...] }` と `{ "schema_version": 1, "sessions": [...] }` です。
+  jq のフィルタ `.[]` は `.codes[]` または `.sessions[]` になります。
+  ほかの文書は先頭に `schema_version` キーが加わっただけで、step record と scenario record にはさらに `nukadoko` が加わりました。
 
 ## 0.15.0 から 0.16.1 へ
 

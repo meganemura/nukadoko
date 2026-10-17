@@ -366,7 +366,7 @@ agent の探索ループも、この呼び出しから始まります。
 }
 ```
 
-この項目は、`{ steps, import_failures }` の一方のフィールドである `steps` の下にあります。
+この項目は、`{ schema_version, steps, import_failures }` のフィールドの 1 つである `steps` の下にあります。
 `import_failures` は、この呼び出しが import できなかった各 step ファイルを名指しします。
 このフィールドは常に存在し、すべての import が成功すれば空です。
 

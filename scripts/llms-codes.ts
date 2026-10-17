@@ -115,7 +115,8 @@ export function rewrite(text: string, tables: readonly CodeTable[]): string {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const cli = path.join(root, "dist", "cli.js");
-  const codes = (command: string) => JSON.parse(execFileSync(process.execPath, [cli, command, "--codes", "--json"], { cwd: root, encoding: "utf8" }));
+  const codes = (command: string) =>
+    JSON.parse(execFileSync(process.execPath, [cli, command, "--codes", "--json"], { cwd: root, encoding: "utf8" })).codes;
   const file = path.join(root, "llms.txt");
   const before = readFileSync(file, "utf8");
   const after = rewrite(before, [checkTable(codes("check")), tendTable(codes("tend"))]);

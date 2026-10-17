@@ -719,7 +719,7 @@ and `needs_browser` is absent alongside it, since a browser-need verdict
 this file cannot derive is not one it states. That step's own
 name/patterns/description still come through: one unreadable `run()` does
 not take the rest of the listing down with it. The call's own top level is
-`{ steps, import_failures }`, not a bare array of steps; `import_failures`
+`{ schema_version, steps, import_failures }`, not a bare array of steps; `import_failures`
 (`{ file, message }`) names every step file whose own import failed, always
 present, `[]` when nothing did (see "Tolerant reporting, fail-fast
 execution" below).
@@ -2484,6 +2484,8 @@ array identifies each step record by id, so either record leads to the other.
 
 ```json
 {
+  "schema_version": 1,
+  "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
   "kind": "do",
@@ -2508,6 +2510,9 @@ array identifies each step record by id, so either record leads to the other.
 }
 ```
 
+- `schema_version` comes first, so a reader can test which shape it holds
+  before it reads the rest (see "CLI summary"). `nukadoko` is the version
+  that wrote the record. A scenario record carries both too.
 - `result` provides the trust anchor: it passed the returns schema and the tool
   (not the caller) produced it. On failure, `error: { kind, message }`
   replaces it. Compat steps record `result: null`.
@@ -3774,7 +3779,7 @@ still healthy.
 
 `nuka tend --codes` lists every code a tend finding can carry, each with a
 one-line description and whether a run without `--all` reports it; with
-`--json` it prints the same list as JSON.
+`--json` it prints the same list as JSON, under `codes`.
 
 It is a separate command, rather than another set of `check` warnings,
 because the two commands are read at different times and have different meanings.
@@ -4247,8 +4252,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               can't read), and where each chained args key
                               comes from (from, or from_errors naming the
                               key and why for the one it can't read);
-                              --json's top level is { steps,
-                              import_failures }, the second always present,
+                              --json's top level is { schema_version, steps,
+                              import_failures }, the last always present,
                               exiting 1 if import_failures is non-empty or
                               any step's needs_error or from_errors is
                               present, output printed either way
@@ -4437,7 +4442,8 @@ nuka tend --codes [--json]    list every finding code nuka tend can report,
                               does, and a one-line description, instead of
                               tending a project
 nuka session list [--json]    list every session, across all environments;
-                              --json names each one's environment
+                              --json prints { schema_version, sessions }
+                              and names each one's environment
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given
@@ -4484,6 +4490,20 @@ A flag that takes one string or one number is refused when it is given more than
 
 Text output (no `--json`) is formatted for a human reading a terminal.
 `--json` is the machine-readable contract.
+
+Every JSON document nukadoko writes or prints starts with
+`schema_version`, an integer that belongs to that kind of document: the
+step record, the scenario record, and the output of `check --json`,
+`check --codes --json` (`{ schema_version, codes }`), `steps --json`,
+`describe`, `tend --json`, `tend --codes --json` (`{ schema_version,
+codes }`), `clean --json`, `explore --json`, and `session list --json`
+(`{ schema_version, sessions }`). The number moves
+when a field the document already has changes its meaning, its type, or
+its name, or is removed. An added field does not move it. A reader checks
+the number before it trusts the shape. Each number is 1 today, and a
+record without `schema_version` was written by nukadoko 0.16.1 or
+earlier. The `experimental` commands print the server's own tool list, a
+shape nukadoko does not own, so they carry no number.
 
 ### Tolerant reporting, fail-fast execution
 

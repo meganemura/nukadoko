@@ -20,7 +20,7 @@ This part does not change release to release.
   One step file that fails to import does not take either command down:
   what discovery could still read comes back, and what it could not is
   named on stderr and in `import_failures` (`nuka steps --json`'s top level
-  is `{ steps, import_failures }`, not a bare array).
+  is `{ schema_version, steps, import_failures }`, not a bare array).
 - **`needs_inferred` reads even from a step nobody has touched yet.** A
   step whose `run()` still takes an undestructured first argument gets a
   best-effort `needs_inferred` list, read lexically from that argument's
@@ -114,6 +114,14 @@ This part does not change release to release.
 - **`nuka init --env` is now `nuka init --env-files`.** `--env` names an
   environment on every other command. `nuka init --env` exits 1 and names
   the new flag, and writes nothing.
+- **`nuka check --codes --json` and `nuka session list --json` print an
+  object, not a bare array.** Every JSON document now starts with
+  `schema_version`, and an array has no place for it. The list moved under
+  one key: `{ "schema_version": 1, "codes": [...] }` and
+  `{ "schema_version": 1, "sessions": [...] }`. A jq filter `.[]` becomes
+  `.codes[]` or `.sessions[]`. Every other document only gained the
+  `schema_version` key in front, and the step and scenario records also
+  gained `nukadoko`.
 
 ## 0.15.0 to 0.16.1
 

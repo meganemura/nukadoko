@@ -1,3 +1,4 @@
+import { versioned } from "../record/schema-version.js";
 import { existsSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
 import os from "node:os";
@@ -66,7 +67,7 @@ export async function runSessionList(options: RunSessionListOptions): Promise<nu
   const sessions = await listSessions(rootDir, config.stateDir);
 
   if (json) {
-    stdout.write(`${JSON.stringify(sessions, null, 2)}\n`);
+    stdout.write(`${JSON.stringify(versioned("sessions", { sessions }), null, 2)}\n`);
   } else {
     for (const session of sessions) {
       stdout.write(`${session.name}\t${session.updated_at}\t${session.alive ? "alive" : "stopped"}\n`);

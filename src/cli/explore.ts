@@ -1,3 +1,4 @@
+import { versioned } from "../record/schema-version.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -228,7 +229,7 @@ async function exploreDiscovered(
       renderScenario({ title, steps, notes, vocabulary, bindings });
     const failedNote = (index: number, message: string) => new Map([[index, `step ${index + 1} failed: ${message}`]]);
     const emit = (json: Record<string, unknown>, text: readonly string[]) => {
-      if (options.json) stdout.write(`${JSON.stringify(json, null, 2)}\n`);
+      if (options.json) stdout.write(`${JSON.stringify(versioned("explore_result", json), null, 2)}\n`);
       else if (text.length > 0) stdout.write(`${text.join("\n")}\n`);
     };
     const file = path.relative(rootDir, target);

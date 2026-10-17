@@ -1,3 +1,4 @@
+import { versioned } from "../record/schema-version.js";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -329,7 +330,7 @@ async function buildExportPlan(
 
 function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: WritableSink): void {
   if (json) {
-    stdout.write(`${JSON.stringify({ ...plan, dry_run: dryRun }, null, 2)}\n`);
+    stdout.write(`${JSON.stringify(versioned("clean_plan", { ...plan, dry_run: dryRun }), null, 2)}\n`);
     return;
   }
   for (const relativePath of [...plan.records, ...plan.cache, ...plan.export]) {

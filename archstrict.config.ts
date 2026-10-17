@@ -230,6 +230,7 @@ export default {
         "run-exports.ts",
         "run-marker.ts",
         "scenario-record.ts",
+        "schema-version.ts",
         "types.ts",
         "write-step-record.ts",
       ],

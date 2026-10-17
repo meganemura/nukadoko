@@ -155,6 +155,8 @@ describe("createAllureEmitter: progress snapshots", () => {
     expect(readProgressFileNames(resultsDir)).toHaveLength(3);
 
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-1",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -196,6 +198,8 @@ describe("createAllureEmitter: progress snapshots", () => {
     };
 
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-outline-1",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -264,6 +268,8 @@ describe("createAllureEmitter: progress snapshots", () => {
     }
 
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-1",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -313,6 +319,8 @@ describe("createAllureEmitter: progress snapshots", () => {
     expect(initialSnapshot.start).toBe(startedAt.getTime() - 2);
 
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-empty",
       run_id: "run-1",
       feature: "features/empty.feature",
@@ -419,6 +427,8 @@ describe("createAllureEmitter: progress snapshots", () => {
     expect(progressUuids.length).toBeGreaterThan(0);
 
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-1",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -468,6 +478,8 @@ describe("createAllureEmitter: progress snapshots", () => {
     expect(new Set(snapshotUuids).size).toBe(1);
 
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-1",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -505,6 +517,8 @@ describe("createAllureEmitter: progress snapshots", () => {
       const uuid = (readJson(resultsDir, readProgressFileNames(resultsDir)[0]!) as { uuid: string }).uuid;
       emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: scenarioId,
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -684,6 +698,8 @@ describe("createAllureEmitter: progress snapshots", () => {
       }
 
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-1",
         run_id: "run-1",
         feature: "features/checkout.feature",

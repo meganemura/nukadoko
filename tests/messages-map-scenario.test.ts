@@ -28,6 +28,8 @@ function parse() {
 
 function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
   return {
+    schema_version: 1,
+    nukadoko: "0.0.0-test",
     scenario_record_id: "scn-1",
     run_id: "run-1",
     feature: "features/checkout.feature",

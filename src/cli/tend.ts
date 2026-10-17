@@ -1,3 +1,4 @@
+import { versioned } from "../record/schema-version.js";
 import { analyzeTend } from "../tend/analyze.js";
 import {
   listTendCodes,
@@ -107,7 +108,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   if (options.codes) {
     const entries = listTendCodes();
     if (json) {
-      stdout.write(`${JSON.stringify(entries, null, 2)}\n`);
+      stdout.write(`${JSON.stringify(versioned("tend_codes", { codes: entries }), null, 2)}\n`);
     } else {
       for (const entry of entries) {
         stdout.write(`${entry.code}\t${entry.reportedByDefault ? "default" : "--all"}\t${entry.description}\n`);
@@ -148,7 +149,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   const report = { ...analyzed, notes };
 
   if (json) {
-    stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    stdout.write(`${JSON.stringify(versioned("tend_report", report), null, 2)}\n`);
   } else {
     // Summary first, ahead of the findings, then the findings grouped by
     // kind: errors first (always empty today, src/tend/analyze.ts's

@@ -254,7 +254,7 @@ describe("nuka session list/clear", () => {
     });
 
     expect(exitCode).toBe(0);
-    const list = JSON.parse(stdout.text());
+    const list = JSON.parse(stdout.text()).sessions;
     expect(list).toHaveLength(2);
     expect(list).toEqual(
       expect.arrayContaining([
@@ -275,7 +275,7 @@ describe("nuka session list/clear", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    expect(JSON.parse(stdout.text())).toEqual([]);
+    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, sessions: [] });
   });
 
   it("prints one line per session in human-readable mode", async () => {

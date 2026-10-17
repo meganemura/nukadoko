@@ -1,3 +1,5 @@
+import { SCHEMA_VERSIONS } from "../record/schema-version.js";
+import { readOwnVersion } from "../version.js";
 import { existsSync } from "node:fs";
 import { executeTypedStep } from "../run/execute-typed-step.js";
 import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
@@ -584,6 +586,8 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
     const stepRecord: StepRecord =
       status === "passed"
         ? {
+            schema_version: SCHEMA_VERSIONS.step_record,
+            nukadoko: readOwnVersion(),
             step_record_id: recordId,
             step: request.step,
             kind: "do",
@@ -614,6 +618,8 @@ export async function createSessionCore(options: CreateSessionCoreOptions): Prom
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
+            schema_version: SCHEMA_VERSIONS.step_record,
+            nukadoko: readOwnVersion(),
             step_record_id: recordId,
             step: request.step,
             kind: "do",

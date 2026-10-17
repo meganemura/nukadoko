@@ -368,7 +368,7 @@ exploration loop starts with the same call. This repository's
 }
 ```
 
-The entry appears under `steps`, one field of `{ steps, import_failures }`.
+The entry appears under `steps`, one field of `{ schema_version, steps, import_failures }`.
 The `import_failures` field names each step file that the call could not
 import. This field is always present and is empty when all imports succeed.
 

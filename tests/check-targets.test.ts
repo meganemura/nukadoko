@@ -116,7 +116,7 @@ describe("nuka check [target..]", () => {
     const targeted = JSON.parse((await check(rootDir, ["--json", "acceptance", "features"])).stdout) as object;
     const whole = JSON.parse((await check(rootDir, ["--json"])).stdout) as object;
 
-    expect(Object.keys(targeted)).toEqual(["errors", "warnings"]);
+    expect(Object.keys(targeted)).toEqual(["schema_version", "errors", "warnings"]);
     expect(Object.keys(targeted)).toEqual(Object.keys(whole));
     expect((targeted as { errors: { code: string; file?: string; line?: number }[] }).errors[2]).toEqual({
       code: "undefined-step",

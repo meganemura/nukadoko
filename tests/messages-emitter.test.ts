@@ -97,6 +97,8 @@ describe("createMessagesEmitter", () => {
       writeFileSync(path.join(recordDir, "note.txt"), "declared note");
 
       const stepRecord: StepRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         step_record_id: "step-1",
         step: "the cart has items",
         kind: "run",
@@ -124,6 +126,8 @@ describe("createMessagesEmitter", () => {
       const beforeHook: ScenarioHookRecord = { type: "before", status: "passed" };
       const afterHook: ScenarioHookRecord = { type: "after", status: "passed" };
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-1",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -144,6 +148,8 @@ describe("createMessagesEmitter", () => {
       emitter.emitScenario({ record, pickle });
 
       const record2: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-2",
         run_id: "run-1",
         feature: "features/checkout.feature",
@@ -394,6 +400,8 @@ describe("createMessagesEmitter", () => {
     emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
     const stepRecord: StepRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       step_record_id: "step-missing-file",
       step: "the cart has items",
       kind: "run",
@@ -414,6 +422,8 @@ describe("createMessagesEmitter", () => {
     writeStepRecordFile(rootDir, stepRecord);
 
     const record: ScenarioRecord = {
+      schema_version: 1,
+      nukadoko: "0.0.0-test",
       scenario_record_id: "scn-missing-file",
       run_id: "run-1",
       feature: "features/checkout.feature",
@@ -478,6 +488,8 @@ describe("createMessagesEmitter", () => {
       expect(sink.text()).toContain("warning:");
 
       const record: ScenarioRecord = {
+        schema_version: 1,
+        nukadoko: "0.0.0-test",
         scenario_record_id: "scn-1",
         run_id: "run-1",
         feature: "features/checkout.feature",

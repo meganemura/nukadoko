@@ -88,7 +88,7 @@ describe("nuka check: done-callback arity", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const codes = JSON.parse(stdout.text()) as Array<{ code: string; description: string; severity?: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; description: string; severity?: string }>;
     const entry = codes.find((item) => item.code === "done-callback-arity");
     expect(entry?.description.length).toBeGreaterThan(0);
     expect(entry?.severity).toBe("error");

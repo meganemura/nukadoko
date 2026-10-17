@@ -585,7 +585,7 @@ args だけを受け取る引数 1 つの `run` はありません。
 そのため agent は scenario を選ぶとき、実行前にブラウザを開かない step を識別できますが、ブラウザを使う scenario には API だけの scenario にはない分単位の時間と実物のターゲットが必要です。
 同じ静的な読み取りが解析できない `run()`、つまりデフォルト値、rest プロパティ、または分割代入パターンの位置に裸の識別子がある場合、`needs` は `[]` ではなく `null` になり、そのエントリの `needs_error` が理由を示し、導けないブラウザ要否を主張しないため `needs_browser` もありません。
 その step 自身の name、patterns、description は引き続き報告されるため、一つの読めない `run()` が残りの一覧を失わせることはありません。
-呼び出しのトップレベルは step のベタな配列ではなく `{ steps, import_failures }` であり、`import_failures`(`{ file, message }`)は import に失敗したすべての step ファイルを名指しし、常に存在し、失敗がなければ `[]` です(下の「報告は寛容に、実行は速く失敗する」を参照)。
+呼び出しのトップレベルは step のベタな配列ではなく `{ schema_version, steps, import_failures }` であり、`import_failures`(`{ file, message }`)は import に失敗したすべての step ファイルを名指しし、常に存在し、失敗がなければ `[]` です(下の「報告は寛容に、実行は速く失敗する」を参照)。
 
 このうち移行前の形である `run(ctx, args)` の裸の分割代入されていない第一引数については、同じ呼び出しが `needs_inferred` も報告します: これは step の fixture 要求についての字句上の推測であり、`run` 自身のソーステキストをその引数のメンバアクセス(`ctx.page`)について走査し、既知の fixture 名だけに絞ります。
 これは独立したフィールドであり、`needs` には混ぜません: `needs` は分割代入パターンから読み取った、executor が step の実行前に実際に構築する対象ですが、`needs_inferred` はまだ実行できない step についての推測なので、両者をまとめると、この読み取りが裏付けられないものまで確実だと述べることになります。
@@ -2102,6 +2102,8 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 
 ```json
 {
+  "schema_version": 1,
+  "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
   "kind": "do",
@@ -2126,6 +2128,9 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 }
 ```
 
+- `schema_version` が先頭に来るので、読み手は残りを読む前に、どの形を持っているかを確かめられます(「CLI summary」を参照)。
+  `nukadoko` は record を書いたバージョンです。
+  scenario record も両方を持ちます。
 - `result` は信頼の錨です。
   returns のスキーマを通過しており、それを作ったのは(呼び出し側ではなく)ツールです。
   失敗時には `error: { kind, message }` がそれに置き換わります。
@@ -3235,7 +3240,7 @@ nukadoko はすべての段階を記録します。
 
 `nuka tend --codes` は、tend の所見が持ちうるコードをすべて一覧にします。
 各コードには 1 行の説明と、`--all` なしで報告されるかどうかが付きます。
-`--json` を付けると、同じ一覧を JSON で出力します。
+`--json` を付けると、同じ一覧を `codes` の下に JSON で出力します。
 
 これが `check` への警告の追加ではなく別のコマンドである理由は、この 2 つが異なる瞬間に読まれ、異なる意味を持つからです。
 `check` はあらゆる run の前に、CI の中で、agent のループの中で実行されます。
@@ -3667,8 +3672,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               can't read), and where each chained args key
                               comes from (from, or from_errors naming the
                               key and why for the one it can't read);
-                              --json's top level is { steps,
-                              import_failures }, the second always present,
+                              --json's top level is { schema_version, steps,
+                              import_failures }, the last always present,
                               exiting 1 if import_failures is non-empty or
                               any step's needs_error or from_errors is
                               present, output printed either way
@@ -3857,7 +3862,8 @@ nuka tend --codes [--json]    list every finding code nuka tend can report,
                               does, and a one-line description, instead of
                               tending a project
 nuka session list [--json]    list every session, across all environments;
-                              --json names each one's environment
+                              --json prints { schema_version, sessions }
+                              and names each one's environment
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given
@@ -3905,6 +3911,15 @@ nuka experimental webmcp-tools <url> [--json]
 
 テキスト出力(`--json` なし)は、端末で読む人間向けに整形されます。
 `--json` が機械可読な契約です。
+
+nukadoko が書く、または出力する JSON の文書はすべて `schema_version` で始まります。
+これはその種類の文書に固有の整数です。
+対象は step record、scenario record と、`check --json`、`check --codes --json`(`{ schema_version, codes }`)、`steps --json`、`describe`、`tend --json`、`tend --codes --json`(`{ schema_version, codes }`)、`clean --json`、`explore --json`、`session list --json`(`{ schema_version, sessions }`)の出力です。
+この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
+フィールドが追加されただけでは上がりません。
+読み手は、形を信頼する前にこの番号を確かめます。
+どの番号も現在は 1 で、`schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
+`experimental` のコマンドは、nukadoko が持たない形であるサーバー自身の tool 一覧を出力するので、番号を持ちません。
 
 ### 報告は寛容に、実行は速く失敗する
 

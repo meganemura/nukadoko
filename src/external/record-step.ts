@@ -1,3 +1,5 @@
+import { SCHEMA_VERSIONS } from "../record/schema-version.js";
+import { readOwnVersion } from "../version.js";
 import { runWithTimeout } from "../run/run-scenario.js";
 import path from "node:path";
 import type { APIRequestContext, Page } from "playwright";
@@ -508,6 +510,8 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
   const stepRecord: StepRecord =
     status === "passed"
       ? {
+          schema_version: SCHEMA_VERSIONS.step_record,
+          nukadoko: readOwnVersion(),
           step_record_id: recordId,
           step: name,
           kind: "external",
@@ -545,6 +549,8 @@ export async function recordStep<TArgs extends z.ZodTypeAny, TReturns extends z.
           ...(truncated !== undefined ? { truncated } : {}),
         }
       : {
+          schema_version: SCHEMA_VERSIONS.step_record,
+          nukadoko: readOwnVersion(),
           step_record_id: recordId,
           step: name,
           kind: "external",

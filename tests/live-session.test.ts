@@ -291,7 +291,7 @@ describe("nuka session start/stop (live sessions)", () => {
         expect(exitCode).toBe(0);
         return stdout;
       })()).text(),
-    ) as Array<{ name: string; alive: boolean }>;
+    ).sessions as Array<{ name: string; alive: boolean }>;
     expect(liveList.find((entry) => entry.name === "finn")?.alive).toBe(true);
 
     // A crash, not a clean `stop` — leaves the lock and socket behind with
@@ -310,7 +310,7 @@ describe("nuka session start/stop (live sessions)", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    const list = JSON.parse(stdout.text()) as Array<{ name: string }>;
+    const list = JSON.parse(stdout.text()).sessions as Array<{ name: string }>;
 
     // No .json was ever written for "finn", so once its dead lock is
     // reaped there is nothing left to call a session at all (session/

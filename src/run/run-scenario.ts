@@ -1,3 +1,5 @@
+import { SCHEMA_VERSIONS } from "../record/schema-version.js";
+import { readOwnVersion } from "../version.js";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
@@ -1007,6 +1009,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     });
     const finishedAt = new Date();
     const record: ScenarioRecord = {
+      schema_version: SCHEMA_VERSIONS.scenario_record,
+      nukadoko: readOwnVersion(),
       scenario_record_id: scenarioId,
       run_id: runId,
       feature: relativeFeaturePath,
@@ -1386,6 +1390,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     const stepRecord: StepRecord =
       status === "passed"
         ? {
+            schema_version: SCHEMA_VERSIONS.step_record,
+            nukadoko: readOwnVersion(),
             step_record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
@@ -1429,6 +1435,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
           }
         : {
+            schema_version: SCHEMA_VERSIONS.step_record,
+            nukadoko: readOwnVersion(),
             step_record_id: begun.recordId,
             step: outcomeStepName,
             kind: "run",
@@ -1559,6 +1567,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     });
     const setupFinishedAt = new Date();
     const setupRecord: ScenarioRecord = {
+      schema_version: SCHEMA_VERSIONS.scenario_record,
+      nukadoko: readOwnVersion(),
       scenario_record_id: scenarioId,
       run_id: runId,
       feature: relativeFeaturePath,
@@ -2385,6 +2395,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const evidenceSnapshot = await contextHandle.evidenceSnapshot();
         const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
         const stepRecord: StepRecord = {
+          schema_version: SCHEMA_VERSIONS.step_record,
+          nukadoko: readOwnVersion(),
           step_record_id: began.recordId,
           step: began.stepName,
           kind: "run",
@@ -2585,6 +2597,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   }
 
   const record: ScenarioRecord = {
+    schema_version: SCHEMA_VERSIONS.scenario_record,
+    nukadoko: readOwnVersion(),
     scenario_record_id: scenarioId,
     run_id: runId,
     feature: relativeFeaturePath,

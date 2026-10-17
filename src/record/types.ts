@@ -239,6 +239,7 @@
 // 100-entry cap is hit, the same sibling-field convention `truncated.actions`
 // already uses.
 
+import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { DeclaredSnapshot } from "../compat/declared.js";
 
 /** Dropped-request counts by Playwright's own `request.resourceType()`
@@ -614,6 +615,11 @@ export interface EvidenceMeta {
 // surface that publishes those two without publishing this name leaks the
 // shared fields as an anonymous type.
 export interface StepRecordBase {
+  /** `SCHEMA_VERSIONS.step_record` (src/record/schema-version.ts). A record
+   * without it was written by nukadoko 0.16.1 or earlier. */
+  schema_version: typeof SCHEMA_VERSIONS.step_record;
+  /** The version of nukadoko that wrote this record. */
+  nukadoko: string;
   step_record_id: string;
   step: string;
   /** `"do"` for a `nuka do` execution, `"run"` for one step inside a `nuka

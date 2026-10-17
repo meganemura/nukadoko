@@ -125,7 +125,7 @@ describe("nuka session list/clear across environments", () => {
     });
 
     expect(exitCode).toBe(0);
-    const list = JSON.parse(stdout.text());
+    const list = JSON.parse(stdout.text()).sessions;
     expect(list).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ environment: "default", name: "alpha" }),

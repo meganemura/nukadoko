@@ -190,6 +190,7 @@ describe("nuka explore", () => {
     expect({ ...result, stdout: JSON.parse(result.stdout) }).toEqual({
       exitCode: 0,
       stdout: {
+        schema_version: 1,
         kind: "model",
         file: "features/explore/add-model.ts",
         verdict: "passed",
@@ -214,6 +215,7 @@ describe("nuka explore", () => {
     expect({ ...result, stdout: json }).toEqual({
       exitCode: 1,
       stdout: {
+        schema_version: 1,
         kind: "model",
         file: "features/explore/wrong-model.ts",
         verdict: "failed",
@@ -252,6 +254,7 @@ describe("nuka explore", () => {
     expect({ ...result, stdout: JSON.parse(result.stdout) }).toEqual({
       exitCode: 1,
       stdout: {
+        schema_version: 1,
         kind: "relation",
         file: "features/explore/add-relation.ts",
         name: "add then listed",
