@@ -41,12 +41,6 @@ The workflow stores no `NPM_TOKEN`. The repository secrets do not keep
 one either. There is no token bootstrap. The package already exists, and
 its Trusted Publisher is already registered.
 
-The VS Code extension under `vscode/` is a different package. It is
-versioned and released separately, on its own `vscode-v*` tags, and
-this page does not cover it. `publish.yml` reads only the root
-`package.json`, so a change to `vscode/package.json` does not start it,
-and it never publishes the extension.
-
 ## One-time setup
 
 The Environment and the trusted publisher are already configured, as of

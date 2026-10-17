@@ -1,9 +1,6 @@
 # Publishes this repository's own npm package when a push to main changes
 # package.json to a version that has no v<version> tag yet. It is not the
-# recipe a project using nukadoko should copy: that one is docs/ci.md. The
-# VS Code extension is released separately, on its own vscode-v* tags; the
-# paths filter names only the root package.json, so vscode/ never starts
-# this file.
+# recipe a project using nukadoko should copy: that one is docs/ci.md.
 #
 # Boundary: check out the pushed commit, build dist/, run the release checks,
 # and npm publish. The release job then creates the v<version> tag and the

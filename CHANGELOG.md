@@ -260,7 +260,7 @@ just until 0.1.
   `docs/releasing.md` to the publish workflow are the named exception: that
   page is read from a checkout. `tests/docs-cli-names.test.ts` also fails
   when llms.txt stops naming a `nuka` command or any of its subcommands
-  (`nuka session stop`, `nuka skill path`).
+  (`nuka session clear`, `nuka skill path`).
 
 - **llms.txt is written for an agent that starts from an empty context, and the CLI points at it.**
   The file now opens with a one-paragraph summary, then says how to
@@ -276,6 +276,14 @@ just until 0.1.
   agent: ...`, with the path relative to the project when the package is
   installed in it; stdout still lists only the paths init wrote. README
   "Skills for coding agents" and the acceptance skill name the file.
+
+- **The VS Code extension moved to its own repository.**
+  It is now developed at
+  [meganemura/nukadoko-vscode](https://github.com/meganemura/nukadoko-vscode),
+  with its history, and depends on the published nukadoko package. This
+  repository no longer holds `vscode/` or its workflow. The npm package
+  never shipped `vscode/`, so nothing a project installs changes, and the
+  `nukadoko/matching` export the extension imports stays.
 
 ### Changed
 

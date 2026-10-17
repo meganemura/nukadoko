@@ -36,11 +36,6 @@ workflow は `NPM_TOKEN` を読みません。
 最初の 1 回をトークンで publish する手順はありません。
 パッケージは既にあり、その Trusted Publisher も登録済みです。
 
-`vscode/` の VS Code 拡張は別パッケージです。
-拡張は独自の `vscode-v*` tag で、別にバージョンを付けてリリースします。
-このページはそれを扱いません。
-`publish.yml` が読むのはルートの `package.json` だけなので、`vscode/package.json` を変えてもこの workflow は始まらず、拡張を publish することもありません。
-
 ## 一度だけの準備
 
 Environment と trusted publisher は、2026-09-23 の時点で既に設定済みです。
