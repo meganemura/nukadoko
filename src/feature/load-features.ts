@@ -11,7 +11,7 @@ export {
   type ScenarioShapeFinding,
   type ScenarioWithoutThen,
 } from "./scenario-shape.js";
-import { enterOnce, entryKind } from "./walk-entry.js";
+import { enterOnce, entryKind, realPathOrSelf } from "./walk-entry.js";
 
 export { enterOnce, entryKind, type EntryKind } from "./walk-entry.js";
 import {
@@ -40,9 +40,10 @@ import {
 // issues too (mirrors src/discover/discover-steps.ts's own tolerance for a
 // missing featuresDir: an empty/partial answer beats a crash).
 //
-// `loadFeaturesFromDirs` de-duplicates by absolute path, so a file
-// reachable from more than one of the walked directories (e.g. one nested
-// inside another) is never parsed or counted twice. `featuresDir` is
+// `loadFeaturesFromDirs` de-duplicates by real path, so a file reachable
+// from more than one of the walked directories (one nested inside another,
+// or a link under featuresDir to a file another directory also holds) is
+// never parsed or counted twice. The first path seen is the one reported. `featuresDir` is
 // fail-open on a missing directory — config-check.ts's
 // `features-dir-missing` already reports that case on its own, with its own
 // message. An `additionalFeatureDirs` entry that does not exist, by
@@ -389,7 +390,7 @@ export interface LoadFeaturesFromDirsResult extends LoadFeaturesResult {
 /**
  * Walks `featuresDir` plus every `additionalFeatureDirs` entry
  * (this file's own header), de-duplicating a file reachable from more than
- * one of them by its absolute path.
+ * one of them by its real path.
  */
 export function loadFeaturesFromDirs(
   rootDir: string,
@@ -403,14 +404,21 @@ export function loadFeaturesFromDirs(
   const serialTagOnScenario: SerialTagOnScenario[] = [];
   const outlinesThatDoNotRun: OutlineDoesNotRun[] = [];
   const scenarioShapeFindings: ScenarioShapeFinding[] = [];
-  const seenAbsolutePaths = new Set<string>();
+  const seenRealPaths = new Set<string>();
+  const firstVisit = (filePath: string): boolean => {
+    const key = realPathOrSelf(filePath);
+    if (seenRealPaths.has(key)) {
+      return false;
+    }
+    seenRealPaths.add(key);
+    return true;
+  };
 
   const collect = (dir: string): void => {
     for (const filePath of walkFeatureFiles(path.join(rootDir, dir))) {
-      if (seenAbsolutePaths.has(filePath)) {
+      if (!firstVisit(filePath)) {
         continue;
       }
-      seenAbsolutePaths.add(filePath);
 
       const relativePath = path.relative(rootDir, filePath);
       try {
@@ -455,17 +463,16 @@ export function loadFeaturesFromDirs(
   // Oaths are selected by name, not by living under featuresDir, so a
   // README or other Markdown file beside a feature is not an oath unless
   // `oaths` says so. Parsed after the `.feature` walk and de-duplicated
-  // by the same absolute-path set, so a path named twice is one document.
+  // by the same real-path set, so a file named twice is one document.
   const resolved = resolveOathPaths(rootDir, oaths);
   for (const problem of resolved.problems) {
     parseErrors.push({ relativePath: problem.path, message: problem.message });
   }
   for (const relativePath of resolved.files) {
     const filePath = path.join(rootDir, relativePath);
-    if (seenAbsolutePaths.has(filePath)) {
+    if (!firstVisit(filePath)) {
       continue;
     }
-    seenAbsolutePaths.add(filePath);
     const source = readFileSync(filePath, "utf8");
     try {
       const { gherkinDocument, pickles } = parseOathSource(source, relativePath);

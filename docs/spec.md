@@ -208,8 +208,11 @@ they are not step definitions.
 Discovery, the `.feature` walk, and the oath walk follow symbolic links, so a
 monorepo can link shared steps or features into `featuresDir`. A walk enters
 each directory once, so a link back up the tree does not loop and two links
-to one directory do not list its files twice. A link whose target is missing
-stays in the walk: its import or read fails, and that failure names the link.
+to one directory do not list its files twice. A feature or oath that
+`featuresDir`, `additionalFeatureDirs`, or `oaths` reach by more than one path
+is read once, under the first path reached, because files are told apart by
+their real path. A link whose target is missing stays in the walk: its import
+or read fails, and that failure names the link.
 
 Discovery identifies each `.cjs` and `.cts` file but never imports it. Both
 extensions are CommonJS by definition, and nukadoko is ESM-only. See "Compat steps" below for the same CommonJS decision. `nuka check`

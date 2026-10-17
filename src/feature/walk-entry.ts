@@ -40,3 +40,16 @@ export function enterOnce(dir: string, entered: Set<string>): boolean {
   entered.add(real);
   return true;
 }
+
+/** The key that tells two paths to one file apart from two files. A
+ * feature linked into featuresDir and also reached through
+ * additionalFeatureDirs is one document, not two. A path that does not
+ * resolve, such as a dangling link, keys as itself, so its read still
+ * reports it. */
+export function realPathOrSelf(filePath: string): string {
+  try {
+    return realpathSync(filePath);
+  } catch {
+    return filePath;
+  }
+}

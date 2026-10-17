@@ -7,7 +7,8 @@ import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
 // Responsibility: a monorepo links shared steps and shared features into
 // featuresDir. Discovery and the feature walk read what a link points to,
 // enter a linked directory once even when a link points back up the tree,
-// and pass a dangling link on to the import or read that names it.
+// pass a dangling link on to the import or read that names it, and read a
+// feature reached both through a link and directly as one file.
 
 function stepSource(pattern: string): string {
   return `import { z } from "zod";
@@ -32,14 +33,14 @@ async function write(root: string, relativePath: string, content: string): Promi
   await writeFile(fullPath, content);
 }
 
-async function createProject(): Promise<string> {
+async function createProject(config = "{}"): Promise<string> {
   const dir = await mkdtemp(path.join(await realpath("/tmp"), "nk-links-"));
   await write(dir, "package.json", `${JSON.stringify({ type: "module" })}\n`);
   await mkdir(path.join(dir, "node_modules"), { recursive: true });
   await symlink(path.join(repoRoot, "node_modules", "zod"), path.join(dir, "node_modules", "zod"), "dir");
   const shimTarget = path.relative(dir, path.join(repoRoot, "src", "index.js")).split(path.sep).join("/");
   await write(dir, "nukadoko-shim.ts", `export * from "${shimTarget}";\n`);
-  await write(dir, "nukadoko.config.ts", `import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({});\n`);
+  await write(dir, "nukadoko.config.ts", `import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig(${config});\n`);
 
   await write(dir, path.join("shared-steps", "shared.ts"), stepSource("a shared step runs"));
   await write(
@@ -122,5 +123,29 @@ describe("symbolic links under featuresDir", () => {
     } finally {
       await rm(dangling);
     }
+  });
+});
+
+describe("a feature linked into featuresDir and also under additionalFeatureDirs", () => {
+  let rootDir: string;
+
+  beforeAll(async () => {
+    rootDir = await createProject(JSON.stringify({ additionalFeatureDirs: ["shared-features"] }));
+  });
+
+  afterAll(async () => {
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it("is checked once, under the path featuresDir reached it by", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    await runCli(["check", "--json"], { rootDir, stdout, stderr });
+
+    expect(stderr.text()).toBe("");
+    const { errors } = JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number }> };
+    expect(errors.map((entry) => [entry.code, entry.file, entry.line])).toEqual([
+      ["undefined-step", "features/linked.feature", 4],
+    ]);
   });
 });

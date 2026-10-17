@@ -344,6 +344,14 @@ just until 0.1.
   `step-file-import-failed` and a feature as a parse error, each naming the
   link.
 
+- **`nuka check` and `nuka tend` read a feature reached by two paths once.**
+  A feature linked into `featuresDir` and also present under an
+  `additionalFeatureDirs` entry was parsed twice, so each of its findings
+  appeared twice, once per path. The walk now tells files apart by their
+  real path and reports the file under the first path it reached, which is
+  the one under `featuresDir`. An oath named twice through a link is one
+  document the same way.
+
 - **`nuka check` names a `.cts` step file as `step-file-unsupported-extension`, the same as a `.cjs` file.**
   A `.cts` file is CommonJS by extension, so discovery never imports it.
   Before, discovery skipped it without a word, and every step it defined
