@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
@@ -183,7 +183,12 @@ export function writeRunResult(rootDir: string, stateDir: string, runId: string,
   mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
   writeFileSync(temporary, text);
-  renameSync(temporary, filePath);
+  try {
+    renameSync(temporary, filePath);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
 }
 
 /** The document at `filePath` when it reads as a run.json: an object for

@@ -44,8 +44,8 @@ const RUN_CODES = {
     fix: "Correct what the message names, such as a step record removed from the run directory, and run nuka report again.",
   },
   "run-result-not-written": {
-    severity: "warning",
-    description: "The run finished, and run.json could not be written.",
+    severity: "failed",
+    description: "The run finished, and run.json could not be written, so the run fails: it has no record for a later command to read.",
     fix: "Correct what the message names, such as the state directory's permissions.",
   },
   "run-sources-not-written": {

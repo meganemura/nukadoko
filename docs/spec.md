@@ -2988,8 +2988,12 @@ no configuration). `nuka report --format markdown` prints the same text for
 any finished run, and `--out <path>` writes it to a file, such as one a CI
 step posts as a pull request comment. Error text in it is `run.json`'s, so secrets are
 already redacted. A summary that cannot be written is a warning
-on stderr; it never changes the exit code. A setup failure, which writes no
-record, writes no summary.
+on stderr; it never changes the exit code. A `run.json` that cannot be
+written fails the run with a `run-result-not-written` finding, which the
+`--json` document carries too: every later command reads a run from
+`run.json`, so a green exit without it would claim a record that does not
+exist. The `run` location line is printed only for a `run.json` that was
+written. A setup failure, which writes no record, writes no summary.
 
 ## Environments and secrets
 
