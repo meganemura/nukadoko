@@ -35,7 +35,7 @@ import type { HookParameter, HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import type { StepContext } from "../step/context.js";
+import type { FixtureBag, StepContext } from "../step/context.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, traceFileFields, type TraceEvidence } from "../context/trace-actions.js";
@@ -72,6 +72,8 @@ import type { StepProgressInfo } from "./progress-log.js";
 import {
   hookDisplayTitle,
   type ScenarioHookRecord,
+  type ProbeNotMeasuredReason,
+  type ProbeValue,
   type ScenarioProbe,
   type ScenarioRecord,
   type ScenarioStepEntry,
@@ -951,16 +953,97 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   });
 
   const stepRecords: ScenarioStepEntry[] = [];
-  // The Then steps `--probe` re-runs once every step has passed: each one
-  // that passed in an Outcome position, declared `mutates: false`, with the
-  // args it ran with and the keys its pattern captured.
-  const probeCandidates: {
-    readonly stepIndex: number;
-    readonly stepName: string;
-    readonly step: Step;
-    readonly args: Record<string, unknown>;
-    readonly keys: readonly string[];
-  }[] = [];
+  // `--probe` re-runs a Then right after it passes, before its AfterStep
+  // hooks and the next step, so the re-run sees the state the Then saw: a
+  // probe after the last step would read whatever a later When left, and
+  // pass or fail by coincidence. It has a boundary of its own in a
+  // directory removed afterwards: a probe is not a step, so nothing it
+  // does lands in a step record, and it opens no trace chunk. Its outcome
+  // never touches `scenarioFailed`. Only a throw from the step's own `run`
+  // is the Then catching the change; anything that stops the re-run
+  // before that is `not-measured`, so a probe that never compared is not
+  // read as one that did.
+  const probes: ScenarioProbe[] = [];
+  const probeStep = async (
+    step: Step,
+    stepName: string,
+    args: Record<string, unknown>,
+  ): Promise<{ status: "passed" | "caught" } | { status: "not-measured"; reason: ProbeNotMeasuredReason; message: string }> => {
+    const argsResult = strictArgsSchema(step.args).safeParse(args);
+    if (!argsResult.success) {
+      return { status: "not-measured", reason: "args-rejected", message: formatValidationIssues(argsResult.error.issues) };
+    }
+    let fixtures: FixtureBag;
+    try {
+      const resolved = await resolveFixtures({
+        names: stepFixtureNames(step),
+        graph: fixtureGraph,
+        ctx: contextHandle.ctx,
+        scenarioCache: fixtureScenarioCache,
+        processCache: fixtureProcessCache,
+        defaultTimeoutMs: config.fixtureTimeout,
+      });
+      fixtures = resolved.fixtures;
+    } catch (error) {
+      return { status: "not-measured", reason: "setup-failed", message: error instanceof Error ? error.message : String(error) };
+    }
+    contextHandle.beginStepRun(step, fixtures);
+    let result: unknown;
+    try {
+      result = await runWithTimeout(
+        () => contextHandle.recordingProcesses(() => Promise.resolve(step.run(fixtures, argsResult.data))),
+        step.timeout ?? config.stepTimeout,
+        "Step",
+        stepName,
+        step.timeout === undefined ? "config" : "step",
+      );
+    } catch (error) {
+      if (classifyCaughtError(error) === "timeout") {
+        return { status: "not-measured", reason: "timeout", message: error instanceof Error ? error.message : String(error) };
+      }
+      return { status: "caught" };
+    }
+    const returnsResult = parseStepReturns(step, result);
+    return returnsResult.success ? { status: "passed" } : { status: "not-measured", reason: "returns-rejected", message: returnsResult.message };
+  };
+  const probeThen = async (
+    stepIndex: number,
+    stepName: string,
+    text: string,
+    step: Step,
+    args: Record<string, unknown>,
+    keys: readonly string[],
+  ): Promise<void> => {
+    // A step that wrote is not run again: the probe runs nothing the
+    // feature did not name a second time, and a read-only declaration
+    // that the step's own observation contradicts is not trusted for it.
+    const observed = contextHandle.observedCounts();
+    const httpWrites = observed.http_writes ?? 0;
+    const processCount = observed.processes?.length ?? 0;
+    const wrote = httpWrites > 0 || processCount > 0;
+    const probeDir = path.join(scenarioDir, ".probe");
+    try {
+      for (const key of keys) {
+        const changed = mutateCapture(args[key]);
+        if (changed === null) continue;
+        const base = { step_index: stepIndex, step: stepName, text, key, recorded: args[key] as ProbeValue, changed: changed.value };
+        if (wrote) {
+          const what = [
+            ...(processCount > 0 ? [`ran ${processCount} process${processCount === 1 ? "" : "es"}`] : []),
+            ...(httpWrites > 0 ? [`made ${httpWrites} HTTP write${httpWrites === 1 ? "" : "s"}`] : []),
+          ].join(" and ");
+          probes.push({ ...base, status: "not-measured", reason: "wrote", message: `the step ${what} when it ran, so it is not run again` });
+          continue;
+        }
+        await mkdir(probeDir, { recursive: true });
+        await contextHandle.beginStep(probeDir);
+        const outcome = await probeStep(step, stepName, { ...args, [key]: changed.value });
+        probes.push({ ...base, ...outcome });
+      }
+    } finally {
+      await rm(probeDir, { recursive: true, force: true });
+    }
+  };
   const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
   // The outcome After reads. A passing scenario contributes the last
@@ -1990,16 +2073,21 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           pickleStep.type === "Outcome" &&
           entry.step.mutates === false &&
           outcome.captures.length > 0 &&
-          recordedArgs !== null &&
-          typeof recordedArgs === "object"
+          bindResult.ok &&
+          bindResult.value !== null &&
+          typeof bindResult.value === "object"
         ) {
-          probeCandidates.push({
+          // The raw bound args, before the args schema parsed them: the
+          // probe validates the changed value through the same schema the
+          // step ran under, so a transform is not applied twice.
+          await probeThen(
             stepIndex,
-            stepName: outcome.stepName,
-            step: entry.step,
-            args: recordedArgs as Record<string, unknown>,
-            keys: [...new Set(outcome.captures.map((capture) => capture.key))],
-          });
+            outcome.stepName,
+            pickleStep.text,
+            entry.step,
+            bindResult.value as Record<string, unknown>,
+            [...new Set(outcome.captures.map((capture) => capture.key))],
+          );
         }
         await runAfterStepHooks(stepIndex, {
           pickleStep,
@@ -2279,62 +2367,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           thrown: error,
         });
       }
-    }
-  }
-
-  // The probe runs while the scenario's ctx and fixtures are still the
-  // ones its Then saw, so before the After hooks tear anything down. It has
-  // a boundary of its own in a directory removed afterwards: a probe is
-  // not a step, so nothing it does lands in a step record, and it opens no
-  // trace chunk. Its outcome never touches `scenarioFailed`.
-  const probeStep = async (step: Step, stepName: string, args: Record<string, unknown>): Promise<boolean> => {
-    const argsResult = strictArgsSchema(step.args).safeParse(args);
-    if (!argsResult.success) return false;
-    try {
-      const resolved = await resolveFixtures({
-        names: stepFixtureNames(step),
-        graph: fixtureGraph,
-        ctx: contextHandle.ctx,
-        scenarioCache: fixtureScenarioCache,
-        processCache: fixtureProcessCache,
-        defaultTimeoutMs: config.fixtureTimeout,
-      });
-      contextHandle.beginStepRun(step, resolved.fixtures);
-      const result = await runWithTimeout(
-        () => contextHandle.recordingProcesses(() => Promise.resolve(step.run(resolved.fixtures, argsResult.data))),
-        step.timeout ?? config.stepTimeout,
-        "Step",
-        stepName,
-        step.timeout === undefined ? "config" : "step",
-      );
-      return parseStepReturns(step, result).success;
-    } catch {
-      return false;
-    }
-  };
-  const probes: ScenarioProbe[] = [];
-  if (probe && !scenarioFailed && probeCandidates.length > 0) {
-    const probeDir = path.join(scenarioDir, ".probe");
-    try {
-      await mkdir(probeDir, { recursive: true });
-      for (const candidate of probeCandidates) {
-        for (const key of candidate.keys) {
-          const changed = mutateCapture(candidate.args[key]);
-          if (changed === null) continue;
-          await contextHandle.beginStep(probeDir);
-          const passed = await probeStep(candidate.step, candidate.stepName, { ...candidate.args, [key]: changed.value });
-          probes.push({
-            step_index: candidate.stepIndex,
-            step: candidate.stepName,
-            key,
-            recorded: candidate.args[key] as ScenarioProbe["recorded"],
-            changed: changed.value,
-            status: passed ? "passed" : "failed",
-          });
-        }
-      }
-    } finally {
-      await rm(probeDir, { recursive: true, force: true });
     }
   }
 

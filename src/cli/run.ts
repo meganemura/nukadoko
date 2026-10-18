@@ -259,7 +259,8 @@ export interface RunRunOptions {
    * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
   repeat: number;
   /** `--probe`: after each scenario passes, re-run every read-only Then
-   * with one capture changed, and note each one that still passes
+   * with one capture changed, and note each one that still passes or that
+   * the probe could not measure
    * (src/run/probe.ts). A note never changes the exit code. */
   probe: boolean;
   /** `$GITHUB_STEP_SUMMARY` as the CLI read it, `undefined` when unset or

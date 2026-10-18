@@ -2022,20 +2022,31 @@ its own files, so the unit of distribution stays the file: a target naming
 one file still runs at 1, and running one scenario on several workers at
 once is not what this flag does.
 
-`--probe` measures whether a passed Then could have failed. After a
-scenario passes, and before its After hooks, each step that ran in a Then
-position (the Gherkin `Then`, and an `And` or `But` after it), declared
-`mutates: false`, and bound at least one capture from its pattern runs
-again, alone, in the same scenario's ctx and fixtures, with the args it ran
+`--probe` measures whether a passed Then could have failed. Each step
+that ran in a Then position (the Gherkin `Then`, and an `And` or `But`
+after it), declared `mutates: false`, and bound at least one capture from
+its pattern runs again right after it passes, before its AfterStep hooks
+and the next step, so the re-run sees the state the Then saw. It runs
+alone, in the same scenario's ctx and fixtures, with the args it was bound
 with and one capture changed: a string gets the suffix `-probe`, a number
-+1, and a boolean is flipped. A capture of another type, or a number +1
++1, and a boolean is flipped. The changed args go through the step's args
+schema as the first run's did. A capture of another type, or a number +1
 does not change, is not probed, and neither is a compat step, which
 declares no `mutates`. Each capture gets its own re-run, and a value
-`from` filled is never changed. The When is not re-run, and only a
-step declared read-only runs, so the probe writes nothing. A Then that
+`from` filled is never changed. The When is not re-run, and a step whose
+own observation shows a process or an HTTP write is not re-run either, so
+a probe runs nothing the feature did not name a second time. A Then that
 still passes is a `then-passed-with-changed-capture` note at the Then's
-line, naming the step, the key, and both values, with the `nuka run
-<file>:<line> --probe` that measures it again. It is a measurement, not a
+line, naming the step's sentence, the step, the key, and both values,
+with the `nuka run <file>:<line> --probe` that measures it again. Only a
+throw from the step's own `run` is the Then catching the change. A probe
+that never reached that point is a `then-probe-not-measured` note with its
+reason: the step wrote when it ran (`wrote`), the args schema refused the
+changed value (`args-rejected`), a fixture failed (`setup-failed`), the
+re-run timed out (`timeout`), or the returns schema refused what it
+returned (`returns-rejected`). Under `--repeat`, the executions of one
+scenario in one environment fold into one note per step and key, and a
+note that held in only some of them ends with `in <k> of <n> executions`. It is a measurement, not a
 verdict: a sentence like "at least {n}" can rightly pass with n+1, so the
 note never changes a scenario's status or the exit code. A probe is not a
 step: it writes no step record, has no entry in `steps`, and opens no
@@ -2282,10 +2293,13 @@ to act on the run without opening another file:
   that wrote none has no `evidence`, and its empty directory is removed
   when the run ends.
 - Under `--probe`, a scenario that had a Then to probe has `probes`: each
-  re-run's `line`, `step`, `key`, the `recorded` value, the `changed` one,
-  and its `status`. `passed` is a Then that passed with the changed value
-  too, and is the `then-passed-with-changed-capture` note in `findings`.
-  A probe has no step record.
+  re-run's `line`, `step`, `text` (the step's sentence), `key`, the
+  `recorded` value, the `changed` one, and its `status`. `passed` is a Then
+  that passed with the changed value too, and is the
+  `then-passed-with-changed-capture` note in `findings`. `caught` is a
+  Then whose `run` threw. `not-measured` carries a `reason` and a
+  `message`, and is the `then-probe-not-measured` note. A probe has no
+  step record.
 - `findings` holds every finding the run raised: each failed scenario, each
   probe note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
@@ -3897,10 +3911,12 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
-                              --probe re-runs each passed read-only Then with
-                              one capture changed and notes one that still
-                              passes (then-passed-with-changed-capture); the
-                              exit code is unchanged.
+                              --probe re-runs each read-only Then right after
+                              it passes, with one capture changed, and notes
+                              one that still passes
+                              (then-passed-with-changed-capture) or that it
+                              could not measure (then-probe-not-measured);
+                              the exit code is unchanged.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set, and writes

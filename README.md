@@ -1208,12 +1208,14 @@ invocation, for a failure that reproduces one time in several. Each
 execution is its own record under one run id, and a scenario that failed
 at least once is tallied after the summary, `<passed> of <n> passed`.
 
-`nuka run --probe` asks whether each passed Then could have failed. After a
-scenario passes, every read-only Then that captured a value runs again,
-alone, with one capture changed (a string suffixed, a number +1, a boolean
-flipped). A Then that still passes is a `then-passed-with-changed-capture`
-note in `run.json` and the run summary. It is a measurement, so the exit
-code stays the run's.
+`nuka run --probe` asks whether each passed Then could have failed. Right
+after a read-only Then that captured a value passes, and before the next
+step, it runs again, alone, with one capture changed (a string suffixed, a
+number +1, a boolean flipped). A Then that still passes is a
+`then-passed-with-changed-capture` note in `run.json` and the run summary,
+and a Then the probe could not measure (it wrote when it ran, or its args
+schema refused the changed value) is a `then-probe-not-measured` note. It
+is a measurement, so the exit code stays the run's.
 
 `nuka run --env a --env b` runs every selected scenario once in each
 environment, in one run with one run id: all of `a` first, then all of

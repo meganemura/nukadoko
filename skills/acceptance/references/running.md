@@ -146,7 +146,9 @@ there is not checked and not run, and the skip reports nothing.
    `then-passed-with-changed-capture` note says that Then passed anyway,
    so it may not compare that value. Fix the step's comparison, not the
    feature. A note on "at least {n}" with n+1 is the sentence being true,
-   and stays. The note never changes the exit code.
+   and stays. A `then-probe-not-measured` note says the probe learned
+   nothing about that Then, and its message says why. Neither note
+   changes the exit code.
 
 ## The pull request
 

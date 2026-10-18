@@ -280,24 +280,34 @@ just until 0.1.
 - **`nuka run --probe` measures whether each passed Then could have
   failed.** A pass meant only that nothing threw, so a Then whose `run`
   never compares the value its sentence names was green, and nothing
-  measured it. After a scenario passes, and before its After hooks, each
-  step in a Then position that declares `mutates: false` and binds a
-  capture runs again, alone, in the same ctx and fixtures, with the args it
-  ran with and one capture changed: a string gets the suffix `-probe`, a
-  number +1, a boolean is flipped. A capture of another type, a number +1
-  does not change, a value `from` filled, and a compat step are never
-  probed, and the When is not re-run. A Then that still passes is a
-  `then-passed-with-changed-capture` note at its line, naming the step,
-  the key, and both values, with `do: nuka run <file>:<line> --probe`; it
+  measured it. Each step in a Then position that declares
+  `mutates: false` and binds a capture runs again right after it passes,
+  before its AfterStep hooks and the next step, so it sees the state the
+  Then saw. It runs alone, in the same ctx and fixtures, with the args it
+  was bound with and one capture changed: a string gets the suffix
+  `-probe`, a number +1, a boolean is flipped. A capture of another type,
+  a number +1 does not change, a value `from` filled, and a compat step
+  are never probed, and the When is not re-run. A step whose own
+  observation shows a process or an HTTP write is not re-run either. A
+  Then that still passes is a `then-passed-with-changed-capture` note at
+  its line, naming the step's sentence, the step, the key, and both
+  values, with `do: nuka run <file>:<line> --probe`. Only a throw from the
+  step's own `run` counts as the Then catching the change; a re-run that
+  never got there (the step wrote, the args schema refused the changed
+  value, a fixture failed, a timeout, or the returns schema refused the
+  result) is a `then-probe-not-measured` note with that reason. Each note
   is in `run.json`'s `findings`, the run summary's Findings section, and on
-  stderr after the count line. The note never changes a scenario's status
+  stderr after the count line. A note never changes a scenario's status
   or the exit code: "at least {n}" can rightly pass with n+1. A probe
   writes no step record and has no entry in `steps`; a scenario's
   `run.json` entry gets `probes` instead, one entry per re-run with `line`,
-  `step`, `key`, `recorded`, `changed`, and `status`, so a Then the probe
-  caught reads apart from one it never probed. Workers under
-  `--concurrency` probe too, and under `--repeat` every execution probes.
-  `nuka check --codes` lists the new code. The acceptance skill's worked
+  `step`, `text`, `key`, `recorded`, `changed`, and `status` (`passed`,
+  `caught`, or `not-measured` with `reason` and `message`), so a Then the
+  probe caught reads apart from one it never measured. Workers under
+  `--concurrency` probe too. Under `--repeat` every execution probes, and
+  the notes of one scenario in one environment fold into one per step and
+  key, ending `in <k> of <n> executions` when only some held. `nuka check
+  --codes` lists the new codes. The acceptance skill's worked
   examples now replay `nuka run --probe` too, and their transcripts end on
   the count line, so an example Then that stopped comparing its capture
   fails `npm run skill-examples`.

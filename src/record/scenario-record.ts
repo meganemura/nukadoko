@@ -257,16 +257,34 @@ export interface ScenarioRecord {
 /** A capture value a probe can change. */
 export type ProbeValue = string | number | boolean;
 
+/** Why a probe said nothing about its Then. `wrote`: the step ran a
+ * process or made an HTTP write when it ran, so it is not run again.
+ * `args-rejected`: the args schema refused the changed value.
+ * `setup-failed` (a fixture's setup threw) and `timeout`: the re-run did
+ * not reach the step's own comparison. `returns-rejected`: the re-run
+ * returned what the returns schema refuses. */
+export type ProbeNotMeasuredReason = "wrote" | "args-rejected" | "setup-failed" | "timeout" | "returns-rejected";
+
+/** What a probe measured: `passed` when the Then passed with the changed
+ * value too, `caught` when its `run` threw, and `not-measured` when the
+ * re-run never reached the comparison (`reason` and `message` say why). */
+export type ProbeStatus = "passed" | "caught" | "not-measured";
+
 export interface ScenarioProbe {
   /** The 0-based index into `steps` of the Then that was re-run. */
   readonly step_index: number;
   readonly step: string;
+  /** The step's sentence in the feature, without its keyword. */
+  readonly text: string;
   /** The args key the changed capture fills. */
   readonly key: string;
   /** The value the step ran with. */
   readonly recorded: ProbeValue;
   /** The value the probe ran it with. */
   readonly changed: ProbeValue;
-  /** `passed` when the Then passed with the changed value too. */
-  readonly status: "passed" | "failed";
+  readonly status: ProbeStatus;
+  /** Only for `not-measured`. */
+  readonly reason?: ProbeNotMeasuredReason;
+  /** Only for `not-measured`. */
+  readonly message?: string;
 }

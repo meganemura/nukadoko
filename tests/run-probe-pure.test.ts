@@ -42,17 +42,19 @@ describe("mutateCapture", () => {
   });
 });
 
-const probe: gs.Generator<RunProbe> = gs.sampledFrom(["passed", "failed"] as const).map((status) => ({
+const probe: gs.Generator<RunProbe> = gs.sampledFrom(["passed", "caught", "not-measured"] as const).map((status) => ({
   line: 4,
   step: "s",
+  text: "the value is \"a\"",
   key: "k",
   recorded: "a",
   changed: "a-probe",
   status,
+  ...(status === "not-measured" ? { reason: "args-rejected" as const, message: "k: Invalid" } : {}),
 }));
 
 const scenario: gs.Generator<RunScenario> = gs
-  .tuples(gs.sampledFrom(["passed", "failed"] as const), gs.arrays(probe, { maxSize: 4 }), gs.integers({ minValue: 1, maxValue: 99 }))
+  .tuples(gs.sampledFrom(["passed", "failed"] as const), gs.arrays(probe, { maxSize: 4 }), gs.integers({ minValue: 1, maxValue: 9 }))
   .map(([status, probes, line]) => ({
     scenario_record_id: "scenario-x",
     feature: "features/a.feature",
@@ -67,17 +69,91 @@ const scenario: gs.Generator<RunScenario> = gs
     probes,
   }));
 
+const CODES = { passed: "then-passed-with-changed-capture", "not-measured": "then-probe-not-measured" } as const;
+
 describe("probeFindings", () => {
-  it("raises one note per passed probe of a passed scenario, and nothing else", () =>
+  it("raises one note per scenario line, step, key, and outcome, for a passed or unmeasured probe of a passed scenario", () =>
     hegel.test((tc) => {
       const scenarios = tc.draw(gs.arrays(scenario, { maxSize: 5 }));
       const findings = probeFindings(scenarios, { rerunFlags: () => [], named: false });
-      const expected = scenarios
-        .filter((entry) => entry.status === "passed")
-        .flatMap((entry) => (entry.probes ?? []).filter((entry) => entry.status === "passed").map(() => entry.line));
-      expect(findings.map((finding) => finding.do)).toEqual(expected.map((line) => `nuka run features/a.feature:${line} --probe`));
-      expect(findings.every((finding) => finding.severity === "note" && finding.code === "then-passed-with-changed-capture")).toBe(true);
+      const expected = [
+        ...new Set(
+          scenarios
+            .filter((entry) => entry.status === "passed")
+            .flatMap((entry) =>
+              (entry.probes ?? []).flatMap((each) => (each.status === "caught" ? [] : [`nuka run features/a.feature:${entry.line} --probe ${CODES[each.status]}`])),
+            ),
+        ),
+      ];
+      expect(findings.map((finding) => `${finding.do} ${finding.code}`)).toEqual(expected);
+      expect(findings.every((finding) => finding.severity === "note")).toBe(true);
     }));
+
+  it("folds the executions of --repeat into one note that says in how many it held", () => {
+    const execution = (status: "passed" | "caught") => ({
+      scenario_record_id: "scenario-x",
+      feature: "features/a.feature",
+      line: 3,
+      scenario: "a",
+      environment: "default",
+      status: "passed" as const,
+      started_at: "2026-10-18T00:00:00.000Z",
+      finished_at: "2026-10-18T00:00:00.000Z",
+      steps: [],
+      hooks: [],
+      probes: [{ line: 4, step: "file-reads", text: 'the file reads "a"', key: "content", recorded: "a", changed: "a-probe", status }],
+    });
+    const findings = probeFindings([execution("passed"), execution("caught"), execution("passed")], { rerunFlags: () => [], named: false });
+    expect(findings.map((finding) => finding.message)).toEqual([
+      'the file reads "a": step "file-reads" passed with content "a-probe" in place of "a", in 2 of 3 executions',
+    ]);
+  });
+
+  it("notes a probe that did not measure, with its reason and message", () => {
+    const findings = probeFindings(
+      [
+        {
+          scenario_record_id: "scenario-x",
+          feature: "features/a.feature",
+          line: 3,
+          scenario: "a",
+          environment: "default",
+          status: "passed",
+          started_at: "2026-10-18T00:00:00.000Z",
+          finished_at: "2026-10-18T00:00:00.000Z",
+          steps: [],
+          hooks: [],
+          probes: [
+            {
+              line: 4,
+              step: "the shell answers",
+              text: 'the shell answers "ok"',
+              key: "answer",
+              recorded: "ok",
+              changed: "ok-probe",
+              status: "not-measured",
+              reason: "wrote",
+              message: "the step ran 1 process when it ran, so it is not run again",
+            },
+          ],
+        },
+      ],
+      { rerunFlags: () => [], named: false },
+    );
+    expect(findings).toEqual([
+      {
+        severity: "note",
+        code: "then-probe-not-measured",
+        file: "features/a.feature",
+        line: 4,
+        step: "the shell answers",
+        message:
+          'the shell answers "ok": step "the shell answers" was not probed with answer "ok-probe" (wrote): the step ran 1 process when it ran, so it is not run again',
+        fix: "Read the reason in the message: a step that wrote when it ran is not run again; an args schema that refuses the changed value, a fixture that failed, a timeout, or a returns schema that refuses the result is corrected where the message names, or the Then is left to review.",
+        do: "nuka run features/a.feature:3 --probe",
+      },
+    ]);
+  });
 
   it("names the environment and reruns in it when the run had several", () => {
     const findings = probeFindings(
@@ -93,13 +169,13 @@ describe("probeFindings", () => {
           finished_at: "2026-10-18T00:00:00.000Z",
           steps: [],
           hooks: [],
-          probes: [{ line: 4, step: "the total is", key: "total", recorded: 3, changed: 4, status: "passed" }],
+          probes: [{ line: 4, step: "the total is", text: "the total is 3", key: "total", recorded: 3, changed: 4, status: "passed" }],
         },
       ],
       { rerunFlags: (environment) => ["--env", environment], named: true },
     );
     expect(findings.map((finding) => [finding.message, finding.do])).toEqual([
-      ['step "the total is" (flag-off) passed with total 4 in place of 3', "nuka run features/a.feature:3 --probe --env flag-off"],
+      ['the total is 3: step "the total is" (flag-off) passed with total 4 in place of 3', "nuka run features/a.feature:3 --probe --env flag-off"],
     ]);
   });
 });

@@ -69,6 +69,12 @@ const RUN_CODES = {
       "Under nuka run --probe, a read-only Then passed again with one of its captures changed, so it may not compare that value.",
     fix: "Make the step compare its result with the capture the message names; a step whose sentence also allows the changed value, such as \"at least n\", can stay as it is.",
   },
+  "then-probe-not-measured": {
+    severity: "note",
+    description:
+      "Under nuka run --probe, a read-only Then was not re-run with a changed capture, or its re-run stopped before the step compared anything, so the probe says nothing about it.",
+    fix: "Read the reason in the message: a step that wrote when it ran is not run again; an args schema that refuses the changed value, a fixture that failed, a timeout, or a returns schema that refuses the result is corrected where the message names, or the Then is left to review.",
+  },
   "trace-version-unknown": {
     severity: "warning",
     description: "A Playwright trace has a version nukadoko cannot read, so its actions are not in the step record.",
