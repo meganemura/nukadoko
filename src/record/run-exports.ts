@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runRelativeDir } from "./state-layout.js";
 
@@ -17,11 +17,16 @@ import { runRelativeDir } from "./state-layout.js";
 // renders at once land whole lines, in some order, and order does not
 // matter to a reader that treats the file as a set.
 //
-// Why the names cannot be derived instead: an attachment's file name is
-// chosen by allure-js-commons and written into the result's own `source`
-// field before the writer sees it, so a run cannot stamp its id into the
-// name without breaking the link from result to attachment. Recording the
-// name at write time is the only way the run keeps ownership of it.
+// Why the names are recorded although they are derived: a result's name
+// comes from the run id, the scenario, and the environment
+// (src/report/allure/writer.ts's `stableNames`), but a hash names no run a
+// reader can see, and a Markdown or messages file has whatever name
+// `--out` gave it. The manifest is the one list retention can read.
+//
+// A render that replaces its earlier render first removes the earlier
+// files and their lines (`forgetExports`), so the manifest holds each file
+// once however often the run is rendered. That one rewrite goes through a
+// temporary file and a rename, so a reader never sees half of it.
 //
 // Root-relative paths, not results-dir-relative: one run can be rendered
 // into more than one directory, and a removal must target where each file
@@ -77,4 +82,24 @@ export function readExportsManifest(filePath: string): string[] {
     }
   }
   return [...seen];
+}
+
+/** Removes every line of the manifest that names one of
+ * `relativePaths`. A missing manifest stays missing. */
+export function forgetExports(filePath: string, relativePaths: ReadonlySet<string>): void {
+  let content: string;
+  try {
+    content = readFileSync(filePath, "utf8");
+  } catch {
+    return;
+  }
+  const kept = content.split("\n").filter((line) => line.length > 0 && !relativePaths.has(line));
+  const tempPath = `${filePath}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tempPath, kept.map((line) => `${line}\n`).join(""));
+    renameSync(tempPath, filePath);
+  } catch (error) {
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
 }

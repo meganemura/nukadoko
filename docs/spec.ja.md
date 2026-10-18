@@ -2812,7 +2812,10 @@ result の出力先は `.nukadoko/export/allure-results/`、または `--out` �
 相対の `--out` はプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 run ディレクトリを渡さない `nuka report` は最新の run を描き出し、run ディレクトリを引数に渡せばその run を描き出します。
 その run がこのプロジェクトの run であれば、state directory の下に書いた各ファイルはその run の exports manifest に記され、retention が run と一緒に消します。
-同じ run を同じディレクトリへ描き直すと、前回その run を描き出したときにそこへ書いたファイルを先に消すため、ディレクトリには各 scenario が 1 つずつ残ります。
+同じ run を同じディレクトリへ描き直すと、前回その run を描き出したときにそこへ書いたファイルと、manifest のその行を先に消すため、ディレクトリには各 scenario が 1 つずつ残り、manifest は各ファイルを 1 度だけ名指します。
+result、container、attachment の名前は、ランダムではなく run id、scenario record、environment から決まります。
+そのため、同じ run の 2 回目の描き出しは、どこへ書いても 1 回目を上書きします。
+state ディレクトリの外の `--out` のディレクトリでも、既定のディレクトリへ描き出したコピーの run でも同じです。
 別の run を描き出すと、その result はほかの result の隣に加わります。
 2 つの run を 1 つの Allure launch とみなすか 2 つとみなすかは、呼び出し側が決めます。
 `nuka clean` は `.nukadoko/export/allure-results/` を空にし、state directory の外へ `--out` で書いたディレクトリを消すのは呼び出し側です。

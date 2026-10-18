@@ -3419,7 +3419,8 @@ The results go to `.nukadoko/export/allure-results/`, or to the directory `--out
 A relative `--out` is resolved against the project root, and an absolute one is used as given.
 `nuka report` with no run directory renders the newest run; a run directory as its argument renders that run.
 When the run is one of this project's runs, each file written under the state directory is noted in that run's exports manifest, so retention removes it with the run.
-Rendering the same run into the same directory again first removes the files the last render of that run wrote there, so the directory holds one copy of each scenario.
+Rendering the same run into the same directory again first removes the files the last render of that run wrote there, and their lines in the manifest, so the directory holds one copy of each scenario and the manifest names each file once.
+Each result, container, and attachment is named from the run id, the scenario record, and the environment rather than at random, so a second render of the same run overwrites the first wherever it goes: into an `--out` directory outside the state directory, and a copied run into the default directory, too.
 A render of a different run adds its results beside the others; whether two runs count as one Allure launch or two is the caller's choice.
 `nuka clean` empties `.nukadoko/export/allure-results/`, and a directory written with `--out` outside the state directory is the caller's to remove.
 `categories.json` and `environment.properties` are written on every render.

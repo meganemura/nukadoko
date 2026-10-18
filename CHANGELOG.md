@@ -71,7 +71,12 @@ just until 0.1.
     `--out` for `markdown` and `messages`.
   - A file `nuka report` writes under the state directory is noted in the
     run's exports manifest, so retention removes it with the run, and
-    rendering the same run into the same place again replaces it.
+    rendering the same run into the same place again replaces it and its
+    manifest lines. Each Allure result, container, and attachment is named
+    from the run id, the scenario record, and the environment, not at
+    random, so a second render of the same run overwrites the first
+    wherever it goes, an `--out` directory outside the state directory and
+    a copied run included.
   - Each run writes `sources.json` (`schema_version` 1) beside `run.json`:
     the text of every feature file it parsed and the project name. A run
     directory without it, such as one from an earlier release, is refused

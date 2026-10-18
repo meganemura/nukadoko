@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import { copyFileSync, linkSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stringifyEnvInfo, type Writer } from "allure-js-commons/sdk/reporter";
 import type { Category, EnvironmentInfo } from "allure-js-commons/sdk";
-import type { Globals, TestResult, TestResultContainer } from "allure-js-commons";
+import type { Attachment, FixtureResult, Globals, StepResult, TestResult, TestResultContainer } from "allure-js-commons";
 
 // Responsibility: a drop-in `Writer` that replaces allure-js-commons' own
 // `FileSystemWriter`'s plain `writeFileSync`
@@ -136,5 +137,97 @@ export function createAtomicWriter(resultsDir: string, options: AtomicWriterOpti
     writeGlobals(distFileName: string, info: Globals): void {
       writeAtomic(resolve(distFileName), JSON.stringify(info));
     },
+  };
+}
+
+// --- stable names ---
+//
+// allure-js-commons names every result, container, and attachment with a
+// random UUID it draws inside `ReporterRuntime`, so a second render of the
+// same run wrote a second copy of every file beside the first, and Allure
+// showed each scenario twice. The writer is the one place every name
+// passes through, so it renames them here: each random UUID becomes one
+// derived from a key the caller names per scenario (the run id, the
+// scenario record id, and the environment) and the order in which the
+// UUID first appeared. The same run renders the same calls in the same
+// order, so a second render writes the same names and overwrites the
+// first. The alternative refused: generating our own UUIDs by replacing
+// `ReporterRuntime`, which would mean copying the runtime's own logic for
+// fixtures, steps, and identity.
+
+const UUID_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+
+/** A UUID-shaped name from `key` and `index`: the first 16 bytes of their
+ * SHA-256, with the version 8 (custom) and RFC 9562 variant bits set. Pure. */
+export function stableUuid(key: string, index: number): string {
+  const bytes = createHash("sha256").update(`${key}\u0000${index}`).digest().subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x80;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export interface StableWriter extends Writer {
+  /** Starts the names of one scenario: every file written until the next
+   * call is named from `key`. */
+  begin(key: string): void;
+}
+
+/** Wraps `inner` so every result, container, and attachment name is
+ * derived from the key of the scenario being written (`begin`) instead of
+ * the random UUID allure-js-commons chose. */
+export function stableNames(inner: Writer): StableWriter {
+  let key = "";
+  let names = new Map<string, string>();
+  const rename = (uuid: string): string => {
+    let stable = names.get(uuid);
+    if (stable === undefined) {
+      stable = stableUuid(key, names.size);
+      names.set(uuid, stable);
+    }
+    return stable;
+  };
+  const renameFile = (fileName: string): string => {
+    const match = UUID_PREFIX.exec(fileName);
+    return match === null ? fileName : `${rename(match[0])}${fileName.slice(match[0].length)}`;
+  };
+  // Only a source this writer renamed is rewritten; anything else in a
+  // result is the run's own data and stays as it is.
+  const renameAttachments = (attachments: readonly Attachment[]): Attachment[] =>
+    attachments.map((attachment) => {
+      const match = UUID_PREFIX.exec(attachment.source);
+      return match !== null && names.has(match[0]) ? { ...attachment, source: renameFile(attachment.source) } : attachment;
+    });
+  const renameSteps = (steps: readonly StepResult[]): StepResult[] =>
+    steps.map((step) => ({ ...step, attachments: renameAttachments(step.attachments), steps: renameSteps(step.steps) }));
+  const renameFixtures = (fixtures: readonly FixtureResult[]): FixtureResult[] =>
+    fixtures.map((fixture) => ({ ...fixture, attachments: renameAttachments(fixture.attachments), steps: renameSteps(fixture.steps) }));
+
+  return {
+    begin(next: string): void {
+      key = next;
+      names = new Map();
+    },
+    writeResult(result: TestResult): void {
+      inner.writeResult({ ...result, uuid: rename(result.uuid), attachments: renameAttachments(result.attachments), steps: renameSteps(result.steps) });
+    },
+    writeGroup(result: TestResultContainer): void {
+      inner.writeGroup({
+        ...result,
+        uuid: rename(result.uuid),
+        children: result.children.map(rename),
+        befores: renameFixtures(result.befores),
+        afters: renameFixtures(result.afters),
+      });
+    },
+    writeAttachment(distFileName: string, content: Buffer): void {
+      inner.writeAttachment(renameFile(distFileName), content);
+    },
+    writeAttachmentFromPath(distFileName: string, from: string): void {
+      inner.writeAttachmentFromPath(renameFile(distFileName), from);
+    },
+    writeEnvironmentInfo: (info) => inner.writeEnvironmentInfo(info),
+    writeCategoriesDefinitions: (categories) => inner.writeCategoriesDefinitions(categories),
+    writeGlobals: (distFileName, info) => inner.writeGlobals(distFileName, info),
   };
 }

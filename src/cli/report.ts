@@ -3,7 +3,7 @@ import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
 import { rankRunsNewestFirst } from "../record/newest-run.js";
-import { createExportsManifest, readExportsManifest, runExportsManifestPath } from "../record/run-exports.js";
+import { createExportsManifest, forgetExports, readExportsManifest, runExportsManifestPath } from "../record/run-exports.js";
 import { readEndedRuns } from "../record/run-result.js";
 import { exportRelativeDir, runRelativeDir } from "../record/state-layout.js";
 import { writeAllureResults } from "../report/allure/write-results.js";
@@ -204,10 +204,16 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   // new one is written instead of piling up beside it.
   function replaceOwnFiles(output: ReportOutput, target: string, kind: "file" | "dir"): void {
     if (!output.ownRun || stateDir === null) return;
-    for (const relativePath of readExportsManifest(runExportsManifestPath(rootDir, stateDir, output.runId))) {
+    const manifestPath = runExportsManifestPath(rootDir, stateDir, output.runId);
+    const replaced = new Set<string>();
+    for (const relativePath of readExportsManifest(manifestPath)) {
       const absolutePath = path.resolve(rootDir, relativePath);
-      if (kind === "file" ? absolutePath === target : isInside(target, absolutePath)) rmSync(absolutePath, { force: true });
+      if (kind === "file" ? absolutePath === target : isInside(target, absolutePath)) {
+        rmSync(absolutePath, { force: true });
+        replaced.add(relativePath);
+      }
     }
+    if (replaced.size > 0) forgetExports(manifestPath, replaced);
   }
 
   function noteOwnFiles(output: ReportOutput, files: readonly string[]): void {

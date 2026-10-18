@@ -51,7 +51,7 @@ describe("nuka report on a run with missing parts", () => {
     expect(await cli(["report", "--format", "markdown", "--out", out])).toEqual({ exitCode: 0, stdout: "", stderr: "markdown  .nukadoko/export/summary.md\n" });
     expect(manifest()).toEqual([out]);
     expect((await cli(["report", "--format", "markdown", "--out", out])).exitCode).toBe(0);
-    expect(manifest()).toEqual([out, out]);
+    expect(manifest()).toEqual([out]);
   });
 
   it("exits 1 with a failed report-incomplete finding, and shows the step and its result broken, when a step record is gone", async () => {

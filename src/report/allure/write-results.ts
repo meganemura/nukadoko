@@ -25,7 +25,7 @@ import {
   type MappedScenarioTest,
   type MappedStatus,
 } from "./map-scenario.js";
-import { createAtomicWriter } from "./writer.js";
+import { createAtomicWriter, stableNames } from "./writer.js";
 import { ownStepSpan } from "../step-timeline.js";
 
 // Responsibility: the thin layer that turns map-scenario.ts's flat
@@ -105,9 +105,11 @@ function allureStatus(status: MappedStatus): Status {
 }
 
 export function writeAllureResults(options: WriteAllureResultsOptions, scenarios: readonly AllureScenarioInput[]): void {
-  const writer = createAtomicWriter(options.resultsDir, {
-    ...(options.onWrite !== undefined ? { onWrite: options.onWrite } : {}),
-  });
+  const writer = stableNames(
+    createAtomicWriter(options.resultsDir, {
+      ...(options.onWrite !== undefined ? { onWrite: options.onWrite } : {}),
+    }),
+  );
   const environmentInfo: EnvironmentInfo = {
     environment: options.environment,
     ...(options.targetVersion !== undefined ? { target_version: options.targetVersion } : {}),
@@ -307,6 +309,9 @@ export function writeAllureResults(options: WriteAllureResultsOptions, scenarios
   for (const input of scenarios) {
     try {
       const { record, gherkinDocument, pickle, relativeFeaturePath } = input;
+      // One scenario execution of one run: a second render of it writes
+      // the same file names (writer.ts's `stableNames`).
+      writer.begin(`${record.run_id}\u0000${record.scenario_record_id}\u0000${record.environment}`);
       const scopeUuid = runtime.startScope();
       const posixPath = toPosixPath(relativeFeaturePath);
       const projectName = options.projectName;
