@@ -74,11 +74,11 @@ If none is true, ask what this is supposed to do before writing anything.
    a person, not a guess and not a value read off the program.
 2. **Steps.** `nuka steps` lists the vocabulary, `nuka describe <step>`
    one contract; reuse before scaffolding. `nuka scaffold --feature <file>`
-   stubs each undefined line, with no `returns` and no `from`. Redo the
-   When that runs a program and the Thens that read it one at a time, with
-   `--replace` (it refuses a stub anyone edited): `nuka scaffold <name>
-   --pattern "<line>" --description "<what it does>"`, plus `--then` for a
-   Then, `--command <entry point>` for the When (`--cwd`, `--argv`), and
+   stubs each undefined line, with no `returns` and no `from`, and prints
+   each stub's own `nuka scaffold ... --replace` line (it refuses a file
+   anyone edited). Redo the When that runs a program and the Thens that
+   read it from those lines, adding `--description "<what it does>"`,
+   `--command <entry point>` for the When (`--cwd`, `--argv`), and
    `--from <step>.<key>` per value an earlier step returns, whose producer
    has to return that key already. Run each alone with `nuka do <step>
    --args '<json>'` (`references/writing-steps.md`, which names the

@@ -52,6 +52,18 @@ just until 0.1.
   such a stub now says it still holds the stub, and its `do:` line is the
   same command with `--replace`. `--feature` refuses `--replace`, and what
   it writes is unchanged.
+- **`nuka scaffold --feature` ends with each stub's own `--replace` line.**
+  The first single scaffold over a `--feature` stub was refused once, only
+  to teach `--replace`: 9 commands from an empty CLI project to green, one
+  of them that refusal. After the written paths, stderr now has a `next:`
+  line and, for each stub, `nuka scaffold <name> --pattern <pattern>
+  [--then] --replace`, the command to add `--command`, `--from`, or
+  `--description` to. A stub's line is printed only when that command, run
+  as it stands, writes the same bytes: a single scaffold reads the
+  attachment from every scanned feature line the pattern matches, so a
+  stub read from a feature outside `featuresDir` can differ, and gets no
+  line. stdout still lists only the written paths. Empty to green is now 8
+  commands for the CLI worked flow.
 - **`nuka scaffold --replace` also redoes a `--command`, `--from`, or `--description` step nobody edited.**
   A step scaffolded with one option wrong (a missing `--argv`, a wrong
   `--from` key, a wrong entry point) was refused with the `rm` line,

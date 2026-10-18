@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -7,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildExpression } from "../src/binding/expression.js";
 import { createParameterTypeRegistry } from "../src/binding/registry.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { inferPattern, nameCaptures, stepNameFor } from "../src/cli/scaffold-feature.js";
+import { inferPattern, nameCaptures, redoCommand, stepNameFor } from "../src/cli/scaffold-feature.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka scaffold --feature <path>`. Each line `nuka check`
@@ -76,7 +77,12 @@ describe("nuka scaffold --feature", () => {
         "features/steps/the-exit-code-is.ts",
         "",
       ].join("\n"),
-      stderr: "",
+      stderr:
+        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "  nuka scaffold a-config-file-with --pattern 'a config file with {value:string}' --replace\n" +
+        "  nuka scaffold i-run-greet-with-times --pattern 'I run greet with {value:string} {value2:int} times' --replace\n" +
+        "  nuka scaffold the-output-is --pattern 'the output is {value:string}' --then --replace\n" +
+        "  nuka scaffold the-exit-code-is --pattern 'the exit code is {value:int}' --then --replace\n",
     });
     expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
   });
@@ -225,7 +231,9 @@ describe("nuka scaffold --feature", () => {
       exitCode: 0,
       stdout: "features/steps/3-items-in-the-cart.ts\n",
       stderr:
-        'note: features/cart.feature:3: "3 items in (the) cart" reads as "{int} items in \\\\(the) cart" or "{count} items in \\\\(the) cart" or "{float} items in \\\\(the) cart", so the stub\'s pattern is the line as written, with no capture; put a {key:type} capture in it by hand\n',
+        'note: features/cart.feature:3: "3 items in (the) cart" reads as "{int} items in \\\\(the) cart" or "{count} items in \\\\(the) cart" or "{float} items in \\\\(the) cart", so the stub\'s pattern is the line as written, with no capture; put a {key:type} capture in it by hand\n' +
+        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "  nuka scaffold 3-items-in-the-cart --pattern '3 items in \\(the) cart' --replace\n",
     });
     expect(await stepFile(rootDir, "3-items-in-the-cart")).toContain('  pattern: "3 items in \\\\(the) cart",\n  // Give');
     expect(await cli(rootDir, ["check", feature])).toEqual({
@@ -246,9 +254,42 @@ describe("nuka scaffold --feature", () => {
       exitCode: 0,
       stdout: "features/steps/i-have-3-apples.ts\n",
       stderr:
-        'note: features/apples.feature:3: "I have {value:int} apples" would also match "I have 5 apples" (features/other.feature:3), so the stub\'s pattern is the line as written, with no capture\n',
+        'note: features/apples.feature:3: "I have {value:int} apples" would also match "I have 5 apples" (features/other.feature:3), so the stub\'s pattern is the line as written, with no capture\n' +
+        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "  nuka scaffold i-have-3-apples --pattern 'I have 3 apples' --replace\n",
     });
     expect((await cli(rootDir, ["check"])).exitCode).toBe(0);
+  });
+
+  it("prints, for each stub, a single scaffold that writes the same bytes again", async () => {
+    const feature = await writeFeature(rootDir, "greet.feature", GREET);
+    const { stderr } = await cli(rootDir, ["scaffold", "--feature", feature]);
+    const thenLine = stderr.split("\n").find((line) => line.includes("the-output-is"))!;
+    const before = await stepFile(rootDir, "the-output-is");
+
+    const redone = await cli(rootDir, ["scaffold", "the-output-is", "--pattern", "the output is {value:string}", "--then", "--replace"]);
+
+    expect(thenLine).toBe("  nuka scaffold the-output-is --pattern 'the output is {value:string}' --then --replace");
+    expect(redone).toEqual({ exitCode: 0, stdout: "features/steps/the-output-is.ts\n", stderr: "" });
+    expect(await stepFile(rootDir, "the-output-is")).toBe(before);
+  });
+
+  it("prints no line for a stub that the single scaffold would write differently", async () => {
+    // Outside featuresDir, so the single scaffold reads no line with a docstring.
+    await writeFile(
+      path.join(rootDir, "probe.feature"),
+      'Feature: probe\n  Scenario: one\n    When I send\n      """\n      hi\n      """\n    Then it answers "ok"\n',
+    );
+
+    const result = await cli(rootDir, ["scaffold", "--feature", "probe.feature"]);
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stdout: "features/steps/i-send.ts\nfeatures/steps/it-answers.ts\n",
+      stderr:
+        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "  nuka scaffold it-answers --pattern 'it answers {value:string}' --then --replace\n",
+    });
   });
 
   it("writes no file for an outline line whose rows read differently, and says so", async () => {
@@ -373,4 +414,23 @@ describe("inferPattern", () => {
   it("keys each capture and keeps an escaped brace literal", () => {
     expect(nameCaptures("a \\{b} {int} \\\\ {string}")).toBe("a \\{b} {value:int} \\\\ {value2:string}");
   });
+});
+
+describe("redoCommand", () => {
+  it("reads back, under sh, as the single scaffold of that stub with --replace", () =>
+    hegel.test((tc) => {
+      const pattern = inferPattern(featureLine(tc), createParameterTypeRegistry()).pattern;
+      const name = stepNameFor(pattern);
+      const then = tc.draw(gs.booleans());
+      const result = spawnSync("sh", ["-c", `printf '%s\\0' ${redoCommand(name, pattern, then)}`], { encoding: "utf8" });
+      expect(result.stdout.split("\0").slice(0, -1)).toEqual([
+        "nuka",
+        "scaffold",
+        name,
+        "--pattern",
+        pattern,
+        ...(then ? ["--then"] : []),
+        "--replace",
+      ]);
+    }));
 });

@@ -19,7 +19,8 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { attachStepLines, loadFeaturesFromDirs } from "../feature/load-features.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { readCheckTargets } from "./check.js";
-import { refusedBelowParentConfig, stepTemplate } from "./scaffold.js";
+import { attachmentInFeatures, readPattern, refusedBelowParentConfig, stepTemplate, type StepTemplate } from "./scaffold.js";
+import { shellWord } from "../shell/shell-word.js";
 import { RefusalError, helpFor, refuse } from "./refusal.js";
 import { formatVocabularyError } from "./vocabulary.js";
 
@@ -53,6 +54,16 @@ import { formatVocabularyError } from "./vocabulary.js";
 // from every step the project defines and every file in the steps
 // directory, so nothing is overwritten and no name is defined twice. Lines
 // that read as one pattern share one file.
+//
+// A stub that runs a program, or reads what an earlier step returned, is
+// redone as a single scaffold with `--command` or `--from`, which only the
+// author can name. So stderr ends with the single-scaffold command for each
+// stub, `--replace` included, for the author to add those options to: that
+// command is printed only when it, run as it stands, writes the same bytes
+// this command wrote. It reads the attachment from every scanned feature
+// line the pattern matches, where this command read the stub's own lines,
+// so the two can differ; a command that would rewrite the stub differently
+// is left out rather than printed as if it were the stub's.
 
 export interface RunScaffoldFeatureOptions {
   rootDir: string;
@@ -312,6 +323,7 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
   const stepsDir = path.join(config.featuresDir, "steps");
   const taken = new Set<string>(discovery.vocabulary.keys());
   const written: string[] = [];
+  const redo: string[] = [];
   for (const stub of planned.values()) {
     const name = distinctName(
       stepNameFor(stub.pattern),
@@ -326,25 +338,52 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
     // out: no one args shape fits both, and check names the line that fails.
     const attachments = new Set(stub.lines.map((line) => line.attachment));
     const attachment = attachments.size === 1 ? (stub.lines[0]!.attachment ?? null) : null;
+    const template: StepTemplate = {
+      name,
+      pattern: stub.pattern,
+      captures: stripCaptureNames(stub.pattern).captures,
+      chained: [],
+      variant: then ? "then" : "when",
+      entryPoint: null,
+      cwd: null,
+      description: null,
+      relativeFilePath: relativeFilePath.split(path.sep).join("/"),
+      attachment,
+    };
+    const source = stepTemplate(template);
     await mkdir(path.join(rootDir, stepsDir), { recursive: true });
-    await writeFile(
-      path.join(rootDir, relativeFilePath),
-      stepTemplate({
-        name,
-        pattern: stub.pattern,
-        captures: stripCaptureNames(stub.pattern).captures,
-        chained: [],
-        variant: then ? "then" : "when",
-        entryPoint: null,
-        cwd: null,
-        description: null,
-        relativeFilePath: relativeFilePath.split(path.sep).join("/"),
-        attachment,
-      }),
-    );
+    await writeFile(path.join(rootDir, relativeFilePath), source);
     written.push(relativeFilePath);
+    if (singleScaffoldOutput(template, rootDir, config) === source) redo.push(redoCommand(name, stub.pattern, then));
   }
   for (const filePath of written) stdout.write(`${filePath}\n`);
   for (const note of notes) stderr.write(`note: ${note}\n`);
+  if (redo.length > 0) {
+    stderr.write(`${REDO_HEADER}\n${redo.map((command) => `  ${command}\n`).join("")}`);
+  }
   return 0;
+}
+
+export const REDO_HEADER =
+  "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:";
+
+/** The single scaffold that writes this stub again, as typed. */
+export function redoCommand(name: string, pattern: string, then: boolean): string {
+  return ["nuka", "scaffold", name, "--pattern", pattern, ...(then ? ["--then"] : []), "--replace"].map(shellWord).join(" ");
+}
+
+/** What `nuka scaffold <name> --pattern <pattern> [--then]` would write
+ * for this stub, or `null` when it would refuse the pattern. */
+function singleScaffoldOutput(
+  template: StepTemplate,
+  rootDir: string,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+): string | null {
+  const read = readPattern(template.pattern!);
+  if ("refusal" in read) return null;
+  return stepTemplate({
+    ...template,
+    captures: read.captures,
+    attachment: attachmentInFeatures(rootDir, template.pattern!, config),
+  });
 }

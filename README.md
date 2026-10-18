@@ -431,7 +431,10 @@ The stubs declare no `returns` and no `from`. For a When that runs a
 program and the Thens that read its result, scaffold one step at a time
 with `--command` and `--then --from`, as
 [Beside your unit tests](#beside-your-unit-tests) does. Each of those
-names a file the stub already holds, so add `--replace`: it overwrites a
+names a file the stub already holds, so `--feature` ends its stderr with a
+`next:` block: each stub's own single scaffold with `--replace`, which
+writes the stub again as it is, for you to add those options to. A line
+is printed only when it writes the same bytes. `--replace` overwrites a
 file that is still, byte for byte, what scaffold writes under some set of
 options (a `--feature` stub, or a `--command` or `--from` step with one
 option wrong), and refuses a file anyone edited. Without it the refusal's `do:` line is that same

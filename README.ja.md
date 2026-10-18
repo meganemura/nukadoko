@@ -417,6 +417,9 @@ pattern は、cucumber-expressions がその行を読んだとおりのもので
 stub は `returns` も `from` も宣言しません。
 プログラムを実行する When と、その結果を読む Then には、[Beside your unit tests](#beside-your-unit-tests) と同じように、`--command` と `--then --from` で step を 1 つずつ scaffold してください。
 そのファイルには stub がすでにあるので、`--replace` を付けます。
+そのため `--feature` は stderr の最後に `next:` のブロックを出し、stub ごとに `--replace` 付きの単独の scaffold を示します。
+その行はそのままでは stub を同じ内容で書き直すだけなので、そこに上のオプションを足してください。
+行が示されるのは、同じバイト列を書くときだけです。
 `--replace` は、scaffold が何らかのオプションの組み合わせで書くものと 1 バイトも変わっていないファイル(`--feature` の stub や、オプションを 1 つ間違えた `--command` や `--from` の step)だけを上書きし、誰かが編集したファイルは拒否します。
 `--replace` を付けないときは、拒否の `do:` 行が `--replace` を付けた同じコマンドを示します。
 

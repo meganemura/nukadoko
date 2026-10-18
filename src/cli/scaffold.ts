@@ -374,7 +374,7 @@ export function lineAttachment(
 /** What the project's feature lines that this pattern matches carry below
  * them. A pattern that names a type the config does not register reads no
  * line, which leaves the key out as before. */
-function attachmentInFeatures(rootDir: string, pattern: string, config: Awaited<ReturnType<typeof loadConfig>>): Attachment | null {
+export function attachmentInFeatures(rootDir: string, pattern: string, config: Awaited<ReturnType<typeof loadConfig>>): Attachment | null {
   let expression;
   try {
     expression = buildExpression(pattern, createParameterTypeRegistry([...config.parameterTypes])).expression;
@@ -757,12 +757,12 @@ export function isUneditedStub(source: string, name: string, relativeFilePath: s
  * the reason `nuka check` would refuse it in any project. `projectTypes`
  * holds each type name the built-ins lack, which only the project's own
  * registry can settle. */
-interface ReadPattern {
+export interface ReadPattern {
   readonly captures: readonly Capture[];
   readonly projectTypes: readonly string[];
 }
 
-function readPattern(pattern: string): ReadPattern | { refusal: string } {
+export function readPattern(pattern: string): ReadPattern | { refusal: string } {
   if (pattern === "") {
     // defineStep reads an empty `pattern` as no pattern at all, so the step
     // would quietly match no feature line.

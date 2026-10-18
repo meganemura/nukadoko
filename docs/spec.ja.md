@@ -3688,7 +3688,13 @@ nuka scaffold --feature <path>
                               "note:" line on stderr says so. An outline
                               line whose Examples rows read as different
                               patterns gets no file and a note. Prints
-                              each written path on stdout. Refuses while
+                              each written path on stdout, then on
+                              stderr a "next:" line and, for each stub,
+                              nuka scaffold <name> --pattern <pattern>
+                              [--then] --replace: the single scaffold
+                              that writes that stub again byte for byte,
+                              left out for a stub it would write
+                              differently. Refuses while
                               a step file does not import, and takes no
                               name, --pattern, --then, --command, --from,
                               --cwd, --argv, --description, or --replace
