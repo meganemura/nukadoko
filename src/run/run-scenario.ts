@@ -57,7 +57,7 @@ export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { mutateCapture } from "./probe.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
-import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
+import type { ErrorKind, FixtureUsageEntry, ObservedCounts, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -1017,27 +1017,44 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // A step that wrote is not run again: the probe runs nothing the
     // feature did not name a second time, and a read-only declaration
     // that the step's own observation contradicts is not trusted for it.
-    const observed = contextHandle.observedCounts();
-    const httpWrites = observed.http_writes ?? 0;
-    const processCount = observed.processes?.length ?? 0;
-    const wrote = httpWrites > 0 || processCount > 0;
+    // The probe's own re-run is held to the same rule: a step can write
+    // only for the changed value, so the re-run's observation is read
+    // too, and a re-run that wrote is not a measurement. The keys after it
+    // are not run at all, since the step has now been seen to write.
+    const writes = (counts: ObservedCounts): string | null => {
+      const httpWrites = counts.http_writes ?? 0;
+      const processCount = counts.processes?.length ?? 0;
+      if (httpWrites === 0 && processCount === 0) return null;
+      return [
+        ...(processCount > 0 ? [`ran ${processCount} process${processCount === 1 ? "" : "es"}`] : []),
+        ...(httpWrites > 0 ? [`made ${httpWrites} HTTP write${httpWrites === 1 ? "" : "s"}`] : []),
+      ].join(" and ");
+    };
+    const stepWrote = writes(contextHandle.observedCounts());
+    let probeWrote = false;
     const probeDir = path.join(scenarioDir, ".probe");
     try {
       for (const key of keys) {
         const changed = mutateCapture(args[key]);
         if (changed === null) continue;
         const base = { step_index: stepIndex, step: stepName, text, key, recorded: args[key] as ProbeValue, changed: changed.value };
-        if (wrote) {
-          const what = [
-            ...(processCount > 0 ? [`ran ${processCount} process${processCount === 1 ? "" : "es"}`] : []),
-            ...(httpWrites > 0 ? [`made ${httpWrites} HTTP write${httpWrites === 1 ? "" : "s"}`] : []),
-          ].join(" and ");
-          probes.push({ ...base, status: "not-measured", reason: "wrote", message: `the step ${what} when it ran, so it is not run again` });
+        if (stepWrote !== null) {
+          probes.push({ ...base, status: "not-measured", reason: "wrote", message: `the step ${stepWrote} when it ran, so it is not run again` });
+          continue;
+        }
+        if (probeWrote) {
+          probes.push({ ...base, status: "not-measured", reason: "wrote", message: "an earlier re-run of the step wrote, so it is not run again" });
           continue;
         }
         await mkdir(probeDir, { recursive: true });
         await contextHandle.beginStep(probeDir);
         const outcome = await probeStep(step, stepName, { ...args, [key]: changed.value });
+        const rerunWrote = writes(contextHandle.observedCounts());
+        if (rerunWrote !== null) {
+          probeWrote = true;
+          probes.push({ ...base, status: "not-measured", reason: "wrote", message: `the probe's own re-run ${rerunWrote}, so its outcome is not used` });
+          continue;
+        }
         probes.push({ ...base, ...outcome });
       }
     } finally {

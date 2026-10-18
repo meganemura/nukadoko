@@ -41,7 +41,9 @@ function shown(value: ProbeValue): string {
  * not measure, in a scenario that passed. A probe the Then caught is the
  * Then doing its job. Under `--repeat`, the executions of one scenario in
  * one environment fold into one note per step and key, the way verdicts
- * fold, and a note that held in only some of them says in how many. */
+ * fold, and a note that held in only some of them says in how many. A
+ * probe that did not measure for two different reasons is two notes,
+ * each with its own reason's message. */
 export function probeFindings(scenarios: readonly RunScenario[], conditions: RunConditions): Finding[] {
   const cellKey = (scenario: RunScenario): string => JSON.stringify([scenario.feature, scenario.line, scenario.environment]);
   const executions = new Map<string, number>();
@@ -52,7 +54,7 @@ export function probeFindings(scenarios: readonly RunScenario[], conditions: Run
     for (const probe of scenario.probes ?? []) {
       const code = probe.status === "passed" ? "then-passed-with-changed-capture" : probe.status === "not-measured" ? "then-probe-not-measured" : null;
       if (code === null) continue;
-      const key = JSON.stringify([cellKey(scenario), probe.line, probe.step, probe.key, code]);
+      const key = JSON.stringify([cellKey(scenario), probe.line, probe.step, probe.key, code, probe.reason ?? null]);
       const group = groups.get(key);
       if (group === undefined) groups.set(key, { scenario, probe, code, count: 1 });
       else group.count += 1;

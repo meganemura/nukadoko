@@ -114,6 +114,21 @@ export default defineStep({
   },
 });
 `,
+  "shell-only-when-changed.ts": `import { z } from "zod";
+import { defineStep, runCommand } from "../../nukadoko-shim.js";
+
+export default defineStep({
+  pattern: "the shell is quiet for {answer:string}",
+  description: "Runs a process only for an answer other than ok",
+  args: z.object({ answer: z.string() }),
+  returns: z.object({}),
+  mutates: false,
+  async run({}, args) {
+    if (args.answer !== "ok") await runCommand(process.execPath, ["-e", ""]);
+    return {};
+  },
+});
+`,
 };
 
 const STORE_FEATURE = `Feature: A store file
@@ -264,6 +279,31 @@ describe("nuka run --probe", () => {
       [
         "then-probe-not-measured",
         'the shell answers "ok": step "shell-answers" was not probed with answer "ok-probe" (wrote): the step ran 1 process when it ran, so it is not run again',
+      ],
+    ]);
+  });
+
+  it("does not count a probe whose own re-run ran a process, and says the re-run wrote", async () => {
+    await writeFile(path.join(rootDir, "features", "quiet.feature"), 'Feature: A quiet shell\n\n  Scenario: quiet\n    Then the shell is quiet for "ok"\n');
+    const { exitCode, document } = await run(["--probe", "features/quiet.feature"]);
+    expect(exitCode).toBe(0);
+    expect(document.scenarios[0]!.probes).toEqual([
+      {
+        line: 4,
+        step: "shell-only-when-changed",
+        text: 'the shell is quiet for "ok"',
+        key: "answer",
+        recorded: "ok",
+        changed: "ok-probe",
+        status: "not-measured",
+        reason: "wrote",
+        message: "the probe's own re-run ran 1 process, so its outcome is not used",
+      },
+    ]);
+    expect(document.findings.map((finding) => [finding.code, finding.message])).toEqual([
+      [
+        "then-probe-not-measured",
+        'the shell is quiet for "ok": step "shell-only-when-changed" was not probed with answer "ok-probe" (wrote): the probe\'s own re-run ran 1 process, so its outcome is not used',
       ],
     ]);
   });

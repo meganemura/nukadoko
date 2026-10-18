@@ -1217,7 +1217,7 @@ after a read-only Then that captured a value passes, and before the next
 step, it runs again, alone, with one capture changed (a string suffixed, a
 number +1, a boolean flipped). A Then that still passes is a
 `then-passed-with-changed-capture` note in `run.json` and the run summary,
-and a Then the probe could not measure (it wrote when it ran, or its args
+and a Then the probe could not measure (it or its re-run wrote, or its args
 schema refused the changed value) is a `then-probe-not-measured` note. It
 is a measurement, so the exit code stays the run's.
 

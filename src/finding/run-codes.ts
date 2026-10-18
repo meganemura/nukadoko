@@ -78,7 +78,7 @@ const RUN_CODES = {
     severity: "note",
     description:
       "Under nuka run --probe, a read-only Then was not re-run with a changed capture, or its re-run stopped before the step compared anything, so the probe says nothing about it.",
-    fix: "Read the reason in the message: a step that wrote when it ran is not run again; an args schema that refuses the changed value, a fixture that failed, a timeout, or a returns schema that refuses the result is corrected where the message names, or the Then is left to review.",
+    fix: "Read the reason in the message: a step that wrote when it ran is not run again, and a re-run that wrote is not counted; an args schema that refuses the changed value, a fixture that failed, a timeout, or a returns schema that refuses the result is corrected where the message names, or the Then is left to review.",
   },
   "trace-version-unknown": {
     severity: "warning",

@@ -1728,8 +1728,9 @@ When は再実行しません。
 note は step の文、step、キー、両方の値を名指し、もう一度計測する `nuka run <file>:<line> --probe` を添えます。
 Then が変更を捕まえたとみなすのは、step 自身の `run` が throw したときだけです。
 そこまで届かなかった probe は、理由を持つ `then-probe-not-measured` という note になります。
-理由は、走ったときに書き込んだ(`wrote`)、args schema が変えた値を拒んだ(`args-rejected`)、fixture が失敗した(`setup-failed`)、再実行がタイムアウトした(`timeout`)、returns schema が戻り値を拒んだ(`returns-rejected`)のいずれかです。
-`--repeat` の下では、1 つの environment での 1 つの scenario の実行が、step とキーごとに 1 つの note にまとまります。
+理由は、走ったとき、または probe 自身の再実行で書き込んだ(`wrote`)、args schema が変えた値を拒んだ(`args-rejected`)、fixture が失敗した(`setup-failed`)、再実行がタイムアウトした(`timeout`)、returns schema が戻り値を拒んだ(`returns-rejected`)のいずれかです。
+probe 自身の再実行も step と同じように観測を読み、書き込んだ再実行の結果は使わず、その step を残りのキーで再実行することもしません。
+`--repeat` の下では、1 つの environment での 1 つの scenario の実行が、step、キー、理由ごとに 1 つの note にまとまります。
 一部の実行でだけ成り立った note は、`in <k> of <n> executions` で終わります。
 これは計測であって断定ではありません。
 「at least {n}」のような文は n+1 で正しく通りえるので、note は scenario の status も終了コードも変えません。

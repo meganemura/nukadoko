@@ -2043,11 +2043,13 @@ line, naming the step's sentence, the step, the key, and both values,
 with the `nuka run <file>:<line> --probe` that measures it again. Only a
 throw from the step's own `run` is the Then catching the change. A probe
 that never reached that point is a `then-probe-not-measured` note with its
-reason: the step wrote when it ran (`wrote`), the args schema refused the
+reason: the step wrote when it ran, or the probe's own re-run did (`wrote`; the
+re-run's observation is read as the step's is, its outcome is not used,
+and the step is not re-run for its other keys), the args schema refused the
 changed value (`args-rejected`), a fixture failed (`setup-failed`), the
 re-run timed out (`timeout`), or the returns schema refused what it
 returned (`returns-rejected`). Under `--repeat`, the executions of one
-scenario in one environment fold into one note per step and key, and a
+scenario in one environment fold into one note per step, key, and reason, and a
 note that held in only some of them ends with `in <k> of <n> executions`. It is a measurement, not a
 verdict: a sentence like "at least {n}" can rightly pass with n+1, so the
 note never changes a scenario's status or the exit code. A probe is not a

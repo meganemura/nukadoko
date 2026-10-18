@@ -339,14 +339,18 @@ just until 0.1.
   `-probe`, a number +1, a boolean is flipped. A capture of another type,
   a number +1 does not change, a value `from` filled, and a compat step
   are never probed, and the When is not re-run. A step whose own
-  observation shows a process or an HTTP write is not re-run either. A
+  observation shows a process or an HTTP write is not re-run either, and
+  a re-run whose own observation shows one is not counted: it is
+  `not-measured` with reason `wrote`, and the step is not re-run for its
+  other keys. A
   Then that still passes is a `then-passed-with-changed-capture` note at
   its line, naming the step's sentence, the step, the key, and both
   values, with `do: nuka run <file>:<line> --probe`. Only a throw from the
   step's own `run` counts as the Then catching the change; a re-run that
   never got there (the step wrote, the args schema refused the changed
   value, a fixture failed, a timeout, or the returns schema refused the
-  result) is a `then-probe-not-measured` note with that reason. Each note
+  result) is a `then-probe-not-measured` note with that reason; under
+  `--repeat`, notes of different reasons stay apart. Each note
   is in `run.json`'s `findings`, the run summary's Findings section, and on
   stderr after the count line. A note never changes a scenario's status
   or the exit code: "at least {n}" can rightly pass with n+1. A probe

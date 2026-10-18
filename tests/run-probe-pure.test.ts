@@ -149,9 +149,33 @@ describe("probeFindings", () => {
         step: "the shell answers",
         message:
           'the shell answers "ok": step "the shell answers" was not probed with answer "ok-probe" (wrote): the step ran 1 process when it ran, so it is not run again',
-        fix: "Read the reason in the message: a step that wrote when it ran is not run again; an args schema that refuses the changed value, a fixture that failed, a timeout, or a returns schema that refuses the result is corrected where the message names, or the Then is left to review.",
+        fix: "Read the reason in the message: a step that wrote when it ran is not run again, and a re-run that wrote is not counted; an args schema that refuses the changed value, a fixture that failed, a timeout, or a returns schema that refuses the result is corrected where the message names, or the Then is left to review.",
         do: "nuka run features/a.feature:3 --probe",
       },
+    ]);
+  });
+
+  it("keeps a note apart for each reason under --repeat, with each reason's own message", () => {
+    const execution = (reason: "wrote" | "timeout", message: string): RunScenario => ({
+      scenario_record_id: `scenario-${reason}`,
+      feature: "features/a.feature",
+      line: 3,
+      scenario: "a",
+      environment: "default",
+      status: "passed",
+      started_at: "2026-10-18T00:00:00.000Z",
+      finished_at: "2026-10-18T00:00:00.000Z",
+      steps: [],
+      hooks: [],
+      probes: [{ line: 4, step: "file-reads", text: 'the file reads "a"', key: "content", recorded: "a", changed: "a-probe", status: "not-measured", reason, message }],
+    });
+    const findings = probeFindings(
+      [execution("timeout", "Step file-reads timed out"), execution("wrote", "the probe's re-run ran 1 process, so its outcome is not used"), execution("timeout", "Step file-reads timed out")],
+      { rerunFlags: () => [], named: false },
+    );
+    expect(findings.map((finding) => finding.message)).toEqual([
+      'the file reads "a": step "file-reads" was not probed with content "a-probe" (timeout): Step file-reads timed out, in 2 of 3 executions',
+      'the file reads "a": step "file-reads" was not probed with content "a-probe" (wrote): the probe\'s re-run ran 1 process, so its outcome is not used, in 1 of 3 executions',
     ]);
   });
 
