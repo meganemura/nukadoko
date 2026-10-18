@@ -52,6 +52,7 @@ scenario は、プログラムを外側から検査します。
 
 以下の手順では、`Hello, <name>!` を出力する CLI `src/cli.ts` を持つプロジェクトに、scenario を 1 つ追加します。
 出力のブロックはすべて、実際の実行からコピーしたものです。
+自分のプロジェクトに、インストールから CI までを 1 手順ずつ導入するには、[docs/adopting.ja.md](docs/adopting.ja.md) に従ってください。
 
 ```sh
 npx nuka init

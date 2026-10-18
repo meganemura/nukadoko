@@ -56,6 +56,8 @@ four things: a `.feature` file, one `defineStep` per kind of line,
 The walkthrough below adds one scenario to a project whose CLI,
 `src/cli.ts`, prints `Hello, <name>!`. Every output block is copied from a
 real run.
+To add nukadoko to your own project one step at a time, from install to
+CI, follow [docs/adopting.md](docs/adopting.md).
 
 ```sh
 npx nuka init

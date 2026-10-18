@@ -310,6 +310,21 @@
       "note": "JSON.stringify が文字列の中に書く綴り。前後の引用符は含まない。redact が読み込んだ値と同じ {{secret.NAME}} で置き換える。コード上の JSON.stringify は識別子なので原文のまま"
     },
     {
+      "en": ["adopt", "adopting", "adoption"],
+      "ja": "導入",
+      "note": "docs/adopting.md(既存のプロジェクトに nukadoko を加える手順)で入った語。動詞は 導入する。採用 と訳すと、使うかどうかを決める判断の話に読めてしまう。このガイドが扱うのは決めたあとの手順"
+    },
+    {
+      "en": ["state directory"],
+      "ja": "state ディレクトリ",
+      "note": "`.nukadoko/`(config の stateDir)。docs/spec.ja.md で既に使われていた形に揃えた。見出しの State directory は spec.ja.md の規則により英語のまま"
+    },
+    {
+      "en": ["pin exactly", "exact pin", "exact-pinned"],
+      "ja": "厳密に固定",
+      "note": "npm install -E が caret の範囲ではなく 1 つの版をそのまま書くこと。ピン留め のようなカタカナ混じりにしない"
+    },
+    {
       "en": ["run summary"],
       "ja": "run サマリ",
       "note": "nuka run が書く Markdown(summary.md、$GITHUB_STEP_SUMMARY)と、nuka report --format markdown が出す同じ本文。stderr に出る 1 行のサマリ(サマリ行)とは別物。run は英語のまま"
@@ -486,6 +501,9 @@
     },
     "docs/migration-playwright-test.ja.md": {
       "rule": "日本語化する。ただしコードスパンで書かれたコマンド名とコード識別子はそのまま残す。見出しにコードスパンを含むもの(`from`、`recordStep`)も、前後の句だけを日本語にする"
+    },
+    "docs/adopting.ja.md": {
+      "rule": "日本語化する。ただし手順の番号と、見出しにコードスパンで書かれたコマンド名(`nuka init`、`nuka report`)はそのまま残す"
     }
   }
 }

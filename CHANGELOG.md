@@ -717,6 +717,19 @@ just until 0.1.
   same message as the finding, and `nuka run --no-check` and `nuka do`
   name the install line as their `do:` line. Exit codes are unchanged.
 
+### Documentation
+
+- **A step-by-step adoption guide, [docs/adopting.md](docs/adopting.md),
+  with its Japanese pair [docs/adopting.ja.md](docs/adopting.ja.md).** It
+  takes an existing Node project from `npm install -D -E nukadoko` through
+  `nuka init`, a first feature, `nuka check`, `nuka scaffold --feature`
+  and its `--replace` lines, `nuka run` with `--probe` and `--env`, the run
+  directory, `nuka report` in its three formats, and CI. Every output
+  block is copied from a run of the packed package. The README's
+  walkthrough links to it, and `docs/glossary.json` gains the terms the
+  translation settled (adoption, state directory, pin exactly) and the
+  heading rule for the new file.
+
 ## 0.17.0 — 2026-10-17
 
 ### Breaking
