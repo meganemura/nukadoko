@@ -1,0 +1,32 @@
+[
+  {
+    "fullName": "allure-identity-fixture:features/checkout.feature#a cart with items",
+    "historyId": "474d55af6fdc5145744d5c35ce8f663f:1419ac36cd09eb6bc413dcf784a90b4d",
+    "testCaseId": "474d55af6fdc5145744d5c35ce8f663f"
+  },
+  {
+    "fullName": "allure-identity-fixture:features/checkout.feature#a cart with items",
+    "historyId": "474d55af6fdc5145744d5c35ce8f663f:43a431a36bfa0dd8cb2c3e3aff99f24f",
+    "testCaseId": "474d55af6fdc5145744d5c35ce8f663f"
+  },
+  {
+    "fullName": "allure-identity-fixture:features/checkout.feature#a cart with items",
+    "historyId": "474d55af6fdc5145744d5c35ce8f663f:6b15c9c9d2d88ec2f3bb02ac7808a4fa",
+    "testCaseId": "474d55af6fdc5145744d5c35ce8f663f"
+  },
+  {
+    "fullName": "allure-identity-fixture:features/checkout.feature#a cart with items",
+    "historyId": "474d55af6fdc5145744d5c35ce8f663f:c4fb9b192a3574e43d47d293d9faf799",
+    "testCaseId": "474d55af6fdc5145744d5c35ce8f663f"
+  },
+  {
+    "fullName": "allure-identity-fixture:features/checkout.feature#an empty cart",
+    "historyId": "ba646a5e56cc469e94d02c1e5de63593:0da229dde4e477db420db7aeb58da416",
+    "testCaseId": "ba646a5e56cc469e94d02c1e5de63593"
+  },
+  {
+    "fullName": "allure-identity-fixture:features/checkout.feature#an empty cart",
+    "historyId": "ba646a5e56cc469e94d02c1e5de63593:36b620333fd9b3ab5619eec2c5fe2283",
+    "testCaseId": "ba646a5e56cc469e94d02c1e5de63593"
+  }
+]
