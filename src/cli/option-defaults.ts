@@ -10,6 +10,14 @@ export const DEFAULT_EXPLORE_LENGTH = 10;
 /** A step name, which `nuka scaffold` also uses as the file name. */
 export const VALID_STEP_NAME = /^[a-z0-9-]+$/;
 
+/** The next command for a `nuka do` whose `--args` is missing or is not
+ * JSON: `nuka describe` prints the args schema the caller has to fill. A
+ * name outside VALID_STEP_NAME would need shell quoting to be copied, so it
+ * gets `fallback` instead. */
+export function describeArgsCommand(name: string, fallback: string): string {
+  return VALID_STEP_NAME.test(name) ? `nuka describe ${name}` : fallback;
+}
+
 /** Why a step name ended up as `--command`'s value. The parser's check says
  * it when no name is left for the positional; scaffold says it when the
  * value is not a file. */

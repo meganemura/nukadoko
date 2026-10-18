@@ -12,6 +12,7 @@ import {
   commandTookTheName,
   DEFAULT_EXPLORE_LENGTH,
   DEFAULT_EXPLORE_RUNS,
+  describeArgsCommand,
   VALID_STEP_NAME,
 } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -285,6 +286,10 @@ export async function runCli(
   // side effects.
   let argsFailed = false;
   const usageFailures: string[] = [];
+  // The `do` a `.check()` names for its own refusal, kept only when that
+  // refusal is the parse's one failure: with two, neither one's fix is the
+  // whole fix, and the command's help covers both.
+  const usageFailureDos: (string | undefined)[] = [];
 
   // Wraps a command that reads the config, so a directory without one is
   // named on stderr. In the handler rather than a yargs middleware: global
@@ -520,7 +525,10 @@ export async function runCli(
         .check((checkArgs) => {
           const useValues = checkArgs.use as string[] | undefined;
           if (checkArgs.args === undefined && (useValues === undefined || useValues.length === 0)) {
-            throw new Error("--args is required unless --use supplies this step's arguments");
+            throw new RefusalError(
+              "--args is required unless --use supplies this step's arguments",
+              describeArgsCommand(String(checkArgs.name), helpFor("do")),
+            );
           }
           return true;
         })
@@ -1126,6 +1134,7 @@ export async function runCli(
       // them become one refusal after the parse, so `--json` still gets
       // exactly one object.
       usageFailures.push(err?.message ?? msg ?? "unknown error");
+      usageFailureDos.push(err instanceof RefusalError ? err.do : undefined);
     })
     .usage(
       `nuka <command>\n\n${renderCommandGroups(
@@ -1165,7 +1174,7 @@ export async function runCli(
     exitCode = refuse(
       { json: argv.includes("--json"), stdout, stderr },
       usageFailures.join("\n"),
-      helpFor(commandPathOf(argv, commandNames)),
+      (usageFailures.length === 1 ? usageFailureDos[0] : undefined) ?? helpFor(commandPathOf(argv, commandNames)),
     );
   }
   return exitCode;

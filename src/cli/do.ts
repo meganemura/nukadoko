@@ -44,6 +44,7 @@ import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { reviveStoredForm } from "../stored-form/revive.js";
 import { RefusalError, helpFor, refuse } from "./refusal.js";
+import { describeArgsCommand } from "./option-defaults.js";
 import { assertFeaturesDirExists } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -148,7 +149,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   try {
     parsedArgs = JSON.parse(argsJson);
   } catch (error) {
-    return refuse(sinks, `Invalid JSON for --args: ${error instanceof Error ? error.message : String(error)}`, help);
+    return refuse(
+      sinks,
+      `Invalid JSON for --args: ${error instanceof Error ? error.message : String(error)}`,
+      describeArgsCommand(name, help),
+    );
   }
 
   let config;
