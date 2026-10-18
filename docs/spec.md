@@ -3009,8 +3009,11 @@ on stderr; it never changes the exit code. A `run.json` that cannot be
 written fails the run with a `run-result-not-written` finding, which the
 `--json` document carries too: every later command reads a run from
 `run.json`, so a green exit without it would claim a record that does not
-exist. The `run` location line is printed only for a `run.json` that was
-written. A setup failure, which writes no record, writes no summary.
+exist. A `sources.json` that cannot be written fails the run the same
+way, with `run-sources-not-written`: without it `nuka report` cannot
+render the run. It is written first, so its finding is in the summary,
+in `run.json`, and in the `--json` document. The `run` location line is
+printed only for a `run.json` that was written. A setup failure, which writes no record, writes no summary.
 
 ## Environments and secrets
 

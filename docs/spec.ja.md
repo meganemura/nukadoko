@@ -2437,6 +2437,9 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 書けなかったサマリは stderr の警告になり、終了コードを変えることはありません。
 書けなかった `run.json` は、`run-result-not-written` の所見で run を失敗させ、その所見は `--json` の文書にも載ります。
 後のコマンドはどれも `run.json` から run を読むので、それなしの緑の終了は、存在しない record を主張することになるからです。
+書けなかった `sources.json` も、`run-sources-not-written` で同じように run を失敗させます。
+それがないと、`nuka report` は run を描き出せないからです。
+`sources.json` は最初に書くので、その所見はサマリにも、`run.json` にも、`--json` の文書にも載ります。
 `run` の場所の行は、書けた `run.json` についてだけ出ます。
 record を何も書かない setup の失敗は、サマリも書きません。
 

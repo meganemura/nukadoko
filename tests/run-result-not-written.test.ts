@@ -1,11 +1,11 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: a run whose run.json cannot be written. The run fails,
+// Responsibility: a run whose run.json or sources.json cannot be written. The run fails,
 // the finding is inside the document `--json` prints, and the text output
 // names no run.json location for a file that does not exist.
 
@@ -71,5 +71,45 @@ describe("nuka run when run.json cannot be written", () => {
     const [runId] = readdirSync(runsDir);
     expect(readdirSync(path.join(runsDir, runId!)).filter((name) => name.endsWith(".tmp"))).toEqual([]);
     expect(existsSync(path.join(runsDir, runId!, "run.json", "occupied"))).toBe(true);
+  });
+});
+
+// The same blocking step, aimed at sources.json: what nuka report parses a
+// run's scenarios from.
+const BLOCKING_SOURCES_STEP = BLOCKING_STEP.replace("the run file is blocked", "the sources file is blocked").replace("run.json/occupied/", "sources.json/occupied/");
+
+const SOURCES_FEATURE = `Feature: A blocked sources file
+
+  Scenario: block it
+    Given the sources file is blocked
+`;
+
+describe("nuka run when sources.json cannot be written", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("pure-step-project");
+    await writeFile(path.join(rootDir, "features", "steps", "sources-file-blocked.ts"), BLOCKING_SOURCES_STEP);
+    await writeFile(path.join(rootDir, "features", "blocked.feature"), SOURCES_FEATURE);
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("fails, and carries the finding in the --json document and in run.json", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "--json", "features/blocked.feature"], { rootDir, stdout, stderr });
+    expect(exitCode).toBe(1);
+    expect(stderr.text()).toBe("");
+    const document = JSON.parse(stdout.text()) as { verdict: string; findings: { severity: string; code: string }[] };
+    expect(document.verdict).toBe("failed");
+    expect(document.findings.map((finding) => [finding.severity, finding.code])).toEqual([["failed", "run-sources-not-written"]]);
+    const runsDir = path.join(rootDir, ".nukadoko", "runs");
+    const [runId] = readdirSync(runsDir);
+    const written = JSON.parse(readFileSync(path.join(runsDir, runId!, "run.json"), "utf8")) as typeof document;
+    expect(written.verdict).toBe("failed");
+    expect(written.findings.map((finding) => finding.code)).toEqual(["run-sources-not-written"]);
   });
 });

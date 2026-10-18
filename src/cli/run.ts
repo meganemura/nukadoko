@@ -717,6 +717,21 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         verdicts,
       };
       let exitCode = verdict === "passed" ? 0 : 1;
+      // sources.json first, before anything is serialized, so a failure to
+      // write it is a finding in the summary, in run.json, and in the
+      // `--json` document alike. It fails the run, as run.json does: without
+      // it `nuka report` cannot render the run at all.
+      if (flatPickles.length > 0) {
+        try {
+          writeRunSources(rootDir, config.stateDir, runId, {
+            project: resolveProjectName(rootDir),
+            features: selected.features.map((feature) => ({ path: feature.relativePath, source: feature.source })),
+          });
+        } catch (error) {
+          warn({ severity: "failed", code: "run-sources-not-written", message: `sources.json was not written: ${error instanceof Error ? error.message : String(error)}` });
+          exitCode = 1;
+        }
+      }
       let summaryPath: string | null = null;
       if (flatPickles.length > 0) {
         const markdown = renderRunSummary(JSON.parse(formatEnvelope("run", exitCode, runFindings, fields)));
@@ -732,16 +747,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       let document = formatEnvelope("run", exitCode, runFindings, fields);
       let runResultWritten = false;
       if (flatPickles.length > 0) {
-        // Before run.json, so a run that ended always has what
-        // `nuka report` parses its scenarios from.
-        try {
-          writeRunSources(rootDir, config.stateDir, runId, {
-            project: resolveProjectName(rootDir),
-            features: selected.features.map((feature) => ({ path: feature.relativePath, source: feature.source })),
-          });
-        } catch (error) {
-          warn({ severity: "warning", code: "run-sources-not-written", message: `sources.json was not written: ${error instanceof Error ? error.message : String(error)}` });
-        }
         try {
           writeRunResult(rootDir, config.stateDir, runId, document);
           runResultWritten = true;

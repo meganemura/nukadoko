@@ -49,8 +49,8 @@ const RUN_CODES = {
     fix: "Correct what the message names, such as the state directory's permissions.",
   },
   "run-sources-not-written": {
-    severity: "warning",
-    description: "The run finished, and sources.json, the feature text nuka report renders the run from, could not be written.",
+    severity: "failed",
+    description: "The run finished, and sources.json, the feature text nuka report renders the run from, could not be written, so the run fails.",
     fix: "Correct what the message names, such as the state directory's permissions, and run again.",
   },
   "scenario-failed": {

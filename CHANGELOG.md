@@ -120,8 +120,9 @@ just until 0.1.
     Allure directory is the results written. Every format goes through
     one tail that writes, notes the exports manifest, and sets the exit
     code, so a Markdown file written under the state directory is noted
-    in the manifest too. A run that could not write `sources.json` warns
-    with `run-sources-not-written`.
+    in the manifest too. A run that could not write `sources.json` fails
+    with `run-sources-not-written`, written first so the finding is in
+    the summary, in `run.json`, and in the `--json` document.
   - `run.json`'s `target_version` is redacted like the rest of the run.
 
 - **One directory per run: `.nukadoko/runs/<run_id>/` holds everything a
