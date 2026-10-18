@@ -102,6 +102,22 @@ function formatSummaryLines(summary: TendSummary, declarationNotesLeftOut: boole
   ];
 }
 
+/** The tend command the caller ran, with `removed` taken out of `--fail-on`:
+ * once a removed code is gone, the rest of the invocation is what the
+ * caller asked for. A `--fail-on` with no code left is dropped. */
+export function tendCommandWithout(
+  removed: ReadonlySet<string>,
+  options: { readonly json: boolean; readonly all: boolean; readonly failOn: readonly string[] },
+): string {
+  const kept = options.failOn.filter((code) => !removed.has(code));
+  return [
+    "nuka tend",
+    ...(options.all ? ["--all"] : []),
+    ...(options.json ? ["--json"] : []),
+    ...(kept.length > 0 ? ["--fail-on", kept.join(",")] : []),
+  ].join(" ");
+}
+
 export async function runTend(options: RunTendOptions): Promise<number> {
   const { rootDir, json, failOn, all, stdout, stderr } = options;
 
@@ -126,7 +142,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   const removed = failOn.filter((code) => REMOVED_TEND_CODES.has(code));
   if (removed.length > 0) {
     const lines = removed.map((code) => `--fail-on: "${code}" ${REMOVED_TEND_CODES.get(code)}.`);
-    return refuse(sinks, lines.join("\n"), helpFor("tend"));
+    return refuse(sinks, lines.join("\n"), tendCommandWithout(new Set(removed), { json, all, failOn }));
   }
   const unknown = failOn.filter((code) => !TEND_CODES.has(code));
   if (unknown.length > 0) {

@@ -49,6 +49,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka explore` and a removed `nuka tend --fail-on` code quote the corrected command as their `do:` line.**
+  Both refusals said what had changed and then ended with `do: ... --help`.
+  `nuka explore <args>` now ends with `do: nuka experimental explore <args>`,
+  each word shell-quoted, and `nuka tend --fail-on <removed code>` ends with
+  the same tend command without the removed codes (`do: nuka tend` when no
+  code is left).
 - **A duplicate step name, compat pattern, or `defineWorld` call names both files as the refusal's `do:` line.**
   Every command that loads step files ended this refusal with
   `do: nuka <command> --help`. The `do:` line now names the two files,

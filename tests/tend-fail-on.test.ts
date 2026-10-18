@@ -1,7 +1,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { tendCommandWithout } from "../src/cli/tend.js";
 import { REMOVED_TEND_CODES, TEND_CODES } from "../src/tend/types.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir, repoRoot } from "./helpers/fixtures.js";
 
@@ -83,7 +86,7 @@ describe("nuka tend --fail-on", () => {
       const stderr = createCaptureSink();
       expect(await runCli(["tend", "--fail-on", code], { rootDir, stdout, stderr })).toBe(2);
       expect(stdout.text()).toBe("");
-      expect(stderr.text()).toBe(`${message}do: nuka tend --help\n`);
+      expect(stderr.text()).toBe(`${message}do: nuka tend\n`);
     }
   });
 
@@ -97,7 +100,7 @@ describe("nuka tend --fail-on", () => {
       expect(stderr.text()).toBe(
         `--fail-on: "${code}" was removed with \`nuka accept\`. A person now reads the run summary \`nuka run\` writes, ` +
           "on the pull request, and approving the pull request is the sign-off (docs/upgrading.md).\n" +
-          "do: nuka tend --help\n",
+          "do: nuka tend\n",
       );
     }
   });
@@ -130,4 +133,29 @@ describe("nuka tend --fail-on", () => {
       ["schema-field-undescribed", "visitor-greeted"],
     ]);
   });
+});
+
+describe("the do line of a removed --fail-on code", () => {
+  it("keeps the other flags and codes of the command", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(
+      ["tend", "--all", "--json", "--fail-on", "pattern-unbound,step-rationale-missing", "--fail-on", "fixture-unused"],
+      { rootDir: repoRoot, stdout, stderr },
+    );
+    expect(exitCode).toBe(2);
+    expect((JSON.parse(stdout.text()) as { do: string }).do).toBe(
+      "nuka tend --all --json --fail-on pattern-unbound,fixture-unused",
+    );
+  });
+
+  it("names every kept code once in order and no removed code", () =>
+    hegel.test((tc) => {
+      const codes = tc.draw(gs.arrays(gs.sampledFrom([...TEND_CODES, ...REMOVED_TEND_CODES.keys()]), { maxSize: 6 }));
+      const removed = new Set(codes.filter((code) => REMOVED_TEND_CODES.has(code)));
+      const kept = codes.filter((code) => !removed.has(code));
+      expect(tendCommandWithout(removed, { json: false, all: false, failOn: codes })).toBe(
+        kept.length === 0 ? "nuka tend" : `nuka tend --fail-on ${kept.join(",")}`,
+      );
+    }));
 });

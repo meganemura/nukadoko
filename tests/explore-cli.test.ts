@@ -431,7 +431,14 @@ describe("nuka explore", () => {
       stdout: "",
       stderr:
         "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n" +
-        "do: nuka experimental explore --help\n",
+        "do: nuka experimental explore features/explore/add-model.ts --seed 1\n",
     });
+  });
+
+  it("quotes back a word the shell would split", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    await runCli(["explore", "models/a b.ts", "--json"], { stdout, stderr });
+    expect((JSON.parse(stdout.text()) as { do: string }).do).toBe("nuka experimental explore 'models/a b.ts' --json");
   });
 });

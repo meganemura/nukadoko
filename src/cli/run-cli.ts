@@ -238,6 +238,14 @@ function firstWord(command: string | readonly string[] | undefined): string {
   return text.split(" ")[0] ?? "";
 }
 
+/** The invocation that reached the moved `explore` spelling, with `explore`
+ * replaced by `experimental explore` and every other word kept. */
+export function movedExploreCommandLine(argv: readonly string[], shellWord: (word: string) => string): string {
+  const at = argv.indexOf("explore");
+  const words = [...argv.slice(0, at), "experimental", "explore", ...argv.slice(at + 1)];
+  return ["nuka", ...words.map(shellWord)].join(" ");
+}
+
 export async function runCli(
   argv: readonly string[],
   options: RunCliOptions = {},
@@ -1016,12 +1024,15 @@ export async function runCli(
     command: "explore",
     describe: false,
     builder: (y: Argv) => y.strict(false),
-    handler: () => {
+    handler: async () => {
       if (argsFailed) return;
+      // Imported here: src/run stays off the load path of every command
+      // that does not run anything.
+      const { shellWord } = await import("../run/progress-log.js");
       exitCode = refuse(
         { json: argv.includes("--json"), stdout, stderr },
         "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments",
-        helpFor("experimental explore"),
+        movedExploreCommandLine(argv, shellWord),
       );
     },
   };

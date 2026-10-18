@@ -123,7 +123,7 @@ describe("a --json command that cannot report prints { error, do } on stdout", (
       argv: ["explore", "--json", "models/a.ts"],
       root: "basic-project",
       error: "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments",
-      do: "nuka experimental explore --help",
+      do: "nuka experimental explore --json models/a.ts",
     },
     {
       argv: ["check", "--json", "--nope"],
