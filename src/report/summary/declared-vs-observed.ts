@@ -39,9 +39,12 @@ export interface DeclaredVsObserved {
   /** Steps that declared `mutates: false` and reached no HTTP channel
    * nukadoko observes, so there was nothing to compare. */
   readonly unobservedReadOnlyCount: number;
+  /** Steps whose step record could not be read, so nothing is known to
+   * compare: counted so they are not read as compared and matched. */
+  readonly unreadableCount: number;
 }
 
-export function collectDeclaredVsObserved(steps: Iterable<ComparedStep>): DeclaredVsObserved {
+export function collectDeclaredVsObserved(steps: Iterable<ComparedStep>, unreadableCount = 0): DeclaredVsObserved {
   const mismatches: DeclaredVsObservedMismatch[] = [];
   let compatStepCount = 0;
   let unobservedReadOnlyCount = 0;
@@ -58,7 +61,7 @@ export function collectDeclaredVsObserved(steps: Iterable<ComparedStep>): Declar
       mismatches.push({ scenarioName, stepText, writes });
     }
   }
-  return { mismatches, compatStepCount, unobservedReadOnlyCount };
+  return { mismatches, compatStepCount, unobservedReadOnlyCount, unreadableCount };
 }
 
 /** One roll-up section rather than a note per scenario: a per-scenario note
@@ -66,7 +69,7 @@ export function collectDeclaredVsObserved(steps: Iterable<ComparedStep>): Declar
  * present, even with no mismatch, so "compared, found nothing" stays
  * distinguishable from "never compared". */
 export function renderDeclaredVsObserved(result: DeclaredVsObserved): string[] {
-  const { mismatches, compatStepCount, unobservedReadOnlyCount } = result;
+  const { mismatches, compatStepCount, unobservedReadOnlyCount, unreadableCount } = result;
   const lines: string[] = ["", "## Declared vs observed", ""];
 
   if (mismatches.length === 0) {
@@ -93,6 +96,11 @@ export function renderDeclaredVsObserved(result: DeclaredVsObserved): string[] {
       "",
       `${subject} no HTTP channel nukadoko observes (\`request\`, \`page\`, \`context\`, \`pageAs\`), so nothing was compared for ${unobservedReadOnlyCount === 1 ? "it" : "them"}.`,
     );
+  }
+
+  if (unreadableCount > 0) {
+    const subject = unreadableCount === 1 ? "1 step has a step record" : `${unreadableCount} steps have step records`;
+    lines.push("", `${subject} nukadoko could not read, so nothing was compared for ${unreadableCount === 1 ? "it" : "them"}.`);
   }
 
   if (compatStepCount > 0) {

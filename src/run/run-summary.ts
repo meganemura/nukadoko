@@ -287,7 +287,12 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderTitle(document),
     ...renderCondition(document),
     ...renderFeatures(document),
-    ...renderDeclaredVsObserved(collectDeclaredVsObserved(comparedSteps(document.scenarios))),
+    ...renderDeclaredVsObserved(
+      collectDeclaredVsObserved(
+        comparedSteps(document.scenarios),
+        document.scenarios.reduce((total, scenario) => total + scenario.steps.filter((step) => step.record_unreadable === true).length, 0),
+      ),
+    ),
     ...renderFindings(document),
     ...renderRerun(document),
   ];

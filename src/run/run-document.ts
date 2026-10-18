@@ -111,7 +111,11 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
       status: entry.status,
       step_record_id: entry.step_record_id,
       record: entry.step_record_id === null ? null : input.recordPath(entry.step_record_id),
-      ...(stepRecord === null ? {} : { mutates: stepRecord.mutates, observed: stepRecord.observed }),
+      ...(stepRecord === null
+        ? entry.step_record_id === null
+          ? {}
+          : { record_unreadable: true as const }
+        : { mutates: stepRecord.mutates, observed: stepRecord.observed }),
       ...(entry.error === undefined ? {} : { error: { kind, message: entry.error.message } }),
       ...(used === undefined ? {} : { used }),
     };

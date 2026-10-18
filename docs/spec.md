@@ -2279,7 +2279,10 @@ to act on the run without opening another file:
   `step` it matched (`null` when none or more than one), and its `status`.
   A step that began has a `step_record_id` (the value `nuka do --use`
   takes) and a `record`, the step record's directory, with its `mutates`
-  declaration and what it `observed`. A step that failed, or never began
+  declaration and what it `observed`. A step whose step record could not
+  be read back has `record_unreadable: true` in their place, a
+  `step-record-unreadable` warning names the file, and the summary's
+  "Declared vs observed" section counts it as not compared. A step that failed, or never began
   for a reason (`undefined`, `ambiguous`), has an `error` with the step
   record's `kind` (`null` when no step record says) and its first message.
   A failed step that read earlier results through `from` has `used`, each

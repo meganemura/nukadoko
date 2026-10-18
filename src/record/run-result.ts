@@ -62,6 +62,10 @@ export interface RunStep {
   readonly mutates?: boolean | null;
   /** What the step record measured, present when it has one. */
   readonly observed?: ObservedCounts;
+  /** `true` when the step wrote a step record that could not be read back,
+   * so `mutates` and `observed` are missing for a reason, not because
+   * nothing ran. */
+  readonly record_unreadable?: true;
   /** Present when the step failed, or never began for a reason
    * (`undefined`, `ambiguous`). `kind` is the step record's `error.kind`,
    * and `null` when no step record says. */

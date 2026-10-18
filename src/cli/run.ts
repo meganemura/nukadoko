@@ -44,7 +44,7 @@ import { generateRunId } from "../run/run-id.js";
 import { probeFindings } from "../run/probe.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
-import { RUN_FILE_DIRS, relativeToRun, runRelativeDir } from "../record/state-layout.js";
+import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
 import { writeRunSources } from "../record/run-sources.js";
@@ -626,8 +626,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // ends: a later scenario of the same run must not draw the same id.
     const emptyEvidenceDirs: string[] = [];
     const noteRecord = (record: ScenarioRecord): void => {
+      const stepRecords = readStepRecordsForScenario(rootDir, config.stateDir, record);
+      for (const [stepRecordId, stepRecord] of stepRecords) {
+        if (stepRecord !== null) continue;
+        warn({
+          severity: "warning",
+          code: "step-record-unreadable",
+          message: `${stepRecordRelativeDir(config.stateDir, runId, stepRecordId)}/record.json of ${record.feature}:${record.line} could not be read, so run.json has no declaration or measurement for that step`,
+        });
+      }
       const entry = buildRunScenario(record, {
-        stepRecords: readStepRecordsForScenario(rootDir, record),
+        stepRecords,
         stepLine: pickleLines.get(`${record.feature}\u0000${record.line}`) ?? (() => null),
         stepName: (text) => {
           const { stepNames } = matchPickleStepText(text, patterns);

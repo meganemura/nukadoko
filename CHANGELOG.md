@@ -126,7 +126,9 @@ just until 0.1.
   itself, byte for byte what `--json` prints, with `commit` (`sha`,
   `dirty`), `environment`, `target_version`, `selection`, `counts`, every
   scenario with its steps (each with `line`, `text`, the `step` it matched,
-  `status`, `step_record_id`, `record`, `mutates`, `observed`, and for a
+  `status`, `step_record_id`, `record`, `mutates`, `observed`, or
+  `record_unreadable` with a `step-record-unreadable` warning for a step
+  record that could not be read back, and for a
   failure `error` with `kind` and `message` and the `used` results it
   read, each bounded to 4096 bytes of JSON with `truncated` and
   `result_bytes` when it was cut), a failed scenario's `do`, and every finding the run raised,
