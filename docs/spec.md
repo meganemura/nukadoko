@@ -2283,7 +2283,13 @@ to act on the run without opening another file:
   for a reason (`undefined`, `ambiguous`), has an `error` with the step
   record's `kind` (`null` when no step record says) and its first message.
   A failed step that read earlier results through `from` has `used`, each
-  producer's step, record, and the result it read. Args and a step's own
+  producer's step, record, and the result it read. A result whose JSON is
+  over 4096 bytes is a preview instead, with `truncated: true` and
+  `result_bytes`, the whole value's size: an object keeps its top-level
+  numbers, booleans, and nulls and the first 1024 characters of each
+  top-level string while they fit, so a process's `exitCode` and the start
+  of its `stderr` stay, and the producer's `record` holds the whole value.
+  Args and a step's own
   result stay in its step record: they can be large, and the next decision
   does not need them.
 - A failed scenario has `do`, the command that runs it alone: the same

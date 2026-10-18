@@ -34,7 +34,13 @@ export interface RunUsed {
   readonly step: string;
   /** The producer's step record directory, relative to the run directory. */
   readonly record: string;
+  /** The producer's result, or a bounded preview of it when `truncated`
+   * (src/run/run-document.ts's `boundUsedResult`); `record` holds the
+   * whole value. */
   readonly result: unknown;
+  readonly truncated?: true;
+  /** The whole result's JSON size in bytes, only when `truncated`. */
+  readonly result_bytes?: number;
 }
 
 export interface RunStep {

@@ -4,7 +4,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import type { ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import type { StepRecord } from "../src/record/types.js";
-import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../src/run/run-document.js";
+import { USED_RESULT_MAX_BYTES, boundUsedResult, buildRunScenario, gherkinStepLines, pickleStepLines } from "../src/run/run-document.js";
 
 // Responsibility: one scenario's run.json entry, built from the scenario as
 // it ran and the step records it cites, and the line of each step in its
@@ -151,4 +151,40 @@ describe("pickleStepLines", () => {
     ]);
     expect(pickleStepLines(pickles[0]!, lines)(5)).toBe(null);
   });
+});
+
+const jsonBytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value) ?? "null", "utf8");
+
+const result = gs.oneOf<unknown>(
+  gs.text({ maxSize: 6000 }),
+  gs.integers(),
+  gs.booleans(),
+  gs.just(null),
+  gs.arrays(gs.text({ maxSize: 2000 }), { maxSize: 6 }),
+  gs
+    .tuples(gs.integers({ minValue: 0, maxValue: 255 }), gs.text({ maxSize: 6000 }), gs.text({ maxSize: 6000 }), gs.arrays(gs.text(), { maxSize: 4 }))
+    .map(([exitCode, stdout, stderr, extra]) => ({ stdout, exitCode, stderr, extra })),
+);
+
+describe("boundUsedResult", () => {
+  it("keeps a result that fits whole, and bounds one that does not, marking it", () =>
+    hegel.test((tc) => {
+      const value = tc.draw(result);
+      const bounded = boundUsedResult(value);
+      if (jsonBytes(value) <= USED_RESULT_MAX_BYTES) {
+        expect(bounded).toEqual({ result: value });
+        return;
+      }
+      expect(bounded.truncated).toBe(true);
+      expect(bounded.result_bytes).toBe(jsonBytes(value));
+      expect(jsonBytes(bounded.result)).toBeLessThanOrEqual(USED_RESULT_MAX_BYTES);
+    }));
+
+  it("keeps a bounded process result's exit code and the start of its stderr", () =>
+    hegel.test((tc) => {
+      const exitCode = tc.draw(gs.integers({ minValue: 1, maxValue: 255 }));
+      const stderr = tc.draw(gs.text({ alphabet: "abc\n", minSize: 1, maxSize: 200 }));
+      const bounded = boundUsedResult({ stdout: "x".repeat(10_000), exitCode, stderr, files: ["a".repeat(5000)] });
+      expect(bounded).toEqual({ result: { stdout: "x".repeat(1024), exitCode, stderr }, truncated: true, result_bytes: jsonBytes({ stdout: "x".repeat(10_000), exitCode, stderr, files: ["a".repeat(5000)] }) });
+    }));
 });

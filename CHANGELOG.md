@@ -128,7 +128,8 @@ just until 0.1.
   scenario with its steps (each with `line`, `text`, the `step` it matched,
   `status`, `step_record_id`, `record`, `mutates`, `observed`, and for a
   failure `error` with `kind` and `message` and the `used` results it
-  read), a failed scenario's `do`, and every finding the run raised,
+  read, each bounded to 4096 bytes of JSON with `truncated` and
+  `result_bytes` when it was cut), a failed scenario's `do`, and every finding the run raised,
   warnings included. `selection` is `partial` when a `:line` target left
   out a scenario of its file; it replaces the "Partial run" paragraph on
   stderr, which is gone. The scenario record files under

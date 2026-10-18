@@ -13,7 +13,12 @@ import type { StepRecord } from "../record/types.js";
 // declaration and the measurement (`mutates`, `observed`) ride along so the
 // run summary's "Declared vs observed" section is rendered from run.json
 // alone. Args and the step's own result stay in the step record: they can be
-// large, and nothing on the next decision needs them.
+// large, and nothing on the next decision needs them. A failed step's
+// `used` results are the exception, because the failure often is what an
+// upstream step returned (a process that exited nonzero, and its stderr).
+// They are bounded (`boundUsedResult`): a 5 MB producer result would
+// otherwise make a 5 MB run.json and `--json` document, and the producer's
+// `record` still holds the whole value.
 
 export interface RunScenarioInput {
   /** The step records the scenario cites, by id; `null` for one that could
@@ -49,9 +54,49 @@ export function wroteScenarioEvidence(record: ScenarioRecord): boolean {
   );
 }
 
+/** The most a used result's JSON takes in run.json, in UTF-8 bytes. */
+export const USED_RESULT_MAX_BYTES = 4096;
+/** The most of one string field a bounded preview keeps, in characters:
+ * enough for the first lines of a process's stderr. */
+export const USED_PREVIEW_STRING_CHARS = 1024;
+
+function jsonBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value) ?? "null", "utf8");
+}
+
+/** A used result as run.json carries it: the value itself when its JSON
+ * fits `USED_RESULT_MAX_BYTES`, or else a preview with `truncated` and the
+ * whole value's size. The preview keeps an object's top-level numbers,
+ * booleans, and nulls, and the start of each top-level string, in key
+ * order, each one that still fits, so `exitCode` and the first line of `stderr`
+ * survive; any other value previews as `null`. Pure. */
+export function boundUsedResult(result: unknown): { readonly result: unknown; readonly truncated?: true; readonly result_bytes?: number } {
+  const bytes = jsonBytes(result);
+  if (bytes <= USED_RESULT_MAX_BYTES) return { result };
+  let preview: unknown = null;
+  if (typeof result === "object" && result !== null && !Array.isArray(result)) {
+    const kept: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(result)) {
+      const shown =
+        typeof value === "string"
+          ? value.slice(0, USED_PREVIEW_STRING_CHARS)
+          : typeof value === "number" || typeof value === "boolean" || value === null
+            ? value
+            : undefined;
+      if (shown === undefined) continue;
+      kept[key] = shown;
+      if (jsonBytes(kept) > USED_RESULT_MAX_BYTES) {
+        delete kept[key];
+      }
+    }
+    preview = kept;
+  }
+  return { result: preview, truncated: true, result_bytes: bytes };
+}
+
 function usedOf(stepRecord: StepRecord, recordPath: (id: string) => string): RunUsed[] | undefined {
   if (stepRecord.status !== "failed" || stepRecord.used === undefined || stepRecord.used.length === 0) return undefined;
-  return stepRecord.used.map((entry) => ({ step: entry.step, record: recordPath(entry.step_record_id), result: entry.result }));
+  return stepRecord.used.map((entry) => ({ step: entry.step, record: recordPath(entry.step_record_id), ...boundUsedResult(entry.result) }));
 }
 
 export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput): RunScenario {

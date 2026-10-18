@@ -21,7 +21,8 @@ failed scenario, whose `  do:` line runs that scenario alone.
 The same list is in the run's `run.json` (`nuka run --json` prints it):
 each entry of `scenarios` with `status: "failed"` names its `do` command,
 and its failed step names its `line`, its `error` (`kind`, `message`),
-its step `record`, and the `used` results it read.
+its step `record`, and the `used` results it read (a large one cut to a
+preview marked `truncated`; the producer's `record` holds it whole).
 When the failed step read from a step whose program exited nonzero, a
 `used    <step>  exit <code>  <first stderr line>` line sits between the
 two: a Then step that got an empty stdout usually failed there, because
