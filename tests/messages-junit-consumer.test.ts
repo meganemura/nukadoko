@@ -104,4 +104,21 @@ describe("nuka report --format messages through the real @cucumber/junit-xml-for
     expect(Number.isFinite(time)).toBe(true);
     expect(time).toBeGreaterThanOrEqual(0);
   });
+
+  it("a --repeat run: each execution is its own test case, attempt 0, and the printer counts every one, the red one included", async () => {
+    const exitCode = await runCli(["run", "--no-check", "--repeat", "2", "features/passing.feature", "features/failing.feature"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+    expect(exitCode).toBe(1);
+    const stdout = createCaptureSink();
+    expect(await runCli(["report", "--format", "messages"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+    const envelopes = stdout.text().trim().split("\n").map((line) => parseEnvelope(line));
+    expect(envelopes.flatMap((e) => (e.testCaseStarted ? [e.testCaseStarted.attempt] : []))).toEqual([0, 0, 0, 0]);
+    expect(envelopes.flatMap((e) => (e.testCaseFinished ? [e.testCaseFinished.willBeRetried] : []))).toEqual([false, false, false, false]);
+    const xml = buildJUnitXml(stdout.text());
+    expect(xml).toMatch(/<testsuite\b[^>]*\btests="4"/);
+    expect(xml).toMatch(/<testsuite\b[^>]*\bfailures="2"/);
+  });
 });

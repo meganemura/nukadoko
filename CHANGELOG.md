@@ -93,8 +93,10 @@ just until 0.1.
   - In a messages stream of a run over more than one environment, each
     pickle gets one copy per environment, with fresh ids and the
     environment in parentheses after its name, since cucumber-messages has
-    no field for the environment. A `--repeat` execution is the next
-    `attempt` of its test case. `meta` names the nukadoko version that ran
+    no field for the environment. Each `--repeat` execution is a test
+    case of its own, `attempt` 0 and never to be retried, since every
+    execution counts; a retry shape would let a reader keep only the
+    last. `meta` names the nukadoko version that ran
     the scenarios, and both run timestamps are the run's.
   - Allure results no longer carry the `host` and `thread` labels, which
     named the machine that rendered rather than the one that ran.

@@ -188,13 +188,16 @@ export function writeMessagesStream(
   }
   append({ testRunStarted: { timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(Date.parse(options.startedAt)) } });
 
-  // `--repeat` executes one pickle more than once in one environment; each
-  // later execution is the next attempt of that test case's pickle.
-  const attempts = new Map<Pickle, number>();
+  // `--repeat` executes one pickle more than once in one environment, and
+  // every execution counts: a cell is red when any of its executions is.
+  // So each execution is its own test case, attempt 0, never to be
+  // retried. The alternative refused: one test case with an attempt per
+  // execution and `willBeRetried` on all but the last, the shape of a
+  // retry, which a reader such as @cucumber/query folds into the last
+  // attempt, so a red first execution followed by a green one would read
+  // as green.
   for (const scenario of scenarios) {
     const pickle = pickleFor(scenario);
-    const attempt = attempts.get(pickle) ?? 0;
-    attempts.set(pickle, attempt + 1);
     let mapped: ReturnType<typeof mapScenario>;
     try {
       mapped = mapScenario({ record: scenario.record, stepRecords: scenario.stepRecords, pickle, newId, hookIds });
@@ -211,7 +214,7 @@ export function writeMessagesStream(
       }
     }
     append({ testCase: mapped.testCase });
-    append({ testCaseStarted: { ...mapped.testCaseStarted, attempt } });
+    append({ testCaseStarted: mapped.testCaseStarted });
     for (const step of mapped.steps) {
       append({ testStepStarted: step.testStepStarted });
       for (const attachment of step.attachments) {

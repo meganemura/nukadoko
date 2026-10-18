@@ -422,7 +422,7 @@ describe("writeMessagesStream", () => {
       expect(envelopes.filter((e) => e.testCaseStarted).map((e) => e.testCaseStarted!.attempt)).toEqual([0, 0]);
     });
 
-    it("keeps the parsed pickle in a one-environment run, and counts a repeat as the next attempt", () => {
+    it("keeps the parsed pickle in a one-environment run, and gives each repeat its own test case, attempt 0, not to be retried", () => {
       const feature = checkout();
       const pickle = feature.pickles[0]!;
       const { envelopes } = render(rootDir, [feature], [
@@ -435,7 +435,8 @@ describe("writeMessagesStream", () => {
         "checkout as member",
       ]);
       expect(envelopes.filter((e) => e.testCase).map((e) => e.testCase!.pickleId)).toEqual([pickle.id, pickle.id]);
-      expect(envelopes.filter((e) => e.testCaseStarted).map((e) => e.testCaseStarted!.attempt)).toEqual([0, 1]);
+      expect(envelopes.filter((e) => e.testCaseStarted).map((e) => e.testCaseStarted!.attempt)).toEqual([0, 0]);
+      expect(envelopes.filter((e) => e.testCaseFinished).map((e) => e.testCaseFinished!.willBeRetried)).toEqual([false, false]);
     });
   });
 

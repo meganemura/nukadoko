@@ -3586,7 +3586,12 @@ manifest, so retention and `nuka clean` remove it with the run.
   the environment in parentheses after the name (`checkout (staging)`), the
   same way an Examples row gets a pickle of its own. A run over one
   environment keeps the pickles as parsed. Each `--repeat` execution of one
-  pickle in one environment is the next `attempt` of its test case.
+  pickle in one environment is a test case of its own, with `attempt` 0
+  and `willBeRetried` false, since every execution counts toward the cell.
+  The retry shape, one test case with `willBeRetried` on all but its last
+  attempt, is refused: a reader such as `@cucumber/query` keeps only the
+  last attempt, so a red execution followed by a green one would read as
+  green.
 - This stream has the inverse role of the Allure results. Allure exposes
   nukadoko's measurement surplus, while this stream preserves compat
   fidelity. Its only job is to ensure that a migrated suite's existing

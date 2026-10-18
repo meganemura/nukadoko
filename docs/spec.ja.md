@@ -3025,7 +3025,10 @@ Allure の result と同じく、ストリームは run の後に run ディレ�
   複製は新しい id を持ち、名前の後ろの丸括弧に environment が入ります(`checkout (staging)`)。
   Examples の行がそれぞれ自分の pickle を持つのと同じやり方です。
   1 つの environment だけの run は、parse したままの pickle を使います。
-  1 つの environment で 1 つの pickle を `--repeat` で実行するたびに、その test case の次の `attempt` になります。
+  1 つの environment で 1 つの pickle を `--repeat` で実行するたびに、それぞれが自分の test case になり、`attempt` は 0、`willBeRetried` は false です。
+  どの実行も cell に数えられるからです。
+  最後の attempt 以外に `willBeRetried` を付けた 1 つの test case という再試行の形は採りません。
+  `@cucumber/query` のような読み手は最後の attempt だけを残すので、red の実行の後に green の実行が続くと green に見えてしまいます。
 - このストリームは Allure の result と逆の役割を持ちます。
   Allure は nukadoko の計測の余剰を公開し、このストリームは compat の忠実さを保ちます。
   唯一の仕事は、移行したスイートの既存フォーマッタと JUnit ベースの CI が、nukadoko の run を従来の cucumber-js の run と同じように読み続けられるようにすることです。
