@@ -38,6 +38,10 @@ This part does not change release to release.
   can have been removed or changed by a later one: in the newest release,
   a refusal exits 2, and `nuka clean` takes no `--records`, `--cache`, or
   `--export`.
+- **A release with no section below needs no action.** 0.4.1, 0.6.0,
+  0.13.1, and 0.14.0 are such releases. Start reading at the first section
+  whose range ends above your version: a project on 0.13.0, 0.13.1, or
+  0.14.0 starts at "0.14.0 to 0.14.1".
 
 ## 0.17.0 to the next release
 
@@ -557,6 +561,16 @@ From the release after 0.16.1 on, `nuka tend` reports the first one as
   `z.object({})` may drop that line and its final `return {}`. An early
   `return {}` inside an `if` becomes `return;`: deleting it makes the step
   fall through to the code after it, such as the next assertion.
+
+## 0.14.0 to 0.14.1
+
+- **`nuka check` can newly report `outline-does-not-run`, an error.** A
+  Scenario Outline with no Examples table, and an Examples table with a
+  header and no body row, used to pass `check`. The first ran once with
+  the placeholder text left in, and the second produced no scenario at
+  all. Add an Examples row for each case that must run, or remove the
+  empty Examples table. This is the only reason a `check` that was green
+  on 0.14.0 turns red on 0.14.1.
 
 ## 0.12.0 to 0.13.0
 

@@ -58,6 +58,15 @@ just until 0.1.
   producer's `returns` and return it from `run()`), then the same
   command line, quoted for a POSIX shell, so it does not have to be typed
   again.
+- **docs/upgrading.md says where a project on 0.13.x or 0.14.0 starts reading.**
+  No section started at 0.14.0, the version many projects pin, so a reader
+  could not tell a release that needs no action from a missing section.
+  The "every time" list now names the releases with no section (0.4.1,
+  0.6.0, 0.13.1, and 0.14.0) and says to start at the first section whose
+  range ends above the reader's version. A new "0.14.0 to 0.14.1" section
+  names `outline-does-not-run`, the error that release added, as the one
+  reason a green `nuka check` turns red there. docs/upgrading.ja.md
+  matches.
 - **The README no longer names `nuka init --env`.** 0.17.0 removed the
   flag and made `init` always add `.env`, `.env.*`, and `!.env.example`
   to `.gitignore`, but README.md and README.ja.md still called those lines
