@@ -51,6 +51,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A printed command line quotes a word that starts with `=`.**
+  `do:` and `rerun` lines left such a word bare, and zsh, the default
+  macOS shell, reads an unquoted `=name` as the path of the command
+  `name`: the pasted line ran with a different argument, or stopped with
+  `name not found`. The word is now single-quoted; an `=` later in a word,
+  as in `--env=staging`, stays bare.
+
 - **`nuka run --no-check` fails a scenario at the line that matches no step, not at the from-order consequence of it.**
   `nuka check` holds back a from-order finding behind an earlier line that
   matches no step, but the guard `nuka run` applies before a scenario

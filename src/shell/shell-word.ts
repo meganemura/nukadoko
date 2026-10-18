@@ -4,8 +4,10 @@
 // may import, not in the runner that first needed it.
 
 // Characters a POSIX shell reads as one plain word; anything else is single
-// quoted, so a path with a space still pastes as one argument.
-const SHELL_SAFE = /^[A-Za-z0-9_./:=@%+,-]+$/;
+// quoted, so a path with a space still pastes as one argument. A word may not
+// start with "=": zsh, the default macOS shell, reads an unquoted =name as the
+// path of the command name, and refuses the line when there is none.
+const SHELL_SAFE = /^[A-Za-z0-9_./:@%+,-][A-Za-z0-9_./:=@%+,-]*$/;
 
 export function shellWord(word: string): string {
   return SHELL_SAFE.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`;
