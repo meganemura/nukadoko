@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 // Responsibility: sessions generalized to per-environment — `do --session
 // --env` writing under
@@ -180,5 +180,23 @@ describe("nuka session list/clear across environments", () => {
     expect(existsSync(path.join(sessionsDir(rootDir, "staging"), "alpha.json"))).toBe(false);
     expect(existsSync(path.join(sessionsDir(rootDir, "staging"), "beta.json"))).toBe(false);
     expect(existsSync(path.join(sessionsDir(rootDir, "default"), "gamma.json"))).toBe(true);
+  });
+
+  it("names nuka session list --json when the name exists only under another environment", async () => {
+    await writeFakeSession("staging", "alpha");
+
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["session", "clear", "alpha"], { rootDir, stdout: createCaptureSink(), stderr });
+    expect({ exitCode, stderr: withoutNoConfigLine(stderr.text()) }).toEqual({
+      exitCode: 1,
+      stderr: 'Session "alpha" not found\ndo: nuka session list --json\n',
+    });
+
+    const listed = createCaptureSink();
+    await runCli(["session", "list", "--json"], { rootDir, stdout: listed, stderr: createCaptureSink() });
+    const sessions: { name: string; environment: string }[] = JSON.parse(listed.text()).sessions;
+    expect(sessions.map(({ name, environment }) => ({ name, environment }))).toEqual([
+      { name: "alpha", environment: "staging" },
+    ]);
   });
 });

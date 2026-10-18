@@ -49,6 +49,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka session clear <name>` for a session that does not exist names `nuka session list --json` as its `do:` line.**
+  It ended with `do: nuka session clear --help`. What the caller lacks is
+  which sessions exist, and under which environment: `nuka session list`
+  has no `--env` and lists every environment, and its `--json` output
+  names the environment of each session, so a name under another
+  environment reads as that. The message and exit 1 are unchanged.
 - **A `nuka run` target that selects nothing names the next step as its `do:` line.**
   Three refusals ended with `do: nuka run --help`. A directory given with
   `:line` now names the same run with the `:line` dropped from each

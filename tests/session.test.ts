@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 // Responsibility: `--session`'s request-path round trip, the setup-phase
 // failures `do` refuses on (invalid name, malformed session
@@ -324,8 +324,10 @@ describe("nuka session list/clear", () => {
       stdout: createCaptureSink(),
       stderr,
     });
-    expect(exitCode).toBe(1);
-    expect(stderr.text()).toContain("no-such-session");
+    expect({ exitCode, stderr: withoutNoConfigLine(stderr.text()) }).toEqual({
+      exitCode: 1,
+      stderr: 'Session "no-such-session" not found\ndo: nuka session list --json\n',
+    });
   });
 
   it("refuses to clear a session whose lock is held by a live process", async () => {
