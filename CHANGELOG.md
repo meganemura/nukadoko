@@ -51,6 +51,14 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka clean` reports nothing after a clean, and creates no Allure results directory that was not there.**
+  Clean removed the results directory and always recreated it empty, and
+  listed it whenever it existed, so every second `nuka clean` printed
+  `.nukadoko/export/allure-results` in a project with the Allure emitter
+  off, and the first one created that directory. An empty results
+  directory is no longer listed, and one that did not exist is not
+  created; one that existed is still recreated empty, so a running
+  `allure watch` keeps finding it.
 - **`env-file-missing`, `environment-env-file-missing`, and `additional-feature-dir-missing` name the entry and the config file in their `do:` line.**
   Each said "the config file" and "the entry" while the check had both in
   hand. The `do:` line now names the missing path, the list it is in

@@ -108,6 +108,24 @@ describe("nuka clean", () => {
     expect(stdout.text()).toContain("ok: nothing to clean");
   });
 
+  it("creates no results directory where none was", async () => {
+    const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+    expect(exitCode).toBe(0);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results"))).toBe(false);
+  });
+
+  it("finds nothing to clean right after a clean", async () => {
+    await seedRecords(rootDir);
+    await seedExport(rootDir);
+    await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() });
+    expect(exitCode).toBe(0);
+    expect(stdout.text()).toBe("ok: nothing to clean\n");
+    expect(await readdir(path.join(stateDir(rootDir), "export", "allure-results"))).toEqual([]);
+  });
+
   it("--dry-run lists every category's targets and deletes nothing", async () => {
     await seedRecords(rootDir);
     await seedCache(rootDir);

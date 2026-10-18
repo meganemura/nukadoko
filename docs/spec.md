@@ -3225,6 +3225,10 @@ It refuses, before removing anything, when `allure.resultsDir` or
 project, or to a parent of the state directory. `--dry-run` refuses those
 paths too. A results directory inside the project is still removed, unless
 that directory is a parent of the state directory.
+A results directory that existed is recreated empty, so an `allure watch`
+pointed at it keeps finding it; an empty one is not listed, so a clean
+right after a clean prints `ok: nothing to clean`; and a results directory
+that did not exist is not created.
 The command never touches `export/allure-history.jsonl`. This file is beside
 `export/allure-results/`, outside that directory. It is the only artifact under
 `.nukadoko/` that a new run cannot reproduce.

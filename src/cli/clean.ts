@@ -143,6 +143,7 @@ async function buildCachePlan(rootDir: string, stateDir: string): Promise<string
 
 interface ExportPlan {
   resultsDirRelative: string;
+  resultsDirExists: boolean;
   messagesOutputRelative: string;
   /** Every run-id-suffixed sibling file found beside `messagesOutputRelative`
    * (root-relative), sorted for a deterministic plan. */
@@ -189,6 +190,14 @@ function isStrictlyInside(parent: string, child: string): boolean {
   return relative !== ".." && !relative.startsWith(`..${path.sep}`);
 }
 
+async function isEmptyDirectory(dir: string): Promise<boolean> {
+  try {
+    return (await readdir(dir)).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 type BuiltExportPlan = { refusal: string; plan: null } | { refusal: null; plan: ExportPlan };
 
 /** `export/allure-results/`, `export/messages.ndjson`, and every run-id-
@@ -224,7 +233,10 @@ async function buildExportPlan(
   const messagesOutputRelative = path.relative(root, path.resolve(root, messagesConfigured));
 
   const paths: string[] = [];
-  if (existsSync(path.join(rootDir, resultsDirRelative))) {
+  // An empty results directory is what the previous clean left behind, so
+  // listing it would make every second clean report a path.
+  const resultsDirExists = existsSync(path.join(rootDir, resultsDirRelative));
+  if (resultsDirExists && !(await isEmptyDirectory(path.join(rootDir, resultsDirRelative)))) {
     paths.push(resultsDirRelative);
   }
   if (existsSync(path.join(rootDir, messagesOutputRelative))) {
@@ -253,7 +265,10 @@ async function buildExportPlan(
   }
   paths.push(...messagesRunOutputsRelative);
 
-  return { refusal: null, plan: { resultsDirRelative, messagesOutputRelative, messagesRunOutputsRelative, paths } };
+  return {
+    refusal: null,
+    plan: { resultsDirRelative, resultsDirExists, messagesOutputRelative, messagesRunOutputsRelative, paths },
+  };
 }
 
 function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: WritableSink): void {
@@ -307,12 +322,14 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   for (const relativePath of plan.cache) {
     await rm(path.join(rootDir, relativePath), { force: true });
   }
-  // Removed and recreated empty, not just removed, regardless of whether
-  // it existed beforehand (cli/init.ts does the same unconditional
-  // creation): this file's own header explains why (an `allure watch`
-  // already pointed at this directory must keep finding it).
-  await rm(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true, force: true });
-  await mkdir(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true });
+  // Removed and recreated empty, not just removed: this file's own header
+  // explains why (an `allure watch` already pointed at this directory must
+  // keep finding it). A directory that was not there is not created, since
+  // the Allure emitter is off unless the config turns it on.
+  if (exportPlan.resultsDirExists) {
+    await rm(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true, force: true });
+    await mkdir(path.join(rootDir, exportPlan.resultsDirRelative), { recursive: true });
+  }
   await rm(path.join(rootDir, exportPlan.messagesOutputRelative), { force: true });
   for (const relativePath of exportPlan.messagesRunOutputsRelative) {
     await rm(path.join(rootDir, relativePath), { force: true });

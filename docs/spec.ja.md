@@ -2657,6 +2657,9 @@ retention はそこに決して触れません。
 `allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合は、何も消す前に拒否します。
 `--dry-run` もそれらのパスを拒否します。
 プロジェクトの中にある results ディレクトリは、そのディレクトリが state directory の親である場合を除き、消します。
+あった results ディレクトリは空の状態で作り直すので、そこを指す `allure watch` は見失いません。
+空の results ディレクトリは一覧に出さないので、clean の直後の clean は `ok: nothing to clean` を出します。
+なかった results ディレクトリは作りません。
 カテゴリを問わず決して触れないファイルが 1 つあります。
 `export/allure-history.jsonl` は `export/allure-results/` の隣にあり、その中にはなく、`.nukadoko/` の下にある成果物の中で唯一、再実行では作り直せないものです。
 
