@@ -7,7 +7,7 @@ import { RUN_RESULT_FILE_NAME, type RunDocument, type RunScenario } from "../rec
 import { parseRunDocument } from "./run-document-schema.js";
 import { readRunSources, runSourcesPath } from "../record/run-sources.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
-import { RUN_FILE_DIRS, resolveRecordedPath, runRelativeDir } from "../record/state-layout.js";
+import { isInsideDir, RUN_FILE_DIRS, resolveRecordedPath, runRelativeDir } from "../record/state-layout.js";
 import type { StepRecord } from "../record/types.js";
 
 // Responsibility: one run directory, read back into what the report
@@ -111,8 +111,7 @@ export function scenarioRecordOf(document: RunDocument, scenario: RunScenario): 
 }
 
 function isWithin(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative === "" || (!path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`));
+  return path.resolve(parent) === path.resolve(child) || isInsideDir(parent, child);
 }
 
 /** `target` with every symlink resolved, or, when it does not exist, the

@@ -83,3 +83,13 @@ export function resolveRecordedPath(recorded: string, runId: string, runDir: str
   }
   return path.resolve(rootDir, recorded);
 }
+
+/** Whether `child` lies strictly inside `parent`, both resolved by
+ * `path.relative` alone (no symlink is read). A name that only starts with
+ * two dots, such as `..foo`, is inside: only `..` itself, or `..` followed
+ * by a separator, leaves. Pure; the one test every caller that removes or
+ * reads a path by this rule shares. */
+export function isInsideDir(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return relative !== "" && !path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`);
+}

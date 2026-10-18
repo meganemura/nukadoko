@@ -2,7 +2,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME } from "../record/run-exports.js";
-import { allureResultsRelativeDir, doRelativeDir, exportRelativeDir, runsRelativeDir } from "../record/state-layout.js";
+import { allureResultsRelativeDir, doRelativeDir, exportRelativeDir, isInsideDir, runsRelativeDir } from "../record/state-layout.js";
 import type { Finding } from "../finding/finding.js";
 import { formatEnvelope, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -126,10 +126,6 @@ async function exists(filePath: string): Promise<boolean> {
   }
 }
 
-function isInside(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative !== "" && !path.isAbsolute(relative) && !relative.startsWith("..");
-}
 
 /** `export/allure-results/` when it holds anything, then every file a run's
  * exports manifest names that is still there, inside `export/` and outside
@@ -154,7 +150,7 @@ async function buildExportPlan(rootDir: string, stateDir: string): Promise<Expor
   for (const runName of runNames) {
     for (const relativePath of readExportsManifest(path.join(rootDir, runsRelativeDir(stateDir), runName, RUN_EXPORTS_FILE_NAME))) {
       const absolutePath = path.resolve(rootDir, relativePath);
-      if (!isInside(exportDir, absolutePath) || absolutePath === resultsDir || isInside(resultsDir, absolutePath)) continue;
+      if (!isInsideDir(exportDir, absolutePath) || absolutePath === resultsDir || isInsideDir(resultsDir, absolutePath)) continue;
       if (await exists(absolutePath)) paths.add(path.relative(rootDir, absolutePath));
     }
   }

@@ -3,7 +3,7 @@ import path from "node:path";
 import { compareNewestFirst, rankRunsNewestFirst, type RunStart } from "./newest-run.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
 import { readEndedRuns } from "./run-result.js";
-import { doRelativeDir, runsRelativeDir } from "./state-layout.js";
+import { doRelativeDir, isInsideDir, runsRelativeDir } from "./state-layout.js";
 
 // Responsibility: what leaves the state directory on its own, and when.
 // Applied at the end of every `nuka run` (src/cli/run.ts). The unit is a
@@ -118,10 +118,6 @@ function recordDate(record: Record<string, unknown> | null): number | null {
   return null;
 }
 
-function isInside(rootDir: string, absolutePath: string): boolean {
-  const relative = path.relative(rootDir, absolutePath);
-  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
-}
 
 export interface ApplyRetentionOptions {
   readonly rootDir: string;
@@ -149,7 +145,7 @@ async function removeRunDir(rootDir: string, stateDir: string, runId: string): P
     const absolutePath = path.resolve(rootDir, relativePath);
     // A manifest is this tool's own file, but a removal that could reach
     // outside the project is still refused rather than trusted.
-    if (!isInside(rootDir, absolutePath)) continue;
+    if (!isInsideDir(rootDir, absolutePath)) continue;
     await rm(absolutePath, { force: true });
   }
   await rm(dir, { recursive: true, force: true });

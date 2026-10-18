@@ -5,6 +5,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import {
   doRelativeDir,
   relativeToRun,
+  isInsideDir,
   resolveRecordedPath,
   runRelativeDir,
   runsRelativeDir,
@@ -95,5 +96,34 @@ describe("state layout", () => {
       path.join("/copy", "steps", "runs", "run-1", "a.txt"),
     );
     expect(resolveRecordedPath("features/a.feature", "run-1", "/copy", "/project")).toBe(path.join("/project", "features", "a.feature"));
+  });
+});
+
+describe("isInsideDir", () => {
+  // A path built from segments that may be `.`, `..`, or a name with
+  // leading dots is inside exactly when the segments never climb past
+  // where they started and end below it.
+  it("is inside exactly when the segments end below the parent without climbing out", () =>
+    hegel.test((tc) => {
+      const segments = tc.draw(gs.arrays(gs.sampledFrom([".", "..", "a", "..a", "...", ".a", "a.."] as const), { maxSize: 6 }));
+      let depth = 0;
+      let climbed = false;
+      for (const segment of segments) {
+        if (segment === "..") depth -= 1;
+        else if (segment !== ".") depth += 1;
+        if (depth < 0) climbed = true;
+      }
+      const parent = path.join(path.sep, "project", "export");
+      // No segment is `export`, so a path that climbed out never comes back in.
+      expect(isInsideDir(parent, path.join(parent, ...segments))).toBe(!climbed && depth > 0);
+    }));
+
+  it("counts a name that starts with two dots as inside, and `..` and the parent itself as not", () => {
+    const parent = path.join(path.sep, "project", "export");
+    expect(
+      [path.join(parent, "..foo"), path.join(parent, "a", "..", "..b"), path.join(parent, ".."), path.join(parent, "..", "x"), parent, path.join(path.sep, "elsewhere")].map((child) =>
+        isInsideDir(parent, child),
+      ),
+    ).toEqual([true, true, false, false, false, false]);
   });
 });

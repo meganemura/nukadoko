@@ -182,6 +182,17 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
   });
 
+  it("removes a manifest-named file whose name starts with two dots, since it is inside export/", async () => {
+    await mkdir(path.join(stateDir(rootDir), "export"), { recursive: true });
+    await writeFile(path.join(stateDir(rootDir), "export", "..messages.ndjson"), "line1\n");
+    await mkdir(path.join(stateDir(rootDir), "runs", "run-eee"), { recursive: true });
+    await writeFile(path.join(stateDir(rootDir), "runs", "run-eee", "exports"), `${path.join(".nukadoko", "export", "..messages.ndjson")}\n`);
+    const stdout = createCaptureSink();
+    expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+    expect(stdout.text()).toBe(`${path.join(".nukadoko", "runs", "run-eee")}\n${path.join(".nukadoko", "export", "..messages.ndjson")}\n`);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "..messages.ndjson"))).toBe(false);
+  });
+
   it.each(["--records", "--cache", "--export"])("refuses %s by name, says clean removes every category, and deletes nothing", async (flag) => {
     await seedRecords(rootDir);
     await seedExport(rootDir);
