@@ -7,10 +7,10 @@ import { containedResolver } from "../src/report/load-run.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: a run directory is untrusted input to nuka report. A path
-// a record names is read only while it stays inside the run directory, or,
-// for this project's own run, inside the project; an absolute path, a `..`
-// path, and a symlink out are refused and named, and their file never
-// reaches the output.
+// a record names is read only while it stays inside the run directory,
+// for a copied run and for this project's own run alike; an absolute path,
+// a `..` path, a symlink out, and a file elsewhere in the project are
+// refused and named, and their file never reaches the output.
 
 const SECRET = "the-secret-token-1234";
 
@@ -28,7 +28,7 @@ describe("containedResolver", () => {
     writeFileSync(path.join(base, "secret.txt"), SECRET);
     cpSync(path.join(import.meta.dirname, "fixtures", "pure-step-project"), path.join(runDir, "steps", "s1"), { recursive: true });
     symlinkSync(path.join(base, "secret.txt"), path.join(runDir, "steps", "s1", "link.txt"));
-    const resolve = containedResolver("run-1", runDir, path.join(base, "copied"), false);
+    const resolve = containedResolver("run-1", runDir, path.join(base, "copied"));
     expect(resolve(".nukadoko/runs/run-1/steps/s1/nukadoko.config.ts")).toBe(path.join(runDir, "steps", "s1", "nukadoko.config.ts"));
     expect(() => resolve(path.join(base, "secret.txt"))).toThrow(`${path.join(base, "secret.txt")} resolves outside the run directory, so it is not read`);
     expect(() => resolve(".nukadoko/runs/run-1/steps/s1/../../../secret.txt")).toThrow("resolves outside the run directory");
@@ -36,14 +36,14 @@ describe("containedResolver", () => {
     expect(() => resolve("features/x.feature")).toThrow("resolves outside the run directory");
   });
 
-  it("lets this project's own run name a file in the project, and nothing outside it", () => {
+  it("refuses a file elsewhere in the project, as it does a file outside it", () => {
     const rootDir = path.join(base, "project");
     const runDir = path.join(rootDir, ".nukadoko", "runs", "run-1");
     cpSync(path.join(import.meta.dirname, "fixtures", "pure-step-project"), rootDir, { recursive: true });
     writeFileSync(path.join(base, "secret.txt"), SECRET);
-    const resolve = containedResolver("run-1", runDir, rootDir, true);
-    expect(resolve("nukadoko.config.ts")).toBe(path.join(rootDir, "nukadoko.config.ts"));
-    expect(() => resolve("../secret.txt")).toThrow("../secret.txt resolves outside the project, so it is not read");
+    const resolve = containedResolver("run-1", runDir, rootDir);
+    expect(() => resolve("nukadoko.config.ts")).toThrow("nukadoko.config.ts resolves outside the run directory, so it is not read");
+    expect(() => resolve("../secret.txt")).toThrow("../secret.txt resolves outside the run directory, so it is not read");
   });
 });
 
@@ -99,6 +99,29 @@ describe("nuka report on an edited run directory", () => {
     { name: "a `..` attachment", evidence: (dir: string) => dir, attachments: ["../../../secret.txt"], link: false },
     { name: "a symlink out", evidence: (dir: string) => dir, attachments: ["link.txt"], link: true },
   ];
+
+  it("refuses a project file that this project's own run names, so `.env` never reaches the output", async () => {
+    writeFileSync(path.join(rootDir, ".env"), `TOKEN=${SECRET}\n`);
+    expect((await cli(["run", "--no-check", "features/passing.feature"])).exitCode).toBe(0);
+    const runId = latestRunJson(rootDir).run_id as string;
+    const runDir = path.join(rootDir, ".nukadoko", "runs", runId);
+    const [stepId] = readdirSync(path.join(runDir, "steps")).sort();
+    const recordPath = path.join(runDir, "steps", stepId!, "record.json");
+    const record = JSON.parse(readFileSync(recordPath, "utf8")) as { evidence: { dir: string }; declared?: unknown };
+    record.evidence.dir = ".";
+    record.declared = { attachments: [".env"], logs: [] };
+    writeFileSync(recordPath, JSON.stringify(record));
+    const allureDir = path.join(outside, "allure");
+    const allure = await cli(["report", "--format", "allure", "--out", allureDir]);
+    expect(allure.exitCode).toBe(1);
+    expect(allure.stderr).toMatch(/^failed\treport-incomplete\t-\tallure: could not attach \.\/\.env: \.\/\.env resolves outside the run directory, so it is not read$/m);
+    expect(everything(allureDir)).not.toContain(SECRET);
+    expect(everything(allureDir)).not.toContain(Buffer.from(`TOKEN=${SECRET}\n`).toString("base64"));
+    const messages = await cli(["report", "--format", "messages"]);
+    expect(messages.exitCode).toBe(1);
+    expect(messages.stderr).toMatch(/^failed\treport-incomplete\t-\tmessages: could not read attachment \.\/\.env: \.\/\.env resolves outside the run directory, so it is not read$/m);
+    expect(messages.stdout).not.toContain(Buffer.from(`TOKEN=${SECRET}\n`).toString("base64"));
+  });
 
   for (const { name, evidence, attachments, link } of cases) {
     it(`refuses ${name} in Allure results and the messages stream, and names it`, async () => {

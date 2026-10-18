@@ -29,10 +29,12 @@ import type { StepRecord } from "../record/types.js";
 // A run directory copied off a CI machine is untrusted input: an edited
 // record can name any path, and a writer would copy that file into the
 // report. So every path a record names is resolved, symlinks included, and
-// refused unless it stays inside the run directory. The one exception is a
-// run of this project's own, whose records may name a file elsewhere in
-// the project; even then the path has to stay inside the project root. A
-// refused path is a problem the report names, never a file it reads.
+// refused unless it stays inside the run directory. A run of this project's
+// own gets no wider reach: a run directory copied into the state directory
+// counts as own, so an exception for the project root would let an edited
+// record name `.env`. Every file nuka run records is written inside its
+// run directory, so the rule costs no real run anything. A refused path is
+// a problem the report names, never a file it reads.
 //
 // A pickle is found by the scenario's feature path and line, the same key
 // the run used. The pickles are parsed again from sources.json, so their
@@ -63,8 +65,7 @@ export interface LoadedRun {
    * out. */
   readonly problems: readonly string[];
   /** Where a path a record names is on disk. Throws for a path outside the
-   * run directory (or, for this project's own run, outside the project
-   * root), so a writer that catches it skips that file. */
+   * run directory, so a writer that catches it skips that file. */
   readonly resolvePath: (recordedPath: string) => string;
   /** Whether the run directory is one of this project's runs. */
   readonly ownRun: boolean;
@@ -126,12 +127,12 @@ function realTarget(target: string): string {
 }
 
 /** The resolver a loaded run hands its writers. Exported for its tests. */
-export function containedResolver(runId: string, runDir: string, rootDir: string, ownRun: boolean): (recordedPath: string) => string {
-  const allowed = [realTarget(runDir), ...(ownRun ? [realTarget(rootDir)] : [])];
+export function containedResolver(runId: string, runDir: string, rootDir: string): (recordedPath: string) => string {
+  const allowed = realTarget(runDir);
   return (recordedPath) => {
     const resolved = resolveRecordedPath(recordedPath, runId, runDir, rootDir);
-    if (allowed.some((root) => isWithin(root, realTarget(resolved)))) return resolved;
-    throw new Error(`${recordedPath} resolves outside the ${ownRun ? "project" : "run directory"}, so it is not read`);
+    if (isWithin(allowed, realTarget(resolved))) return resolved;
+    throw new Error(`${recordedPath} resolves outside the run directory, so it is not read`);
   };
 }
 
@@ -159,8 +160,7 @@ export function loadRunDocument(
 
 /** Whether `runDir` is the directory this project's own state directory
  * holds for run `runId`: only then does a render note its files in the
- * run's exports manifest, and only then may a recorded path resolve into
- * the project root. `stateDir` is `null` when the config does not load. */
+ * run's exports manifest. `stateDir` is `null` when the config does not load. */
 export function isOwnRun(runDir: string, rootDir: string, stateDir: string | null, runId: string): boolean {
   return stateDir !== null && path.resolve(runDir) === path.resolve(rootDir, runRelativeDir(stateDir, runId));
 }
@@ -184,7 +184,7 @@ export function loadRun(runDir: string, rootDir: string, stateDir: string | null
   }
   const sources = read.sources;
   const ownRun = isOwnRun(runDir, rootDir, stateDir, document.run_id);
-  const resolvePath = containedResolver(document.run_id, runDir, rootDir, ownRun);
+  const resolvePath = containedResolver(document.run_id, runDir, rootDir);
   const problems: string[] = [];
   const features: LoadedFeature[] = [];
   const pickles = new Map<string, { feature: LoadedFeature; pickle: Pickle }>();
@@ -214,7 +214,7 @@ export function loadRun(runDir: string, rootDir: string, stateDir: string | null
       if (step.step_record_id === null || step.record === null || stepRecords.has(step.step_record_id)) continue;
       let stepRecord: StepRecord | null = null;
       try {
-        stepRecord = readStepRecord(containedResolver(document.run_id, runDir, runDir, false)(step.record));
+        stepRecord = readStepRecord(containedResolver(document.run_id, runDir, runDir)(step.record));
         if (stepRecord === null) problems.push(`${step.record}/record.json of ${scenario.scenario_record_id} could not be read`);
       } catch (error) {
         problems.push(`${scenario.scenario_record_id}: ${error instanceof Error ? error.message : String(error)}`);
