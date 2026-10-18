@@ -64,6 +64,17 @@ just until 0.1.
   opt-in and pointed at `--env` in Setup details. Both now say `init`
   takes one flag, `--allure`, and writes the env lines every time, as
   `nuka init --help` and `llms.txt` already did.
+- **`from-order-violation`'s `do:` names a fix for the scenario at hand, and no longer says to remove the `from` entry.**
+  A scenario often names its producer on a line written before that
+  line's step exists, and the `do:` then said to remove the `from` entry,
+  which breaks every scenario that already chains through it. The `do:`
+  is now built for each finding: it names the step to run earlier (or the
+  candidates, one of which must run), and when an earlier line has no
+  step yet it names that line and says how to make it the producer (give
+  its step the key in `returns`, then list it as another
+  `[step, "key"]` candidate in `from`). When two candidates ran earlier,
+  it says to keep one. The finding still fires: the scenario fails
+  as written until one of those changes is made.
 - **`undefined-step-check-suppressed` names the findings that held the undefined lines back.**
   When the only step files that did not import lacked Playwright, the
   warning's `do:` told the reader to correct a `step-file-import-failed`

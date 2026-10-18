@@ -10,7 +10,7 @@ import type { FeatureFile } from "../feature/load-features.js";
 import { attachmentTypeMismatch } from "./attachment-type.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { declaresDoneCallback, doneCallbackMessage, passedArgCountForStep } from "./done-callback.js";
-import { checkFromOrder } from "./from-order.js";
+import { checkFromOrder, fromOrderDo } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
 
@@ -412,6 +412,7 @@ export function checkFeatures(
           file: feature.relativePath,
           line: pickle.steps[issue.stepIndex]?.line,
           step: issue.stepName,
+          do: fromOrderDo(issue, pickle.steps),
         });
       }
 

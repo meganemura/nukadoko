@@ -430,7 +430,7 @@ catches it before either step executes:
 
 ```
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
-  do: Put a line that runs the producer step earlier in the scenario, or remove the from entry for the key.
+  do: Put a line that runs step "create-project" earlier in the scenario.
 ```
 
 These two cases are only examples. `nuka check --codes` answers "what can

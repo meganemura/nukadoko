@@ -75,6 +75,57 @@ export interface FromOrderIssue {
   readonly stepIndex: number;
   readonly stepName: string;
   readonly message: string;
+  readonly key: string;
+  /** "missing": no candidate ran earlier; `candidates` is every named one.
+   * "ambiguous": two or more ran earlier; `candidates` is those. */
+  readonly kind: "missing" | "ambiguous";
+  readonly candidates: readonly string[];
+  /** Indexes of earlier lines no step matches. Such a line is often the
+   * producer the author meant, written before its step, and nothing can
+   * tell from here whether it is, so the do line names it as a condition. */
+  readonly undefinedBefore: readonly number[];
+}
+
+export interface FromOrderLine {
+  readonly line: number | undefined;
+  readonly text: string;
+}
+
+function quotedNames(names: readonly string[]): string {
+  return names.map((name) => `"${name}"`).join(", ");
+}
+
+/** The do line for one issue. Each sentence either names a change that
+ * resolves the issue as stated, or is conditional on a fact only the author
+ * knows (which earlier line is meant to produce the key). Removing the from
+ * entry is not offered: the key stays required, and another scenario may
+ * depend on the producer it names. */
+export function fromOrderDo(issue: FromOrderIssue, steps: readonly FromOrderLine[]): string {
+  const { key, stepName, candidates } = issue;
+  if (issue.kind === "ambiguous") {
+    return `Remove or move lines so that exactly one of steps ${quotedNames(candidates)} runs before this line.`;
+  }
+  const put =
+    candidates.length === 1
+      ? `Put a line that runs step "${candidates[0]}" earlier in the scenario`
+      : `Put a line that runs exactly one of steps ${quotedNames(candidates)} earlier in the scenario`;
+  const another = `list that step as another [step, "${key}"] candidate in from.${key} of step "${stepName}"`;
+  if (issue.stepIndex === 0) {
+    return `${put}.`;
+  }
+  if (issue.undefinedBefore.length === 0) {
+    return `${put}. Or, if a step that an earlier line runs returns ${key}, ${another}.`;
+  }
+  const lines = issue.undefinedBefore.map((index) => {
+    const step = steps[index];
+    const at = step?.line === undefined ? "" : `line ${step.line} `;
+    return `${at}"${step?.text ?? ""}"`;
+  });
+  const which =
+    lines.length === 1
+      ? `${lines[0]}, which no step matches yet,`
+      : `one of ${lines.join(", ")}, which no step matches yet,`;
+  return `${put}. Or, if ${which} should produce ${key}: give its step ${key} in returns, and ${another}.`;
 }
 
 /** One candidate's own order status against the consuming line — computed
@@ -263,6 +314,10 @@ export function checkFromOrder(
           stepIndex,
           stepName,
           message: fromOrderAmbiguousMessage(stepName, key, names),
+          key,
+          kind: "ambiguous",
+          candidates: names,
+          undefinedBefore: [],
         });
         continue;
       }
@@ -274,6 +329,12 @@ export function checkFromOrder(
         stepIndex,
         stepName,
         message: fromOrderMissingMessage(stepName, key, named),
+        key,
+        kind: "missing",
+        candidates: named.map((candidate) => candidate.name),
+        undefinedBefore: matches
+          .slice(0, stepIndex)
+          .flatMap((earlier, index) => (earlier.stepNames.length === 0 ? [index] : [])),
       });
     }
   });

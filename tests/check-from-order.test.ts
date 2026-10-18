@@ -1,6 +1,11 @@
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { fromOrderDo, type FromOrderIssue as CheckedIssue } from "../src/check/from-order.js";
+import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check`'s scenario-order check (docs/spec.md
 // "Chaining steps"' "Declaring `from` buys a
@@ -27,6 +32,7 @@ interface FromOrderIssue {
   readonly file?: string;
   readonly line?: number;
   readonly step?: string;
+  readonly do?: string;
 }
 
 describe("nuka check: from's scenario-order check", () => {
@@ -93,8 +99,7 @@ describe("nuka check: from's scenario-order check", () => {
   });
 
   it("errors on a step whose from names itself at each line no earlier line binds it", async () => {
-    const FROM_ORDER_DO =
-      "Put a line that runs the producer step earlier in the scenario, or remove the from entry for the key.";
+    const FROM_ORDER_DO = 'Put a line that runs step "next-page-read" earlier in the scenario.';
     const { exitCode, report } = await checkReport(fixture("from-self-project"));
     expect(exitCode).toBe(1);
     expect(report.warnings).toEqual([]);
@@ -105,4 +110,79 @@ describe("nuka check: from's scenario-order check", () => {
       { code: "from-order-violation", message, file: "features/pages.feature", line: 7, step: "next-page-read", do: FROM_ORDER_DO },
     ]);
   });
+});
+
+describe("nuka check: from-order-violation's do line", () => {
+  const feature = [
+    "Feature: a producer written before its step",
+    "",
+    "  Scenario: the earlier line has no step yet",
+    "    Given a project id comes from an import",
+    "    Then the project is archived",
+    "",
+    "  Scenario: the earlier line runs a step that is not the producer",
+    '    Given a plain args failure on count "1"',
+    "    Then the project is archived",
+    "",
+  ].join("\n");
+
+  async function doLines(): Promise<Record<number, string | undefined>> {
+    const rootDir = await copyFixtureToTempDir("from-project");
+    try {
+      await writeFile(path.join(rootDir, "features", "producer.feature"), feature);
+      const { report } = await checkReport(rootDir);
+      const issues = (report.errors as FromOrderIssue[]).filter(
+        (issue) => issue.code === "from-order-violation" && issue.file === "features/producer.feature",
+      );
+      return Object.fromEntries(issues.map((issue) => [issue.line, issue.do]));
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  }
+
+  it("names an earlier line no step matches as a possible producer, and how to add it as a candidate", async () => {
+    expect(await doLines()).toEqual({
+      5: 'Put a line that runs step "create-project" earlier in the scenario. Or, if line 4 "a project id comes from an import", which no step matches yet, should produce projectId: give its step projectId in returns, and list that step as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
+      9: 'Put a line that runs step "create-project" earlier in the scenario. Or, if a step that an earlier line runs returns projectId, list that step as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
+    });
+  });
+
+  it("never offers removing the from entry", async () => {
+    const { report } = await checkReport(fixture("from-project"));
+    const dos = (report.errors as FromOrderIssue[])
+      .filter((issue) => issue.code === "from-order-violation")
+      .map((issue) => issue.do);
+    expect(dos).toEqual([
+      'Put a line that runs step "create-project" earlier in the scenario.',
+      'Put a line that runs step "create-project" earlier in the scenario.',
+    ]);
+  });
+});
+
+describe("fromOrderDo", () => {
+  const lineText = gs.text({ minSize: 1, maxSize: 10, alphabet: "abc xyz" });
+
+  it("names exactly the earlier lines no step matches, each by its line number", () =>
+    hegel.test((tc) => {
+      const texts = tc.draw(gs.arrays(lineText, { minSize: 1, maxSize: 6 }));
+      const steps = [...texts.map((text, index) => ({ line: 100 + index, text })), { line: 200, text: "consumer" }];
+      const flags = tc.draw(gs.arrays(gs.booleans(), { minSize: texts.length, maxSize: texts.length }));
+      const undefinedBefore = flags.flatMap((flag, index) => (flag ? [index] : []));
+      const issue: CheckedIssue = {
+        stepIndex: texts.length,
+        stepName: "consume",
+        message: "",
+        key: "id",
+        kind: "missing",
+        candidates: ["produce"],
+        undefinedBefore,
+      };
+      const text = fromOrderDo(issue, steps);
+      expect(text.startsWith('Put a line that runs step "produce" earlier in the scenario.')).toBe(true);
+      steps.slice(0, texts.length).forEach((step, index) => {
+        expect(text.includes(`line ${step.line} `)).toBe(undefinedBefore.includes(index));
+      });
+      expect(text.includes("which no step matches yet")).toBe(undefinedBefore.length > 0);
+      expect(text).toContain('another [step, "id"] candidate in from.id of step "consume"');
+    }));
 });

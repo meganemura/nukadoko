@@ -417,7 +417,7 @@ step B が `from` を宣言して step A の返り値を読むとして、この
 
 ```
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
-  do: Put a line that runs the producer step earlier in the scenario, or remove the from entry for the key.
+  do: Put a line that runs step "create-project" earlier in the scenario.
 ```
 
 この 2 つのケースは一例にすぎません。

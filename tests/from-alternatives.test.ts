@@ -93,6 +93,7 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
     readonly file?: string;
     readonly line?: number;
     readonly step?: string;
+    readonly do?: string;
   }
 
   it("errors when both candidates are bound before a required-key consumer", async () => {
@@ -102,6 +103,9 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
     expect(issues[0]!.message).toContain("archive-project");
     expect(issues[0]!.message).toContain("create-project");
     expect(issues[0]!.message).toContain("import-project");
+    expect(issues[0]!.do).toBe(
+      'Remove or move lines so that exactly one of steps "create-project", "import-project" runs before this line.',
+    );
   });
 
   it("errors the same way when both candidates are bound before an optional-key consumer", async () => {

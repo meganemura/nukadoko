@@ -149,7 +149,7 @@ const CHECK_CODES = {
     description:
       "A step declares from for a key, and the step or steps it names have not run earlier in the same scenario, or (when the key names more than one candidate) more than one candidate has.",
     severity: "error",
-    do: "Put a line that runs the producer step earlier in the scenario, or remove the from entry for the key.",
+    do: "Put a line that runs one producer step earlier in the scenario, or list the step an earlier line runs as another candidate for the key in from. When more than one candidate ran earlier, keep only one.",
   },
   "from-structural-violation": {
     description: "A step's from names a value that is not a registered step, or is otherwise structurally malformed.",
