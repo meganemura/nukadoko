@@ -60,7 +60,9 @@ just until 0.1.
   is a `report-incomplete` finding and is never read. The files the
   report opens itself (run.json, `sources.json`, each `record.json`, and
   the `exports` manifest) are held to the same rule by their real path,
-  so a symlink among them is refused rather than followed.
+  so a symlink among them is refused rather than followed. A run.json
+  whose `run_id` is not the one path segment `nuka run` generates is
+  refused with `run-invalid`.
   - `nuka report [<run dir>] --format markdown|allure|messages [--out
     <path>] [--json]` renders one run: the newest one when no run
     directory is given. `markdown` is the run summary, on stdout or to

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { formatValidationIssues } from "../issues/format-issues.js";
 import type { RunDocument } from "../record/run-result.js";
+import { isGeneratedId } from "../record/record-id.js";
 import { ENVELOPE_SCHEMA_VERSION } from "../record/schema-version.js";
 
 // Responsibility: the check a run.json passes before `nuka report` reads
@@ -41,7 +42,10 @@ const scenario = z.looseObject({
 const document = z.looseObject({
   command: z.literal("run"),
   nukadoko: z.string(),
-  run_id: z.string(),
+  // A run id is joined into paths (the run's own records, its exports
+  // manifest, and whether it is this project's run), so it has to be the
+  // one path segment nuka run generates.
+  run_id: z.string().refine((value) => isGeneratedId("run", value), { message: "expected a run id nuka run generates, run-YYYYMMDD-HHMMSS-xxxx" }),
   verdict: z.enum(["passed", "failed"]),
   started_at: z.string(),
   finished_at: z.string(),

@@ -33,6 +33,14 @@ export function generateId(prefix: string, now: Date = new Date()): string {
   return `${prefix}-${date}-${time}-${randomSuffix(4)}`;
 }
 
+/** Whether `value` has the shape `generateId(prefix)` gives: one path
+ * segment, never `..` or a separator. An id read back from disk is joined
+ * into a path, so a value of any other shape is refused rather than
+ * followed. Pure. */
+export function isGeneratedId(prefix: string, value: string): boolean {
+  return new RegExp(`^${prefix}-[0-9]{8}-[0-9]{6}-[a-z0-9]{4}$`).test(value);
+}
+
 export function generateStepRecordId(now: Date = new Date()): string {
   return generateId("step", now);
 }

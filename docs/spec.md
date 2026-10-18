@@ -3417,6 +3417,7 @@ A run directory copied off a CI machine therefore renders the same results as th
 Such a directory is untrusted input, so every path a record names is resolved, symlinks included, and read only while it stays inside the run directory.
 A run of this project's own gets no wider reach: a directory copied into the state directory counts as one, and every file `nuka run` records is inside its run directory.
 The files the report opens itself (run.json, `sources.json`, each step's `record.json`, and the run's `exports` manifest) are held to the same rule by their real path, so a symlink among them is not followed out.
+A run.json whose `run_id` is not the one path segment `nuka run` generates (`run-YYYYMMDD-HHMMSS-xxxx`) is refused with `run-invalid`, since the report joins it into paths.
 A path that leaves is not read: it is a `report-incomplete` finding, and the file it names never reaches the results or the messages stream.
 The results use the Allure 2 file format, which Allure 2 and Allure 3 can read.
 nukadoko does not render HTML.

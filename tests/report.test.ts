@@ -271,6 +271,16 @@ describe("nuka report", () => {
         "holds a sources.json that resolves outside the run directory, so the scenarios of run <run> cannot be parsed",
         "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
       ],
+      [
+        "a run.json whose run_id is not one path segment",
+        "run-invalid",
+        (copy) => {
+          const document = JSON.parse(readFileSync(path.join(copy, "run.json"), "utf8")) as Record<string, unknown>;
+          writeFileSync(path.join(copy, "run.json"), JSON.stringify({ ...document, run_id: "../../x" }));
+        },
+        "run.json does not have the fields nuka report reads: run_id: expected a run id nuka run generates, run-YYYYMMDD-HHMMSS-xxxx",
+        "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+      ],
     ];
 
     for (const [name, code, edit, ending, fix] of EDITS) {

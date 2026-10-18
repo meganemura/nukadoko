@@ -13,7 +13,7 @@ const VALID = {
   command: "run",
   verdict: "passed",
   findings: [],
-  run_id: "run-1",
+  run_id: "run-20261018-000000-abcd",
   started_at: "2026-10-18T00:00:00.000Z",
   finished_at: "2026-10-18T00:00:01.000Z",
   commit: null,
