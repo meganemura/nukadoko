@@ -12,7 +12,6 @@ import {
   commandTookTheName,
   DEFAULT_EXPLORE_LENGTH,
   DEFAULT_EXPLORE_RUNS,
-  describeArgsCommand,
   VALID_STEP_NAME,
 } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -507,32 +506,9 @@ export async function runCli(
           describe:
             "step record id whose result fills this step's `from` keys (repeatable; --args still wins for a key it also sets)",
         })
-        // `--args` lost its `demandOption`: once `--use` is given,
-        // "arguments come from the chain" is already stated, so making the
-        // caller also write `--args '{}'` for a step every key of which
-        // `from` fills is pure ritual. This `.check()`
-        // is what still refuses the case that matters — neither flag given
-        // — kept in the same yargs layer `demandOption` used to occupy
-        // (not moved into do.ts) so a bad invocation still fails before any
-        // step-record-writing setup runs, exactly as it did before.
-        //
-        // `--args` is deliberately not made unconditionally optional: doing
-        // so would let a typo'd `nuka do <step>` (missing `--args`
-        // entirely, `--use` also forgotten) parse successfully and only
-        // fail later at args-schema validation, deep inside the execution
-        // phase, instead of failing fast here. `--use` is the one signal
-        // that specifically means "arguments come from the chain instead",
-        // so only its presence earns the exemption.
-        .check((checkArgs) => {
-          const useValues = checkArgs.use as string[] | undefined;
-          if (checkArgs.args === undefined && (useValues === undefined || useValues.length === 0)) {
-            throw new RefusalError(
-              "--args is required unless --use supplies this step's arguments",
-              describeArgsCommand(String(checkArgs.name), helpFor("do")),
-            );
-          }
-          return true;
-        })
+        // `--args` has no `demandOption`: `--use` can supply every key, and
+        // runDo refuses a missing `--args` after it knows the step exists,
+        // so its do line can name `nuka describe <name>` for a real step.
         .check(rejectRepeatedFlags(["args", "session", "env"])) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       if (argsFailed) return;
@@ -540,11 +516,7 @@ export async function runCli(
       exitCode = await runDo({
         rootDir,
         name: args.name,
-        // `--args`'s own `.check()` above already refused this when both
-        // it and `--use` are absent, so `??` here only ever fires when
-        // `--use` supplies this step's arguments — `"{}"` gives do.ts's
-        // `from` injection (execution phase) an object to fill.
-        argsJson: args.args ?? "{}",
+        argsJson: args.args ?? null,
         session: args.session ?? null,
         env: args.env ?? null,
         use: args.use ?? [],

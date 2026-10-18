@@ -28,10 +28,24 @@ describe("nuka do without usable --args names the command that prints the args s
     });
   });
 
-  it("two parse failures keep the command's help", async () => {
+  it("an unknown flag keeps the command's help", async () => {
     expect(await doRefusal(["do", "create-project", "--bogus"])).toEqual({
       exitCode: 2,
-      stderr: "Unknown argument: bogus\n--args is required unless --use supplies this step's arguments\ndo: nuka do --help\n",
+      stderr: "Unknown argument: bogus\ndo: nuka do --help\n",
+    });
+  });
+
+  it("--args left out for a name no step has is refused as an unknown step", async () => {
+    expect(await doRefusal(["do", "no-such-step"])).toEqual({
+      exitCode: 2,
+      stderr: "Unknown step: no-such-step\ndo: nuka steps\n",
+    });
+  });
+
+  it("--args that is not JSON for a name no step has is refused as an unknown step", async () => {
+    expect(await doRefusal(["do", "no-such-step", "--args", "name=x"])).toEqual({
+      exitCode: 2,
+      stderr: "Unknown step: no-such-step\ndo: nuka steps\n",
     });
   });
 

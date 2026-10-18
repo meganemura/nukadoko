@@ -93,9 +93,11 @@ just until 0.1.
 - **`nuka do <step>` without `--args`, or with `--args` that is not JSON, names `nuka describe <step>` as its `do:` line.**
   Both refusals ended with `do: nuka do --help`, which says only that
   `--args` takes JSON. `nuka describe <step>` prints the args schema the
-  caller has to fill. A step name that would need shell quoting keeps
-  `nuka do --help`, and a parse that fails for two reasons at once (an
-  unknown flag as well) keeps it too.
+  caller has to fill. Both refusals now come after the step lookup, so a
+  name no step has is refused as `Unknown step` with `do: nuka steps`
+  instead of naming a `nuka describe` that refuses again. A step name that
+  would need shell quoting keeps `nuka do --help`, and so does an unknown
+  flag.
 - **`nuka explore` and a removed `nuka tend --fail-on` code quote the corrected command as their `do:` line.**
   Both refusals said what had changed and then ended with `do: ... --help`.
   `nuka explore <args>` now ends with `do: nuka experimental explore <args>`,

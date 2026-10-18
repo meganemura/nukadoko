@@ -116,7 +116,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 export interface RunDoOptions {
   rootDir: string;
   name: string;
-  argsJson: string;
+  /** `--args` as given, or `null` when it was left out. */
+  argsJson: string | null;
   /** Carries login state across `do` calls as Playwright storageState;
    * `null` means a clean start — no session file is read or written
    * (docs/spec.md "Sessions, environments, secrets"). */
@@ -145,17 +146,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   const help = helpFor("do");
 
   // --- Setup phase: any failure here writes nothing. ---
-  let parsedArgs: unknown;
-  try {
-    parsedArgs = JSON.parse(argsJson);
-  } catch (error) {
-    return refuse(
-      sinks,
-      `Invalid JSON for --args: ${error instanceof Error ? error.message : String(error)}`,
-      describeArgsCommand(name, help),
-    );
-  }
-
   let config;
   try {
     config = await loadConfig(rootDir);
@@ -245,6 +235,28 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // This is a setup failure, not an execution one: no step record is written.
     if (entry.kind === "compat") {
       return refuse(sinks, `Step "${name}" is a compat step and has no typed contract, so it cannot be run individually; promote it to defineStep to run it via \`nuka do\` (docs/spec.md "Compat steps (the migration door)")`, help);
+    }
+
+    // After the lookup, so the do line's `nuka describe <name>` names a
+    // step that exists: an unknown name is refused as unknown first.
+    if (argsJson === null && use.length === 0) {
+      return refuse(
+        sinks,
+        "--args is required unless --use supplies this step's arguments",
+        describeArgsCommand(name, help),
+      );
+    }
+    let parsedArgs: unknown;
+    try {
+      // `{}` when `--use` supplies the arguments: `from` injection below
+      // fills that object.
+      parsedArgs = JSON.parse(argsJson ?? "{}");
+    } catch (error) {
+      return refuse(
+        sinks,
+        `Invalid JSON for --args: ${error instanceof Error ? error.message : String(error)}`,
+        describeArgsCommand(name, help),
+      );
     }
 
     // Built once, from this same vocabulary — the "Step object -> the name
