@@ -142,6 +142,12 @@ nothing.
    failed list, `<passed> of <n> passed`. Read the failing executions'
    records and screenshots (`references/diagnosing.md`) rather than the
    count alone: the count says how often, never why.
+4. Once the feature is green, run `nuka run <feature> --probe`. Each
+   passed read-only Then runs again with one capture changed; a
+   `then-passed-with-changed-capture` note says that Then passed anyway,
+   so it may not compare that value. Fix the step's comparison, not the
+   feature. A note on "at least {n}" with n+1 is the sentence being true,
+   and stays. The note never changes the exit code.
 
 ## The pull request
 

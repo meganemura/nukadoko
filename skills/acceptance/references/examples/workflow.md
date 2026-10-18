@@ -130,6 +130,9 @@ scenario 3/5  features/signup.feature:20  the same email twice
   step 3/3  passed  0.0s  the registration is refused because "email already registered"
 ...
 5 scenarios: 5 passed, 0 failed  (0s)
+$ npx nuka run --probe
+...
+5 scenarios: 5 passed, 0 failed  (0s)
 ```
 
 In "the same email twice", `register` runs twice, and the Then reads the

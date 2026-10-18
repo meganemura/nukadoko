@@ -1741,7 +1741,7 @@ scenario は見出しか `---` で分け、narration は引用かフェンスに
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--json] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n>] [--repeat <n>] [--probe] [--quiet] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1835,6 +1835,25 @@ run サマリは各実行をそれぞれ 1 行として並べます。
 `--concurrency` の下では、各 worker が自分のファイルを繰り返すので、配る単位はファイルのままです。
 1 つのファイルを名指す target は変わらず 1 で走ります。
 1 つの scenario を複数の worker で同時に走らせることは、このフラグの仕事ではありません。
+
+`--probe` は、通った Then が失敗しえたかどうかを計測します。
+scenario が通ったあと、その After hook より前に、Then の位置(Gherkin の `Then` と、その後の `And` や `But`)で走り、`mutates: false` を宣言し、pattern の capture を 1 つ以上結び付けた step を、もう一度単独で走らせます。
+同じ scenario の ctx と fixture の中で、走ったときの args のまま、capture を 1 つだけ変えます。
+文字列には接尾辞 `-probe` を付け、数には 1 を足し、真偽値は反転します。
+ほかの型の capture と、1 を足しても変わらない数は probe しません。
+`mutates` を宣言しない compat の step も probe しません。
+capture ごとに 1 回ずつ再実行し、`from` が埋めた値は変えません。
+When は再実行せず、読み取り専用と宣言した step だけが走るので、probe は何も書きません。
+それでも通った Then は、その Then の行の `then-passed-with-changed-capture` という note になります。
+note は step、キー、両方の値を名指し、もう一度計測する `nuka run <file>:<line> --probe` を添えます。
+これは計測であって断定ではありません。
+「at least {n}」のような文は n+1 で正しく通りえるので、note は scenario の status も終了コードも変えません。
+probe は step ではありません。
+step record を書かず、`steps` にエントリを持たず、trace のチャンクも開きません。
+scenario の `run.json` のエントリは再実行ごとに 1 つずつ `probes` を持つので、読み手は probe が捕まえた Then と、probe しなかった Then を見分けられます。
+probe は、nukadoko がこれまで問えなかった 1 つの問いに答えます。
+step の `run` は書かれたとおりに信頼されており、実装したエージェントが自分のために書いた step こそ、何も確かめていない見込みが最も高いのです。
+`--concurrency` の下では各 worker が自分の scenario を probe し、`--repeat` の下ではすべての実行が probe します。
 
 worker はプロセスであるため、`"process"` スコープの fixture は worker ごとに 1 回構築され、compat の `BeforeAll`/`AfterAll` も worker ごとに 1 回実行されます。
 「Fixtures」節はすでに `process` スコープを、1 つのアドレス空間ごとに 1 回と定義しています。
@@ -2004,8 +2023,12 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `scenario-failed` の所見の `do:` 行が出すのと同じコマンドです。
   自分の evidence(最終スクリーンショット、hook の trace や添付)を書いた scenario は、run の `scenarios/` の下のそのディレクトリを `evidence` に持ちます。
   何も書かなかった scenario は `evidence` を持たず、その空のディレクトリは run の終わりに消されます。
+- `--probe` のとき、probe する Then があった scenario は `probes` を持ちます。
+  再実行ごとの `line`、`step`、`key`、`recorded` の値、`changed` の値、その `status` です。
+  `passed` は変えた値でも通った Then で、`findings` の `then-passed-with-changed-capture` の note です。
+  probe には step record がありません。
 - `findings` は、run が出したすべての所見を持ちます。
-  失敗した各 scenario と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
+  失敗した各 scenario と、各 probe の note と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
 - `verdict` は終了コードの断定です。
   どの scenario も持たない BeforeAll や AfterAll の失敗も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
 
@@ -3627,6 +3650,10 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
+                              --probe re-runs each passed read-only Then with
+                              one capture changed and notes one that still
+                              passes (then-passed-with-changed-capture); the
+                              exit code is unchanged.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set; --summary

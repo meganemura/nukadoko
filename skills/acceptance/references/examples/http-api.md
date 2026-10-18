@@ -226,6 +226,9 @@ scenario 5/7  features/items.feature:51  a bad request body: {} answers 422
 scenario 6/7  features/items.feature:52  a bad request body: {"name":""} answers 422
 ...
 7 scenarios: 7 passed, 0 failed  (1s)
+$ npx nuka run --probe
+...
+7 scenarios: 7 passed, 0 failed  (1s)
 ```
 
 `nuka tend` reported one note, and it was not acted on:

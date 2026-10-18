@@ -2036,7 +2036,7 @@ blockquote or a fence.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n>] [--repeat <n>] [--quiet] [--records] [--json] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n>] [--repeat <n>] [--probe] [--quiet] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2159,6 +2159,31 @@ once however many times it ran. Under `--concurrency`, each worker repeats
 its own files, so the unit of distribution stays the file: a target naming
 one file still runs at 1, and running one scenario on several workers at
 once is not what this flag does.
+
+`--probe` measures whether a passed Then could have failed. After a
+scenario passes, and before its After hooks, each step that ran in a Then
+position (the Gherkin `Then`, and an `And` or `But` after it), declared
+`mutates: false`, and bound at least one capture from its pattern runs
+again, alone, in the same scenario's ctx and fixtures, with the args it ran
+with and one capture changed: a string gets the suffix `-probe`, a number
++1, and a boolean is flipped. A capture of another type, or a number +1
+does not change, is not probed, and neither is a compat step, which
+declares no `mutates`. Each capture gets its own re-run, and a value
+`from` filled is never changed. The When is not re-run, and only a
+step declared read-only runs, so the probe writes nothing. A Then that
+still passes is a `then-passed-with-changed-capture` note at the Then's
+line, naming the step, the key, and both values, with the `nuka run
+<file>:<line> --probe` that measures it again. It is a measurement, not a
+verdict: a sentence like "at least {n}" can rightly pass with n+1, so the
+note never changes a scenario's status or the exit code. A probe is not a
+step: it writes no step record, has no entry in `steps`, and opens no
+trace chunk. The scenario's `run.json` entry gets `probes`, one per
+re-run, so a reader tells a Then the probe caught from one it never
+probed. The probe answers one question nukadoko could not ask before: a
+step's `run` is trusted as written, and the step the implementing agent
+wrote for itself is the one most likely to check nothing. Under
+`--concurrency` each worker probes its own scenarios, and under `--repeat`
+every execution probes.
 
 A `"process"`-scope fixture is built once per worker, and a compat
 `BeforeAll`/`AfterAll` runs once per worker, because a worker is a process.
@@ -2355,8 +2380,13 @@ to act on the run without opening another file:
   has `evidence`, its directory under the run's `scenarios/`. A scenario
   that wrote none has no `evidence`, and its empty directory is removed
   when the run ends.
-- `findings` holds every finding the run raised: each failed scenario, and
-  each warning (a file that was not written, a hook or a fixture teardown
+- Under `--probe`, a scenario that had a Then to probe has `probes`: each
+  re-run's `line`, `step`, `key`, the `recorded` value, the `changed` one,
+  and its `status`. `passed` is a Then that passed with the changed value
+  too, and is the `then-passed-with-changed-capture` note in `findings`.
+  A probe has no step record.
+- `findings` holds every finding the run raised: each failed scenario, each
+  probe note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
   in text.
 - `verdict` is the exit code's: it also counts a BeforeAll or AfterAll
@@ -4241,6 +4271,10 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
+                              --probe re-runs each passed read-only Then with
+                              one capture changed and notes one that still
+                              passes (then-passed-with-changed-capture); the
+                              exit code is unchanged.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set; --summary

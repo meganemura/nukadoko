@@ -116,6 +116,8 @@ export interface RunConcurrentOptions {
   /** `--repeat`; each worker runs its own files this many times
    * (src/cli/run.ts's `RunRunOptions.repeat`). */
   readonly repeat: number;
+  /** `--probe` (src/cli/run.ts's `RunRunOptions.probe`). */
+  readonly probe: boolean;
   readonly selected: SelectedScenarios;
   readonly flatPickles: readonly { readonly feature: SelectedFeature; readonly pickle: Pickle }[];
   /** `null`: the emitter is off (src/config/emitter-targets.ts). */
@@ -174,6 +176,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     quiet,
     concurrency,
     repeat,
+    probe,
     selected,
     flatPickles,
     allureResultsDirRel,
@@ -357,7 +360,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       if (interruptedBy !== null) {
         return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
       }
-      const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath, repeat });
+      const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath, repeat, probe });
       liveWorkers.add(child);
 
       const stdoutBuffer = createLineBuffer((line) => {

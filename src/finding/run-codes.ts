@@ -4,7 +4,7 @@
 // raises them, and a check code it reuses (a pattern that did not build)
 // stays in src/check/codes.ts.
 
-export type RunSeverity = "failed" | "warning";
+export type RunSeverity = "failed" | "warning" | "note";
 
 export interface RunCodeInfo {
   readonly severity: RunSeverity;
@@ -67,6 +67,12 @@ const RUN_CODES = {
     severity: "warning",
     description: "The run finished, and a summary file could not be written.",
     fix: "Correct what the message names, such as the summary path's directory.",
+  },
+  "then-passed-with-changed-capture": {
+    severity: "note",
+    description:
+      "Under nuka run --probe, a read-only Then passed again with one of its captures changed, so it may not compare that value.",
+    fix: "Make the step compare its result with the capture the message names; a step whose sentence also allows the changed value, such as \"at least n\", can stay as it is.",
   },
   "trace-version-unknown": {
     severity: "warning",

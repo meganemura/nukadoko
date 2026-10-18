@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
-import type { ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
+import type { ProbeValue, ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
 import type { ErrorKind, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
@@ -86,6 +86,21 @@ export interface RunScenario {
   /** For a failed scenario: the command that runs it alone, in the same
    * environment. */
   readonly do?: string;
+  /** Under `--probe`: each Then re-run with one capture changed. Not a
+   * step: it has no step record. */
+  readonly probes?: readonly RunProbe[];
+}
+
+export interface RunProbe {
+  /** The Then's line in its feature file, or `null`. */
+  readonly line: number | null;
+  readonly step: string;
+  readonly key: string;
+  readonly recorded: ProbeValue;
+  readonly changed: ProbeValue;
+  /** `passed` when the Then passed with the changed value too: the
+   * `then-passed-with-changed-capture` note. */
+  readonly status: "passed" | "failed";
 }
 
 /** The fields `nuka run` puts beside the envelope's `findings`. */

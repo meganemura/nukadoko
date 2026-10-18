@@ -201,6 +201,9 @@ ok: no issues found
 $ npx nuka run
 ...
 4 scenarios: 4 passed, 0 failed  (2s)
+$ npx nuka run --probe
+...
+4 scenarios: 4 passed, 0 failed  (2s)
 $ npx nuka tend
 scanned: features
 bed: typed 6, compat 0, read-only 6

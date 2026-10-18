@@ -45,6 +45,7 @@ import {
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
+import { probeFindings } from "../run/probe.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir } from "../record/state-layout.js";
@@ -304,6 +305,10 @@ export interface RunRunOptions {
    * Under `--concurrency`, each worker repeats its own files; a target
    * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
   repeat: number;
+  /** `--probe`: after each scenario passes, re-run every read-only Then
+   * with one capture changed, and note each one that still passes
+   * (src/run/probe.ts). A note never changes the exit code. */
+  probe: boolean;
   /** `--summary <path>`: one more copy of the run summary, resolved against
    * `rootDir`, for a CI step that posts it as a pull request comment.
    * `null` without the flag; the copy in the run directory is written
@@ -695,7 +700,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // a warning: the exit code is the run's verdict either way. Returns the
     // root-relative path of the summary in the run directory, or `null`.
     const finishRun = async (verdict: "passed" | "failed", failedScenarios: readonly FailedScenario[]): Promise<{ summaryPath: string | null; retention: string | null }> => {
-      runFindings.push(...failedScenarioFindings(failedScenarios, rerunFlags));
+      runFindings.push(...failedScenarioFindings(failedScenarios, rerunFlags), ...probeFindings(runScenarios, rerunFlags));
       // The run's `scenarios/` goes too once no scenario left evidence in it.
       for (const dir of [...emptyEvidenceDirs, path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios)]) {
         try {
@@ -771,7 +776,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         failed: counts.total - counts.passed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      for (const finding of failedScenarioFindings(failedScenarios, rerunFlags)) progress.write(formatFinding(withHint(finding)));
+      for (const finding of [...failedScenarioFindings(failedScenarios, rerunFlags), ...probeFindings(runScenarios, rerunFlags)]) {
+        progress.write(formatFinding(withHint(finding)));
+      }
       writeRepeatTallies(progress, tallies);
       if (end.retention !== null) progress.write(`${end.retention}\n`);
     };
@@ -862,6 +869,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           config: runConfig,
           runId,
           repeat,
+          probe: options.probe,
           envArg: env,
           environment: resolvedEnv.name,
           targetVersion,
@@ -1151,6 +1159,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             fixtureGraph,
             fixtureProcessCache,
             processSignal,
+            probe: options.probe,
           });
 
           // One JSON line per completed scenario record, streamed as it

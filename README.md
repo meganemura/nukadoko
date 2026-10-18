@@ -1249,6 +1249,13 @@ invocation, for a failure that reproduces one time in several. Each
 execution is its own record under one run id, and a scenario that failed
 at least once is tallied after the summary, `<passed> of <n> passed`.
 
+`nuka run --probe` asks whether each passed Then could have failed. After a
+scenario passes, every read-only Then that captured a value runs again,
+alone, with one capture changed (a string suffixed, a number +1, a boolean
+flipped). A Then that still passes is a `then-passed-with-changed-capture`
+note in `run.json` and the run summary. It is a measurement, so the exit
+code stays the run's.
+
 ## What this does not do
 
 - **Step records are not unforgeable.** An agent with shell access can write
@@ -1260,7 +1267,10 @@ at least once is tallied after the summary, `<passed> of <n> passed`.
   truthfully does what its description claims rests on PR review. The tool
   guarantees the shape of inputs and outputs and the fact of execution. A
   typed contract makes an empty assertion easier to spot in review, but
-  nothing rejects one automatically.
+  nothing rejects one automatically. `nuka run --probe` measures one part
+  of it: a read-only Then that still passes with a capture changed is a
+  note, never a failure, and a Then the probe catches can still check the
+  wrong thing.
 - **`mutates` is trusted, not re-derived from what the network shows.**
   Write detection runs on HTTP method as a proxy for write semantics, not
   the semantics itself: purely client-side state and a server that mutates

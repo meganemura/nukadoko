@@ -85,6 +85,11 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     ...(wroteScenarioEvidence(record) ? { evidence: { ...record.evidence, dir: input.evidenceDir } } : {}),
     ...(record.teardown_errors === undefined ? {} : { teardown_errors: record.teardown_errors }),
     ...(record.status === "failed" ? { do: input.rerun } : {}),
+    ...(record.probes === undefined
+      ? {}
+      : {
+          probes: record.probes.map(({ step_index, ...probe }) => ({ line: input.stepLine(step_index), ...probe })),
+        }),
   };
 }
 

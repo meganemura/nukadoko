@@ -132,6 +132,10 @@ the same rule.
   case. Two other names that differ only by case do not share a path.
   Application-specific evidence is
   `skills/acceptance/references/evidence.md`.
+- **Don't read a quiet `nuka run --probe` as a verdict on compat Thens.**
+  The probe re-runs only typed steps declared `mutates: false`; a compat
+  step declares no `mutates` and is never probed. Promote a Then to a
+  typed step before its probe means anything.
 - A `.feature` file inside `node_modules`, or inside a directory whose
   name starts with `.`, is outside the walk `nuka check` and `nuka run`
   use. The skip reports nothing (`references/cucumber-js.md`).

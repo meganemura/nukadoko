@@ -249,4 +249,26 @@ export interface ScenarioRecord {
    * in the invocation, not attributable to any single one — is reported the
    * same way, on stderr, but never lands on any one `ScenarioRecord`. */
   readonly teardown_errors?: readonly { readonly fixture: string; readonly message: string }[];
+  /** `nuka run --probe`: one entry per Then re-run with one capture
+   * changed (src/run/probe.ts). Present only when the run probed and this
+   * scenario had a step to probe. A probe has no step record and no entry
+   * in `steps`, so it is never read as a step the scenario ran. */
+  readonly probes?: readonly ScenarioProbe[];
+}
+
+/** A capture value a probe can change. */
+export type ProbeValue = string | number | boolean;
+
+export interface ScenarioProbe {
+  /** The 0-based index into `steps` of the Then that was re-run. */
+  readonly step_index: number;
+  readonly step: string;
+  /** The args key the changed capture fills. */
+  readonly key: string;
+  /** The value the step ran with. */
+  readonly recorded: ProbeValue;
+  /** The value the probe ran it with. */
+  readonly changed: ProbeValue;
+  /** `passed` when the Then passed with the changed value too. */
+  readonly status: "passed" | "failed";
 }
