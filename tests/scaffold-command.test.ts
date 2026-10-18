@@ -287,7 +287,7 @@ describe("nuka scaffold --command", () => {
     expect(done.exitCode).not.toBe(0);
     expect(done.stdout + done.stderr).toContain(message);
 
-    const run = await cli(rootDir, ["run", "features/greet.feature"]);
+    const run = await cli(rootDir, ["run", "--records", "features/greet.feature"]);
     expect(run.exitCode).toBe(1);
     expect(run.stdout).toContain(message);
     // The Then step is never reached with an empty stdout.
@@ -319,7 +319,7 @@ describe("nuka scaffold --command", () => {
       ),
     );
 
-    const unimplemented = await cli(rootDir, ["run", "features/greet.feature"]);
+    const unimplemented = await cli(rootDir, ["run", "--records", "features/greet.feature"]);
     expect(unimplemented.exitCode).toBe(1);
 
     const runGreet = stepPath(rootDir, "run-greet");
@@ -338,11 +338,11 @@ describe("nuka scaffold --command", () => {
       path.join(rootDir, "features", "exit.feature"),
       ["Feature: exit", "  Scenario: exits three", '    When I run greet with "Ada"', "    Then it exits 3", ""].join("\n"),
     );
-    const exitRun = await cli(rootDir, ["run", "features/exit.feature"]);
+    const exitRun = await cli(rootDir, ["run", "--records", "features/exit.feature"]);
     expect(exitRun.exitCode).toBe(1);
     expect(exitRun.stderr).toContain("\n      code: expected 3, got 0\n");
 
-    const green = await cli(rootDir, ["run", "features/greet.feature"]);
+    const green = await cli(rootDir, ["run", "--records", "features/greet.feature"]);
     expect(green.stderr).toContain("1 scenario: 1 passed, 0 failed");
     expect(green.exitCode).toBe(0);
   });
@@ -376,7 +376,7 @@ describe("nuka scaffold --command", () => {
       ),
     );
 
-    const run = await cli(rootDir, ["run", "features/greet.feature"]);
+    const run = await cli(rootDir, ["run", "--records", "features/greet.feature"]);
     expect(run.exitCode).toBe(1);
     const failed = run.stderr.slice(run.stderr.indexOf("step 2/2"));
     expect(failed).toMatch(
@@ -411,7 +411,7 @@ describe("nuka scaffold --command", () => {
       ["Feature: exit", "  Scenario: exits zero", '    When I run greet with "Ada"', "    Then it exits 0", ""].join("\n"),
     );
 
-    const run = await cli(rootDir, ["run", "features/exit.feature"]);
+    const run = await cli(rootDir, ["run", "--records", "features/exit.feature"]);
     expect(run.exitCode).toBe(1);
     expect(run.stderr).toContain(
       "\n      code: expected 0, got 1\n      used    run-greet  exit 1  Error: Cannot find module '../dist/cli.js'\n",
@@ -550,7 +550,7 @@ describe("nuka scaffold --command --cwd", () => {
 
     const check = await cli(rootDir, ["check"]);
     expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
-    const run = await cli(rootDir, ["run", "features/show.feature"]);
+    const run = await cli(rootDir, ["run", "--records", "features/show.feature"]);
     expect(run.stderr).toContain("2 scenarios: 2 passed, 0 failed");
     expect(run.exitCode).toBe(0);
   });
@@ -578,7 +578,7 @@ describe("nuka scaffold --command --cwd", () => {
 
     const check = await cli(rootDir, ["check"]);
     expect(check.stdout + check.stderr).toContain("warning\tscenario-without-then");
-    const run = await cli(rootDir, ["run", "features/show.feature"]);
+    const run = await cli(rootDir, ["run", "--records", "features/show.feature"]);
     expect(run.exitCode).toBe(1);
     expect(run.stdout).toContain("pass dir where the program reads them: features/steps/run-show.ts:28; args {");
   });
@@ -645,7 +645,7 @@ describe("nuka scaffold --command --argv", () => {
       ].join("\n"),
     );
 
-    const run = await cli(rootDir, ["run", "features/args.feature"]);
+    const run = await cli(rootDir, ["run", "--records", "features/args.feature"]);
 
     expect(run.stderr).toContain("2 scenarios: 2 passed, 0 failed");
     expect(run.exitCode).toBe(0);

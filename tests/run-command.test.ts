@@ -135,7 +135,7 @@ describe("observed.processes on a step record", () => {
 
   async function stepRecordOf(line: number): Promise<Record<string, any>> {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", `features/run-command.feature:${line}`], {
+    const exitCode = await runCli(["run", "--records", `features/run-command.feature:${line}`], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

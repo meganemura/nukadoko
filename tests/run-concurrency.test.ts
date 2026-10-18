@@ -108,7 +108,7 @@ describe("nuka run --concurrency", () => {
   it("--concurrency 1 (explicit) is byte-identical to not passing --concurrency at all, once ids/timestamps are normalized", async () => {
     const defaultStdout = createCaptureSink();
     const defaultStderr = createCaptureSink();
-    const defaultExit = await runCli(["run", "--no-check", "features/basic/"], {
+    const defaultExit = await runCli(["run", "--records", "--no-check", "features/basic/"], {
       rootDir,
       stdout: defaultStdout,
       stderr: defaultStderr,
@@ -116,7 +116,7 @@ describe("nuka run --concurrency", () => {
 
     const explicitStdout = createCaptureSink();
     const explicitStderr = createCaptureSink();
-    const explicitExit = await runCli(["run", "--no-check", "features/basic/", "--concurrency", "1"], {
+    const explicitExit = await runCli(["run", "--records", "--no-check", "features/basic/", "--concurrency", "1"], {
       rootDir,
       stdout: explicitStdout,
       stderr: explicitStderr,
@@ -131,7 +131,7 @@ describe("nuka run --concurrency", () => {
   it("runs both files' worth of scenarios at --concurrency 2: both records on stdout, one shared run_id", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/basic/", "--concurrency", "2"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/basic/", "--concurrency", "2"], {
       rootDir,
       stdout,
       stderr,
@@ -159,7 +159,7 @@ describe("nuka run --concurrency", () => {
 
       const stderr = createCaptureSink();
       expect(
-        await runCli(["run", "--no-check", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr }),
+        await runCli(["run", "--records", "--no-check", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr }),
         stderr.text(),
       ).toBe(0);
 
@@ -177,6 +177,7 @@ describe("nuka run --concurrency", () => {
     const exitCode = await runCli(
       [
         "run",
+        "--records",
         "--no-check",
         "features/basic/b.feature",
         "features/basic/a.feature",
@@ -198,7 +199,7 @@ describe("nuka run --concurrency", () => {
   it("names a failed scenario after the summary at --concurrency 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/failure/", "--concurrency", "2", "--quiet"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/failure/", "--concurrency", "2", "--quiet"], {
       rootDir,
       stdout,
       stderr,
@@ -220,7 +221,7 @@ describe("nuka run --concurrency", () => {
     await delayFixtureSteps(rootDir);
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/serial/", "--concurrency", "3"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/serial/", "--concurrency", "3"], {
       rootDir,
       stdout,
       stderr,
@@ -254,7 +255,7 @@ describe("nuka run --concurrency", () => {
     const stderr = createCaptureSink();
     heldRun = {
       releasePath,
-      exit: runCli(["run", "--no-check", "features/serial/", "--concurrency", "3"], {
+      exit: runCli(["run", "--records", "--no-check", "features/serial/", "--concurrency", "3"], {
         rootDir,
         stdout,
         stderr,
@@ -284,7 +285,7 @@ describe("nuka run --concurrency", () => {
   it("a target naming one feature file has nothing to distribute: runs normally and says so on stderr", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/basic/a.feature", "--concurrency", "4"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/basic/a.feature", "--concurrency", "4"], {
       rootDir,
       stdout,
       stderr,
@@ -299,7 +300,7 @@ describe("nuka run --concurrency", () => {
   it("names the file a crashed worker never reported a record for, and fails the run", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/crash/", "--concurrency", "2"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/crash/", "--concurrency", "2"], {
       rootDir,
       stdout,
       stderr,
@@ -325,7 +326,7 @@ describe("nuka run --concurrency", () => {
     for (const value of ["0", "-1", "2.5", "banana"]) {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "--no-check", "features/basic/", "--concurrency", value], {
+      const exitCode = await runCli(["run", "--records", "--no-check", "features/basic/", "--concurrency", value], {
         rootDir,
         stdout,
         stderr,

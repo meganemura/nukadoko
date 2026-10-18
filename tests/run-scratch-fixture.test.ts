@@ -35,7 +35,7 @@ describe("nuka run: the builtin scratch fixture", () => {
   it("lists each directory on the step record and removes it when the scenario ends, passed or failed", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/scratch.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/scratch.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     const scenarios = stdout

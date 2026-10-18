@@ -78,7 +78,7 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
   it("a compat step's cookie (via this.openRequest()) is visible to a later typed step's ctx.request(), and ctx.resultOf still works", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/mixed.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/mixed.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
     expect(stripRunProgressLines(stderr.text())).toBe("");

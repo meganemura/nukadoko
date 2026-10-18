@@ -174,7 +174,7 @@ describe("nuka check: from-order-violation's do line, and the findings an undefi
       await writeFile(path.join(rootDir, "features", "producer.feature"), feature);
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "--no-check", "features/producer.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--records", "--no-check", "features/producer.feature"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(1);
       const records = stdout

@@ -165,7 +165,7 @@ describe("nuka run with a directory target and a link to it", () => {
 
   async function runFeatures(targets: readonly string[]): Promise<Array<[unknown, unknown]>> {
     const stdout = createCaptureSink();
-    await runCli(["run", "--no-check", ...targets], { rootDir, stdout, stderr: createCaptureSink() });
+    await runCli(["run", "--records", "--no-check", ...targets], { rootDir, stdout, stderr: createCaptureSink() });
     return stdout
       .text()
       .split("\n")

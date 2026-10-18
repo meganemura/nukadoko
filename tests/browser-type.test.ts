@@ -51,7 +51,7 @@ describe("nuka run: browserType", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/no-browser.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/no-browser.feature"], {
       rootDir,
       stdout,
       stderr,

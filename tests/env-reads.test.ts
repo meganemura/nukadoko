@@ -35,7 +35,7 @@ describe("ctx.requireEnv / required_env", () => {
 
   it("nuka run: requireEnv calls land on the step record deduplicated, in first-read order", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/env-reads.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "features/env-reads.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -50,7 +50,7 @@ describe("ctx.requireEnv / required_env", () => {
 
   it("nuka run: a step that never calls requireEnv has no required_env key on its step record", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/env-reads.feature:6"], {
+    const exitCode = await runCli(["run", "--records", "features/env-reads.feature:6"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -66,7 +66,7 @@ describe("ctx.requireEnv / required_env", () => {
 
   it("nuka run: a step that requires a missing env var still reports the name on its failed step record", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/env-reads.feature:9"], {
+    const exitCode = await runCli(["run", "--records", "features/env-reads.feature:9"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -83,7 +83,7 @@ describe("ctx.requireEnv / required_env", () => {
 
   it("nuka run: required_env does not bleed across steps sharing one scenario's ctx (beginStep reset regression)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/env-reads.feature:12"], {
+    const exitCode = await runCli(["run", "--records", "features/env-reads.feature:12"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

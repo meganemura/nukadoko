@@ -11,10 +11,6 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // Responsibility: run.json, the run's machine-readable result, as `nuka run`
 // writes it and as `nuka run --json` prints it.
 
-function pipeSink(): ReturnType<typeof createCaptureSink> & { isTTY: false } {
-  return Object.assign(createCaptureSink(), { isTTY: false as const });
-}
-
 function onlyRunId(rootDir: string): string {
   const runs = readdirSync(path.join(rootDir, ".nukadoko", "records", "runs"));
   expect(runs).toHaveLength(1);
@@ -37,9 +33,9 @@ describe("nuka run: run.json", () => {
   });
 
   it("names every scenario of a mixed run with its record and the rerun command stderr prints", async () => {
-    const stdout = pipeSink();
+    const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/failure/"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/failure/"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     const runId = onlyRunId(rootDir);
@@ -92,7 +88,7 @@ describe("nuka run: run.json", () => {
   it("prints run.json under --json as the one document on stdout, also at --concurrency 2", async () => {
     for (const extra of [[], ["--concurrency", "2"]]) {
       await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
-      const stdout = pipeSink();
+      const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(["run", "--no-check", "--json", ...extra, "features/basic/"], { rootDir, stdout, stderr });
 

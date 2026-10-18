@@ -34,7 +34,7 @@ describe("nuka run: After hook failure", () => {
 
   it("fails the scenario, but the step's own status and the scenario record survive the hook's own throw", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/after-hook-failure.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/after-hook-failure.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

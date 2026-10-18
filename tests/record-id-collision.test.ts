@@ -58,7 +58,7 @@ describe("a record id already taken on disk", () => {
     queued.scenario.push(duplicateScenarioId, duplicateScenarioId);
     const stdout = createCaptureSink();
 
-    const exitCode = await runCli(["run", "features/notes.feature"], { rootDir, stdout, stderr: createCaptureSink() });
+    const exitCode = await runCli(["run", "--records", "features/notes.feature"], { rootDir, stdout, stderr: createCaptureSink() });
 
     expect(exitCode).toBe(0);
     const scenarios = stdout

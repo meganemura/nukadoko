@@ -98,7 +98,7 @@ describe("page_events on the step record", () => {
   it("nuka run: page_events lands on the step's own step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/page-events.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/page-events.feature"], {
       rootDir,
       stdout,
       stderr,

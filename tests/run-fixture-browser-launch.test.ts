@@ -32,7 +32,7 @@ describe("nuka run: a step reaching page only through a fixture still launches e
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/via-logged-in.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--records", "features/via-logged-in.feature"], { rootDir, stdout, stderr });
 
       expect(stripRunProgressLines(stderr.text())).toBe("");
       expect(exitCode).toBe(0);

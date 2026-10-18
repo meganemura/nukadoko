@@ -66,7 +66,7 @@ describe("examples/todo", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/todo.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/todo.feature"], { rootDir, stdout, stderr });
 
     expect(stripRunProgressLines(stderr.text())).toBe("");
     const records = stdout
@@ -90,7 +90,7 @@ describe("examples/todo", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/todo.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/todo.feature"], { rootDir, stdout, stderr });
 
     const records = stdout
       .text()
@@ -110,7 +110,7 @@ describe("examples/todo", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/todo.md"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/todo.md"], { rootDir, stdout, stderr });
 
     expect(stripRunProgressLines(stderr.text()), stderr.text()).toBe("");
     const records = stdout

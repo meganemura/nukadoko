@@ -97,7 +97,7 @@ describe("actions on the step record: a real expect() wait", () => {
   it("records the expect() call's real wait time in actions[].ms, not zero", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/wait-for-late-element.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/wait-for-late-element.feature"], {
       rootDir,
       stdout,
       stderr,

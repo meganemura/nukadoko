@@ -28,7 +28,7 @@ describe("nuka run: secret redaction", () => {
   it("redacts the secret value from both the scenario record and the step's own step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/leak.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/leak.feature"], {
       rootDir,
       stdout,
       stderr,

@@ -39,7 +39,7 @@ describe("nuka run: from's scenario-order guard", () => {
   it("fails the scenario before any step runs when the upstream is never bound", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:11"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/chain.feature:11"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
@@ -61,7 +61,7 @@ describe("nuka run: from's scenario-order guard", () => {
   it("fails the scenario before any step runs when the upstream is bound only after this line", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/chain.feature:23"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/chain.feature:23"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
@@ -80,7 +80,7 @@ describe("nuka run: from's scenario-order guard", () => {
   it("every other scenario in the same feature file still runs normally", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/chain.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/chain.feature"], { rootDir, stdout, stderr });
 
     // Some scenarios in this file fail (the two above), so this whole
     // invocation's own exit code is non-zero — that must not be confused
@@ -110,7 +110,7 @@ describe("nuka run: from's scenario-order guard", () => {
   it("refuses the whole run, before any scenario record is written, when a bound step's own from is structurally broken", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/broken-from-bound.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/broken-from-bound.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(2);
     // Setup-phase fatal, same family as ConfigError/DuplicateStepError

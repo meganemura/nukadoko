@@ -40,7 +40,7 @@ describe("nuka run: a parameter-type transformer", () => {
     async (_label, feature) => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", feature], {
+      const exitCode = await runCli(["run", "--records", feature], {
         rootDir,
         stdout,
         stderr,

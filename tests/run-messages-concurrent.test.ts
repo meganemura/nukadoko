@@ -47,12 +47,12 @@ describe("nuka run: two concurrent invocations against the same project", () => 
 
   it("leaves the stable messages.ndjson holding exactly one run's own well-formed stream", async () => {
     const [exitA, exitB] = await Promise.all([
-      runCli(["run", "--no-check", "features/two-steps-timing.feature"], {
+      runCli(["run", "--records", "--no-check", "features/two-steps-timing.feature"], {
         rootDir,
         stdout: createCaptureSink(),
         stderr: createCaptureSink(),
       }),
-      runCli(["run", "--no-check", "features/two-steps-timing.feature"], {
+      runCli(["run", "--records", "--no-check", "features/two-steps-timing.feature"], {
         rootDir,
         stdout: createCaptureSink(),
         stderr: createCaptureSink(),
@@ -79,8 +79,8 @@ describe("nuka run: two concurrent invocations against the same project", () => 
     const stdoutB = createCaptureSink();
 
     const [exitA, exitB] = await Promise.all([
-      runCli(["run", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: stdoutA, stderr: createCaptureSink() }),
-      runCli(["run", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: stdoutB, stderr: createCaptureSink() }),
+      runCli(["run", "--records", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: stdoutA, stderr: createCaptureSink() }),
+      runCli(["run", "--records", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: stdoutB, stderr: createCaptureSink() }),
     ]);
     expect(exitA).toBe(0);
     expect(exitB).toBe(0);

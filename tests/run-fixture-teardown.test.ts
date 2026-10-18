@@ -52,7 +52,7 @@ describe("nuka run: scenario-scope fixture teardown", () => {
   it("tears down with the scenario's own outcome, and only runs the fixture's own conditional cleanup on passed", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/teardown.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/teardown.feature"], { rootDir, stdout, stderr });
 
     expect(stripRunProgressLines(stderr.text())).toBe("");
     // The whole run fails overall (its second scenario does), even though

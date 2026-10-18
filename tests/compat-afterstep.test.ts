@@ -35,7 +35,7 @@ describe("nuka run: AfterStep hook execution", () => {
 
   it("runs once per executed step, with the right step_index and result.status each time", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/afterstep.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "features/afterstep.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -60,7 +60,7 @@ describe("nuka run: AfterStep hook execution", () => {
 
   it("does not run after a step this scenario skipped, since a skipped step never executes and so leaves nothing for an AfterStep to follow", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/afterstep.feature:7"], {
+    const exitCode = await runCli(["run", "--records", "features/afterstep.feature:7"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -87,7 +87,7 @@ describe("nuka run: AfterStep hook execution", () => {
 
   it("tag filter: the @slow-tagged AfterStep only runs for the @slow-tagged scenario", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/afterstep.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/afterstep.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

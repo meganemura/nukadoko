@@ -1070,10 +1070,11 @@ run が遅いときは、`nuka check` を単独で速い PR ゲート(数秒、�
 対象を渡さない `nuka check` は `additionalFeatureDirs` も対象にしますが、対象を渡さない `nuka run` はそれを含みません。
 
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
-stdout が端末でないとき(パイプ、ファイル、CI のログ)は、stdout に 1 行 1 件の JSON の scenario record が出力されます。
-端末では `--records` を渡したときだけ出力されます。
+stdout には、求めたときだけ出力されます。
+`nuka run --records` は、1 行 1 件の JSON の scenario record を stdout に出力します。
 `nuka run --json` は、代わりに 1 つの文書として run の `run.json` を出力します。
 そこには断定、件数、各 scenario の status、record のパス、再実行のコマンドが入ります。
+record は、フラグにかかわらず `.nukadoko/records/` の下に書かれます。
 失敗した step は、進捗行の下にエラーの 1 行目と step record のパスを出力します。
 そのため、CI のログだけで失敗の理由が分かります。
 失敗した step が、プログラムが 0 以外で終わった step から値を読んでいたときは、その 2 行の間に `used` 行が入ります。

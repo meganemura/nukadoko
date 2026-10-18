@@ -40,7 +40,7 @@ describe("nuka run", () => {
   it("runs a pure-step scenario to completion: record + step records + JSONL stdout + exit 0", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -96,7 +96,7 @@ describe("nuka run", () => {
 
   it("skips every step after one fails, recording each step's own status; exit 1", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/failing.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -134,7 +134,7 @@ describe("nuka run", () => {
 
   it("an undefined step gets no step record and fails the scenario, naming the unmatched text", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/undefined.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/undefined.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -154,7 +154,7 @@ describe("nuka run", () => {
 
   it("an ambiguous step gets no step record and names every step that matched", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/ambiguous.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/ambiguous.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -179,7 +179,7 @@ describe("nuka run", () => {
 
   it("binds a table to the one unconsumed key; a second scenario violates that rule and still writes a failed step record", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/table.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/table.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -220,7 +220,7 @@ describe("nuka run", () => {
 
   it(":line selects only the matching scenario in a two-scenario file", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/lines.feature:6"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature:6"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -243,7 +243,7 @@ describe("nuka run", () => {
   it("stderr announces a partial run when :line is given, naming the selected/total scenario counts, without touching stdout's record JSON", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/lines.feature:6"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature:6"], {
       rootDir,
       stdout,
       stderr,
@@ -261,7 +261,7 @@ describe("nuka run", () => {
 
   it("stderr says nothing about a partial run when :line selects the file's only scenario", async () => {
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/passing.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature:3"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -273,7 +273,7 @@ describe("nuka run", () => {
 
   it("stderr says nothing about a partial run when the :line targets together select every scenario of the file", async () => {
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/lines.feature:3", "features/lines.feature:6"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature:3", "features/lines.feature:6"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -285,7 +285,7 @@ describe("nuka run", () => {
 
   it("stderr says nothing about a partial run when no :line is given", async () => {
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/lines.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -298,7 +298,7 @@ describe("nuka run", () => {
   it("an invalid :line is a setup failure: stderr + exit 2, nothing written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/lines.feature:999"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature:999"], {
       rootDir,
       stdout,
       stderr,
@@ -313,7 +313,7 @@ describe("nuka run", () => {
   it("a missing feature file is a setup failure: stderr + exit 2, nothing written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/does-not-exist.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/does-not-exist.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -328,7 +328,7 @@ describe("nuka run", () => {
   it("--tag is gone: yargs reports it as an unknown argument (design decision 2026-08-02, --tag removed)", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    await runCli(["run", "--no-check", "features/passing.feature", "--tag", "issue-42"], {
+    await runCli(["run", "--records", "--no-check", "features/passing.feature", "--tag", "issue-42"], {
       rootDir,
       stdout,
       stderr,
@@ -341,7 +341,7 @@ describe("nuka run", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "--no-check", "features/passing.feature", "--unknown-flag", "x"],
+      ["run", "--records", "--no-check", "features/passing.feature", "--unknown-flag", "x"],
       { rootDir, stdout, stderr },
     );
 
@@ -364,7 +364,7 @@ describe("nuka run: .js and .mjs step files", () => {
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
+      const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
         rootDir,
         stdout,
         stderr,

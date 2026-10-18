@@ -187,7 +187,7 @@ Then("the live report shows 0 results before any run starts", async function (th
 When(
   "nuka run runs {string} in the fixture project, without waiting for it to finish",
   function (this: SelftestWorld, feature: string) {
-    const proc = spawn(process.execPath, [cliPath, "run", feature], { cwd: fixtureProjectDir });
+    const proc = spawn(process.execPath, [cliPath, "run", "--records", feature], { cwd: fixtureProjectDir });
     this.runProcess = proc;
 
     let stdout = "";

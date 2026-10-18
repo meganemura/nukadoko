@@ -25,7 +25,7 @@ describe("nuka run: the allure emitter's own setup fails", () => {
 
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/noop.feature"], {
+      const exitCode = await runCli(["run", "--records", "features/noop.feature"], {
         rootDir,
         stdout,
         stderr,

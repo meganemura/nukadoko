@@ -60,7 +60,7 @@ describe("nuka run (hook trace chunks)", () => {
   it("gives each Before/AfterStep hook invocation its own trace chunk, isolated from steps and each other, and none to a hook that never touches the browser", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/hook-trace.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/hook-trace.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
     expect(stripRunProgressLines(stderr.text())).toBe("");

@@ -202,7 +202,7 @@ describe("evidence.attach: nuka run", () => {
 
   it("writes and lists an attachment the same way nuka do does", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/evidence.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "features/evidence.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -219,7 +219,7 @@ describe("evidence.attach: nuka run", () => {
 
   it("does not bleed an attachment across steps sharing one scenario's ctx (beginStep reset regression)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/evidence.feature:27"], {
+    const exitCode = await runCli(["run", "--records", "features/evidence.feature:27"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

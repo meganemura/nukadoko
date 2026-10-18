@@ -32,7 +32,7 @@ describe("nuka run: process-scope fixture is built once, reused by a later scena
   it("both scenarios read the same seededDb build count", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/process-scope.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/process-scope.feature"], { rootDir, stdout, stderr });
 
     expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(exitCode).toBe(0);

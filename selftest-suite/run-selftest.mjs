@@ -145,7 +145,7 @@ async function runBaseline(suiteFeature) {
 
 async function runSwap(suiteFeature) {
   const env = { ...process.env, NUKADOKO_SELFTEST_TRACK: "swap" };
-  const { stdout } = await execFileAsync(process.execPath, [nukaCliBin, "run", suiteFeature], {
+  const { stdout } = await execFileAsync(process.execPath, [nukaCliBin, "run", "--records", suiteFeature], {
     cwd: suiteDir,
     env,
   });

@@ -29,7 +29,7 @@ describe("nuka run: World + Before/After hooks", () => {
   it("Before hooks (untagged, not-@excluded, @tagged) set state on the custom World a later step reads", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/world-hooks.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/world-hooks.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -71,7 +71,7 @@ describe("nuka run: World + Before/After hooks", () => {
 
   it("a failing Before hook skips every step; record.hooks shows the failure, and After still runs", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/world-hooks.feature:15"], {
+    const exitCode = await runCli(["run", "--records", "features/world-hooks.feature:15"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -97,7 +97,7 @@ describe("nuka run: World + Before/After hooks", () => {
 
   it("accessing this.page before openPage() resolves fails clearly (WorldNotOpenedError), and attach/log/link are held without crashing", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/unopened-getter.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/unopened-getter.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -134,7 +134,7 @@ describe("nuka run: unsupported hook tag expression is a setup failure", () => {
   it("exits 2 with a message naming the unsupported expression; nothing is written", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/noop.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/noop.feature"], {
       rootDir: fixture("compat-bad-tag-project"),
       stdout,
       stderr,

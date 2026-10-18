@@ -31,7 +31,7 @@ describe("nuka run: unfillable required args key guard", () => {
   it("fails the violating scenario before its step ever runs, with no step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/run-guard.feature:3"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/run-guard.feature:3"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     const record = JSON.parse(nonEmptyLines(stdout.text())[0]!);
@@ -46,7 +46,7 @@ describe("nuka run: unfillable required args key guard", () => {
   it("every other scenario in the same feature file still runs normally, step records and all", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/run-guard.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/run-guard.feature"], { rootDir, stdout, stderr });
 
     // The one violating scenario fails this whole invocation's exit code —
     // that must not be confused with every scenario failing.

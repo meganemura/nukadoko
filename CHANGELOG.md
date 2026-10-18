@@ -9,6 +9,17 @@ just until 0.1.
 
 ### Breaking
 
+- **`nuka run` writes scenario records to stdout only under `--records`.**
+  A stdout that was not a terminal got one JSON line of about 1 KB per
+  scenario by default. An agent's shell is no terminal and reads stdout
+  together with stderr, so those lines sat between the progress lines and
+  were the larger part of what the agent read, while the same records were
+  already on disk. stdout now stays empty without a flag, on a terminal or
+  not. `--records` writes the records there, one per line, at any
+  concurrency; `--json` still prints `run.json` instead. The records under
+  `.nukadoko/records/`, the run summary, the stderr lines, and `nuka do`'s
+  stdout do not change. Breaking for a pipeline that parsed the default
+  stdout: see docs/upgrading.md.
 - **`evidence.attach` and `evidence.path` refuse `trace.<name>.zip` and `final.<name>.png`.**
   Those are the files a `pageAs(name)` context writes beside the step's
   own, so an attachment with that name would replace one. The names are

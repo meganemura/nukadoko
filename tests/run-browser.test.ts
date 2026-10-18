@@ -91,7 +91,7 @@ describe("nuka run (Background + browser)", () => {
   it("shares one browser context across a Background step and the scenario's own step, each with its own trace", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/browser-scenario.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/browser-scenario.feature"], {
       rootDir,
       stdout,
       stderr,

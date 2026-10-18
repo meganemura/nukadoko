@@ -27,7 +27,7 @@ describe("nuka run: a fixture whose own teardown fails", () => {
 
   it("keeps the scenario passed, and names the fixture and message under teardown_errors", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/teardown-failure.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/teardown-failure.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

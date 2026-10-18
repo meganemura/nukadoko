@@ -34,7 +34,7 @@ Given("a clean copy of the fixture project's nukadoko state", async function (th
 
 When("nuka run runs {string} in the fixture project", async function (this: SelftestWorld, feature: string) {
   try {
-    const { stdout } = await execFileAsync(process.execPath, [cliPath, "run", feature], {
+    const { stdout } = await execFileAsync(process.execPath, [cliPath, "run", "--records", feature], {
       cwd: fixtureProjectDir,
     });
     this.nukaExitCode = 0;

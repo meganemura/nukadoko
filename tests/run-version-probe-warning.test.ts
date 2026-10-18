@@ -19,7 +19,7 @@ describe("nuka run: an environment's own version probe", () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(
-        ["run", "features/noop.feature", "--env", "probe-ok"],
+        ["run", "--records", "features/noop.feature", "--env", "probe-ok"],
         { rootDir, stdout, stderr },
       );
 
@@ -39,7 +39,7 @@ describe("nuka run: an environment's own version probe", () => {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(
-        ["run", "features/noop.feature", "--env", "probe-throws"],
+        ["run", "--records", "features/noop.feature", "--env", "probe-throws"],
         { rootDir, stdout, stderr },
       );
 

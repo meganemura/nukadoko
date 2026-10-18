@@ -48,7 +48,7 @@ describe("nuka run: a scenario that never destructures page never launches a bro
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/no-browser.feature"], { rootDir, stdout, stderr });
+      const exitCode = await runCli(["run", "--records", "features/no-browser.feature"], { rootDir, stdout, stderr });
 
       expect(stripRunProgressLines(stderr.text())).toBe("");
       expect(exitCode).toBe(0);

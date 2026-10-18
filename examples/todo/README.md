@@ -245,11 +245,11 @@ ok: no issues found
 ```
 
 ```sh
-nuka run features/todo.feature
+nuka run --records features/todo.feature
 ```
 
-Three scenario records stream to stdout, one JSON line each, every one
-`"status":"passed"` — exit `0`. The vocabulary gap from step 1 is closed,
+Three scenario records stream to stdout (`--records` asks for them), one
+JSON line each, every one `"status":"passed"`, and the exit code is `0`. The vocabulary gap from step 1 is closed,
 reviewably: the diff is one new step file, and this green run is its proof.
 
 Nothing here left a lasting change: you either restored the exact file this
@@ -268,7 +268,7 @@ Nothing else changed — not the feature file, not the typed steps, not their
 `args`/`returns` schemas. Run the exact same scenario:
 
 ```sh
-nuka run features/todo.feature
+nuka run --records features/todo.feature
 ```
 
 exit `1`. The first scenario record's first step:

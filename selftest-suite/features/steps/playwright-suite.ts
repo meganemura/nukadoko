@@ -107,7 +107,7 @@ Then("the Playwright suite passes", function () {
 
 When("nuka run runs the fixture's cart feature against it", { timeout: 30_000 }, async function () {
   const state = requireCurrent();
-  state.runResult = await run(process.execPath, [nukaCliPath, "run", "features/cart.feature"], portEnv(state));
+  state.runResult = await run(process.execPath, [nukaCliPath, "run", "--records", "features/cart.feature"], portEnv(state));
 });
 
 Then("that run passes too", function () {

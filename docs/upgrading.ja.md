@@ -38,6 +38,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.17.0 から次のリリースへ
 
+- **`nuka run` は、`--records` のときだけ scenario record を stdout に出力します。**
+  パイプ、ファイル、CI のログ、エージェントのシェルには、既定では 1 行 1 件の JSON の record が出力されなくなり、stdout は空のままです。
+  その列を解析していたスクリプトは、次の 3 つから 1 つを選びます。
+  読んでいる `nuka run` に `--records` を足します(これまでと同じ行が出力されます)。
+  または `--json` に切り替えて `run.json` を読みます(断定、件数、各 scenario の status、record のパス、`rerun` コマンドが 1 つの文書に入ります)。
+  または、run がフラグにかかわらず書く `.nukadoko/records/scenarios/` の下のファイルを読みます。
+  ログを表示するだけの CI の step は、何も変える必要がありません。
+  run サマリ、stderr の行、`nuka do` の stdout は変わりません。
 - **`evidence.attach` と `evidence.path` は `trace.<name>.zip` と `final.<name>.png` を拒否します。**
   `pageAs(name)` の context は、step 自身の `trace.zip` と `final.png` の隣にそれらのファイルを書きます。
   そのため、有効なすべての context 名について、大文字小文字を問わず、これらの名前は `ReservedEvidenceNameError` で予約されます。

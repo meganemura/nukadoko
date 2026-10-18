@@ -100,7 +100,7 @@ interface RunArgs {
    * output-location and summary lines still print; run.ts's own header
    * explains why those two are exempt. */
   quiet?: boolean;
-  /** Writes the scenario records to stdout when stdout is a terminal too. */
+  /** Writes the scenario records to stdout; without it stdout stays empty. */
   records?: boolean;
   /** Prints run.json on stdout instead of the scenario record stream. */
   json?: boolean;
@@ -574,8 +574,8 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe:
-            "write one JSON scenario record per line to stdout even when stdout is a terminal " +
-            "(they are written there whenever stdout is a pipe or a file)",
+            "write one JSON scenario record per line to stdout (without it, stdout stays empty; " +
+            "the records are written under .nukadoko/records/scenarios/ either way)",
         })
         .option("json", {
           type: "boolean",

@@ -58,7 +58,7 @@ describe("nuka run: setDefaultTimeout applies to compat steps/hooks", () => {
 
   it("applies to a step with no own timeout: fails at the default value, not the sleep duration", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/default-timeout-step.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/default-timeout-step.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -75,7 +75,7 @@ describe("nuka run: setDefaultTimeout applies to compat steps/hooks", () => {
 
   it("a step's own (larger) timeout overrides the default: the scenario passes", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/step-own-timeout-overrides-default.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/step-own-timeout-overrides-default.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -88,7 +88,7 @@ describe("nuka run: setDefaultTimeout applies to compat steps/hooks", () => {
 
   it("applies to a Before hook with no own timeout: the hook fails at the default value", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/default-timeout-hook.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/default-timeout-hook.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -105,7 +105,7 @@ describe("nuka run: setDefaultTimeout applies to compat steps/hooks", () => {
 
   it("a Before hook's own (larger) timeout overrides the default: the scenario passes", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/hook-own-timeout-overrides-default.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/hook-own-timeout-overrides-default.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -130,7 +130,7 @@ describe("nuka run: setDefaultTimeout never called leaves compat steps unbounded
 
   it("a step with no own timeout, and no default configured anywhere in the project, still passes", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/no-default-timeout.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/no-default-timeout.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -157,7 +157,7 @@ describe("nuka run: BeforeAll/AfterAll run once per run, in LIFO order for After
   it("BeforeAll runs once (not once per scenario); both AfterAll registrations are attempted, in reverse registration order, even though the second one throws", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/two-scenarios.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/two-scenarios.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -185,7 +185,7 @@ describe("nuka run: BeforeAll/AfterAll run once per run, in LIFO order for After
   it("neither BeforeAll nor AfterAll runs for a feature file with zero scenarios", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/empty.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/empty.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -212,7 +212,7 @@ describe("nuka run: a negative compat timeout means no timeout", () => {
 
   it("setDefaultTimeout(-1) does not fail a step with no own timeout", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/negative-default-timeout.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/negative-default-timeout.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -226,7 +226,7 @@ describe("nuka run: a negative compat timeout means no timeout", () => {
 
   it("a step's own { timeout: -1 } does not fail the step", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/negative-step-timeout.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/negative-step-timeout.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -240,7 +240,7 @@ describe("nuka run: a negative compat timeout means no timeout", () => {
 
   it("setDefaultTimeout(-1) does not fail a Before hook with no own timeout", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/negative-default-hook.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/negative-default-hook.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -255,7 +255,7 @@ describe("nuka run: a negative compat timeout means no timeout", () => {
 
   it("a positive step timeout still applies when the default is negative", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/positive-step-timeout.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/positive-step-timeout.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -286,7 +286,7 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
   it("BeforeAll's own { timeout } fires, stopping the second BeforeAll registration, skipping every scenario, while AfterAll still runs", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/one-scenario.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/one-scenario.feature"], {
       rootDir,
       stdout,
       stderr,

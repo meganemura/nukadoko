@@ -26,7 +26,7 @@ describe("nuka run: worldParameters", () => {
   it("passes the config object to the World as this.parameters", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/parameters.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/parameters.feature"], {
       rootDir,
       stdout,
       stderr,

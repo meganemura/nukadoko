@@ -84,7 +84,7 @@ describe("measured mutates: request-side observed counts", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/then-position.feature:3"],
+      ["run", "--records", "features/then-position.feature:3"],
       { rootDir, stdout, stderr },
     );
 
@@ -114,7 +114,7 @@ describe("measured mutates: request-side observed counts", () => {
   it("nuka run: a Then-position step declared mutates: false passes even though it observes a write, and the rest of the scenario keeps running", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/then-position.feature:7"],
+      ["run", "--records", "features/then-position.feature:7"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
@@ -168,7 +168,7 @@ describe("measured mutates: request-side observed counts", () => {
   it("nuka run: a declared-mutating step is refused before it runs in a read-only environment; the rest of the scenario is skipped", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/read-only-policy.feature:3", "--env", "readonly"],
+      ["run", "--records", "features/read-only-policy.feature:3", "--env", "readonly"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
@@ -196,7 +196,7 @@ describe("measured mutates: request-side observed counts", () => {
   it("nuka run: a step declared mutates:false that actually writes passes under a read-only environment, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/read-only-policy.feature:7", "--env", "readonly"],
+      ["run", "--records", "features/read-only-policy.feature:7", "--env", "readonly"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 

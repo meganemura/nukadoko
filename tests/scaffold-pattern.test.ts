@@ -231,7 +231,7 @@ describe("nuka scaffold --pattern", () => {
     expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
     expect(check.exitCode).toBe(0);
 
-    const unimplemented = await cli(rootDir, ["run", "features/sum.feature"]);
+    const unimplemented = await cli(rootDir, ["run", "--records", "features/sum.feature"]);
     expect(unimplemented.exitCode).toBe(1);
     expect(unimplemented.stdout).toContain("not implemented: add-numbers");
 
@@ -249,7 +249,7 @@ describe("nuka scaffold --pattern", () => {
       ),
     );
 
-    const green = await cli(rootDir, ["run", "features/sum.feature"]);
+    const green = await cli(rootDir, ["run", "--records", "features/sum.feature"]);
     expect(green.stderr).toContain("1 scenario: 1 passed, 0 failed");
     expect(green.exitCode).toBe(0);
   });

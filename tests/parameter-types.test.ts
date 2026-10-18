@@ -108,7 +108,7 @@ describe("config.parameterTypes: from-dir folds the with/without location-clause
   it("nuka run executes both the with- and without-location-clause scenarios", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/from-dir.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/from-dir.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -158,7 +158,7 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
   it("nuka run: the scenario record is still written, the exploding step is failed with step_record_id: null, and the rest is skipped", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/transformer-throws.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/transformer-throws.feature"], {
       rootDir,
       stdout,
       stderr,

@@ -116,7 +116,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
   it("both `nuka run` invocations report the same scenario status (claim 1)", async () => {
     const glueStdout = createCaptureSink();
     const glueStderr = createCaptureSink();
-    const glueExit = await runCli(["run", "features/promote.feature"], {
+    const glueExit = await runCli(["run", "--records", "features/promote.feature"], {
       rootDir: glueRoot,
       stdout: glueStdout,
       stderr: glueStderr,
@@ -124,7 +124,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
 
     const typedStdout = createCaptureSink();
     const typedStderr = createCaptureSink();
-    const typedExit = await runCli(["run", "features/promote.feature"], {
+    const typedExit = await runCli(["run", "--records", "features/promote.feature"], {
       rootDir: typedRoot,
       stdout: typedStdout,
       stderr: typedStderr,
@@ -146,7 +146,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
 
   it("only the typed step's step record carries a validated result; the compat step's step record result is always null (claim 2)", async () => {
     const glueStdout = createCaptureSink();
-    await runCli(["run", "features/promote.feature"], {
+    await runCli(["run", "--records", "features/promote.feature"], {
       rootDir: glueRoot,
       stdout: glueStdout,
       stderr: createCaptureSink(),
@@ -156,7 +156,7 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
     expect(glueStepRecord.result).toBeNull();
 
     const typedStdout = createCaptureSink();
-    await runCli(["run", "features/promote.feature"], {
+    await runCli(["run", "--records", "features/promote.feature"], {
       rootDir: typedRoot,
       stdout: typedStdout,
       stderr: createCaptureSink(),

@@ -57,7 +57,7 @@ describe("ctx.section", () => {
 
   it("nuka run: three ctx.section calls land on the step record in the order they were called", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/sections.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "features/sections.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -72,7 +72,7 @@ describe("ctx.section", () => {
 
   it("nuka run: a step that never calls ctx.section has no sections key on its step record", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/sections.feature:6"], {
+    const exitCode = await runCli(["run", "--records", "features/sections.feature:6"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -88,7 +88,7 @@ describe("ctx.section", () => {
 
   it("nuka run: a step that fails partway still reports the sections it reached before failing", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/sections.feature:9"], {
+    const exitCode = await runCli(["run", "--records", "features/sections.feature:9"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -107,7 +107,7 @@ describe("ctx.section", () => {
 
   it("nuka run: sections do not bleed across steps sharing one scenario's ctx (beginStep reset regression)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/sections.feature:12"], {
+    const exitCode = await runCli(["run", "--records", "features/sections.feature:12"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

@@ -73,7 +73,7 @@ describe("nuka check: capture type against args schema", () => {
   it("agrees with nuka run: every bad-* scenario fails and every ok-* scenario passes", async () => {
     tempDir = await copyFixtureToTempDir("check-capture-types-project");
     const stdout = createCaptureSink();
-    await runCli(["run", "--no-check", "features/capture-types.feature"], {
+    await runCli(["run", "--records", "--no-check", "features/capture-types.feature"], {
       rootDir: tempDir,
       stdout,
       stderr: createCaptureSink(),
@@ -93,7 +93,7 @@ describe("nuka check: capture type against args schema", () => {
   it("nuka run writes a bound bigint into the step record as its decimal string", async () => {
     tempDir = await copyFixtureToTempDir("check-capture-types-project");
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/capture-types.feature"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/capture-types.feature"], {
       rootDir: tempDir,
       stdout,
       stderr: createCaptureSink(),

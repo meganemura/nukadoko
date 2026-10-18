@@ -31,7 +31,7 @@ describe("nuka run <dir>", () => {
     const stderr = createCaptureSink();
     // Trailing slash, matching README's own CI example verbatim (this
     // task's own "なぜ": README:566 becomes true once this runs).
-    const exitCode = await runCli(["run", "features/multi/"], {
+    const exitCode = await runCli(["run", "--records", "features/multi/"], {
       rootDir,
       stdout,
       stderr,
@@ -59,7 +59,7 @@ describe("nuka run <dir>", () => {
   it("runs two feature file arguments in one invocation with one run_id", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/multi/alpha.feature", "features/multi/beta.feature"],
+      ["run", "--records", "features/multi/alpha.feature", "features/multi/beta.feature"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
@@ -75,7 +75,7 @@ describe("nuka run <dir>", () => {
   it("runs a repeated feature file argument only once", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/multi/alpha.feature", "features/multi/alpha.feature"],
+      ["run", "--records", "features/multi/alpha.feature", "features/multi/alpha.feature"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
@@ -86,7 +86,7 @@ describe("nuka run <dir>", () => {
   it("runs a file included by both a directory and a file argument only once", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/multi", "features/multi/alpha.feature"],
+      ["run", "--records", "features/multi", "features/multi/alpha.feature"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
@@ -101,7 +101,7 @@ describe("nuka run <dir>", () => {
   it("sorts the combined feature set by repo-relative byte order, not argument order", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/multi/beta.feature", "features/multi/alpha.feature"],
+      ["run", "--records", "features/multi/beta.feature", "features/multi/alpha.feature"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
@@ -116,7 +116,7 @@ describe("nuka run <dir>", () => {
   it("mixes a line-selected feature with another feature file", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "features/line-mix/b.feature", "features/line-mix/a.feature:3"],
+      ["run", "--records", "features/line-mix/b.feature", "features/line-mix/a.feature:3"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 
@@ -131,7 +131,7 @@ describe("nuka run <dir>", () => {
 
   it("walks a directory in deterministic byte order of the repo-relative path, not directory-then-file name order", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/order"], {
+    const exitCode = await runCli(["run", "--records", "features/order"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -153,7 +153,7 @@ describe("nuka run <dir>", () => {
   it("refuses a directory with no .feature file anywhere under it: non-zero exit, names what it walked, writes nothing", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/empty"], {
+    const exitCode = await runCli(["run", "--records", "features/empty"], {
       rootDir,
       stdout,
       stderr,
@@ -170,7 +170,7 @@ describe("nuka run <dir>", () => {
     const stderr = createCaptureSink();
     // The exact shape this task's own spec calls out: `features/:12` names
     // no single file for `:line` to mean anything against.
-    const exitCode = await runCli(["run", "features/:12"], {
+    const exitCode = await runCli(["run", "--records", "features/:12"], {
       rootDir,
       stdout,
       stderr,
@@ -185,7 +185,7 @@ describe("nuka run <dir>", () => {
   it("names every scanned target when none contains a feature file", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/empty", "features/empty/"], {
+    const exitCode = await runCli(["run", "--records", "features/empty", "features/empty/"], {
       rootDir,
       stdout,
       stderr,

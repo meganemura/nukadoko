@@ -60,7 +60,7 @@ describe("ctx.poll step records", () => {
 
   it("nuka run: a poll that resolves on the first try records attempts: 1, outcome: resolved", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/polls.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "features/polls.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -78,7 +78,7 @@ describe("ctx.poll step records", () => {
 
   it("nuka run: a poll that retries records attempts >= 2 and waited_ms > 0", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/polls.feature:6"], {
+    const exitCode = await runCli(["run", "--records", "features/polls.feature:6"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -96,7 +96,7 @@ describe("ctx.poll step records", () => {
 
   it("nuka run: a poll that times out fails the step and records outcome: timed_out", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/polls.feature:9"], {
+    const exitCode = await runCli(["run", "--records", "features/polls.feature:9"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -114,7 +114,7 @@ describe("ctx.poll step records", () => {
 
   it("nuka run: a poll whose fn throws fails the step and records outcome: failed", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/polls.feature:12"], {
+    const exitCode = await runCli(["run", "--records", "features/polls.feature:12"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -133,7 +133,7 @@ describe("ctx.poll step records", () => {
 
   it("nuka run: a step that never calls ctx.poll has no polls key on its step record", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/polls.feature:15"], {
+    const exitCode = await runCli(["run", "--records", "features/polls.feature:15"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -149,7 +149,7 @@ describe("ctx.poll step records", () => {
 
   it("nuka run: polls do not bleed across steps sharing one scenario's ctx (beginStep reset regression)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/polls.feature:18"], {
+    const exitCode = await runCli(["run", "--records", "features/polls.feature:18"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -187,7 +187,7 @@ describe("ctx.poll step records", () => {
 
   it("nuka run: multiple polls in one step land in completion order, not call order", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/polls.feature:22"], {
+    const exitCode = await runCli(["run", "--records", "features/polls.feature:22"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

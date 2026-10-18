@@ -201,7 +201,7 @@ character for character.
 Run it:
 
 ```sh
-node ../../dist/cli.js run features/migration.feature
+node ../../dist/cli.js run --records features/migration.feature
 ```
 
 Real captured output, one JSON line per scenario (reformatted here for
@@ -284,7 +284,7 @@ difference is enforcement, not visibility: as a hands-on check, temporarily
 change `seed-legacy-todos.ts`'s own `this.seededCount = rows.length;` to
 `this.seededCount = String(rows.length) as unknown as number;` (a
 deliberately wrong type TypeScript can't catch through the cast) and rerun
-`node ../../dist/cli.js run features/migration.feature`. Real captured
+`node ../../dist/cli.js run --records features/migration.feature`. Real captured
 output from doing exactly that:
 
 ```json

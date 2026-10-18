@@ -53,7 +53,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
   it("a compat step calling the allure facade directly gets declared attachments/labels/links/parameters/logs, and the attachment file exists", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/compat-declared.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/compat-declared.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -87,7 +87,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
 
   it("a compat step's World channel (this.attach/log/link) declares into the same bucket", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/world-declared.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/world-declared.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -110,7 +110,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
 
   it("a Before hook's own declared data lands on record.hooks[].declared, not the step's own step record", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/hook-declared.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/hook-declared.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -139,7 +139,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
 
   it("a typed step importing the allure facade directly still gets declared on its own step record (kind-independent)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/typed-declared.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/typed-declared.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -159,7 +159,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
 
   it("a scenario with no facade/World-channel calls at all gets no declared field", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/no-declared.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/no-declared.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -176,7 +176,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
 
   it("a declared label whose value is a configured secret is redacted, same as any other step record string", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/secret-declared.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/secret-declared.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

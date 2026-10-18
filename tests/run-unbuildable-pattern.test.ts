@@ -50,7 +50,7 @@ describe("nuka run with a pattern that cannot be built", () => {
   it("warns before running, naming the step, the missing type, and the check code", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/viewer.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/viewer.feature"], { rootDir, stdout, stderr });
     expect(exitCode).toBe(1);
 
     const text = stderr.text();

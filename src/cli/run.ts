@@ -221,8 +221,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // once, and naming where output landed is not what that flag is for. The
 // progress has no TTY check. A CI log wants the same progress, and stderr
 // staying busy is invisible to stdout's NDJSON readers. The records on
-// stdout do have one: in a terminal they are left out unless `--records`
-// asks for them (see `runRun`).
+// stdout are written only under `--records` (see `runRun`).
 //
 // The Markdown run summary (src/run/run-summary.ts) is the reader-facing
 // counterpart of those stderr lines. Every written record is noted as it is
@@ -271,8 +270,8 @@ export interface RunRunOptions {
    * output-location and summary lines at the
    * end of a run are written either way; see this file's own header. */
   quiet: boolean;
-  /** `--records`: write the scenario records to stdout when it is a
-   * terminal as well. Off a terminal they are written either way. */
+  /** `--records`: write the scenario records to stdout, one per line.
+   * Without it stdout stays empty, terminal or not. */
   records: boolean;
   /** `--json`: print run.json on stdout at the end, and no scenario
    * record stream, so stdout holds exactly one JSON document. */
@@ -323,13 +322,11 @@ function exportLocations(
 export async function runRun(options: RunRunOptions): Promise<number> {
   const { rootDir, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
   const refused = (error: unknown): number => refuse({ json: options.json, stdout: options.stdout, stderr }, error, helpFor("run"));
-  // A person at a terminal reads stderr; the records are on disk and the
-  // `scenarios` line names them, so a line of JSON per scenario there is
-  // noise. A pipe, a file, an agent's shell, and a CI log are not terminals,
-  // so every machine reader still gets the stream without asking. A driver
-  // that reads stdout through a pseudo-terminal passes `--records`.
-  const stdout: WritableSink =
-    !options.json && (options.records || options.stdout.isTTY !== true) ? options.stdout : { write: () => true };
+  // The records are on disk, and the `scenarios` line names them. An
+  // agent's shell is no terminal and reads stdout together with stderr, so
+  // a stream that was on by default would put a line of JSON per scenario
+  // between its progress lines. A reader that wants the stream asks for it.
+  const stdout: WritableSink = !options.json && options.records ? options.stdout : { write: () => true };
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a

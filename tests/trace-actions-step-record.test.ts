@@ -97,7 +97,7 @@ describe("actions on the step record: secret redaction", () => {
   it("nuka run: the goto action's own url is redacted on the step's own step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/visit-secret-url.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/visit-secret-url.feature"], {
       rootDir,
       stdout,
       stderr,

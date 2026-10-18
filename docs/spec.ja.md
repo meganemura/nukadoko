@@ -1853,12 +1853,14 @@ stderr の step ごとの進捗行は、その scenario 自身が終わるまで
 1 台のマシンが同時に実行できる scenario の数はそのマシンについての事実であり、コミットされた config ファイルはそれを保つ場所として適していません。
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
-stdout には、スクリプトが読む 1 行 1 件の scenario record を NDJSON として出力します。
-`--json` のときは、代わりに下で述べる 1 つの run の結果を出力します。
-この列は stdout が端末でないとき(パイプ、ファイル、エージェントのシェル、CI のログ)に出力され、端末では `--records` を渡したときだけ出力されます。
-端末の前にいる人は stderr を読み、record はどちらの場合もディスクにあり、`scenarios` の行がそのディレクトリを示します。
-そのため、端末に scenario ごとの JSON の行を出すのは雑音になります。
-疑似端末を通して stdout を読むツールは `--records` を渡します。
+stdout はスクリプトのためのもので、求められたものだけを出力します。
+`--records` のときは、1 行 1 件の scenario record を NDJSON として出力します。
+`--json` のときは、下で述べる 1 つの run の結果を出力します。
+どちらのフラグもなければ、端末かどうかにかかわらず stdout には何も出力しません。
+record はフラグにかかわらずディスクにあり、`scenarios` の行がそのディレクトリを示します。
+人もエージェントも stderr を読みます。
+エージェントのシェルは端末ではなく、stdout を stderr と一緒に読みます。
+そのため、既定で scenario ごとの JSON の行を出すと、進捗の行が埋もれます。
 `--concurrency` でも同じ規則です。
 プロジェクトのコードが `console.log` や `process.stdout.write` で書いたテキストは、stderr に渡されます。
 これは step、Before と After の hook、BeforeAll と AfterAll、fixture の setup と teardown、World のコンストラクタ、読み込み中の step ファイル、timeout の後も動き続ける step に当てはまります。
@@ -1937,7 +1939,7 @@ scenario を 1 つも選ばなかった run は record を書かず、`run.json`
 強制終了された run にもありません。
 retention は、それによって終わった run と見分けます。
 
-`--json` は、同じオブジェクトを stdout の唯一の JSON 文書として、1 行 1 件の scenario record の代わりに出力します。
+`--json` は、同じオブジェクトを stdout の唯一の JSON 文書として、`--records` が出力する scenario record の代わりに出力します。
 スクリプトは 1 回の解析で結果全体を読めます。
 scenario を 1 つも選ばなかった run でも、空の `scenarios` とともに出力します。
 何かが実行される前の拒否では、`--json` なしのときと同じく stdout に何も出力しません。
@@ -3510,9 +3512,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
-                              stdout is NDJSON, one record per scenario,
-                              when it is not a terminal; in a terminal
-                              only under --records. --json prints run.json
+                              stdout is empty unless asked: --records
+                              prints NDJSON, one record per scenario, on a
+                              terminal or not. --json prints run.json
                               (run id, verdict, counts, each scenario's
                               record path and rerun command, the summary
                               path) as the one document on stdout instead;
@@ -3947,7 +3949,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 
 | コマンド | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | stdout が端末でないとき、1 行に 1 つの scenario record | 進捗、失敗、書き込んだ場所、summary の行 |
+| `nuka run` | `--records` なら 1 行に 1 つの scenario record、`--json` なら `run.json`、それ以外は何も出さない | 進捗、失敗、書き込んだ場所、summary の行 |
 | `nuka do` | step record(失敗した step でも) | session の通知、警告 |
 | `nuka check`、`nuka tend` | 報告、`--json` なら 1 つの JSON オブジェクト | 何も出さない(`--json` なしの拒否と、`nuka tend` の `fail-on` の行を除く) |
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に JSON) | import に失敗した step ファイル |

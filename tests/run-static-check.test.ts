@@ -52,7 +52,7 @@ describe("nuka run checks before it executes", () => {
   });
 
   it("refuses a feature with an undefined step: exit 2, the check finding on stderr, no record written", async () => {
-    const result = await run(rootDir, ["run", "features/mixed.feature"]);
+    const result = await run(rootDir, ["run", "--records", "features/mixed.feature"]);
 
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
@@ -68,7 +68,7 @@ describe("nuka run checks before it executes", () => {
   });
 
   it("reaches the runtime failure under --no-check", async () => {
-    const result = await run(rootDir, ["run", "--no-check", "features/mixed.feature"]);
+    const result = await run(rootDir, ["run", "--records", "--no-check", "features/mixed.feature"]);
 
     expect(result.exitCode).toBe(1);
     expect(result.stderr).not.toContain("nuka run did not start");
@@ -79,7 +79,7 @@ describe("nuka run checks before it executes", () => {
   });
 
   it("checks only the scenario a :line target selects", async () => {
-    const result = await run(rootDir, ["run", "features/mixed.feature:3"]);
+    const result = await run(rootDir, ["run", "--records", "features/mixed.feature:3"]);
 
     expect(result.exitCode).toBe(0);
     expect(scenarioOutcomes(result.stdout)).toEqual([["features/mixed.feature", "clean", "passed"]]);
@@ -96,8 +96,8 @@ describe("nuka run checks before it executes", () => {
       'Feature: More\n\n  Scenario: another\n    Given a thing "gadget" exists\n',
     );
 
-    const bare = await run(rootDir, ["run"]);
-    const named = await run(rootDir, ["run", "features"]);
+    const bare = await run(rootDir, ["run", "--records"]);
+    const named = await run(rootDir, ["run", "--records", "features"]);
 
     expect(bare.exitCode).toBe(0);
     expect(named.exitCode).toBe(0);
@@ -160,7 +160,7 @@ describe("the findings nuka run reports before executing", () => {
           const target = targetIndex === -1 ? [] : [paths[targetIndex]!];
 
           const checked = await run(rootDir, ["check", ...target]);
-          const ran = await run(rootDir, ["run", ...target]);
+          const ran = await run(rootDir, ["run", "--records", ...target]);
 
           const expected = errorLines(checked.stdout);
           expect(errorLines(ran.stderr)).toEqual(expected);
@@ -206,7 +206,7 @@ describe("the findings nuka run reports before executing", () => {
           const targets = tc.draw(gs.arrays(gs.sampledFrom(candidates), { minSize: 1, maxSize: 4 }));
 
           const checked = await run(rootDir, ["check", ...targets]);
-          const ran = await run(rootDir, ["run", ...targets]);
+          const ran = await run(rootDir, ["run", "--records", ...targets]);
 
           expect(errorLines(ran.stderr)).toEqual(errorLines(checked.stdout));
         },

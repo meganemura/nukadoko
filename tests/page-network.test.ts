@@ -198,7 +198,7 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
   it("nuka run: via and http_omitted land on the step's own step record", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/browse-page.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/browse-page.feature"], {
       rootDir,
       stdout,
       stderr,

@@ -13,7 +13,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // and run.json also name the nukadoko version that wrote them.
 
 async function cli(rootDir: string, argv: string[]): Promise<string> {
-  const stdout = Object.assign(createCaptureSink(), { isTTY: false });
+  const stdout = createCaptureSink();
   const stderr = createCaptureSink();
   await runCli(argv, { rootDir, stdout, stderr });
   return stdout.text();
@@ -44,7 +44,7 @@ describe("schema_version", () => {
     documents.set("sessions", parse(await cli(runProject, ["session", "list", "--json"])));
     documents.set("step_record", parse(await cli(runProject, ["do", "thing-exists", "--args", '{"name":"widget"}'])));
     await cli(runProject, ["clean"]);
-    const runStdout = await cli(runProject, ["run", "--no-check", "features/basic/a.feature"]);
+    const runStdout = await cli(runProject, ["run", "--records", "--no-check", "features/basic/a.feature"]);
     documents.set("scenario_record", parse(runStdout.trim().split("\n")[0]!));
     documents.set("run_result", parse(await cli(runProject, ["run", "--no-check", "--json", "features/basic/b.feature"])));
     documents.set("clean_plan", parse(await cli(runProject, ["clean", "--dry-run", "--json"])));

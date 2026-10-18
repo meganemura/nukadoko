@@ -37,7 +37,7 @@ describe("nuka run: AfterStep hook failure", () => {
 
   it("fails the hook's own entry, leaves the step's status alone, and skips the rest of the scenario", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/afterstep-failure.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/afterstep-failure.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

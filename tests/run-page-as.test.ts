@@ -107,7 +107,7 @@ describe("nuka run: pageAs gives each person a browser context of their own", ()
     const stderr = createCaptureSink();
     let exitCode: number;
     try {
-      exitCode = await runCli(["run", "features/people.feature"], { rootDir, stdout, stderr });
+      exitCode = await runCli(["run", "--records", "features/people.feature"], { rootDir, stdout, stderr });
     } finally {
       launchSpy.mockRestore();
     }

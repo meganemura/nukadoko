@@ -127,7 +127,7 @@ describe("markdown oaths", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "oaths-empty"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "oaths-empty"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
@@ -173,7 +173,7 @@ describe("markdown oaths", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "docs/list.md"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "docs/list.md"], { rootDir, stdout, stderr });
     const records = stdout
       .text()
       .split("\n")

@@ -2190,14 +2190,14 @@ it from a fixture or a Given step its feature names.
 machine can run at once is a fact about that machine, and a committed
 config file is the wrong place to keep it.
 
-Each run uses two output channels for two readers. stdout contains only NDJSON,
-with one scenario record per line for scripts to parse, or under `--json`
-the one run result described below. The stream is written when
-stdout is not a terminal (a pipe, a file, an agent's shell, a CI log), and
-in a terminal only under `--records`. A person at a terminal reads stderr,
-the records are on disk either way, and the `scenarios` line names their
-directory, so a line of JSON per scenario there would be noise. A tool that
-reads stdout through a pseudo-terminal passes `--records`. The same rule
+Each run uses two output channels for two readers. stdout is for scripts,
+and it carries only what one asked for: under `--records`, NDJSON with one
+scenario record per line, and under `--json`, the one run result described
+below. Without either flag, stdout stays empty, on a terminal or not. The
+records are on disk either way, and the `scenarios` line names their
+directory. A person and an agent both read stderr, and an agent's shell is
+no terminal and reads stdout together with stderr, so a line of JSON per
+scenario there by default would bury the progress lines. The same rule
 holds under `--concurrency`. Text project code
 writes through `console.log` or `process.stdout.write` is delivered on
 stderr. That covers a step, a Before or After hook, a BeforeAll or
@@ -2285,7 +2285,7 @@ writes no record and no `run.json`. A run that was killed has none either,
 which is how retention tells it from a run that ended.
 
 `--json` prints that same object on stdout as the one JSON document there,
-instead of one scenario record per line, so a script reads the whole
+instead of the scenario records `--records` prints, so a script reads the whole
 result with one parse. It also prints for a run that selected no scenario,
 with empty `scenarios`. A refusal before anything runs prints nothing on
 stdout, as without `--json`. stderr is unchanged.
@@ -4105,9 +4105,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
-                              stdout is NDJSON, one record per scenario,
-                              when it is not a terminal; in a terminal
-                              only under --records. --json prints run.json
+                              stdout is empty unless asked: --records
+                              prints NDJSON, one record per scenario, on a
+                              terminal or not. --json prints run.json
                               (run id, verdict, counts, each scenario's
                               record path and rerun command, the summary
                               path) as the one document on stdout instead;
@@ -4553,7 +4553,7 @@ reading either stream.
 
 | Command | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | one scenario record per line when stdout is not a terminal | progress, failures, the locations written, the summary line |
+| `nuka run` | one scenario record per line under `--records`, `run.json` under `--json`, nothing otherwise | progress, failures, the locations written, the summary line |
 | `nuka do` | the step record, also for a failed step | session notices, warnings |
 | `nuka check`, `nuka tend` | the report, or with `--json` one JSON object | nothing, except a refusal without `--json` and `nuka tend`'s `fail-on` lines |
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always JSON) | the step files that failed to import |

@@ -49,7 +49,7 @@ describe("ctx.resultOf", () => {
 
   it("a step that never calls resultOf has no used field on its step record (bullet 5, independent of module identity)", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/resultof.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "features/resultof.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -68,7 +68,7 @@ describe("ctx.resultOf", () => {
 
   it("a later step reads the earlier step's validated result; the read is recorded as used", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/resultof.feature:3"], {
+    const exitCode = await runCli(["run", "--records", "features/resultof.feature:3"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -89,7 +89,7 @@ describe("ctx.resultOf", () => {
 
   it("the same step run twice in one scenario: resultOf returns the most recent result", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/resultof.feature:7"], {
+    const exitCode = await runCli(["run", "--records", "features/resultof.feature:7"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -109,7 +109,7 @@ describe("ctx.resultOf", () => {
 
   it("resultOf never crosses a scenario boundary, and a failed run is never chained", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/resultof-boundary.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/resultof-boundary.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -141,7 +141,7 @@ describe("ctx.resultOf", () => {
 
   it("a failed step's step record carries the ctx.resultOf-read value's own result", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/resultof.feature:12"], {
+    const exitCode = await runCli(["run", "--records", "features/resultof.feature:12"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

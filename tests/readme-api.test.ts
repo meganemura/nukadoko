@@ -208,7 +208,7 @@ describe(`README.md: ${SELF_STARTED}`, () => {
   }, 120_000);
 
   it("runs green, and the fetch call is not observed", async () => {
-    const result = await nuka(["run"]);
+    const result = await nuka(["run", "--records"]);
     expect(result.code, result.stderr).toBe(0);
     const record = JSON.parse(result.stdout.trim().split("\n").at(-1)!) as {
       status: string;
@@ -323,7 +323,7 @@ describe("README.md: An HTTP API", () => {
       expect(scaffold.code, scaffold.stderr).toBe(0);
     }
 
-    const result = await nukaIn(["run"]);
+    const result = await nukaIn(["run", "--records"]);
     expect(result.code, result.stderr).toBe(0);
     const record = JSON.parse(result.stdout.trim().split("\n").at(-1)!) as {
       status: string;

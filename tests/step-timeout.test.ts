@@ -62,7 +62,7 @@ describe("a typed step that never returns", () => {
 
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/hang.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/hang.feature"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(1);
     // The run finished rather than hanging: a summary line exists at all.
@@ -87,7 +87,7 @@ describe("a typed step that never returns", () => {
     );
 
     const stdout = createCaptureSink();
-    expect(await runCli(["run", "features/hang.feature"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(1);
+    expect(await runCli(["run", "--records", "features/hang.feature"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(1);
     const [record] = stdout.text().split("\n").filter((l) => l.length > 0).map((l) => JSON.parse(l));
 
     const { readFileSync } = await import("node:fs");
@@ -110,7 +110,7 @@ describe("a typed step that never returns", () => {
     );
 
     const stdout = createCaptureSink();
-    expect(await runCli(["run", "features/hang.feature"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(1);
+    expect(await runCli(["run", "--records", "features/hang.feature"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(1);
     const [record] = stdout.text().split("\n").filter((l) => l.length > 0).map((l) => JSON.parse(l));
     expect(record.steps[0].error.message).toContain("stepTimeout in nukadoko.config.ts");
   });
@@ -131,7 +131,7 @@ describe("a typed step that never returns", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     expect(
-      await runCli(["run", "features/greeting.feature"], { rootDir, stdout, stderr }),
+      await runCli(["run", "--records", "features/greeting.feature"], { rootDir, stdout, stderr }),
       stderr.text(),
     ).toBe(0);
     expect(stdout.text()).toContain('"status":"passed"');

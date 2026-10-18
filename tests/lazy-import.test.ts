@@ -13,7 +13,7 @@ describe("a dynamic import of a TypeScript file inside a step body", () => {
     const rootDir = await copyFixtureToTempDir("lazy-import-project");
     try {
       const stdout = createCaptureSink();
-      const exitCode = await runCli(["run", "features/lazy.feature"], {
+      const exitCode = await runCli(["run", "--records", "features/lazy.feature"], {
         rootDir,
         stdout,
         stderr: createCaptureSink(),

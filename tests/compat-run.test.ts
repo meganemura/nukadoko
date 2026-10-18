@@ -73,7 +73,7 @@ describe("nuka run: compat step execution", () => {
   it("runs string/RegExp patterns + a compat-registered parameter type + table (DataTable) + docstring: result is null, args are positional, exit 0", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/compat-basic.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/compat-basic.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -128,7 +128,7 @@ describe("nuka run: compat step execution", () => {
 
   it("a throwing compat step fails with a step record and skips the rest of the scenario", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/compat-throw.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/compat-throw.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -162,7 +162,7 @@ describe("nuka run: compat step execution", () => {
   // check it could never have opted out either way.
   it("a Then-position compat step that observes a network write passes, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/compat-then.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/compat-then.feature"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),

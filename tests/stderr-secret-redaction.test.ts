@@ -43,7 +43,7 @@ describe("stderr redacts a suite secret in teardown and version-probe failures",
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/leak-a.feature"], {
+      const exitCode = await runCli(["run", "--records", "features/leak-a.feature"], {
         rootDir,
         stdout,
         stderr,
@@ -63,7 +63,7 @@ describe("stderr redacts a suite secret in teardown and version-probe failures",
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/", "--concurrency", "2"], {
+      const exitCode = await runCli(["run", "--records", "features/", "--concurrency", "2"], {
         rootDir,
         stdout,
         stderr,

@@ -57,7 +57,7 @@ describe("a from key and a docstring on the same line", () => {
   it("runs, with the from key filled by the earlier step and the docstring bound to the other", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/chained.feature"], { rootDir, stdout, stderr });
+    const exitCode = await runCli(["run", "--records", "features/chained.feature"], { rootDir, stdout, stderr });
     expect(exitCode, stderr.text()).toBe(0);
     const [record] = stdout.text().split("\n").filter((line) => line.length > 0).map((line) => JSON.parse(line));
     expect(record.steps.map((step: { status: string }) => step.status)).toEqual(["passed", "passed"]);

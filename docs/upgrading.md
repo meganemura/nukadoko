@@ -45,6 +45,16 @@ This part does not change release to release.
 
 ## 0.17.0 to the next release
 
+- **`nuka run` writes scenario records to stdout only under `--records`.**
+  A pipe, a file, a CI log, and an agent's shell no longer get one JSON
+  record per line by default; stdout stays empty. A script that parsed
+  that stream picks one of three: add `--records` to the `nuka run` it
+  reads (the same lines as before), switch to `--json` and read
+  `run.json` (the verdict, the counts, and each scenario's status, record
+  path, and `rerun` command in one document), or read the files under
+  `.nukadoko/records/scenarios/`, which the run writes either way. A
+  CI step that only shows the log needs nothing. The run summary, the
+  stderr lines, and `nuka do`'s stdout do not change.
 - **`evidence.attach` and `evidence.path` refuse `trace.<name>.zip` and
   `final.<name>.png`.** A `pageAs(name)` context writes those files beside
   a step's own `trace.zip` and `final.png`, so the names are reserved for

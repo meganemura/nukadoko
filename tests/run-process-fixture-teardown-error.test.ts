@@ -17,7 +17,7 @@ describe("nuka run: a process-scope fixture whose own teardown fails", () => {
     try {
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "features/teardown.feature"], {
+      const exitCode = await runCli(["run", "--records", "features/teardown.feature"], {
         rootDir,
         stdout,
         stderr,

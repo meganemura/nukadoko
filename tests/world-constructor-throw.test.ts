@@ -28,7 +28,7 @@ describe("nuka run: World constructor throw", () => {
   it("fails that scenario with one setup message, then runs the next and finalizes messages", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "features/world-throw.feature"], {
+    const exitCode = await runCli(["run", "--records", "features/world-throw.feature"], {
       rootDir,
       stdout,
       stderr,

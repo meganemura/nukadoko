@@ -90,7 +90,7 @@ describe("examples/migration", () => {
     rootDir = await copyExampleToTempDir("migration");
     await pointConfigAt(rootDir, started.baseURL);
 
-    const { stdout, stderr, exitCode } = await runNuka(["run", "features/migration.feature"], rootDir);
+    const { stdout, stderr, exitCode } = await runNuka(["run", "--records", "features/migration.feature"], rootDir);
 
     expect(stripRunProgressLines(stderr)).toBe("");
     expect(exitCode).toBe(0);

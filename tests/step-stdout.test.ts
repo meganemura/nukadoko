@@ -140,6 +140,7 @@ describe("step stdout stays off the record stream", () => {
       await writeChattyProject(rootDir);
       const { stdout, stderr, exitCode } = await runNuka(rootDir, [
         "run",
+        "--records",
         "features/typed.feature",
         "features/compat.feature",
         "--quiet",
@@ -168,6 +169,7 @@ describe("step stdout stays off the record stream", () => {
       await writeChattyProject(rootDir);
       const { stdout, stderr, exitCode } = await runNuka(rootDir, [
         "run",
+        "--records",
         "features/typed.feature",
         "features/compat.feature",
         "--quiet",
@@ -340,6 +342,7 @@ describe("project stdout outside step bodies stays off the record stream", () =>
         await writeNoisyProject(rootDir);
         const { stdout, stderr, exitCode } = await runNuka(rootDir, [
           "run",
+          "--records",
           "features/noisy.feature",
           "features/late.feature",
           "--quiet",
