@@ -4,8 +4,8 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 
 // Responsibility: turn a `--env` name plus the loaded config into the
 // *effective* settings one `do` run actually uses, and never anything
-// else's job (cli/do.ts wires the result into session
-// paths, the read-only check, the version probe, and ctx.baseURL/envFiles;
+// else's job (cli/do.ts wires the result into the read-only check, the
+// version probe, and ctx.baseURL/envFiles;
 // it never re-derives any of this layering itself).
 //
 // Layering rule: effective baseURL = env.baseURL ?? top-level

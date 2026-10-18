@@ -124,12 +124,3 @@ no Then, in it or in the Background, passes whenever its steps run, so
 `nuka check` warns `scenario-without-then`. Add the Then line that names
 what the reader must observe afterwards; a step that checks something
 but sits under Given or When belongs under Then instead.
-
-## A Markdown oath
-
-The same steps can be written in a Markdown file named in `oaths`
-(`nukadoko.config.ts`). `nuka check <file.md>` and `nuka run <file.md>`
-also read that path when it is not listed. A sentence that matches no
-pattern is `undefined-step`. A named directory is read for `*.md` files
-only; one with none (`.MD` does not count) is `feature-parse-error`. The grammar, and what this slice does not
-read, is docs/spec.md ("Markdown oaths").

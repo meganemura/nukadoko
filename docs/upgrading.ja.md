@@ -38,6 +38,39 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.17.0 から次のリリースへ
 
+- **`nuka run --quiet` は削除されました。**
+  `removed-command` で拒否されます。
+  短いログが欲しい CI の step は `nuka run --json` を走らせます。
+  stderr は空になり、stdout は `run.json` です。
+
+- **Markdown oaths は削除されました。**
+  config の `oaths` キーは `config-key-removed` で拒否されます。
+  `nuka check` や `nuka run` の `.md` の対象は `removed-command` で拒否されます。
+  各 oath の scenario を、`featuresDir` の下の `.feature` ファイルに Gherkin で書き、`oaths` キーを消してください。
+
+- **session は削除されました。**
+  `nuka session list`、`nuka session clear`、`nuka do --session` は `removed-command` で拒否されます。
+  各 scenario がすでにそうだったように、`nuka do` の各呼び出しはクリーンに始まります。
+  - ログイン状態が必要な step は、それを fixture から得ます。
+    Playwright の storageState のファイルを持つプロジェクトは、それを `browserContext.storageState` か `requestContext.storageState` に書きます。
+    config はこれらを拒否せず、そのまま Playwright に渡すようになりました。
+  - `.nukadoko/cache/` を消してください(`rm -rf .nukadoko/cache`)。
+    それを読むものはありません。
+    `nuka clean` はそれを一覧に出さなくなり、その `--json` の計画は `records` と `export` だけを持ちます。
+  - step record の `schema_version` は 3 になり、record は `session` フィールドを持ちません。
+    `schema_version === 2` を確かめていた読み手は 3 を確かめます。
+
+- **`nuka experimental explore` とそのモデルの API は削除されました。**
+  このコマンド(と、より古い `nuka explore` の綴り)は `removed-command` で拒否されます。
+  `experimental_defineModel`、`experimental_defineRelation`、`experimental_modelCommand`、`experimental_relationEntry` は `nukadoko` から export されなくなったので、それらを import するファイルは読み込めません。
+  残す価値のある列をそれぞれ scenario として書き、モデルと関係のファイルを消してください。
+  `explore-*` の所見の code はなくなりました。
+
+- **`nukadoko/mcp` は削除されました。**
+  `@modelcontextprotocol/client` への任意の peer dependency も一緒です。
+  `connectMcpServer` や `callMcpTool` を呼んでいた fixture は、SDK 自身の client を使います。
+  `@modelcontextprotocol/client` をプロジェクトに加え、fixture の setup で `StdioClientTransport`(`@modelcontextprotocol/client/stdio` から)を使う `Client` を作り、teardown で閉じてください。
+
 - **各 run は 1 つのディレクトリ `.nukadoko/runs/<run_id>/` になり、`records/` は書かれなくなりました。**
   state directory を読むスクリプト、CI の step、ツールは、次のパスを変えます。
   - `.nukadoko/records/runs/<run_id>/run.json`、`summary.md`、`exports` は、`.nukadoko/runs/<run_id>/run.json`、`summary.md`、`exports` です。
@@ -56,7 +89,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   手で消してください(`rm -rf .nukadoko/records`)。
   そのディレクトリの id を `nuka do --use` に渡すと、見つからないとして拒否されます。
   値を作る step をもう一度走らせてください。
-  session、cache、export の出力は動きません。
+  export の出力は動きません。
 
 - **`run.json` が run のすべてを持ち、scenario record のファイルはなくなりました。**
   `run.json` や `nuka run --json` を読むスクリプトは、次の読み方を変えます。
@@ -75,7 +108,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
     スクリーンショット、hook の trace、添付のどれも書かなかった scenario は、scenario の evidence のディレクトリを残しません(それがいまどこに置かれるかは、上の run ディレクトリの項目を参照)。
   - stderr の「Partial run」の段落に一致させていたスクリプトは、`run.json` の `selection`(`partial` か `full`)か、run サマリの `- selection:` の行を読みます。
   - `--records` の行は、いまは scenario の `run.json` のエントリです。
-    `run_id`、`environment`、`session`、`git`、`nukadoko`、`schema_version` は持たないので、それらは `run.json` から読みます。
+    `run_id`、`environment`、`git`、`nukadoko`、`schema_version` は持たないので、それらは `run.json` から読みます。
   run サマリには `- selection:` の行と「Findings」の節が加わります。
   サマリを投稿するだけの CI の step は、何も変える必要がありません。
 
@@ -93,7 +126,6 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
     `nuka run --json` は `run.json` のフィールドを持ち続けます。
     `nuka check --codes --json` と `nuka tend --codes --json` は `codes` を持ち続け、各エントリは finding です。
     意味は `description` ではなく `message` に、全般的な編集は `do` ではなく `fix` に入ります。
-  - `nuka experimental explore --json` は自身の `verdict` を持たなくなりました。
     envelopeの `verdict` を読みます。
   - `verdict` は終了コード 0、1、2 に対して `passed`、`failed`、`refused` です。
 - **finding のテキストは `<severity>\t<code>\t<where>\t<message>` で、その後に `  fix:` と `  do:` の行が続きます。**

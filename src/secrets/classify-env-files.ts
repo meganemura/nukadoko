@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 // Responsibility: decide which of a project's configured envFiles are
-// "secret sources" per docs/spec.md "Sessions, environments, secrets". Git is the classifier, not
+// "secret sources" per docs/spec.md "Environments and secrets". Git is the classifier, not
 // nukadoko. An env file git does not track (ignored or untracked; the two
 // are never distinguished, both are uncommitted) is a secret source: every
 // value it defines is a secret. A tracked env file is plain configuration

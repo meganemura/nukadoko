@@ -1188,7 +1188,6 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   ];
 
   const contextParameters: MappedParameter[] = [
-    ...(record.session !== null ? [{ name: "session", value: record.session, excluded: true }] : []),
     ...(record.target_version !== undefined ? [{ name: "target_version", value: record.target_version, excluded: true }] : []),
   ];
 

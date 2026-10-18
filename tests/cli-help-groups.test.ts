@@ -45,13 +45,10 @@ describe("nuka --help", () => {
       "describe",
       "Exploring:",
       "do",
-      "session",
       "Upkeep:",
       "tend",
       "clean",
       "skill",
-      "Experimental:",
-      "experimental",
       "Options:",
     ]);
   });
@@ -67,13 +64,6 @@ describe("nuka --help", () => {
   it("keeps a grouped command's own description on its own help screen", async () => {
     const text = await help(["init"]);
     expect(text.split("\n").slice(0, 3)).toEqual(["nuka init", "", "set up a project; ends with a self-check"]);
-  });
-
-  it("lists only explore under experimental", async () => {
-    const text = await help(["experimental"]);
-    expect(text.split("\n").filter((row) => row.startsWith("  nuka experimental "))).toEqual([
-      expect.stringMatching(/^ {2}nuka experimental explore <file> /),
-    ]);
   });
 });
 

@@ -84,7 +84,6 @@ describe("nuka run", () => {
       expect(stepRecord.kind).toBe("run");
       expect(stepRecord.scenario_record_id).toBe(record.scenario_record_id);
       expect(stepRecord.environment).toBe("default");
-      expect(stepRecord.session).toBeNull();
       // A pure step reaches no channel nukadoko observes: `observed` is
       // still always present, with every channel null.
       expect(stepRecord.observed).toEqual({ http_reads: null, http_writes: null, processes: null });

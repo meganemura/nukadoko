@@ -76,8 +76,8 @@ one request context. A part sees the page where the part before it left
 off, which is what makes a browser flow expressible as parts at all.
 
 Across `nuka do` calls, nothing continues by default. Every call builds
-its own browser on a fresh page, and `--session` alone carries only login
-state. Values still move forward with `--use <step-record-id>`, which
+its own browser on a fresh page, with no login state carried over: a step
+that needs it gets it from a fixture. Values still move forward with `--use <step-record-id>`, which
 fills the `from` keys of the next step from a record you already have.
 
 So one shape of an exploration is: keep the unit of a single `do` call
@@ -104,10 +104,10 @@ command, from the `@playwright/mcp` README, is:
 claude mcp add playwright npx @playwright/mcp@latest
 ```
 
-It takes effect in a new session. To start the browser from a login that
-`nuka do --session <name>` already saved, the server's `--isolated
---storage-state=<file>` options load that session's file,
-`.nukadoko/cache/sessions/<env>/<name>.json`.
+It takes effect in a new session. To start the browser from a saved
+login, the server's `--isolated --storage-state=<file>` options load a
+Playwright storageState file, such as the one `browserContext.storageState`
+names in `nukadoko.config.ts`.
 
 Say before the first call that the browser acts on the real application
 with whatever login it holds. A click that submits a form there is the
@@ -119,17 +119,7 @@ scenario: write the steps it needs, write the scenario from what you did
 ("Then fix what you found" below), and run `nuka check` on it, then
 `nuka run` from nothing.
 
-## Saved sessions
-
-`nuka session list` finds every saved session across every environment,
-each with its own name, whether a `nuka do --session` call still holds
-it, and the environment it belongs to. `nuka session clear [name]` deletes one by
-name, or, with no name, every session in `--env`'s environment
-(`default` when omitted); one a running call still holds refuses to
-clear. An `--env` the config does not define is refused when nothing is
-left under it, and stderr names it. Files left under an environment
-removed from the config are still cleared, and stderr names that
-environment.
+## Records left behind
 
 A step record has a lifetime without anyone cleaning: `nuka run` keeps the
 newest `retention.runs` runs (default 20) and a record no run owns, which
@@ -141,7 +131,7 @@ within the window, or raise `adHocDays` for a longer exploration.
 
 `nuka clean [--dry-run]` is the wider
 version of the same idea, once you are done exploring rather than mid-way
-through it: it removes every step record, run directory, session cache file, and
+through it: it removes every step record, run directory, and
 the Allure/messages export output at once, all disposable by design
 (see "Artifacts" in `docs/spec.md`). `--dry-run` prints the same plan the
 real run would act on without removing anything. It refuses, before

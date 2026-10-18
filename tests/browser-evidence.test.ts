@@ -51,7 +51,6 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
   return {
     featuresDir: "features",
     additionalFeatureDirs: [],
-    oaths: [],
     stateDir: ".nukadoko",
     envFiles: [],
     parameterTypes: [],
@@ -91,7 +90,7 @@ describe("createStepContext / ctx.page()", () => {
       await page.setContent("<html><body>hello</body></html>");
 
       const beforeDispose = Date.now();
-      const { evidence, storageState } = await dispose();
+      const { evidence } = await dispose();
       const afterDispose = Date.now();
 
       expect(evidence.trace).toBe("trace.zip");
@@ -115,9 +114,6 @@ describe("createStepContext / ctx.page()", () => {
       // exactly one exists, not the name of whichever second file used to.
       const pngFiles = (await readdir(evidenceDir)).filter((name) => name.endsWith(".png"));
       expect(pngFiles).toEqual(["final.png"]);
-      // A browser context was opened, so there is always something to
-      // persist for a session, even one with no cookies yet.
-      expect(storageState).toBeDefined();
     },
   );
 
@@ -143,15 +139,12 @@ describe("createStepContext / ctx.page()", () => {
       const page = await ctx.page();
       await page.context().browser()?.close();
 
-      const { evidence, storageState } = await dispose();
+      const { evidence } = await dispose();
 
       expect(evidence.screenshots).toEqual([]);
       expect(evidence.trace).toBeUndefined();
       expect(existsSync(path.join(evidenceDir, "trace.zip"))).toBe(false);
       expect(existsSync(path.join(evidenceDir, "final.png"))).toBe(false);
-      // The context was already closed, so collectStorageState() must have
-      // swallowed its own failure the same way finalize()'s teardown does.
-      expect(storageState).toBeUndefined();
     },
   );
 

@@ -1,8 +1,8 @@
 // Responsibility: the error type `ctx.requireEnv` raises, kept separate from
 // create-context.ts so callers (steps, tests) can `instanceof` it without
-// pulling in that module's browser/request/session wiring — same convention
-// as config/errors.ts, discover/errors.ts, environment/errors.ts,
-// session/errors.ts, run/errors.ts.
+// pulling in that module's browser/request wiring, the same convention
+// as config/errors.ts, discover/errors.ts, environment/errors.ts, and
+// run/errors.ts.
 //
 // The two `pageAs` errors are declared in context-name.ts, beside the rule
 // they enforce, and re-exported here so this file stays the one place the

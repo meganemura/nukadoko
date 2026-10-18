@@ -78,7 +78,7 @@ Point `envFiles` at the env files the suite already has. They are
 quotes, double quotes, and backticks are read, including a value that
 spans lines. Double quotes expand `\n` and `\r`. The separator is `=`.
 `$NAME` is not expanded. The full rules are in docs/spec.md under
-"Sessions, environments, secrets". A line that is not a blank, a comment,
+"Environments and secrets". A line that is not a blank, a comment,
 or a binding is `env-file-skipped-line` from `nuka check`.
 
 A suite that ran once per target, a shell loop or one CI job per profile,
@@ -122,10 +122,6 @@ the same rule.
 - **Don't treat a committed env file as plain after a local edit.**
   Uncommitted edits are redacted. `nuka check` reports each env file's
   classification.
-- **Don't treat a Markdown oath as a Varar import.** `oaths` is a front
-  for criteria written here, matched by the same steps as a `.feature`
-  file. The cucumber-js door is unchanged: an existing suite still comes
-  in through `nukadoko/compat`.
 - **Don't expect a loaded secret to remain visible in a record once it
   has been percent-encoded or JSON-escaped.** Those forms are removed
   with the same `{{secret.NAME}}` token as the raw value. A JSON number

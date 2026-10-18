@@ -256,8 +256,7 @@ In CI it is one more line beside the unit tests
 
 Commit `features/` (the feature and its steps), `nukadoko.config.ts`, and
 the `package.json` change. Do not commit `.nukadoko/`: it holds the step
-records, the run summaries, and session state, may hold live credentials
-in plaintext, and `nuka init` already ignores it.
+records and the run summaries, and `nuka init` already ignores it.
 
 ## An HTTP API
 
@@ -404,12 +403,10 @@ Feature: greet API
 Everything past the loop above, one line each:
 
 - [Wrong before it runs](#wrong-before-it-runs): what `nuka check` catches before anything executes, and running one step alone with `nuka do`.
-- [Markdown oaths](#markdown-oaths): the same steps behind sentences in a Markdown file instead of a `.feature`.
-- [Exploring a model](#exploring-a-model): `nuka experimental explore` generates sequences of request-only steps and prints the shortest failing one.
 - [The compat door](#the-compat-door): bring an existing cucumber-js suite in by switching one import.
 - [Reports fill themselves](#reports-fill-themselves): the Allure and cucumber-messages emitters.
 - [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, and `--repeat`.
-- Sessions, environments, and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Sessions, environments, secrets" in [docs/spec.md](docs/spec.md#sessions-environments-secrets)): login state across calls, named environments, redaction.
+- Environments and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Environments and secrets" in [docs/spec.md](docs/spec.md#environments-and-secrets)): named environments, redaction.
 - [Skills for coding agents](#skills-for-coding-agents): the two skills an agent loads to run this loop.
 - [The bed has to be tended](#the-bed-has-to-be-tended): `nuka tend`, for what is rotting rather than broken.
 - [Setup details](#setup-details), [Upgrading](#upgrading), [Status](#status), and [Why this exists now](#why-this-exists-now).
@@ -538,7 +535,7 @@ afterward. The result is a step record, not a pass/fail line.
 }
 ```
 
-(`evidence`, `environment`, `session`, and the timestamps are trimmed above
+(`evidence`, `environment`, and the timestamps are trimmed above
 for space; the real step record has them too.)
 
 An existing cucumber-js suite reaches this door too, by switching one
@@ -549,51 +546,6 @@ line against, and `nuka do` refuses to run one by name at all.
 `check` is the cheap static gate; `run` leaves the step record trail and
 the run summary a pull request carries; `tend` is the periodic one, and the
 only one you are meant to *not* run before every change.
-
-## Markdown oaths
-
-Gherkin is one front for the same typed steps and step records. A
-Varar-style Markdown oath is another.
-`nukadoko.config.ts`'s `oaths` names the files, or a directory of them.
-The default is `[]`, so this README is not a scenario.
-
-A sentence outside a blockquote or a fenced code block is a step, matched
-by the same `defineStep` patterns a `.feature` line uses. A sentence no
-pattern matches is an `undefined-step`, on the line it was written on.
-`nuka check features/todo.md` and `nuka run features/todo.md` take an
-explicit `.md` path even when `oaths` does not list it. A directory
-target includes a configured oath that lives under that directory, and
-still walks `.feature` files the way it always has.
-
-`examples/todo/features/todo.md` is the same todo criteria as
-`features/todo.feature`, plus one outline row. What this slice reads,
-and what it leaves for later, is in
-[docs/spec.md](docs/spec.md#markdown-oaths).
-
-## Exploring a model
-
-A scenario is one sequence a person chose. A model says what any sequence
-of request-only steps should do, and `nuka experimental explore` generates
-sequences from it. The command and the `experimental_` functions a model
-file imports are experimental: they can change or go in any release
-without a deprecation notice.
-
-```
-nuka experimental explore features/explore/add-model.ts --seed 1
-```
-
-Each sequence is built from `draw.int` and `draw.pick` choices taken from
-one seed, so the same command reruns the same sequences. The first
-failure is shrunk: a step is deleted, then a choice is lowered, and an
-edit stays only while the sequence still fails. stdout then gets the
-shortest scenario found, written in the project's own step patterns and
-ready to paste into a feature. A relation runs a declared sequence and a
-second one built from it, and prints both scenarios when their results
-disagree. Nothing is added to a feature on its own: a person reads the
-printed scenario and decides. The model in
-`examples/todo/features/explore/` runs against the todo app, and
-[docs/spec.md](docs/spec.md#exploring-a-model-or-a-relation) has the
-rules.
 
 ## Why this exists now
 
@@ -661,15 +613,10 @@ delegated to Allure.
 whole 0.x range, not a stretch that ends at 0.1: reaching 0.1 will mean
 more of the roadmap has landed, not that the surface has frozen.
 
-Implemented and covered by tests: typed steps, step records, sessions,
+Implemented and covered by tests: typed steps, step records,
 environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
-emitters, the Markdown run summary, tending (`nuka tend`), experimental
-models and relations (`nuka experimental explore`), the
-MCP client (`nukadoko/mcp`), Varar-style Markdown
-oaths (a second front beside Gherkin; see [Markdown oaths](#markdown-oaths)), and two
-agent skills. Not implemented: an AI-assisted glue converter, and the rest
-of Varar (comparing a step's return value to words in the sentence, every
-dialect). See the [roadmap](docs/spec.md#roadmap).
+emitters, the Markdown run summary, tending (`nuka tend`), and two
+agent skills. Not implemented: an AI-assisted glue converter. See the [roadmap](docs/spec.md#roadmap).
 
 Maintenance is one person working in the open. Every claim below that
 carries a number was measured; where something was only reasoned about,
@@ -1170,7 +1117,7 @@ and reports the errors that run would stop on; with no target,
 target leaves out.
 
 `nuka run` also prints its own progress and where it wrote to stderr as it
-goes (`--quiet` quiets the progress only). stdout stays empty unless you
+goes. stdout stays empty unless you
 ask: `nuka run --records` writes each scenario's `run.json` entry there,
 one JSON line per scenario as it finishes, and `nuka run --json` prints
 `run.json` itself instead, the envelope every `--json` prints with the
@@ -1190,7 +1137,7 @@ failed step read from a step whose program exited nonzero, a `used` line
 between the two names that step, its exit code, and the first line of its
 stderr: a Then step that got an empty stdout usually failed there. After the
 summary, each failed scenario is a `scenario-failed` finding whose `do:`
-line runs it again. `--quiet` keeps all of these.
+line runs it again.
 
 ```text
   step 2/2  failed  0.0s  the sum is 5
@@ -1349,7 +1296,7 @@ commit, so nukadoko writes no record of its own beside the feature (see
 ## Design
 
 The full design (problem statement, typed steps, keyword semantics,
-records, sessions/environments/secrets, review, roadmap, and honest
+records, environments and secrets, review, roadmap, and honest
 limits) lives in a single place: [docs/spec.md](docs/spec.md).
 
 ## License

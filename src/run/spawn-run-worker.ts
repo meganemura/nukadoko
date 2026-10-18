@@ -40,7 +40,6 @@ export interface SpawnRunWorkerOptions {
    * `nuka run` itself does rather than trusting a name this module resolved
    * on the parent's behalf. */
   readonly env: string | null;
-  readonly quiet: boolean;
   /** Absolute path to a temp file, one repo-relative `.feature` path per
    * line, in the order this worker should run them (src/run/worker-
    * protocol.ts's own argv contract). */
@@ -63,11 +62,11 @@ export interface SpawnRunWorkerOptions {
 const detached = process.platform !== "win32";
 
 export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<null, Readable, Readable> {
-  const { rootDir, runId, env, quiet, featureListPath, repeat, probe } = options;
+  const { rootDir, runId, env, featureListPath, repeat, probe } = options;
   const here = fileURLToPath(import.meta.url);
   const ext = path.extname(here);
   const workerEntry = path.join(path.dirname(here), `run-worker-entry${ext}`);
-  const args = [rootDir, runId, env ?? "", quiet ? "1" : "0", featureListPath, String(repeat), probe ? "1" : "0"];
+  const args = [rootDir, runId, env ?? "", featureListPath, String(repeat), probe ? "1" : "0"];
   const nodeArgs =
     ext === ".ts" ? ["--import", loaderUrl, workerEntry] : [workerEntry];
 

@@ -32,7 +32,6 @@ import {
   RUN_HOOK_ARG_COUNT,
   SCENARIO_HOOK_ARG_COUNT,
 } from "./done-callback.js";
-import { checkExploreDeclarations } from "./explore-check.js";
 import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
@@ -144,7 +143,7 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
 // being reported.
 
 /** The report a `nuka check` with no target gives: every feature under
- * featuresDir and additionalFeatureDirs, and every configured oath. */
+ * featuresDir and additionalFeatureDirs. */
 export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   // additionalFeatureDirs joins featuresDir here: a no-target `nuka check`
   // is one of the two commands whose default scan includes it (`nuka tend`
@@ -154,7 +153,7 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   // `missingAdditionalDirs` is intentionally unread.
   const { report } = await analyze(
     rootDir,
-    (config) => loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths),
+    (config) => loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs),
     false,
   );
   return report;
@@ -266,8 +265,6 @@ async function reportFor(
 ): Promise<{ report: CheckReport; undefinedSteps: readonly UndefinedStepLine[] }> {
   const {
     vocabulary,
-    models,
-    relations,
     compatParameterTypes,
     compatHooks,
     compatRunHooks,
@@ -491,24 +488,7 @@ async function reportFor(
     });
   }
 
-  // A model or a relation names steps by basename. That name is either a
-  // file discovery registered, or it is not, and the step either needs a
-  // browser or it does not. Both are known before any step runs, so they
-  // belong here rather than in the runner. `checkExploreDeclarations` does
-  // not call the model or the relation.
   const fixtureGraph = buildFixtureGraph(config);
-  for (const issue of checkExploreDeclarations({
-    vocabulary,
-    models,
-    relations,
-    needsBrowser: (step) => stepNeeds(step, fixtureGraph).needsBrowser,
-  })) {
-    errors.push({
-      ...issue,
-      file: issue.file === undefined ? undefined : path.relative(rootDir, issue.file),
-    });
-  }
-
   // The fixture-bag counterpart to the `from` structural check just above:
   // this is the same validation `nuka check` and `nuka run` share
   // (docs/spec.md "Context API"), so a
@@ -562,7 +542,6 @@ async function reportFor(
       code: "feature-parse-error",
       message: parseError.message,
       file: parseError.relativePath,
-      line: parseError.line,
     });
   }
   // `@nukadoko:serial` read anywhere but a `Feature:` line does nothing at all
@@ -619,7 +598,7 @@ async function reportFor(
     // for tend: the suffix's own wording says which lines were read.
     const bound = selection
       ? boundStepNames(
-          loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths).features,
+          loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs).features,
           bindingResult.patterns,
         )
       : new Set(featureResult.boundSteps.map((line) => line.stepName));

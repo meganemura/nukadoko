@@ -17,7 +17,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka init`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs
-// (same split as cli/do.ts and cli/session.ts). One command, one all-or-
+// (same split as cli/do.ts and cli/run.ts). One command, one all-or-
 // nothing outcome:
 //
 //   - If either nukadoko.config.ts or nukadoko.config.mts already exists,
@@ -80,7 +80,7 @@ export interface RunInitOptions {
 // them here, is the one form of this comment that cannot go stale when
 // that table gains a key.
 const CONFIG_KEYS_COMMENT =
-  '  // Every config key nukadoko reads, one line each: docs/spec.md, "Sessions, environments, secrets"';
+  '  // Every config key nukadoko reads, one line each: docs/spec.md, "Environments and secrets"';
 
 /** What `--server` and `--server-url` name: the program's argv and its URL. */
 export interface ServerSpec {

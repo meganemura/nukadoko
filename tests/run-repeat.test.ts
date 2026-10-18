@@ -127,7 +127,7 @@ describe("nuka run --repeat with --concurrency", () => {
     );
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/failure/", "--concurrency", "2", "--repeat", "2", "--quiet"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/failure/", "--concurrency", "2", "--repeat", "2"], {
       rootDir,
       stdout,
       stderr,

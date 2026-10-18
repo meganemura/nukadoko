@@ -11,7 +11,6 @@ import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
-import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import { probeVersion } from "../environment/probe-version.js";
@@ -172,7 +171,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // rest of the run.
 //
 // A pickle's `emitStep` calls happen once per step, through `runScenario`'s
-// `onStepFinished`, never gated on `--quiet`, before that pickle's
+// `onStepFinished`, before that pickle's
 // `stdout.write`. Each call maps that one step, buffers the result, and
 // writes a disposable progress snapshot (src/report/allure/emitter.ts). The
 // one real Allure test for the scenario reaches disk only at `endScenario`,
@@ -229,11 +228,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // Progress lines (src/run/progress-log.ts) go to stderr, never stdout.
 // stdout's one-JSON-record-per-scenario contract stays a machine contract.
 // `onStepProgress` is built once and threaded into every `runScenario`
-// call, and is undefined under `--quiet`. `--quiet` suppresses only the
-// step and scenario boundary lines. `writeOutputLocations` and
-// `writeRunSummary` near the return are unconditional: each is written
-// once, and naming where output landed is not what that flag is for. The
-// progress has no TTY check. A CI log wants the same progress. The records
+// call. The progress has no TTY check. A CI log wants the same progress. The records
 // on stdout are written only under `--records`, and under `--json` none of
 // these lines is written at all (see `runRun`).
 //
@@ -298,10 +293,6 @@ export interface RunRunOptions {
   /** `--env`, in the order given; empty for the `default` environment.
    * Each selected scenario runs once per environment, in this order. */
   envs: readonly string[];
-  /** Suppresses the per-step and per-scenario progress lines — the
-   * output-location and summary lines at the
-   * end of a run are written either way; see this file's own header. */
-  quiet: boolean;
   /** `--records`: write each scenario's run.json entry to stdout, one per
    * line, as the scenario finishes.
    * Without it stdout stays empty, terminal or not. */
@@ -375,7 +366,7 @@ function stepsLocation(
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, envs, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
+  const { rootDir, envs, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
   const notices = options.notices ?? [];
   const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint, before: readonly Finding[] = []): number =>
     refuse({ json: options.json, stdout: options.stdout, stderr, command: "run" }, error, code, hint, [...notices, ...before]);
@@ -461,8 +452,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   try {
     const select = (): ReturnType<typeof selectPickles> | { refused: unknown } => {
       try {
-        const oaths = resolveOathPaths(rootDir, config.oaths);
-        return selectPickles(rootDir, featureArgs, oaths.files, oaths.directories);
+        return selectPickles(rootDir, featureArgs);
       } catch (error) {
         if (error instanceof DirectoryTargetLineError) {
           const command = ["nuka", "run", ...error.targetsWithoutLine, ...rerunFlags].map(shellWord).join(" ");
@@ -841,9 +831,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const onUnknownTraceVersion = createTraceVersionWarner(warnings("trace-version-unknown"));
 
     // Same "one instance, threaded unchanged into every `runScenario` call"
-    // shape as `onUnknownTraceVersion` just above. Built under `--quiet` too:
-    // the logger itself drops every line but a failed step's.
-    const onStepEnd = createStepProgressLogger(progress, { stateDir: config.stateDir, runId, quiet });
+    // shape as `onUnknownTraceVersion` just above.
+    const onStepEnd = createStepProgressLogger(progress, { stateDir: config.stateDir, runId });
 
     // Runs one BeforeAll/AfterAll
     // registration, in isolation — `label` is only ever "BeforeAll" or
@@ -892,8 +881,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const { allureResultsDir: allureResultsDirRel, messagesOutput: messagesOutputRel } = emitterTargets(config);
 
     // A target naming one file has nothing to distribute across more than
-    // one worker, so `--concurrency` drops back to 1 with a one-line,
-    // `--quiet`-proof reason (docs/spec.md "Scenarios (the scripted path)",
+    // one worker, so `--concurrency` drops back to 1 with a one-line
+    // reason (docs/spec.md "Scenarios (the scripted path)",
     // same category as the paths line), before any worker is spawned.
     let effectiveConcurrency = concurrency;
     if (effectiveConcurrency > 1 && selected.features.length <= 1) {
@@ -923,7 +912,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             targetVersion: condition.targetVersion,
             secrets: condition.secrets,
           })),
-          quiet,
           concurrency: effectiveConcurrency,
           selected,
           flatPickles,
@@ -1076,7 +1064,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // next begins, so two conditions never share a moment or a fixture.
       const repeatTally = createRepeatTally();
       for (const [conditionIndex, condition] of conditions.entries()) {
-        if (conditionsOf.named && hasPickles && !quiet) progress.write(`environment ${condition.resolvedEnv.name}\n`);
+        if (conditionsOf.named && hasPickles) progress.write(`environment ${condition.resolvedEnv.name}\n`);
         let passPassed = true;
         // This environment's own `"process"`-scope fixture cache — one
         // instance, shared by every `runScenario`
@@ -1124,15 +1112,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             const executionIndex = (conditionIndex * repeat + iteration) * flatPickles.length + pickleIndex;
             // This pickle's own boundary line, right before its execution
             // actually begins.
-            if (!quiet) {
-              writeScenarioBoundary(progress, {
-                index: executionIndex + 1,
-                total: flatPickles.length * repeat * conditions.length,
-                relativeFeaturePath: feature.relativePath,
-                line: pickle.location?.line ?? 0,
-                name: pickle.name,
-              });
-            }
+            writeScenarioBoundary(progress, {
+              index: executionIndex + 1,
+              total: flatPickles.length * repeat * conditions.length,
+              relativeFeaturePath: feature.relativePath,
+              line: pickle.location?.line ?? 0,
+              name: pickle.name,
+            });
 
             // Opens this scenario's own Allure scope right before its first
             // step can possibly run — `emitStep` below needs it to already
@@ -1158,9 +1144,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             // over this
             // pickle's own `gherkinDocument`/`relativeFeaturePath`, which
             // `run-scenario.ts`'s own `StepFinishedInfo` does not carry (that
-            // struct is per-*step*, not per-*scenario*). Built regardless of
-            // `quiet` — the report's own granularity does not follow the
-            // terminal's — and is itself a
+            // struct is per-*step*, not per-*scenario*). It is itself a
             // no-op when `allureEmitter` is `null`.
             const onStepFinished: ((info: StepFinishedInfo) => void) | undefined = allureEmitter
               ? (info) => {
@@ -1170,7 +1154,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
                     pickle,
                     relativeFeaturePath: feature.relativePath,
                     environment: condition.resolvedEnv.name,
-                    session: null,
                     targetVersion: condition.targetVersion,
                     runId,
                   });

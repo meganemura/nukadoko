@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -11,28 +10,13 @@ import { readOwnVersion } from "../src/version.js";
 import { messagesRunOutputPath } from "../src/record/messages-output.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-/** A pid guaranteed to already be dead: spawnSync blocks until the child
- * has exited, so by the time it returns, its pid is free to be reused as a
- * "the process that held this lock is gone" fixture — the same trick
- * session.test.ts uses for the same reason (a literal constant like
- * 999999 is a real, possibly another user's, process on a machine with a
- * large pid_max, e.g. Linux's default). */
-function deadPid(): number {
-  const child = spawnSync(process.execPath, ["-e", "process.exit(0)"]);
-  if (child.pid === undefined) {
-    throw new Error("spawnSync did not report a pid");
-  }
-  return child.pid;
-}
-
 // Responsibility: `nuka clean` — what it deletes (runs/<run_id>, do/<id>,
-// cache/sessions/<env>/*, export/allure-results,
+// export/allure-results,
 // export/messages.ndjson), what it refuses to touch (`export/allure-
 // history.jsonl`), and
 // `--dry-run`/`--json`/category selection. Seeds `.nukadoko/` by hand
 // rather than by running real steps: this is a state-directory-shape test,
-// not a re-test of what `nuka do`/`nuka run` already write (session.test.ts,
-// run-session.test.ts).
+// not a re-test of what `nuka do`/`nuka run` already write.
 
 function stateDir(rootDir: string): string {
   return path.join(rootDir, ".nukadoko");
@@ -67,12 +51,6 @@ async function seedRecords(rootDir: string): Promise<void> {
   await writeFile(path.join(stateDir(rootDir), "runs", "run-ccc", "exports"), "");
 }
 
-async function seedCache(rootDir: string, environment = "default"): Promise<void> {
-  const dir = path.join(stateDir(rootDir), "cache", "sessions", environment);
-  await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, "alpha.json"), JSON.stringify({ cookies: [], origins: [] }));
-}
-
 async function seedExport(rootDir: string): Promise<void> {
   const resultsDir = path.join(stateDir(rootDir), "export", "allure-results");
   await mkdir(resultsDir, { recursive: true });
@@ -95,7 +73,7 @@ describe("nuka clean", () => {
   let rootDir: string;
 
   beforeEach(async () => {
-    rootDir = await copyFixtureToTempDir("session-project");
+    rootDir = await copyFixtureToTempDir("pure-step-project");
   });
 
   afterEach(async () => {
@@ -129,7 +107,6 @@ describe("nuka clean", () => {
 
   it("--dry-run lists every category's targets and deletes nothing", async () => {
     await seedRecords(rootDir);
-    await seedCache(rootDir);
     await seedExport(rootDir);
     await seedExportRunFile(rootDir, "run-seed-0001");
 
@@ -142,14 +119,12 @@ describe("nuka clean", () => {
     // scenario evidence leaves with its run, and is not listed apart.
     expect(text).toContain(`${path.join(".nukadoko", "runs", "run-ccc")}\n${path.join(".nukadoko", "do", "step-aaa")}\n`);
     expect(text).not.toContain("scenario-bbb");
-    expect(text).toContain(path.join(".nukadoko", "cache", "sessions", "default", "alpha.json"));
     expect(text).toContain(path.join(".nukadoko", "export", "allure-results"));
     expect(text).toContain(path.join(".nukadoko", "export", "messages.ndjson"));
     expect(text).toContain(path.join(".nukadoko", "export", "messages.run-seed-0001.ndjson"));
 
     // Nothing actually removed.
     expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
-    expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "messages.run-seed-0001.ndjson"))).toBe(true);
   });
@@ -177,14 +152,6 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(false);
     expect(existsSync(path.join(stateDir(rootDir), "runs", "run-ccc", "scenarios", "scenario-bbb"))).toBe(false);
     expect(existsSync(path.join(stateDir(rootDir), "runs", "run-ccc"))).toBe(false);
-  });
-
-  it("deletes a non-live session's cache files", async () => {
-    await seedCache(rootDir);
-
-    const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
-    expect(exitCode).toBe(0);
-    expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(false);
   });
 
   it("deletes export/allure-results contents but recreates the directory empty, and never touches allure-history.jsonl", async () => {
@@ -224,7 +191,6 @@ describe("nuka clean", () => {
 
   it.each(["--records", "--cache", "--export"])("refuses %s by name, says clean removes every category, and deletes nothing", async (flag) => {
     await seedRecords(rootDir);
-    await seedCache(rootDir);
     await seedExport(rootDir);
 
     const stdout = createCaptureSink();
@@ -233,11 +199,10 @@ describe("nuka clean", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      `refused\tremoved-command\t-\tnuka clean ${flag} is removed: nuka clean always removes records, cache, and export together; ` +
+      `refused\tremoved-command\t-\tnuka clean ${flag} is removed: nuka clean always removes records and export together; ` +
         "nuka clean --dry-run lists what it would remove.\n  fix: Use what the message names in its place.\n  do: nuka clean --help\n",
     );
     expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
-    expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
   });
 
@@ -257,28 +222,13 @@ describe("nuka clean", () => {
           severity: "refused",
           code: "removed-command",
           message:
-            "nuka clean --cache is removed: nuka clean always removes records, cache, and export together; " +
+            "nuka clean --cache is removed: nuka clean always removes records and export together; " +
             "nuka clean --dry-run lists what it would remove.",
           fix: "Use what the message names in its place.",
           do: "nuka clean --help",
         },
       ],
     });
-  });
-
-  it("removes a stale lock whose own pid is dead", async () => {
-    await seedRecords(rootDir);
-    const dir = path.join(stateDir(rootDir), "cache", "sessions", "default");
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      path.join(dir, "stale.lock"),
-      JSON.stringify({ pid: deadPid(), started_at: new Date().toISOString() }),
-    );
-
-    const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
-    expect(exitCode).toBe(0);
-    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(false);
-    expect(existsSync(path.join(dir, "stale.lock"))).toBe(false);
   });
 
   it("still removes a results directory that stays inside the project and is not a parent of the state directory", async () => {

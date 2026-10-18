@@ -143,7 +143,6 @@ describe("step stdout stays off the record stream", () => {
         "--records",
         "features/typed.feature",
         "features/compat.feature",
-        "--quiet",
       ]);
 
       expect(exitCode, stderr).toBe(0);
@@ -172,7 +171,6 @@ describe("step stdout stays off the record stream", () => {
         "--records",
         "features/typed.feature",
         "features/compat.feature",
-        "--quiet",
         "--concurrency",
         "2",
       ]);
@@ -345,7 +343,6 @@ describe("project stdout outside step bodies stays off the record stream", () =>
           "--records",
           "features/noisy.feature",
           "features/late.feature",
-          "--quiet",
           "--concurrency",
           concurrency,
         ]);

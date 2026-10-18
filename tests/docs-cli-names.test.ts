@@ -303,7 +303,7 @@ function summaryOmissions(tree: CommandNode, summary: string): string[] {
 }
 
 /** The commands no `nuka ...` in the file names, down to each subcommand
- * (`nuka session clear`, `nuka skill path`). llms.txt is the one file an
+ * (`nuka skill path`). llms.txt is the one file an
  * agent may read alone, so it names each one. */
 function commandOmissions(tree: CommandNode, file: DocFile): string[] {
   const named = nukaInvocations(file).map((invocation) => invocation.trim().split(/\s+/));
@@ -323,12 +323,13 @@ const REMOVED_COMMANDS = new Set([
   "mcp-tools",
   "experimental mcp-tools",
   "experimental webmcp-tools",
-  "session start",
-  "session stop",
+  "session",
+  "experimental",
 ]);
 const REMOVED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["init", new Set(["--env", "--env-files", "--base-url", "--features-dir"])],
-  ["run", new Set(["--session"])],
+  ["run", new Set(["--session", "--quiet"])],
+  ["do", new Set(["--session"])],
   ["clean", new Set(["--records", "--cache", "--export"])],
   ["tend", new Set(["--all"])],
 ]);
@@ -420,12 +421,13 @@ describe("the extraction itself", () => {
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "accept features/a.feature")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "acceptx")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental webmcp-tools <url>")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental explore a.ts")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "experimental explore a.ts")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "README.md", text: "" }, "init --env")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --env-files")).toBe(true);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "run features/a.feature --session alice")).toBe(true);
-    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "do open-cart --session alice")).toBe(false);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "do open-cart --session alice")).toBe(true);
+    expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "do open-cart --env staging")).toBe(false);
     expect(citesRemovedCommand({ relativePath: "docs/upgrading.md", text: "" }, "init --allure")).toBe(false);
   });
 
@@ -438,8 +440,8 @@ describe("the extraction itself", () => {
     const tree = await readCommandTree();
     expect(invocationProblem(tree, "skill install")).toBe('"nuka skill" has no command "install"');
     expect(invocationProblem(tree, "tend --fix")).toBe('"nuka tend" has no flag --fix');
-    expect(invocationProblem(tree, "experimental explore features/m.ts --json -- --port 1")).toBe(undefined);
-    expect(invocationProblem(tree, "run features/ --no-quiet")).toBe(undefined);
+    expect(invocationProblem(tree, "check features/m.feature --json -- --port 1")).toBe(undefined);
+    expect(invocationProblem(tree, "run features/ --no-check")).toBe(undefined);
   });
 
   it("accepts any of a command's own flags, and names a flag it does not have, ignoring words after --", async () => {
@@ -506,17 +508,15 @@ describe("the extraction itself", () => {
     const llms = docFiles.find((file) => file.relativePath === "llms.txt")!;
     const withoutClean = sample("llms.txt", llms.text.replace(/^- `nuka clean.*$/m, ""));
     expect(commandOmissions(tree, withoutClean)).toEqual(["nuka clean"]);
-    const sessionOnly = sample("llms.txt", "`nuka session list` and `nuka session`\n");
-    expect(commandOmissions(tree, sessionOnly).filter((name) => name.startsWith("nuka session"))).toEqual([
-      "nuka session clear",
-    ]);
+    const skillOnly = sample("llms.txt", "`nuka skill`\n");
+    expect(commandOmissions(tree, skillOnly).filter((name) => name.startsWith("nuka skill"))).toEqual(["nuka skill path"]);
   });
 
   it("reports a command or a flag the CLI summary leaves out", async () => {
     const tree = await readCommandTree();
     const summary = cliSummaryOf("docs/spec.md")
-      .replace(/^nuka session clear .*$/m, "")
+      .replace(/^nuka skill path.*$/m, "")
       .replaceAll("--concurrency", "");
-    expect(summaryOmissions(tree, summary)).toEqual(["nuka run --concurrency", "nuka session clear"]);
+    expect(summaryOmissions(tree, summary)).toEqual(["nuka run --concurrency", "nuka skill path"]);
   });
 });

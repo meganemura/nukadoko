@@ -5,7 +5,7 @@
 > 原文は spec.md。
 > 相違があれば原文が正。
 
-Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`/`scaffold`、session、environment、secret)。
+Status: M1(engine core)実装済み(`steps`/`describe`/`do`/`run`/`check`/`init`/`scaffold`、environment、secret)。
 M2(compat、後述)も実装済み(`nukadoko/compat`、typed World の計測、移行ガイド)。
 実世界での検証ゲートは、いまや両方とも実行済みです。
 typed step を実際の feature ファイルに対して起草したゲートと、compat の扉を実際の cucumber-js の glue に対して監査したゲートです(後述)。
@@ -78,10 +78,9 @@ nukadoko は意図的に、所有する範囲を最小限にとどめていま�
 | 「何が何を証明するか」の承認 | git(feature と step 定義の PR レビュー、CODEOWNERS) |
 | **型付き step の契約** | **nukadoko** |
 | **実行と計測(record)** | **nukadoko** |
-| **Session、environment、secret** | **nukadoko** |
+| **Environment、secret** | **nukadoko** |
 | **キーワードの意味論(Then は mutate してはならない)** | **nukadoko** |
 | **pull request が運ぶ run サマリ** | **nukadoko** |
-| Markdown oaths(「Markdown oaths」のサブセット) | **nukadoko**(`.feature` ファイルと同じ pickle にコンパイルする) |
 
 ## 課題
 
@@ -115,7 +114,6 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
 | Measurement | `.nukadoko/runs/<run_id>/`、`nuka run` 1 回につき 1 つのディレクトリ(run の結果である `run.json`、その Markdown のサマリである `summary.md`、evidence を含む各 step record である `steps/<id>/`、scenario 自身の evidence を書いたときだけの `scenarios/<id>/`、その run が書いた export ファイルの一覧である `exports`)と、`.nukadoko/do/<id>/`(`nuka do` の step record) | ツール | しない | 最新 `retention.runs` 回分の run。`nuka do` の record と終わっていない run は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、Allure emitter と messages emitter、`nuka do --use`、`nuka tend` |
 | Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも)。どちらも、その emitter が有効なときだけ | ツール | しない | 書いた run と同じ | 他のツール |
-| Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
 
 この表が名指しているのはファイルです。
 列の間にある区別は、「これを消すと何が起きるか」と「誰がこれを変えてよいか」という 2 つの問いに答えます。
@@ -124,10 +122,6 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   消すと、次の `nuka run` が新しいものを書きます。
   Allure の CLI や CI の formatter など、nukadoko の外側の読み手のために存在します。
   nukadoko 自身は決して読みません。
-- **Cache が使い捨てなのは、別の理由からです。**
-  何かが起きたことを記録しません。
-  避けられた作業だけを表し、session ファイルがあれば、後の呼び出しで再ログインを省けます。
-  消すとログインし直す必要がありますが、正しさには影響しません。
 - **コミットされるのは Contract だけです。**
   Contract は人が書き、レビューした約束です。
   その約束が green で通ったかどうかは、CI が pull request に投稿する run サマリにあります(「レビュー」を参照)。
@@ -184,11 +178,11 @@ step 名は、ファイル名から拡張子を取り除いた名前です。
 discovery は、どの深さでも `node_modules` と `.git`、`.nukadoko`、`.vscode` などのドットディレクトリをスキップします。
 `.d.ts`、`.d.mts`、`.d.cts` は step 定義ではなく型宣言であるため、対象から除外します。
 
-discovery も、`.feature` ファイルと oath を歩く処理も、シンボリックリンクをたどります。
+discovery も、`.feature` ファイルを歩く処理も、シンボリックリンクをたどります。
 そのため monorepo は、共有の step や feature を `featuresDir` にリンクできます。
 どの処理も、各ディレクトリには一度だけ入ります。
 そのため、ツリーの上を指すリンクがあってもループせず、同じディレクトリを指す 2 つのリンクがあってもファイルを二重に並べません。
-`featuresDir`、`additionalFeatureDirs`、`oaths` から複数の経路で届く feature や oath は、一度だけ読みます。
+`featuresDir` と `additionalFeatureDirs` から複数の経路で届く feature は、一度だけ読みます。
 ファイルは実パスで区別し、最初に届いた経路の名前で報告します。
 リンク先が存在しないリンクも、歩く対象に残ります。
 その import や読み込みが失敗し、その失敗がリンクを名指しします。
@@ -229,13 +223,13 @@ Node は型注釈を空白に置き換え、残りを実行します。
 - `type` なしで import した名前は、型の除去の後も import として残ります。
   そのため型をこの形で import すると、Node の "does not provide an export named" エラーで失敗します。
   `import type` を使えば避けられます(`"verbatimModuleSyntax": true` にすると `tsc` がそれを求めます)。
-  その名前が `nukadoko`、`nukadoko/compat`、`nukadoko/matching`、`nukadoko/mcp` が export する型(`IWorldOptions` など)のとき、finding は `import type` と書くよう伝えます。
+  その名前が `nukadoko`、`nukadoko/compat`、`nukadoko/matching` が export する型(`IWorldOptions` など)のとき、finding は `import type` と書くよう伝えます。
   それ以外のモジュールについては型と書き間違いを区別できないので、何も足しません。
 - `"type"` のない `package.json` のもとでは、Node は `.ts` や `.js` のファイルを 2 回解析し、読み込むたびに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
   ファイルは読み込めるので、これを報告するのは `nuka tend` で、`package-type-missing` として、`"type": "module"` を追加すべき `package.json` を名指します。
 
 discovery は 1 回ごとに、それ自身のモジュールグラフでファイルを読み込みます。
-そのため 2 回 discovery を行うプロセス(MCP サーバー、テスト)では、各ファイルのトップレベルのコードが再び実行され、2 回の discovery がモジュールを共有することはありません。
+そのため 2 回 discovery を行うプロセス(テスト、実行中のプロセスの下で編集された config)では、各ファイルのトップレベルのコードが再び実行され、2 回の discovery がモジュールを共有することはありません。
 
 リポジトリのルートなどを `featuresDir` に設定すると、同じように歩く範囲が広がります。
 その木の中にあるビルド成果物も、名前が上記 4 つの拡張子のいずれかで終わる場合は glue になり得ます。
@@ -423,7 +417,7 @@ nukadoko では、このパターンがまず `check` に宣言を渡します�
 
 fixture の名前:
 
-- `page: Page`: session の storageState から復元された Playwright の Page です。
+- `page: Page`: `config.browserContext` から作った新しい browser context の Playwright の Page です。
   設定された baseURL は browser context に渡されるため、`page.goto("/path")` はそれを基準に解決されます。
   標準の URL 規則が適用されます: 先頭のスラッシュは、baseURL 自身のパスに追加されず、そのパスを置き換えます。
   この動作は、Playwright 1.61.1 と `baseURL: "https://demo.playwright.dev/todomvc/"` を使って計測しました。
@@ -444,7 +438,7 @@ fixture の名前:
   `options` はその 1 つの context のための Playwright 自身の `BrowserContextOptions` で、たとえば `{ javaScriptEnabled: false }` です。
   `config.browserContext` の上に適用されます。
   `baseURL` は `page` と同じように渡されます。
-  session の storageState は渡されません。
+  `config.browserContext` の `storageState` は渡されません。
   その context は別の人だからです。
   context は scenario の中でその `name` が最初に呼ばれたときに開き、後の呼び出しは同じページを返します。
   後の呼び出しが別の `options` を渡すと `ContextOptionsConflictError` を投げます。
@@ -457,14 +451,14 @@ fixture の名前:
   `pageAs` を分割代入しても何も起動しません。
   起動するのは最初の呼び出しです。
   後述の「1 つの scenario の複数の人」を参照してください。
-- `request: APIRequestContext`: session の cookie を持つ Playwright の APIRequestContext です。
+- `request: APIRequestContext`: `config.requestContext` から作った Playwright の APIRequestContext です。
   上の `page` と同様に、`baseURL` は任意です。
   複数のホストに絶対 URL だけでアクセスするスイートには、指定する単一の baseURL がありません。
   nukadoko は、この fixture を満たすためだけに baseURL を config へ強制しません。
   `baseURL` が未設定の状態で step が相対パスを渡すと、Playwright がエラーを発生させます。
   nukadoko は、そのエラーを先に防ぐために Playwright の URL 解決を再実装しません。
 - `env`: 設定された envFiles から得た読み取り専用の環境変数です。
-  ファイルの形式は「Session、environment、secret」にあります。
+  ファイルの形式は「Environment、secret」にあります。
   この fixture は決定論を強制します: プロセス環境は決してマージされません。
   secrets の redaction も強制します: redact できるのは nukadoko がロードした値だけです。
   これは便利機能ではありません。
@@ -977,52 +971,6 @@ note は builtin が何を与えるかを名指します。
 「Context API」の説明どおり、`needs_inferred` は引き続き含まれる場合があります。
 そのフィールドは契約ではなく、字句上の推測です。
 nukadoko は `needs_inferred` を fixture グラフ全体へ展開しません。
-
-### MCP servers
-
-`"nukadoko/mcp"` の `connectMcpServer` と `callMcpTool` により、手書きの step は、標準的な MCP サーバが stdio 経由で宣言したツールを呼べます。
-このインターフェースは `nuka steps` から分離されています。
-このパッケージは、宣言されたツールを step または step 語彙に変換しません。
-`nuka steps` は MCP ツールを一覧にせず、このインターフェースも MCP ツールを生成しません。
-サーバが宣言したツールを読むには、エージェント自身の MCP ホストか、MCP Inspector のような MCP クライアントを使ってください。
-
-fixture がサーバプロセスの寿命を制御します。
-`nukadoko.config.ts` には MCP 専用のフィールドがありません。
-fixture の機構が、setup、teardown、`scenario` または `process` のスコープをすでに提供します。
-fixture は setup 中に `connectMcpServer` を呼び、teardown 中に `client.close()` を呼びます。
-fixture のスコープによって、scenario ごとの接続か run ごとの接続を選びます。
-2 つのサーバを同時に使う場合は 2 つの fixture を使い、機構は変わりません。
-
-ハンドシェイクが失敗した場合、`connectMcpServer` は client を返しません。
-この関数は、reject する前に、起動したプロセスを止めます。
-エラーには、起動した `command` の名前が含まれます。
-呼び出し側には、閉じる client がありません。
-ハンドシェイクが成功した場合は、これまでどおり生きた client を返し、teardown がそれを閉じます。
-
-`connectMcpServer` は、client パッケージの stdio パラメータを変更せずに受け取ります。
-第二引数には、そのパッケージの `ClientOptions` も渡せます。
-この関数は、そのパッケージの接続済み `Client` を返します。
-この薄いインターフェースは、`page` と `request` の fixture が Playwright に対して採る方針に従います。
-
-`ClientOptions` の `versionNegotiation` フィールドが MCP プロトコルの世代を選びます。
-呼び出し側が省略すると、client パッケージは既定の動作を使います。
-その動作は、probe と新しいヘッダを使わない、通常の 2025 年版接続手順です。
-`{ versionNegotiation: { mode: 'auto' } }` モードは、最初に `server/discover` probe を送ります。
-サーバが modern な版を報告しない場合、client は 2025 年版の手順を使います。
-stdio では、各 probe が接続ごとに短命の sibling process を 1 つ追加で起動します。
-client はプロトコルの世代を判定したあとに、そのプロセスを破棄します。
-したがって、`'auto'` モードの fixture setup は、毎回プロセスを 1 つ追加で起動します。
-
-pin モードの `{ mode: { pin: '<version>' } }` はフォールバックを使いません。
-サーバが指定された版を提供しない場合は失敗します。
-`connectMcpServer` は `ClientOptions` を `Client` のコンストラクタへ直接渡します。
-この関数はオプションを読まず、上書きもしないため、呼び出し側がプロトコルの世代を選びます。
-
-`callMcpTool` は、直接のインターフェースに 1 つの動作を加えます。
-MCP はツール内の失敗を、`isError: true` を持つ成功レスポンスとして返します。
-その失敗では Promise を reject しません。
-確認がなければ、step は失敗した呼び出しを成功した呼び出しとして記録する場合があります。
-`callMcpTool` は `isError` が true の場合に throw し、その他の結果フィールドを変更せずに返します。
 
 ### step の連鎖
 
@@ -1669,79 +1617,12 @@ Playwright の `test()` は Playwright runner の外では動かないため、i
 モジュールは step を定義しないため、discovery が import しても問題はありません。
 しかし、その場所は既存のスイートが共有ファイルを所有することを示します。
 
-## Markdown oaths
-
-Gherkin は scenario の 1 つの表側です。
-Markdown oath はもう 1 つの表側であり、同じ型付き step と、同じ step record の上にあります。
-ファイルは、人や agent が読める文書であり、narration と印を付けられていない文はすべて step です。
-nukadoko は Varar を埋め込みません。
-step の戻り値を文の中の語句と比べることもありません。
-`Then` は依然として `run` の中で表明し、`returns` は戻ってきた値を検証します。
-計測はここにとどまります。
-
-`nukadoko.config.ts` の `oaths` は、ファイル、または `*.md` のディレクトリを名指しします。
-デフォルトは `[]` です。
-README とプロジェクト配下の他の Markdown は、名指しされるまで scenario ではありません。
-ディレクトリの走査は `node_modules` とドットで始まるディレクトリを飛ばします。
-ディレクトリの走査が読むのは、小文字の `.md` で終わるファイルだけです。
-存在しないパス、`.md` ファイルを 1 つも持たないディレクトリ(`.MD` のファイルだけのディレクトリも該当します)、または Markdown ファイルでもディレクトリでもないパスは `feature-parse-error` です。
-`nuka run` に渡した oath のディレクトリに `.md` ファイルが無いときの拒否は、`.feature` ではなく Markdown ファイルが見つからないと述べます。
-`nuka check` または `nuka run` に渡した `.md` のパスは、`oaths` に無くても oath です。
-`nuka run` のディレクトリ対象は、その配下にある設定済みの oath を含み、`.feature` ファイルもこれまで通り歩きます。
-引数なしの `nuka check` と `nuka tend` は、`featuresDir` と `additionalFeatureDirs` に加えて `oaths` を読みます。
-そのため、oath だけが結び付ける step は結び付けられています。
-
-このスライスが読む範囲は次のとおりです。
-
-- 最初の `#` 見出しが feature 名です。
-  無ければ、ファイルの basename が名前です。
-- それ以降の見出し(後から来る `#` を含む)は、その見出しを名前とする scenario を始めます。
-  ハイフンが 3 つ以上だけの行も同じです。
-  その scenario の名前は最初の step から取り、80 文字で切り、同じ名前が既にあれば ` (2)` を付けます。
-  空行は scenario を始めません。
-- 1 行に複数の文を置けます。
-  区切りは、二重引用符の外にあり、空白または行末が続く `.` `!` `?` です。
-  同じ記号の連続(`...`)は区切りではありません。
-  終端記号は step のテキストに含まれないので、末尾のピリオドを書かない pattern でもマッチします。
-- 任意の `Given`、`When`、`Then`、`And`、`But`、`*` の接頭辞はキーワードであり、マッチするテキストの一部ではありません。
-  Gherkin と同じです。
-  `And` と `But` は直前の step の位置を引き継ぎます。
-  リスト記号(`-`、`*`、`+`、`1.`)はキーワードより先に外すので、`* Given foo` は Given です。
-- 引用(`>`)とフェンスされたコードブロックは narration です。
-  step ではなく、所見でもありません。
-  このスライスが散文を受け入れるのはここです。
-  フェンスは、3 つ以上のバッククォートまたはチルダで開きます。
-  インデントがあってもかまいません(リスト項目の中のフェンスはインデントされます)。
-  閉じるのは、同じ文字を開きと同じ長さ以上に並べ、後ろに何も無い行です。
-  閉じられていないフェンス、または閉じられていない HTML コメント(`<!--`)はパースエラーです。
-  YAML frontmatter は取り除きません。
-  先頭の `---` は scenario の区切りであり、その前に何も無ければ何もしません。
-- step の下のパイプ表は、その step のデータ表です。
-  区切り行は構文です。
-  見出し行はデータ行ではありません。
-  Markdown には見出しが必要で、nukadoko のデータ表は見出しの規約を持たない `string[][]` だからです。
-  本体の行が表です。
-  step のテキストが `<column>` のプレースホルダを含み、その名前がすべて見出しのセルであるとき、表は代わりに Examples になり、`compile()` が本体の行ごとに 1 つの pickle を展開します。
-  Examples の列名の重複、step の前に無い表、区切りの欠落、データ行の無い表、セル数の不一致、1 つの step に対する 2 つ目の表、1 つの scenario に対する 2 つ目の Examples は、行を名指しするパースエラーです。
-
-どの pattern にもマッチしない文は、既存の `undefined-step` 所見です。
-書かれた Markdown の行に付きます。
-`nuka run` は、その step を、未定義の Gherkin 行と同じように失敗させます。
-所見は新しいコードではなく、文は捨てられません。
-
-`examples/todo` は、`features/todo.feature` の隣に `features/todo.md` を持ち、`oaths` に列挙しています。
-
-このスライスに無いもの: 1 つの文の中の複数 step のマッチ、step の戻り値と文中の語句の比較、doc string、tag、Markdown の中の `@nukadoko:serial`、そして Varar の残り(すべての方言、そのテストランナー、その playground)です。
-何にもマッチしない段落は、ここでは例を終わらせません。
-パーサがまだ語彙を持たないからです。
-scenario は見出しか `---` で分け、narration は引用かフェンスにします。
-
 ## 実行
 
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--quiet] [--records] [--json] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1764,14 +1645,14 @@ nukadoko は各 pickle の step をコミットされた pattern と照合して
 対象が無ければ `featuresDir` を実行します。
 これは `nuka check` が既定で辿るディレクトリです(`additionalFeatureDirs` は含みません。
 それを読むのは `nuka check` と `nuka tend` だけです)。
-各対象には feature ファイル、Markdown oath(`.md` で終わるパス。
-「Markdown oaths」を参照)、`ファイル:行`、ディレクトリのいずれかを指定できます。
+各対象には feature ファイル、`ファイル:行`、ディレクトリのいずれかを指定できます。
+`.md` で終わるパスは名指しで拒否されます。
+nukadoko は scenario を `.feature` ファイルからだけ読むからです。
 ディレクトリは再帰的に走査され、その下の `.feature` ファイルが選ばれます。
 どの深さでも、走査は `node_modules` と `.` で始まるディレクトリ(`.git`、`.nukadoko`、`.vscode` など)をスキップします。
 これは step discovery がスキップするディレクトリと同じです。
 このスキップは何も報告しません。
 それらのディレクトリの中の `.feature` ファイルは、チェックされず、実行もされません。
-ディレクトリ対象は、その配下にある設定済みの oath も含みます。
 選ばれたファイルは重複を除いた 1 つの集合になり、ファイル全体の指定は、そのファイルに対する行指定を含みます。
 ファイルは実パスで区別します。
 そのため、リンクしたディレクトリとそのリンク先のように、2 つの対象が別の経路で同じファイルに届くときは、そのファイルを一度だけ、最初に届いた経路の名前で選びます。
@@ -1782,7 +1663,7 @@ nukadoko は各 pickle の step をコミットされた pattern と照合して
 ファイルは同じ順序で配られますが、record は worker が終えた順に並びます。
 ディレクトリに `:line` を付けると拒否されます。
 `:line` は 1 つのファイルの中から 1 つの scenario を選ぶものであり、ディレクトリはその中から選ぶべき単一のファイルを名指ししていないからです。
-走査が見つけられる `.feature` ファイルも、設定済みの oath も持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
+走査が見つけられる `.feature` ファイルを持たないディレクトリも拒否され、`nuka check` 自身の `no-step-files-found` と同じ語り口で、実際に何を歩いたかを名指しします。
 何もしなかった run は、exit 0 で何もしなかったことにするのではなく、それを大声で言わなければならないからです。
 
 `--concurrency <n>` は、複数の feature ファイルを同時に実行します。
@@ -1891,7 +1772,6 @@ stderr の step ごとの進捗行は、その scenario 自身が終わるまで
 複数の scenario の行が入り交じっていては誰も読めないからです。
 どちらも record の中身は変えません。
 
-`nuka run` は `--session` を受け付けません。
 どの scenario もブラウザの状態を持たずに始まるので、scenario が 1 つ前の残したものに依存することはなく、並行度がいくつでも同じ答えになります。
 ログイン状態が必要な scenario は、その feature が名指す fixture か Given step から得ます。
 
@@ -1917,8 +1797,6 @@ stdout はスクリプトのためのもので、求められたものだけを�
 worker の stdout は、親プロセスが読む envelope の列です。
 run を見守る人向けの出力は stderr に置きます: 各 pickle の前の境界、各 step の後の 1 行、run が書いたパス、1 行のサマリです。
 step の行は、その成否を step record と同じ語で示します: `passed`、`failed`、`skipped` のいずれかです。
-`--quiet` は step ごとと scenario ごとの進捗行を抑止します。
-このフラグは端末を静かにしますが、無音にはしないため、パスとサマリは表示されます。
 失敗した step の行の後には、字下げした 2 行が続きます。
 1 行目はエラーメッセージの最初の行で、端末の色コードを除いたものです。
 2 行目はその step record のパス(`<stateDir>/runs/<run_id>/steps/<id>`)です。
@@ -1940,12 +1818,11 @@ matcher の名前だけでは、ページが間違っているのか期待が間
 実行したプログラムが起動しなかったか失敗したのに、それを実行した step は passed のままです。
 exit code は結果であって、失敗ではないからです。
 文字列は step record から取るので、そこに含まれる secret はすでに redact されています。
-`--quiet` は、失敗した step の行とこれらの行を残し、それ以外の step の行を落とします。
 サマリ行の後では、失敗した各 scenario を所見 `failed\tscenario-failed\t<feature>:<line>\t<name>: <エラーの 1 行目>` として stderr に表示します。
 その各所見に `  do:` 行が続きます。
 `do:` 行は `nuka run <feature>:<line>` で、run に `--env` が与えられていれば、その scenario が走った environment を名指す `--env <name>` も付きます。
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
-この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
+この行は直列実行と並行実行の両方で表示されます。
 `--json` のとき、stderr は空です。
 この段落とその前の 2 つの段落が挙げる行がどれも出ず、retention の行も出ません。
 stdout の文書が結果を持っていて、エージェントのシェルは 2 つのストリームを 1 つとして読むからです。
@@ -2137,7 +2014,7 @@ feature のバックログが語彙の成長を駆動します。
 ### 単体 step(agent の経路)
 
 ```sh
-nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>]
+nuka do create-project --args '{"name":"acme"}' [--env <name>]
 nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
@@ -2169,7 +2046,8 @@ id はまず `do/` で、次に各 run の `steps/` で探されるので、`nuk
 `do` の下で通った step は、それだけでは `run` の下でも通ることが示されたわけではありません。
 `do` はすべての実行にそれぞれ専用のブラウザとそれ以外のすべてを与えますが、scenario はそのすべての step に 1 つの context を与えるので、2 番目の step は 1 番目が残したものをそのまま引き継ぎます(すでにログイン済みかもしれず、別のページにいるかもしれず、ダイアログが開いたままかもしれません)。
 この 2 つの問いは別物であり、どちらの答えも他方の代わりにはなりません: `do` はその step が動くかどうかを問い、`run` はそこで動くかどうかを問います。
-`--session` は storageState を `do` の呼び出しをまたいで持ち運ぶことでこの差を狭めますが、それがカバーするのはログイン状態だけであり、それ以外の何ものでもありません: 実行がどこまで進んでいたかはそこには含まれません。
+ログイン状態も含めて、`do` の呼び出しをまたいで持ち運ばれるものはありません。
+ログイン状態が必要な step は、それを fixture から得ます。
 これがいちばん厳しく効くのは、自分自身の setup が 2 回目の実行では no-op になってしまう step で、直すべきは engine ではなく feature の側です: 状態は step ごとに毎回立てるのではなく、それを行うと名前が言っている step の中で一度だけ立てます。
 
 ### 繰り返せない状態
@@ -2193,11 +2071,6 @@ step record も `run.json` も書きません。
 30 回の呼び出しを経た世界は、誰にも再現できません。
 だからこそ、探索から出てくるのは、それをもとに書かれ、`nuka check` で確かめられ、ゼロからもう一度実行される scenario です。
 
-`nuka session clear --env <name>` は、config が定義していない environment の下に session ファイルも lock file も残っていないとき、その environment を拒否します。
-拒否の文は、ほかのコマンドが未知の environment にすでに使っているものと同じです。
-config から外された environment の下に残っている session ファイルは、今までどおり削除されます。
-そのとき stderr はその environment を名指します。
-
 ## Records
 
 step record は、1 回の step 実行に対するツールの計測を含みます。
@@ -2210,7 +2083,7 @@ scenario record は独立したファイルではなく、その run の `run.js
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
@@ -2222,7 +2095,6 @@ scenario record は独立したファイルではなく、その run の `run.js
   "observed": { "http_reads": 2, "http_writes": 1, "processes": null },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
-  "session": "checkout-flow",
   "scenario_record_id": null,
   "run_id": null,
   "started_at": "...",
@@ -2551,16 +2423,13 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 書けなかったサマリは stderr の警告になり、終了コードを変えることはありません。
 record を何も書かない setup の失敗は、サマリも書きません。
 
-## Session、environment、secret
+## Environment、secret
 
 nukadoko は、Cucumber が提供しなかった実行インフラを提供します:
 
-- **Session** は Playwright の storageState として、CLI の呼び出しをまたいでログイン状態を運びます。
-  nukadoko は各 session を environment ごとに保存し、advisory lock によって同時に 1 つのコマンドだけに制限します。
-  `nuka do --session <name>` がそれを読み、保存します。
-  `nuka run` は session を受け付けません。
-  各 scenario はクリーンに始まり、暗黙に共有される状態はありません。
-  保存された session は storageState のファイルであり、daemon を必要としません。
+- **呼び出しをまたいで持ち運ばれる状態はありません。**
+  `nuka run` の各 scenario も、`nuka do` の各呼び出しも、クリーンに始まります。
+  ログイン状態が必要な step は、それを fixture から、またはその feature が名指す Given step から得ます。
 - **Environment** はデプロイ先に名前を付けます。
   各 environment は `baseURL`、`envFiles`、`policy: "read-only"`、任意の `version` プローブを定義できます。
   read-only policy は mutate する step を拒否します。
@@ -2639,7 +2508,6 @@ default export が無いファイル、または default export が Promise で�
 | --- | --- |
 | `featuresDir` | feature ファイルと step のコード。`nuka run` が無人で実行する集合そのもの(デフォルトは `features`。Cucumber 流のやり方) |
 | `additionalFeatureDirs` | `nuka check`/`nuka tend` が語彙を結び付ける対象を広げる追加のディレクトリ。`featuresDir` そのものを広げることはない(デフォルトは `[]`。下記) |
-| `oaths` | `.feature` ファイルと同じ scenario にコンパイルされる Markdown ファイル、またはそのディレクトリ(デフォルトは `[]`。「Markdown oaths」を参照) |
 | `baseURL` | トップレベルの base URL。environment ごとに上書きされる(下記) |
 | `envFiles` | トップレベルの env file。environment ごとに追記される(下記) |
 | `environments` | environment ごとの `baseURL`、`envFiles`、`policy`、`version` プローブ(下記) |
@@ -2674,12 +2542,6 @@ default export が無いファイル、または default export が Promise で�
 step discovery も同じディレクトリをスキップします。
 その中にある `.feature` ファイルは `nuka check` にも `nuka tend` にも `nuka run` にも含まれず、このスキップは何も報告しません。
 
-`oaths` のデフォルトは `[]` です。
-各エントリは Markdown ファイル、または `*.md` のディレクトリであり、`.feature` ファイルと同じ pickle にコンパイルされます(「Markdown oaths」を参照)。
-名指しされるまで、プロジェクト配下の何も oath ではないので、README は scenario ではありません。
-`nuka check` と `nuka tend` はこの一覧を読みます。
-`nuka run` は、パスが渡されたとき、またはディレクトリ対象がそのファイルを含むときに、エントリを読みます。
-
 `browserType` は `page` fixture が起動する Playwright のエンジンを選びます: `"chromium"`(デフォルト)、`"firefox"`、`"webkit"` のいずれかです。
 これは `browser` の中のフィールドではなく、別のキーです。
 `browser` 自身の型である `LaunchOptions`(下記参照)には、エンジンを選ぶキーがそもそも無いからです。
@@ -2706,8 +2568,10 @@ Playwright のオプションを zod で列挙し直すと、Playwright が 1 �
 これは `browser` が従っているのと同じ「Playwright 自身の型に委ねる」方針です。
 これにより `ignoreHTTPSErrors` のようなオプションに初めて手が届くようになります。
 自己署名証明書を使うローカルの接続先では、どちらの fixture にもそれを設定する手段がこれまでありませんでした。
-どちらのキーも `baseURL` と `storageState` は理由を述べたエラーで拒否し、黙って無視することはしません。
-`config.baseURL` はプロジェクトの base URL の唯一の出所であるべきであり、`storageState` は nukadoko 自身の session 機構が設定するものなので、ここでも受け付けてしまうと config が自分自身と静かに食い違う値を持つことになるからです。
+どちらのキーも `baseURL` は理由を述べたエラーで拒否し、黙って無視することはしません。
+`config.baseURL` はプロジェクトの base URL の唯一の出所であり、2 つ目の出所があると config が食い違う値を持ちうるからです。
+`storageState` はそのまま Playwright に渡ります。
+ログイン状態のファイルを持つプロジェクトは、ここでそれを名指します。
 
 `parameterTypes` のエントリは、カスタムの cucumber-expressions parameter type を登録します(`{ name, regexp, transformer? }`)。
 たとえば `{ name: "negation", regexp: /( not)?/, transformer: (s) => s === " not" }` は、`will{negated:negation} return` という pattern を素の `z.boolean()` の args キーに結び付けられるようにします。
@@ -2798,7 +2662,7 @@ export default defineConfig({
 ### State directory
 
 nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置かれ(`init` によって gitignore されます)、そのどれもコミットされることを意図していません。
-データは measurement、cache、export の 3 種類に分かれます(「成果物」を参照):
+データは measurement と export の 2 種類に分かれます(「成果物」を参照):
 
 - `runs/<run_id>/`(`nuka run` の呼び出しごとに 1 つのディレクトリ)。
   その run が計測したものをすべて持ちます。
@@ -2821,7 +2685,6 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
     それは `run.json` が持ちます。
 - `do/<id>/`(`nuka do` の step record ごとに 1 つの、run の `steps/<id>/` と同じ形のディレクトリ)。
   `nuka do` の呼び出しはどの run にも属さないので、その record はどの run ディレクトリからも離れて置かれます。
-- `cache/sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
 - `export/allure-results/`(emitter の出力。
   `runs/` が持つのと同じ run を持ちます。
   run のファイルは run と一緒に消えるからです(「成果物」を参照)。
@@ -2835,8 +2698,8 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
   `nuka run` の呼び出し 1 回につき 1 つで、その run と一緒に消えます(Messages emitter を参照)。
 
 日常の削除は retention で、`nuka run` 自身が毎回の run の終わりに適用します(「成果物」を参照)。
-`nuka clean [--dry-run] [--json]` は、3 種類すべてを一度に消すコマンドです。
-すべての run ディレクトリ、すべての `do/` の record、cache、export の出力を消します。
+`nuka clean [--dry-run] [--json]` は、2 種類を一度に消すコマンドです。
+すべての run ディレクトリ、すべての `do/` の record、export の出力を消します。
 run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。
 retention はそこに決して触れません。
 `allure.resultsDir` または `messages.output` がプロジェクトの root、プロジェクトの外のパス、または state directory の親に解決される場合は、何も消す前に拒否します。
@@ -2878,7 +2741,7 @@ scenario が基準を表しているかどうかは、レビュアーが pull re
 変更が取り込まれた後、プロジェクトは feature の今後の役割を選びます。
 ほとんどの受け入れ基準は、依頼された変更を記述します。
 その変更が取り込まれれば、もう一度実行しても確かめる主張は残っていません。
-そうした feature は `featuresDir` の外に置いたまま `additionalFeatureDirs` に列挙できます(「Session、environment、secret」を参照)。
+そうした feature は `featuresDir` の外に置いたまま `additionalFeatureDirs` に列挙できます(「Environment、secret」を参照)。
 すると静的チェックはその step を結び付け続け、無人では何も実行しません。
 削除してもかまいません。
 製品を通る持続的な経路を記述する scenario もあります。
@@ -3314,7 +3177,7 @@ nukadoko はすべての段階を記録します。
 この 3 行のどれも所見ではなく、exit code も変わりません(移行の途中にあるスイートはそれ自体が異常な状態ではなく通常の状態であり、毎回それについて警告すれば、本当に対応が必要な所見を埋もれさせてしまいます):
 
 - `scanned:` は、この run が実際に調べたすべてのディレクトリを名指しします。
-  `featuresDir` と、各 `additionalFeatureDirs` エントリです(「Session、environment、secret」を参照)。
+  `featuresDir` と、各 `additionalFeatureDirs` エントリです(「Environment、secret」を参照)。
   最初に出力されるのは、件数はその範囲を読み手が知るまで何も意味しないからです。
 - `bed:` は、語彙のうちどれだけが compat ではなく型付けされているかを示します。
   加えて、いくつの型付き step が `mutates: false`(読み取り専用)を宣言しているかも示します。
@@ -3461,167 +3324,6 @@ tend の所見はどれもすでに exit code を変えない注記なので、�
 直すということは、description を書くこと、step を削除すること、feature を移すことを意味します。
 どれも背後に書き手がいる判断です。
 
-## モデルと関係(実験的)
-
-この節と次の節は実験的です。
-`nuka experimental explore`、4 つの `experimental_` 関数、`explore-*` の指摘は、どのリリースでも非推奨の告知なしに形が変わったりなくなったりすることがあります。
-コマンドは `experimental` の下にあり、各関数名は接頭辞を持つので、その語はすべての呼び出し箇所に現れます。
-
-model と relation は、step の語彙の隣に置く宣言です。
-`nuka check` はそれらを読みます。
-`initial`、`args`、`pre`、`next`、`post`、`follow`、`relate` は呼びません。
-step も実行しません。
-それらを実行するのは `nuka experimental explore` です(「モデルまたは関係を探索する」を参照)。
-
-`experimental_defineModel(initial).commands({ ... })` は、初期状態のあと、step の basename ごとに 1 つの command を取ります。
-command は `experimental_modelCommand(step)({ args, pre, next, post })` です。
-`args` と `post` は、その step の args と result に対して型が付きます。
-`args` は状態と、唯一の変化の源である `draw` を受け取ります。
-`next` は、状態と args から model を更新します。
-basename は、拡張子を除いた step ファイルの名前です。
-2 回に分かれているのは、callback を検査する前に状態の型が決まっている必要があるからです。
-1 つのオブジェクトリテラルにすると `step` が `Step` へ広がり、検査が `unknown` になります。
-
-`experimental_defineRelation` は、名前、`experimental_relationEntry(step, args)` の `source` 列、2 本目の列を返す `follow`、2 つの実行の result を比べる `relate` を取ります。
-`experimental_relationEntry` は、その step に対して `args` を検査します。
-`follow` と `relate` は保存されるだけです。
-check が読むのは `source` だけです。
-2 本目の列は `follow` を呼んだ結果だからです。
-
-`source` は生成させることもできます。
-関数 `(draw, length) => [...]` は、最大 `length` 個の要素を返し、変化する値はすべて `draw` から取ります。
-モデルの command で生成することもできます。
-その場合、モデルの実行と同じく `pre`、`args`、`next` が各 step を選び、モデルの `post` は呼ばれません。
-関数の source では、`relate` が受け取る source の result にはその step の型が付きます。
-モデルの source では `unknown` です。
-check は、モデルの source の command をモデルと同じように読み、関数の source は呼びません。
-
-discovery は、どちらかの宣言の default export を step ではなくその宣言として扱います。
-ファイルは `featuresDir` の下ならどこでも置けます。
-`examples/todo/features/explore/` は、request だけを使う model と relation です。
-
-`nuka check` は、command のキーがその step の basename でないとき、または列の step が登録されていないとき、`explore-unknown-step` を報告します。
-その step が `page`、`context`、`pageAs` のどれかを必要とするとき、fixture を経由する場合も含めて、`explore-browser-step` を報告します。
-`request` だけを必要とする step は許されます。
-
-宣言を読んで、結果が 1 通りにしかならない所見がさらに 2 つあります。
-`explore-empty-model` は、command を 1 つも持たないモデルを報告します。
-それが組み立てる列はすべて空なので、どの実行も合格し、何も分かりません。
-関係のモデルの source が command を持たない場合は報告しません。
-空の source でも `follow` と `relate` は実行され、そこで失敗しうるからです。
-`explore-unseeded-random` は、command の `args`、`pre`、`next`、または関係の draw する source の中で、`Math.random` を直接呼ぶことを報告します。
-その値は seed が決めないので、実行を seed から再現できず、縮小の編集もそれまでと同じ意味を持ちません。
-check はこのために関数のソーステキストを読み、関数を呼びません。
-文字列、コメント、正規表現、テンプレートの文字部分にある呼び出しは、呼び出しではありません。
-check が見るのはソーステキストだけなので、関数の外の束縛（モジュールのスコープや import）は届かない範囲にあります。
-そのため `crypto.random*` は報告しません。
-モジュールのスコープの `crypto` は、seed を持つ生成器かもしれないからです。
-ヘルパーや別名を経由する呼び出しと、関数が自分で束縛した `Math` も、届かない範囲にあります。
-check はそのどれについても何も言いません。
-推測する check は、check がないより悪いからです。
-
-### モデルまたは関係を探索する
-
-`nuka experimental explore <file>` は、1 つのモデルまたは 1 つの関係を実行します。
-ファイルは、discovery が `featuresDir` の下で見つけたものです。
-step を 1 つも実行する前に、このコマンドはそれらの step について `nuka check` と `nuka do` が行う拒否を行います。
-対象は、上の 4 つの `explore-*` の所見のどれか、fixture の問題、未知の `--env` です。
-どれかに当てはまると、何も実行しません。
-
-モデルの実行は、各列をモデルだけから組み立てます。
-状態から `pre` が成り立つ command を集め、1 つを選び、`args(state, draw)` を呼び、`next` で状態を進めます。
-変化の源は `draw.int(min, max)` と `draw.pick(items)` だけです。
-したがって列は、それが行った選択の関数です。
-`next` は新しい状態を返し、受け取った状態は変更しません。
-その状態のオブジェクトを、後で `post` が受け取るからです。
-その後、列を 1 step ずつ実行し、`post` が各 result をその step の前の状態に照らして判定します。
-最初に失敗した step、または最初に成り立たなかった `post` が、その列を失敗にします。
-step は `nuka do` で失敗するどの理由でも失敗し、fixture の準備や拒否された接続も含みます。
-`--runs`(既定値 20)は実行する列の数を、`--length`(既定値 10)は 1 つの列の最大 step 数を決めます。
-1 つの `--seed` がすべての実行のすべての選択を決め、出力は必ずそれを表示します。
-そのため、同じコマンドは同じ列を再実行します。
-
-失敗は縮小されます。
-縮小は、記録した選択を編集して列を組み立て直します。
-まず 1 つの step の選択を削除し、次に隣り合う 2 つの step の選択を削除し、次に 1 つの選択を 0 に向けて小さくします。
-編集を残すのは、新しい列がまだ同じように失敗するときだけです。
-小さい選択は、宣言順で前の command、`min` に近い `draw.int`、`draw.pick` のより前の要素を意味します。
-残した編集はどれも選択の列を短くするか小さくするので、縮小は終わります。
-また 200 回試すと止まります。
-
-同じように失敗するとは、失敗の種類が同じで、`post` の失敗なら command も同じであることです。
-種類は 3 つあります。
-step が失敗した(`step`)、`post` が false を返した(`post-false`)、`post` が例外を投げた(`post-threw`)です。
-違う失敗をするもっと短い列は、別の問題を示します。
-それを表示すると、実行が見つけた問題が隠れます。
-メッセージは比べません。
-メッセージには step の result と args が入っており、縮小が変えるのはまさにそれだからです。
-重複した追加を小さい値へ縮小しても、同じ `post` が失敗し、メッセージの数字だけが変わります。
-`step` の失敗は command も比べません。
-拒否された接続や失敗する fixture は、最初に実行される step がどれでも失敗させるからです。
-
-関係の実行は、`source` を 1 つの world で実行し、`follow` を呼び、その 2 本目の列を新しい world で実行し、2 つの result の並びについて `relate` を呼びます。
-宣言された `source` は 1 回だけ実行され、seed はなく、縮小もしません。
-生成される `source` は、モデルと同じく `--seed`、`--runs`、`--length` を取ります。
-各実行は新しい source を引き、それについて関係を実行します。
-最初の失敗は同じやり方で縮小されます。
-関数の source の step は選択と対応付けられないため、選択を 1 つずつ削除します。
-編集を残すのは、関係がまだ同じように失敗するときだけです。
-つまり同じ列で失敗し、`relate` なら前と同じく false を返すか例外を投げるかのどちらかです。
-出力には、実行の番号、見つかった source の step 数、縮小後の step 数のコメントが加わります。
-2 本目の列、または関数が引いた source に、語彙にない step、またはブラウザを必要とする step があると、関係は実行される前に止まります。
-
-各列は新しい `ctx` と新しい scenario scope の fixture のキャッシュを受け取ります。
-そのため、対象をリセットする scenario scope の fixture は、各列の前に動きます。
-process scope の fixture は、`nuka run` と同じく 1 回の起動につき 1 回だけ準備されます。
-すべての実行とすべての縮小の試行がそれを共有し、最後の列のあとで片付けられます。
-step が失敗した列、または `post` が成り立たなかった列では、fixture の `use()` は `"failed"` を返します。
-process scope は、どれかの列が失敗したとき `"failed"` を受け取ります。
-SIGINT、SIGTERM、SIGHUP のどれかを受けると、`nuka do` と同じく、開いている列の fixture、次に process scope の fixture を片付けてからプロセスが終了します。
-対象そのものはリセットされません。
-初期状態が空の対象を前提とするモデルには、その fixture が必要です。
-step は、`nuka do` が使うのと同じ関数を通って実行されます。
-args を検証し、fixture の袋を開き、step の期限の下で `run` を呼び、result を検証します。
-step record は書きません。
-1 回の実行は多くの列を試し、そのほとんどは成功します。
-失敗の記録は人が残す scenario であり、その scenario を `nuka run` すると記録が書かれます。
-
-失敗すると、stdout には feature に貼り付ける scenario が出ます。
-中身は、それを再実行するコマンドのコメント、どう失敗したかのコメント、そして step ごとに 1 行の `*` の行です。
-行は、その step の最初の pattern から書かれます。
-capture も `from` も受け持たない必須の args のキーが 1 つだけあるとき、それは `nuka run` が束縛するのと同じく書かれます。
-文字列の行のリストなら table として、文字列なら docstring として書かれます。
-失敗した step の上には、そのメッセージのコメントが付きます。
-関係は、source と follow の 2 つの scenario を表示します。
-すべての行は `nuka run` が読むのと同じやり方で読み戻されます。
-同じ step と args に戻らない行、または行が運べない args のキーは、その行の上のコメントで名指しされます。
-成功したとき stdout は空のままで、stderr にはどちらの場合も 1 行の要約が出ます。
-終了コードが 0 になるのは成功したときだけです。
-
-`--json` は、stdout のテキストを 1 つの JSON オブジェクトに置き換え、成功したときも表示します。
-どのオブジェクトにも `kind`(`"model"` または `"relation"`)、`file`、`verdict`、`rerun` があります。
-`verdict` は `"passed"`、`"failed"`、または `"error"` です。
-`"error"` は、step を実行する前にモデルや関係の callback が例外を投げたことを表します。
-モデルは `seed`、`runs`、`length` を加え、成功すると実行した step の数 `steps` を加えます。
-失敗したモデルは、`run`、`found_steps`、`shrunk_steps`、`shrink_attempts`、`failure`(`index`、`kind`、`command`、`message`)、`steps`、`scenario` を加えます。
-これらはすべて縮小した列についての値です。
-関係は `name` を加えます。
-失敗した関係は、`failure`(`sequence`、`sequence` が `relate` でなければ `index`、`relate` なら `threw`、そして `message`)と、`source` と `follow` を加えます。
-`source` と `follow` には、それぞれ `steps` と `scenario` があります。
-source を生成する関係は、さらに `seed`、`runs`、`length` を加え、失敗すると `run`、`found_steps`、`shrunk_steps`、`shrink_attempts` を加えます。
-step 数は source の step で数えます。
-`steps` の各要素には `step`、`args`、`status` があります。
-`status` は、`result` を伴う `"passed"`、`message` を伴う `"failed"`、同じ列の中で失敗した step のあとにある step を表す `"not-run"` のいずれかです。
-`scenario` は、通常の出力が表示するテキストから先頭の 2 行のコメントを除いたものです。
-`error` は `message` を持ち、モデルと source を生成する関係では `run` も持ちます。
-step を実行する前の拒否では、`--json` がないときと同じく stdout には何も出ません。
-explore はオブジェクトを stdout にだけ書き、`.nukadoko/` の下には書きません。
-そのため run サマリと `nuka tend` がそれを実行として読むことはありません。
-
-scenario はどの feature にも追加されません。
-それが scenario になるか、間違っていたのはシステムかモデルか、その scenario が何を主張するかは、それを読んだ人だけが決めます。
-成功した生成済みの列は残しません。
-
 ## CLI summary
 
 npm パッケージは `nukadoko` で、それがインストールするただ 1 つのコマンドが `nuka` です。
@@ -3664,9 +3366,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               its feature, line, and name, then a rerun
                               line (nuka run <feature>:<line>). Then one retention
                               line, when a run older than the newest
-                              retention.runs was removed (see "Artifacts");
-                              --quiet keeps it. --quiet drops the
-                              progress lines only, except a failed step's.
+                              retention.runs was removed (see "Artifacts").
                               --json drops every one of these lines, and
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records
@@ -3700,10 +3400,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set; --summary
                               <path> writes one more copy there
-nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
+nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
-                              --env as on nuka run; --session carries login
-                              state across do calls via a named session.
+                              --env as on nuka run; each call starts clean.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
                               delivered on stderr.
@@ -3932,14 +3631,13 @@ nuka check [feature..] [--json]
                               has an invalid capture key, a syntax error, or an
                               unregistered or duplicate parameter type, an
                               undefined-step finding held back until such a cause
-                              is fixed, a feature or oath that does not parse, a
+                              is fixed, a feature that does not parse, a
                               scenario outline with no Examples row that runs,
                               warnings for a scenario with no Then and for an
                               outline with several rows and no <column> in its
                               name, a
                               fixture that destructures a name nukadoko does not
-                              know, a model or relation naming an unknown or
-                              browser-needing step, a step whose `parts` form a
+                              know, a step whose `parts` form a
                               cycle, declare `mutates: false` over a part that
                               mutates, or name something that is not a registered
                               step, a `@nukadoko:serial` tag on a Scenario line (it
@@ -3949,10 +3647,10 @@ nuka check [feature..] [--json]
                               looks secret but is not in secrets.redact, a
                               secrets.redact key too short to redact; with no
                               target, scans featuresDir plus
-                              additionalFeatureDirs and every path in oaths;
+                              additionalFeatureDirs;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
-                              files and the oaths under it), so the errors
+                              files), so the errors
                               nuka run prints before executing equal nuka
                               check's for the same targets. :line is refused,
                               since check analyzes whole files. A path that
@@ -3962,8 +3660,8 @@ nuka check --codes [--json]   list every finding code nuka check can produce,
                               with a one-line description and the code's
                               general do, instead of checking a project
 nuka clean [--dry-run] [--json]
-                              delete accumulated runs/do/cache/export under
-                              the state directory, all three together; --dry-run
+                              delete accumulated runs/do/export under
+                              the state directory, all together; --dry-run
                               prints the same plan the real run would act on
                               without removing anything; refuses, before
                               removing anything, an
@@ -4001,13 +3699,6 @@ nuka tend [--json] [--fail-on <code>]
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               a one-line description, and the code's
                               general do, instead of tending a project
-nuka session list [--json]    list every session, across all environments,
-                              one line each: name, updated_at, alive or
-                              stopped, and environment, tab-separated;
-                              --json prints { schema_version, sessions }
-nuka session clear [name] [--env <name>]
-                              delete a session, or every session for the
-                              environment when no name is given
 nuka init [--allure] [--server "<command>" --server-url <url>]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
@@ -4036,20 +3727,6 @@ nuka init [--allure] [--server "<command>" --server-url <url>]
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
-nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
-                              run one model or relation file found under
-                              featuresDir, request-only steps only, with no
-                              step record. A model runs --runs sequences
-                              (default 20) of at most --length steps (default
-                              10) from one --seed, and shrinks the first
-                              failure; so does a relation whose source is
-                              generated. On a failure stdout gets the scenario to
-                              paste (two for a relation) and the command that
-                              reruns it; stdout is empty on a pass. --json
-                              prints the envelope instead, on a pass too:
-                              the seed and counts, and on a failure
-                              each step's result, the failure, and the
-                              scenario. Exits 1 on a failure, 2 on a refusal
 ```
 
 文字列または数値を 1 つ取るフラグを 2 回以上与えると、nuka はそのフラグを拒否し、そのコマンドは何も書き込みません。
@@ -4070,11 +3747,11 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
 フィールドが追加されただけでは上がりません。
 読み手は、形を信頼する前にこの番号を確かめます。
-step record は 2 です。
-実行が届かなかった `observed` のチャネルは `null` になり、`observed.processes` は常に存在するからです。
+step record は 3 です。
+2 で、実行が届かなかった `observed` のチャネルが `null` になり、`observed.processes` が常に存在するようになりました。
+3 で `session` フィールドがなくなりました。
 envelope は 2 です。
 `schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
-`experimental` のコマンドは、nukadoko が持たない形であるサーバー自身の tool 一覧を出力するので、番号を持ちません。
 
 ### envelope
 
@@ -4100,10 +3777,10 @@ envelope は 2 です。
 }
 ```
 
-`command` はコマンドのパス(`check`、`session list`、`experimental explore`)で、argv がどのコマンドも名指さないときは `""` です。
+`command` はコマンドのパス(`check`、`skill path`)で、argv がどのコマンドも名指さないときは `""` です。
 `verdict` は終了コードの断定で、0 なら `passed`、2 なら `refused`、それ以外は `failed` です。
 コマンド自身のフィールドは `findings` の後に置かれ、5 つのフィールドを置き換えることはありません。
-それは `steps`(`nuka steps`)、契約(`nuka describe`)、`summary` と `fail_on_hits`(`nuka tend`)、`run.json` のフィールド(`nuka run`)、計画(`nuka clean`)、`sessions`(`nuka session list`)、seed と件数と scenario(`nuka experimental explore`)、`codes`(`--codes`、各エントリは場所を持たない所見)です。
+それは `steps`(`nuka steps`)、契約(`nuka describe`)、`summary` と `fail_on_hits`(`nuka tend`)、`run.json` のフィールド(`nuka run`)、計画(`nuka clean`)、`codes`(`--codes`、各エントリは場所を持たない所見)です。
 `nuka do` は step record を出力します。
 これは報告ではなく record なので、envelope も `--json` も持ちません。
 その拒否と警告は stderr の所見です。
@@ -4112,7 +3789,7 @@ envelope は 2 です。
 
 所見、拒否、失敗した scenario は 1 つの形です。
 フィールドは `severity`、`code`、`message` で、わかっているときは `file`、`line`、`step` が続き(fixture についての tend の note では `fixture`)、その後に `fix` と `do` が続きます。
-severity は `error` か `warning`(`nuka check` と、あらゆるコマンドの警告)、`note`(`nuka tend`)、`refused`(「拒否」を参照)、`failed`(失敗した scenario、BeforeAll または AfterAll の hook、explore の run)です。
+severity は `error` か `warning`(`nuka check` と、あらゆるコマンドの警告)、`note`(`nuka tend`)、`refused`(「拒否」を参照)、`failed`(失敗した scenario、BeforeAll または AfterAll の hook)です。
 `file` はプロジェクトのルートからの相対パスです。
 1 つの step についての所見では、その step を定義する step ファイルです。
 複数の step を挙げる `duplicate-pattern` では、最後に挙げた step のファイルです。
@@ -4137,7 +3814,7 @@ discovery は、どのファイルが hook を登録したかを記録しない�
 ### 拒否
 
 報告するものが何もないうちにコマンドが止まるとき、コマンドは拒否します。
-対象は、yargs またはコマンドが受け付けないフラグ、読み込めない config、存在しない対象、知らない step 名、邪魔をしている session、そして `nuka run` では、選んだ scenario について `nuka check` が報告するエラーです。
+対象は、yargs またはコマンドが受け付けないフラグ、読み込めない config、存在しない対象、知らない step 名、そして `nuka run` では、選んだ scenario について `nuka check` が報告するエラーです。
 終了コードは 2 で、拒否は severity が `refused` で code を持つ所見です。
 code は `invalid-arguments`、`target-not-found`、`config-invalid`、`check-errors` など `nuka check --codes` が一覧にするもの、または同じ原因の check の code です(parse できない feature ファイルは、どのコマンドが見つけても `feature-parse-error` です)。
 `--json` のときは envelope の `findings` に入り、`verdict` は `refused` で、stderr は何も出しません。
@@ -4156,19 +3833,18 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
-| 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run`、保持されていない session に対する `nuka session clear` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka tend` が報告した `--fail-on` の code、失敗した `nuka experimental explore` の run、削除できなかった session ファイル |
+| 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka tend` が報告した `--fail-on` の code |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
 | コマンド | stdout | stderr |
 | --- | --- | --- |
 | `nuka run` | `--records` なら 1 行に 1 つの scenario の `run.json` のエントリ、`--json` なら `run.json`(envelope)、それ以外は何も出さない | 進捗、書き込んだ場所、summary の行、`scenario-failed` の所見、警告。`--json` なら何も出さない |
-| `nuka do` | step record(失敗した step でも) | session の通知、警告の所見 |
+| `nuka do` | step record(失敗した step でも) | 警告の所見 |
 | `nuka check`、`nuka tend` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`nuka tend` の `fail-on` の行を除く) |
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |
-| `nuka experimental explore` | 縮めた scenario、`--json` なら envelope | `explore-failed` または `explore-error` の所見と、その rerun コマンド(`--json` のときを除く) |
-| `nuka clean`、`nuka session list` | パスまたは session ごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
+| `nuka clean` | パスごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
 
 `--json` のときの拒否は報告の代わりになります。
 envelope は拒否の所見を持ち、コマンド自身のフィールドは持ちません。
@@ -4245,7 +3921,7 @@ step record の `error.kind` は「Records」に一覧があります。
 
 ## ロードマップ
 
-- **M1(engine core)**: `defineStep`、`do`、pickle に対する `run`、step record、session/environment、`check`、`init`。
+- **M1(engine core)**: `defineStep`、`do`、pickle に対する `run`、step record、environment、`check`、`init`。
   secret のオンボーディングは再設計されました。
 - **M2(compat API)**: `nukadoko/compat`(Given/When/Then/World/hooks のサブセット)、cucumber-js + Playwright のスイート向け移行ガイド。
 - **M3(reporting interop)**: scenario 実行のための cucumber messages(NDJSON)エミッタ(移行チームの既存 formatter、JUnit ベースの CI、HTML レポートを動き続けさせる互換面)と、旗艦ダッシュボードとしての allure-results エミッタ。
@@ -4278,22 +3954,24 @@ step record の `error.kind` は「Records」に一覧があります。
   これはのちに削除されました。
   一連の呼び出しを実行した agent はその step をすでに知っており、下書きは scenario が述べるべき主張を空欄のまま残していたからです。
   探索によって見つかった経路は、今も探索した者が書くことで、1 つの文に固定された経路になります。
-- **M11(live sessions)**: `nuka session` の下の `start` と `stop`、プロセス内で開いたまま保持する 1 つの `ctx` でした。
+- **M11(live sessions)**: `session` コマンドの下の `start` と `stop`、プロセス内で開いたまま保持する 1 つの `ctx` でした。
   これにより、`nuka do` はすでに途中まで進んだ world に降り立てました。
   のちに削除されました。
   agent のホストがすでに動かしている Playwright MCP サーバが、nukadoko 自身のプロセスも socket もアイドルタイムアウトもなしに、同じように呼び出しをまたいでブラウザを開いたまま保つからです(「繰り返せない状態」を参照)。
+  session の残り、`session list` と `session clear` のコマンドと `do` の `--session` フラグも、その後に削除されました。
+  ログイン状態は fixture から得るので、呼び出しをまたいで持ち運ばれる状態はありません。
 - **M12(concurrency)**: `nuka run --concurrency <n>`、feature ファイルをまるごと持つ worker プロセス、単独で実行しなければならないファイルのための `@nukadoko:serial`、そしてそれらが動く間 run の identity を保つ親プロセスです(「Scenario」を参照)。
   すべての scenario は依然として同じ直列エンジンの下で実行されます。
   変わるのは、それらが一度に何個実行されるかだけです。
   worker プロセスにしたことが、この高速化をスイートが何に時間を使っているかから独立させ、fixture の teardown 規則をそのまま保たせています。
-- **M13(Markdown oaths)**: Gherkin の隣にある 2 つ目の表側です。
-  名指しされた Markdown ファイルは同じ pickle にコンパイルされ、同じ `defineStep` の語彙に結び付き、どの pattern にもマッチしない文では `nuka check` が失敗します(「Markdown oaths」を参照)。
-  これは oath の表面であり、Varar のエンジンではありません。
-- **M14(exploring、実験的)**: `nuka experimental explore` です。
-  request だけを使う step に対してモデルまたは関係を実行し、モデルの失敗を seed から再生できる選択の列で縮小し、貼り付ける scenario を表示します(「モデルまたは関係を探索する」を参照)。
-  feature ファイルは、人が残すと決めた列の集まりのままです。
+- **M13(Markdown oaths)**: `.feature` ファイルと同じ pickle にコンパイルされる Markdown ファイルでした。
+  のちに削除されました。
+  2 つ目の表側には 2 つ目のパーサーと 2 つ目の所見の組が要り、`.feature` ファイルで同じことが言えるからです。
+- **M14(exploring、実験的)**: `experimental explore` コマンドでした。
+  request だけを使う step に対してモデルまたは関係を実行し、縮小した scenario を貼り付け用に表示しました。
+  のちに `defineModel` と `defineRelation` とともに削除されました。
+  feature ファイルは人が残すと決めた列の集まりであり、探索で見つかった列はそこに scenario として書かれるからです。
 - **Later**: AI 支援の glue コンバータ(既存の正規表現ベースの glue → 型付き step)、tag-expression によるフィルタリング、移行ではなくその場での共存が必要な実際のスイートのための cucumber-js アダプタ。
-  Varar の完全な対応(すべての方言、step の戻り値と文中の語句の比較、doc string、tag、Markdown の中の `@nukadoko:serial`)もここに残します。
 
 ## 実装ノート
 

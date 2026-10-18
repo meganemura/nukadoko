@@ -678,15 +678,13 @@ describe("configSchema: browserContext", () => {
     }
   });
 
-  it("rejects browserContext.storageState, with a message stating the session mechanism owns it", () => {
+  it("passes browserContext.storageState through to Playwright unmodified", () => {
     const result = configSchema.safeParse({
       browserContext: { storageState: { cookies: [], origins: [] } },
     });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const message = JSON.stringify(result.error.issues);
-      expect(message).toContain("browserContext.storageState");
-      expect(message).toContain("session mechanism");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.browserContext).toEqual({ storageState: { cookies: [], origins: [] } });
     }
   });
 });
@@ -730,15 +728,13 @@ describe("configSchema: requestContext", () => {
     }
   });
 
-  it("rejects requestContext.storageState, with a message stating the session mechanism owns it", () => {
+  it("passes requestContext.storageState through to Playwright unmodified", () => {
     const result = configSchema.safeParse({
       requestContext: { storageState: { cookies: [], origins: [] } },
     });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const message = JSON.stringify(result.error.issues);
-      expect(message).toContain("requestContext.storageState");
-      expect(message).toContain("session mechanism");
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.requestContext).toEqual({ storageState: { cookies: [], origins: [] } });
     }
   });
 });

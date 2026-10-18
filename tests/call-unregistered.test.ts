@@ -28,7 +28,6 @@ function baseConfig(): NukadokoConfig {
   return {
     featuresDir: "features",
     additionalFeatureDirs: [],
-    oaths: [],
     stateDir: ".nukadoko",
     envFiles: [],
     parameterTypes: [],

@@ -36,7 +36,7 @@ more than once, and the command writes nothing. `--use`, `--fail-on`, and
 
 ## Environments
 
-`--env <name>` on `nuka do`, `nuka run`, and `nuka session clear`
+`--env <name>` on `nuka do` and `nuka run`
 targets one of the environments named in `nukadoko.config.ts`'s
 own `environments` key; omitting it targets `default`, which needs no
 entry there. Each entry can override `baseURL`, append its own `envFiles`
@@ -60,10 +60,7 @@ about itself.
 anything executes. Among them: a step whose `from` key has no producing
 step earlier in that scenario, or has two of them competing. That case
 otherwise costs a whole browser session to discover, since the scenario
-looks correct until the consuming step actually runs. A default-exported
-`experimental_defineModel` or `experimental_defineRelation` is checked
-too. An unknown step name, and a step that needs a browser, are errors.
-Check does not run those steps. A step whose fixtures build `page`, `context`, `pageAs`, or `request` in a
+looks correct until the consuming step actually runs. A step whose fixtures build `page`, `context`, `pageAs`, or `request` in a
 project that has not installed `playwright` is `playwright-missing`, with
 the install line, so the run stops before it starts. A step file that
 imports `playwright/test` (or `playwright-core`, `@playwright/test`)
@@ -108,8 +105,7 @@ there is not checked and not run, and the skip reports nothing.
    and, once the run ends, every path it actually wrote plus a summary
    line. A failed step adds its error's first line and its step record
    path, and each failed scenario gets a `scenario-failed` finding after
-   the summary, whose `do:` line reruns it;
-   `--quiet` drops the other progress lines when the terminal gets noisy.
+   the summary, whose `do:` line reruns it.
    stdout is empty unless you ask: `--records` writes NDJSON there, one
    scenario's `run.json` entry per line, and `run.json` is on disk either
    way. To act on the result, pass `--json` instead: stdout is then

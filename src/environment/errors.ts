@@ -1,19 +1,8 @@
 // Responsibility: the error types environment resolution and its runtime
 // `--env` validation raise, kept separate from the modules that throw them
-// (name.ts, resolve-environment.ts) so callers (cli/do.ts, cli/session.ts,
-// tests) can `instanceof` them without pulling in those modules' other
-// dependencies — same convention as session/errors.ts and config/errors.ts.
-
-export class InvalidEnvironmentNameError extends Error {
-  readonly code = "invalid-environment-name";
-  readonly environmentName: string;
-
-  constructor(environmentName: string) {
-    super(`Invalid environment name "${environmentName}": must match [a-z0-9_-]+`);
-    this.name = "InvalidEnvironmentNameError";
-    this.environmentName = environmentName;
-  }
-}
+// (resolve-environment.ts) so callers (cli/do.ts, tests) can `instanceof`
+// them without pulling in that module's other dependencies, the same
+// convention as config/errors.ts.
 
 /** Thrown only when `--env <name>` was given explicitly and `name` has no
  * matching entry in nukadoko.config.ts's `environments`. The implicit

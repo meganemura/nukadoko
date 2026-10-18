@@ -5,7 +5,7 @@ import { runCli } from "./cli/run-cli.js";
 // that can be unit-tested without spawning a process lives in
 // cli/run-cli.ts; this file only owns argv/exit-code plumbing.
 
-// Saved before `runCli`: `run`, `do`, and `explore` point
+// Saved before `runCli`: `run` and `do` point
 // `process.stdout.write` at stderr, and the flush below has to wait on the
 // real stdout.
 const stdoutWrite = process.stdout.write.bind(process.stdout);

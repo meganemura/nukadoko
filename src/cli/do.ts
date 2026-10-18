@@ -28,10 +28,6 @@ import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact, fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
-import { acquireLock, releaseLock } from "../session/lock.js";
-import { validateSessionName } from "../session/name.js";
-import { sessionFilePath, sessionLockPath } from "../session/paths.js";
-import { readSessionFile, writeSessionFile } from "../session/store.js";
 import type { Step } from "../step/define-step.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import {
@@ -56,9 +52,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //
 //   1. Setup — malformed --args JSON, an unknown step name, a config/
 //      discovery error, an unknown `--env` name, a mutating step against a
-//      `policy: "read-only"` environment, an invalid `--session` name, a
-//      lock held by another live process, a malformed session file, a bad
-//      `--use <record-id>` (unknown id, a non-`"passed"` step record, a step
+//      `policy: "read-only"` environment, a bad `--use <record-id>` (unknown id, a non-`"passed"` step record, a step
 //      record whose step names none of this step's `from` entries, or a
 //      missing
 //      result key), or two `--use` values filling the
@@ -87,10 +81,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //      exists once `contextHandle` does.
 //
 // `--env` is resolved (environment/resolve-environment.ts) right after
-// config loads and before anything session-related, because session paths
-// are now per-environment — the resolved
-// environment's name, not the raw `--env` string, is what every later
-// cache/sessions/<env>/ path uses. The secret set is built once before the
+// config loads. The secret set is built once before the
 // version probe, still at the top of the execution phase: the probe's
 // failure reason is its own text and can carry a loaded secret, and the
 // warning is a stderr line rather than the step record. The probe itself
@@ -100,11 +91,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //
 // The evidence-collecting side of ctx (browser/http/trace) is created and
 // disposed here, never handed to the step itself — see
-// context/create-context.ts's header for why that split exists. Sessions
-// follow the same rule: this module is the only place a session's file is
-// actually read or written; `--session`'s lock is acquired right after it
-// passes setup's name/config checks and is always released in `finally`,
-// covering every return path below it.
+// context/create-context.ts's header for why that split exists.
 //
 // This is also the one place a run's SecretSet is built and the one place a
 // step record gets redacted:
@@ -120,10 +107,6 @@ export interface RunDoOptions {
   name: string;
   /** `--args` as given, or `null` when it was left out. */
   argsJson: string | null;
-  /** Carries login state across `do` calls as Playwright storageState;
-   * `null` means a clean start — no session file is read or written
-   * (docs/spec.md "Sessions, environments, secrets"). */
-  session: string | null;
   /** `--env`'s value, or `null` when it was omitted. `null` is not the same
    * as the string `"default"`: it is what tells resolveEnvironment() not to
    * require a matching `environments` entry.
@@ -141,7 +124,7 @@ export interface RunDoOptions {
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {
-  const { rootDir, name, argsJson, session, env, use, stdout, stderr } = options;
+  const { rootDir, name, argsJson, env, use, stdout, stderr } = options;
   // `do` prints a step record on stdout, never a report of its own, so a
   // refusal stays text on stderr.
   const sinks = { json: false, stdout, stderr, command: "do" };
@@ -156,9 +139,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     return refuse(sinks, error, "unexpected-error");
   }
 
-  // Environment resolution comes before anything session-related: session
-  // paths below are per-environment, so the resolved environment's name has
-  // to exist first. `env !== null` is what distinguishes "explicit --env
+  // `env !== null` is what distinguishes "explicit --env
   // that must exist in config.environments" from "implicit default, no such
   // requirement" — see
   // resolve-environment.ts's header for the reasoning.
@@ -169,48 +150,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     return refuse(sinks, error, "unexpected-error");
   }
 
-  // Name validation and lock acquisition happen together, still in setup:
-  // a name that fails validation never reaches the filesystem at all, and a
-  // lock conflict is reported before anything else about this run is
-  // decided. `lockPath` stays `null`
-  // exactly when `session` is `null`, so the `finally` below knows whether
-  // there is anything to release.
-  let lockPath: string | null = null;
   // Installed once this execution's fixture caches exist. `stop()` in the
   // `finally` below removes it on a normal return.
   let processSignal: ProcessSignal | undefined;
-  if (session !== null) {
-    try {
-      validateSessionName(session);
-    } catch (error) {
-      return refuse(sinks, error, "unexpected-error");
-    }
-    lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, session);
-
-    try {
-      await acquireLock(lockPath, session);
-    } catch (error) {
-      return refuse(sinks, error, "unexpected-error");
-    }
-  }
 
   try {
-    // A malformed session file is also a setup failure: unlike a missing
-    // one (a session's first-ever use), it's data nukadoko itself owns, so
-    // silently treating it as "no session" would risk restoring nothing
-    // without saying so.
-    let loadedStorageState: Awaited<ReturnType<typeof readSessionFile>> = null;
-    if (session !== null) {
-      try {
-        loadedStorageState = await readSessionFile(
-          sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, session),
-          session,
-        );
-      } catch (error) {
-        return refuse(sinks, error, "unexpected-error");
-      }
-    }
-
     let vocabulary;
     try {
       // Compat-origin parameter types are
@@ -435,7 +379,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       rootDir,
       env: envVars,
       secrets,
-      storageState: loadedStorageState ?? undefined,
       // `nuka do` has no scenario, so no chain: `ctx.resultOf` always
       // returns `undefined` here (docs/spec.md "Context API"). This matches
       // createStepContext's own default when `resultOf` is omitted — spelled
@@ -479,7 +422,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `"failed"` until this step's own outcome is known. A signal during
     // the step reads that, because the invocation did not finish.
     let fixtureOutcome: FixtureOutcome = "failed";
-    let disposeResult: DisposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+    let disposeResult: DisposeResult = { evidence: { screenshots: [] } };
     // Both caches tear down before dispose: a fixture built off `page`,
     // `context`, or `request` needs those still open. Scenario scope first,
     // matching `nuka run`. One function so the signal path and the normal
@@ -504,20 +447,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         // backstop so a failure neither of them anticipated still can't take
         // the step record down with it (docs/spec.md "Records": a step record is
         // written for every execution that started). No evidence file is known
-        // to exist in that case, so none is listed, and there is nothing to
-        // persist for the session either.
-        disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+        // to exist in that case, so none is listed.
+        disposeResult = { evidence: { screenshots: [] } };
       }
     });
     processSignal = installProcessSignalHandlers();
     processSignal.setScenarioCleanup(tearDownFixtures);
-    // `process.exit` from the signal handler does not run the `finally`
-    // that releases this execution's session lock.
-    processSignal.setSignalFinalizer(async () => {
-      if (lockPath !== null) {
-        await releaseLock(lockPath);
-      }
-    });
     const startedAt = new Date();
 
     // `--use`'s actual effect — applied here, not in
@@ -629,7 +564,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // failure never changes `status`.
     fixtureOutcome = status;
     await tearDownFixtures();
-    const { evidence, storageState: storageStateToPersist } = disposeResult;
+    const { evidence } = disposeResult;
     // `dispose()` above is what closes this execution's own (only) trace
     // chunk, if `ctx.page()` was ever called (create-context.ts's own
     // `closeCurrentChunk`) — trace.zip, when it exists at all, is fully
@@ -648,24 +583,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // than two independent spreads.
     const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
 
-    // Save whenever a session was requested *and* dispose() actually
-    // produced something to persist: a run
-    // that never opened a browser or request context leaves storageState
-    // `undefined`, and the session file is left untouched — not created,
-    // not overwritten, not deleted.
-    if (session !== null && storageStateToPersist !== undefined) {
-      try {
-        await writeSessionFile(
-          sessionFilePath(rootDir, config.stateDir, resolvedEnv.name, session),
-          storageStateToPersist,
-        );
-      } catch {
-        // Persisting the session must not cost the step record, mirroring
-        // dispose()'s own fault tolerance above; a write failure here just
-        // leaves the session's previous file (if any) in place.
-      }
-    }
-
     const stepRecord: StepRecord =
       status === "passed"
         ? {
@@ -679,7 +596,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             status: "passed",
             environment: resolvedEnv.name,
             target_version: targetVersion,
-            session,
             scenario_record_id: null,
             run_id: null,
             started_at: startedAt.toISOString(),
@@ -724,7 +640,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             status: "failed",
             environment: resolvedEnv.name,
             target_version: targetVersion,
-            session,
             scenario_record_id: null,
             run_id: null,
             started_at: startedAt.toISOString(),
@@ -767,11 +682,5 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     return status === "passed" ? 0 : 1;
   } finally {
     processSignal?.stop();
-    // Released regardless of which path above returned: setup failure,
-    // execution failure, or success. The signal path releases it too,
-    // before `process.exit`, because this `finally` does not run then.
-    if (lockPath !== null) {
-      await releaseLock(lockPath);
-    }
   }
 }

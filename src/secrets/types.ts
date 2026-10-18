@@ -19,7 +19,7 @@ export interface SecretEntry {
  * percent-encoded or JSON-escaped form, and ties broken by name. */
 export type SecretSet = readonly SecretEntry[];
 
-/** docs/spec.md "Sessions, environments, secrets" Honest limits: values shorter than this are never
+/** docs/spec.md "Environments and secrets" Honest limits: values shorter than this are never
  * redacted. A 1-3 character "secret" would match constantly inside ordinary
  * step record text (ids, statuses, single words) and turn redaction into the
  * thing that destroys the step record it's supposed to protect. */

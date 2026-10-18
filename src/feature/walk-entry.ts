@@ -1,7 +1,7 @@
 import { realpathSync, statSync, type Dirent } from "node:fs";
 
-// Responsibility: what the three project walks (features, step files, oath
-// Markdown) see in one directory entry once a symbolic link is followed,
+// Responsibility: what the two project walks (features, step files) see in
+// one directory entry once a symbolic link is followed,
 // and whether a directory was already entered. A monorepo links shared
 // steps and features into featuresDir, and a walk that took `Dirent` at
 // its word skipped every link with no report. Nothing here filters by name

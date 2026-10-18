@@ -19,9 +19,7 @@ const REPEATED: ReadonlyArray<{ readonly flag: string; readonly argv: readonly s
   { flag: "--concurrency", argv: ["run", "features/x.feature", "--concurrency", "2", "--concurrency", "3"], help: "nuka run --help" },
   { flag: "--repeat", argv: ["run", "features/x.feature", "--repeat", "2", "--repeat", "3"], help: "nuka run --help" },
   { flag: "--args", argv: ["do", "step", "--args", "{}", "--args", "{}"], help: "nuka do --help" },
-  { flag: "--session", argv: ["do", "step", "--args", "{}", "--session", "a", "--session", "b"], help: "nuka do --help" },
   { flag: "--env", argv: ["do", "step", "--args", "{}", "--env", "a", "--env", "b"], help: "nuka do --help" },
-  { flag: "--env", argv: ["session", "clear", "--env", "a", "--env", "b"], help: "nuka session clear --help" },
   { flag: "--pattern", argv: ["scaffold", "step", "--pattern", "a", "--pattern", "b"], help: "nuka scaffold --help" },
 ];
 

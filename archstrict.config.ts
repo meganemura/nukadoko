@@ -11,9 +11,9 @@ import type { Config } from "./archstrict.types.js";
 // which is the moment the surface has to be updated on purpose.
 //
 // Layers run from the leaves up to the two process entries. A layer may
-// depend on an earlier one. Checks, the runner, compat, matching, and
-// mcp are not one module, so a change in one of them is not a change to
-// all of them.
+// depend on an earlier one. Checks, the runner, compat, and matching are
+// not one module, so a change in one of them is not a change to all of
+// them.
 //
 // After an edit here, run `archstrict init` to regenerate archstrict.types.ts.
 export default {
@@ -56,7 +56,7 @@ export default {
   // Leaves and package doors that should not accumulate frozen debt.
   // A bypass here is fixed by extending that module's surface, not by
   // writing it into the todo file.
-  strict: ["binding", "check", "compat", "draft", "entry", "env", "explore", "feature", "finding", "issues", "matching", "mcp", "shell", "sink", "stored-form", "version"],
+  strict: ["binding", "check", "compat", "entry", "env", "feature", "finding", "issues", "matching", "shell", "sink", "stored-form", "version"],
   classify: [
     { glob: "src/env/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/finding/**", tags: ["layer:leaf", "pkghost:library"] },
@@ -66,7 +66,6 @@ export default {
     { glob: "src/binding/**", tags: ["layer:base", "pkghost:library"] },
     { glob: "src/compat/**", tags: ["layer:base", "pkghost:library"] },
     { glob: "src/secrets/**", tags: ["layer:base", "pkghost:library"] },
-    { glob: "src/session/**", tags: ["layer:base", "pkghost:library"] },
     { glob: "src/sink/**", tags: ["layer:base", "pkghost:library"] },
     { glob: "src/record/**", tags: ["layer:record", "pkghost:library"] },
     { glob: "src/step/**", tags: ["layer:contract", "pkghost:library"] },
@@ -80,9 +79,6 @@ export default {
     { glob: "src/environment/**", tags: ["layer:service", "pkghost:library"] },
     { glob: "src/report/**", tags: ["layer:service", "pkghost:library"] },
     { glob: "src/run/**", tags: ["layer:run", "pkghost:library"] },
-    { glob: "src/draft/**", tags: ["layer:workflow", "pkghost:library"] },
-    { glob: "src/explore/**", tags: ["layer:workflow", "pkghost:library"] },
-    { glob: "src/mcp/**", tags: ["layer:workflow", "pkghost:mcp"] },
     { glob: "src/tend/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/cli/**", tags: ["layer:adapter", "pkghost:cli"] },
     { glob: "src/cli.ts", tags: ["layer:entry", "pkghost:cli"] },
@@ -98,37 +94,30 @@ export default {
         },
         direction: "downward-only",
         because:
-          "foundation first. Records sit under the step contract, then config, the context that builds ctx, and fixtures. Checks, the runner, matching, and mcp sit above all five, so a change in one of them does not reach back into a lower layer. compat sits below them in base, so the migration door never depends on the engine it is migrating into.",
+          "foundation first. Records sit under the step contract, then config, the context that builds ctx, and fixtures. Checks, the runner, and matching sit above all five, so a change in one of them does not reach back into a lower layer. compat sits below them in base, so the migration door never depends on the engine it is migrating into.",
       },
     ],
     allowDeny: [
       {
         source: "pkghost:library",
         targetNamespace: "pkg",
-        deny: ["@modelcontextprotocol/client", "yargs", "@cucumber/gherkin"],
+        deny: ["yargs", "@cucumber/gherkin"],
         because:
-          "the MCP client, yargs, and the Gherkin parser each have one home. Library code does not grow a second one.",
+          "yargs and the Gherkin parser each have one home. Library code does not grow a second one.",
       },
       {
         source: "pkghost:cli",
         targetNamespace: "pkg",
-        deny: ["@modelcontextprotocol/client", "@cucumber/gherkin"],
+        deny: ["@cucumber/gherkin"],
         because:
-          "the CLI may parse argv with yargs. The MCP client belongs to the mcp module, and feature files are parsed by the feature module.",
-      },
-      {
-        source: "pkghost:mcp",
-        targetNamespace: "pkg",
-        deny: ["yargs", "@cucumber/gherkin"],
-        because:
-          "mcp is the only module that links the optional MCP client. It does not parse argv or feature files.",
+          "the CLI may parse argv with yargs. Feature files are parsed by the feature module.",
       },
       {
         source: "pkghost:feature",
         targetNamespace: "pkg",
-        deny: ["@modelcontextprotocol/client", "yargs"],
+        deny: ["yargs"],
         because:
-          "feature is the only module that links @cucumber/gherkin. It does not parse argv or talk to an MCP server.",
+          "feature is the only module that links @cucumber/gherkin. It does not parse argv.",
       },
     ],
   },
@@ -175,11 +164,6 @@ export default {
       name: "secrets",
       glob: "src/secrets/**",
       surface: ["build-secret-set.ts", "classify-env-files.ts", "redact.ts", "types.ts"],
-    },
-    {
-      name: "session",
-      glob: "src/session/**",
-      surface: ["lock.ts", "manage.ts", "name.ts", "paths.ts", "storage-state.ts", "store.ts"],
     },
     { name: "sink", glob: "src/sink/**", surface: ["writable-sink.ts"] },
     {
@@ -241,7 +225,6 @@ export default {
       glob: "src/step/**",
       surface: [
         "context.ts",
-        "define-explore.ts",
         "define-step.ts",
         "fixture-names.ts",
         "fixture-types.ts",
@@ -262,7 +245,7 @@ export default {
     {
       name: "feature",
       glob: "src/feature/**",
-      surface: ["feature-arg-read.ts", "load-features.ts", "parse-oath.ts", "resolve-oaths.ts"],
+      surface: ["feature-arg-read.ts", "load-features.ts"],
     },
     { name: "version", glob: "src/version.ts", surface: "version.ts" },
     {
@@ -274,7 +257,6 @@ export default {
         "codes.ts",
         "config-check.ts",
         "done-callback.ts",
-        "explore-check.ts",
         "feature-check.ts",
         "from-order.ts",
         "playwright-check.ts",
@@ -320,13 +302,6 @@ export default {
         "step-stdout.ts",
       ],
     },
-    { name: "draft", glob: "src/draft/**", surface: ["index.ts"] },
-    { name: "explore", glob: "src/explore/**", surface: ["index.ts"] },
-    {
-      name: "mcp",
-      glob: "src/mcp/**",
-      surface: ["index.ts"],
-    },
     { name: "tend", glob: "src/tend/**", surface: ["analyze.ts", "record-parse.ts", "types.ts"] },
     { name: "cli", glob: "src/cli/**", surface: ["run-cli.ts"] },
     { name: "bin", glob: "src/cli.ts", surface: "cli.ts" },
@@ -334,5 +309,5 @@ export default {
     { name: "matching", glob: "src/matching/**" },
   ],
   because:
-    "seams follow growth. The step contract is one module, layered between records below and config, context, and fixtures above. Checks, compat, matching, mcp, and the CLI are separate modules with explicit surfaces, so a new file in one of them does not land in a single core.",
+    "seams follow growth. The step contract is one module, layered between records below and config, context, and fixtures above. Checks, compat, matching, and the CLI are separate modules with explicit surfaces, so a new file in one of them does not land in a single core.",
 } satisfies Config;

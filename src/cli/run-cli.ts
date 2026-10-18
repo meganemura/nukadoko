@@ -7,12 +7,7 @@ import yargs from "yargs";
 import type { Arguments, Argv, CommandModule } from "yargs";
 import { readOwnVersion } from "../version.js";
 import { AGENT_ENTRY_POINT, HELP_WIDTH, type HelpGroup, helpLines, renderCommandGroups, withoutFlatListing } from "./help-groups.js";
-import {
-  commandTookTheName,
-  DEFAULT_EXPLORE_LENGTH,
-  DEFAULT_EXPLORE_RUNS,
-  VALID_STEP_NAME,
-} from "./option-defaults.js";
+import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
@@ -30,16 +25,13 @@ import {
 } from "./refusal.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
-// `session list`/`clear`, `init`, `scaffold`, `check`,
-// `clean`, `tend`, `skill path`, `experimental explore`)
+// `init`, `scaffold`, `check`, `clean`, `tend`, `skill path`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
 // That is `cli.ts`'s job, so this function stays callable directly from
 // tests. `do`'s own setup/execution split and step record writing lives in
-// cli/do.ts; `run`'s own execution lives in cli/run.ts;
-// `session`'s own list/clear logic lives in
-// cli/session.ts; `init`/`scaffold`'s own generation logic lives in
+// cli/do.ts; `run`'s own execution lives in cli/run.ts; `init`/`scaffold`'s own generation logic lives in
 // cli/init.ts and
 // cli/scaffold.ts; `check`'s own analysis lives in cli/check.ts (thin
 // wiring) and src/check/* (the actual checks); `clean`'s own plan-then-
@@ -94,7 +86,6 @@ interface DoArgs {
    * handler defaults a missing `args` to `"{}"` so `--use`'s `from`
    * injection (do.ts, execution phase) still has an object to fill. */
   args?: string;
-  session?: string;
   env?: string;
   /** `--use <record-id>` (repeatable) — yargs' `array: true` collects
    * every occurrence into this list, in the order given, rather than only
@@ -110,10 +101,6 @@ interface RunArgs {
    * collects a repeated string flag into an array). Not `array: true`,
    * which would also swallow the feature targets that follow it. */
   env?: string | string[];
-  /** Suppresses the per-step/per-scenario progress lines — the
-   * output-location and summary lines still print; run.ts's own header
-   * explains why those two are exempt. */
-  quiet?: boolean;
   /** Writes run.json's scenario entries to stdout, one per line; without
    * it stdout stays empty. */
   records?: boolean;
@@ -132,26 +119,6 @@ interface RunArgs {
   /** `--probe`: re-run each passed read-only Then with one capture
    * changed. */
   probe?: boolean;
-}
-
-interface ExploreArgs {
-  file: string;
-  /** yargs' `type: "number"` passes `NaN` or a fraction through; explore.ts
-   * refuses both. */
-  seed?: number;
-  runs?: number;
-  length?: number;
-  env?: string;
-  json?: boolean;
-}
-
-interface SessionListArgs {
-  json?: boolean;
-}
-
-interface SessionClearArgs {
-  name?: string;
-  env?: string;
 }
 
 interface InitArgs {
@@ -244,7 +211,7 @@ function rejectRepeatedFlags(flags: readonly string[]) {
 
 const INIT_WRITES_ENV_LINES = "init always adds .env, .env.*, and !.env.example to .gitignore.";
 const CLEAN_REMOVES_EVERY_CATEGORY =
-  "nuka clean always removes records, cache, and export together; nuka clean --dry-run lists what it would remove.";
+  "nuka clean always removes records and export together; nuka clean --dry-run lists what it would remove.";
 
 // A removed flag is refused by name, with what replaces it, rather than
 // left to `.strict()`: "Unknown argument: session" says what is wrong with
@@ -264,14 +231,6 @@ function refuseRemovedFlags(y: Argv, removed: Readonly<Record<string, string>>):
 function firstWord(command: string | readonly string[] | undefined): string {
   const text = typeof command === "string" ? command : (command?.[0] ?? "");
   return text.split(" ")[0] ?? "";
-}
-
-/** The invocation that reached the moved `explore` spelling, with `explore`
- * replaced by `experimental explore` and every other word kept. */
-export function movedExploreCommandLine(argv: readonly string[]): string {
-  const at = argv.indexOf("explore");
-  const words = [...argv.slice(0, at), "experimental", "explore", ...argv.slice(at + 1)];
-  return ["nuka", ...words.map(shellWord)].join(" ");
 }
 
 export async function runCli(
@@ -303,7 +262,7 @@ export async function runCli(
   // dispatch are separate steps in yargs' internals; a custom `.fail()`
   // callback that doesn't throw just falls through to dispatch). Every
   // handler here overwrites the shared `exitCode` with its own result and
-  // may perform real side effects (writing a step record, clearing a session),
+  // may perform real side effects (writing a step record, deleting runs),
   // so letting it run would silence the failure and let an unparsed
   // invocation take real action. `argsFailed` is set synchronously inside
   // `.fail()`, which — because validation always runs before dispatch, see
@@ -519,7 +478,11 @@ export async function runCli(
     command: "do <name>",
     describe: "execute one typed step; step record to stdout",
     builder: (y: Argv) =>
-      y
+      refuseRemovedFlags(y, {
+        session:
+          "nuka do --session is removed: each nuka do call starts clean. A step that needs login state gets it from " +
+          "a fixture, and a page whose state cannot be repeated is explored through a Playwright MCP server.",
+      })
         .positional("name", {
           type: "string",
           demandOption: true,
@@ -529,10 +492,6 @@ export async function runCli(
           type: "string",
           describe:
             "step arguments as a JSON object (may be omitted only when --use supplies every key)",
-        })
-        .option("session", {
-          type: "string",
-          describe: "carry login state across calls via a named session",
         })
         .option("env", {
           type: "string",
@@ -547,7 +506,7 @@ export async function runCli(
         // `--args` has no `demandOption`: `--use` can supply every key, and
         // runDo refuses a missing `--args` after it knows the step exists,
         // so its do line can name `nuka describe <name>` for a real step.
-        .check(rejectRepeatedFlags(["args", "session", "env"])) as Argv<DoArgs>,
+        .check(rejectRepeatedFlags(["args", "env"])) as Argv<DoArgs>,
     handler: async (args: Arguments<DoArgs>) => {
       if (argsFailed) return;
       const { runDo } = await import("./do.js");
@@ -555,7 +514,6 @@ export async function runCli(
         rootDir,
         name: args.name,
         argsJson: args.args ?? null,
-        session: args.session ?? null,
         env: args.env ?? null,
         use: args.use ?? [],
         stdout: await recordStdout(),
@@ -567,20 +525,21 @@ export async function runCli(
   const runCommand: CommandModule<Record<string, never>, RunArgs> = {
     command: "run [feature..]",
     describe:
-      "check, then execute scenarios from a feature file, a Markdown oath, or a directory of them (featuresDir when none is given); step records + run.json",
+      "check, then execute scenarios from a feature file or a directory of them (featuresDir when none is given); step records + run.json",
     builder: (y: Argv) =>
       refuseRemovedFlags(y, {
         session:
           "nuka run --session is removed: a scenario that needs login state gets it from a fixture or a Given step " +
-          "its feature names. nuka do --session <name> still carries state across do calls.",
+          "its feature names.",
+        quiet:
+          "nuka run --quiet is removed: nuka run --json prints one document on stdout and nothing on stderr.",
       })
         .positional("feature", {
           type: "string",
           array: true,
           describe:
-            "feature file or Markdown oath, optionally with :line (e.g. features/checkout.feature:12), or a directory " +
-            "walked recursively for .feature files and for Markdown files named in oaths (:line is refused on a directory); " +
-            "omit to run featuresDir",
+            "feature file, optionally with :line (e.g. features/checkout.feature:12), or a directory " +
+            "walked recursively for .feature files (:line is refused on a directory); omit to run featuresDir",
         })
         .option("check", {
           type: "boolean",
@@ -594,12 +553,6 @@ export async function runCli(
           describe:
             'target a named environment (omit for the "default" environment); repeat it to run every selected ' +
             "scenario once in each, in one run with one verdict per scenario and environment",
-        })
-        .option("quiet", {
-          type: "boolean",
-          default: false,
-          describe:
-            "suppress the per-step/per-scenario progress lines (output locations and the summary still print; --json prints none of them)",
         })
         .option("records", {
           type: "boolean",
@@ -654,7 +607,6 @@ export async function runCli(
         featureArgs: args.feature ?? [],
         check: args.check ?? true,
         envs: args.env === undefined ? [] : typeof args.env === "string" ? [args.env] : args.env,
-        quiet: args.quiet ?? false,
         records: args.records ?? false,
         json: args.json ?? false,
         concurrency: args.concurrency ?? 1,
@@ -670,110 +622,40 @@ export async function runCli(
     },
   };
 
-  const exploreCommand: CommandModule<Record<string, never>, ExploreArgs> = {
-    command: "explore <file>",
-    describe:
-      "run one model or relation file against request-only steps; on a failure, the shortest scenario " +
-      "found goes to stdout with the command that reruns it",
-    builder: (y: Argv) =>
-      y
-        .positional("file", { type: "string", demandOption: true, describe: "a model or relation file under featuresDir" })
-        .option("seed", { type: "number", describe: "the seed every choice comes from (printed when omitted)" })
-        .option("runs", { type: "number", describe: `how many sequences a model runs (default ${DEFAULT_EXPLORE_RUNS})` })
-        .option("length", { type: "number", describe: `the most steps in one sequence (default ${DEFAULT_EXPLORE_LENGTH})` })
-        .option("env", { type: "string", describe: 'target a named environment (omit for the "default" environment)' })
-        .option("json", {
-          type: "boolean",
-          default: false,
-          describe: "one JSON object on stdout: the verdict, the seed and counts, and on a failure each step's result and the scenario",
-        })
-        .check(rejectRepeatedFlags(["seed", "runs", "length", "env"])) as Argv<ExploreArgs>,
-    handler: async (args: Arguments<ExploreArgs>) => {
-      if (argsFailed) return;
-      const { runExplore } = await import("./explore.js");
-      exitCode = await runExplore({
-        notices,
-        rootDir,
-        file: args.file,
-        seed: args.seed ?? null,
-        runs: args.runs ?? DEFAULT_EXPLORE_RUNS,
-        length: args.length ?? DEFAULT_EXPLORE_LENGTH,
-        env: args.env ?? null,
-        json: args.json ?? false,
-        stdout: await recordStdout(),
-        stderr,
-      });
-    },
-  };
-
-  const sessionListCommand: CommandModule<Record<string, never>, SessionListArgs> = {
-    command: "list",
-    describe: "list every session, across all environments, one line each with its environment",
-    builder: (y: Argv) =>
-      y.option("json", {
-        type: "boolean",
-        default: false,
-        describe: "machine-readable output",
-      }) as Argv<SessionListArgs>,
-    handler: async (args: Arguments<SessionListArgs>) => {
-      if (argsFailed) return;
-      const { runSessionList } = await import("./session.js");
-      exitCode = await runSessionList({
-        notices,
-        rootDir,
-        json: args.json ?? false,
-        stdout,
-        stderr,
-      });
-    },
-  };
-
-  const sessionClearCommand: CommandModule<Record<string, never>, SessionClearArgs> = {
-    command: "clear [name]",
-    describe: "delete a session, or every session for the environment when no name is given",
-    builder: (y: Argv) =>
-      y
-        .positional("name", {
-          type: "string",
-          describe: "session name; omit to clear every session in the environment",
-        })
-        .option("env", {
-          type: "string",
-          describe: 'target a named environment (omit for the "default" environment)',
-        })
-        .check(rejectRepeatedFlags(["env"])) as Argv<SessionClearArgs>,
-    handler: async (args: Arguments<SessionClearArgs>) => {
-      if (argsFailed) return;
-      const { runSessionClear } = await import("./session.js");
-      exitCode = await runSessionClear({
-        rootDir,
-        name: args.name ?? null,
-        env: args.env ?? null,
-        stdout,
-        stderr,
-      });
-    },
-  };
-
-  // `session start` and `session stop` were removed with live sessions.
-  // The old spellings name what replaced them instead of yargs' bare
-  // "Unknown argument". Hidden from the help: they run nothing.
-  const removedSessionCommands: CommandModule[] = ["start", "stop"].map((verb) => ({
-    command: verb,
+  // `harvest`, `session`, `explore`, and `experimental` were removed. Each
+  // old spelling names what replaces it instead of yargs' bare "Unknown
+  // argument", so a script that still calls it learns what to change.
+  // Hidden from the help: they run nothing.
+  const removedCommand = (command: string, message: string, hint: { fix?: string; do?: string }): CommandModule => ({
+    command,
     describe: false,
     builder: (y: Argv) => y.strict(false),
     handler: () => {
       if (argsFailed) return;
-      exitCode = refuse(
-        { json: jsonRequested, stdout, stderr, command: `session ${verb}` },
-        `\`nuka session ${verb}\` was removed with live sessions; \`nuka do <step> --session <name>\` still carries ` +
-          "login state across calls, and a page whose state cannot be repeated is explored through a Playwright " +
-          "MCP server (see docs/upgrading.md in the nukadoko package)",
-        "removed-command",
-        { do: "nuka do --help" },
-      );
+      exitCode = refuse({ json: jsonRequested, stdout, stderr, command }, message, "removed-command", hint);
     },
-  }));
+  });
+  const removedHarvestCommand = removedCommand(
+    "harvest",
+    "`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)",
+    { fix: "Write the scenario from the steps you ran in a feature file.", do: "nuka check" },
+  );
+  const removedSessionCommand = removedCommand(
+    "session",
+    "`nuka session` was removed with sessions: each nuka do call starts clean, and a step that needs login state " +
+      "gets it from a fixture (see docs/upgrading.md in the nukadoko package)",
+    { fix: "Give the step a fixture that logs in, and delete .nukadoko/cache/.", do: "nuka do --help" },
+  );
+  const removedExperimentalCommand = removedCommand(
+    "experimental",
+    "`nuka experimental explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
+    { fix: "Write each sequence the model found as a scenario in a feature file.", do: "nuka check" },
+  );
+  const removedExploreCommand = removedCommand(
+    "explore",
+    "`nuka explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
+    { fix: "Write each sequence the model found as a scenario in a feature file.", do: "nuka check" },
+  );
 
   const initCommand: CommandModule<Record<string, never>, InitArgs> = {
     command: "init",
@@ -947,8 +829,8 @@ export async function runCli(
           type: "string",
           array: true,
           describe:
-            "feature file, Markdown oath, or directory, selected the way nuka run selects them (no :line); " +
-            "omit to check every feature under featuresDir and additionalFeatureDirs and every path in oaths",
+            "feature file or directory, selected the way nuka run selects them (no :line); " +
+            "omit to check every feature under featuresDir and additionalFeatureDirs",
         })
         .option("json", {
           type: "boolean",
@@ -1067,73 +949,7 @@ export async function runCli(
     builder: (y: Argv) => y.command(skillPathCommand).demandCommand(1).strict(),
     handler: () => {
       // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // `path`, same pattern as `sessionCommand` below.
-    },
-  };
-
-  // `harvest` was removed. The old spelling names the upgrading note
-  // instead of yargs' bare "Unknown argument", so a script that still
-  // calls it learns what replaced it. Hidden from the help: it runs nothing.
-  const removedHarvestCommand: CommandModule = {
-    command: "harvest",
-    describe: false,
-    builder: (y: Argv) => y.strict(false),
-    handler: () => {
-      if (argsFailed) return;
-      exitCode = refuse(
-        { json: jsonRequested, stdout, stderr, command: "harvest" },
-        "`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)",
-        "removed-command",
-        { fix: "Write the scenario from the steps you ran in a feature file.", do: "nuka check" },
-      );
-    },
-  };
-
-  // `explore` was a top-level command until it moved under `experimental`.
-  // Hidden from the help: it runs nothing, and names the new spelling so a
-  // script written against the old one says what to change.
-  const movedExploreCommand: CommandModule = {
-    command: "explore",
-    describe: false,
-    builder: (y: Argv) => y.strict(false),
-    handler: async () => {
-      if (argsFailed) return;
-      exitCode = refuse(
-        { json: jsonRequested, stdout, stderr, command: "explore" },
-        "`nuka explore` moved to `nuka experimental explore`",
-        "removed-command",
-        { do: movedExploreCommandLine(argv) },
-      );
-    },
-  };
-
-  const experimentalCommand: CommandModule = {
-    command: "experimental",
-    describe:
-      "EXPERIMENTAL: commands this package is still trying out; any of them may change shape or " +
-      "disappear release to release without the deprecation notice a stable command would get",
-    builder: (y: Argv) => y.command(namingMissingConfig(exploreCommand)).demandCommand(1).strict(),
-    handler: () => {
-      // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // a subcommand, same pattern as `skillCommand`/`sessionCommand`.
-    },
-  };
-
-  const sessionCommand: CommandModule = {
-    command: "session",
-    describe: "list|clear sessions",
-    builder: (y: Argv) =>
-      removedSessionCommands
-        .reduce(
-          (sub: Argv, command) => sub.command(command),
-          y.command(namingMissingConfig(sessionListCommand)).command(namingMissingConfig(sessionClearCommand)),
-        )
-        .demandCommand(1)
-        .strict(),
-    handler: () => {
-      // Never invoked: `demandCommand(1)` on the sub-builder above requires
-      // one of `list`/`clear`, so this bare handler only
-      // exists to satisfy yargs' CommandModule shape.
+      // `path`.
     },
   };
 
@@ -1153,20 +969,17 @@ export async function runCli(
     },
     {
       heading: "Exploring",
-      commands: [namingMissingConfig(doCommand), sessionCommand],
+      commands: [namingMissingConfig(doCommand)],
     },
     { heading: "Upkeep", commands: [namingMissingConfig(tendCommand), namingMissingConfig(cleanCommand), skillCommand] },
-    { heading: "Experimental", commands: [experimentalCommand] },
   ];
 
   const commandNames = new Map<string, readonly string[]>(
     helpGroups
       .flatMap((group) => group.commands)
-      .concat(movedExploreCommand, removedHarvestCommand)
+      .concat(removedHarvestCommand, removedSessionCommand, removedExperimentalCommand, removedExploreCommand)
       .map((command) => [firstWord(command.command), []]),
   );
-  commandNames.set("session", [sessionListCommand, sessionClearCommand, ...removedSessionCommands].map((c) => firstWord(c.command)));
-  commandNames.set("experimental", [firstWord(exploreCommand.command)]);
   commandNames.set("skill", [firstWord(skillPathCommand.command)]);
 
   const parser = helpGroups
@@ -1208,7 +1021,9 @@ export async function runCli(
     .wrap(null)
     .epilogue(AGENT_ENTRY_POINT)
     .command(removedHarvestCommand)
-    .command(movedExploreCommand)
+    .command(removedSessionCommand)
+    .command(removedExperimentalCommand)
+    .command(removedExploreCommand)
     .demandCommand(1)
     .strict()
     .help();

@@ -5,7 +5,6 @@ import { listCheckCodes } from "../check/codes.js";
 import type { CheckFinding, CheckIssue, CheckReport } from "../check/types.js";
 import { loadConfig } from "../config/load-config.js";
 import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
-import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { readFeaturesForCheck, resolveFeatureTargets } from "../run/select-pickles.js";
 import { listRunCodes } from "../finding/run-codes.js";
 import { shellWord } from "../shell/shell-word.js";
@@ -33,10 +32,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // warnings alone are exit 0).
 //
 // `targets` select files the way `nuka run`'s do (src/run/select-pickles.ts:
-// files, directories walked for .feature files and configured oaths), so
+// files, and directories walked for .feature files), so
 // the errors `nuka run` prints before executing are this report's errors
 // for the same targets. No target keeps the project-wide walk
-// (featuresDir, additionalFeatureDirs, every oath), which is wider than a
+// (featuresDir and additionalFeatureDirs), which is wider than a
 // bare `nuka run`'s featuresDir. `:line` is refused: check analyzes whole
 // files, and a narrowed file would hide findings in its other scenarios.
 // A file that does not parse stays a `feature-parse-error` finding here,
@@ -57,7 +56,7 @@ export interface RunCheckOptions {
   rootDir: string;
   json: boolean;
   codes?: boolean;
-  /** Feature files, oaths, or directories; empty checks the whole project. */
+  /** Feature files or directories; empty checks the whole project. */
   targets?: readonly string[];
   /** Findings the invocation raised before the command ran, such as a
    * missing config file, which `--json` carries in the envelope. */
@@ -207,8 +206,7 @@ export async function readCheckTargets(
   }
   let selected;
   try {
-    const oaths = resolveOathPaths(rootDir, config.oaths);
-    const files = resolveFeatureTargets(rootDir, targets, oaths.files, oaths.directories);
+    const files = resolveFeatureTargets(rootDir, targets);
     selected = readFeaturesForCheck(rootDir, files.map(([relativePath]) => relativePath));
   } catch (error) {
     const message = `${command}: ${error instanceof Error ? error.message : String(error)}`;

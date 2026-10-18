@@ -319,7 +319,6 @@ export interface EmitStepInput {
   readonly runId: string;
   readonly scenarioId: string;
   readonly environment: string;
-  readonly session: string | null;
   readonly targetVersion?: string;
   readonly record: ScenarioStepEntry;
   /** The exact in-memory object run-scenario.ts's own `writeStepRecord`
@@ -734,7 +733,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     const sequence = progressSnapshotCount;
     result.start = Math.min(anchor + sequence, ceiling);
     // Identity only. `mapScenario`'s own context
-    // parameters (session/target_version) are excluded from historyId
+    // parameter (target_version) is excluded from historyId
     // already, so a snapshot that never carries them changes nothing a
     // reader could compare against the real result. The environment is not
     // context: it is part of the identity (`BeginScenarioInput.environment`),

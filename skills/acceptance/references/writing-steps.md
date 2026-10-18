@@ -152,12 +152,11 @@ scenario's steps, so a step green under `do` can still fail under `run` if
 it depends on state an earlier step left (signed in, navigated elsewhere, a
 dialog left open). Passing alone under `do` checks that each step works on
 its own, not that it works in the scenario's own order; only `run` checks
-that. `nuka do --session <name>` narrows the gap only for login state,
-carrying storageState across `do` calls, not where execution had got to, so
-anything else still needs fixing in the feature: give shared state its own
-step, named for what it establishes, and call it once. `nuka run` takes no
-session, so a scenario that needs to be signed in gets that from a fixture
-or a Given step its feature names.
+that. Nothing carries across `do` calls or into a scenario, login state
+included, so shared state needs fixing in the feature: give it its own
+step, named for what it establishes, and call it once. A scenario that
+needs to be signed in gets that from a fixture or a Given step its feature
+names.
 
 A step that declares `from` (see "Chaining a value from an earlier step"
 below) still runs alone: pass the key in `--args` like any other, or add

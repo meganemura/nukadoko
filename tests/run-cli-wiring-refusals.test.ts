@@ -2,15 +2,9 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
-// Responsibility: two shapes of run-cli.ts's own wiring that session.test.ts
-// already proves for `session clear` (its own "an unknown flag fails
-// setup" case) but no test yet proves for the other commands. yargs'
-// `.fail()` sets `argsFailed`, then still runs the matched handler, whose
-// own `if (argsFailed) return;` guard is what actually stops it: the same
-// mechanism, one line per command, checked here for the commands this
-// package's own test suite is otherwise thinnest on. Also `nuka describe`'s
-// own ConfigError propagation, which `nuka steps`' sibling test
-// (cli.test.ts) already proves for `steps` but not for `describe`.
+// Responsibility: the removed commands, each refused by name with what
+// replaces it, and `nuka describe`'s own ConfigError propagation, which
+// `nuka steps`' sibling test (cli.test.ts) already proves for `steps`.
 
 describe("nuka harvest, removed", () => {
   it("exits 2 and names what replaced it, with or without arguments", async () => {
@@ -30,18 +24,41 @@ describe("nuka harvest, removed", () => {
   });
 });
 
-describe("nuka <command> --unknown-flag: the matched handler never runs", () => {
-  it("nuka session list: prints nothing", async () => {
+describe("nuka session, nuka experimental explore and nuka explore, removed", () => {
+  const REMOVED = [
+    {
+      argv: ["session", "list"],
+      stderr:
+        "refused\tremoved-command\t-\t`nuka session` was removed with sessions: each nuka do call starts clean, and a step that needs " +
+        "login state gets it from a fixture (see docs/upgrading.md in the nukadoko package)\n" +
+        "  fix: Give the step a fixture that logs in, and delete .nukadoko/cache/.\n" +
+        "  do: nuka do --help\n",
+    },
+    {
+      argv: ["experimental", "explore", "features/model.ts"],
+      stderr:
+        "refused\tremoved-command\t-\t`nuka experimental explore` was removed with models and relations " +
+        "(see docs/upgrading.md in the nukadoko package)\n" +
+        "  fix: Write each sequence the model found as a scenario in a feature file.\n" +
+        "  do: nuka check\n",
+    },
+    {
+      argv: ["explore", "features/model.ts"],
+      stderr:
+        "refused\tremoved-command\t-\t`nuka explore` was removed with models and relations " +
+        "(see docs/upgrading.md in the nukadoko package)\n" +
+        "  fix: Write each sequence the model found as a scenario in a feature file.\n" +
+        "  do: nuka check\n",
+    },
+  ];
+
+  it.each(REMOVED)("exits 2 and names what replaced it ($argv)", async ({ argv, stderr: expected }) => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["session", "list", "--unknown-flag"], {
-      rootDir: fixture("basic-project"),
-      stdout,
-      stderr,
-    });
+    const exitCode = await runCli(argv, { rootDir: fixture("basic-project"), stdout, stderr });
 
     expect(exitCode).toBe(2);
-    expect(stderr.text()).toContain("unknown-flag");
+    expect(stderr.text()).toBe(expected);
     expect(stdout.text()).toBe("");
   });
 });

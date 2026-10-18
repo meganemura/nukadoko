@@ -110,31 +110,10 @@ describe("nuka run: progress output", () => {
     }
   });
 
-  it("--quiet suppresses step and scenario lines; output locations and the summary still print", async () => {
+  it("names each failed scenario after the summary", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature", "--quiet"], {
-      rootDir,
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    expect(stepLines(stderr.text())).toHaveLength(0);
-    expect(scenarioBoundaryLines(stderr.text())).toHaveLength(0);
-
-    const text = stderr.text();
-    expect(text).toContain("steps");
-    expect(text).toContain("run.json");
-    expect(text).toContain("allure");
-    expect(text).toContain("messages");
-    expect(text).toMatch(/1 scenario: 1 passed, 0 failed {2}\(/);
-  });
-
-  it("names each failed scenario after the summary, including under --quiet", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature", "--quiet"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature"], {
       rootDir,
       stdout,
       stderr,
@@ -188,21 +167,6 @@ describe("nuka run: progress output", () => {
     );
   });
 
-  it("--quiet still writes a failed step's lines, and only those", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature", "--quiet"], { rootDir, stdout, stderr });
-
-    expect(exitCode).toBe(1);
-    const lines = nonEmptyLines(normalizeRun(stderr.text()));
-    expect(lines.slice(0, 3)).toEqual([
-      "  step 2/3  failed  <d>s  the operation fails",
-      "      operation failed on purpose",
-      "      record  .nukadoko/runs/<run>/steps/<id>",
-    ]);
-    expect(stepLines(stderr.text())).toHaveLength(1);
-  });
-
   it("the do line carries --env, so the scenario reruns where it failed", async () => {
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
@@ -210,7 +174,7 @@ describe("nuka run: progress output", () => {
     );
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature", "--env", "staging", "--quiet"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature", "--env", "staging"], {
       rootDir,
       stdout,
       stderr,

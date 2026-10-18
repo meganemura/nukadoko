@@ -100,7 +100,7 @@ jobs:
       - run: npm ci --ignore-scripts
       # `nuka run` opens a browser; install it here, not on the `check`
       # job above, which never launches one. `chromium` is
-      # `browserType`'s own default (docs/spec.md "Sessions, environments,
+      # `browserType`'s own default (docs/spec.md "Environments and
       # secrets"); add `firefox`/`webkit` too if `browserType` names one
       # of them. `--with-deps` is a Linux-runner requirement: without it,
       # Playwright's own browser binary is present but missing the system
@@ -188,7 +188,7 @@ jobs:
   nukadoko には読み込む先の `playwright.config.ts` がありません。
   代わりに `nukadoko.config.ts` の `browserType` がエンジンを選びます(既定は `"chromium"`)。
   だから上のインストールコマンドはそれを明示的に名指しています。
-  firefox と webkit もそれぞれ自分自身のバイナリを必要とします(docs/spec.ja.md の「Session、environment、secret」を参照)。
+  firefox と webkit もそれぞれ自分自身のバイナリを必要とします(docs/spec.ja.md の「Environment、secret」を参照)。
   `browserType`(や、それを渡り歩く test matrix)が実際に必要とするものを足してください。
 - **テスト対象のアプリは自分の手で起動する必要があります。**
   `playwright test` から来た人がもっとも見落としがちなのがこれです。
@@ -198,11 +198,11 @@ jobs:
 - **run が残すものには上限があり、それ以外にはありません。**
   `nuka run` は最新 `retention.runs` 回分の run を保ち、それより古い run を毎回の run の終わりに自分で消します(docs/spec.ja.md の「成果物」を参照)。
   だから永続するランナーでも、`.nukadoko/runs/` と export の出力はその回数ぶんの大きさに留まります。
-  決して消さないのは `.nukadoko/cache/`(`nuka do`/session の利用が残す session ファイル)と、nukadoko が run ごとのファイル一覧を残すようになる前に書かれた `allure-results/` です。
-  GitHub がホストするランナーはジョブごとに新しい仮想マシンなので、そこではどちらも問題になりません。
-  セルフホストや、それ以外の理由で永続するランナーでは、その 2 つに対して手当てが 2 つあります。
+  決して消さないのは、nukadoko が run ごとのファイル一覧を残すようになる前に書かれた `allure-results/` です。
+  GitHub がホストするランナーはジョブごとに新しい仮想マシンなので、そこでは問題になりません。
+  セルフホストや、それ以外の理由で永続するランナーでは、それに対して手当てが 2 つあります。
   ジョブの先頭で `rm -rf .nukadoko` するか、`npx nuka clean`(自身の `--help` を参照)を叩くかです。
-  後者は同じことをより狭く行い、そのランナー上でまだ生きている `nuka session` があれば、それを理由に丸ごと拒否します。
+  後者は同じことをより狭く行います。
 - **`nuka tend` は自分自身のトリガーを必要とします。**
   workflow が明示しない限り、これを定期的に走らせるものは何もありません。
   上の `tend` job がそのトリガーで、`check`/`run` の経路からは意図的に外してあります(docs/spec.ja.md の「Tending(手入れ)」を参照)。
@@ -300,7 +300,7 @@ jobs:
 この workflow は、実際のランナー上で green になるのを見届けたファイルとしてではなく、手を加えるための出発点として読んでください。
 
 ジョブの後で Allure の出力がどこへ行くかについても、このページは何も言いません。
-trace と screenshot は伏せられません(docs/spec.ja.md の「Session、environment、secret」を参照)。
+trace と screenshot は伏せられません(docs/spec.ja.md の「Environment、secret」を参照)。
 隣の `http.jsonl` は秘密を置き換えてありますが、trace はブラウザ自身の状態を cookie ごと持ち、screenshot は画面に出ていたものをそのまま持ちます。
 artifact としてアップロードした run ディレクトリや `allure-results/`、チャットに貼った生成済みレポートは、そのすべてを運びます。
 ランナーの中に留めるか、最初のアップロードの前に誰が開いてよいかを決めてください。

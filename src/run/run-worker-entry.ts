@@ -90,13 +90,12 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 // redacted before they are written. The parent parses each note back into
 // its finding and reports it as the serial path does.
 
-const [rootDirArg, runIdArg, envArg0, quietRawArg, featureListPathArg, repeatRawArg, probeRawArg] = process.argv.slice(2);
+const [rootDirArg, runIdArg, envArg0, featureListPathArg, repeatRawArg, probeRawArg] = process.argv.slice(2);
 
 if (
   rootDirArg === undefined ||
   runIdArg === undefined ||
   envArg0 === undefined ||
-  quietRawArg === undefined ||
   featureListPathArg === undefined ||
   repeatRawArg === undefined ||
   !/^[1-9][0-9]*$/.test(repeatRawArg) ||
@@ -114,7 +113,6 @@ const rootDir: string = rootDirArg;
 const runId: string = runIdArg;
 const featureListPath: string = featureListPathArg;
 const env = envArg0 === "" ? null : envArg0;
-const quiet = quietRawArg === "1";
 const repeat: number = Number(repeatRawArg);
 const probe = probeRawArg === "1";
 
@@ -326,7 +324,7 @@ async function main(): Promise<void> {
               return true;
             },
           },
-          { stateDir: config.stateDir, runId, quiet },
+          { stateDir: config.stateDir, runId },
         );
 
         allureEmitter?.beginScenario({
@@ -345,7 +343,6 @@ async function main(): Promise<void> {
                 pickle,
                 relativeFeaturePath: feature.relativePath,
                 environment: resolvedEnv.name,
-                session: null,
                 targetVersion,
                 runId,
               });

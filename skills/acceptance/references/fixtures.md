@@ -68,12 +68,6 @@ A program under test that listens on a URL starts in a fixture through
 (`running.md`, "Setting up"); a `request` override that destructures
 `server` makes every request step start it.
 
-An MCP server over stdio is the same pattern: `connectMcpServer`/
-`callMcpTool` (`"nukadoko/mcp"`) belong in a fixture. A server's tools
-are never step vocabulary.
-If the handshake fails, `connectMcpServer` stops the process it spawned
-before rejecting, and the error names the command. A successful handshake
-still returns a live client for teardown to close.
 
 ## Temporary directories
 
@@ -156,5 +150,5 @@ Those files are `KEY=VALUE` text. A `#` comment, an optional `export`
 prefix, single quotes, double quotes, and backticks are read, including a
 value that spans lines. Double quotes expand `\n` and `\r`. The separator
 is `=`. `$NAME` is not expanded. The full rules are in docs/spec.md under
-"Sessions, environments, secrets". A line that is not a blank, a comment,
+"Environments and secrets". A line that is not a blank, a comment,
 or a binding is `env-file-skipped-line` from `nuka check`.

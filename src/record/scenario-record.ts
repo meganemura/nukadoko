@@ -214,9 +214,6 @@ export interface ScenarioRecord {
    * is absent rather than naming a browser that never ran (the same
    * "no browser, no field" convention `evidence.trace` already follows). */
   readonly browser?: { readonly type: string; readonly version: string };
-  /** Always `null`: `nuka run` takes no session. Kept so the record keeps
-   * the shape earlier versions wrote. */
-  readonly session: string | null;
   readonly started_at: string;
   readonly finished_at: string;
   readonly steps: readonly ScenarioStepEntry[];

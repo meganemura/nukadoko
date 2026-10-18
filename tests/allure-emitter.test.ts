@@ -82,7 +82,6 @@ function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "
     runId: "run-1",
     scenarioId: "scn-1",
     environment: "staging",
-    session: null,
     index: 0,
     gherkinDocument: overrides.gherkinDocument!,
     pickle: overrides.pickle!,
@@ -138,7 +137,7 @@ describe("createAllureEmitter", () => {
       writeFileSync(path.join(recordDir, "http.jsonl"), '{"method":"GET","url":"https://x","status":200,"duration_ms":5}\n');
 
       const stepRecord1: StepRecord = {
-        schema_version: 2,
+        schema_version: 3,
         nukadoko: "0.0.0-test",
         step_record_id: "step-1",
         step: "the cart has items",
@@ -147,7 +146,6 @@ describe("createAllureEmitter", () => {
         result: { ok: true },
         status: "passed",
         environment: "staging",
-        session: "sess-1",
         target_version: "9.9.9",
         scenario_record_id: "scn-1",
         run_id: "run-1",
@@ -166,7 +164,7 @@ describe("createAllureEmitter", () => {
       writeFileSync(path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", "step-1", "step-trace.zip"), "step trace bytes");
 
       const stepRecord2: StepRecord = {
-        schema_version: 2,
+        schema_version: 3,
         nukadoko: "0.0.0-test",
         step_record_id: "step-2",
         step: "the total is correct",
@@ -175,7 +173,6 @@ describe("createAllureEmitter", () => {
         result: null,
         status: "passed",
         environment: "staging",
-        session: "sess-1",
         scenario_record_id: "scn-1",
         run_id: "run-1",
         started_at: "2026-08-01T00:00:01.000Z",
@@ -208,7 +205,6 @@ describe("createAllureEmitter", () => {
           index: 0,
           gherkinDocument,
           pickle,
-          session: "sess-1",
           targetVersion: "9.9.9",
         }),
       );
@@ -219,7 +215,6 @@ describe("createAllureEmitter", () => {
           index: 1,
           gherkinDocument,
           pickle,
-          session: "sess-1",
           targetVersion: "9.9.9",
         }),
       );
@@ -233,7 +228,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "passed",
         environment: "staging",
-        session: "sess-1",
         target_version: "9.9.9",
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:01.200Z",
@@ -282,7 +276,6 @@ describe("createAllureEmitter", () => {
       expect(result.labels?.some((l) => l.name === "suite")).toBe(false);
 
       expect(result.parameters).toContainEqual({ name: "environment", value: "staging" });
-      expect(result.parameters).toContainEqual({ name: "session", value: "sess-1", excluded: true });
       expect(result.parameters).toContainEqual({ name: "target_version", value: "9.9.9", excluded: true });
     });
 
@@ -417,7 +410,6 @@ describe("createAllureEmitter", () => {
       line: 3,
       status: "passed",
       environment: "staging",
-      session: null,
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
       steps: [step],
@@ -469,7 +461,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "passed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         steps: pickle.steps.map(
@@ -538,7 +529,6 @@ describe("createAllureEmitter", () => {
       line: 3,
       status: "passed",
       environment: "staging",
-      session: null,
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.000Z",
       steps: [{ text: "the cart has items", status: "skipped", step_record_id: null }],
@@ -596,7 +586,7 @@ describe("createAllureEmitter", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
       const stepRecord: StepRecord = {
-        schema_version: 2,
+        schema_version: 3,
         nukadoko: "0.0.0-test",
         step_record_id: "step-fail-1",
         step: "the cart has items",
@@ -604,7 +594,6 @@ describe("createAllureEmitter", () => {
         args: {},
         status: "failed",
         environment: "staging",
-        session: null,
         scenario_record_id: "scn-fail-1",
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.000Z",
@@ -625,7 +614,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "failed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
@@ -660,7 +648,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "passed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
@@ -695,7 +682,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "failed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
@@ -744,7 +730,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "failed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
@@ -788,7 +773,6 @@ describe("createAllureEmitter", () => {
           line: 3,
           status: "passed",
           environment: "staging",
-          session: null,
           started_at: "2026-08-01T00:00:00.000Z",
           finished_at: "2026-08-01T00:00:00.500Z",
           steps: [healthyStep],
@@ -807,7 +791,7 @@ describe("createAllureEmitter", () => {
       // endScenario (this file's own header: every attachment write for the
       // whole scenario now happens inside that one call).
       const stepRecord: StepRecord = {
-        schema_version: 2,
+        schema_version: 3,
         nukadoko: "0.0.0-test",
         step_record_id: "step-broken",
         step: "the cart has items",
@@ -816,7 +800,6 @@ describe("createAllureEmitter", () => {
         result: null,
         status: "passed",
         environment: "staging",
-        session: null,
         scenario_record_id: "scn-broken",
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.000Z",
@@ -838,7 +821,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "passed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
@@ -868,7 +850,7 @@ describe("createAllureEmitter", () => {
       const pickle = pickles[0]!;
 
       const stepRecord: StepRecord = {
-        schema_version: 2,
+        schema_version: 3,
         nukadoko: "0.0.0-test",
         step_record_id: "step-parts",
         step: "project-with-member",
@@ -877,7 +859,6 @@ describe("createAllureEmitter", () => {
         result: { memberId: "m_1" },
         status: "passed",
         environment: "staging",
-        session: null,
         scenario_record_id: "scn-parts",
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.000Z",
@@ -915,7 +896,6 @@ describe("createAllureEmitter", () => {
         line: 3,
         status: "passed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         steps: [step],

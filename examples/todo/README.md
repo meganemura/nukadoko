@@ -47,13 +47,10 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
 
 ## Layout
 
-- `nukadoko.config.ts`: `baseURL`, and `oaths` naming
-  `features/todo.md`. No `envFiles` (this app needs no secrets).
+- `nukadoko.config.ts`: `baseURL`. No `envFiles` (this app needs no
+  secrets).
 - `features/todo.feature`: 3 scenarios: adding a todo, completing a todo,
   and adding several at once via a data table.
-- `features/todo.md`: the same three scenarios as a Markdown oath, plus
-  one outline row. `nuka check` and `nuka run features/todo.md` exercise
-  it. See [Markdown oath](#markdown-oath) below.
 - `features/steps/*.ts`: 5 typed steps, each importing `defineStep` and
   `z` from `"nukadoko"`, each actually calling the app above
   (nothing here is a stub):
@@ -64,30 +61,6 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
     `PATCH /todos/:id`
   - `todo-list-includes.ts` / `todo-is-marked-done.ts` — read-only
     (`mutates: false`) assertions bound in `Then` position
-- `features/explore/add-model.ts`: a model that adds and completes todos.
-  `nuka experimental explore features/explore/add-model.ts` runs it
-  against the app and prints nothing on stdout while the app agrees with
-  it. Against the v2 app it prints the one-line scenario that fails.
-- `features/explore/add-relation.ts`: a relation. A todo that was added
-  is listed.
-
-## Markdown oath
-
-`features/todo.md` is the twin of `features/todo.feature`. It is listed
-in `oaths`, so `nuka check` with no argument reads it. An explicit path
-works the same way:
-
-```sh
-nuka check
-nuka check features/todo.md
-nuka run features/todo.md
-```
-
-`nuka check` needs no server. `nuka run` needs the app from above, the
-same as the `.feature` file. The oath is four scenarios: the
-three from the feature file, plus one outline row (`Buy milk`). What
-the Markdown slice reads is in
-[docs/spec.md](../../docs/spec.md#markdown-oaths).
 
 ## Part 1 — adaptive authoring
 
@@ -97,12 +70,7 @@ one step aside and rebuild it yourself:
 
 ```sh
 mv features/steps/complete-todo.ts /tmp/complete-todo.ts.bak
-mv features/explore /tmp/explore.bak
 ```
-
-The model in `features/explore/add-model.ts` imports `complete-todo`, so it
-goes aside too. Left in place, it makes `nuka check` report that failed
-import instead of the missing step.
 
 **1. Discover the vocabulary:**
 
@@ -141,7 +109,7 @@ nuka do add-todo --args '{"title":"Buy milk"}'
 }
 ```
 
-(`evidence`, `environment`, `session`, and the timestamps are trimmed above
+(`evidence`, `environment`, and the timestamps are trimmed above
 for space — the real step record on your terminal has them too.) Read `result`,
 decide the next call: that loop is what `nuka do` is for, and it's the same
 loop whether the vocabulary is complete or, as here, missing something.
@@ -157,11 +125,7 @@ nuka check
 ```text
 error	undefined-step	features/todo.feature:9	No step definition matches "the todo titled "Walk the dog" is completed"
   do: nuka scaffold --feature features/todo.feature
-error	undefined-step	features/todo.md:14	No step definition matches "the todo titled "Walk the dog" is completed"
-  do: nuka scaffold --feature features/todo.md
 ```
-
-The second line is the same step in the Markdown oath. Both files name it.
 
 **5. Scaffold it:**
 
@@ -232,11 +196,9 @@ export default defineStep({
 `features/steps/complete-todo.ts`. Paste it in, or retype it; either way
 you end up back at the committed version.)
 
-**7. Check, then run.** Bring the model back first, now that the step it
-imports exists again:
+**7. Check, then run.**
 
 ```sh
-mv /tmp/explore.bak features/explore
 nuka check
 ```
 

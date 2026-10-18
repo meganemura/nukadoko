@@ -199,7 +199,7 @@ describe("nuka run --concurrency", () => {
   it("names a failed scenario after the summary at --concurrency 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/failure/", "--concurrency", "2", "--quiet"], {
+    const exitCode = await runCli(["run", "--records", "--no-check", "features/failure/", "--concurrency", "2"], {
       rootDir,
       stdout,
       stderr,
@@ -213,7 +213,7 @@ describe("nuka run --concurrency", () => {
       'failed\tscenario-failed\tfeatures/failure/a.feature:3\tnamed concurrent failure: No step definition matches "a missing concurrent step"',
     );
     expect(lines[summaryIndex + 2]).toBe("  do: nuka run features/failure/a.feature:3");
-    // A worker's failed step reaches the parent's stderr under --quiet too.
+    // A worker's failed step reaches the parent's stderr.
     const failIndex = lines.findIndex((line) => /^ {2}step 1\/1 {2}failed /.test(line));
     expect(lines[failIndex]).toBe("  step 1/1  failed  0.0s  a missing concurrent step");
     expect(lines[failIndex + 1]).toMatch(/^ {6}No step definition matches "a missing concurrent step"/);

@@ -98,7 +98,7 @@ describe("a step file that imports another by its .ts name", () => {
       expect([...vocabulary.keys()].sort()).toEqual(["by-js", "by-ts", "make-number"]);
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "--quiet"], { rootDir: dir, stdout, stderr });
+      const exitCode = await runCli(["run"], { rootDir: dir, stdout, stderr });
       expect(stderr.text()).toContain("1 scenario: 1 passed, 0 failed");
       expect(exitCode).toBe(0);
     } finally {

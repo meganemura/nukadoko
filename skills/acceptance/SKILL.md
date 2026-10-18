@@ -1,7 +1,7 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first, or a model or relation of request-only steps that `nuka experimental explore` should run.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka experimental explore, nuka check, nuka run, nuka tend).
+description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first.
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka tend).
 license: MIT
 ---
 
@@ -59,9 +59,6 @@ pick the one line that is true:
    adds it with `claude mcp add playwright npx @playwright/mcp@latest`
    once the person agrees. Then line 4 (`references/exploring.md`,
    "Exploring state that cannot be repeated").
-6. **A model or a relation over request-only steps**:
-   `references/models.md` (`nuka experimental explore`, which can change
-   in any release), then the loop at step 3.
 
 If none is true, ask what this is supposed to do before writing anything.
 
@@ -114,7 +111,5 @@ code (`references/scenario-rules.md`, "How this file grows").
   prompt that gives a different budget overrides the three.
 - Don't hand-edit a step record or a run summary: it was measured, and
   editing it turns it back into a claim.
-- Don't change a model or a relation only to make a failure that `nuka
-  experimental explore` printed go away (`references/models.md`).
 - Don't run `nuka tend` on every pull request, or act on its notes
   unasked: report them (`references/maintenance.md`).

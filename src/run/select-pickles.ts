@@ -7,13 +7,12 @@ import {
   walkFeatureFiles,
   type FeatureParseError,
 } from "../feature/load-features.js";
-import { OathParseError, parseOathSource } from "../feature/parse-oath.js";
-import { isOathPath } from "../feature/resolve-oaths.js";
 import {
   DirectoryTargetLineError,
   FeatureFileNotFoundError,
   FeatureParseFailedError,
   FeatureReadFailedError,
+  MarkdownTargetError,
   NoFeatureFilesFoundError,
   NoMatchingScenarioError,
 } from "./errors.js";
@@ -25,7 +24,7 @@ export { DirectoryTargetLineError };
 // the one place that each argument's syntax and
 // gherkin's own pickle `location` are both known. A missing file, a parse
 // failure, `:line` matching zero pickles, a directory carrying `:line`, or
-// a directory with no `.feature` file and no configured oath anywhere under it are all setup
+// a directory with no `.feature` file anywhere under it, or a Markdown file, are all setup
 // failures, thrown here before anything about the run is decided; cli/
 // run.ts turns them into stderr + exit 1 the same way it already does for
 // config/environment errors.
@@ -38,8 +37,7 @@ export { DirectoryTargetLineError };
 // unchanged. A directory is walked recursively for `.feature` files
 // via src/feature/load-features.ts's own `walkFeatureFiles` (reused, not
 // duplicated), which skips `node_modules` and dot-directories and reports
-// nothing about that skip. Configured oath files that live under that
-// directory are added to the same set. The result is re-sorted by rootDir-relative path in plain byte
+// nothing about that skip. The result is re-sorted by rootDir-relative path in plain byte
 // order — never `localeCompare`, whose collation can legally differ
 // between machines/ICU builds, exactly the run-to-run instability this
 // sort exists to rule out. `:line` on a directory is refused outright: it
@@ -111,9 +109,7 @@ function readFeatureSource(rootDir: string, relativePath: string): string {
 }
 
 function parseSelectedSource(relativePath: string, source: string): SelectedFeature {
-  const { gherkinDocument, pickles } = isOathPath(relativePath)
-    ? parseOathSource(source, relativePath)
-    : parseFeatureSource(source, relativePath);
+  const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
   return { relativePath, gherkinDocument, pickles, selectedLines: null };
 }
 
@@ -148,7 +144,6 @@ export function readFeaturesForCheck(
       parseErrors.push({
         relativePath,
         message: error instanceof Error ? error.message : String(error),
-        line: error instanceof OathParseError ? error.line : undefined,
       });
     }
   }
@@ -164,19 +159,6 @@ function compareByteOrder(a: string, b: string): number {
   if (a < b) return -1;
   if (a > b) return 1;
   return 0;
-}
-
-/** True when `fileRelative` is a file inside `directoryRelative`, both
- * root-relative. A trailing separator on the directory is what keeps
- * `features` from matching `features-extra`. `.` means the project root. */
-function isInsideDirectory(directoryRelative: string, fileRelative: string): boolean {
-  const directory = path.normalize(directoryRelative);
-  const file = path.normalize(fileRelative);
-  if (directory === ".") {
-    return file !== ".." && !file.startsWith(`..${path.sep}`);
-  }
-  const prefix = directory.endsWith(path.sep) ? directory : `${directory}${path.sep}`;
-  return file.startsWith(prefix);
 }
 
 function featureFilesInDirectory(rootDir: string, relativePath: string): string[] {
@@ -199,8 +181,6 @@ export type SelectedFileLines = ReadonlySet<number> | null;
 export function resolveFeatureTargets(
   rootDir: string,
   featureArgs: readonly string[],
-  oathFiles: readonly string[] = [],
-  oathDirectories: readonly string[] = [],
 ): ReadonlyArray<readonly [string, SelectedFileLines]> {
   const selections = new Map<string, Set<number> | null>();
   // Two targets can reach one file by different paths, such as a linked
@@ -224,6 +204,9 @@ export function resolveFeatureTargets(
     const target = parseFeatureTarget(featureArg);
     const absolutePath = path.join(rootDir, target.relativePath);
     const normalizedRelativePath = path.relative(rootDir, path.resolve(rootDir, target.relativePath));
+    if (/\.md$/i.test(target.relativePath)) {
+      throw new MarkdownTargetError(target.relativePath);
+    }
     let isDirectory = false;
     try {
       isDirectory = statSync(absolutePath).isDirectory();
@@ -240,11 +223,6 @@ export function resolveFeatureTargets(
       scannedDirectories.push({ relativePath: target.relativePath, absolutePath });
       for (const relativePath of featureFilesInDirectory(rootDir, target.relativePath)) {
         selections.set(selectionKey(relativePath), null);
-      }
-      for (const relativePath of oathFiles) {
-        if (isInsideDirectory(normalizedRelativePath, relativePath)) {
-          selections.set(selectionKey(relativePath), null);
-        }
       }
       continue;
     }
@@ -270,10 +248,7 @@ export function resolveFeatureTargets(
   if (selections.size === 0) {
     const relativePaths = scannedDirectories.map(({ relativePath }) => relativePath);
     const absolutePaths = scannedDirectories.map(({ absolutePath }) => absolutePath).join(", ");
-    const onlyOathDirectories = scannedDirectories.every(({ relativePath }) =>
-      oathDirectories.includes(path.normalize(relativePath.replace(/[\\/]+$/, "") || ".")),
-    );
-    throw new NoFeatureFilesFoundError(relativePaths, absolutePaths, oathFiles.length > 0, onlyOathDirectories);
+    throw new NoFeatureFilesFoundError(relativePaths, absolutePaths);
   }
 
   return [...selections.entries()].sort(([a], [b]) => compareByteOrder(a, b));
@@ -291,12 +266,10 @@ export function resolveFeatureTargets(
 export function selectPickles(
   rootDir: string,
   featureArgs: string | readonly string[],
-  oathFiles: readonly string[] = [],
-  oathDirectories: readonly string[] = [],
 ): SelectedScenarios {
   const args = typeof featureArgs === "string" ? [featureArgs] : featureArgs;
   let totalPickles = 0;
-  const features = resolveFeatureTargets(rootDir, args, oathFiles, oathDirectories).map(
+  const features = resolveFeatureTargets(rootDir, args).map(
     ([relativePath, selectedLines]) => {
       const feature = readSelectedFeature(rootDir, relativePath);
       totalPickles += feature.pickles.length;

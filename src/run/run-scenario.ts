@@ -392,7 +392,6 @@ export interface RunScenarioOptions {
    * invocation (src/run/progress-log.ts's `createStepProgressLogger`, built
    * once by cli/run.ts, same "build once, thread unchanged into every
    * runScenario call" shape `onUnknownTraceVersion` above already has).
-   * Built under `--quiet` too, where it writes only a failed step's lines.
    * `undefined` under `nuka do` (which has no scenario,
    * hence no `runScenario` call at all, hence nothing to wire this into).
    * Called from exactly one place in this file, `pushStepRecord` below —
@@ -401,9 +400,7 @@ export interface RunScenarioOptions {
   readonly onStepEnd?: (info: StepProgressInfo) => void;
   /** Reports one pickle step's own finished record, step record, and moment —
    * unlike `onStepEnd` above,
-   * never gated on `--quiet` (that flag silences only the terminal's own
-   * progress line; the report's own granularity should not depend on a
-   * terminal flag); the caller (cli/run.ts) builds one
+   * the caller (cli/run.ts) builds one
    * instance per pickle, since it needs that pickle's own `gherkinDocument`/
    * `relativeFeaturePath` to do anything with what this reports.
    * `undefined` under `nuka do` (no scenario, no `runScenario` call) or when
@@ -413,8 +410,7 @@ export interface RunScenarioOptions {
    * append site funnels through it instead of calling this directly. */
   readonly onStepFinished?: (info: StepFinishedInfo) => void;
   /** Reports one heartbeat tick while a step's own `run` is still pending
-   * (this file's own header, `runWithHeartbeat`), never gated on `--quiet`,
-   * same reasoning as `onStepFinished` above. The caller (cli/run.ts) builds
+   * (this file's own header, `runWithHeartbeat`). The caller (cli/run.ts) builds
    * one instance per pickle, for the same reason `onStepFinished` needs one:
    * both need that pickle's own `gherkinDocument`/`relativeFeaturePath` to
    * do anything with what this reports. `undefined` under `nuka do` (no
@@ -904,12 +900,6 @@ function buildHookParameter(
   };
 }
 
-// A scenario never carries a session: login state comes from a fixture or
-// a Given step the feature names, so every scenario starts clean. The
-// records keep the field because `nuka do --session` step records share
-// their shape.
-const session = null;
-
 export async function runScenario(options: RunScenarioOptions): Promise<ScenarioRecord> {
   const {
     rootDir,
@@ -1039,7 +1029,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       status: "failed",
       environment,
       ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
-      session,
       started_at: startedAt.toISOString(),
       finished_at: finishedAt.toISOString(),
       steps: stepRecords,
@@ -1131,7 +1120,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // step reads this: the scenario did not finish, so `use()` gets `"failed"`.
   let scenarioOutcome: FixtureOutcome = "failed";
   const fixtureTeardownErrors: FixtureTeardownError[] = [];
-  let disposeResult: DisposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+  let disposeResult: DisposeResult = { evidence: { screenshots: [] } };
   // Shared with the signal handler (`runOnce`). Scenario fixtures tear
   // down before dispose: one built off `page`, `context`, or `request`
   // needs those still open. A teardown failure never changes
@@ -1163,7 +1152,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     } catch {
       // Same backstop as cli/do.ts: teardown failures must never take the
       // scenario record down with them.
-      disposeResult = { evidence: { screenshots: [] }, storageState: undefined };
+      disposeResult = { evidence: { screenshots: [] } };
     }
   });
   processSignal?.setScenarioCleanup(tearDownScenario);
@@ -1259,8 +1248,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * Runs `run()`, a step's own `run(fixtures, args)` (typed) or its
    * `runWithTimeout(...)` call (compat), under a heartbeat when this run
    * actually has somewhere to report one, calling `run()` directly with no
-   * timer at all otherwise (`nuka do`, `--quiet` under `nuka run` without an
-   * Allure emitter, this file's own `onStepProgress` doc comment). A step
+   * timer at all otherwise (`nuka do`, this file's own `onStepProgress` doc
+   * comment). A step
    * whose report nobody will ever read has no reason to hold a `setInterval`
    * open for the whole time it runs.
    */
@@ -1284,7 +1273,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * (measurement stays a record, never a
    * verdict — see this file's own header). A closure over this function's
    * own `chain`/`contextHandle`/`environment`/`policy`/`targetVersion`/
-   * `session`/`scenarioId`/`secrets`, and mutates the outer
+   * `scenarioId`/`secrets`, and mutates the outer
    * `scenarioFailed`/`stepRecords` — kept as a nested function rather than
    * a free one specifically so it can reach all of that without threading
    * every one of those through its own parameter list.
@@ -1427,7 +1416,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             status: "passed",
             environment,
             target_version: targetVersion,
-            session,
             scenario_record_id: scenarioId,
             run_id: runId,
             started_at: stepStartedAt.toISOString(),
@@ -1479,7 +1467,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             status: "failed",
             environment,
             target_version: targetVersion,
-            session,
             scenario_record_id: scenarioId,
             run_id: runId,
             started_at: stepStartedAt.toISOString(),
@@ -1603,7 +1590,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       status: "failed",
       environment,
       ...(targetVersion !== undefined ? { target_version: targetVersion } : {}),
-      session,
       started_at: startedAt.toISOString(),
       finished_at: setupFinishedAt.toISOString(),
       steps: failedSteps,
@@ -2451,7 +2437,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           status: "failed",
           environment,
           target_version: targetVersion,
-          session,
           scenario_record_id: scenarioId,
           run_id: runId,
           started_at: began.startedAt.toISOString(),
@@ -2695,7 +2680,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // field). Absent whenever this scenario's own run never launched a
     // browser at all.
     ...(browserInfo !== undefined ? { browser: browserInfo } : {}),
-    session,
     started_at: startedAt.toISOString(),
     finished_at: finishedAt.toISOString(),
     steps: stepRecords,

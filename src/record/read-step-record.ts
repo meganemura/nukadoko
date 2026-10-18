@@ -57,8 +57,7 @@ export function readStepRecord(recordDir: string): StepRecord | null {
 // input. A real id is only ever `[a-z0-9-]+` (record-id.ts's own
 // `generateId`); rejecting anything else up front, before it is ever joined
 // into a path, is what keeps `--use ../../etc/passwd` from resolving outside
-// the state directory at all — same reasoning as session/name.ts's
-// own `VALID_SESSION_NAME`. A rejected id collapses into the same `null` a
+// the state directory at all. A rejected id collapses into the same `null` a
 // merely-absent one already produces: `--use`'s own caller reports both as
 // "no such step record", so a malformed id gets no signal about which
 // failure mode it hit.

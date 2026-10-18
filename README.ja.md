@@ -245,7 +245,7 @@ CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.j
 
 `features/`(feature とその step)、`nukadoko.config.ts`、`package.json` の変更をコミットしてください。
 `.nukadoko/` はコミットしないでください。
-そこには step record、run サマリ、session の状態が入り、平文の生きた認証情報が入ることもあります。
+そこには step record と run サマリが入ります。
 `nuka init` が既に無視の対象にしています。
 
 ## An HTTP API
@@ -392,12 +392,10 @@ Feature: greet API
 上のループの先にあるものを、1 行ずつ挙げます:
 
 - [Wrong before it runs](#wrong-before-it-runs): 何かが実行される前に `nuka check` が捕まえるもの、および `nuka do` で 1 つの step だけを実行すること。
-- [Markdown oaths](#markdown-oaths): 同じ step を、`.feature` ではなく Markdown ファイルの文の裏に置く。
-- [モデルを探索する](#モデルを探索する): `nuka experimental explore` が request だけの step の列を生成し、失敗する最短の列を出力する。
 - [The compat door](#the-compat-door): import を 1 つ切り替えて、既存の cucumber-js のスイートを取り込む。
 - [Reports fill themselves](#reports-fill-themselves): Allure と cucumber-messages の emitter。
 - [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`。
-- session、environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md) の「Session、environment、secret」): 呼び出しをまたぐログイン状態、名前付きの environment、redact。
+- environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md) の「Environment、secret」): 名前付きの environment、redact。
 - [Skills for coding agents](#skills-for-coding-agents): agent がこのループを回すために読み込む 2 つの skill。
 - [The bed has to be tended](#the-bed-has-to-be-tended): 壊れているものではなく腐りつつあるもののための `nuka tend`。
 - [Setup details](#setup-details)、[Upgrading](#upgrading)、[Status](#status)、[Why this exists now](#why-this-exists-now)。
@@ -510,7 +508,7 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 }
 ```
 
-(`evidence`、`environment`、`session`、および各種タイムスタンプは、上では紙面の都合で省いています。
+(`evidence`、`environment`、および各種タイムスタンプは、上では紙面の都合で省いています。
 実物の step record にはそれらも入っています。)
 
 既存の cucumber-js のスイートも、import を 1 つ切り替えるだけでこの扉に届きます(下の [The compat door](#the-compat-door) を参照)。
@@ -518,46 +516,6 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 `nuka do` は、そうした step を名前で実行することを一切拒否します。
 
 `check` は安価な静的ゲートであり、`run` は step record の証跡と pull request が運ぶ run サマリを残し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
-
-## Markdown oaths
-
-**Markdown oath**
-
-Gherkin は、同じ型付き step と step record に対する 1 つの表側です。
-Varar 式の Markdown oath は、もう 1 つの表側です。
-`nukadoko.config.ts` の `oaths` は、ファイル、またはそのディレクトリを名指しします。
-デフォルトは `[]` なので、この README は scenario ではありません。
-
-引用またはフェンスされたコードブロックの外にある文は step であり、`.feature` の行と同じ `defineStep` の pattern にマッチします。
-どの pattern にもマッチしない文は、書かれた行の `undefined-step` です。
-`nuka check features/todo.md` と `nuka run features/todo.md` は、`oaths` に無くても、明示的な `.md` のパスを受けます。
-ディレクトリ対象は、その配下にある設定済みの oath を含み、`.feature` ファイルはこれまで通り歩きます。
-
-`examples/todo/features/todo.md` は、`features/todo.feature` と同じ todo の基準に、outline の行を 1 つ足したものです。
-このスライスが読むもの、後に残すものは [docs/spec.ja.md](docs/spec.ja.md#markdown-oaths) にあります。
-
-## モデルを探索する
-
-scenario は、人が選んだ 1 つの列です。
-モデルは、request だけを使う step のどんな列が何をすべきかを述べ、`nuka experimental explore` はそこから列を生成します。
-このコマンドと、モデルのファイルが import する `experimental_` の関数は実験的です。
-どのリリースでも、非推奨の告知なしに変わったりなくなったりすることがあります。
-
-```
-nuka experimental explore features/explore/add-model.ts --seed 1
-```
-
-各列は、1 つの seed から取った `draw.int` と `draw.pick` の選択で組み立てられます。
-そのため、同じコマンドは同じ列を再実行します。
-最初の失敗は縮小されます。
-step を削除し、次に選択を小さくし、列がまだ失敗する間だけその編集を残します。
-その後 stdout には、見つかった最も短い scenario が、プロジェクト自身の step の pattern で書かれて出ます。
-そのまま feature に貼り付けられます。
-関係は、宣言された列と、そこから組み立てた 2 本目の列を実行し、結果が食い違うと両方の scenario を表示します。
-feature には何も勝手に追加されません。
-表示された scenario を人が読んで決めます。
-`examples/todo/features/explore/` のモデルは todo アプリに対して動きます。
-規則は [docs/spec.ja.md](docs/spec.ja.md#モデルまたは関係を探索する) にあります。
 
 ## Why this exists now
 
@@ -624,8 +582,8 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、session、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、Markdown の run サマリ、tending(`nuka tend`)、実験的なモデルと関係(`nuka experimental explore`)、MCP クライアント(`nukadoko/mcp`)、Varar 式の Markdown oath、そして 2 つの agent skill です。
-未実装なのは、AI 支援によるグルーの変換と、Varar の残り(step の戻り値と文中の語句の比較、すべての方言)です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
+テストで実装済みかつカバーされているのは、型付き step、step record、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、Markdown の run サマリ、tending(`nuka tend`)、そして 2 つの agent skill です。
+未実装なのは、AI 支援によるグルーの変換です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
 以下で数字を伴う主張はすべて計測済みです。
@@ -1070,7 +1028,7 @@ run が遅いときは、`nuka check` を単独で速い PR ゲート(数秒、�
 このゲートは run と同じファイルやディレクトリを名指しでき(`nuka check features/checkout`)、run が止まるはずの error を報告します。
 対象を渡さない `nuka check` は `additionalFeatureDirs` も対象にしますが、対象を渡さない `nuka run` はそれを含みません。
 
-`nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
+`nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します。
 stdout には、求めたときだけ出力されます。
 `nuka run --records` は、scenario が終わるたびに、その scenario の `run.json` のエントリを 1 行 1 件の JSON として stdout に出力します。
 `nuka run --json` は、代わりに `run.json` そのものを出力します。
@@ -1085,7 +1043,6 @@ stdout や stderr が端末かどうかで変わる出力はありません。
 その行は、その step、exit code、stderr の最初の行を示します。
 空の stdout を受け取った Then step は、たいていそこで失敗しています。
 サマリの後では、失敗した各 scenario が `scenario-failed` の finding になり、その `do:` 行が scenario を再実行します。
-`--quiet` でも、これらの行はすべて残ります。
 
 ```text
   step 2/2  failed  0.0s  the sum is 5
@@ -1220,7 +1177,7 @@ forge がすでに CI のチェックと承認を 1 つの commit に結び付�
 
 **設計**
 
-設計の全体、すなわち課題設定、型付き step、キーワードの意味論、record、session/environment/secret、レビュー、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
+設計の全体、すなわち課題設定、型付き step、キーワードの意味論、record、environment と secret、レビュー、roadmap、正直な限界は、1 か所にまとまっています: [docs/spec.ja.md](docs/spec.ja.md)。
 
 English: [README.md](README.md) / [docs/spec.md](docs/spec.md)
 

@@ -3,7 +3,7 @@
 > nukadoko, a living pickling bed for your Gherkin: typed steps, step records, and an agent-first CLI.
 
 Status: M1 (engine core) implemented (`steps`/`describe`/`do`/`run`/
-`check`/`init`/`scaffold`, sessions, environments, secrets). M2 (compat,
+`check`/`init`/`scaffold`, environments, secrets). M2 (compat,
 below) is implemented too (`nukadoko/compat`, typed World measurement, and
 a migration guide). Both real-world gates have now been run: typed steps
 drafted against real feature files, and the compat door audited against
@@ -80,10 +80,9 @@ nukadoko deliberately owns as little as possible:
 | Approval of what-would-prove-what | git: PR review of features and step definitions, CODEOWNERS |
 | **Typed step contracts** | **nukadoko** |
 | **Execution and measurement (records)** | **nukadoko** |
-| **Sessions, environments, secrets** | **nukadoko** |
+| **Environments and secrets** | **nukadoko** |
 | **Keyword semantics (Then must not mutate)** | **nukadoko** |
 | **The run summary a pull request carries** | **nukadoko** |
-| Markdown oaths (the subset in "Markdown oaths") | **nukadoko**: compiled into the same pickles a `.feature` file becomes |
 
 ## Problem
 
@@ -116,7 +115,6 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
 | Measurement | `.nukadoko/runs/<run_id>/`, one directory per `nuka run` (`run.json`, the run's result; `summary.md`, its Markdown summary; `steps/<id>/`, each step record with its evidence; `scenarios/<id>/`, a scenario's own evidence, when it wrote any; `exports`, which export files that run wrote), and `.nukadoko/do/<id>/` (a `nuka do` step record) | the tool | no | the newest `retention.runs` runs; a `nuka do` record or an unfinished run, `retention.adHocDays` days | a person reviewing the run (its summary), the Allure and messages emitters, `nuka do --use`, `nuka tend` |
 | Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter), each only while its emitter is on | the tool | no | with the run that wrote it | other tools |
-| Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
 
 The table names files. The distinctions between its columns answer two
 questions: "what happens if this is deleted" and "who gets to change it":
@@ -124,9 +122,6 @@ questions: "what happens if this is deleted" and "who gets to change it":
 - **Export is disposable because it is derived.** Delete it, and the next
   `nuka run` writes a fresh one. It exists for readers outside nukadoko,
   such as Allure's CLI or a CI formatter. Nukadoko never reads it itself.
-- **Cache is disposable for a different reason.** It does not record anything
-  that happened. It only represents avoided work: a session file lets a later
-  call skip another login. Deleting it costs a login but never correctness.
 - **Only Contract is committed.** Contract is the promise that a human wrote
   and reviewed. Whether the promise ran green is in the run summary CI posts
   on the pull request (see "Review"), kept by the forge with the pull
@@ -193,11 +188,11 @@ The step name omits the file's extension. At every depth, discovery skips
 It also excludes `.d.ts`, `.d.mts`, and `.d.cts` type declarations because
 they are not step definitions.
 
-Discovery, the `.feature` walk, and the oath walk follow symbolic links, so a
+Discovery and the `.feature` walk follow symbolic links, so a
 monorepo can link shared steps or features into `featuresDir`. A walk enters
 each directory once, so a link back up the tree does not loop and two links
-to one directory do not list its files twice. A feature or oath that
-`featuresDir`, `additionalFeatureDirs`, or `oaths` reach by more than one path
+to one directory do not list its files twice. A feature that
+`featuresDir` or `additionalFeatureDirs` reach by more than one path
 is read once, under the first path reached, because files are told apart by
 their real path. A link whose target is missing stays in the walk: its import
 or read fails, and that failure names the link.
@@ -243,7 +238,7 @@ Node floor is the first release that does that without a flag (22.18 on the
   importing a type that way fails with Node's "does not provide an export
   named" error. `import type` (or `"verbatimModuleSyntax": true`, which
   makes `tsc` require it) avoids that. When the name is a type that
-  `nukadoko`, `nukadoko/compat`, `nukadoko/matching`, or `nukadoko/mcp`
+  `nukadoko`, `nukadoko/compat`, or `nukadoko/matching`
   exports, such as `IWorldOptions`, the finding says to write
   `import type`. For any other module it cannot tell a type from a typo,
   so it adds nothing.
@@ -254,7 +249,7 @@ Node floor is the first release that does that without a flag (22.18 on the
   `"type": "module"` to.
 
 Each discovery run loads its files in a module graph of its own, so a
-process that discovers twice (the MCP server, a test) runs
+process that discovers twice (a test, a config edited under a running process) runs
 every file's top-level code again, and two runs never share a module.
 
 A wide `featuresDir`, such as a repository root, widens the same walk. A build
@@ -507,8 +502,8 @@ becomes a construction instruction as a consequence.
 
 The fixture names:
 
-- `page: Page`: a Playwright Page restored from the session's storageState.
-  The configured baseURL is wired into the browser context, so
+- `page: Page`: a Playwright Page in a fresh browser context, built from
+  `config.browserContext`. The configured baseURL is wired into the browser context, so
   `page.goto("/path")` resolves against it. The standard URL rule applies: a
   leading slash replaces baseURL's own path instead of appending to it.
   This behavior was measured with Playwright 1.61.1 and `baseURL:
@@ -531,8 +526,8 @@ The fixture names:
   that remembers a person by a cookie. `options` is Playwright's own
   `BrowserContextOptions` for that one context, such as
   `{ javaScriptEnabled: false }`, applied over `config.browserContext`.
-  `baseURL` is wired in as for `page`; the session's storageState is not,
-  because the context is somebody else. The context opens on the first
+  `baseURL` is wired in as for `page`; a `storageState` in
+  `config.browserContext` is not, because the context is somebody else. The context opens on the first
   call for `name` in the scenario, and a later call returns the same page.
   A later call with other `options` throws `ContextOptionsConflictError`:
   Playwright fixes a context's options when it creates it, so the second
@@ -543,15 +538,15 @@ The fixture names:
   of file names; another name throws `InvalidContextNameError`. The context
   is `page.context()` of the page it returns. Destructuring `pageAs` launches
   nothing; the first call does. See "Several people in one scenario" below.
-- `request: APIRequestContext`: a Playwright APIRequestContext with the
-  session's cookies. As with `page` above, `baseURL` is optional. A suite that
+- `request: APIRequestContext`: a Playwright APIRequestContext built from
+  `config.requestContext`. As with `page` above, `baseURL` is optional. A suite that
   calls only absolute URLs across multiple hosts has no single baseURL to
   state. Nukadoko does not force one into config only to satisfy this fixture.
   If `baseURL` is unset and a step passes a relative path, Playwright produces
   the failure. Nukadoko does not re-implement Playwright's URL resolution to
   prevent that failure first.
 - `env`: read-only environment variables from the configured envFiles. The
-  file format is under "Sessions, environments, secrets". This fixture
+  file format is under "Environments and secrets". This fixture
   enforces determinism: the process environment is never merged. It
   also enforces secrets redaction: only values that nukadoko loaded are
   redactable. It is not a convenience. The object a step receives is a
@@ -1229,53 +1224,6 @@ It can still contain `needs_inferred`, as described in "Context API."
 That field is a lexical estimate, rather than a contract.
 nukadoko does not expand `needs_inferred` through the fixture graph.
 
-### MCP servers
-
-`connectMcpServer` and `callMcpTool` from `"nukadoko/mcp"` let a hand-written step call a tool that a standard MCP server declares over stdio.
-This interface stays separate from `nuka steps`.
-This package does not convert a declared tool into a step or step vocabulary.
-`nuka steps` does not list MCP tools, and this interface does not generate them.
-To read the tools a server declares, use the agent's own MCP host, or an MCP client such as the MCP Inspector.
-
-A fixture controls the server process lifetime.
-`nukadoko.config.ts` has no MCP-specific field.
-The fixture mechanism already provides setup, teardown, and a `scenario` or
-`process` scope.
-A fixture calls `connectMcpServer` during setup and `client.close()` during teardown.
-Its scope selects one connection per scenario or one connection per run.
-Two simultaneous servers use two fixtures, with no change to the mechanism.
-
-If the handshake fails, `connectMcpServer` does not return a client.
-It stops the process it spawned before rejecting, and the error names the command.
-The caller has no client to close.
-A successful handshake still returns a live client for teardown to close.
-
-`connectMcpServer` accepts the client package's stdio parameters without changes.
-It can also accept the package's `ClientOptions` as its second argument.
-It returns the connected `Client` from that package.
-This thin interface follows the choice that the `page` and `request`
-fixtures make for Playwright.
-
-The `versionNegotiation` field in `ClientOptions` selects the MCP protocol era.
-When the caller omits it, the client package uses its default behavior.
-That behavior uses the plain 2025 connection sequence, without a probe or new headers.
-The mode `{ versionNegotiation: { mode: 'auto' } }` first sends a `server/discover` probe.
-If the server does not report a modern revision, the client uses the 2025 sequence.
-For stdio, each probe starts one additional short-lived sibling process per connection.
-The client discards that process after it determines the protocol era.
-Thus, each fixture setup in `'auto'` mode starts one additional process.
-
-A pinned mode, `{ mode: { pin: '<version>' } }`, does not use the fallback.
-It fails when the server does not offer the specified revision.
-`connectMcpServer` passes `ClientOptions` directly to the `Client` constructor.
-It does not read or override the options, so the caller selects the protocol era.
-
-`callMcpTool` adds one behavior to the direct interface.
-MCP returns an in-band tool failure as a successful response with `isError: true`.
-It does not reject the promise for that failure.
-Without a check, a step could record the failed call as a passing call.
-`callMcpTool` throws when `isError` is true and returns all other result fields unchanged.
-
 ### Chaining steps
 
 A CLI-only step has no `pattern` and runs independently.
@@ -1952,91 +1900,12 @@ In both arrangements, place the shared file outside `featuresDir`.
 Discovery could import it without harm because the module defines no step.
 However, its location shows that the existing suite owns it.
 
-## Markdown oaths
-
-Gherkin is one front for a scenario. A Markdown oath is another, over the
-same typed steps and the same step records. The file is documentation a
-person or an agent can read, and every sentence that is not marked as
-narration is a step. nukadoko does not embed Varar, and it does not
-compare a step's return value to a slot in the sentence. A `Then` still
-asserts inside `run`, and `returns` still validates what came back.
-Measurement stays here.
-
-`oaths` in `nukadoko.config.ts` names the files, or a directory of
-`*.md` files. The default is `[]`: a README and any
-other Markdown under the project are not scenarios until named. A
-directory walk skips `node_modules` and dot-directories, and reads only
-files that end in lowercase `.md`. A missing path, a directory that holds
-no such file (a directory of `.MD` files is one), or a path that is
-neither a Markdown file nor a directory, is `feature-parse-error`. An explicit `.md` path given to `nuka check` or
-`nuka run` is an oath even when `oaths` does not list it. When `nuka run`
-is given an oath directory that holds no Markdown file, it refuses and
-says that no Markdown file was found. A directory
-target of `nuka run` includes a configured oath that lives under that
-directory, and still walks `.feature` files. `nuka check` and `nuka tend`
-with no argument read `oaths` along with `featuresDir` and
-`additionalFeatureDirs`, so a step that only an oath binds is bound.
-
-The subset this slice reads:
-
-- The first `#` heading is the feature name. With none, the name is the
-  file's basename.
-- A later heading, including a later `#`, starts a scenario named by
-  that heading. A line of three or more hyphens does the same, and the
-  scenario is named from its first step (truncated at 80 characters,
-  with a ` (2)` suffix when the name is already used). A blank line does
-  not start a scenario.
-- A line may hold several sentences. The split is `.` `!` `?` outside
-  double quotes, followed by whitespace or the end of the line. A run of
-  the same mark (`...`) is not a split. The terminator is not part of
-  the step text, so a pattern written without a trailing period still
-  matches.
-- An optional `Given`, `When`, `Then`, `And`, `But`, or `*` prefix is
-  the keyword, not part of the matched text, the same way Gherkin works.
-  `And` and `But` inherit the previous step's position. A list marker
-  (`-`, `*`, `+`, or `1.`) is peeled before the keyword, so `* Given foo`
-  is a Given.
-- A blockquote (`>`) and a fenced code block are narration. They are not
-  steps and they are not findings. That is how this slice accepts prose.
-  A fence opens with three or more backticks or tildes, indented or not
-  (a fence in a list item is indented). It closes on a line of the same
-  character, at least as long as the opener, with nothing after it. An
-  unclosed fence or an unclosed HTML comment (`<!--`) is a parse
-  error. YAML frontmatter is not stripped: a leading `---` is a scenario
-  break, and it is a no-op when nothing precedes it.
-- A pipe table under a step is that step's data table. The separator row
-  is syntax. The header row is not a data row: Markdown requires a
-  header, and a nukadoko data table is `string[][]` with no header
-  convention. Body rows are the table. When step text contains
-  `<column>` placeholders and every placeholder name is a header cell,
-  the table is Examples instead, and `compile()` expands one pickle per
-  body row. A repeated Examples column name, a table with no step before
-  it, a missing separator, a table with no data rows, a cell-count
-  mismatch, a second table on one step, or a second Examples table on
-  one scenario is a parse error that names the line.
-
-A sentence no pattern matches is the existing `undefined-step` finding,
-on the Markdown line it was written on. `nuka run` fails that step the
-same way it fails an undefined Gherkin line. The finding is not a new
-code, and the sentence is not dropped.
-
-`examples/todo` carries `features/todo.md` beside `features/todo.feature`,
-listed in `oaths`.
-
-Later, and not in this slice: matching several steps inside one sentence,
-comparing a step's return value to words in the sentence, doc strings,
-tags, `@nukadoko:serial` in Markdown, and the rest of Varar (every dialect,
-its test runner, its playground). A paragraph that matches nothing does
-not end the example here, because the parser does not have the vocabulary
-yet. Separate scenarios with a heading or `---`, and mark narration as a
-blockquote or a fence.
-
 ## Running
 
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--quiet] [--records] [--json] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2064,14 +1933,13 @@ gate that has to stay seconds long and for `additionalFeatureDirs`.
 the directory `nuka check` walks by default (without
 `additionalFeatureDirs`, which only `nuka check` and `nuka tend` read).
 Each target can be a feature file, a
-Markdown oath (a path ending in `.md`; see "Markdown oaths"), a
-`file:line` selection, or a directory. A directory target is walked
+`file:line` selection, or a directory. A path ending in `.md` is refused
+by name: nukadoko reads scenarios from `.feature` files only. A directory target is walked
 recursively for `.feature` files. At every depth the walk skips
 `node_modules` and any directory whose name starts with `.` (`.git`,
 `.nukadoko`, `.vscode`, and the rest), the same directories step discovery
 skips. The skip reports nothing: a `.feature` file inside one of those
-directories is not checked and is not run. The directory target also
-includes a configured oath that lives under that directory. The selected files form one
+directories is not checked and is not run. The selected files form one
 deduplicated set, and a full-file selection includes any line selections for
 that file. Files are told apart by their real path, so two targets that reach
 one file by different paths, such as a linked directory and the directory it
@@ -2085,8 +1953,7 @@ gives up the position: the files are still handed out in it, and the
 records land in the order the workers finish. `:line` on a directory is
 refused: it selects one scenario inside a single file, and a directory
 names no single file for it to select inside. A directory holding no
-`.feature` file the walk can see, and no configured oath under it either,
-is refused too, the same tone
+`.feature` file the walk can see is refused too, the same tone
 `nuka check`'s own `no-step-files-found`
 uses: it names exactly what it scanned, because a run that did nothing must
 say so loudly rather than exit 0 having run nothing at all.
@@ -2230,7 +2097,7 @@ until their own scenario finishes and are then written together, because
 lines from several scenarios interleaved are lines nobody can read.
 Neither changes what a record contains.
 
-`nuka run` takes no `--session`. Every scenario starts with no browser
+Every scenario starts with no browser
 state, so a scenario never depends on what the one before it left, and any
 concurrency gives the same answer. A scenario that needs login state gets
 it from a fixture or a Given step its feature names.
@@ -2262,9 +2129,7 @@ output for a person who watches the run: a boundary before each pickle, one
 line after each step, the paths written by the run, and a one-line summary.
 A step's line names its outcome with the word a step record uses:
 `passed`, `failed`, or `skipped`.
-`--quiet` suppresses the per-step and per-scenario progress lines. The paths
-and summary still appear because the flag makes the terminal quieter, not
-silent. A failed step's line is followed by two indented lines: the first
+A failed step's line is followed by two indented lines: the first
 line of its error message, without terminal color codes, and the path of
 its step record (`<stateDir>/runs/<run_id>/steps/<id>`). When the message holds a
 Playwright `expect(...)` line (its first line, or the line after the
@@ -2287,15 +2152,13 @@ a `: ` is kept. Any other text keeps its own first line. It says why a Then step
 empty stdout: the program it ran did not start, or failed, and the step
 that ran it still passed, because an exit code is a result, not a failure.
 The text comes from the step record, so a secret in it is already
-redacted. `--quiet` keeps a failed step's line and these lines, and drops
-every other step line. After the
+redacted. After the
 summary line, stderr prints each failed scenario as a finding,
 `failed\tscenario-failed\t<feature>:<line>\t<name>: <first error line>`,
 followed by a `  do:` line: `nuka run <feature>:<line>`, plus `--env <name>`
 naming the environment the scenario ran in when the run was given `--env`,
 quoted for a POSIX shell where a word needs
-it. These lines appear for serial and concurrent runs, and `--quiet` keeps
-them. Under `--json`, stderr is empty: it carries none of the lines this
+it. These lines appear for serial and concurrent runs. Under `--json`, stderr is empty: it carries none of the lines this
 paragraph and the two above it name, nor the retention line, and the
 document on stdout holds the result, since an
 agent's shell reads both streams as one. A warning that something went
@@ -2534,7 +2397,7 @@ vocabulary growth.
 ### Single steps (the agent path)
 
 ```sh
-nuka do create-project --args '{"name":"acme"}' [--env <name>] [--session <name>]
+nuka do create-project --args '{"name":"acme"}' [--env <name>]
 nuka do archive-project --use step-20260801-143022-a1b2
 ```
 
@@ -2579,9 +2442,8 @@ else; a scenario gives one context to all of its steps, so the second one
 meets whatever the first left behind (already signed in, on a different
 page, a dialog still open). The two questions are different and neither
 answer substitutes for the other: `do` asks whether the step works, `run`
-asks whether it works there. `--session` narrows the gap by carrying
-storageState across `do` calls, which covers login state and nothing else;
-where execution had got to is not in it. This lands hardest on a step
+asks whether it works there. Nothing carries across `do` calls, login
+state included: a step that needs it gets it from a fixture. This lands hardest on a step
 whose own setup is a no-op the second time it runs, and the fix is in the
 feature rather than in the engine: establish the state once, in the step
 whose name says it does, instead of once per step.
@@ -2612,12 +2474,6 @@ does not exist. A world thirty calls deep is not reproducible, by anyone,
 which is why what comes out of an exploration is a scenario written from
 it, checked with `nuka check`, and run again from nothing.
 
-`nuka session clear --env <name>` refuses an environment the config does
-not define when no session file or lock is left under it, with the same
-message the other commands already use for an unknown environment.
-Session files left under an environment that has been removed from the
-config are still cleared, and stderr names that environment.
-
 ## Records
 
 A step record contains the tool's measurements for one step execution. Its
@@ -2631,7 +2487,7 @@ its scenario record's id, so either record leads to the other.
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
@@ -2643,7 +2499,6 @@ its scenario record's id, so either record leads to the other.
   "observed": { "http_reads": 2, "http_writes": 1, "processes": null },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
-  "session": "checkout-flow",
   "scenario_record_id": null,
   "run_id": null,
   "started_at": "...",
@@ -3127,16 +2982,13 @@ already redacted. A summary that cannot be written is a warning
 on stderr; it never changes the exit code. A setup failure, which writes no
 record, writes no summary.
 
-## Sessions, environments, secrets
+## Environments and secrets
 
 Nukadoko provides execution infrastructure that Cucumber did not provide:
 
-- **Sessions** carry login state across CLI calls as Playwright storageState.
-  Nukadoko stores each session by environment and uses an advisory lock to
-  limit it to one command at a time. `nuka do --session <name>` reads and
-  saves it. `nuka run` takes no session: each scenario starts clean and has
-  no implicit shared state. A saved session is a storageState file and
-  needs no daemon.
+- **No state carries across calls.** Each scenario under `nuka run` and each
+  `nuka do` call starts clean. A step that needs login state gets it from a
+  fixture, or from a Given step its feature names.
 - **Environments** name deployment targets. Each environment can define a
   `baseURL`, `envFiles`, `policy: "read-only"`, and an optional `version` probe.
   The read-only policy refuses mutating steps. Each step record stores the
@@ -3223,7 +3075,6 @@ missing file.
 | --- | --- |
 | `featuresDir` | feature files and step code, `nuka run`'s own unattended set (default `features`, Cucumber-style) |
 | `additionalFeatureDirs` | extra directories `nuka check`/`nuka tend` bind vocabulary against, without joining `featuresDir` (default `[]`, below) |
-| `oaths` | Markdown files, or directories of them, compiled into the same scenarios as `.feature` files (default `[]`, see "Markdown oaths") |
 | `baseURL` | top-level base URL, overridden per environment (below) |
 | `envFiles` | top-level env files, appended to per environment (below) |
 | `environments` | per-environment `baseURL`, `envFiles`, `policy`, `version` probe (below) |
@@ -3263,13 +3114,6 @@ entry, and for a directory passed to `nuka run`. Step discovery skips those
 same directories. A `.feature` file inside one is not part of `nuka check`,
 `nuka tend`, or `nuka run`, and the skip reports nothing.
 
-`oaths` defaults to `[]`. Each entry is a Markdown file, or a directory
-of `*.md` files, compiled into the same pickles as a `.feature` file
-(see "Markdown oaths"). Nothing under the project is an oath until it
-is named, so a README is not a scenario. `nuka check` and
-`nuka tend` read the list. `nuka run` reads an entry when the path is
-given, or when a directory target contains it.
-
 `browserType` selects the Playwright engine that the `page` fixture launches. The
 choices are `"chromium"` (default), `"firefox"`, and `"webkit"`. It is separate
 from `browser` because Playwright's `LaunchOptions` type has no engine key.
@@ -3301,10 +3145,11 @@ use different Playwright option types, so each has a separate config key. Both
 keys follow the `browser` policy and use Playwright's type directly. This makes
 options such as `ignoreHTTPSErrors` available for local targets with a
 self-signed certificate. Previously, neither fixture could set that option.
-Both keys reject `baseURL` and `storageState` with an error that gives the
-reason. `config.baseURL` is the single source for the project base URL, and
-nukadoko's session mechanism sets `storageState`. Accepting these values again
-would let the config contain conflicting sources.
+Both keys reject `baseURL` with an error that gives the reason:
+`config.baseURL` is the single source for the project base URL, and a second
+one would let the config contain conflicting sources. `storageState` passes
+through to Playwright unchanged, so a project that keeps a login state file
+names it here.
 
 A `parameterTypes` entry registers a custom cucumber-expressions parameter
 type with the shape `{ name, regexp, transformer? }`. For example,
@@ -3397,8 +3242,8 @@ export default defineConfig({
 ### The state directory
 
 Nukadoko writes all run-time data under `.nukadoko/`. `init` adds this directory
-to gitignore, and the data is not for commits. The data falls into three
-kinds, measurement, cache, and export (see "Artifacts"):
+to gitignore, and the data is not for commits. The data falls into two
+kinds, measurement and export (see "Artifacts"):
 
 - `runs/<run_id>/`: one directory per `nuka run` invocation, holding
   everything that run measured, so CI uploads one directory per run and
@@ -3427,8 +3272,6 @@ kinds, measurement, cache, and export (see "Artifacts"):
 - `do/<id>/`: one directory per `nuka do` step record, the same shape as a
   run's `steps/<id>/`. A `nuka do` call belongs to no run, so its record
   sits apart from every run directory
-- `cache/sessions/<env>/<name>.json`: storageState; live credentials in
-  plaintext, created with restricted permissions
 - `export/allure-results/`: the emitter's output, holding the same runs
   `runs/` holds, since a run's files leave with the run (see
   "Artifacts"), and safe to delete whenever a fresh Allure launch is
@@ -3446,8 +3289,8 @@ kinds, measurement, cache, and export (see "Artifacts"):
 
 The routine removal is retention, which `nuka run` applies itself at the end
 of every run (see "Artifacts").
-`nuka clean [--dry-run] [--json]` deletes all three kinds at once: every
-run directory, every `do/` record, the cache, and the export output. It is also the
+`nuka clean [--dry-run] [--json]` deletes both kinds at once: every
+run directory, every `do/` record, and the export output. It is also the
 operation for an `allure-results/` directory written before runs kept a
 manifest of their files, which retention never touches.
 It refuses, before removing anything, when `allure.resultsDir` or
@@ -3494,8 +3337,8 @@ during the pull request review whether the scenarios express them.
 After the change lands, the project chooses the feature's future role. Most
 acceptance criteria describe a requested change; once it lands, another run
 has no remaining claim to confirm. Such a feature can stay outside
-`featuresDir` and be listed in `additionalFeatureDirs` (see "Sessions,
-environments, secrets"), so static checks keep binding its steps while
+`featuresDir` and be listed in `additionalFeatureDirs` (see "Environments
+and secrets"), so static checks keep binding its steps while
 nothing runs it unattended, or it can be deleted. Some scenarios describe a
 lasting path through the product. Those features move into `featuresDir`,
 where `nuka run` selects them on each future commit.
@@ -3900,8 +3743,8 @@ faulty one, and warning about it every time would drown the findings that
 do need acting on):
 
 - `scanned:` names every directory that this run inspected:
-  `featuresDir` plus each `additionalFeatureDirs` entry (see "Sessions,
-  environments, secrets"). Printed first, because a count means nothing
+  `featuresDir` plus each `additionalFeatureDirs` entry (see "Environments
+  and secrets"). Printed first, because a count means nothing
   until the reader knows the scope of the count.
 - `bed:` shows how much of the vocabulary is typed instead of compat,
   and how many typed steps declare `mutates: false`
@@ -4075,185 +3918,6 @@ with `--fail-on`, not by what a plain run prints.
 deleting a step, or moving a feature: decisions with an author behind
 them.
 
-## Models and relations (experimental)
-
-This section and the next are experimental. `nuka experimental explore`,
-the four `experimental_` functions, and the `explore-*` findings can change
-shape or go in any release without a deprecation notice. The command sits
-under `experimental` and each function name carries the prefix, so the
-word is at every call site.
-
-A model and a relation sit next to the step vocabulary. They are
-declarations. `nuka check` reads them. It does not run them, and it does
-not call `initial`, `args`, `pre`, `next`, `post`, `follow`, or `relate`.
-`nuka experimental explore` runs them (see "Exploring a model or a
-relation").
-
-`experimental_defineModel(initial).commands({ ... })` takes the initial
-state, then one command per step basename. A command is
-`experimental_modelCommand(step)({ args, pre, next, post })`. `args` and
-`post` are typed against that step's args and result. `args` receives the
-state and a `draw`, the one source of variation. `next` updates the model
-from the state and the args. The basename is the step file's name, without
-its extension. The two calls exist so the state type is known before those
-callbacks are checked. One object literal widens `step` to `Step` and the
-check becomes `unknown`.
-
-`experimental_defineRelation` takes a name, a `source` sequence of
-`experimental_relationEntry(step, args)`, a `follow` function that returns
-the second sequence, and `relate` over the two runs' results.
-`experimental_relationEntry` checks `args` against that step. `follow` and
-`relate` are stored. Check reads `source` only, because the
-second sequence is the result of calling `follow`.
-
-`source` can instead be generated. A function `(draw, length) => [...]`
-returns at most `length` entries and takes every varying value from
-`draw`. A model's commands can also generate it: `pre`, `args`, and
-`next` pick each step as in a model run, and the model's `post` is not
-called. For a function source, `relate` receives the source results
-typed by its step. For a model source they are `unknown`. Check reads a
-model source's commands as it reads a model, and does not call a
-function source.
-
-Discovery treats a default export of either declaration as that declaration,
-not as a step. The file can live anywhere under `featuresDir`.
-`examples/todo/features/explore/` is a request-only model and relation.
-
-`nuka check` reports `explore-unknown-step` when a command key is not the
-basename of the step it holds, or when a sequence entry's step was never
-registered. It reports `explore-browser-step` when that step needs `page`,
-`context`, or `pageAs`, including through a fixture that reaches one. A step that needs
-only `request` is allowed.
-
-Two more findings read the declaration and end only one way.
-`explore-empty-model` reports a model with no commands: every sequence it
-builds is empty, so every run passes and says nothing. A relation whose
-model source has no commands is not reported, because `follow` and
-`relate` still run on the empty source and can fail there.
-`explore-unseeded-random` reports a direct call to `Math.random` in a
-command's `args`, `pre`, or `next`, or in a relation's drawn source. The
-seed does not drive that value, so a run cannot be replayed from its seed
-and a shrink edit does not mean what it meant. Check reads the function's
-source text for this and does not call the function. A call in a string, a
-comment, a regular expression, or a template's text is not a call. The
-source text is all check sees, so a binding outside the function (at
-module scope or from an import) is out of reach. For that reason
-`crypto.random*` is not reported: a module-level `crypto` can be a seeded
-generator. A call reached through a helper or an alias, and a `Math` the
-function binds itself, are out of reach too. Check says nothing about any
-of them, because a check that guesses is worse than none.
-
-### Exploring a model or a relation
-
-`nuka experimental explore <file>` runs one model or one relation. The file
-is one that discovery found under `featuresDir`. Before any step runs, the
-command makes the refusals `nuka check` and `nuka do` make for those steps:
-any of the four `explore-*` findings above, a fixture problem, and an
-unknown `--env`. Nothing runs when one of them applies.
-
-A model run builds each sequence from the model alone. From the state, it
-takes the commands whose `pre` holds, picks one, calls `args(state, draw)`,
-and moves the state with `next`. `draw.int(min, max)` and `draw.pick(items)`
-are the only sources of variation, so a sequence is a function of the
-choices it made. `next` returns a new state and leaves the one it was
-given unchanged, because that state object is the one `post` later
-receives. The sequence then runs step by step, and `post` judges each
-result against the state from before that step. The first step that fails,
-or the first `post` that does not hold, fails the sequence. A step fails
-for any reason it fails under `nuka do`, a fixture setup or a refused
-connection included. `--runs`
-(default 20) sets how many sequences run, and `--length` (default 10) sets
-the most steps one sequence has. One `--seed` drives every choice of every
-run, and the output always prints it, so the same command reruns the same
-sequences.
-
-A failure is shrunk. Shrinking edits the recorded choices and builds the
-sequence again: first it deletes one step's choices, then two adjacent
-steps' choices, then it lowers one choice toward zero, and it keeps an edit only when the new sequence still
-fails the same way. A lower choice means an earlier command in declaration order, a
-`draw.int` nearer its `min`, or an earlier item of `draw.pick`. Each kept edit makes
-the choice list shorter or smaller, so shrinking ends, and it stops after
-200 attempts.
-
-The same way means the same failure kind, and for a `post` failure the
-same command. There are three kinds: the step failed (`step`), `post`
-returned false (`post-false`), and `post` threw (`post-threw`). A shorter
-sequence that fails another way shows a different problem, and printing it
-would hide the one the run found. The message is not compared. It carries
-the step's result and args, and those are what shrinking changes: a
-duplicate add shrunk from one value to a smaller one still fails the same
-`post` with a different number in its message. A `step` failure does not
-compare the command either, because a refused connection or a failing
-fixture fails whichever step runs first.
-
-A relation run runs `source` in one world, calls `follow`, runs that second
-sequence in a fresh world, and calls `relate` on the two lists of results.
-A declared `source` runs once, with no seed, and does not shrink. A
-generated `source` takes `--seed`, `--runs`, and `--length` as a model
-does: each run draws a new source and runs the relation on it, and the
-first failure is shrunk by the same passes. A function source's steps
-are not known by choice, so each choice is deleted on its own. An edit is kept only when the relation still fails the
-same way: in the same sequence, and for `relate`, by returning false or
-by throwing as before. The output adds a comment with the run, the
-number of source steps found, and the number after shrinking. A step of
-the second sequence, or of a source drawn by a function, that is not in
-the vocabulary, or needs a browser, stops the relation before it runs.
-
-Each sequence gets a fresh `ctx` and a fresh scenario-scope fixture cache,
-so a scenario-scope fixture that resets the target runs before every
-sequence. A process-scope fixture is set up once for the invocation, as
-under `nuka run`: every run and every shrink attempt shares it, and it is
-torn down after the last sequence. A fixture's `use()` returns `"failed"`
-for a sequence whose step failed or whose `post` did not hold, and the
-process scope gets `"failed"` when any sequence did. SIGINT, SIGTERM, or
-SIGHUP tears down the open sequence's fixtures and then the process-scope ones
-before the process exits, as for `nuka do`. The target itself is not reset, and a
-model whose initial state assumes an empty target needs that fixture. A
-step runs through the same function `nuka do` uses: the
-args are validated, the fixture bag is opened, `run` is called under the
-step's deadline, and the result is validated. No step record is written. A
-run tries many sequences and most of them pass. The record of a failure is
-the scenario a person keeps, and `nuka run` of that scenario writes the
-records.
-
-On a failure, stdout gets a scenario to paste into a feature: a comment with
-the command that reruns it, a comment that says how the run failed, and one
-`*` line per step, written from the step's first pattern. The one required args key that no capture and no
-`from` speaks for is written as a table when it is a list of string rows,
-or as a docstring when it is a string, the way `nuka run` binds it. The
-failing step has a comment above it with its message. A
-relation prints two scenarios, the source and the follow. Every line is
-read back the way `nuka run` reads it, and a line that does not return the
-same step and args, or an args key the line cannot carry, is named in
-a comment above it. stdout stays empty on a pass, stderr gets one summary
-line either way, and the exit code is 0 only for a pass.
-
-`--json` replaces the stdout text with one JSON object, printed on a pass
-too. Every object has `kind` (`"model"` or `"relation"`), `file`, `verdict`
-(`"passed"`, `"failed"`, or `"error"` for a model or relation callback that
-threw before a step ran), and `rerun`. A model adds `seed`, `runs`, and
-`length`; a pass adds `steps`, the number of steps run. A failing model
-adds `run`, `found_steps`, `shrunk_steps`, `shrink_attempts`, `failure`
-(`index`, `kind`, `command`, `message`), `steps`, and `scenario`, all for
-the shrunk sequence. A relation adds `name`, and a failing one adds
-`failure` (`sequence`; `index` unless the sequence is `relate`, and
-`threw` when it is; and `message`) plus `source` and `follow`, each with
-`steps` and `scenario`. A relation with a generated source also adds
-`seed`, `runs`, and `length`, and on a failure `run`, `found_steps`,
-`shrunk_steps`, and `shrink_attempts`, counted in source steps.
-Each entry of `steps` has `step`, `args`, and `status`: `"passed"` with
-`result`, `"failed"` with `message`, or `"not-run"` for a step after the
-failed step in the same sequence. `scenario` is the text the plain output prints, without
-the two leading comments. An `error` carries `message`, and `run` for a
-model or a relation with a generated source. A refusal before
-any step runs prints nothing on stdout, as without `--json`. Explore
-writes the object to stdout only, never under the state directory, so
-the run summary and `nuka tend` never read it as a run.
-
-The scenario is not added to any feature. Only a person who read it decides
-whether it becomes a scenario, whether the system or the model was wrong,
-and what the scenario claims. Generated sequences that passed are not kept.
-
 ## CLI summary
 
 The npm package is `nukadoko`. The one command it installs is `nuka`.
@@ -4296,9 +3960,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               its feature, line, and name, then a rerun
                               line (nuka run <feature>:<line>). Then one retention
                               line, when a run older than the newest
-                              retention.runs was removed (see "Artifacts");
-                              --quiet keeps it. --quiet drops the
-                              progress lines only, except a failed step's.
+                              retention.runs was removed (see "Artifacts").
                               --json drops every one of these lines, and
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records
@@ -4332,10 +3994,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set; --summary
                               <path> writes one more copy there
-nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>] [--session <name>]
+nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
-                              --env as on nuka run; --session carries login
-                              state across do calls via a named session.
+                              --env as on nuka run; each call starts clean.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
                               delivered on stderr.
@@ -4564,14 +4225,13 @@ nuka check [feature..] [--json]
                               has an invalid capture key, a syntax error, or an
                               unregistered or duplicate parameter type, an
                               undefined-step finding held back until such a cause
-                              is fixed, a feature or oath that does not parse, a
+                              is fixed, a feature that does not parse, a
                               scenario outline with no Examples row that runs,
                               warnings for a scenario with no Then and for an
                               outline with several rows and no <column> in its
                               name, a
                               fixture that destructures a name nukadoko does not
-                              know, a model or relation naming an unknown or
-                              browser-needing step, a step whose `parts` form a
+                              know, a step whose `parts` form a
                               cycle, declare `mutates: false` over a part that
                               mutates, or name something that is not a registered
                               step, a `@nukadoko:serial` tag on a Scenario line (it
@@ -4581,10 +4241,10 @@ nuka check [feature..] [--json]
                               looks secret but is not in secrets.redact, a
                               secrets.redact key too short to redact; with no
                               target, scans featuresDir plus
-                              additionalFeatureDirs and every path in oaths;
+                              additionalFeatureDirs;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
-                              files and the oaths under it), so the errors
+                              files), so the errors
                               nuka run prints before executing equal nuka
                               check's for the same targets. :line is refused,
                               since check analyzes whole files. A path that
@@ -4594,8 +4254,8 @@ nuka check --codes [--json]   list every finding code nuka check can produce,
                               with a one-line description and the code's
                               general do, instead of checking a project
 nuka clean [--dry-run] [--json]
-                              delete accumulated runs/do/cache/export under
-                              the state directory, all three together; --dry-run
+                              delete accumulated runs/do/export under
+                              the state directory, all together; --dry-run
                               prints the same plan the real run would act on
                               without removing anything; refuses, before
                               removing anything, an
@@ -4633,13 +4293,6 @@ nuka tend [--json] [--fail-on <code>]
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               a one-line description, and the code's
                               general do, instead of tending a project
-nuka session list [--json]    list every session, across all environments,
-                              one line each: name, updated_at, alive or
-                              stopped, and environment, tab-separated;
-                              --json prints { schema_version, sessions }
-nuka session clear [name] [--env <name>]
-                              delete a session, or every session for the
-                              environment when no name is given
 nuka init [--allure] [--server "<command>" --server-url <url>]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
@@ -4668,20 +4321,6 @@ nuka init [--allure] [--server "<command>" --server-url <url>]
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
-nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env <name>] [--json]
-                              run one model or relation file found under
-                              featuresDir, request-only steps only, with no
-                              step record. A model runs --runs sequences
-                              (default 20) of at most --length steps (default
-                              10) from one --seed, and shrinks the first
-                              failure; so does a relation whose source is
-                              generated. On a failure stdout gets the scenario to
-                              paste (two for a relation) and the command that
-                              reruns it; stdout is empty on a pass. --json
-                              prints the envelope instead, on a pass too:
-                              the seed and counts, and on a failure
-                              each step's result, the failure, and the
-                              scenario. Exits 1 on a failure, 2 on a refusal
 ```
 
 A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do`, `--env` on `nuka run`, and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
@@ -4700,12 +4339,10 @@ step record and the envelope. `run.json` is the `nuka run --json`
 envelope, so it carries the envelope's. The
 number moves when a field the document already has changes its meaning,
 its type, or its name, or is removed. An added field does not move it. A
-reader checks the number before it trusts the shape. The step record is 2 (an `observed` channel the
-execution never reached is `null`, and `observed.processes` is always
-present). The envelope is 2. A record without `schema_version` was written
-by nukadoko 0.16.1 or earlier. The `experimental` commands print the
-server's own tool list, a shape nukadoko does not own, so they carry no
-number.
+reader checks the number before it trusts the shape. The step record is 3: 2 made an `observed` channel the
+execution never reached `null` and `observed.processes` always
+present, and 3 removed the `session` field. The envelope is 2. A record without `schema_version` was written
+by nukadoko 0.16.1 or earlier.
 
 ### The envelope
 
@@ -4731,14 +4368,12 @@ has no text form, always does:
 }
 ```
 
-`command` is the command path (`check`, `session list`, `experimental
-explore`), or `""` when argv names no command. `verdict` is the exit
+`command` is the command path (`check`, `skill path`), or `""` when argv names no command. `verdict` is the exit
 code's: `passed` for 0, `refused` for 2, and `failed` otherwise. The
 command's own fields sit after `findings` and never replace the five:
 `steps` (`nuka steps`), the contract (`nuka describe`), `summary` and
 `fail_on_hits` (`nuka tend`), the `run.json` fields (`nuka run`), the plan
-(`nuka clean`), `sessions` (`nuka session list`), the seed, counts, and
-scenarios (`nuka experimental explore`), and `codes` (`--codes`, each entry
+(`nuka clean`), and `codes` (`--codes`, each entry
 a finding with no location). `nuka do` prints its step record, which is a
 record and not a report, so it has no envelope and no `--json`; its
 refusals and warnings are findings on stderr.
@@ -4750,7 +4385,7 @@ A finding, a refusal, and a failed scenario are one shape. Its fields are
 are known (`fixture` on a tend note about a fixture), then `fix` and `do`.
 The severity is `error` or `warning` (`nuka check`, and a warning of any
 command), `note` (`nuka tend`), `refused` (see "Refusals"), or `failed` (a
-failed scenario, a BeforeAll or AfterAll hook, an explore run). `file` is
+failed scenario, a BeforeAll or AfterAll hook). `file` is
 relative to the project root: for a finding about one step, it is the step
 file that defines the step; for `duplicate-pattern`, which names several
 steps, it is the file of the last one named; for a finding about a config
@@ -4777,8 +4412,7 @@ the same grammar.
 
 A command refuses when it stops before it has anything to report: a flag
 yargs or the command does not accept, a config it cannot load, a target
-that does not exist, a step name it does not know, a session in the way,
-or, for `nuka run`, an error `nuka check` reports for the selected
+that does not exist, a step name it does not know, or, for `nuka run`, an error `nuka check` reports for the selected
 scenarios. It exits 2, and the refusal is a finding with severity
 `refused` and a code: `invalid-arguments`, `target-not-found`,
 `config-invalid`, `check-errors`, and the others `nuka check --codes`
@@ -4805,19 +4439,18 @@ reading either stream.
 
 | Exit | Meaning | Examples |
 | --- | --- | --- |
-| 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run`, `nuka session clear` of a session that is not held |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported, a failed `nuka experimental explore` run, a session file that could not be removed |
+| 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
 | Command | stdout | stderr |
 | --- | --- | --- |
 | `nuka run` | one scenario's `run.json` entry per line under `--records`, `run.json` (the envelope) under `--json`, nothing otherwise | progress, the locations written, the summary line, the `scenario-failed` findings, warnings; nothing under `--json` |
-| `nuka do` | the step record, also for a failed step | session notices, warning findings |
+| `nuka do` | the step record, also for a failed step | warning findings |
 | `nuka check`, `nuka tend` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and `nuka tend`'s `fail-on` lines |
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |
-| `nuka experimental explore` | the shrunk scenario, or with `--json` the envelope | the `explore-failed` or `explore-error` finding and its rerun command, except under `--json` |
-| `nuka clean`, `nuka session list` | one line per path or session, or with `--json` the envelope | nothing, except a refusal without `--json` |
+| `nuka clean` | one line per path, or with `--json` the envelope | nothing, except a refusal without `--json` |
 
 A refusal under `--json` replaces the report: the envelope holds the
 refusal finding and none of the command's own fields. A step record's
@@ -4911,7 +4544,7 @@ would be running against glue it never actually read.
 ## Roadmap
 
 - **M1 (engine core)**: `defineStep`, `do`, `run` over pickles, step records,
-  sessions/environments, `check`, `init`. Secrets onboarding redesigned.
+  environments, `check`, `init`. Secrets onboarding redesigned.
 - **M2 (compat API)**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
   migration guide for cucumber-js + Playwright suites.
 - **M3 (reporting interop)**: a cucumber messages (NDJSON) emitter for
@@ -4966,12 +4599,14 @@ would be running against glue it never actually read.
   sequence already knew its steps, and the draft left blank the claims a
   scenario exists to state. A path found by exploring still becomes a path
   fixed in a sentence, written by whoever explored it.
-- **M11 (live sessions)**: `start` and `stop` under `nuka session`, one `ctx` held
+- **M11 (live sessions)**: `start` and `stop` under the `session` command, one `ctx` held
   open in a process so `nuka do` could land on a world already partway
   through. It was removed later: a Playwright MCP server the agent's host
   already runs keeps a browser open across calls the same way, with no
   process, socket, or idle timeout of nukadoko's own (see "State that
-  cannot be repeated").
+  cannot be repeated"). The rest of sessions, the `session list` and
+  `session clear` commands and the `--session` flag of `do`, went after it: login state comes from a
+  fixture, so no state carries across calls.
 - **M12 (concurrency)**: `nuka run --concurrency <n>`, worker processes
   each holding whole feature files, `@nukadoko:serial` for a file that has to run
   alone, and the parent that keeps the run's identity while they work (see
@@ -4979,20 +4614,18 @@ would be running against glue it never actually read.
   what changes is how many of them run at once. Worker processes make the
   gain independent of what a suite spends its time on, and leave the
   fixture teardown rule standing.
-- **M13 (Markdown oaths)**: a second front beside Gherkin. Selected
-  Markdown files compile into the same pickles, bind the same `defineStep`
-  vocabulary, and fail `nuka check` on a sentence no pattern matches (see
-  "Markdown oaths"). This is the oath surface, not Varar's engine.
-- **M14 (exploring, experimental)**: `nuka experimental explore`, which
-  runs a model or a relation against request-only steps, shrinks a
-  model's failure with a seeded, replayable list of choices, and prints
-  the scenario to paste (see "Exploring a model or a relation"). The feature file stays the set of
-  sequences a person chose to keep.
+- **M13 (Markdown oaths)**: Markdown files compiled into the same pickles
+  as a `.feature` file. It was removed later: a second front meant a second
+  parser and a second set of findings, and a `.feature` file says the same
+  thing.
+- **M14 (exploring, experimental)**: the `experimental explore` command, which ran
+  a model or a relation against request-only steps and printed a shrunk
+  scenario to paste. It was removed later, with `defineModel` and
+  `defineRelation`: the feature file is the set of sequences a person chose
+  to keep, and a sequence found by exploring is written there as a scenario.
 - **Later**: AI-assisted glue converter (existing regex glue → typed steps),
   tag-expression filtering, cucumber-js adapter if a real suite needs
-  in-place coexistence rather than migration. Full Varar parity (every
-  dialect, comparing a step's return value to words in the sentence, doc
-  strings, tags, and `@nukadoko:serial` inside Markdown) stays here too.
+  in-place coexistence rather than migration.
 
 ## Implementation notes
 

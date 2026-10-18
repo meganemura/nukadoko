@@ -13,7 +13,6 @@ function baseConfig(overrides: Partial<NukadokoConfig> = {}): NukadokoConfig {
   return {
     featuresDir: "features",
     additionalFeatureDirs: [],
-    oaths: [],
     stateDir: ".nukadoko",
     envFiles: [],
     parameterTypes: [],

@@ -110,7 +110,7 @@ export interface RefusalSinks {
   readonly json: boolean;
   readonly stdout: WritableSink;
   readonly stderr: WritableSink;
-  /** The command the envelope names: `check`, `session list`, or `""` when
+  /** The command the envelope names: `check`, `skill path`, or `""` when
    * argv names no command nukadoko has. */
   readonly command: string;
 }
@@ -214,17 +214,17 @@ export function refuse(
   return writeStopped(sinks, [...before, refusalOf(error, code, sinks.command, hint)], REFUSED_EXIT_CODE);
 }
 
-/** The same shape as `refuse`, for a command that had started: a session
- * file that could not be removed is not the invocation's fault, so it
- * exits 1 and its severity is `error`. */
+/** The same shape as `refuse`, for a command that had started: a handler
+ * that threw is not the invocation's fault, so it exits 1 and its severity
+ * is `error`. */
 export function failInShape(sinks: RefusalSinks, error: unknown, code: RefusalCode, hint?: Hint): number {
   return writeStopped(sinks, [{ ...refusalOf(error, code, sinks.command, hint), severity: "error" }], FAILED_EXIT_CODE);
 }
 
 /**
  * The command an argv names, as far as `commands` (top-level name to its
- * subcommand names) knows it: `["session", "start", "x"]` is `"session
- * start"`, an unknown or missing first word is `""`. A yargs failure has no
+ * subcommand names) knows it: `["skill", "path", "x"]` is `"skill
+ * path"`, an unknown or missing first word is `""`. A yargs failure has no
  * parsed command to ask, so this reads argv the way a person typed it.
  */
 export function commandPathOf(argv: readonly string[], commands: ReadonlyMap<string, readonly string[]>): string {

@@ -159,7 +159,7 @@ export type MatchOutcome =
  * (`Promise.all` over `getValue`). This function does the same: `world` is
  * that object, and a Promise a transformer returns is awaited here, so the
  * step receives the resolved value. `world` is `null` only for a caller
- * that has no World (explore's read-back of its printed scenario). If a transformer throws, or
+ * that has no World, such as a test of the binding alone. If a transformer throws, or
  * an async transformer rejects, that failure propagates unchanged, straight
  * out of this function (cucumber-expressions itself does no try/catch
  * around a transformer call, and this module deliberately adds none of its
@@ -169,8 +169,7 @@ export type MatchOutcome =
  * invocation. `nuka check` never reaches this code path at all:
  * src/check/feature-check.ts's own matching only calls
  * `expression.match()`/`RegExp.test()`, never `Argument.getValue()`, so a
- * transformer is only ever invoked at `nuka run` time (and by explore's
- * read-back, which calls this same function).
+ * transformer is only ever invoked at `nuka run` time.
  *
  * A compat RegExp binding is matched by a *fresh* `RegularExpression` whose
  * `RegExp` is built from the binding's `source`/`flags`. `RegularExpression`

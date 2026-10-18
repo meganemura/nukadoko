@@ -477,7 +477,7 @@ export function attachmentInFeatures(rootDir: string, pattern: string, config: A
   } catch {
     return null;
   }
-  const { features } = loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths);
+  const { features } = loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs);
   return lineAttachment(
     (text) => expression.match(text) !== null,
     features.flatMap((feature) => feature.pickles.flatMap((pickle) => pickle.steps)),

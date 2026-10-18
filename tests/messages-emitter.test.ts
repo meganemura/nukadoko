@@ -97,7 +97,7 @@ describe("createMessagesEmitter", () => {
       writeFileSync(path.join(recordDir, "note.txt"), "declared note");
 
       const stepRecord: StepRecord = {
-        schema_version: 2,
+        schema_version: 3,
         nukadoko: "0.0.0-test",
         step_record_id: "step-1",
         step: "the cart has items",
@@ -106,7 +106,6 @@ describe("createMessagesEmitter", () => {
         result: { ok: true },
         status: "passed",
         environment: "staging",
-        session: null,
         scenario_record_id: "scn-1",
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.500Z",
@@ -134,7 +133,6 @@ describe("createMessagesEmitter", () => {
         line: 3,
         status: "passed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:02.000Z",
         steps: [step],
@@ -155,7 +153,6 @@ describe("createMessagesEmitter", () => {
         line: 7,
         status: "passed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:02.000Z",
         finished_at: "2026-08-01T00:00:02.500Z",
         steps: [{ text: outlineRow.steps[0]!.text, status: "passed", step_record_id: null }],
@@ -398,7 +395,7 @@ describe("createMessagesEmitter", () => {
     emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
     const stepRecord: StepRecord = {
-      schema_version: 2,
+      schema_version: 3,
       nukadoko: "0.0.0-test",
       step_record_id: "step-missing-file",
       step: "the cart has items",
@@ -407,7 +404,6 @@ describe("createMessagesEmitter", () => {
       result: null,
       status: "passed",
       environment: "staging",
-      session: null,
       scenario_record_id: "scn-missing-file",
       run_id: "run-1",
       started_at: "2026-08-01T00:00:00.000Z",
@@ -428,7 +424,6 @@ describe("createMessagesEmitter", () => {
       line: 3,
       status: "passed",
       environment: "staging",
-      session: null,
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
       steps: [{ text: "the cart has items", status: "passed", step_record_id: "step-missing-file" }],
@@ -493,7 +488,6 @@ describe("createMessagesEmitter", () => {
         line: 3,
         status: "passed",
         environment: "staging",
-        session: null,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [{ text: "the cart has items", status: "passed", step_record_id: null }],

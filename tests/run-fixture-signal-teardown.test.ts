@@ -232,7 +232,6 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "--no-check",
       "features/hold.feature",
       "features/hold-again.feature",
-      "--quiet",
       "--concurrency",
       "2",
     ]);
@@ -254,7 +253,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
   it("tears every worker's fixtures down when they write to stdout and stderr after the parent is killed with SIGKILL", async () => {
     const child = spawnNuka(
       rootDir,
-      ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+      ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--concurrency", "2"],
       { ...process.env, TEARDOWN_WRITES: "1" },
     );
     await waitForSetups(rootDir, child, 2);
@@ -279,7 +278,6 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
       "--no-check",
       "features/read-stdin.feature",
       "features/read-stdin-stream.feature",
-      "--quiet",
       "--concurrency",
       "2",
     ]);
@@ -298,7 +296,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
   it("exits nuka run --concurrency 2 when project code listens on the worker's IPC channel", async () => {
     const child = spawnNuka(
       rootDir,
-      ["run", "--records", "--no-check", "features/finish.feature", "features/finish-again.feature", "--quiet", "--concurrency", "2"],
+      ["run", "--records", "--no-check", "features/finish.feature", "features/finish-again.feature", "--concurrency", "2"],
       { ...process.env, IPC_MESSAGE_LISTENER: "1" },
     );
     const stderr = collect(child.stderr);
@@ -310,7 +308,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
   it("names project code closing a worker's IPC channel, and tears that worker down", async () => {
     const child = spawnNuka(
       rootDir,
-      ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+      ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--concurrency", "2"],
       { ...process.env, DISCONNECT_IPC: "1" },
     );
     const stderr = collect(child.stderr);
@@ -332,7 +330,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
   it("finishes a forwarded signal's teardown in every worker when the parent is then killed with SIGKILL", async () => {
     const child = spawnNuka(
       rootDir,
-      ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+      ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--concurrency", "2"],
       { ...process.env, SIGNAL_TEARDOWN_HOLD_MS: "3000" },
     );
     await waitForSetups(rootDir, child, 2);
@@ -355,7 +353,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
   it("names a signal that arrives after every scenario had a record under nuka run --concurrency 2", async () => {
     const child = spawnNuka(
       rootDir,
-      ["run", "--records", "--no-check", "features/finish.feature", "features/finish-again.feature", "--quiet", "--concurrency", "2"],
+      ["run", "--records", "--no-check", "features/finish.feature", "features/finish-again.feature", "--concurrency", "2"],
       { ...process.env, LEDGER_TEARDOWN_HOLD_MS: "3000" },
     );
     const stdout = collect(child.stdout);
@@ -377,7 +375,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
 
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     it(`tears both scopes down when nuka run receives ${signal}`, async () => {
-      const child = spawnNuka(rootDir, ["run", "--records", "--no-check", "features/hold.feature", "--quiet"]);
+      const child = spawnNuka(rootDir, ["run", "--records", "--no-check", "features/hold.feature"]);
       await waitForSetups(rootDir, child);
       child.kill(signal);
       const closed = await waitForClose(child);
@@ -397,7 +395,6 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
         "features/hold.feature",
         "features/hold-again.feature",
         "features/serial-after.feature",
-        "--quiet",
         "--concurrency",
         "2",
       ]);
@@ -433,7 +430,7 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
     it(`exits at once on a second ${signal} to nuka run --concurrency 2 and leaves no worker behind`, async () => {
       const child = spawnNuka(
         rootDir,
-        ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--quiet", "--concurrency", "2"],
+        ["run", "--records", "--no-check", "features/hold.feature", "features/hold-again.feature", "--concurrency", "2"],
         { ...process.env, SIGNAL_TEARDOWN_HOLD_MS: String(5 * SPAWNED_TEST_TIMEOUT_MS) },
       );
       await waitForSetups(rootDir, child, 2);

@@ -5,7 +5,7 @@ import { defineConfig } from "./nukadoko-shim.js";
 // throw). No real HTTP server is needed — the steps under features/steps/
 // only ever read `ctx.baseURL`/`ctx.env`, never `ctx.request()`/`ctx.page()`
 // — so every baseURL here is a plain string, not an ephemeral test-server
-// port like session-project/secrets-project need. `.env.base`/`.env.staging`
+// port like secrets-project needs. `.env.base`/`.env.staging`
 // are demoted via `secrets.public`: a copied-fixture temp directory (see
 // tests/helpers/fixtures.ts) is never itself a git repository with these
 // files tracked, so without this they would classify as secret sources and

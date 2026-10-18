@@ -23,7 +23,6 @@ import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { Step } from "../step/define-step.js";
 import { parseStepReturns } from "../step/parse-returns.js";
 import { strictArgsSchema } from "../step/strict-args.js";
-import type { StorageState } from "../session/storage-state.js";
 import { launchBrowser, type BrowserHandle, type TracedContextHandle } from "./browser-evidence.js";
 import {
   assertValidContextName,
@@ -70,10 +69,6 @@ import { createUsedCollector } from "./used.js";
 // collection, so nothing evidence-related is exposed on the object passed
 // into `run`; only the executor (src/cli/do.ts), which never hands
 // `dispose` onward, can call it.
-// The same split applies to sessions: this module restores a loaded
-// storageState into whichever context(s) a step opens and hands back
-// whichever one *should* be persisted, but never writes it to disk itself —
-// that stays the executor's job too.
 //
 // `nuka run` shares one `ctx` across every step of a pickle (docs/spec.md
 // "Running": "Steps in one pickle share one context"), but each step's
@@ -143,7 +138,7 @@ import { createUsedCollector } from "./used.js";
 // SecretSet itself, once, and hands both down — this module never reads an
 // envFile and never decides what is secret. `secrets` only ever reaches
 // http-log.ts's redaction; nothing here exposes it on `ctx`, matching
-// docs/spec.md "Sessions, environments, secrets": redaction is applied by the executor, never
+// docs/spec.md "Environments and secrets": redaction is applied by the executor, never
 // controllable from a step's `run`.
 //
 // `resultOf`: the *lookup* — "does
@@ -349,14 +344,6 @@ export interface LivePollEntry {
 
 export interface DisposeResult {
   evidence: EvidenceResult;
-  /** The storageState the executor should persist for this run's
-   * `--session`, or `undefined` when there is nothing to persist — either
-   * because neither `ctx.page()` nor `ctx.request()` was ever called this
-   * run, or because collecting it failed (see browser-evidence.ts's
-   * `collectStorageState`). `undefined` must not be read as "clear the
-   * session": the executor's own contract is to
-   * leave an existing session file untouched when this is `undefined`. */
-  storageState: StorageState | undefined;
   /** The engine and version this execution actually launched, lifted
    * straight from `browserHandle.browserInfo`
    * (browser-evidence.ts) — measured, never `config.browserType` itself.
@@ -371,8 +358,7 @@ export interface StepContextHandle {
   ctx: StepContext;
   /** Closes whatever this execution opened (browser, request context),
    * reports which evidence files it actually produced (docs/spec.md
-   * "Records": only files that exist), and hands back the storageState (if
-   * any) the executor should persist for this run's session. Takes no
+   * "Records": only files that exist). Takes no
    * `status`: its only past use was
    * passing it on to `browserHandle.finalize`, which no longer takes one
    * either — see browser-evidence.ts's own header for why keeping an unused
@@ -540,12 +526,6 @@ export interface CreateStepContextOptions {
    * when there is nothing secret to log. Never exposed on `ctx` — only
    * `wrapRequestContextWithLogging` (http-log.ts) sees it. */
   secrets?: SecretSet;
-  /** A `--session`'s previously saved storageState, when one was loaded and
-   * parsed successfully; `undefined` for a session's first-ever use or when
-   * `--session` wasn't given. Restored into whichever of `ctx.page()` /
-   * `ctx.request()` the step actually opens — never both eagerly, since
-   * neither is created until first use. */
-  storageState?: StorageState;
   /** Looks up `step`'s most recent successful result by object identity —
    * the executor's own connection
    * to `ctx.resultOf`. Defaults to a reader that always returns `undefined`,
@@ -628,7 +608,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     evidenceDir,
     env: sourceEnv,
     secrets = [],
-    storageState,
     resultOf: readResultOf = () => undefined,
     isRegisteredStep = () => true,
     stepNameOf = () => undefined,
@@ -1066,10 +1045,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   }
 
   // What `browser.newContext` receives. `config.browserContext` first:
-  // schema.ts already rejects one that sets `baseURL`/`storageState`, so
-  // nukadoko's own values after it never collide with it. A `pageAs` context
-  // starts with no storageState: it is a person of its own, not the session
-  // the default context restores. Its own options come last, so a step can
+  // schema.ts already rejects one that sets `baseURL`, so nukadoko's own
+  // value after it never collides with it. Its own options come last, so a step can
   // turn off JavaScript (or set anything else Playwright accepts) for that
   // one context.
   function contextOptionsFor(
@@ -1078,7 +1055,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   ): BrowserContextOptions {
     return {
       ...(config.browserContext ?? {}),
-      ...(as === undefined && storageState ? { storageState } : {}),
       ...(config.baseURL ? { baseURL: config.baseURL } : {}),
       ...(options ?? {}),
     };
@@ -1152,9 +1128,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // pre-empt that with its own error.
       //
       // `config.requestContext` is spread in
-      // first, `baseURL`/`storageState` after: schema.ts already rejects
-      // a `requestContext` that sets either key, so this ordering never
-      // actually resolves a real collision, only guards the invariant.
+      // first, `baseURL` after: schema.ts already rejects a
+      // `requestContext` that sets it, so this ordering never actually
+      // resolves a real collision, only guards the invariant.
       // Loaded here, not at module load: `playwright` is an optional
       // peer (load-playwright.ts), and a step that never calls
       // `ctx.request()` never reaches this line.
@@ -1162,7 +1138,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       const raw = await playwrightRequest.newContext({
         ...(config.requestContext ?? {}),
         ...(config.baseURL ? { baseURL: config.baseURL } : {}),
-        ...(storageState ? { storageState } : {}),
       });
       requestContext = wrapRequestContextWithLogging(
         raw,
@@ -1187,24 +1162,13 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
   async function disposeOpenedResources(): Promise<DisposeResult> {
     const evidence: EvidenceResult = { screenshots: [] };
-    let browserStorageState: StorageState | undefined;
-    let requestStorageState: StorageState | undefined;
-
-    const defaultContext = contexts.get(undefined);
     if (browserHandle) {
-      // Must run before finalize() below: finalize() closes the context,
-      // and storageState() can only succeed on one that's still open (see
-      // browser-evidence.ts's collectStorageState doc comment). Only the
-      // default context's state is a session's: a `pageAs` context is
-      // somebody else.
-      browserStorageState = await defaultContext?.handle.collectStorageState();
       // Closes whatever chunk the *current* boundary still has open (this
       // file's own header) — the only closing point `nuka do` ever reaches
       // (it calls neither `beginStep` nor `endStep`), and, for `nuka run`, a
       // defense-in-depth no-op: every step's and hook's own chunk is already
       // closed by its own `endStep()` call well before `dispose()` ever
-      // runs. Must run before finalize() below for the same reason
-      // `collectStorageState` above does — `endStepChunk` needs a
+      // runs. Must run before finalize() below: `endStepChunk` needs a
       // still-open context.
       await closeCurrentChunk();
       // The default context first, then each `pageAs` context in the order
@@ -1239,18 +1203,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
 
     if (requestContext) {
       try {
-        // Collected before dispose() below for the same reason as the
-        // browser context above, though request contexts don't actually
-        // close their cookie jar on dispose() the way a browser context
-        // does — kept symmetric with the browser path regardless.
-        requestStorageState = await requestContext.storageState();
-      } catch {
-        // A step can dispose its own request context before returning;
-        // losing this snapshot must not block teardown below, nor cost the
-        // step record (see DisposeResult's doc comment: `undefined` here means
-        // "leave the existing session file untouched", never "clear it").
-      }
-      try {
         await requestContext.dispose();
       } catch {
         // As with browser teardown above, losing the request context's own
@@ -1277,20 +1229,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       evidence.http = "http.jsonl";
     }
 
-    // Browser wins whenever one was opened, whether or not a request
-    // context was *also* opened: it carries
-    // cookies + localStorage where the request context only carries
-    // cookies, and Playwright's two cookie jars are independent, so merging
-    // them would synthesize a state that never actually existed. This also
-    // covers the case where `browserStorageState` itself is `undefined`
-    // (collection failed) — falling back to the request context's value
-    // there would contradict "collection failing means skip the save, keep
-    // the existing file".
-    const storageStateToPersist = defaultContext ? browserStorageState : requestStorageState;
-
     return {
       evidence,
-      storageState: storageStateToPersist,
       // Measured, not declared (DisposeResult's own doc comment) — absent
       // whenever no browser was ever launched this ctx's lifetime, same
       // "no browser, no field" rule `evidence.trace` already follows.

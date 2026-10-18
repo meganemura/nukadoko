@@ -1,7 +1,6 @@
 // Responsibility: the step record shape from docs/spec.md "Records", typed as
 // the discriminated union `status` actually implies — `StepRecordPassed` carries
-// `result`, `StepRecordFailed` carries `error`, never both. `session` is
-// `string | null` (null when the invocation named no session) and
+// `result`, `StepRecordFailed` carries `error`, never both.
 // `environment` is the environment's own name, plus the optional
 // `target_version`. `kind` and
 // `scenario_record_id` are widened again now that `nuka run` exists: `kind: "do" | "run"` tells a step record's origin apart — the
@@ -664,14 +663,9 @@ export interface StepRecordBase {
   args: unknown;
   /** The `--env` name this run targeted; `"default"` when `--env` was
    * omitted. Not a special value in the schema sense — docs/spec.md
-   * "Sessions, environments, secrets": default is just the name of an
+   * "Environments and secrets": default is just the name of an
    * environment that may or may not itself be configured. */
   environment: string;
-  /** The `nuka do --session` name this execution carried, or `null` when
-   * none was given. Always `null` for `kind: "run"`: `nuka run` takes no
-   * session, so every scenario starts clean (docs/spec.md "Sessions,
-   * environments, secrets"). */
-  session: string | null;
   /** The owning scenario record's id for a `run`-originated step record
    * (`kind: "run"`); always `null` for a `do`- or `external`-originated
    * one. */

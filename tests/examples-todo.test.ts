@@ -1,4 +1,4 @@
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -100,40 +100,16 @@ describe("examples/todo", () => {
     expect(records.some((record) => record.status === "failed")).toBe(true);
     expect(exitCode).toBe(1);
   });
-
-  it("runs features/todo.md green against the v1 app", async () => {
-    const started = await startTodoApp({ v2: false });
-    server = started.server;
-    rootDir = await copyExampleToTempDir("todo");
-    await ensureNukadokoShim();
-    await pointConfigAt(rootDir, started.baseURL);
-
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "features/todo.md"], { rootDir, stdout, stderr });
-
-    expect(stripRunProgressLines(stderr.text()), stderr.text()).toBe("");
-    const records = stdout
-      .text()
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as { status: string });
-    expect(records).toHaveLength(4);
-    for (const record of records) {
-      expect(record.status).toBe("passed");
-    }
-    expect(exitCode).toBe(0);
-  });
 });
 
-describe("examples/todo oath check", () => {
+describe("examples/todo check", () => {
   let rootDir: string;
 
   afterEach(async () => {
     await removeTempDir(rootDir);
   });
 
-  it("nuka check is clean for the committed feature and its Markdown oath", async () => {
+  it("nuka check is clean for the committed feature", async () => {
     rootDir = await copyExampleToTempDir("todo");
     await ensureNukadokoShim();
 
@@ -170,11 +146,10 @@ describe("examples/todo README, Part 1", () => {
 
   it("shows the check output, the scaffold output, and the shipped step as they are", async () => {
     const readme = await readFile(path.join(repoRoot, "examples", "todo", "README.md"), "utf8");
-    expect(readme).toContain("mv features/steps/complete-todo.ts /tmp/complete-todo.ts.bak\nmv features/explore /tmp/explore.bak\n");
+    expect(readme).toContain("mv features/steps/complete-todo.ts /tmp/complete-todo.ts.bak\n");
     rootDir = await copyExampleToTempDir("todo");
     await ensureNukadokoShim();
     await rm(path.join(rootDir, "features", "steps", "complete-todo.ts"));
-    await rename(path.join(rootDir, "features", "explore"), path.join(rootDir, "explore.bak"));
 
     const checkOut = createCaptureSink();
     const checkCode = await runCli(["check"], { rootDir, stdout: checkOut, stderr: createCaptureSink() });

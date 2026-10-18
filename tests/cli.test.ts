@@ -192,7 +192,6 @@ describe("nuka do", () => {
       expect(stepRecord.args).toEqual({ value: "hi" });
       expect(stepRecord.result).toEqual({ value: "hi" });
       expect(stepRecord.environment).toBe("default");
-      expect(stepRecord.session).toBeNull();
       expect(stepRecord.scenario_record_id).toBeNull();
       expect(stepRecord.evidence.dir).toBe(path.join(".nukadoko", "do", stepRecord.step_record_id));
       expect(stepRecord.evidence.screenshots).toEqual([]);

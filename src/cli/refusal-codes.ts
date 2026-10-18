@@ -37,6 +37,10 @@ const REFUSAL_CODES = {
     description: "There is no config file in the directory nuka runs in, so the defaults apply.",
     fix: "Run nuka from the directory that holds the config file, or run nuka init to write one.",
   },
+  "config-key-removed": {
+    description: "The config file sets a key that an earlier release removed.",
+    fix: "Remove the key from the config file, and do what the message names in its place.",
+  },
   "config-invalid": {
     description: "The config file did not load: it does not import, it has no default export, or a field is wrong.",
     fix: "Correct the config file as the message says.",
@@ -53,10 +57,6 @@ const REFUSAL_CODES = {
     description: "allure.resultsDir or messages.output points outside the project, so nuka clean does not read or remove it.",
     fix: "Point the path in the config file at a directory inside the project.",
   },
-  "explore-target-unknown": {
-    description: "The file nuka experimental explore names is not a model or a relation that discovery found.",
-    fix: "Name a file under featuresDir whose default export is an experimental_defineModel or experimental_defineRelation declaration.",
-  },
   "fail-on-unknown-code": {
     description: "--fail-on names a code that nuka tend does not report.",
     fix: "Name a code that nuka tend --codes lists.",
@@ -72,14 +72,6 @@ const REFUSAL_CODES = {
   "invalid-arguments": {
     description: "The command line names an unknown command or flag, or leaves out a required one.",
     fix: "Correct the command line; the command's --help lists its flags.",
-  },
-  "invalid-environment-name": {
-    description: "--env names an environment with characters outside [a-z0-9_-].",
-    fix: "Pass an environment name that matches [a-z0-9_-]+.",
-  },
-  "invalid-session-name": {
-    description: "--session names a session with characters outside [a-z0-9_-].",
-    fix: "Pass a session name that matches [a-z0-9_-]+.",
   },
   "invalid-step-definition": {
     description: "A step file calls defineStep with a definition nukadoko cannot register.",
@@ -98,7 +90,7 @@ const REFUSAL_CODES = {
     fix: "Remove the :line suffix from the target.",
   },
   "no-feature-files": {
-    description: "A target directory holds no feature file or oath, so nothing can run.",
+    description: "A target directory holds no feature file, so nothing can run.",
     fix: "Add a feature file under the directory, or name another target.",
   },
   "no-scenario-at-line": {
@@ -114,24 +106,8 @@ const REFUSAL_CODES = {
     fix: "Run the step against an environment that allows writes, or declare mutates: false if it only reads.",
   },
   "removed-command": {
-    description: "The command line names a command or a flag value that an earlier release removed or moved.",
+    description: "The command line names a command, a flag, or a flag value that an earlier release removed or moved.",
     fix: "Use what the message names in its place.",
-  },
-  "session-clear-failed": {
-    description: "nuka session clear found the session file, and could not remove it.",
-    fix: "Remove the file the message names by hand.",
-  },
-  "session-file-malformed": {
-    description: "A session file is not valid JSON.",
-    fix: "Delete the session file the message names, so the next call starts the session clean.",
-  },
-  "session-locked": {
-    description: "Another process holds the session's lock.",
-    fix: "Wait for the other process to finish, or pass another --session name.",
-  },
-  "session-not-found": {
-    description: "No session file has the name nuka session clear was given.",
-    fix: "Name a session that nuka session list shows.",
   },
   "step-args-invalid": {
     description: "nuka do has no --args, or --args is not valid JSON.",

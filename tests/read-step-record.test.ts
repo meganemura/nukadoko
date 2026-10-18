@@ -18,7 +18,7 @@ describe("readStepRecord", () => {
 
   it("reads a valid record.json back", async () => {
     const stepRecord: StepRecord = {
-      schema_version: 2,
+      schema_version: 3,
       nukadoko: "0.0.0-test",
       step_record_id: "step-20260801-143022-a1b2",
       step: "noop",
@@ -27,7 +27,6 @@ describe("readStepRecord", () => {
       result: { ok: true },
       status: "passed",
       environment: "default",
-      session: null,
       scenario_record_id: null,
       run_id: null,
       started_at: new Date().toISOString(),
@@ -50,7 +49,6 @@ describe("readStepRecord", () => {
       result: { id: 7 },
       status: "ok",
       environment: "default",
-      session: null,
       scenario_record_id: null,
       run_id: null,
       started_at: "2026-08-01T14:30:22.000Z",

@@ -45,6 +45,45 @@ This part does not change release to release.
 
 ## 0.17.0 to the next release
 
+- **`nuka run --quiet` is removed.** It is refused with `removed-command`.
+  A CI step that wanted a short log runs `nuka run --json`: stderr is
+  empty, and stdout is `run.json`.
+
+- **Markdown oaths are removed.** The `oaths` config key is refused with
+  `config-key-removed`, and a `.md` target of `nuka check` or `nuka run`
+  is refused with `removed-command`. Write the scenarios of each oath as
+  Gherkin in a `.feature` file under `featuresDir`, then delete the
+  `oaths` key.
+
+- **Sessions are removed.** `nuka session list`, `nuka session clear`, and
+  `nuka do --session` are refused with `removed-command`. Each `nuka do`
+  call starts clean, as each scenario already did.
+  - A step that needs login state gets it from a fixture. A project that
+    keeps a Playwright storageState file names it in
+    `browserContext.storageState` or `requestContext.storageState`, which
+    the config now passes through to Playwright instead of refusing.
+  - Delete `.nukadoko/cache/` (`rm -rf .nukadoko/cache`): nothing reads it.
+    `nuka clean` no longer lists it, and its `--json` plan has `records`
+    and `export` only.
+  - A step record's `schema_version` is 3, and the record has no
+    `session` field. A reader that checks `schema_version === 2` checks 3.
+
+- **`nuka experimental explore` and its model API are removed.** The
+  command (and the older `nuka explore` spelling) is refused with
+  `removed-command`. `experimental_defineModel`,
+  `experimental_defineRelation`, `experimental_modelCommand`, and
+  `experimental_relationEntry` are no longer exported from `nukadoko`, so
+  a file that imports them fails to load. Write each sequence worth
+  keeping as a scenario, then delete the model and relation files. The
+  `explore-*` finding codes are gone.
+
+- **`nukadoko/mcp` is removed**, with the optional peer dependency on
+  `@modelcontextprotocol/client`. A fixture that called `connectMcpServer`
+  or `callMcpTool` uses the SDK's own client: add
+  `@modelcontextprotocol/client` to the project, build a `Client` with a
+  `StdioClientTransport` (from `@modelcontextprotocol/client/stdio`) in
+  the fixture's setup, and close it in its teardown.
+
 - **Each run is one directory, `.nukadoko/runs/<run_id>/`, and
   `records/` is no longer written.** A script, a CI step, or a tool that
   reads the state directory changes these paths:
@@ -72,7 +111,7 @@ This part does not change release to release.
   and neither retention nor `nuka clean` removes it: delete it by hand
   (`rm -rf .nukadoko/records`). `nuka do --use` with an id from
   that directory is refused as not found; run the producing step again.
-  Sessions, the cache, and the export output do not move.
+  The export output does not move.
 
 - **`run.json` holds the whole run, and scenario record files are gone.**
   A script that read `run.json` or `nuka run --json` changes these reads:
@@ -98,7 +137,7 @@ This part does not change release to release.
     `selection` in `run.json`, `partial` or `full`, or the
     `- selection:` line of the run summary.
   - A `--records` line is now a scenario's `run.json` entry: it has no
-    `run_id`, `environment`, `session`, `git`, `nukadoko`, or
+    `run_id`, `environment`, `git`, `nukadoko`, or
     `schema_version`; read those from `run.json`.
   The run summary gains a `- selection:` line and a "Findings" section; a
   CI step that only posts it needs nothing.
@@ -119,8 +158,6 @@ This part does not change release to release.
     `nuka check --codes --json` and `nuka tend --codes --json` keep
     `codes`, and each entry is a finding: its meaning is `message`, not
     `description`, and its general edit is `fix`, not `do`.
-  - `nuka experimental explore --json` has no `verdict` of its own; read
-    the envelope's.
   - `verdict` is `passed`, `failed`, or `refused`, for exit 0, 1, and 2.
 - **A finding's text is `<severity>\t<code>\t<where>\t<message>`, then
   `  fix:` and `  do:` lines.** A parser of `nuka check` text reads the

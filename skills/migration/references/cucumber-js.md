@@ -86,8 +86,7 @@ repository root.
 A migration repeats that loop far more than a finished suite ever runs
 `nuka run` again. `nuka run` keeps only the newest `retention.runs` runs
 (default 20) and removes older records and export files itself, so
-`.nukadoko/` stays that size on its own; session cache files are the part
-it never touches. `nuka clean [--dry-run]` removes records, cache, and
+`.nukadoko/` stays that size on its own. `nuka clean [--dry-run]` removes records and
 export at once; `--dry-run` previews the same plan it would act on without
 removing anything. It refuses, before removing anything,
 when `allure.resultsDir` or `messages.output` resolves to the project
@@ -290,9 +289,3 @@ Stage 1. That hook receives cucumber's hook parameter, including
 `result.duration`, and `result.message` and `error` when the scenario
 failed. An `AfterStep` hook receives those too, plus `pickleStep` and
 `testStepId` for the step that just ran.
-
-An MCP server over stdio is the same kind of resource: `connectMcpServer`
-(`"nukadoko/mcp"`) during setup, `client.close()` during teardown. If the
-handshake fails, `connectMcpServer` stops the process it spawned before
-rejecting, and the error names the command. A successful handshake still
-returns a live client for that teardown to close.

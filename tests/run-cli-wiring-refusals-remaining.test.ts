@@ -4,13 +4,10 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, createEmptyTempDir, fixture, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: the same "yargs' own .fail() sets argsFailed, then still
-// runs the matched handler, whose own `if (argsFailed) return;` guard is
-// what actually stops it" shape tests/run-cli-wiring-refusals.test.ts
-// already proves for session list/start/stop, extended
-// here to the remaining commands that guard reaches: steps, describe,
-// init, scaffold, check, tend, skill path, and experimental explore. Kept in its own file (a new file, not an edit to that one)
-// so the two never collide on the same lines.
+// Responsibility: yargs' own .fail() sets argsFailed, then still runs the
+// matched handler, whose own `if (argsFailed) return;` guard is what
+// actually stops it. Checked for each command that guard reaches: steps,
+// describe, init, scaffold, check, tend, and skill path.
 
 describe("nuka <command> --unknown-flag: the matched handler never runs (remaining commands)", () => {
   it("nuka steps: prints nothing", async () => {
@@ -111,20 +108,6 @@ describe("nuka <command> --unknown-flag: the matched handler never runs (remaini
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["skill", "path", "--unknown-flag"], {
-      rootDir: fixture("basic-project"),
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(2);
-    expect(stderr.text()).toContain("unknown-flag");
-    expect(stdout.text()).toBe("");
-  });
-
-  it("nuka experimental explore: runs no model", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["experimental", "explore", "features/model.ts", "--unknown-flag"], {
       rootDir: fixture("basic-project"),
       stdout,
       stderr,

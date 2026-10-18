@@ -5,5 +5,4 @@ import { defineConfig } from "nukadoko";
 // secrets to talk to.
 export default defineConfig({
   baseURL: "http://localhost:4000",
-  oaths: ["features/todo.md"],
 });

@@ -1,5 +1,5 @@
 // Responsibility: run an environment's `version` probe with a hard timeout,
-// per docs/spec.md "Sessions, environments, secrets" (`target_version`
+// per docs/spec.md "Environments and secrets" (`target_version`
 // recorded "(when probed)"). Called once, by the executor
 // (cli/do.ts), at the top of the execution phase, never
 // reachable from a step's own `run`. A probe is metadata about the target,

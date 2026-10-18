@@ -26,12 +26,11 @@ import type { FixtureDefinition } from "../step/fixture-types.js";
 // this same list — is src/binding/registry.ts's job, not this schema's; a
 // zod schema only rejects shapes, not cross-entry relationships.
 
-// Same rule and reason as session names (src/session/name.ts): a name is
-// used directly as a cache/sessions/<env>/ directory segment, so anything outside
-// this set — most importantly `.`/`/` — could escape that directory.
+// A name is written on the command line and into every record, so it
+// keeps to a set that needs no quoting and holds no `.` or `/`.
 const ENVIRONMENT_NAME_PATTERN = /^[a-z0-9_-]+$/;
 
-/** One named deployment target (docs/spec.md "Sessions, environments,
+/** One named deployment target (docs/spec.md "Environments and
  * secrets"). `version` is a function rather than a URL+jsonPath DSL:
  * nukadoko.config.ts is already executable TypeScript (Node loads it by
  * erasing its types), so a config author can call HTTP or exec directly instead of
@@ -52,9 +51,8 @@ const environmentConfigSchema = z
   })
   .strict();
 
-// A parameter type's own name, same character set as a session/environment
-// name (src/session/name.ts, ENVIRONMENT_NAME_PATTERN above) for the same
-// reason those are restricted: it is not filesystem-derived here, but it is
+// A parameter type's own name, same character set as an environment name
+// (ENVIRONMENT_NAME_PATTERN above): it is not filesystem-derived here, but it is
 // still the identifier a pattern's `{key:type}` and this list's collision
 // check both key off of, so keeping it to an unambiguous, easy-to-diff
 // character set costs nothing and rules out a name that would need
@@ -224,13 +222,6 @@ export const configSchema = z
      * whole point, not an oversight. Default `[]`: nothing extra is scanned
      * unless named. */
     additionalFeatureDirs: z.array(z.string()).default([]),
-    /** Markdown oaths compiled into the same pickles as a `.feature`
-     * file (src/feature/parse-oath.ts). Each entry is a file or a
-     * directory of `*.md`. Default `[]`: a README or other Markdown
-     * file is not a scenario until named. `nuka check` and `nuka tend` read
-     * the list. `nuka run` reads an entry when the path is given, or
-     * when a directory target contains it. */
-    oaths: z.array(z.string()).default([]),
     stateDir: z.string().default(".nukadoko"),
     baseURL: z.string().optional(),
     envFiles: z.array(z.string()).optional(),
@@ -322,26 +313,19 @@ export const configSchema = z
      * both sides, so one key would need a hand-written union or
      * intersection type instead of deferring to Playwright, the same
      * problem `browser`'s doc comment above already argues against.
-     * `baseURL` and `storageState` are rejected below even though
-     * `BrowserContextOptions` allows them: `config.baseURL` is meant to be
-     * the only place a project states its base URL, and nukadoko's session
-     * mechanism is what owns `storageState` (src/context/create-context.ts)
-     * — accepting either here would let a config value silently disagree
-     * with, or overwrite, the one nukadoko already injects. Rejecting them
-     * outright (rather than silently dropping them) is deliberate: a
-     * dropped option would leave a config author with something written
-     * that quietly does nothing. */
+     * `baseURL` is rejected below even though `BrowserContextOptions`
+     * allows it: `config.baseURL` is meant to be the only place a project
+     * states its base URL, and accepting it here would let a config value
+     * silently disagree with the one nukadoko already injects. Rejecting it
+     * outright (rather than silently dropping it) is deliberate: a dropped
+     * option would leave a config author with something written that
+     * quietly does nothing. */
     browserContext: z
       .custom<BrowserContextOptions>((value) => typeof value === "object" && value !== null)
       .superRefine((value, ctx) => {
         if (value.baseURL !== undefined) {
           ctx.addIssue(
             "browserContext.baseURL is not accepted: config.baseURL is the only source for baseURL; setting it again here would give config two disagreeing answers for the same question.",
-          );
-        }
-        if (value.storageState !== undefined) {
-          ctx.addIssue(
-            "browserContext.storageState is not accepted: nukadoko's session mechanism sets storageState itself; setting it here would silently override (and could break) a restored session.",
           );
         }
       })
@@ -352,18 +336,13 @@ export const configSchema = z
      * `RequestContextOptions` (defined above `configSchema`) is how this
      * keeps deferring to Playwright's own type despite Playwright not
      * exporting a name for it — see that type's own doc comment. Same
-     * reserved-key rejection, and the same reasons, as `browserContext`. */
+     * reserved-key rejection, and the same reason, as `browserContext`. */
     requestContext: z
       .custom<RequestContextOptions>((value) => typeof value === "object" && value !== null)
       .superRefine((value, ctx) => {
         if (value.baseURL !== undefined) {
           ctx.addIssue(
             "requestContext.baseURL is not accepted: config.baseURL is the only source for baseURL; setting it again here would give config two disagreeing answers for the same question.",
-          );
-        }
-        if (value.storageState !== undefined) {
-          ctx.addIssue(
-            "requestContext.storageState is not accepted: nukadoko's session mechanism sets storageState itself; setting it here would silently override (and could break) a restored session.",
           );
         }
       })

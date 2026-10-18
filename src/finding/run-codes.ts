@@ -18,16 +18,6 @@ const RUN_CODES = {
     description: "The Allure or the messages emitter could not write part of its output; the run and its records are not affected.",
     fix: "Correct what the message names, such as the output directory's permissions, and run again.",
   },
-  "explore-error": {
-    severity: "failed",
-    description: "nuka experimental explore stopped on an error in the model or the relation itself, not in a step.",
-    fix: "Correct the model or the relation code the message names.",
-  },
-  "explore-failed": {
-    severity: "failed",
-    description: "nuka experimental explore found a sequence of steps that fails; the shrunk scenario is on stdout.",
-    fix: "Name the scenario on stdout, add it to a feature file, and correct the step or the code under test.",
-  },
   "fixture-teardown-failed": {
     severity: "warning",
     description: "A fixture's teardown threw after its scenario or the run finished.",

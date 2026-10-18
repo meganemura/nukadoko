@@ -9,6 +9,39 @@ just until 0.1.
 
 ### Breaking
 
+- **Five surfaces are removed: `--quiet`, Markdown oaths, sessions,
+  `nuka experimental explore` with its model API, and `nukadoko/mcp`.**
+  Each was a second way to do something the rest of nukadoko already
+  does, and each is refused by name with what to do instead, never
+  ignored.
+  - `nuka run --quiet` is refused with `removed-command`; `--json` already
+    prints one document on stdout and nothing on stderr.
+  - The `oaths` config key is refused with the new `config-key-removed`
+    refusal code, and a `.md` target of `nuka check` or `nuka run` is
+    refused with `removed-command`. The Markdown parser and the
+    `feature-parse-error` wording for an oath are gone.
+  - `nuka session list`, `nuka session clear`, and `nuka do --session` are
+    refused with `removed-command`. Each `nuka do` call starts clean, and
+    nothing is written under `.nukadoko/cache/`. `browserContext` and
+    `requestContext` now pass `storageState` through to Playwright
+    instead of refusing it, so a login state file is named in the config.
+    The step record's `schema_version` is 3: its `session` field is gone.
+    `nuka clean` has no cache category, and its `--json` plan holds
+    `records` and `export`. The `invalid-session-name`,
+    `session-clear-failed`, `session-file-malformed`, `session-locked`,
+    `session-not-found`, and `invalid-environment-name` refusal codes are
+    gone.
+  - `nuka experimental explore` and `nuka explore` are refused with
+    `removed-command`. `experimental_defineModel`,
+    `experimental_defineRelation`, `experimental_modelCommand`, and
+    `experimental_relationEntry` are no longer exported, and the
+    `explore-*` check and run codes and `explore-target-unknown` are gone.
+  - The `nukadoko/mcp` export and the optional peer dependency on
+    `@modelcontextprotocol/client` are removed.
+  docs/spec.md drops "MCP servers", "Markdown oaths", and "Models and
+  relations", and "Sessions, environments, secrets" is now "Environments
+  and secrets". docs/upgrading.md says what a project changes.
+
 - **One directory per run: `.nukadoko/runs/<run_id>/` holds everything a
   `nuka run` measured.** A run's files were spread over
   `records/steps/`, `records/scenarios/`, and `records/runs/<run_id>/`,

@@ -24,10 +24,6 @@ export interface ProcessSignal {
   setScenarioCleanup(cleanup: SignalCleanup | null): void;
   /** Process-scope teardown for this invocation. */
   setProcessCleanup(cleanup: SignalCleanup | null): void;
-  /** Runs after both fixture cleanups, and only on the signal path.
-   * The normal path already releases a session lock from `finally`, which
-   * `process.exit` does not run. */
-  setSignalFinalizer(cleanup: SignalCleanup | null): void;
   /** Acts as if `signal` had arrived. A `nuka run --concurrency` worker
    * calls it when its parent is gone. */
   trigger(signal: NodeJS.Signals): void;
@@ -61,7 +57,6 @@ export function installProcessSignalHandlers(): ProcessSignal {
   let exiting = false;
   let scenarioCleanup: SignalCleanup | null = null;
   let processCleanup: SignalCleanup | null = null;
-  let signalFinalizer: SignalCleanup | null = null;
 
   const onSignal = (signal: NodeJS.Signals): void => {
     if (exiting) {
@@ -74,12 +69,10 @@ export function installProcessSignalHandlers(): ProcessSignal {
     // already holds the function that owns the fixtures.
     const scenario = scenarioCleanup;
     const processLevel = processCleanup;
-    const finalize = signalFinalizer;
     void (async () => {
       try {
         await scenario?.();
         await processLevel?.();
-        await finalize?.();
       } catch {
         // Teardown turns a fixture failure into a reported message. Anything
         // else still has to reach the exit below, or the process would stay
@@ -103,9 +96,6 @@ export function installProcessSignalHandlers(): ProcessSignal {
     },
     setProcessCleanup(cleanup) {
       processCleanup = cleanup;
-    },
-    setSignalFinalizer(cleanup) {
-      signalFinalizer = cleanup;
     },
     trigger: onSignal,
     stop() {

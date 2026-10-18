@@ -14,7 +14,6 @@ const ENTRY_DECLARATIONS: Readonly<Record<string, string>> = {
   nukadoko: "dist/index.d.ts",
   "nukadoko/compat": "dist/compat/index.d.ts",
   "nukadoko/matching": "dist/matching/index.d.ts",
-  "nukadoko/mcp": "dist/mcp/index.d.ts",
 };
 
 /** The names an entry's declaration file exports as types only: every name

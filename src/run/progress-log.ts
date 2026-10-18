@@ -10,10 +10,7 @@ import { shellWord } from "../shell/shell-word.js";
 // here writes to stderr only; stdout's one-JSON-record-per-scenario contract
 // (src/cli/run.ts) is untouched by any of it. Display only: nothing written
 // here is read back by any command, so its exact
-// wording is free to change without a compat concern. `--quiet` is mostly not this
-// file's concern: cli/run.ts decides which of these calls to make. The one
-// exception is the step logger, which alone knows whether a step failed,
-// and a failed step's lines survive the flag.
+// wording is free to change without a compat concern.
 
 /** One pickle step's own outcome, reported once it stops running.
  * `stepIndex` is 1-based ("step 3/20", how a person reads a position, not a
@@ -42,10 +39,6 @@ export interface StepProgressOptions {
   readonly stateDir: string;
   /** The run the step records belong to; they sit in its directory. */
   readonly runId: string;
-  /** Under `--quiet` only a failed step writes, and it writes the same lines
-   * it would without the flag. The flag asks for a quieter terminal, and a
-   * CI log that says FAIL but not why is the reason this output exists. */
-  readonly quiet: boolean;
 }
 
 // Playwright's assertion messages carry color codes; a CI log or a file
@@ -200,7 +193,6 @@ export function createStepProgressLogger(
   options: StepProgressOptions,
 ): (info: StepProgressInfo) => void {
   return (info: StepProgressInfo): void => {
-    if (options.quiet && info.status !== "failed") return;
     // The status is the word a step record uses for the same outcome, so a
     // search of stderr for `failed` finds the step its record calls failed.
     let text =
@@ -364,11 +356,8 @@ export function formatSummaryDuration(durationMs: number): string {
   return parts.join(" ");
 }
 
-/** The one line `nuka run` used to leave to the exit code alone —
- * always written, `--quiet` included: this and `writeOutputLocations`
- * above are each written exactly once per invocation, and "where did
- * output land" is never worth suppressing for a flag whose whole point is
- * a quieter terminal, not a silent one. */
+/** The one line `nuka run` used to leave to the exit code alone, written
+ * once per invocation. */
 export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void {
   stderr.write(
     `${summary.total} scenario${summary.total === 1 ? "" : "s"}: ${summary.passed} passed, ` +

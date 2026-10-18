@@ -17,9 +17,9 @@ import {
 // createAllureEmitter directly; this file only proves what cli/run.ts adds
 // on top: the default output location, config.allure.resultsDir overriding
 // it, the `hasPickles` gate that keeps a pickle-less run from creating
-// allure-results at all, and the two facts only a real `nuka run`
-// invocation can prove: `--quiet` leaves Allure's own output untouched, and
-// two separate invocations against the same feature share one historyId.
+// allure-results at all, and the fact only a real `nuka run`
+// invocation can prove: two separate invocations against the same feature
+// share one historyId.
 //
 // One result file per scenario now, never per step: every `resultFiles`
 // count below reads `record.length` (the number of scenario records `nuka
@@ -119,42 +119,6 @@ describe("nuka run: allure-results wiring", () => {
     expect(stdout.text()).toBe("");
     expect(stripRunProgressLines(stderr.text())).toBe("");
     expect(existsSync(path.join(rootDir, ".nukadoko", "export", "allure-results"))).toBe(false);
-  });
-
-  it("writes the same Allure output whether or not --quiet is given (the report's own granularity does not follow the terminal's)", async () => {
-    const quietDir = await copyFixtureToTempDir("run-project");
-    try {
-      const loudStdout = createCaptureSink();
-      const loudStderr = createCaptureSink();
-      await runCli(["run", "--records", "--no-check", "features/passing.feature"], { rootDir, stdout: loudStdout, stderr: loudStderr });
-
-      const quietStdout = createCaptureSink();
-      const quietStderr = createCaptureSink();
-      await runCli(["run", "--records", "--no-check", "features/passing.feature", "--quiet"], {
-        rootDir: quietDir,
-        stdout: quietStdout,
-        stderr: quietStderr,
-      });
-
-      // `--quiet` does change stderr (fewer progress lines) — proving that
-      // is not this test's job (tests/run-progress-log.test.ts already
-      // does). What this test proves is that Allure's own output is
-      // unaffected by it either way.
-      const loudResultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
-      const quietResultsDir = path.join(quietDir, ".nukadoko", "export", "allure-results");
-      expect(resultFiles(quietResultsDir)).toHaveLength(resultFiles(loudResultsDir).length);
-      expect(existsSync(path.join(quietResultsDir, "categories.json"))).toBe(true);
-
-      const loudNames = resultFiles(loudResultsDir)
-        .map((name) => (readResult(loudResultsDir, name) as { name?: string }).name)
-        .sort();
-      const quietNames = resultFiles(quietResultsDir)
-        .map((name) => (readResult(quietResultsDir, name) as { name?: string }).name)
-        .sort();
-      expect(quietNames).toEqual(loudNames);
-    } finally {
-      await removeTempDir(quietDir);
-    }
   });
 
   it("shares one historyId between two separate `nuka run` invocations against the same feature", async () => {

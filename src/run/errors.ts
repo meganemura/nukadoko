@@ -3,8 +3,7 @@
 // `cause`). Kept separate from the module that throws them
 // (select-pickles.ts) so callers (cli/run.ts, tests) can `instanceof` them
 // without pulling in that module's fs/gherkin dependencies — same
-// convention as config/errors.ts, discover/errors.ts, session/errors.ts,
-// environment/errors.ts.
+// convention as config/errors.ts, discover/errors.ts, environment/errors.ts.
 
 export class FeatureFileNotFoundError extends Error {
   readonly code = "target-not-found";
@@ -105,23 +104,28 @@ export class NoFeatureFilesFoundError extends Error {
   readonly resolvedPath: string;
   readonly fix: string;
 
-  constructor(
-    scannedPaths: readonly string[],
-    resolvedPath: string,
-    consideredOaths = false,
-    oathDirectory = false,
-  ) {
+  constructor(scannedPaths: readonly string[], resolvedPath: string) {
     const relativePath = scannedPaths.join('" and "');
-    super(
-      oathDirectory
-        ? `no Markdown file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`
-        : consideredOaths
-        ? `no .feature file or configured oath was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`
-        : `no .feature file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`,
-    );
+    super(`no .feature file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`);
     this.name = "NoFeatureFilesFoundError";
     this.relativePath = relativePath;
     this.resolvedPath = resolvedPath;
-    this.fix = `Add a ${oathDirectory ? "Markdown" : ".feature"} file under ${scannedPaths.join(" or ")}.`;
+    this.fix = `Add a .feature file under ${scannedPaths.join(" or ")}.`;
+  }
+}
+
+/** Thrown when a target names a Markdown file. Markdown oaths were
+ * removed, and parsing the file as Gherkin would report a parse error that
+ * says nothing about why. */
+export class MarkdownTargetError extends Error {
+  readonly code = "removed-command";
+  readonly relativePath: string;
+  readonly fix: string;
+
+  constructor(relativePath: string) {
+    super(`${relativePath} is a Markdown file: Markdown oaths were removed, and nukadoko reads scenarios from .feature files only`);
+    this.name = "MarkdownTargetError";
+    this.relativePath = relativePath;
+    this.fix = `Write the scenarios of ${relativePath} as Gherkin in a .feature file, and name that file.`;
   }
 }

@@ -26,13 +26,11 @@ const ENVELOPE_KEYS = ["schema_version", "nukadoko", "command", "verdict", "find
 
 describe("schema_version", () => {
   let runProject: string;
-  let exploreProject: string;
   const documents = new Map<DocumentKind, Record<string, unknown>>();
   const envelopes = new Map<string, Record<string, unknown>>();
 
   beforeAll(async () => {
     runProject = await copyFixtureToTempDir("run-concurrency-project");
-    exploreProject = await copyFixtureToTempDir("explore-relation-project");
     const parse = (text: string) => JSON.parse(text) as Record<string, unknown>;
     envelopes.set("check", parse(await cli(runProject, ["check", "--json", "features/basic/"])));
     envelopes.set("check --codes", parse(await cli(runProject, ["check", "--codes", "--json"])));
@@ -41,7 +39,7 @@ describe("schema_version", () => {
     envelopes.set("tend", parse(await cli(runProject, ["tend", "--json"])));
     envelopes.set("tend --codes", parse(await cli(runProject, ["tend", "--codes", "--json"])));
     envelopes.set("refused", parse(await cli(runProject, ["check", "--json", "features/nope.feature"])));
-    envelopes.set("session list", parse(await cli(runProject, ["session", "list", "--json"])));
+    envelopes.set("removed", parse(await cli(runProject, ["session", "list", "--json"])));
     documents.set("step_record", parse(await cli(runProject, ["do", "thing-exists", "--args", '{"name":"widget"}'])));
     await cli(runProject, ["clean"]);
     envelopes.set("run", parse(await cli(runProject, ["run", "--no-check", "--json", "features/basic/b.feature"])));
@@ -49,15 +47,10 @@ describe("schema_version", () => {
     const runDir = path.join(runProject, ".nukadoko", "runs");
     envelopes.set("run.json", parse(readFileSync(path.join(runDir, runId, "run.json"), "utf8")));
     envelopes.set("clean", parse(await cli(runProject, ["clean", "--dry-run", "--json"])));
-    envelopes.set(
-      "experimental explore",
-      parse(await cli(exploreProject, ["experimental", "explore", "features/reverse.ts", "--seed", "1", "--runs", "20", "--length", "6", "--json"])),
-    );
   }, 120_000);
 
   afterAll(async () => {
     await removeTempDir(runProject);
-    await removeTempDir(exploreProject);
   });
 
   it("covers every record kind", () => {
@@ -78,11 +71,10 @@ describe("schema_version", () => {
     ["tend", "tend", "passed"],
     ["tend --codes", "tend", "passed"],
     ["refused", "check", "refused"],
-    ["session list", "session list", "passed"],
+    ["removed", "session", "refused"],
     ["run", "run", "passed"],
     ["run.json", "run", "passed"],
     ["clean", "clean", "passed"],
-    ["experimental explore", "experimental explore", "failed"],
   ])("nuka %s --json prints the envelope first", (name, command, verdict) => {
     const document = envelopes.get(name)!;
     expect(Object.keys(document).slice(0, 5)).toEqual(ENVELOPE_KEYS);

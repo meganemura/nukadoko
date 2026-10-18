@@ -18,7 +18,7 @@ import { createStepTextMatcher } from "./feature-check.js";
 // stays beside it.
 //
 // The set is always judged on every feature the project scans (featuresDir,
-// additionalFeatureDirs, and oaths, the files `tend` reads), never on the
+// and additionalFeatureDirs, the files `tend` reads), never on the
 // files a target selected. Judged on a selection, a step bound in a file
 // outside it would be called unbound, the same undefined line would read
 // differently under `nuka check a.feature` and `nuka check a.feature

@@ -92,32 +92,8 @@ const CHECK_CODES = {
     severity: "warning",
     fix: "Create the file, or remove it from that environment's envFiles in the config file.",
   },
-  "explore-browser-step": {
-    description:
-      "A model command or a relation sequence entry names a step that needs a browser (page, context, or pageAs). Explore does not run that step.",
-    severity: "error",
-    fix: "Remove the step from the model or the relation. Explore runs only steps that need no browser.",
-  },
-  "explore-empty-model": {
-    description:
-      "A model declares no commands, so every sequence it builds is empty and passes.",
-    severity: "error",
-    fix: "Add at least one command to the model.",
-  },
-  "explore-unknown-step": {
-    description:
-      "A model command or a relation sequence entry names a step that is not in the vocabulary.",
-    severity: "error",
-    fix: "Correct the step name, or add the step. nuka steps lists the names in the vocabulary.",
-  },
-  "explore-unseeded-random": {
-    description:
-      "A model command's args, pre, or next, or a relation's drawn source, calls Math.random directly. The seed does not drive that value, so a run cannot be replayed or shrunk.",
-    severity: "error",
-    fix: "Draw the value with draw.int or draw.pick, so that the seed drives it.",
-  },
   "feature-parse-error": {
-    description: "A .feature file or a Markdown oath could not be parsed, so nothing in it was checked.",
+    description: "A .feature file could not be parsed, so nothing in it was checked.",
     severity: "error",
     fix: "Correct the Gherkin at the line that the message names, then run nuka check on the file again.",
   },

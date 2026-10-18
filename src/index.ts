@@ -70,13 +70,6 @@ export type {
   StepRunResult,
 } from "./step/define-step.js";
 export { defineStep, InvalidStepDefinitionError } from "./step/define-step.js";
-export {
-  experimental_defineModel,
-  experimental_defineRelation,
-  experimental_modelCommand,
-  experimental_relationEntry,
-} from "./step/define-explore.js";
-export type { Draw, Model, ModelCommand, Relation, RelationSource, RelationStep, SourceDraw } from "./step/define-explore.js";
 // `z` itself, not merely its type: `vocabulary.ts` calls
 // `z.toJSONSchema(entry.step.args)` and `strict-args.ts` reads a schema's
 // own `.type` property to decide whether to strictify it, both against

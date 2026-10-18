@@ -12,14 +12,13 @@ import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../src/run/
 
 function stepRecord(id: string, status: "passed" | "failed", used: boolean): StepRecord {
   const base = {
-    schema_version: 2 as const,
+    schema_version: 3 as const,
     nukadoko: "0.17.0",
     step_record_id: id,
     step: "a-step",
     kind: "run" as const,
     args: {},
     environment: "default",
-    session: null,
     scenario_record_id: "scn-1",
     run_id: "run-1",
     started_at: "2026-10-18T00:00:00.000Z",
@@ -48,7 +47,6 @@ function record(steps: ScenarioStepEntry[], status: "passed" | "failed", screens
     line: 3,
     status,
     environment: "default",
-    session: null,
     started_at: "2026-10-18T00:00:00.000Z",
     finished_at: "2026-10-18T00:00:02.000Z",
     steps,

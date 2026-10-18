@@ -7,8 +7,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // tests/fixtures/environments-project —
 // baseURL/envFiles layering, unknown-environment setup failure,
 // `policy: "read-only"` refusal, and the `version` probe (success/throw).
-// Session-scoping-by-environment tests live in their own file
-// (session-environments.test.ts); pure resolution-logic unit tests live in
+// Pure resolution-logic unit tests live in
 // resolve-environment.test.ts and probe-version.test.ts.
 
 describe("nuka do --env: baseURL/envFiles layering", () => {

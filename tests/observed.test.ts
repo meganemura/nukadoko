@@ -99,9 +99,9 @@ describe("measured mutates: request-side observed counts", () => {
       }),
     );
     expect(observed).toEqual([
-      [2, "setup-step", { http_reads: null, http_writes: null, processes: null }],
-      [2, "only-a-read-happens", { http_reads: 1, http_writes: 0, processes: null }],
-      [2, "a-fetch-read-happens", { http_reads: null, http_writes: null, processes: null }],
+      [3, "setup-step", { http_reads: null, http_writes: null, processes: null }],
+      [3, "only-a-read-happens", { http_reads: 1, http_writes: 0, processes: null }],
+      [3, "a-fetch-read-happens", { http_reads: null, http_writes: null, processes: null }],
     ]);
     expect(await readFile(path.join(rootDir, "summary.md"), "utf8")).toContain(
       "2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`), so nothing was compared for them.",

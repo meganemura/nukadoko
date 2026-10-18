@@ -28,7 +28,7 @@ const drawnStep = gs.tuples(
 
 function stepRecordFor(index: number, startMs: number, stopMs: number): StepRecord {
   const stepRecord: StepRecord = {
-    schema_version: 2,
+    schema_version: 3,
     nukadoko: "0.0.0-test",
     step_record_id: `step-${index}`,
     step: `step ${index}`,
@@ -37,7 +37,6 @@ function stepRecordFor(index: number, startMs: number, stopMs: number): StepReco
     result: null,
     status: "passed",
     environment: "default",
-    session: null,
     scenario_record_id: "scn-1",
     run_id: "run-1",
     started_at: new Date(startMs).toISOString(),
@@ -74,7 +73,6 @@ describe("Allure and cucumber-messages place the steps of one record the same wa
         line: 2,
         status: "passed",
         environment: "default",
-        session: null,
         started_at: new Date(SCENARIO_START_MS).toISOString(),
         finished_at: new Date(SCENARIO_START_MS + 8000).toISOString(),
         steps: entries,

@@ -12,7 +12,6 @@ import type {
 } from "playwright";
 import type { ScreenshotEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
-import type { StorageState } from "../session/storage-state.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 import { instrumentApiRequestContext } from "./http-log.js";
@@ -171,7 +170,7 @@ export interface TracedContextOptions {
    * into its file names (context-name.ts's `contextFileName`). */
   as?: string;
   /** Passed straight to `browser.newContext`. The caller merges
-   * `config.browserContext`, `baseURL`, `storageState`, and a `pageAs`
+   * `config.browserContext`, `baseURL`, and a `pageAs`
    * call's own options into it; this module adds nothing of its own. */
   contextOptions: BrowserContextOptions;
   /** Where the final screenshot is written. Must already exist. */
@@ -202,13 +201,6 @@ export interface TracedContextOptions {
 
 export interface TracedContextHandle {
   readonly page: Page;
-  /** Snapshot of the context's current storageState, for the executor to
-   * persist as the session's new state. Must be called *before*
-   * `finalize()` (which closes the context). Swallows failures (returns
-   * `undefined`): a step can close or crash the page before returning, and
-   * `undefined` here means create-context.ts's `dispose` leaves the
-   * existing session file untouched. */
-  collectStorageState(): Promise<StorageState | undefined>;
   /** Opens a new trace chunk (`tracing.startChunk({ title })`); `title`
    * lands on the chunk's own `context-options` entry. Must not be called
    * while a chunk is already open. A failure here is not swallowed: it
@@ -316,14 +308,6 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
 
     return {
       page,
-      async collectStorageState(): Promise<StorageState | undefined> {
-        try {
-          return await context.storageState();
-        } catch {
-          // See the interface's own doc comment above.
-          return undefined;
-        }
-      },
       async beginStepChunk(title: string): Promise<void> {
         // Not swallowed: see the interface's own doc comment above.
         await context.tracing.startChunk({ title });

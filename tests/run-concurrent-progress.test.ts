@@ -64,19 +64,6 @@ describe("nuka run --concurrency progress", () => {
     }
   });
 
-  it("--quiet suppresses the start line, as it does the finishing line", async () => {
-    const stderr = createCaptureSink();
-    expect(
-      await runCli(["run", "features/basic/", "--concurrency", "2", "--quiet"], {
-        rootDir,
-        stdout: createCaptureSink(),
-        stderr,
-      }),
-    ).toBe(0);
-    expect(stderr.text()).not.toContain("scenario start ");
-    expect(stderr.text()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
-  });
-
   it("writes no start line at concurrency 1, where the boundary line is already written at the start", async () => {
     const stderr = createCaptureSink();
     expect(

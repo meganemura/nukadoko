@@ -123,7 +123,6 @@ export interface RunConcurrentOptions {
    * `@nukadoko:serial` file still runs alone and two environments never
    * share a target at once. */
   readonly conditions: readonly ConcurrentCondition[];
-  readonly quiet: boolean;
   readonly concurrency: number;
   /** `--repeat`; each worker runs its own files this many times
    * (src/cli/run.ts's `RunRunOptions.repeat`). */
@@ -182,7 +181,6 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     config,
     runId,
     conditions,
-    quiet,
     concurrency,
     repeat,
     probe,
@@ -291,14 +289,12 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     }
 
     if (envelope.kind === "scenario-started") {
-      if (!quiet) {
-        writeScenarioStarted(progress, {
-          worker,
-          relativeFeaturePath: envelope.feature,
-          line: envelope.line,
-          name: envelope.name,
-        });
-      }
+      writeScenarioStarted(progress, {
+        worker,
+        relativeFeaturePath: envelope.feature,
+        line: envelope.line,
+        name: envelope.name,
+      });
       return;
     }
 
@@ -317,17 +313,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
     onRecord(record);
 
-    if (!quiet) {
-      writeScenarioBoundary(progress, {
-        index: completedCount,
-        total: expectedRecords,
-        relativeFeaturePath: record.feature,
-        line: record.line,
-        name: record.scenario,
-      });
-    }
-    // The worker's own logger already dropped every line `--quiet` hides,
-    // so what is left here is a failed step's lines, which always print.
+    writeScenarioBoundary(progress, {
+      index: completedCount,
+      total: expectedRecords,
+      relativeFeaturePath: record.feature,
+      line: record.line,
+      name: record.scenario,
+    });
     for (const line of stepLines) {
       progress.write(`${line}\n`);
     }
@@ -374,7 +366,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       if (interruptedBy !== null) {
         return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
       }
-      const child = spawnRunWorker({ rootDir, runId, env: envArg, quiet, featureListPath, repeat, probe });
+      const child = spawnRunWorker({ rootDir, runId, env: envArg, featureListPath, repeat, probe });
       liveWorkers.add(child);
 
       const stdoutBuffer = createLineBuffer((line) => {
@@ -448,7 +440,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const condition of conditions) {
       // A signal stops the run before the next environment starts.
       if (interruptedBy !== null) break;
-      if (conditions.length > 1 && !quiet) progress.write(`environment ${condition.environment}\n`);
+      if (conditions.length > 1) progress.write(`environment ${condition.environment}\n`);
       await runCondition(condition.envArg);
     }
   } finally {

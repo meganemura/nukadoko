@@ -94,10 +94,9 @@ async function runTypeScriptCapture(args, cwd, outputPath) {
   }
 }
 
-// Both optional peers are left out of the install (`--omit=peer`), so every
-// stage below runs the way a project that never opens a browser and never
-// talks to an MCP server would.
-const OPTIONAL_PEERS = ["@modelcontextprotocol/client", "playwright"];
+// The optional peer is left out of the install (`--omit=peer`), so every
+// stage below runs the way a project that never opens a browser would.
+const OPTIONAL_PEERS = ["playwright"];
 
 async function verifyOptionalPeerTypeIsolation(projectDir) {
   const checkDir = path.join(projectDir, "peer-isolation");
@@ -158,10 +157,6 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
       name: "negative-control",
       source: 'import { __nukadoko_missing_export__ } from "nukadoko";\nvoid __nukadoko_missing_export__;',
     },
-    {
-      name: "mcp-surface",
-      source: 'import * as mcp from "nukadoko/mcp";\nvoid mcp;',
-    },
   ];
 
   const results = new Map();
@@ -187,36 +182,23 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
 
   const publicResult = results.get("public-surfaces");
   if (publicResult.code !== 0) {
-    throw new Error(`public type surfaces failed without the optional peers:\n${publicResult.output}`);
+    throw new Error(`public type surfaces failed without the optional peer:\n${publicResult.output}`);
   }
-  log("public type surfaces passed without the optional peers");
+  log("public type surfaces passed without the optional peer");
 
   const checkedLibsResult = results.get("public-surfaces-checked-libs");
   if (checkedLibsResult.code !== 0) {
     throw new Error(
-      `public type surfaces failed under skipLibCheck: false without the optional peers:\n${checkedLibsResult.output}`,
+      `public type surfaces failed under skipLibCheck: false without the optional peer:\n${checkedLibsResult.output}`,
     );
   }
-  log("public type surfaces passed under skipLibCheck: false without the optional peers");
+  log("public type surfaces passed under skipLibCheck: false without the optional peer");
 
   const negativeResult = results.get("negative-control");
   if (negativeResult.code === 0) {
     throw new Error("negative typecheck control passed despite importing a missing export");
   }
   log("negative typecheck control failed as expected");
-
-  const mcpResult = results.get("mcp-surface");
-  if (mcpResult.code === 0) {
-    throw new Error("nukadoko/mcp passed without its optional peer");
-  }
-  const diagnostics = mcpResult.output.split("\n").filter((line) => /\berror TS\d+:/.test(line));
-  const unrelatedDiagnostics = diagnostics.filter((line) => !line.includes("@modelcontextprotocol/client"));
-  if (diagnostics.length === 0 || unrelatedDiagnostics.length > 0) {
-    throw new Error(
-      `nukadoko/mcp did not fail only for the optional peer:\n${mcpResult.output}`,
-    );
-  }
-  log("nukadoko/mcp failed only for the missing optional peer");
 }
 
 // A project with `declaration: true` (what `tsc --init` writes, and what

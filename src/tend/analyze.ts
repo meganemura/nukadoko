@@ -116,12 +116,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
 
   const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   const scannedFeatureDirs = [config.featuresDir, ...config.additionalFeatureDirs];
-  const { features } = loadFeaturesFromDirs(
-    rootDir,
-    config.featuresDir,
-    config.additionalFeatureDirs,
-    config.oaths,
-  );
+  const { features } = loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs);
   const occurrences = resolveStepOccurrences(features, patterns);
 
   const errors: TendIssue[] = [];

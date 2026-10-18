@@ -66,7 +66,6 @@ function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
     line: 5,
     status: "passed",
     environment: "default",
-    session: null,
     started_at: "2026-08-01T00:00:00.000Z",
     finished_at: "2026-08-01T00:00:03.000Z",
     steps: [],
@@ -85,7 +84,6 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     result: null,
     status: "passed",
     environment: "default",
-    session: null,
     scenario_record_id: "scn-1",
     started_at: "2026-08-01T00:00:00.500Z",
     finished_at: "2026-08-01T00:00:01.000Z",
@@ -985,20 +983,18 @@ describe("mapScenario: parameter modes and context parameters read straight from
     expect(param!.excluded).toBeFalsy();
   });
 
-  it("marks session/target_version excluded and keeps environment in the identity, read from record fields directly", () => {
+  it("marks target_version excluded and keeps environment in the identity, read from record fields directly", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const record = baseRecord({
       steps: [],
       environment: "staging",
-      session: "sess-1",
       target_version: "9.9.9",
     });
 
     const mapped = callMapScenario({ record, gherkinDocument, pickle });
 
     expect(mapped.parameters).toContainEqual({ name: "environment", value: "staging" });
-    expect(mapped.parameters).toContainEqual({ name: "session", value: "sess-1", excluded: true });
     expect(mapped.parameters).toContainEqual({ name: "target_version", value: "9.9.9", excluded: true });
   });
 
@@ -1013,14 +1009,13 @@ describe("mapScenario: parameter modes and context parameters read straight from
     expect(historyOf("flag-on")).toBe(historyOf("flag-on"));
   });
 
-  it("omits session when null and target_version when absent", () => {
+  it("omits target_version when absent", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const record = baseRecord({ steps: [], session: null });
+    const record = baseRecord({ steps: [] });
 
     const mapped = callMapScenario({ record, gherkinDocument, pickle });
 
-    expect(mapped.parameters.some((p) => p.name === "session")).toBe(false);
     expect(mapped.parameters.some((p) => p.name === "target_version")).toBe(false);
   });
 });

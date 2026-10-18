@@ -68,12 +68,12 @@ describe("verdictOf", () => {
 describe("commandPathOf", () => {
   const commands = new Map<string, readonly string[]>([
     ["check", []],
-    ["session", ["list", "start"]],
+    ["skill", ["path", "list"]],
   ]);
 
   it("names the command and subcommand an argv starts with, skipping flags", () => {
-    expect(commandPathOf(["session", "--env", "staging"], commands)).toBe("session");
-    expect(commandPathOf(["--json", "session", "start", "s1"], commands)).toBe("session start");
+    expect(commandPathOf(["skill", "--env", "staging"], commands)).toBe("skill");
+    expect(commandPathOf(["--json", "skill", "list", "s1"], commands)).toBe("skill list");
     expect(commandPathOf(["check", "features/a.feature"], commands)).toBe("check");
     expect(commandPathOf(["bogus"], commands)).toBe("");
     expect(commandPathOf([], commands)).toBe("");
@@ -82,7 +82,7 @@ describe("commandPathOf", () => {
   it("never names a command the table does not hold", () =>
     hegel.test((tc) => {
       const argv = tc.draw(
-        gs.arrays(gs.oneOf(gs.sampledFrom(["check", "session", "list", "start", "--json", "-x"]), gs.text({ maxSize: 8 })), {
+        gs.arrays(gs.oneOf(gs.sampledFrom(["check", "skill", "path", "list", "--json", "-x"]), gs.text({ maxSize: 8 })), {
           maxSize: 5,
         }),
       );
@@ -143,10 +143,10 @@ describe("a --json command that cannot report prints a refused envelope on stdou
       argv: ["experimental", "explore", "models/a.ts", "--json", "--runs", "0"],
       root: "basic-project",
       finding: {
-        code: "invalid-value",
-        message: "--runs must be a whole number of 1 or more (got 0).",
-        fix: "Correct the flag's value as the message says.",
-        do: "nuka experimental explore --help",
+        code: "removed-command",
+        message: "`nuka experimental explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
+        fix: "Write each sequence the model found as a scenario in a feature file.",
+        do: "nuka check",
       },
     },
     {
@@ -157,7 +157,12 @@ describe("a --json command that cannot report prints a refused envelope on stdou
     {
       argv: ["explore", "--json", "models/a.ts"],
       root: "basic-project",
-      finding: { code: "removed-command", message: "`nuka explore` moved to `nuka experimental explore`", do: "nuka experimental explore --json models/a.ts" },
+      finding: {
+        code: "removed-command",
+        message: "`nuka explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
+        fix: "Write each sequence the model found as a scenario in a feature file.",
+        do: "nuka check",
+      },
     },
     {
       argv: ["check", "--json", "--nope"],
@@ -181,7 +186,6 @@ describe("a --json command that cannot report prints a refused envelope on stdou
     ["check", "--json"],
     ["tend", "--json"],
     ["clean", "--json", "--dry-run"],
-    ["session", "list", "--json"],
   ])("nuka %s %s on an invalid config", async (...argv) => {
     const result = await cli(argv, fixture("invalid-config-project"));
 

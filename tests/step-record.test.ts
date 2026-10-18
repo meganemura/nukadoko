@@ -34,7 +34,7 @@ describe("writeStepRecord", () => {
 
   it("writes record.json under the given directory", async () => {
     const stepRecord: StepRecord = {
-      schema_version: 2,
+      schema_version: 3,
       nukadoko: "0.0.0-test",
       step_record_id: "step-20260801-143022-a1b2",
       step: "noop",
@@ -43,7 +43,6 @@ describe("writeStepRecord", () => {
       result: {},
       status: "passed",
       environment: "default",
-      session: null,
       scenario_record_id: null,
       run_id: null,
       started_at: new Date().toISOString(),

@@ -242,7 +242,7 @@ shared World, outside any step's own boundary).
 
 Nothing above asked for measurement -- it came from switching the import.
 The seeding step's own step record (`step-...-hkkk` above), real captured
-output (`evidence`/`environment`/`session`/timestamps trimmed for space):
+output (`evidence`/`environment`/timestamps trimmed for space):
 
 ```json
 {

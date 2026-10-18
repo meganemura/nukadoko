@@ -109,6 +109,18 @@ function suggestFor(key: string, known: readonly string[] | undefined): string {
   return match === undefined ? "" : ` (did you mean "${match}"?)`;
 }
 
+// A key an earlier release read, with what replaces it. Refused by name
+// before the schema runs: `.strict()` alone would call it an unknown key,
+// which says what is wrong and not what to write instead.
+const REMOVED_CONFIG_KEYS: Readonly<Record<string, string>> = {
+  oaths: "nukadoko reads scenarios from .feature files only. Write each Markdown oath as a .feature file under featuresDir.",
+};
+
+function removedKeysIn(raw: unknown): string[] {
+  if (raw === null || typeof raw !== "object") return [];
+  return Object.keys(REMOVED_CONFIG_KEYS).filter((key) => Object.hasOwn(raw, key));
+}
+
 // A Promise has no own enumerable keys, so an object schema parses it as
 // `{}` and fills every default. That is the same silent drop as a missing
 // default export. Any thenable has that shape, so the check is `then`,
@@ -184,7 +196,7 @@ export function resolveConfigFileName(rootDir: string): string {
 // suite) calls it once per command, so a load per call would
 // grow that process by a graph per call. So the parsed result is kept per root, and the load
 // happens once for each version of the file. One process can outlive an
-// edit to the config (runCli called twice, the MCP server),
+// edit to the config (runCli called twice),
 // so the kept result is reused only while the same file name exists with
 // the same mtime and size; a stat per call costs far less than a load.
 // A module the config imports is not part of that check. A failed load is
@@ -283,6 +295,16 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
       );
     }
     raw = mod.default;
+  }
+
+  const removed = removedKeysIn(raw);
+  if (removed.length > 0) {
+    throw new ConfigError(
+      `Invalid config at ${configPath}: ${removed.map((key) => `${key} was removed: ${REMOVED_CONFIG_KEYS[key]}`).join("; ")}`,
+      configPath,
+      { fix: `Remove ${removed.join(" and ")} from ${resolved?.fileName ?? CONFIG_FILE_NAME}.` },
+      { code: "config-key-removed" },
+    );
   }
 
   const result = configSchema.safeParse(raw);

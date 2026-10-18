@@ -17,7 +17,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 //   { "kind": "note", "text": string }
 //
 // Argv contract (never yargs — this is not a CLI command):
-//   <rootDir> <runId> <env|""> <quiet:0|1> <featureListPath> <repeat> <probe:0|1>
+//   <rootDir> <runId> <env|""> <featureListPath> <repeat> <probe:0|1>
 // `featureListPath` names a temp file, one repo-relative `.feature` path per
 // line, in the exact order this worker should run them. `repeat` is how
 // many times the worker runs that whole list (`nuka run --repeat`), a
@@ -42,7 +42,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // `"scenario"` bundles everything one finished pickle produced: the record
 // itself, the per-step progress lines src/run/progress-log.ts's
 // `createStepProgressLogger` would have written directly to stderr under
-// `--concurrency 1` (already fully rendered text, only a failed step's under `--quiet`,
+// `--concurrency 1` (already fully rendered text,
 // since a step's own "N/total" numbering is local to its scenario and needs
 // no renumbering the way a scenario boundary line's own index does), and
 // any fixture-teardown warning that scenario's own execution produced
@@ -57,8 +57,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // straight to stderr under `--concurrency 1`: a version-probe warning, an
 // Allure emitter setup failure, a BeforeAll/AfterAll failure. None of these
 // are scoped to one scenario, so they carry no completion-order index and
-// the parent simply relays the text as its own stderr line, unconditional
-// on `--quiet` exactly as `nuka run` already treats each of them today.
+// the parent simply relays the text as its own stderr line.
 
 /** Sent the moment a worker begins one pickle, before its first step runs.
  * The parent turns it into the one line that says what is running now

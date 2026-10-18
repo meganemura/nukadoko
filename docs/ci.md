@@ -111,7 +111,7 @@ jobs:
       - run: npm ci --ignore-scripts
       # `nuka run` opens a browser; install it here, not on the `check`
       # job above, which never launches one. `chromium` is
-      # `browserType`'s own default (docs/spec.md "Sessions, environments,
+      # `browserType`'s own default (docs/spec.md "Environments and
       # secrets"); add `firefox`/`webkit` too if `browserType` names one
       # of them. `--with-deps` is a Linux-runner requirement: without it,
       # Playwright's own browser binary is present but missing the system
@@ -212,7 +212,7 @@ of the above; these four are what changes.
   `playwright.config.ts` of its own to read that from:
   `browserType` in `nukadoko.config.ts` picks the engine (`"chromium"` by
   default), so the install command above names it explicitly. Firefox and
-  webkit each need their own binary too (see "Sessions, environments,
+  webkit each need their own binary too (see "Environments and
   secrets" in [docs/spec.md](spec.md)); add the ones `browserType` (or a
   test matrix across it) actually needs.
 - **The app under test needs starting by hand.** This is the one most
@@ -229,15 +229,13 @@ of the above; these four are what changes.
   the end of every run (see "Artifacts" in
   [docs/spec.md](spec.md#artifacts)), so on a persistent runner
   `.nukadoko/runs/` and the export output stay the size of that many
-  runs. What it never removes is `.nukadoko/cache/` (session files a
-  `nuka do`/session use can leave) and an `allure-results/` directory
+  runs. What it never removes is an `allure-results/` directory
   written before nukadoko kept a per-run manifest of its files. A
-  GitHub-hosted runner is a fresh virtual machine per job, so neither
-  matters there. A self-hosted or otherwise persistent runner has two
-  fixes for them: `rm -rf .nukadoko` at the start of the job, or
+  GitHub-hosted runner is a fresh virtual machine per job, so it does not
+  matter there. A self-hosted or otherwise persistent runner has two
+  fixes for it: `rm -rf .nukadoko` at the start of the job, or
   `npx nuka clean` (see its own `--help`), which does the same thing more
-  narrowly and refuses outright if a live `nuka session` is somehow still
-  running against that runner.
+  narrowly.
 - **`nuka tend` needs its own trigger.** Nothing runs it periodically
   unless a workflow says so; the `tend` job above is that trigger, kept
   off the `check`/`run` path on purpose (see "Tending" in
@@ -357,8 +355,8 @@ file this project has watched go green on a real runner.
 It also says nothing about where the Allure output goes after the job,
 for a project that turns the Allure emitter on (`allure: {}`; it is off by
 default).
-Traces and screenshots are not redacted (see "Sessions, environments,
-secrets" in [docs/spec.md](spec.md#sessions-environments-secrets)): the
+Traces and screenshots are not redacted (see "Environments and
+secrets" in [docs/spec.md](spec.md#environments-and-secrets)): the
 `http.jsonl` beside them has secrets replaced, but a trace holds the
 browser's own state, cookies included, and a screenshot holds whatever the
 page showed. A run directory or an `allure-results/` directory uploaded as

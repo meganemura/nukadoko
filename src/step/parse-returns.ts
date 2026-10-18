@@ -4,7 +4,7 @@ import { declaresReturns, type Step } from "./define-step.js";
 
 // Responsibility: parse what a typed step's `run` gave back against its
 // `returns`, and word the failure where zod's own text names neither the
-// cause nor the fix. `nuka run`, `nuka do`, explore, and a part reached
+// cause nor the fix. `nuka run`, `nuka do`, and a part reached
 // through `call` all parse here, so a step passes or fails the same way on
 // each. Does not run the step or write a record.
 

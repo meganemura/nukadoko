@@ -8,7 +8,7 @@
 // the `nuka run --json` envelope, so the envelope's number versions it.
 
 export const SCHEMA_VERSIONS = {
-  step_record: 2,
+  step_record: 3,
 } as const;
 
 export type DocumentKind = keyof typeof SCHEMA_VERSIONS;

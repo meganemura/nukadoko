@@ -68,7 +68,7 @@ import { formatVocabularyError } from "./vocabulary.js";
 
 export interface RunScaffoldFeatureOptions {
   rootDir: string;
-  /** The `--feature` value: a feature file, an oath, or a directory. */
+  /** The `--feature` value: a feature file or a directory. */
   feature: string;
   stdout: WritableSink;
   stderr: WritableSink;
@@ -259,7 +259,7 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
   }
 
   const projectLines: ProjectLine[] = [];
-  const scanned = loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths).features;
+  const scanned = loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs).features;
   const selectedFiles = selected.features.map((file) => ({
     relativePath: file.relativePath,
     pickles: attachStepLines(file.pickles, file.gherkinDocument),

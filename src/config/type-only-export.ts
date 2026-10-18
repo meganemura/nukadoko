@@ -22,7 +22,6 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "DeclaredParameter",
     "DeclaredSnapshot",
     "DefaultReturns",
-    "Draw",
     "ErrorKind",
     "EvidenceAttachmentEntry",
     "EvidenceMeta",
@@ -38,8 +37,6 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "FromCandidate",
     "FromMap",
     "HttpOmittedCounts",
-    "Model",
-    "ModelCommand",
     "NamedTraceEntry",
     "NukadokoConfig",
     "NukadokoConfigInput",
@@ -50,9 +47,6 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "PollOptions",
     "PollRecord",
     "ProcessEntry",
-    "Relation",
-    "RelationSource",
-    "RelationStep",
     "ReplaceableFixtures",
     "RunCommandOptions",
     "RunCommandResult",
@@ -61,7 +55,6 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "Scratch",
     "ScreenshotEntry",
     "SectionEntry",
-    "SourceDraw",
     "Step",
     "StepDefinitionInput",
     "StepFixtures",
@@ -88,7 +81,6 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "WorldConstructorParams",
   ],
   "nukadoko/matching": ["StaticPatternInput", "StaticPatternResolution"],
-  "nukadoko/mcp": ["McpToolCallResult"],
 };
 
 const MISSING_EXPORT = /The requested module '([^'\r\n]+)' does not provide an export named '([^'\r\n]+)'/;

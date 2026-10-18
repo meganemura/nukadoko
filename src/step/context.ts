@@ -3,7 +3,7 @@ import type { z } from "zod";
 import type { Step } from "./define-step.js";
 
 // Responsibility: two related shapes, both types only — no implementation
-// (the harness that actually launches a browser, restores session state,
+// (the harness that actually launches a browser
 // and logs requests belongs to the execution slice, `nuka do` / `nuka
 // run`'s src/context/create-context.ts, not this one).
 //
@@ -151,8 +151,8 @@ export interface PollOptions {
 
 export interface StepFixtures {
   /** Playwright Page; the browser launches when this name is destructured
-   * (docs/spec.md "Context API") — restored from the session's
-   * storageState, with the configured baseURL wired into the browser
+   * (docs/spec.md "Context API"), in a fresh context built from
+   * `config.browserContext`, with the configured baseURL wired into the browser
    * context so `page.goto("/path")` resolves against it. A step that never
    * destructures `page` (or `context`) never causes a browser to launch at
    * all. */
@@ -174,8 +174,8 @@ export interface StepFixtures {
    * (src/context/context-name.ts). Closed when the scenario ends, after its
    * final screenshot (`final.<name>.png`). The context is `page.context()`. */
   readonly pageAs: (name: string, options?: BrowserContextOptions) => Promise<Page>;
-  /** Playwright APIRequestContext with the configured baseURL and the
-   * session's cookies; built when this name is destructured. */
+  /** Playwright APIRequestContext with the configured baseURL, built from
+   * `config.requestContext` when this name is destructured. */
   readonly request: APIRequestContext;
   /** Environment variables from the configured envFiles. A frozen copy of
    * the merged map: assigning a property throws in a step module, so a
@@ -331,13 +331,13 @@ export const BUILTIN_FIXTURE_NAMES: readonly string[] = Object.keys(FIXTURE_NAME
 export const BROWSER_FIXTURE_NAMES: ReadonlySet<string> = new Set<keyof FixtureBag>(["page", "context", "pageAs"]);
 
 export interface StepContext {
-  /** Playwright Page; browser launches on first call, restored from the
-   * session's storageState, with the configured baseURL wired into the
+  /** Playwright Page; browser launches on first call, in a fresh context
+   * built from `config.browserContext`, with the configured baseURL wired into the
    * browser context so `page.goto("/path")` resolves against it. */
   page(): Promise<Page>;
   /** The same function as `StepFixtures.pageAs`; see its doc comment. */
   pageAs(name: string, options?: BrowserContextOptions): Promise<Page>;
-  /** Playwright APIRequestContext with the configured baseURL and the session's cookies. */
+  /** Playwright APIRequestContext with the configured baseURL, built from `config.requestContext`. */
   request(): Promise<APIRequestContext>;
   /** Environment variables from the configured envFiles. A frozen copy of
    * the merged map: assigning a property throws in a step module, so a

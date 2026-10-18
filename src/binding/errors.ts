@@ -3,7 +3,7 @@
 // from the modules that throw them so callers (today: src/check/binding-
 // check.ts; later: `nuka run`'s matching layer) can `instanceof` them without
 // pulling in anything else — same convention as config/errors.ts,
-// discover/errors.ts, environment/errors.ts, session/errors.ts.
+// discover/errors.ts, environment/errors.ts.
 
 /** A `{...}` token had no `:` at all — docs/spec.md "Typed steps" requires
  * every parameter in a pattern to be named (`{key:type}`); a bare `{string}`/

@@ -17,7 +17,7 @@ import type { CheckIssue } from "./types.js";
 // there matters: `do`/`run` are already tolerant of a missing envFile
 // (loadEnvFiles contributes nothing for ENOENT). check's job here is to
 // surface that leniency, not turn it into a reason to fail (docs/spec.md
-// "Sessions, environments, secrets": the executor redacts when it writes a
+// "Environments and secrets": the executor redacts when it writes a
 // record surface; this warning is visibility only).
 //
 // That same

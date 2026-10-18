@@ -2,7 +2,7 @@ import { toStoredForm } from "../stored-form/stored-form.js";
 import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 
 // Responsibility: the one place a secret value actually becomes
-// `{{secret.NAME}}` text (docs/spec.md "Sessions, environments, secrets"). Pure — no I/O, no
+// `{{secret.NAME}}` text (docs/spec.md "Environments and secrets"). Pure — no I/O, no
 // knowledge of step records, http.jsonl, or stdout; callers (cli/do.ts,
 // context/http-log.ts) decide *what* to redact and *when*, this module only
 // knows *how*. Never reachable from a step's own `run`: redaction is

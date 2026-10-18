@@ -29,7 +29,7 @@ the program did not start (a missing build, a missing dependency, a `.js`
 import of a `.ts` file under `node`), and the step that ran it passed.
 When that program was Node and it crashed, the line shows the `Error:`
 line, not the location Node printed above it.
-`--quiet` keeps all of these. Open that path's `record.json` rather than
+Open that path's `record.json` rather than
 searching the records directory.
 
 Before repeating `nuka run <feature>`, read the failed step's own step
