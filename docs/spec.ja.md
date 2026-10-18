@@ -3575,7 +3575,14 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               TODO) with the capture, and the message
                               is "<key>: expected <value>, got
                               <actual>"; a custom type compares with
-                              deepEqual.
+                              deepEqual. When every feature line the
+                              pattern matches carries a docstring, args
+                              gets docstring: z.string(), and for a
+                              table, table: z.array(z.array(z.string()));
+                              --then compares it as it would a capture.
+                              With no such line, or lines that disagree,
+                              the key is left out. --command never gets
+                              one.
                               --from (repeatable) chains one key of an
                               earlier step's returns: the import of that
                               step's file, an args field typed by its
@@ -3638,7 +3645,10 @@ nuka scaffold --feature <path>
                               {value:float}, keyed value, value2, ... A
                               Then line (and its And/But) gets --then's
                               mutates: false, and with one capture
-                              --then's assertion body. The name is the pattern's
+                              --then's assertion body. A line with a
+                              docstring gets a docstring: z.string()
+                              key, and one with a table a table key of
+                              rows, which a Then compares. The name is the pattern's
                               literal words in kebab-case, with -2, -3
                               added past a name the project already
                               holds; lines that read as one pattern share

@@ -212,6 +212,8 @@ export interface UndefinedStepLine {
   readonly line: number | undefined;
   readonly text: string;
   readonly type: PickleStepType | undefined;
+  /** What the line carries below it, which fills one args key no capture fills. */
+  readonly attachment: "docstring" | "table" | undefined;
 }
 
 export interface FeatureCheckResult {
@@ -282,7 +284,14 @@ export function checkFeatures(
                 ? `Rewrite the line as: ${gherkinKeyword(step.type)} ${quoteHint.rewrittenText}`
                 : `nuka scaffold --feature ${feature.relativePath}`,
           });
-          undefinedSteps.push({ file: feature.relativePath, line, text: step.text, type: step.type });
+          undefinedSteps.push({
+            file: feature.relativePath,
+            line,
+            text: step.text,
+            type: step.type,
+            attachment:
+              step.argument?.docString !== undefined ? "docstring" : step.argument?.dataTable !== undefined ? "table" : undefined,
+          });
           continue;
         }
 

@@ -12,6 +12,7 @@ import { type Capture, stripCaptureNames } from "../binding/pattern.js";
 import { ParameterTypeCollisionError } from "../binding/parameter-type-errors.js";
 import type { RegisteredParameterType } from "../binding/parameter-type-config.js";
 import { createParameterTypeRegistry } from "../binding/registry.js";
+import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import type { PrimitiveClass } from "../binding/schema-shape.js";
 import { availableParameterTypeNames, CAPTURED_CLASS } from "../check/binding-check.js";
 import { helpFor, refuse, type RefusalSinks } from "./refusal.js";
@@ -245,6 +246,8 @@ export interface StepTemplate {
   readonly description: string | null;
   /** The written file, relative to the project root, as the guard names it. */
   readonly relativeFilePath: string;
+  /** The docstring or table the feature line carries, when the stub is read from one. */
+  readonly attachment?: Attachment | null;
 }
 
 /** The text `cli` holds until someone names the entry point. */
@@ -323,8 +326,50 @@ export function importSpecifier(fromDir: string, toFile: string, spelling: Impor
   return named.startsWith(".") ? named : `./${named}`;
 }
 
-function argsLines(captures: readonly Capture[], chained: readonly ChainedField[]): string[] {
-  if (captures.length === 0 && chained.length === 0) {
+/** What a feature line carries below it. bindStepArgs hands a docstring
+ * over as a string and a table as its rows of cells, into the one args key
+ * no capture fills, so the stub declares that key or check refuses it. */
+export type Attachment = "docstring" | "table";
+
+const ATTACHMENT_FIELD: Readonly<Record<Attachment, { readonly field: Field; readonly schema: string }>> = {
+  docstring: { field: { key: "docstring", valueClass: "string" }, schema: "z.string()" },
+  table: { field: { key: "table", valueClass: "other" }, schema: "z.array(z.array(z.string()))" },
+};
+
+/** The attachment every line the pattern matches carries, or `null` when
+ * no line matches or the lines disagree: a stub written before its feature
+ * line, or for lines that carry different things, cannot know the key. */
+export function lineAttachment(
+  matches: (text: string) => boolean,
+  steps: Iterable<{ readonly text: string; readonly argument?: { readonly docString?: unknown; readonly dataTable?: unknown } }>,
+): Attachment | null {
+  const kinds = new Set<Attachment | null>();
+  for (const step of steps) {
+    if (!matches(step.text)) continue;
+    kinds.add(step.argument?.docString !== undefined ? "docstring" : step.argument?.dataTable !== undefined ? "table" : null);
+  }
+  return kinds.size === 1 ? [...kinds][0]! : null;
+}
+
+/** What the project's feature lines that this pattern matches carry below
+ * them. A pattern that names a type the config does not register reads no
+ * line, which leaves the key out as before. */
+function attachmentInFeatures(rootDir: string, pattern: string, config: Awaited<ReturnType<typeof loadConfig>>): Attachment | null {
+  let expression;
+  try {
+    expression = buildExpression(pattern, createParameterTypeRegistry([...config.parameterTypes])).expression;
+  } catch {
+    return null;
+  }
+  const { features } = loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs, config.oaths);
+  return lineAttachment(
+    (text) => expression.match(text) !== null,
+    features.flatMap((feature) => feature.pickles.flatMap((pickle) => pickle.steps)),
+  );
+}
+
+function argsLines(captures: readonly Capture[], attachment: Attachment | null, chained: readonly ChainedField[]): string[] {
+  if (captures.length === 0 && attachment === null && chained.length === 0) {
     return ["  args: z.object({}),"];
   }
   const fields = captures.map((capture) => {
@@ -332,8 +377,10 @@ function argsLines(captures: readonly Capture[], chained: readonly ChainedField[
     const schema = (captured && ZOD_FOR_CLASS.get(captured)) ?? "z.unknown()";
     return `    ${capture.key}: ${schema},`;
   });
+  const attachmentFields =
+    attachment === null ? [] : [`    ${ATTACHMENT_FIELD[attachment].field.key}: ${ATTACHMENT_FIELD[attachment].schema},`];
   const chainedFields = chained.map((field) => `    ${field.key}: ${field.producers[0].identifier}.returns.shape.${field.key},`);
-  return ["  args: z.object({", ...fields, ...chainedFields, "  }),"];
+  return ["  args: z.object({", ...fields, ...attachmentFields, ...chainedFields, "  }),"];
 }
 
 function fromLines(chained: readonly ChainedField[]): string[] {
@@ -428,8 +475,20 @@ function commandArgv(fields: readonly Field[]): string {
   return ["cli", ...fields.map((field) => (field.valueClass === "string" ? field.key : `String(${field.key})`))].join(", ");
 }
 
-export function stepTemplate({ name, pattern, captures, chained, variant, entryPoint, cwd, description, relativeFilePath }: StepTemplate): string {
-  const fields = fieldsOf(captures, chained);
+export function stepTemplate({
+  name,
+  pattern,
+  captures,
+  chained,
+  variant,
+  entryPoint,
+  cwd,
+  description,
+  relativeFilePath,
+  attachment = null,
+}: StepTemplate): string {
+  const attached = attachment === null ? [] : [ATTACHMENT_FIELD[attachment].field];
+  const fields = [...fieldsOf(captures, []), ...attached, ...fieldsOf([], chained)];
   const keys = fields.map((field) => field.key);
   const argsParameter = keys.length === 0 ? "" : `{ ${keys.join(", ")} }`;
   const patternLine =
@@ -437,7 +496,8 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
       ? ['  // pattern: "the feature line this step matches", (without one, the step is called by name only)']
       : [`  pattern: ${JSON.stringify(pattern)},`];
   const command = variant === "command";
-  const asserts = assertsInBody(variant, captures.length, chained.length);
+  // The docstring or table is the expected value as much as a capture is.
+  const asserts = assertsInBody(variant, captures.length + attached.length, chained.length);
   const headerLines = command
     ? [
         'import { defineStep, runCommand, z } from "nukadoko";',
@@ -506,7 +566,7 @@ export function stepTemplate({ name, pattern, captures, chained, variant, entryP
     `  description: ${JSON.stringify(describedAs)},`,
     ...patternLine,
     "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
-    ...argsLines(captures, chained),
+    ...argsLines(captures, attachment, chained),
     ...fromLines(chained),
     ...outcomeLines,
     ...runLines,
@@ -933,6 +993,8 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       cwd,
       description,
       relativeFilePath: relativeFilePath.split(path.sep).join("/"),
+      // A command's docstring has no place in argv, so it stays the author's call.
+      attachment: pattern === null || variant === "command" ? null : attachmentInFeatures(rootDir, pattern, config),
     }),
   );
 

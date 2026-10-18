@@ -125,8 +125,8 @@ export default defineStep({
 ```
 
 `features/steps/output-is.ts`. The scaffold wrote the import, the `from`
-entry, and `mutates: false`; the `expected` key for the docstring and the
-assertion are by hand:
+entry, the key for the docstring, the assertion, and `mutates: false`;
+the key's name `expected` and trimming both sides are by hand:
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -172,12 +172,13 @@ $ npx nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --comma
 features/steps/run-tally.ts
 ```
 
-`nuka scaffold output-is --pattern 'the output is' --then --from
-run-tally.stdout` leaves no key for the docstring, and `nuka check` said so:
+Every `the output is` line in the feature carries a docstring, so the
+Then step got a `docstring` key beside the chained `stdout`, and its body
+compares the two:
 
 ```
-error	table-docstring-key-mismatch	features/tally.feature:18	Step "output-is" has a table/docstring attached but every args key is already consumed by named captures or declared from
-  do: Leave exactly one args key that no capture fills, typed string[][] for a table or string for a docstring, or remove the attachment from the line.
+$ npx nuka scaffold output-is --pattern 'the output is' --then --from run-tally.stdout
+features/steps/output-is.ts
 ```
 
 A red run, with `rent: 101` in the docstring for the first scenario. The

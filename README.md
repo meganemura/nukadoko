@@ -416,8 +416,9 @@ features/steps/the-exit-code-is.ts
 
 The pattern is the line as cucumber-expressions reads it: a quoted value
 becomes `{value:string}`, an integer `{value:int}`, a decimal
-`{value:float}`, and a Then line gets `mutates: false`. Rename `value` in
-the pattern and in `args` together. When a line reads more than one way
+`{value:float}`, and a Then line gets `mutates: false`. A docstring below
+the line becomes a `docstring: z.string()` key, and a table a `table` key
+of rows. Rename `value` in the pattern and in `args` together. When a line reads more than one way
 (a registered type and a built-in both fit), or its reading would also
 match another line of the project, the stub keeps the line itself as its
 pattern, with no capture, and a `note:` line on stderr says so.

@@ -67,9 +67,10 @@ capture, so put the captures in by hand. Steps that need `--command` or
    and no `returns`. With one capture, the expected value, the body asserts
    with `node:assert/strict`: `actual` is the one `--from` value (or
    `undefined` under a TODO), and the message names the expected and the
-   actual value. A Then that takes a docstring or a table needs one args
-   key that nothing else fills; add it by hand, or `nuka check` reports
-   `table-docstring-key-mismatch`.
+   actual value. A step whose feature lines carry a docstring or a table
+   gets a `docstring` or `table` key, which a Then compares like a
+   capture; write the feature line first, or add the key by hand, or
+   `nuka check` reports `table-docstring-key-mismatch`.
    Add `--from <step>.<key>` for each value the step reads from an
    earlier step's result: it writes the import, the args field, and the
    `from` entry ("Chaining a value from an earlier step"). Repeat it with

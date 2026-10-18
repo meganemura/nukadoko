@@ -8,7 +8,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { z } from "zod";
-import { declaredType, importIdentifiers, importSpecifier, JS_IMPORT_NOTE, parseFromFlag } from "../src/cli/scaffold.js";
+import { declaredType, importIdentifiers, importSpecifier, JS_IMPORT_NOTE, lineAttachment, parseFromFlag } from "../src/cli/scaffold.js";
 import { typeScriptSpecifier } from "../src/config/ts-loader.js";
 import {
   createCaptureSink,
@@ -150,6 +150,35 @@ describe("nuka scaffold --from", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  it("adds the docstring key when every feature line the pattern matches carries one, and the scenario runs green", async () => {
+    const feature = path.join("features", "greet.feature");
+    await writeFile(
+      path.join(rootDir, feature),
+      ["Feature: greet", "  Scenario: a greeting", '    When I run greet with "Ada"', "    Then the output is", '      """', "      Hello, Ada!", '      """', ""].join("\n"),
+    );
+
+    const result = await cli(rootDir, ["scaffold", "output-is", "--pattern", "the output is", "--then", "--from", "run-greet.stdout"]);
+
+    expect(result).toEqual({ exitCode: 0, stdout: "features/steps/output-is.ts\n", stderr: "" });
+    expect(await readFile(path.join(rootDir, "features", "steps", "output-is.ts"), "utf8")).toContain(
+      [
+        "  args: z.object({",
+        "    docstring: z.string(),",
+        "    stdout: runGreet.returns.shape.stdout,",
+        "  }),",
+        "  from: {",
+        '    stdout: [runGreet, "stdout"],',
+        "  },",
+        "  mutates: false,",
+        "  run({}, { docstring, stdout }) {",
+        "    const actual = stdout;",
+        "    assert.equal(actual, docstring, `docstring: expected ${JSON.stringify(docstring)}, got ${JSON.stringify(actual)}`);",
+      ].join("\n"),
+    );
+    expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
+    expect((await cli(rootDir, ["run", feature])).exitCode).toBe(0);
   });
 
   it("imports each producer once for two --from, in the order given", async () => {
@@ -577,6 +606,19 @@ describe("scaffold --from helpers", () => {
     expect(declaredType(z.string())).toBe('{"type":"string"}');
     expect(declaredType(z.bigint())).toBeNull();
   });
+
+  it("reads an attachment only when every line the pattern matches carries that one", () =>
+    hegel.test((tc) => {
+      const kinds = tc.draw(gs.arrays(gs.sampledFrom(["docstring", "table", null] as const), { maxSize: 6 }));
+      const unmatched = tc.draw(gs.arrays(gs.sampledFrom(["docstring", "table", null] as const), { maxSize: 3 }));
+      const step = (text: string, kind: "docstring" | "table" | null) => ({
+        text,
+        argument: kind === "docstring" ? { docString: {} } : kind === "table" ? { dataTable: {} } : undefined,
+      });
+      const steps = [...kinds.map((kind) => step("matched", kind)), ...unmatched.map((kind) => step("other", kind))];
+      const distinct = new Set(kinds);
+      expect(lineAttachment((text) => text === "matched", steps)).toBe(distinct.size === 1 ? kinds[0] : null);
+    }));
 
   it("camel-cases a kebab name as a person would write it", () => {
     expect([...importIdentifiers(["run-greet", "z", "2fa-login", "delete"]).values()]).toEqual([

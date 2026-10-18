@@ -51,6 +51,16 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka scaffold` gives a docstring or a table line the args key it fills.**
+  A stub for a line with a docstring or a table declared no key for it,
+  so the next `nuka check` reported `table-docstring-key-mismatch` on the
+  file the scaffold had just written. `--feature` now writes
+  `docstring: z.string()` or `table: z.array(z.array(z.string()))` for
+  such a line, and a single `nuka scaffold <name> --pattern` does the same
+  when every feature line the pattern matches carries one. A Then compares
+  it as it compares a capture. `--command` writes none, because a
+  docstring has no place in argv.
+
 - **`nuka run <feature>:<line>` prints the partial-run notice only when the run is partial.**
   The notice fired for every `:line` target, so the `rerun` line of a
   failed scenario in a one-scenario feature printed "selects 1 of 1

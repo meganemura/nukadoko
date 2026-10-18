@@ -132,6 +132,49 @@ describe("nuka scaffold --feature", () => {
     );
   });
 
+  it("gives a docstring line a string key and a table line a rows key, the expected value of a Then", async () => {
+    const feature = await writeFeature(rootDir, "body.feature", [
+      "Feature: body",
+      "  Scenario: a body and a table",
+      "    When I send this body",
+      '      """',
+      '      {"name":"lamp"}',
+      '      """',
+      "    Then the headers are",
+      "      | content-type | application/json |",
+    ]);
+
+    const result = await cli(rootDir, ["scaffold", "--feature", feature]);
+
+    expect(result.exitCode).toBe(0);
+    expect(await stepFile(rootDir, "i-send-this-body")).toBe(
+      [
+        'import { defineStep, z } from "nukadoko";',
+        "",
+        "export default defineStep({",
+        '  description: "TODO: describe i-send-this-body",',
+        '  pattern: "I send this body",',
+        "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
+        "  args: z.object({",
+        "    docstring: z.string(),",
+        "  }),",
+        "  // Return what later steps cite and the values this step's correctness rests on;",
+        '  // beside an absence (false, 0, ""), return proof the read was valid. Declare them here:',
+        "  // returns: z.object({ ... }),",
+        "  run({}, { docstring }) {",
+        "    throw new Error(`not implemented: i-send-this-body; args ${JSON.stringify({ docstring })}`);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    expect(await stepFile(rootDir, "the-headers-are")).toContain(
+      ["  args: z.object({", "    table: z.array(z.array(z.string())),", "  }),", "  mutates: false,", "  run({}, { table }) {"].join("\n"),
+    );
+    expect(await stepFile(rootDir, "the-headers-are")).toContain("    assert.deepEqual(actual, table, ");
+    expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
+  });
+
   it("writes nothing for a line that already matches a step, and nothing on a second run", async () => {
     await cli(rootDir, ["scaffold", "the-output-is", "--pattern", "the output is {text:string}", "--then"]);
     const feature = await writeFeature(rootDir, "greet.feature", GREET);

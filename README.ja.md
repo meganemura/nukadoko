@@ -408,6 +408,7 @@ features/steps/the-exit-code-is.ts
 
 pattern は、cucumber-expressions がその行を読んだとおりのものです。
 引用符で囲んだ値は `{value:string}`、整数は `{value:int}`、小数は `{value:float}` になり、Then の行には `mutates: false` が付きます。
+行の下の docstring は `docstring: z.string()` のキーに、table は行の配列を持つ `table` のキーになります。
 `value` の名前を変えるときは、pattern と `args` を一緒に変えてください。
 行が 2 通り以上に読めるとき(登録した型と組み込みの型の両方が当てはまるとき)や、その読み方がプロジェクトの別の行にも一致するときは、stub は行そのものを キャプチャなしの pattern にし、stderr の `note:` 行がそのことを伝えます。
 stub は `returns` も `from` も宣言しません。

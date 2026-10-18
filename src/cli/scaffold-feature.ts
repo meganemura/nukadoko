@@ -322,6 +322,10 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
     taken.add(name);
     const relativeFilePath = path.join(stepsDir, `${name}${stepExtension}`);
     const then = stub.lines.some((line) => line.type === PickleStepType.OUTCOME);
+    // Lines that share a stub but disagree on what they carry leave the key
+    // out: no one args shape fits both, and check names the line that fails.
+    const attachments = new Set(stub.lines.map((line) => line.attachment));
+    const attachment = attachments.size === 1 ? (stub.lines[0]!.attachment ?? null) : null;
     await mkdir(path.join(rootDir, stepsDir), { recursive: true });
     await writeFile(
       path.join(rootDir, relativeFilePath),
@@ -335,6 +339,7 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
         cwd: null,
         description: null,
         relativeFilePath: relativeFilePath.split(path.sep).join("/"),
+        attachment,
       }),
     );
     written.push(relativeFilePath);
