@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -220,6 +220,55 @@ describe("nuka report", () => {
       expect(copied.map(identity)).toEqual(inProject.map(identity));
     });
 
+    // Each edit of a copied run, and the refusal it gets: the field or the
+    // file that is wrong is named, instead of a TypeError later on.
+    const EDITS: readonly [string, string, (copy: string) => void, string, string][] = [
+      [
+        "a run.json without environments",
+        "run-invalid",
+        (copy) => {
+          const document = JSON.parse(readFileSync(path.join(copy, "run.json"), "utf8")) as Record<string, unknown>;
+          delete document.environments;
+          writeFileSync(path.join(copy, "run.json"), JSON.stringify(document));
+        },
+        "run.json does not have the fields nuka report reads: environments: Invalid input: expected array, received undefined",
+        "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+      ],
+      [
+        "a run.json of another schema version",
+        "run-invalid",
+        (copy) => {
+          const document = JSON.parse(readFileSync(path.join(copy, "run.json"), "utf8")) as Record<string, unknown>;
+          writeFileSync(path.join(copy, "run.json"), JSON.stringify({ ...document, schema_version: 1 }));
+        },
+        "run.json has schema_version 1, and this release reads 2",
+        "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+      ],
+      [
+        "a sources.json of another schema version",
+        "run-sources-invalid",
+        (copy) => writeFileSync(path.join(copy, "sources.json"), JSON.stringify({ schema_version: 7, project: null, features: [] })),
+        "holds a sources.json with schema_version 7, and this release reads 1, so the scenarios of run <run> cannot be parsed",
+        "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+      ],
+    ];
+
+    for (const [name, code, edit, ending, fix] of EDITS) {
+      it(`refuses ${name} with ${code}`, async () => {
+        const runId = await run();
+        const copy = path.join(elsewhere, "copied");
+        cpSync(path.join(rootDir, ".nukadoko", "runs", runId), copy, { recursive: true });
+        edit(copy);
+        const stdout = createCaptureSink();
+        const stderr = createCaptureSink();
+        expect(await runCli(["report", "copied", "--format", "allure", "--out", "out"], { rootDir: elsewhere, stdout, stderr })).toBe(2);
+        const [line, fixLine] = withoutNoConfigLine(stderr.text()).split("\n");
+        expect(line!.startsWith(`refused\t${code}\t-\t${copy}`)).toBe(true);
+        expect(line!.endsWith(ending.replace("<run>", runId))).toBe(true);
+        expect(fixLine).toBe(`  fix: ${fix}`);
+      });
+    }
+
     it("refuses with run-sources-missing when sources.json is gone", async () => {
       const runId = await run();
       cpSync(path.join(rootDir, ".nukadoko", "runs", runId), path.join(elsewhere, "copied"), { recursive: true });
@@ -228,7 +277,7 @@ describe("nuka report", () => {
       const stderr = createCaptureSink();
       expect(await runCli(["report", "copied", "--format", "messages", "--out", "m.ndjson"], { rootDir: elsewhere, stdout, stderr })).toBe(2);
       expect(withoutNoConfigLine(stderr.text())).toBe(
-        `refused\trun-sources-missing\t-\t${path.join(elsewhere, "copied")} holds no readable sources.json, so the scenarios of run ${runId} cannot be parsed\n` +
+        `refused\trun-sources-missing\t-\t${path.join(elsewhere, "copied")} holds no sources.json, so the scenarios of run ${runId} cannot be parsed\n` +
           "  fix: Run the scenarios again with this release, and render that run.\n  do: nuka report --help\n",
       );
     });

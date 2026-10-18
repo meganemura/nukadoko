@@ -7,6 +7,11 @@
 // to one kind does not tell a reader of another to look again. run.json is
 // the `nuka run --json` envelope, so the envelope's number versions it.
 
+/** The `schema_version` of every command's `--json` envelope, run.json
+ * included. It moves when a field the envelope already had changes
+ * meaning, type, or name. */
+export const ENVELOPE_SCHEMA_VERSION = 2;
+
 export const SCHEMA_VERSIONS = {
   step_record: 3,
   run_sources: 1,

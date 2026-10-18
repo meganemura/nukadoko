@@ -1,9 +1,10 @@
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { parseFeatureSource } from "../feature/load-features.js";
 import { readStepRecord } from "../record/read-step-record.js";
-import { RUN_RESULT_FILE_NAME, readRunResult, type RunDocument, type RunScenario } from "../record/run-result.js";
+import { RUN_RESULT_FILE_NAME, type RunDocument, type RunScenario } from "../record/run-result.js";
+import { parseRunDocument } from "./run-document-schema.js";
 import { readRunSources } from "../record/run-sources.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { RUN_FILE_DIRS, resolveRecordedPath, runRelativeDir } from "../record/state-layout.js";
@@ -71,7 +72,7 @@ export interface LoadedRun {
 
 export type LoadRunResult =
   | { readonly run: LoadedRun }
-  | { readonly refusal: { readonly code: "run-not-found" | "run-sources-missing"; readonly message: string } };
+  | { readonly refusal: { readonly code: "run-not-found" | "run-invalid" | "run-sources-missing" | "run-sources-invalid"; readonly message: string } };
 
 /** The scenario record a scenario of run.json stands for. Pure. */
 export function scenarioRecordOf(document: RunDocument, scenario: RunScenario): ScenarioRecord {
@@ -138,24 +139,42 @@ function pickleKey(feature: string, line: number): string {
   return `${feature}\u0000${line}`;
 }
 
+/** The run directory's run.json, checked (src/report/run-document-schema.ts),
+ * or the refusal that says why it cannot be read. */
+export function loadRunDocument(
+  runDir: string,
+): { readonly document: RunDocument } | { readonly refusal: { readonly code: "run-not-found" | "run-invalid"; readonly message: string } } {
+  let text: string;
+  try {
+    text = readFileSync(path.join(runDir, RUN_RESULT_FILE_NAME), "utf8");
+  } catch {
+    return { refusal: { code: "run-not-found", message: `${runDir} holds no run.json that nuka run wrote` } };
+  }
+  const parsed = parseRunDocument(text);
+  if ("problem" in parsed) {
+    return { refusal: { code: "run-invalid", message: `${path.join(runDir, RUN_RESULT_FILE_NAME)} ${parsed.problem}` } };
+  }
+  return { document: parsed.document };
+}
+
 /** `rootDir` is where a path that is not inside the run resolves, the
  * project the run directory sits in when it does. `stateDir` is that
  * project's, or `null` when its config does not load, which makes no run
  * its own. */
 export function loadRun(runDir: string, rootDir: string, stateDir: string | null): LoadRunResult {
-  const document = readRunResult(path.join(runDir, RUN_RESULT_FILE_NAME));
-  if (document === null) {
-    return { refusal: { code: "run-not-found", message: `${runDir} holds no run.json that nuka run wrote` } };
-  }
-  const sources = readRunSources(runDir);
-  if (sources === null) {
+  const runJson = loadRunDocument(runDir);
+  if ("refusal" in runJson) return runJson;
+  const document = runJson.document;
+  const read = readRunSources(runDir);
+  if ("problem" in read) {
     return {
       refusal: {
-        code: "run-sources-missing",
-        message: `${runDir} holds no readable sources.json, so the scenarios of run ${document.run_id} cannot be parsed`,
+        code: read.problem === "missing" ? "run-sources-missing" : "run-sources-invalid",
+        message: `${runDir} ${read.message}, so the scenarios of run ${document.run_id} cannot be parsed`,
       },
     };
   }
+  const sources = read.sources;
   const ownRun = stateDir !== null && path.resolve(runDir) === path.resolve(rootDir, runRelativeDir(stateDir, document.run_id));
   const resolvePath = containedResolver(document.run_id, runDir, rootDir, ownRun);
   const problems: string[] = [];

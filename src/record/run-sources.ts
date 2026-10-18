@@ -40,23 +40,44 @@ export function writeRunSources(rootDir: string, stateDir: string, runId: string
   renameSync(temporary, filePath);
 }
 
-/** The sources.json in `runDirectory`, or `null` when it is missing, does
- * not parse, or carries another schema version. */
-export function readRunSources(runDirectory: string): RunSources | null {
+/** The sources.json in `runDirectory`, or which of three things is wrong
+ * with it: missing (an earlier release wrote none), corrupt (it does not
+ * parse, or lacks a field), or written by a release with another schema
+ * version. Each one is refused with its own message. */
+export function readRunSources(
+  runDirectory: string,
+): { readonly sources: RunSources } | { readonly problem: "missing" | "corrupt" | "version"; readonly message: string } {
+  let text: string;
   try {
-    const parsed: unknown = JSON.parse(readFileSync(runSourcesPath(runDirectory), "utf8"));
-    if (parsed === null || typeof parsed !== "object") return null;
-    const document = parsed as Record<string, unknown>;
-    if (document.schema_version !== SCHEMA_VERSIONS.run_sources) return null;
-    if (document.project !== null && typeof document.project !== "string") return null;
-    if (!Array.isArray(document.features)) return null;
-    const features = document.features.filter(
-      (entry): entry is { path: string; source: string } =>
-        entry !== null && typeof entry === "object" && typeof entry.path === "string" && typeof entry.source === "string",
-    );
-    if (features.length !== document.features.length) return null;
-    return { project: document.project as string | null, features: features.map(({ path: p, source }) => ({ path: p, source })) };
+    text = readFileSync(runSourcesPath(runDirectory), "utf8");
   } catch {
-    return null;
+    return { problem: "missing", message: "holds no sources.json" };
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    return { problem: "corrupt", message: `holds a sources.json that does not parse as JSON: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const document = (parsed !== null && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
+  if (document.schema_version !== SCHEMA_VERSIONS.run_sources) {
+    return {
+      problem: "version",
+      message: `holds a sources.json with schema_version ${JSON.stringify(document.schema_version ?? null)}, and this release reads ${SCHEMA_VERSIONS.run_sources}`,
+    };
+  }
+  const features = Array.isArray(document.features) ? document.features : null;
+  const valid =
+    (document.project === null || typeof document.project === "string") &&
+    features !== null &&
+    features.every((entry) => entry !== null && typeof entry === "object" && typeof entry.path === "string" && typeof entry.source === "string");
+  if (!valid) {
+    return { problem: "corrupt", message: "holds a sources.json without a string-or-null project and a features list of path and source strings" };
+  }
+  return {
+    sources: {
+      project: document.project as string | null,
+      features: (features as { path: string; source: string }[]).map(({ path: p, source }) => ({ path: p, source })),
+    },
+  };
 }

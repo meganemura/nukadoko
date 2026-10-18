@@ -2,6 +2,7 @@ import { checkCodeInfo, isCheckCode } from "../check/codes.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { isRunCode, runCodeInfo } from "../finding/run-codes.js";
+import { ENVELOPE_SCHEMA_VERSION } from "../record/schema-version.js";
 import { readOwnVersion } from "../version.js";
 import { isRefusalOnlyCode, refusalCodeInfo, type RefusalCode } from "./refusal-codes.js";
 
@@ -13,9 +14,7 @@ import { isRefusalOnlyCode, refusalCodeInfo, type RefusalCode } from "./refusal-
 // or refused. Boundary: no command logic; a caller names the code and the
 // fields beside `findings`.
 
-/** The `schema_version` of the envelope. It moves when a field the
- * envelope already had changes meaning, type, or name. */
-export const ENVELOPE_SCHEMA_VERSION = 2;
+export { ENVELOPE_SCHEMA_VERSION };
 
 export type Verdict = "passed" | "failed" | "refused";
 

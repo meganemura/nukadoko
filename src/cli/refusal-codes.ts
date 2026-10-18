@@ -117,8 +117,16 @@ const REFUSAL_CODES = {
     description: "nuka report found no run to render: the directory it names holds no run.json, or the state directory holds no run that ended.",
     fix: "Name a run directory that holds a run.json, or run nuka run first.",
   },
+  "run-invalid": {
+    description: "The run directory's run.json does not parse, has another schema version, or lacks a field nuka report reads.",
+    fix: "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+  },
+  "run-sources-invalid": {
+    description: "The run directory's sources.json does not parse, lacks a field, or has another schema version.",
+    fix: "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+  },
   "run-sources-missing": {
-    description: "The run directory holds no readable sources.json, the feature text nuka report parses the run's scenarios from. A run an earlier release wrote has none.",
+    description: "The run directory holds no sources.json, the feature text nuka report parses the run's scenarios from. A run an earlier release wrote has none.",
     fix: "Run the scenarios again with this release, and render that run.",
   },
   "step-args-invalid": {

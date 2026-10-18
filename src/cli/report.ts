@@ -4,10 +4,10 @@ import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
 import { rankRunsNewestFirst } from "../record/newest-run.js";
 import { createExportsManifest, readExportsManifest, runExportsManifestPath } from "../record/run-exports.js";
-import { RUN_RESULT_FILE_NAME, readEndedRuns, readRunResult } from "../record/run-result.js";
+import { readEndedRuns } from "../record/run-result.js";
 import { exportRelativeDir, runRelativeDir } from "../record/state-layout.js";
 import { writeAllureResults } from "../report/allure/write-results.js";
-import { loadRun, type LoadedRun } from "../report/load-run.js";
+import { loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
 import { writeMessagesStream } from "../report/messages/write-stream.js";
 import { renderRunSummary } from "../run/run-summary.js";
 import { writeOutputLocations } from "../run/progress-log.js";
@@ -94,10 +94,9 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   const outPath = options.out === undefined ? undefined : path.resolve(rootDir, options.out);
 
   if (format === "markdown") {
-    const document = readRunResult(path.join(runDir, RUN_RESULT_FILE_NAME));
-    if (document === null) {
-      return refuse(sinks, `${runDir} holds no run.json that nuka run wrote`, "run-not-found", undefined, notices);
-    }
+    const read = loadRunDocument(runDir);
+    if ("refusal" in read) return refuse(sinks, read.refusal.message, read.refusal.code, undefined, notices);
+    const document = read.document;
     const markdown = renderRunSummary(document);
     if (outPath === undefined) {
       for (const finding of findings) stderr.write(formatFinding(withHint(finding)));

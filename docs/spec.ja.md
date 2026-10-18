@@ -3347,8 +3347,11 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               first. --json prints {run_id, format, written}
                               and needs --out for markdown and messages.
                               A run directory with no run.json is refused
-                              (run-not-found), and one with no sources.json
-                              (run-sources-missing)
+                              (run-not-found), one whose run.json is not
+                              one this release reads (run-invalid), one
+                              with no sources.json (run-sources-missing),
+                              and one whose sources.json is corrupt or of
+                              another version (run-sources-invalid)
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               --env as on nuka run; each call starts clean.
