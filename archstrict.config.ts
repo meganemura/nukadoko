@@ -287,7 +287,9 @@ export default {
       name: "run",
       glob: "src/run/**",
       surface: [
+        "criteria-since.ts",
         "execute-typed-step.ts",
+        "git-since.ts",
         "match-step.ts",
         "probe-git.ts",
         "probe.ts",

@@ -95,6 +95,9 @@ interface DoArgs {
 
 interface RunArgs {
   feature?: string[];
+  /** `--since <git ref>`: what moved in each scenario's criteria since that
+   * commit. */
+  since?: string;
   /** `false` under `--no-check` (yargs' own boolean negation). */
   check?: boolean;
   /** `--env`: one name, or every name when the flag repeats (yargs-parser
@@ -604,7 +607,15 @@ export async function runCli(
             "then-passed-with-changed-capture note, and one the probe could not measure is a then-probe-not-measured " +
             "note. Never changes the exit code",
         })
-        .check(rejectRepeatedFlags(["concurrency", "repeat"])) as Argv<RunArgs>,
+        .option("since", {
+          type: "string",
+          nargs: 1,
+          describe:
+            "compare each scenario's own lines (Background, steps, docstrings, tables, its Examples row) and each step " +
+            "file it bound to with the commit a git ref names: run.json gives each scenario criteria.changed_since " +
+            "(unchanged, changed, or new), and the summary quotes what moved. Reports only; never changes the exit code",
+        })
+        .check(rejectRepeatedFlags(["concurrency", "repeat", "since"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
@@ -619,6 +630,7 @@ export async function runCli(
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
         probe: args.probe ?? false,
+        ...(args.since !== undefined ? { since: args.since } : {}),
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
         stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,

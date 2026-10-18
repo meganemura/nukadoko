@@ -102,6 +102,35 @@ export interface RunScenario {
   /** Under `--probe`: each Then re-run with one capture changed. Not a
    * step: it has no step record. */
   readonly probes?: readonly RunProbe[];
+  /** What moved in this scenario's criteria since `nuka run --since`'s
+   * ref. Absent in a run.json an earlier build wrote. */
+  readonly criteria?: RunCriteria;
+}
+
+/** How a scenario's own lines (Background, steps, docstrings, tables, its
+ * Examples row) compare with the same scenario at the `--since` ref. */
+export type CriteriaChange = "unchanged" | "changed" | "new";
+
+export interface RunCriteria {
+  /** `null` for a run without `--since`. */
+  readonly changed_since: CriteriaChange | null;
+  /** The scenario's lines in the working tree, for a `changed` or `new`
+   * one: what a reader approves. */
+  readonly lines?: readonly string[];
+  /** Under `--since`: the step files the scenario's lines bound to,
+   * relative to the project root. `since.step_files` says which changed. */
+  readonly step_files?: readonly string[];
+}
+
+/** The ref `nuka run --since` compared against. */
+export interface RunSince {
+  /** The ref as given. */
+  readonly ref: string;
+  /** The commit it named when the run started. */
+  readonly commit: string;
+  /** Every step file a scenario of the run bound to, relative to the
+   * project root, and whether its text differs from the commit's. */
+  readonly step_files: readonly { readonly file: string; readonly changed: boolean }[];
 }
 
 export interface RunProbe {
@@ -164,6 +193,9 @@ export type RunFields = {
   /** One entry per (scenario, environment), red when any execution of it
    * was red. */
   readonly verdicts: readonly RunVerdict[];
+  /** `nuka run --since`'s ref, or `null` without it. Absent in a run.json
+   * an earlier build wrote. */
+  readonly since?: RunSince | null;
 };
 
 /** run.json as a reader gets it: the envelope every `--json` shares, and

@@ -1221,6 +1221,17 @@ and a Then the probe could not measure (it or its re-run wrote, or its args
 schema refused the changed value) is a `then-probe-not-measured` note. It
 is a measurement, so the exit code stays the run's.
 
+`nuka run --since <git ref>` says what moved in the criteria since a base
+a person approved, such as `origin/main`. Each scenario's own lines (its
+Background, steps, docstrings, tables, and Examples row, read from the
+Gherkin tree so indentation and comments do not count) are compared with
+the same scenario at that commit, and `run.json` gives each one
+`criteria.changed_since`: `unchanged`, `changed`, or `new`. `since` lists
+each step file a scenario bound to and whether its source changed. The run
+summary's "Criteria since" section quotes every changed or new scenario,
+which is what the reader is asked to approve again. It reports only; the
+exit code stays the run's.
+
 `nuka run --env a --env b` runs every selected scenario once in each
 environment, in one run with one run id: all of `a` first, then all of
 `b`, each with its own env files, secrets, version probe, BeforeAll and

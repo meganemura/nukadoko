@@ -75,6 +75,9 @@ describe("nuka report on a run.json with one field deleted or null", () => {
     ];
     failed.evidence = { dir: `scenarios/${failed.scenario_record_id}`, screenshots: [{ file: "final.png", at: failed.finished_at }] };
     failed.teardown_errors = [{ fixture: "db", message: "gone" }];
+    // What `--since` adds, so its fields are tried too.
+    document.since = { ref: "main", commit: "0123456789abcdef0123456789abcdef01234567", step_files: [{ file: "features/steps/a.ts", changed: true }] };
+    first.criteria = { changed_since: "changed", lines: ["Given a step"], step_files: ["features/steps/a.ts"] };
     base = document as Json;
   }, 120_000);
 

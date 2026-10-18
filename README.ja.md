@@ -1108,6 +1108,14 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 probe が計測できなかった Then(走ったとき、または再実行で書き込んだ、あるいは args schema が変えた値を拒んだ)は、`then-probe-not-measured` の note になります。
 これは計測なので、終了コードは run のものから変わりません。
 
+`nuka run --since <git ref>` は、人が承認した基点(`origin/main` など)から、受け入れ基準の何が動いたかを述べます。
+各 scenario 自身の行(Background、step、docstring、table、Examples の行)を、そのコミットの同じ scenario と比べます。
+行は Gherkin の木から読むので、インデントやコメントは数えません。
+`run.json` は各 scenario に `criteria.changed_since` を与え、値は `unchanged`、`changed`、`new` のどれかです。
+`since` は、scenario が束ねた各 step ファイルと、そのソースが変わったかどうかを並べます。
+run サマリの「Criteria since」の節は changed と new の各 scenario を引用し、読み手がもう一度承認するのはその行です。
+これは報告するだけで、終了コードは run のものから変わりません。
+
 `nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。
 まず `a` ですべてを実行し、次に `b` ですべてを実行します。
 それぞれの environment が、自分の env file、secret、version の probe、BeforeAll と AfterAll、process スコープの fixture を持ちます。

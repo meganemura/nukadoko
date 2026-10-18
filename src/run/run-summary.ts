@@ -260,6 +260,42 @@ function comparedSteps(scenarios: readonly RunScenario[]): ComparedStep[] {
   );
 }
 
+// What moved in the criteria since `--since`'s ref, for the person who
+// approved that base: one row per scenario (environments and repeats of it
+// counted once), the text of each changed or new one quoted in full, since
+// that text is what they are asked to approve again, and the step files
+// whose source changed under criteria that did not.
+function renderCriteriaSince(document: RunDocument): string[] {
+  const since = document.since;
+  if (since === undefined || since === null) return [];
+  const byScenario = new Map<string, RunScenario>();
+  for (const scenario of document.scenarios) {
+    const key = `${scenario.feature}\u0000${scenario.line}`;
+    if (!byScenario.has(key)) byScenario.set(key, scenario);
+  }
+  const scenarios = [...byScenario.values()].sort((a, b) => a.feature.localeCompare(b.feature) || a.line - b.line);
+  const count = (change: string): number => scenarios.filter((scenario) => scenario.criteria?.changed_since === change).length;
+  const changedFiles = since.step_files.filter((entry) => entry.changed).map((entry) => entry.file);
+  const lines = [
+    "",
+    `## Criteria since ${cellCode(since.ref)} (\`${since.commit.slice(0, 7)}\`)`,
+    "",
+    `${count("unchanged")} unchanged, ${count("changed")} changed, ${count("new")} new.`,
+    changedFiles.length === 0
+      ? "No step file a scenario bound to changed."
+      : `Step files changed: ${changedFiles.map((file) => cellCode(file)).join(", ")}.`,
+  ];
+  for (const scenario of scenarios) {
+    const change = scenario.criteria?.changed_since;
+    if (change !== "changed" && change !== "new") continue;
+    const text = scenario.criteria?.lines ?? [];
+    const longestRun = Math.max(2, ...text.flatMap((line) => line.match(/`+/g) ?? []).map((run) => run.length));
+    const fence = "`".repeat(longestRun + 1);
+    lines.push("", `### ${change === "changed" ? "Changed" : "New"}: ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}`, "", `${fence}gherkin`, ...text, fence);
+  }
+  return lines;
+}
+
 function renderFindings(document: RunDocument): string[] {
   const findings = runFindings(document);
   if (findings.length === 0) return [];
@@ -286,6 +322,7 @@ export function renderRunSummary(document: RunDocument): string {
     RUN_SUMMARY_MARKER,
     ...renderTitle(document),
     ...renderCondition(document),
+    ...renderCriteriaSince(document),
     ...renderFeatures(document),
     ...renderDeclaredVsObserved(
       collectDeclaredVsObserved(

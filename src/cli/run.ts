@@ -53,9 +53,13 @@ import {
   countScenarios,
   runResultRelativePath,
   writeRunResult,
+  type RunCriteria,
   type RunFields,
   type RunScenario,
+  type RunSince,
 } from "../record/run-result.js";
+import { classifyCriteria, criteriaAtRef, criteriaOf } from "../run/criteria-since.js";
+import { changedSince, readAtCommit, resolveSince } from "../run/git-since.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
 import {
@@ -264,6 +268,10 @@ export interface RunRunOptions {
    * the probe could not measure
    * (src/run/probe.ts). A note never changes the exit code. */
   probe: boolean;
+  /** `--since <ref>`: compare each scenario's criteria, and each step file
+   * it bound to, with the commit `ref` names, and report what moved. It
+   * reports only; the exit code is unchanged. `undefined` without it. */
+  since?: string;
   /** `$GITHUB_STEP_SUMMARY` as the CLI read it, `undefined` when unset or
    * empty. Passed in rather than read here so a test decides it. */
   stepSummaryPath: string | undefined;
@@ -323,6 +331,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   }
   if (!Number.isInteger(concurrency) || concurrency < 1) {
     return refused(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).`, "invalid-value");
+  }
+  // Resolved once, before anything runs: a ref that names nothing, or a
+  // project outside git, has nothing to compare against, and a run that
+  // reported every scenario `new` would claim a comparison it did not make.
+  let since: { ref: string; commit: string } | undefined;
+  if (options.since !== undefined) {
+    const resolved = await resolveSince(rootDir, options.since);
+    if ("problem" in resolved) {
+      return resolved.problem === "outside-git"
+        ? refused(resolved.message, "since-outside-git")
+        : refused(resolved.message, "since-ref-unknown", { do: "git log --oneline" });
+    }
+    since = { ref: options.since, commit: resolved.commit };
   }
 
   // This whole invocation's own start — read
@@ -606,6 +627,52 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     const runId = generateRunId();
     const git = await probeGitState(rootDir);
+    // Under `--since`, each selected scenario's criteria and each step
+    // file's text are compared with the ref before the first scenario runs,
+    // so a step that edits a file mid-run does not change what the run
+    // reports about the files it started from.
+    const criteriaByPickle = new Map<string, RunCriteria>();
+    const stepFileChanged = new Map<string, boolean>();
+    const projectRelative = (filePath: string): string => path.relative(rootDir, path.resolve(rootDir, filePath));
+    if (since !== undefined) {
+      const atRef = new Map<string, ReadonlyMap<string, readonly string[]>>();
+      for (const { feature, pickle } of flatPickles) {
+        let before = atRef.get(feature.relativePath);
+        if (before === undefined) {
+          before = criteriaAtRef(await readAtCommit(rootDir, since.commit, feature.relativePath), feature.relativePath);
+          atRef.set(feature.relativePath, before);
+        }
+        const now = criteriaOf(feature.gherkinDocument, pickle);
+        if (now === undefined) continue;
+        const change = classifyCriteria(before.get(now.key), now.lines);
+        criteriaByPickle.set(`${feature.relativePath}\u0000${pickle.location?.line ?? 0}`, {
+          changed_since: change,
+          ...(change === "unchanged" ? {} : { lines: now.lines }),
+        });
+      }
+      for (const entry of vocabulary.values()) {
+        const file = projectRelative(entry.filePath);
+        if (!stepFileChanged.has(file)) stepFileChanged.set(file, await changedSince(rootDir, since.commit, file));
+      }
+    }
+    // The step files a scenario's lines bound to: the file of the step each
+    // line matched. A part a step calls is the calling step's own business
+    // and is not listed.
+    const boundStepFiles = (scenario: RunScenario): string[] => {
+      const files = new Set<string>();
+      for (const step of scenario.steps) {
+        const entry = step.step === null ? undefined : vocabulary.get(step.step);
+        if (entry !== undefined) files.add(projectRelative(entry.filePath));
+      }
+      return [...files].sort((a, b) => a.localeCompare(b));
+    };
+    const criteriaFor = (scenario: RunScenario): RunCriteria =>
+      since === undefined
+        ? { changed_since: null }
+        : {
+            ...(criteriaByPickle.get(`${scenario.feature}\u0000${scenario.line}`) ?? { changed_since: "new" as const }),
+            step_files: boundStepFiles(scenario),
+          };
     // Each scenario's run.json entry is built when its record arrives, from
     // the step records it cites, so a `--repeat` run never holds more than
     // one scenario's step records at a time. The lines and step names come
@@ -636,7 +703,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           message: `${stepRecordRelativeDir(config.stateDir, runId, stepRecordId)}/record.json of ${record.feature}:${record.line} could not be read, so run.json has no declaration or measurement for that step`,
         });
       }
-      const entry = buildRunScenario(record, {
+      const built = buildRunScenario(record, {
         stepRecords,
         stepLine: pickleLines.get(`${record.feature}\u0000${record.line}`) ?? (() => null),
         stepName: (text) => {
@@ -647,6 +714,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         evidenceDir: relativeToRun(config.stateDir, runId, record.evidence.dir),
         rerun: formatRerunCommand(record, conditionsOf.rerunFlags(record.environment)),
       });
+      const entry: RunScenario = { ...built, criteria: criteriaFor(built) };
       runScenarios.push(entry);
       if (entry.evidence === undefined) emptyEvidenceDirs.push(path.join(rootDir, record.evidence.dir));
       stdout.write(`${JSON.stringify(entry)}\n`);
@@ -672,6 +740,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // summary is rendered and before the document is printed, so the
     // summary and `--json` carry it too. Returns the root-relative path of the summary in the
     // run directory, or `null`, and the exit code.
+    const sinceOf = (resolved: { ref: string; commit: string }): RunSince => {
+      const files = [...new Set(runScenarios.flatMap((scenario) => scenario.criteria?.step_files ?? []))].sort((a, b) => a.localeCompare(b));
+      return { ref: resolved.ref, commit: resolved.commit, step_files: files.map((file) => ({ file, changed: stepFileChanged.get(file) ?? true })) };
+    };
     const finishRun = async (
       verdict: "passed" | "failed",
       failedScenarios: readonly FailedScenario[],
@@ -718,6 +790,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         counts: countScenarios(runScenarios, verdicts),
         scenarios: runScenarios,
         verdicts,
+        since: since === undefined ? null : sinceOf(since),
       };
       let exitCode = verdict === "passed" ? 0 : 1;
       // sources.json first, before anything is serialized, so a failure to

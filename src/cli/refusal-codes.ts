@@ -129,6 +129,14 @@ const REFUSAL_CODES = {
     description: "The run directory holds no sources.json, the feature text nuka report parses the run's scenarios from. A run an earlier release wrote has none.",
     fix: "Run the scenarios again with this release, and render that run.",
   },
+  "since-outside-git": {
+    description: "nuka run --since compares with a git commit, and the project is not inside a git repository.",
+    fix: "Run nuka run --since inside the git repository that holds the project, or drop --since.",
+  },
+  "since-ref-unknown": {
+    description: "nuka run --since names a ref that is no commit in the project's repository.",
+    fix: "Name a branch, tag, or commit the repository holds, such as the base the criteria were approved at.",
+  },
   "step-args-invalid": {
     description: "nuka do has no --args, or --args is not valid JSON.",
     fix: "Pass --args as a JSON object with the keys that nuka describe <step> lists.",

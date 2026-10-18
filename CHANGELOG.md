@@ -328,6 +328,30 @@ just until 0.1.
 
 ### Added
 
+- **`nuka run --since <git ref>` says what moved in the criteria since an
+  approved base.** A run proved the scenarios passed, but a reader of the
+  pull request had to diff the feature files by hand to learn which
+  criteria they were approving again. Before anything runs, each selected
+  scenario's own lines (every Background step of its feature and Rule, its
+  steps with docstrings and data tables, and an outline row's Examples
+  header and row, read from the Gherkin tree so indentation, blank lines,
+  comments, and tags do not count) are compared with the same scenario at
+  the commit the ref names, found by its Rule, its name, and which
+  scenario of that name it is; a row is found by its values.
+  - Every scenario in `run.json` has `criteria`: `changed_since` is
+    `unchanged`, `changed`, or `new` under `--since` and `null` without it,
+    with the current `lines` of a changed or new scenario and the
+    `step_files` its lines bound to.
+  - `since` gives the `ref`, its `commit`, and each bound step file with
+    whether its source differs from the commit's; it is `null` without
+    the flag.
+  - The run summary gains "Criteria since `<ref>`": the three counts, the
+    step files that changed, and each changed or new scenario's lines in a
+    `gherkin` block.
+  - It reports only, and the exit code stays the run's. A ref that names
+    no commit is refused with the new `since-ref-unknown`, and a project
+    outside git with the new `since-outside-git`.
+
 - **`nuka run --probe` measures whether each passed Then could have
   failed.** A pass meant only that nothing threw, so a Then whose `run`
   never compares the value its sentence names was green, and nothing

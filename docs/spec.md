@@ -1902,7 +1902,7 @@ However, its location shows that the existing suite owns it.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--since <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2061,6 +2061,30 @@ step's `run` is trusted as written, and the step the implementing agent
 wrote for itself is the one most likely to check nothing. Under
 `--concurrency` each worker probes its own scenarios, and under `--repeat`
 every execution probes.
+
+`--since <git ref>` says what moved in the criteria since a base a person
+approved, such as the target branch of a pull request. Before anything
+runs, each selected scenario's own lines are compared with the same
+scenario at the commit the ref names: every Background step of its feature
+and of its Rule, its own steps with their keywords, docstrings, and data
+tables, and for a Scenario Outline row the Examples header and that row.
+The lines come from the Gherkin tree, not the file, so indentation, blank
+lines, comments, and tags never count as a change. A scenario is found at
+the ref by its Rule, its name, and which scenario of that name it is in
+the file; an Examples row by its values. Each scenario's `run.json` entry
+gets `criteria.changed_since`: `unchanged`, `changed`, or `new` (a renamed
+scenario, a row whose values changed, or a file the ref lacks), with the
+current `lines` of a changed or new one and the `step_files` its lines
+bound to. `since` names the ref, its commit, and whether the text of each
+bound step file differs from the commit's, read before the first scenario
+runs. The summary's "Criteria since" section counts the three and quotes
+each changed or new scenario, so the reader of the pull request approves
+those lines and sees which step files moved under the ones that did not.
+It reports only: no flag turns a change into a failure, and the exit code
+is the run's. A ref that names no commit is refused with
+`since-ref-unknown`, and a project outside git with `since-outside-git`,
+before anything runs. Without the flag, every scenario has
+`criteria: { changed_since: null }` and `since` is `null`.
 
 `--env` may repeat: `nuka run --env a --env b` is one run, with one
 `run_id`, one `run.json`, one summary, and one exit code, that runs every
@@ -2313,6 +2337,11 @@ to act on the run without opening another file:
   Then whose `run` threw. `not-measured` carries a `reason` and a
   `message`, and is the `then-probe-not-measured` note. A probe has no
   step record.
+- Every scenario has `criteria`. `changed_since` is `null` without
+  `--since`; with it, `unchanged`, `changed`, or `new`, with the current
+  `lines` of a changed or new scenario and the `step_files` its lines bound
+  to. `since` is `null` without the flag; with it, the `ref`, its `commit`,
+  and each bound step file's `file` and whether it `changed`.
 - `findings` holds every finding the run raised: each failed scenario, each
   probe note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
@@ -2967,6 +2996,9 @@ holds:
   target version, every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
   file), the nukadoko version, the run id, and the start and finish times;
+- under `--since`, "Criteria since `<ref>`": how many scenarios are
+  unchanged, changed, and new, the step files that changed, and the lines
+  of each changed or new scenario in a `gherkin` block;
 - one table per feature file, by path, with a row per scenario in line
   order: scenario, line, one column per environment, named after it, with
   that cell's verdict (`<passed> of <n> passed` under `--repeat`), the
@@ -3979,6 +4011,14 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               (then-passed-with-changed-capture) or that it
                               could not measure (then-probe-not-measured);
                               the exit code is unchanged.
+                              --since <git ref> compares each scenario's
+                              own lines and each step file it bound to with
+                              the commit the ref names: criteria.changed_since
+                              is unchanged, changed, or new, since names the
+                              step files that changed, and the summary quotes
+                              what moved. It reports only. An unknown ref
+                              (since-ref-unknown) or a project outside git
+                              (since-outside-git) is refused.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set, and writes

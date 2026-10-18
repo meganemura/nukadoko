@@ -89,6 +89,7 @@ describe("nuka run: run.json", () => {
           ],
           hooks: [],
           do: "nuka run features/failure/a.feature:3",
+          criteria: { changed_since: null },
         },
         {
           scenario_record_id: expect.stringMatching(/^scn-/),
@@ -112,6 +113,7 @@ describe("nuka run: run.json", () => {
             },
           ],
           hooks: [],
+          criteria: { changed_since: null },
         },
       ],
       verdicts: [
@@ -134,6 +136,7 @@ describe("nuka run: run.json", () => {
           passed: 1,
         },
       ],
+      since: null,
     });
     // Paths in run.json are relative to the run directory.
     expect(existsSync(path.join(rootDir, ".nukadoko", "runs", runId, passedStep.record, "record.json"))).toBe(true);

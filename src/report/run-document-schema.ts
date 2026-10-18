@@ -109,6 +109,13 @@ const scenario = z.looseObject({
       }),
     )
     .optional(),
+  criteria: z
+    .looseObject({
+      changed_since: z.enum(["unchanged", "changed", "new"]).nullable(),
+      lines: z.array(z.string()).optional(),
+      step_files: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 
 const document = z.looseObject({
@@ -147,6 +154,10 @@ const document = z.looseObject({
       step: z.string().optional(),
     }),
   ),
+  since: z
+    .looseObject({ ref: z.string(), commit: z.string(), step_files: z.array(z.looseObject({ file: z.string(), changed: z.boolean() })) })
+    .nullable()
+    .optional(),
 });
 
 /** The run.json text as a document a report can read, or why not. */
