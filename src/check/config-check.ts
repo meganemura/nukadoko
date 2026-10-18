@@ -127,6 +127,7 @@ export async function checkConfig(
         code: "additional-feature-dir-missing",
         message: `additionalFeatureDirs names "${relativePath}", which does not exist at ${absolutePath}`,
         file: relativePath,
+        do: `Create the directory ${relativePath}, or remove ${JSON.stringify(relativePath)} from additionalFeatureDirs in ${configFile}.`,
       });
     }
   }
@@ -137,6 +138,7 @@ export async function checkConfig(
         code: "env-file-missing",
         message: `envFile "${relativePath}" does not exist`,
         file: relativePath,
+        do: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from envFiles in ${configFile}.`,
       });
     }
   }
@@ -148,6 +150,7 @@ export async function checkConfig(
           code: "environment-env-file-missing",
           message: `environments.${environmentName}.envFiles names "${relativePath}", which does not exist`,
           file: relativePath,
+          do: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from environments.${environmentName}.envFiles in ${configFile}.`,
         });
       }
     }

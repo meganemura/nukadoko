@@ -105,6 +105,9 @@ describe("additionalFeatureDirs", () => {
       expect(missing).toHaveLength(1);
       expect(missing[0]!.file).toBe("ghost-dir");
       expect(missing[0]!.message).toContain("ghost-dir");
+      expect(missing[0]).toMatchObject({
+        do: 'Create the directory ghost-dir, or remove "ghost-dir" from additionalFeatureDirs in nukadoko.config.ts.',
+      });
     });
   });
 });

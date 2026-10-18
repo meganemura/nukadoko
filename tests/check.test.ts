@@ -43,8 +43,14 @@ describe("nuka check", () => {
     expect(report.errors).toEqual([]);
     expect(report.warnings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: "env-file-missing" }),
-        expect.objectContaining({ code: "environment-env-file-missing" }),
+        expect.objectContaining({
+          code: "env-file-missing",
+          do: 'Create .env.missing, or remove ".env.missing" from envFiles in nukadoko.config.ts.',
+        }),
+        expect.objectContaining({
+          code: "environment-env-file-missing",
+          do: 'Create .env.staging-missing, or remove ".env.staging-missing" from environments.staging.envFiles in nukadoko.config.ts.',
+        }),
         expect.objectContaining({ code: "then-mutates" }),
       ]),
     );

@@ -49,6 +49,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`env-file-missing`, `environment-env-file-missing`, and `additional-feature-dir-missing` name the entry and the config file in their `do:` line.**
+  Each said "the config file" and "the entry" while the check had both in
+  hand. The `do:` line now names the missing path, the list it is in
+  (`envFiles`, `environments.<name>.envFiles`, or `additionalFeatureDirs`),
+  and the config file, the way `features-dir-missing` already did. The
+  registry text `nuka check --codes` prints keeps the general form.
 - **`nuka session clear <name>` for a session that does not exist names `nuka session list --json` as its `do:` line.**
   It ended with `do: nuka session clear --help`. What the caller lacks is
   which sessions exist, and under which environment: `nuka session list`
