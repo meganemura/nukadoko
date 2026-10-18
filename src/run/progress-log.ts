@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { UsedEntryWithResult } from "../record/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { shellWord } from "../shell/shell-word.js";
 
 // Responsibility: `nuka run`'s own progress output — what src/step/context.ts
 // and src/compat/allure-runtime.ts used to call "a future progress-log
@@ -389,14 +390,6 @@ export function writeFailedScenarios(
     stderr.write(`failed  ${failure.feature}:${failure.line}  ${failure.scenario}\n`);
     stderr.write(`  rerun  ${formatRerunCommand(failure, rerunFlags)}\n`);
   }
-}
-
-// Characters a POSIX shell reads as one plain word; anything else is single
-// quoted, so a feature path with a space still pastes as one argument.
-const SHELL_SAFE = /^[A-Za-z0-9_./:=+,-]+$/;
-
-export function shellWord(word: string): string {
-  return SHELL_SAFE.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`;
 }
 
 /** The command that runs one failed scenario again, in the same environment.

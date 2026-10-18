@@ -6,6 +6,7 @@ import { resolveConfigFileName } from "../config/load-config.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
+import { shellWord } from "../shell/shell-word.js";
 import type { CheckIssue } from "./types.js";
 
 // Responsibility: config coherence —
@@ -109,7 +110,7 @@ export async function checkConfig(
       code: "features-dir-missing",
       message: `featuresDir "${config.featuresDir}" does not exist at ${featuresRoot}`,
       file: configFile,
-      do: `mkdir -p ${path.posix.join(config.featuresDir, "steps")}, or correct featuresDir in ${configFile}`,
+      do: `mkdir -p ${shellWord(path.posix.join(config.featuresDir, "steps"))}, or correct featuresDir in ${configFile}`,
     });
   }
 
@@ -127,7 +128,7 @@ export async function checkConfig(
         code: "additional-feature-dir-missing",
         message: `additionalFeatureDirs names "${relativePath}", which does not exist at ${absolutePath}`,
         file: relativePath,
-        do: `Create the directory ${relativePath}, or remove ${JSON.stringify(relativePath)} from additionalFeatureDirs in ${configFile}.`,
+        do: `mkdir -p ${shellWord(relativePath)}, or remove ${JSON.stringify(relativePath)} from additionalFeatureDirs in ${configFile}.`,
       });
     }
   }

@@ -21,7 +21,7 @@ import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-s
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
 import type { WritableSink } from "../sink/writable-sink.js";
-import { shellWord } from "../run/progress-log.js";
+import { shellWord } from "../shell/shell-word.js";
 
 // Responsibility: `nuka scaffold <name>`'s actual work, kept out of
 // run-cli.ts so it's unit-testable without going

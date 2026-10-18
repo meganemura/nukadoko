@@ -1,3 +1,7 @@
+import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -94,6 +98,38 @@ describe("nuka check", () => {
     const report = JSON.parse(stdout.text());
     expect(report.errors).toEqual([expect.objectContaining({ code: "features-dir-missing" })]);
     expect(exitCode).toBe(1);
+  });
+
+  it("quotes a featuresDir or additionalFeatureDirs path with a space in the mkdir -p of its do line", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-check-spaced-dirs-"));
+    try {
+      await writeFile(
+        path.join(rootDir, "nukadoko.config.ts"),
+        'export default { featuresDir: "my features", additionalFeatureDirs: ["extra dir"] };\n',
+      );
+      const stdout = createCaptureSink();
+      await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
+
+      const report = JSON.parse(stdout.text());
+      const doLines = report.errors
+        .filter((issue: { code: string }) => issue.code.endsWith("-missing"))
+        .map((issue: { code: string; do: string }) => [issue.code, issue.do]);
+      expect(doLines).toEqual([
+        ["features-dir-missing", "mkdir -p 'my features/steps', or correct featuresDir in nukadoko.config.ts"],
+        [
+          "additional-feature-dir-missing",
+          `mkdir -p 'extra dir', or remove "extra dir" from additionalFeatureDirs in nukadoko.config.ts.`,
+        ],
+      ]);
+
+      for (const [, line] of doLines) execSync(line.split(", or ")[0], { cwd: rootDir });
+      expect([existsSync(path.join(rootDir, "my features", "steps")), existsSync(path.join(rootDir, "extra dir"))]).toEqual([
+        true,
+        true,
+      ]);
+    } finally {
+      await rm(rootDir, { recursive: true, force: true });
+    }
   });
 
   it("exits 1 and reports every error category at least once", async () => {

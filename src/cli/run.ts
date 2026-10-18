@@ -39,8 +39,8 @@ import {
   writeRepeatTallies,
   createRepeatTally,
   formatRerunCommand,
-  shellWord,
 } from "../run/progress-log.js";
+import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
 import { createRunSummaryCollector, renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";

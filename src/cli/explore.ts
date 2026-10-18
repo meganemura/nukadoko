@@ -34,6 +34,7 @@ import { installProcessSignalHandlers } from "../run/process-signal.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { shellWord } from "../shell/shell-word.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { isModel, type RelationSource, type RelationStep } from "../step/define-explore.js";
 import type { Step } from "../step/define-step.js";
@@ -79,12 +80,6 @@ function rerunCommand(options: RunExploreOptions, seed: number | null): string {
   const generated = seed === null ? "" : ` --seed ${seed} --runs ${options.runs} --length ${options.length}`;
   const env = options.env === null ? "" : ` --env ${shellWord(options.env)}`;
   return `nuka experimental explore ${shellWord(options.file)}${generated}${env}`;
-}
-
-/** The rerun line is meant to be pasted into a shell, so a path with a
- * space or a quote in it is single-quoted. */
-function shellWord(word: string): string {
-  return /^[A-Za-z0-9_./:=@%+-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`;
 }
 
 function oneLine(text: string): string {

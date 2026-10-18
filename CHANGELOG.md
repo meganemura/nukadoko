@@ -61,6 +61,16 @@ just until 0.1.
   has no `--env` and lists every environment, and its `--json` output
   names the environment of each session, so a name under another
   environment reads as that. The message and exit 1 are unchanged.
+- **`features-dir-missing` and `additional-feature-dir-missing` quote the path in the `mkdir -p` of their `do:` line.**
+  `features-dir-missing` printed `mkdir -p my features/steps` for a
+  `featuresDir` of `my features`, which makes two directories. The path is
+  now single-quoted when a shell would split it or read it, the way a
+  `rerun` line already is. `additional-feature-dir-missing` now says
+  `mkdir -p <dir>` too, in place of "Create the directory". The quoting
+  moved out of the runner into a module check and run can both import, and
+  `nuka experimental explore` uses the same one: its rerun line no longer
+  quotes a word with `,` or `=` in it, and a `nuka run` rerun line no
+  longer quotes one with `@` or `%`.
 - **A `nuka run` target that selects nothing names the next step as its `do:` line.**
   Three refusals ended with `do: nuka run --help`. A directory given with
   `:line` now names the same run with the `:line` dropped from each

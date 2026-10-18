@@ -16,6 +16,7 @@ import {
   VALID_STEP_NAME,
 } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { shellWord } from "../shell/shell-word.js";
 import { RefusalError, commandPathOf, helpFor, refuse } from "./refusal.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
@@ -241,7 +242,7 @@ function firstWord(command: string | readonly string[] | undefined): string {
 
 /** The invocation that reached the moved `explore` spelling, with `explore`
  * replaced by `experimental explore` and every other word kept. */
-export function movedExploreCommandLine(argv: readonly string[], shellWord: (word: string) => string): string {
+export function movedExploreCommandLine(argv: readonly string[]): string {
   const at = argv.indexOf("explore");
   const words = [...argv.slice(0, at), "experimental", "explore", ...argv.slice(at + 1)];
   return ["nuka", ...words.map(shellWord)].join(" ");
@@ -1034,13 +1035,10 @@ export async function runCli(
     builder: (y: Argv) => y.strict(false),
     handler: async () => {
       if (argsFailed) return;
-      // Imported here: src/run stays off the load path of every command
-      // that does not run anything.
-      const { shellWord } = await import("../run/progress-log.js");
       exitCode = refuse(
         { json: argv.includes("--json"), stdout, stderr },
         "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments",
-        movedExploreCommandLine(argv, shellWord),
+        movedExploreCommandLine(argv),
       );
     },
   };
