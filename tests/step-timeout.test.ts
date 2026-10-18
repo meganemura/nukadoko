@@ -137,10 +137,7 @@ describe("a typed step that never returns", () => {
     expect(stdout.text()).toContain('"status":"passed"');
   });
 
-  it("defaults to the horizon the live report already used", () => {
-    // 120 heartbeat ticks of 10s (src/run/run-scenario.ts) is where this
-    // tool already decided a step has stopped being worth watching. One
-    // run, one horizon.
-    expect(DEFAULT_STEP_TIMEOUT_MS).toBe(120 * 10_000);
+  it("defaults to twenty minutes", () => {
+    expect(DEFAULT_STEP_TIMEOUT_MS).toBe(1_200_000);
   });
 });

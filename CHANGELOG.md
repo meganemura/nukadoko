@@ -42,6 +42,53 @@ just until 0.1.
   relations", and "Sessions, environments, secrets" is now "Environments
   and secrets". docs/upgrading.md says what a project changes.
 
+- **`nuka report` renders a finished run; `nuka run` writes no Allure
+  results or messages stream.** Writing reports during the run tied each
+  format to a config key set before the run, made every worker of a
+  concurrent run write its own share, and left nothing to render a run
+  again from. A run directory now holds everything a report needs, so a
+  run directory copied off a CI machine renders the same as one in place.
+  - `nuka report [<run dir>] --format markdown|allure|messages [--out
+    <path>] [--json]` renders one run: the newest one when no run
+    directory is given. `markdown` is the run summary, on stdout or to
+    `--out`. `allure` writes Allure results to
+    `.nukadoko/export/allure-results/` or the directory `--out` names, with
+    the same `fullName`, `historyId`, and `testCaseId` the run-time writer
+    gave, environment included, so an Allure history carries on. `messages`
+    writes a cucumber-messages stream on stdout or to `--out`. `--json`
+    prints the envelope with `run_id`, `format`, and `written`, and needs
+    `--out` for `markdown` and `messages`.
+  - A file `nuka report` writes under the state directory is noted in the
+    run's exports manifest, so retention removes it with the run, and
+    rendering the same run into the same place again replaces it.
+  - Each run writes `sources.json` (`schema_version` 1) beside `run.json`:
+    the text of every feature file it parsed and the project name. A run
+    directory without it, such as one from an earlier release, is refused
+    with the new `run-sources-missing` refusal code; a directory with no
+    `run.json`, or no run at all, with the new `run-not-found`.
+  - The `allure` and `messages` config keys are refused with
+    `config-key-removed`, and `nuka run --summary <path>` is refused with
+    `removed-command`. `nuka run` still writes `summary.md` into the run
+    directory and appends it to `$GITHUB_STEP_SUMMARY`.
+  - In a messages stream of a run over more than one environment, each
+    pickle gets one copy per environment, with fresh ids and the
+    environment in parentheses after its name, since cucumber-messages has
+    no field for the environment. A `--repeat` execution is the next
+    `attempt` of its test case. `meta` names the nukadoko version that ran
+    the scenarios, and both run timestamps are the run's.
+  - Allure results no longer carry the `host` and `thread` labels, which
+    named the machine that rendered rather than the one that ran.
+  - The live Allure progress snapshots (`*-progress-result.json`) and the
+    ten-second heartbeat that fed them are gone; the progress output on
+    stderr is the live view of a run.
+  - `nuka clean` removes every entry of `.nukadoko/export/` but
+    `allure-history.jsonl`, and no longer reads paths from the config, so
+    the `export-path-outside-project` refusal code is gone. The
+    `emitter-failed` run code is gone; a render that could not write part
+    of its output warns with the new `report-incomplete`, and a run that
+    could not write `sources.json` warns with `run-sources-not-written`.
+  - `run.json`'s `target_version` is redacted like the rest of the run.
+
 - **One directory per run: `.nukadoko/runs/<run_id>/` holds everything a
   `nuka run` measured.** A run's files were spread over
   `records/steps/`, `records/scenarios/`, and `records/runs/<run_id>/`,

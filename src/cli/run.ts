@@ -6,7 +6,6 @@ import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback
 import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
-import { emitterTargets, messagesOutputPath } from "../config/emitter-targets.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
@@ -19,12 +18,6 @@ import {
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
-import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
-import {
-  createMessagesEmitter,
-  type MessagesEmitter,
-} from "../report/messages/emitter.js";
-import { messagesRunOutputPath } from "../record/messages-output.js";
 import { hookDisplayTitle } from "../record/scenario-record.js";
 import { buildStepBindings, type StepBinding } from "../run/match-step.js";
 import { probeGitState } from "../run/probe-git.js";
@@ -54,7 +47,8 @@ import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
-import { runExportsManifestPath } from "../record/run-exports.js";
+import { writeRunSources } from "../record/run-sources.js";
+import { resolveProjectName } from "../report/allure/identity.js";
 import {
   countScenarios,
   runResultRelativePath,
@@ -66,16 +60,13 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
 import {
   doneCallbackMessage,
-  HEARTBEAT_TICK_CAP,
   pendingOrSkippedMessage,
   runScenario,
   runWithTimeout,
-  type StepFinishedInfo,
-  type StepHeartbeatInfo,
 } from "../run/run-scenario.js";
 import { DirectoryTargetLineError, parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
-import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
+import { fixtureTeardownWarning, redactString, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import {
   formatFixtureDefinitionIssues,
@@ -157,54 +148,6 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // `pendingOrSkippedMessage` come from src/run/run-scenario.ts rather than
 // being copied here.
 //
-// The Allure emitter is built and `begin()`-ed once, after `hasPickles` is
-// known, for the same reason BeforeAll and AfterAll are: a run that selects
-// nothing has nothing for the emitter to measure, so it never creates
-// `allure-results/`. Construction and `begin()` share one try/catch even
-// though the emitter's other methods already carry their own
-// (src/report/allure/emitter.ts). `createAllureEmitter` creates `resultsDir`
-// synchronously (src/report/allure/writer.ts's `createAtomicWriter`), which
-// can throw before the emitter's own safety net exists. A failure here is a
-// warning on stderr, never a run failure: measurement must not break
-// execution. `allureEmitter` stays null, and every later
-// `beginScenario`, `emitStep`, and `endScenario` call is skipped for the
-// rest of the run.
-//
-// A pickle's `emitStep` calls happen once per step, through `runScenario`'s
-// `onStepFinished`, before that pickle's
-// `stdout.write`. Each call maps that one step, buffers the result, and
-// writes a disposable progress snapshot (src/report/allure/emitter.ts). The
-// one real Allure test for the scenario reaches disk only at `endScenario`,
-// after the `stdout.write`: stdout's one-line-per-scenario contract must
-// not be disturbed by an emit failure, and none of these methods throws.
-// `endScenario` writes that test result, maps hooks into fixtures, and
-// deletes the progress snapshots. `record.status`, the run's exit code, and
-// stdout's content stay untouched by any of this.
-//
-// The messages emitter is built and `begin()`-ed right after the Allure
-// emitter: the same `hasPickles` gate, the same try/catch around
-// construction and `begin()`, and the same stderr-warning-only failure
-// handling (src/report/messages/emitter.ts). `emitScenario` sits immediately
-// after the Allure emitter's `endScenario`, both after that scenario's
-// `stdout.write`. `end(allPassed)` runs after AfterAll, immediately before
-// this function returns. That is the one place `allPassed` has absorbed
-// every BeforeAll and AfterAll failure, so `testRunFinished.success` equals
-// this run's exit code. That stream is the only channel for a run-scope
-// hook's failure, since neither hook has a record of its own.
-//
-// Output-file semantics: one `nuka run` invocation is one stream. Its real
-// file is unique to this invocation, named from `runId`
-// (src/report/messages/emitter.ts's `messagesRunOutputPath`). `begin()`
-// truncates that file, never the configured `messagesOutputRel` path.
-// Appending would produce a second `testRunStarted` in what must read back
-// as a single message stream, and a second concurrent invocation must not
-// share this invocation's file. A directory target folds every `.feature`
-// file into this same stream, with `begin()` called once, and it is still
-// one invocation and one file. The configured path changes only in `end()`,
-// replaced atomically with a copy of this invocation's finished stream, so
-// a later sequential `nuka run` still leaves that path holding the newest
-// run.
-//
 // `from`'s structural validation (`validateStepFrom` in
 // src/step/validate-from.ts) is a setup-phase fatal: stderr and exit 1, no
 // scenario written. It runs once for the invocation right after `bindings`
@@ -227,7 +170,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //
 // Progress lines (src/run/progress-log.ts) go to stderr, never stdout.
 // stdout's one-JSON-record-per-scenario contract stays a machine contract.
-// `onStepProgress` is built once and threaded into every `runScenario`
+// `onStepEnd` is built once and threaded into every `runScenario`
 // call. The progress has no TTY check. A CI log wants the same progress. The records
 // on stdout are written only under `--records`, and under `--json` none of
 // these lines is written at all (see `runRun`).
@@ -319,11 +262,6 @@ export interface RunRunOptions {
    * with one capture changed, and note each one that still passes
    * (src/run/probe.ts). A note never changes the exit code. */
   probe: boolean;
-  /** `--summary <path>`: one more copy of the run summary, resolved against
-   * `rootDir`, for a CI step that posts it as a pull request comment.
-   * `null` without the flag; the copy in the run directory is written
-   * either way. */
-  summaryPath: string | null;
   /** `$GITHUB_STEP_SUMMARY` as the CLI read it, `undefined` when unset or
    * empty. Passed in rather than read here so a test decides it. */
   stepSummaryPath: string | undefined;
@@ -331,42 +269,23 @@ export interface RunRunOptions {
   stderr: WritableSink;
 }
 
-/** The output-location rows for the emitters that are on; a row for one
- * that is off would name a path nothing wrote. The messages row names this
- * run's own suffixed file, which a concurrent invocation cannot replace. */
-function exportLocations(
-  allureResultsDirRel: string | null,
-  messagesOutputRel: string | null,
-  runId: string,
-): Array<{ label: string; relativePath: string; kind: "dir" | "file" }> {
-  return [
-    ...(allureResultsDirRel === null ? [] : [{ label: "allure", relativePath: allureResultsDirRel, kind: "dir" as const }]),
-    ...(messagesOutputRel === null
-      ? []
-      : [{ label: "messages", relativePath: messagesRunOutputPath(messagesOutputRel, runId), kind: "file" as const }]),
-  ];
-}
-
-/** The step records row, when the run wrote a scenario, then the export
- * rows. Scenarios have no directory of their own to name: run.json holds
- * them. */
+/** The step records row, when the run wrote a scenario. Scenarios have no
+ * directory of their own to name: run.json holds them. */
 function stepsLocation(
   stateDir: string,
   runId: string,
   scenariosWritten: number,
   stepRecordsWritten: number,
-  exports: ReturnType<typeof exportLocations>,
 ): Array<{ label: string; relativePath: string; kind: "dir" | "file"; count?: number }> {
   return [
     ...(scenariosWritten > 0
       ? [{ label: "steps", relativePath: path.join(runRelativeDir(stateDir, runId), RUN_FILE_DIRS.steps), kind: "dir" as const, count: stepRecordsWritten }]
       : []),
-    ...exports,
   ];
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, envs, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
+  const { rootDir, envs, concurrency, repeat, stepSummaryPath, stderr } = options;
   const notices = options.notices ?? [];
   const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint, before: readonly Finding[] = []): number =>
     refuse({ json: options.json, stdout: options.stdout, stderr, command: "run" }, error, code, hint, [...notices, ...before]);
@@ -524,10 +443,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     // Flattened once, here, into the `{ feature, pickle }` pairs every use
-    // below actually needs: `selected.
-    // features` stays grouped by file for the messages emitter's own
-    // `begin()` call (its own site below), but every other use — counting,
-    // the from/fixture checks, the pickle loop itself — wants one ordered
+    // below actually needs: `selected.features` stays grouped by file for
+    // sources.json, but every other use (counting,
+    // the from/fixture checks, the pickle loop itself) wants one ordered
     // sequence across every file, each pickle still paired with *its own*
     // feature's `relativePath`/`gherkinDocument`, never a stray shared one.
     const flatPickles = selected.features.flatMap((feature) =>
@@ -754,7 +672,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           stateDir: config.stateDir,
           policy: config.retention,
           now: new Date(),
-          messagesOutputRel: messagesOutputPath(config),
           currentRun: { runId, startedAt: invocationStartedAt.getTime() },
         });
         retention = formatRetention(outcome, config.retention);
@@ -768,7 +685,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean },
         environments: conditions.map((condition) => ({
           name: condition.resolvedEnv.name,
-          target_version: condition.targetVersion ?? null,
+          // Unlike a scenario record, run.json is not redacted as a whole,
+          // and a version probe can answer with a secret value.
+          target_version: condition.targetVersion === undefined ? null : redactString(condition.targetVersion, condition.secrets),
         })),
         selection,
         counts: countScenarios(runScenarios),
@@ -783,7 +702,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           rootDir,
           stateDir: config.stateDir,
           runId,
-          summaryPath: options.summaryPath ?? undefined,
           stepSummaryPath,
         });
         for (const warning of written.warnings) warnings("summary-not-written").write(`${warning}\n`);
@@ -791,6 +709,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
       const document = formatEnvelope("run", exitCode, runFindings, fields);
       if (flatPickles.length > 0) {
+        // Before run.json, so a run that ended always has what
+        // `nuka report` parses its scenarios from.
+        try {
+          writeRunSources(rootDir, config.stateDir, runId, {
+            project: resolveProjectName(rootDir),
+            features: selected.features.map((feature) => ({ path: feature.relativePath, source: feature.source })),
+          });
+        } catch (error) {
+          warn({ severity: "warning", code: "run-sources-not-written", message: `sources.json was not written: ${error instanceof Error ? error.message : String(error)}` });
+        }
         try {
           writeRunResult(rootDir, config.stateDir, runId, document);
         } catch (error) {
@@ -872,14 +800,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
     };
 
-    // Root-relative (src/config/schema.ts's own doc comment for each of
-    // these two keys) — computed here, ahead of the `--concurrency`
-    // branch just below, since both the parallel path (src/run/
-    // run-concurrent.ts) and the unchanged path right after it need the
-    // exact same resolved value for the output-location line near this
-    // function's own `return`.
-    const { allureResultsDir: allureResultsDirRel, messagesOutput: messagesOutputRel } = emitterTargets(config);
-
     // A target naming one file has nothing to distribute across more than
     // one worker, so `--concurrency` drops back to 1 with a one-line
     // reason (docs/spec.md "Scenarios (the scripted path)",
@@ -896,7 +816,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         scenariosWritten,
         scenariosPassed,
         stepRecordsWritten,
-        messagesEmitter,
         failedScenarios,
         repeatTallies,
         interruptedBy,
@@ -915,24 +834,21 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           concurrency: effectiveConcurrency,
           selected,
           flatPickles,
-          allureResultsDirRel,
-          messagesOutputRel,
           onRecord: noteRecord,
           progress,
           warn,
           stderr,
         });
 
-      messagesEmitter?.end(allPassed);
       // An interrupted run prunes nothing and writes no run.json, as at
       // `--concurrency 1`, where the signal handler exits first.
       if (interruptedBy !== null) {
-        writeRunEnd(stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten, exportLocations(allureResultsDirRel, messagesOutputRel, runId)), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null });
+        writeRunEnd(stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null });
         return exitCodeForSignal(interruptedBy);
       }
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
-        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten, flatPickles.length > 0 ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
+        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten),
         { total: scenariosWritten, passed: scenariosPassed },
         failedScenarios,
         repeatTallies,
@@ -966,88 +882,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       const hasPickles = flatPickles.length > 0;
 
       processSignal = installProcessSignalHandlers();
-
-      // `allureResultsDirRel`/`messagesOutputRel` are computed once, above
-      // the `--concurrency` branch this block sits after — the exact
-      // resolved value (config default already applied, the actual write
-      // destination rather than the config key itself) both this block and
-      // src/run/run-concurrent.ts need for the output-location line near
-      // this function's own `return`, whether or not the emitter that
-      // writes there actually succeeds. `messagesOutputRel` itself feeds
-      // two different things below: the emitter's own `output` (the
-      // stable, config-facing path it copies its finished stream onto),
-      // and, run-id-suffixed via `messagesRunOutputPath`, the row that
-      // output-location line names — a concurrent second invocation can
-      // replace the stable path's contents before a reader gets to it, but
-      // never this run's own suffixed file (src/report/messages/
-      // emitter.ts's own header).
-
-      // See this file's own header for why this is gated on `hasPickles`,
-      // why construction and
-      // `begin()` are wrapped together, and why a failure here never fails
-      // the run.
-      let allureEmitter: AllureEmitter | null = null;
-      if (hasPickles && allureResultsDirRel !== null) {
-        try {
-          const resultsDir = path.resolve(rootDir, allureResultsDirRel);
-          allureEmitter = createAllureEmitter({
-            resultsDir,
-            rootDir,
-            exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
-            // One emitter serves every environment of the run, so its
-            // environment.properties names them all; each result carries
-            // its own environment as a parameter. A version is only
-            // written when one environment ran, since it belongs to that
-            // one target.
-            environment: conditions.map((condition) => condition.resolvedEnv.name).join(", "),
-            ...(conditions.length === 1 && conditions[0]!.targetVersion !== undefined
-              ? { targetVersion: conditions[0]!.targetVersion }
-              : {}),
-            secrets: conditions.flatMap((condition) => condition.secrets),
-            stderr: warnings("emitter-failed"),
-            // The exact same cap run-scenario.ts's own heartbeat enforces
-            // per step (src/report/allure/emitter.ts's own
-            // `AllureEmitterOptions.heartbeatCap` doc comment), threaded
-            // through explicitly so the two can never drift apart on their
-            // own.
-            heartbeatCap: HEARTBEAT_TICK_CAP,
-          });
-          allureEmitter.begin();
-        } catch (error) {
-          allureEmitter = null;
-          warnings("emitter-failed").write(`allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
-        }
-      }
-
-      // See this file's own header for the gate, the try/catch shape, and
-      // the output-file truncate semantics.
-      let messagesEmitter: MessagesEmitter | null = null;
-      if (hasPickles && messagesOutputRel !== null) {
-        try {
-          const output = path.resolve(rootDir, messagesOutputRel);
-          messagesEmitter = createMessagesEmitter({
-            output,
-            rootDir,
-            stderr: warnings("emitter-failed"),
-            runId,
-            exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
-          });
-          // One `features` entry per file `selected` carries —
-          // `selected.features` is already in this
-          // run's own deterministic order, so this emitter has no reordering
-          // of its own to do (src/report/messages/emitter.ts's own header).
-          messagesEmitter.begin({
-            features: selected.features.map((feature) => ({
-              relativeFeaturePath: feature.relativePath,
-              gherkinDocument: feature.gherkinDocument,
-              pickles: feature.pickles,
-            })),
-          });
-        } catch (error) {
-          messagesEmitter = null;
-          warnings("emitter-failed").write(`messages emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
-        }
-      }
 
       const beforeAllHooks = compatRunHooks.filter((hook) => hook.type === "beforeAll");
       // Same LIFO convention as src/run/run-scenario.ts's own After-hook
@@ -1120,64 +954,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               name: pickle.name,
             });
 
-            // Opens this scenario's own Allure scope right before its first
-            // step can possibly run — `emitStep` below needs it to already
-            // exist the moment the
-            // first step finishes. `undefined` — a no-op — when this run has
-            // no Allure emitter at all (setup failure or zero pickles, this
-            // file's own header). `startedAt` is captured here, not read back
-            // out of `record` below: this call always happens before
-            // `runScenario` even starts, so it can only ever be earlier than
-            // or equal to that call's own `record.started_at`, which is what
-            // keeps every progress snapshot's own `start` strictly below the
-            // real result's (src/report/allure/emitter.ts's own
-            // `BeginScenarioInput`).
-            allureEmitter?.beginScenario({
-              pickle,
-              gherkinDocument: feature.gherkinDocument,
-              relativeFeaturePath: feature.relativePath,
-              environment: condition.resolvedEnv.name,
-              startedAt: new Date(),
-            });
-
-            // One instance per pickle, unlike `onStepEnd` above: it closes
-            // over this
-            // pickle's own `gherkinDocument`/`relativeFeaturePath`, which
-            // `run-scenario.ts`'s own `StepFinishedInfo` does not carry (that
-            // struct is per-*step*, not per-*scenario*). It is itself a
-            // no-op when `allureEmitter` is `null`.
-            const onStepFinished: ((info: StepFinishedInfo) => void) | undefined = allureEmitter
-              ? (info) => {
-                  allureEmitter?.emitStep({
-                    ...info,
-                    gherkinDocument: feature.gherkinDocument,
-                    pickle,
-                    relativeFeaturePath: feature.relativePath,
-                    environment: condition.resolvedEnv.name,
-                    targetVersion: condition.targetVersion,
-                    runId,
-                  });
-                }
-              : undefined;
-
-            // Same "no-op unless there's an Allure emitter to write to" shape
-            // as `onStepFinished` just above, built once per pickle for the
-            // same reason: this closure needs that pickle's own
-            // `gherkinDocument`/`relativeFeaturePath`, which
-            // `StepHeartbeatInfo` itself does not carry.
-            const onStepProgress: ((info: StepHeartbeatInfo) => void) | undefined = allureEmitter
-              ? (info) => {
-                  allureEmitter?.emitStepProgress({
-                    ...info,
-                    gherkinDocument: feature.gherkinDocument,
-                    pickle,
-                    relativeFeaturePath: feature.relativePath,
-                  });
-                }
-              : undefined;
-
-            const record = await runScenario({
-              rootDir,
+            const record = await runScenario({              rootDir,
               config: condition.runConfig,
               pickle,
               relativeFeaturePath: feature.relativePath,
@@ -1200,8 +977,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               defaultTimeoutMs,
               onUnknownTraceVersion,
               onStepEnd,
-              onStepFinished,
-              onStepProgress,
               fixtureGraph,
               fixtureProcessCache,
               processSignal,
@@ -1228,22 +1003,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             for (const teardownError of record.teardown_errors ?? []) {
               warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, condition.secrets) + "\n");
             }
-            // After the stdout line, always — see this file's own header.
-            // `allureEmitter` is `null` when this run selected zero pickles or
-            // its own setup failed above; `endScenario` itself never throws.
-            // Every one of this scenario's own steps has already had its own
-            // `emitStep` call by now, each one only buffered — this call is
-            // what actually writes this scenario's one Allure test result
-            // (every buffered step nested inside it), maps this scenario's
-            // own hooks into fixtures alongside it, and writes the scope both
-            // share.
-            allureEmitter?.endScenario({
-              record,
-              gherkinDocument: feature.gherkinDocument,
-              pickle,
-              relativeFeaturePath: feature.relativePath,
-            });
-            messagesEmitter?.emitScenario({ record, pickle });
             if (record.status !== "passed") {
               passPassed = false;
               failedScenarios.push(failedScenarioOf(record));
@@ -1284,14 +1043,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         if (!passPassed) allPassed = false;
       }
 
-      // See this file's own header for why this must run here — after
-      // BeforeAll/AfterAll have
-      // had their chance to flip `allPassed`, immediately before the
-      // `return` below that turns it into this run's own exit code.
-      messagesEmitter?.end(allPassed);
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
-        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten, hasPickles ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
+        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten),
         { total: scenariosWritten, passed: scenariosPassed },
         failedScenarios,
         repeatTally.list(),

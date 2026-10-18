@@ -19,8 +19,8 @@ import {
 
 // Responsibility: the Markdown run summary one `nuka run` invocation leaves
 // for a person: in its own run directory always, appended to
-// `$GITHUB_STEP_SUMMARY` when that is set, and at `--summary <path>` when
-// asked. It says what ran, at which commit, under which condition, and how
+// `$GITHUB_STEP_SUMMARY` when that is set, and wherever
+// `nuka report --format markdown` is pointed later. It says what ran, at which commit, under which condition, and how
 // each scenario ended.
 //
 // The renderer reads run.json and nothing else, so the summary is a view of
@@ -296,9 +296,6 @@ export interface RunSummaryTargets {
   readonly rootDir: string;
   readonly stateDir: string;
   readonly runId: string;
-  /** `--summary <path>`, resolved against `rootDir`; replaced, not
-   * appended, because it is this run's file. */
-  readonly summaryPath: string | undefined;
   /** `$GITHUB_STEP_SUMMARY`; appended, because earlier steps of the same
    * job write to the same file. */
   readonly stepSummaryPath: string | undefined;
@@ -327,13 +324,6 @@ export function writeRunSummaryFiles(markdown: string, targets: RunSummaryTarget
     mkdirSync(path.dirname(runCopy), { recursive: true });
     writeFileSync(runCopy, markdown);
   });
-  if (targets.summaryPath !== undefined) {
-    const destination = path.resolve(targets.rootDir, targets.summaryPath);
-    attempt(targets.summaryPath, () => {
-      mkdirSync(path.dirname(destination), { recursive: true });
-      writeFileSync(destination, markdown);
-    });
-  }
   if (targets.stepSummaryPath !== undefined) {
     const destination = targets.stepSummaryPath;
     attempt("GITHUB_STEP_SUMMARY", () => appendFileSync(destination, markdown));

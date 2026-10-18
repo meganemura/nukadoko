@@ -67,7 +67,9 @@ describe("nuka run --repeat", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    const stream = await readFile(path.join(rootDir, ".nukadoko", "export", "messages.ndjson"), "utf8");
+    const out = createCaptureSink();
+    expect(await runCli(["report", "--format", "messages"], { rootDir, stdout: out, stderr: createCaptureSink() })).toBe(0);
+    const stream = out.text();
     const envelopes = stream
       .split("\n")
       .filter((line) => line.length > 0)

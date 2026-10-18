@@ -1,22 +1,18 @@
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { Envelope } from "@cucumber/messages";
+import type { Envelope, Pickle } from "@cucumber/messages";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
-import { messagesRunOutputPath } from "../src/record/messages-output.js";
-import { createMessagesEmitter, type MessagesEmitter } from "../src/report/messages/emitter.js";
+import { writeMessagesStream, type MessagesFeatureInput, type MessagesScenarioInput } from "../src/report/messages/write-stream.js";
 import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
-import { readOwnVersion } from "../src/version.js";
-import { createCaptureSink } from "./helpers/fixtures.js";
 
-// Responsibility: integration tests —
-// drives the real `createMessagesEmitter` end to end against fixture
-// record.json/step record.json data (built here as plain objects, not by
-// actually running a scenario) and reads the real NDJSON file it writes
-// back off disk, one `JSON.parse` per line. No `.feature` file on disk is
-// needed: `parseFeatureSource` takes source text directly.
+// Responsibility: drives the real `writeMessagesStream` end to end
+// against scenario and step records built here as plain objects, not by
+// running a scenario, and parses each line it writes. No `.feature` file
+// on disk is needed: `parseFeatureSource` takes source text directly, and
+// the stream carries the source it is given.
 
 const FEATURE_SOURCE = `Feature: Checkout
   Handles the checkout flow.
@@ -44,53 +40,66 @@ const SECOND_FEATURE_SOURCE = `Feature: Shipping
     Given a carrier is chosen
 `;
 
-function writeStepRecordFile(rootDir: string, stepRecord: StepRecord): void {
-  const dir = path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", stepRecord.step_record_id);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}
-`);
+interface Rendered {
+  envelopes: Envelope[];
+  warnings: string[];
 }
 
-function readEnvelopes(output: string): Envelope[] {
-  const content = readFileSync(output, "utf8");
-  return content
-    .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as Envelope);
+function render(
+  rootDir: string,
+  features: readonly MessagesFeatureInput[],
+  scenarios: readonly { record: ScenarioRecord; pickle: Pickle; stepRecords?: readonly StepRecord[] }[],
+  success = true,
+): Rendered {
+  const lines: string[] = [];
+  const warnings: string[] = [];
+  const inputs: MessagesScenarioInput[] = scenarios.map((scenario) => ({
+    record: scenario.record,
+    pickle: scenario.pickle,
+    stepRecords: new Map((scenario.stepRecords ?? []).map((stepRecord) => [stepRecord.step_record_id, stepRecord])),
+  }));
+  writeMessagesStream(
+    {
+      write: (line) => lines.push(line),
+      resolvePath: (recordedPath) => path.resolve(rootDir, recordedPath),
+      readFile: (absolutePath) => readFileSync(absolutePath),
+      warn: (message) => warnings.push(message),
+      nukadokoVersion: "0.0.0-ran",
+      startedAt: "2026-08-01T00:00:00.000Z",
+      finishedAt: "2026-08-01T00:00:03.000Z",
+      success,
+    },
+    features,
+    inputs,
+  );
+  for (const line of lines) expect(line.endsWith("\n")).toBe(true);
+  return { envelopes: lines.join("").split("\n").filter((line) => line.length > 0).map((line) => JSON.parse(line) as Envelope), warnings };
 }
 
-describe("createMessagesEmitter", () => {
+function checkout(): MessagesFeatureInput {
+  const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+  return { relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles, source: FEATURE_SOURCE };
+}
+
+describe("writeMessagesStream", () => {
   let rootDir: string;
-  let output: string;
-  let runOutput: string;
-  let sink: { write(chunk: string): boolean; text(): string };
-  let emitter: MessagesEmitter;
 
   beforeEach(() => {
-    rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-messages-emitter-"));
-    output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
-    runOutput = messagesRunOutputPath(output, "run-1");
-    sink = createCaptureSink();
-    emitter = createMessagesEmitter({ output, rootDir, stderr: sink, runId: "run-1" });
+    rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-messages-stream-"));
   });
 
   afterEach(() => {
     rmSync(rootDir, { recursive: true, force: true });
   });
 
-  describe("a full run: begin -> emitScenario x2 -> end(true)", () => {
+  describe("a full run of two scenarios", () => {
     let envelopes: Envelope[];
+    let warnings: string[];
 
     beforeEach(() => {
-      const featurePath = path.join(rootDir, "features", "checkout.feature");
-      mkdirSync(path.dirname(featurePath), { recursive: true });
-      writeFileSync(featurePath, FEATURE_SOURCE);
-
-      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-      const pickle = pickles[0]!;
-      const outlineRow = pickles.find((p) => p.name.startsWith("checkout as"))!;
-
-      emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
+      const feature = checkout();
+      const pickle = feature.pickles[0]!;
+      const outlineRow = feature.pickles.find((p) => p.name.startsWith("checkout as"))!;
 
       const recordDir = path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", "step-1");
       mkdirSync(recordDir, { recursive: true });
@@ -115,7 +124,6 @@ describe("createMessagesEmitter", () => {
         mutates: true,
         declared: { attachments: ["note.txt"], logs: ["did the thing"] },
       };
-      writeStepRecordFile(rootDir, stepRecord);
 
       const scenarioDir = path.join(rootDir, ".nukadoko", "runs", "run-1", "scenarios", "scn-1");
       mkdirSync(scenarioDir, { recursive: true });
@@ -142,7 +150,6 @@ describe("createMessagesEmitter", () => {
           screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.500Z" }],
         },
       };
-      emitter.emitScenario({ record, pickle });
 
       const record2: ScenarioRecord = {
         nukadoko: "0.0.0-test",
@@ -159,11 +166,12 @@ describe("createMessagesEmitter", () => {
         hooks: [],
         evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-2", screenshots: [] },
       };
-      emitter.emitScenario({ record: record2, pickle: outlineRow });
-
-      emitter.end(true);
-
-      envelopes = readEnvelopes(output);
+      const rendered = render(rootDir, [feature], [
+        { record, pickle, stepRecords: [stepRecord] },
+        { record: record2, pickle: outlineRow },
+      ]);
+      envelopes = rendered.envelopes;
+      warnings = rendered.warnings;
     });
 
     it("produces valid NDJSON, one JSON.parse-able envelope per line", () => {
@@ -201,10 +209,15 @@ describe("createMessagesEmitter", () => {
       }
     });
 
-    it("sets meta.implementation to nukadoko's own name and package.json version", () => {
+    it("sets meta.implementation to the nukadoko version that ran the scenarios", () => {
       const meta = envelopes.find((e) => e.meta)!.meta!;
-      expect(meta.implementation.name).toBe("nukadoko");
-      expect(meta.implementation.version).toBe(readOwnVersion());
+      expect(meta.implementation).toEqual({ name: "nukadoko", version: "0.0.0-ran" });
+    });
+
+    it("takes both run timestamps from the run, and warns about nothing", () => {
+      expect(envelopes.find((e) => e.testRunStarted)!.testRunStarted!.timestamp).toEqual({ seconds: 1785542400, nanos: 0 });
+      expect(envelopes.find((e) => e.testRunFinished)!.testRunFinished!.timestamp).toEqual({ seconds: 1785542403, nanos: 0 });
+      expect(warnings).toEqual([]);
     });
 
     it("gives source.data the feature file's own original text", () => {
@@ -275,83 +288,13 @@ describe("createMessagesEmitter", () => {
     });
   });
 
-  it("truncates this run's own file on begin(), so a leftover under the same run id never survives", () => {
-    mkdirSync(path.dirname(runOutput), { recursive: true });
-    writeFileSync(runOutput, "leftover line from a previous run\n");
-
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
-
-    const content = readFileSync(runOutput, "utf8");
-    expect(content).not.toContain("leftover line from a previous run");
-  });
-
-  it("leaves the configured output path untouched until end(), then replaces it atomically with this run's own complete stream", () => {
-    mkdirSync(path.dirname(output), { recursive: true });
-    writeFileSync(output, "leftover line from a previous run\n");
-
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
-
-    // begin() alone must not touch `output` at all — a concurrent run's own
-    // begin() truncating a file this run also writes to is exactly the
-    // corruption src/report/messages/emitter.ts's own header describes.
-    expect(readFileSync(output, "utf8")).toBe("leftover line from a previous run\n");
-
-    emitter.end(true);
-
-    const content = readFileSync(output, "utf8");
-    expect(content).not.toContain("leftover line from a previous run");
-    expect(content).toContain("testRunFinished");
-    // `output` is a copy, byte for byte, of this run's own file — not a
-    // reconstruction, not a summary.
-    expect(content).toBe(readFileSync(runOutput, "utf8"));
-  });
-
-  it("replaces the configured output under a new inode, so a reader of the previous stream never sees this run's bytes", () => {
-    mkdirSync(path.dirname(output), { recursive: true });
-    writeFileSync(output, "previous complete stream\n");
-    // Stands for a reader that opened the previous stream before end(): it
-    // keeps the old inode, so a copy that rewrote `output` in place would
-    // show through it.
-    const reader = path.join(rootDir, "reader.ndjson");
-    linkSync(output, reader);
-
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
-    emitter.end(true);
-
-    expect(readFileSync(reader, "utf8")).toBe("previous complete stream\n");
-    expect(readFileSync(output, "utf8")).toBe(readFileSync(runOutput, "utf8"));
-  });
-
-  it("removes its temp file when publishing onto the configured output fails", () => {
-    // A directory at the configured path makes the rename fail on every platform.
-    mkdirSync(output, { recursive: true });
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
-    emitter.end(true);
-
-    expect(sink.text()).toMatch(/^warning: messages end failed: EISDIR: /m);
-    expect(readdirSync(path.dirname(output)).sort()).toEqual([path.basename(output), path.basename(runOutput)].sort());
-  });
-
-  it("begin() with more than one feature writes meta, then one (source, gherkinDocument, pickle x N) group per feature in the given order, then one testRunStarted", () => {
-    const first = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
+  it("more than one feature writes meta, then one (source, gherkinDocument, pickle x N) group per feature in the given order, then one testRunStarted", () => {
     const second = parseFeatureSource(SECOND_FEATURE_SOURCE, "features/shipping.feature");
-
-    mkdirSync(path.join(rootDir, "features"), { recursive: true });
-    writeFileSync(path.join(rootDir, "features", "checkout.feature"), FEATURE_SOURCE);
-    writeFileSync(path.join(rootDir, "features", "shipping.feature"), SECOND_FEATURE_SOURCE);
-
-    emitter.begin({
-      features: [
-        { relativeFeaturePath: "features/checkout.feature", gherkinDocument: first.gherkinDocument, pickles: first.pickles },
-        { relativeFeaturePath: "features/shipping.feature", gherkinDocument: second.gherkinDocument, pickles: second.pickles },
-      ],
-    });
-
-    const envelopes = readEnvelopes(runOutput);
+    const { envelopes } = render(
+      rootDir,
+      [checkout(), { relativeFeaturePath: "features/shipping.feature", ...second, source: SECOND_FEATURE_SOURCE }],
+      [],
+    );
     const kinds = envelopes.map((e) => Object.keys(e)[0]);
 
     // meta, then checkout's own (source, gherkinDocument, pickle x 3), then
@@ -369,6 +312,7 @@ describe("createMessagesEmitter", () => {
       "gherkinDocument",
       "pickle",
       "testRunStarted",
+      "testRunFinished",
     ]);
 
     const sources = envelopes.filter((e) => e.source).map((e) => e.source!);
@@ -390,9 +334,8 @@ describe("createMessagesEmitter", () => {
   });
 
   it("degrades gracefully when a declared attachment file doesn't exist: warns, but the scenario's own envelopes still land", () => {
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    const pickle = pickles[0]!;
-    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
+    const feature = checkout();
+    const pickle = feature.pickles[0]!;
 
     const stepRecord: StepRecord = {
       schema_version: 3,
@@ -413,7 +356,6 @@ describe("createMessagesEmitter", () => {
       mutates: true,
       declared: { attachments: ["never-written.txt"] },
     };
-    writeStepRecordFile(rootDir, stepRecord);
 
     const record: ScenarioRecord = {
       nukadoko: "0.0.0-test",
@@ -431,72 +373,74 @@ describe("createMessagesEmitter", () => {
       evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-missing-file", screenshots: [] },
     };
 
-    expect(() => emitter.emitScenario({ record, pickle })).not.toThrow();
-
-    expect(sink.text()).toContain("warning:");
-    expect(sink.text()).toContain("never-written.txt");
-
-    const envelopes = readEnvelopes(runOutput);
+    const { envelopes, warnings } = render(rootDir, [feature], [{ record, pickle, stepRecords: [stepRecord] }]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("never-written.txt");
     expect(envelopes.some((e) => e.testCase)).toBe(true);
     expect(envelopes.some((e) => e.attachment)).toBe(false);
   });
 
-  it("sets testRunFinished.success to false on end(false)", () => {
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
-    emitter.end(false);
-
-    const envelopes = readEnvelopes(output);
-    const testRunFinished = envelopes.find((e) => e.testRunFinished)!.testRunFinished!;
-    expect(testRunFinished.success).toBe(false);
-  });
-
-  it("keeps the previous stream at the configured path when this run's own file is removed mid-run", () => {
-    mkdirSync(path.dirname(output), { recursive: true });
-    writeFileSync(output, "previous complete stream\n");
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
-
-    rmSync(runOutput);
-    emitter.end(true);
-
-    expect(readFileSync(output, "utf8")).toBe("previous complete stream\n");
-    expect(existsSync(runOutput)).toBe(false);
-    expect(sink.text()).toContain(`warning: messages end failed: ENOENT: no such file or directory, open '${runOutput}'\n`);
-  });
-
-  describe("begin() failure isolation", () => {
-    it("degrades to a silent no-op for emitScenario/end when begin() itself fails (unwritable run output path)", () => {
-      // A deterministic way to make begin()'s own truncate fail: pre-create
-      // a *directory* at the exact path this run's own file would be
-      // written to — `writeFileSync` onto an existing directory always
-      // fails (EISDIR), regardless of platform/CI permissions setup.
-      mkdirSync(runOutput, { recursive: true });
-
-      const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-      const pickle = pickles[0]!;
-
-      expect(() => emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] })).not.toThrow();
-      expect(sink.text()).toContain("warning:");
-
-      const record: ScenarioRecord = {
+  describe("a scenario run more than once", () => {
+    function recordOf(id: string, environment: string): ScenarioRecord {
+      return {
         nukadoko: "0.0.0-test",
-        scenario_record_id: "scn-1",
+        scenario_record_id: id,
         run_id: "run-1",
         feature: "features/checkout.feature",
         scenario: "a customer checks out",
         line: 3,
         status: "passed",
-        environment: "staging",
+        environment,
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [{ text: "the cart has items", status: "passed", step_record_id: null }],
         hooks: [],
-        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
+        evidence: { dir: `.nukadoko/runs/run-1/scenarios/${id}`, screenshots: [] },
       };
+    }
 
-      expect(() => emitter.emitScenario({ record, pickle })).not.toThrow();
-      expect(() => emitter.end(true)).not.toThrow();
+    it("gives each environment its own pickle, named with the environment, and each test case the pickle of its environment", () => {
+      const feature = checkout();
+      const pickle = feature.pickles[0]!;
+      const { envelopes } = render(rootDir, [feature], [
+        { record: recordOf("scn-s", "staging"), pickle },
+        { record: recordOf("scn-p", "production"), pickle },
+      ]);
+      const pickles = envelopes.filter((e) => e.pickle).map((e) => e.pickle!);
+      expect(pickles.map((p) => p.name)).toEqual([
+        "a customer checks out (staging)",
+        "a customer checks out (production)",
+        "checkout as guest",
+        "checkout as member",
+      ]);
+      expect(new Set(pickles.flatMap((p) => p.steps.map((step) => step.id))).size).toBe(4);
+      const testCases = envelopes.filter((e) => e.testCase).map((e) => e.testCase!);
+      expect(testCases.map((testCase) => pickles.find((p) => p.id === testCase.pickleId)!.name)).toEqual([
+        "a customer checks out (staging)",
+        "a customer checks out (production)",
+      ]);
+      expect(envelopes.filter((e) => e.testCaseStarted).map((e) => e.testCaseStarted!.attempt)).toEqual([0, 0]);
     });
+
+    it("keeps the parsed pickle in a one-environment run, and counts a repeat as the next attempt", () => {
+      const feature = checkout();
+      const pickle = feature.pickles[0]!;
+      const { envelopes } = render(rootDir, [feature], [
+        { record: recordOf("scn-1", "staging"), pickle },
+        { record: recordOf("scn-2", "staging"), pickle },
+      ]);
+      expect(envelopes.filter((e) => e.pickle).map((e) => e.pickle!.name)).toEqual([
+        "a customer checks out",
+        "checkout as guest",
+        "checkout as member",
+      ]);
+      expect(envelopes.filter((e) => e.testCase).map((e) => e.testCase!.pickleId)).toEqual([pickle.id, pickle.id]);
+      expect(envelopes.filter((e) => e.testCaseStarted).map((e) => e.testCaseStarted!.attempt)).toEqual([0, 1]);
+    });
+  });
+
+  it("sets testRunFinished.success to false for a run that did not pass", () => {
+    const { envelopes } = render(rootDir, [checkout()], [], false);
+    expect(envelopes.find((e) => e.testRunFinished)!.testRunFinished!.success).toBe(false);
   });
 });

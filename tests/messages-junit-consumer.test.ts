@@ -1,12 +1,10 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { JUnitXmlPrinter } from "@cucumber/junit-xml-formatter";
 import { parseEnvelope } from "@cucumber/messages";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: run our messages.ndjson through the real, official
+// Responsibility: run the stream `nuka report --format messages` prints through the real, official
 // consumer rather than our own
 // structural assertions about it. `@cucumber/junit-xml-formatter` drives
 // `@cucumber/query` over the envelope stream to resolve every id reference
@@ -14,9 +12,8 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // pickleStepId a failed testStepResult's trace is built from); if any of
 // those references don't actually resolve, this is where it would show —
 // either as a thrown error or as empty/missing content in the XML, not as
-// a passing assertion in messages-emitter.test.ts's own hand-rolled checks.
-// Reuses run-project (same fixture run-messages.test.ts drives via a temp
-// copy) rather than a new fixture: it already has both a passing and a
+// a passing assertion in messages-write-stream.test.ts's own hand-rolled checks.
+// Reuses run-project rather than a new fixture: it already has both a passing and a
 // failing scenario, which is exactly what's needed here.
 
 function buildJUnitXml(ndjson: string): string {
@@ -31,11 +28,12 @@ function buildJUnitXml(ndjson: string): string {
 }
 
 async function readMessagesFile(rootDir: string): Promise<string> {
-  const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
-  return readFile(output, "utf8");
+  const stdout = createCaptureSink();
+  expect(await runCli(["report", "--format", "messages"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+  return stdout.text();
 }
 
-describe("messages.ndjson through the real @cucumber/junit-xml-formatter consumer", () => {
+describe("nuka report --format messages through the real @cucumber/junit-xml-formatter consumer", () => {
   let rootDir: string;
 
   beforeEach(async () => {

@@ -1,4 +1,4 @@
-import { copyFileSync, linkSync, mkdirSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, linkSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { stringifyEnvInfo, type Writer } from "allure-js-commons/sdk/reporter";
 import type { Category, EnvironmentInfo } from "allure-js-commons/sdk";
@@ -24,13 +24,9 @@ import type { Globals, TestResult, TestResultContainer } from "allure-js-commons
 // (never across a different filesystem/mount), which is what makes the
 // rename itself atomic.
 //
-// `writeProgressSnapshot`/`deleteProgressSnapshot`/`cleanProgressSnapshots`
-// are the one exception to "existing files under `resultsDir` are never
-// touched" above: a progress snapshot is emitter.ts's own scratch state
-// (docs/spec.md's append-only promise is about `*-result.json`, the actual
-// record, never about this tool's own disposable stand-in for one), so
-// deleting one outright, mid-run or at the next run's own startup, is
-// exactly the intended lifecycle rather than an exception to it.
+// `allure watch` is still why this matters after a run: `nuka report
+// --format allure` can write into a directory a running `allure watch`
+// already reads.
 
 function tempNameFor(finalName: string): string {
   const random = Math.random().toString(36).slice(2, 8);
@@ -66,7 +62,7 @@ function writeAtomic(filePath: string, data: Buffer | string): void {
 // original, since the link count, not the original path, keeps the bytes
 // alive. The link is made to the temp name and then renamed, so the
 // atomicity the header describes holds for links exactly as for writes.
-// Linking fails across filesystems (`allure.resultsDir` can point anywhere)
+// Linking fails across filesystems (`nuka report --out` can point anywhere)
 // and on filesystems without hard links, so any link failure falls back to
 // a copy of the same bytes; the outcome differs only in disk usage.
 function linkOrCopyAtomic(filePath: string, sourcePath: string, link: LinkFile): void {
@@ -89,69 +85,16 @@ export interface AtomicWriterOptions {
   /** Called with the absolute path of every result, container, and
    * attachment file this writer completes (after the rename, so the path
    * names a finished file). Never called for `environment.properties`,
-   * `categories.json`, a globals file, or a progress snapshot: the first
-   * three are rewritten by every run and belong to none, and a snapshot is
-   * deleted by the run that wrote it. This is what lets one run own its
+   * `categories.json`, or a globals file: those are rewritten by every
+   * report and belong to no one run. This is what lets one run own its
    * export files (src/record/run-exports.ts). */
   readonly onWrite?: (absolutePath: string) => void;
 }
 
-// A progress snapshot's own filename always ends in this — nested inside
-// `writeResult`'s own `-result.json` suffix (`allure watch`'s own glob
-// reads both alike, this file's own header) but with the extra `-progress`
-// marker that lets `cleanProgressSnapshots` (and a human skimming the
-// directory) tell one apart from a real, finished result sharing the same
-// directory.
-const PROGRESS_SUFFIX = "-progress-result.json";
-
-function progressFileName(uuid: string, sequence: number): string {
-  return `${uuid}-${sequence}${PROGRESS_SUFFIX}`;
-}
-
-/** `createAtomicWriter`'s own return type — the bare `Writer` interface
- * `ReporterRuntime` itself is built against, plus the three progress-
- * snapshot operations only emitter.ts's own progress mechanism calls.
- * `ReporterRuntime` never sees these three: they exist because a progress
- * snapshot is written directly, bypassing `ReporterRuntime` entirely (this
- * file's own header, emitter.ts's own header explains why).
- *
- * `writeProgressSnapshot`/`deleteProgressSnapshot` take a `sequence` number
- * because a scenario's own snapshots all carry the same `uuid` (a fixed
- * `uuid` is what keeps `allure watch`'s detail page on one route for the
- * whole scenario, since that route is `md5(uuid)`) while still needing a
- * fresh file name on every write (`allure watch` only ever discovers a path
- * it has not read before, so overwriting one name in place would go
- * unnoticed after the first write). `sequence` is what tells two snapshots
- * with the same `uuid` apart on disk. */
-export interface AllureAtomicWriter extends Writer {
-  /** Atomically writes one progress snapshot under
-   * `<result.uuid>-<sequence>-progress-result.json`, never `writeResult`'s
-   * own `<uuid>-result.json`, so a real, finished result and a still-
-   * updating snapshot can never collide on one filename even while sharing
-   * a `uuid`-shaped prefix. */
-  writeProgressSnapshot(result: TestResult, sequence: number): void;
-  /** Deletes one scenario's own progress snapshot by the `uuid` and
-   * `sequence` it was written under. Silent when the file is already gone
-   * (a repeated cleanup, or a `uuid`/`sequence` pair this writer never
-   * actually wrote a snapshot for). There is nothing left to warn about
-   * once the file this call wanted removed already does not exist. */
-  deleteProgressSnapshot(uuid: string, sequence: number): void;
-  /** Deletes every `*-progress-result.json` file already sitting in
-   * `resultsDir` — called once, at `nuka run`'s own startup (emitter.ts's
-   * own `begin()`), the same moment categories.json/environment.properties
-   * get (re)written. A progress file is this tool's own scratch state
-   * (this file's own header, just above), so a previous run's
-   * crash-abandoned one is safe to remove outright rather than merely
-   * superseded the way a real result would need to be. */
-  cleanProgressSnapshots(): void;
-}
-
 /** Builds a `Writer` rooted at `resultsDir`, creating it (and any missing
  * parents) up front. Existing `*-result.json`/`*-container.json`/etc. files
- * under `resultsDir` are never touched — only added to (never delete an
- * existing allure-results directory); a `*-progress-result.json` file is
- * the one exception (this file's own header). */
-export function createAtomicWriter(resultsDir: string, options: AtomicWriterOptions = {}): AllureAtomicWriter {
+ * under `resultsDir` are never touched by the writer: only added to. */
+export function createAtomicWriter(resultsDir: string, options: AtomicWriterOptions = {}): Writer {
   mkdirSync(resultsDir, { recursive: true });
   const link: LinkFile = options.link ?? linkSync;
 
@@ -192,23 +135,6 @@ export function createAtomicWriter(resultsDir: string, options: AtomicWriterOpti
     },
     writeGlobals(distFileName: string, info: Globals): void {
       writeAtomic(resolve(distFileName), JSON.stringify(info));
-    },
-    writeProgressSnapshot(result: TestResult, sequence: number): void {
-      writeAtomic(resolve(progressFileName(result.uuid, sequence)), JSON.stringify(result));
-    },
-    deleteProgressSnapshot(uuid: string, sequence: number): void {
-      try {
-        unlinkSync(resolve(progressFileName(uuid, sequence)));
-      } catch {
-        // Already gone -- nothing left to clean up.
-      }
-    },
-    cleanProgressSnapshots(): void {
-      for (const name of readdirSync(resultsDir)) {
-        if (name.endsWith(PROGRESS_SUFFIX)) {
-          unlinkSync(resolve(name));
-        }
-      }
     },
   };
 }

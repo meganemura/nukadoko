@@ -114,6 +114,11 @@ function suggestFor(key: string, known: readonly string[] | undefined): string {
 // which says what is wrong and not what to write instead.
 const REMOVED_CONFIG_KEYS: Readonly<Record<string, string>> = {
   oaths: "nukadoko reads scenarios from .feature files only. Write each Markdown oath as a .feature file under featuresDir.",
+  allure:
+    "nuka run writes no Allure results. Run nuka report --format allure after a run; it writes " +
+    "<stateDir>/export/allure-results, or the directory --out names.",
+  messages:
+    "nuka run writes no cucumber-messages stream. Run nuka report --format messages --out <path> after a run.",
 };
 
 function removedKeysIn(raw: unknown): string[] {
@@ -300,7 +305,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const removed = removedKeysIn(raw);
   if (removed.length > 0) {
     throw new ConfigError(
-      `Invalid config at ${configPath}: ${removed.map((key) => `${key} was removed: ${REMOVED_CONFIG_KEYS[key]}`).join("; ")}`,
+      `Invalid config at ${configPath}: ${removed.map((key) => `${key} was removed: ${REMOVED_CONFIG_KEYS[key]}`).join(" ")}`,
       configPath,
       { fix: `Remove ${removed.join(" and ")} from ${resolved?.fileName ?? CONFIG_FILE_NAME}.` },
       { code: "config-key-removed" },

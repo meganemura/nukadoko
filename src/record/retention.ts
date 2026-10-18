@@ -1,6 +1,5 @@
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { messagesRunOutputPath } from "./messages-output.js";
 import { compareNewestFirst, rankRunsNewestFirst, type RunStart } from "./newest-run.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
 import { readEndedRuns } from "./run-result.js";
@@ -19,8 +18,8 @@ import { doRelativeDir, runsRelativeDir } from "./state-layout.js";
 //    (src/record/run-result.ts), dated by its `started_at`
 //    (src/record/newest-run.ts, the rule `nuka tend` uses too). The newest
 //    `retention.runs` runs are kept; every older run directory is removed,
-//    with the export files its manifest lists (src/record/run-exports.ts)
-//    and its messages stream. The run that is applying retention counts as
+//    with the export files its manifest lists (src/record/run-exports.ts):
+//    what `nuka report` wrote under the state directory for it. The run that is applying retention counts as
 //    one of the runs, though its run.json is written after this, and it is
 //    never removed.
 //
@@ -38,7 +37,7 @@ import { doRelativeDir, runsRelativeDir } from "./state-layout.js";
 // can be shared with another tool's Allure output, so a file nothing here
 // wrote is never touched, however old; `nuka clean` is the operation for a
 // directory that predates manifests. A manifest line that resolves outside
-// the project root is skipped as well: `allure.resultsDir` can point above
+// the project root is skipped as well: `nuka report --out` can point above
 // the project, and a removal that leaves the project is not one this tool
 // makes on its own.
 
@@ -129,9 +128,6 @@ export interface ApplyRetentionOptions {
   readonly stateDir: string;
   readonly policy: RetentionPolicy;
   readonly now: Date;
-  /** Root-relative `messages.ndjson` path, as `nuka run` resolves it,
-   * so a run's own run-id-suffixed stream can be named beside it. */
-  readonly messagesOutputRel: string;
   /** The run that is applying retention, before its run.json exists. It
    * counts as a run and is never removed. */
   readonly currentRun: RunStart;
@@ -146,13 +142,8 @@ export interface RetentionOutcome {
 }
 
 /** Removes one run directory whole, after the export files its manifest
- * lists and its messages stream. */
-async function removeRunDir(
-  rootDir: string,
-  stateDir: string,
-  runId: string,
-  messagesOutputRel: string,
-): Promise<void> {
+ * lists. */
+async function removeRunDir(rootDir: string, stateDir: string, runId: string): Promise<void> {
   const dir = runDir(rootDir, stateDir, runId);
   for (const relativePath of readExportsManifest(path.join(dir, RUN_EXPORTS_FILE_NAME))) {
     const absolutePath = path.resolve(rootDir, relativePath);
@@ -161,15 +152,11 @@ async function removeRunDir(
     if (!isInside(rootDir, absolutePath)) continue;
     await rm(absolutePath, { force: true });
   }
-  // The manifest names the stream of every run that noted it. A run written
-  // before the stream was noted is found by the name the current
-  // `messages.output` gives it.
-  await rm(messagesRunOutputPath(path.resolve(rootDir, messagesOutputRel), runId), { force: true });
   await rm(dir, { recursive: true, force: true });
 }
 
 export async function applyRetention(options: ApplyRetentionOptions): Promise<RetentionOutcome> {
-  const { rootDir, stateDir, policy, now, messagesOutputRel, currentRun } = options;
+  const { rootDir, stateDir, policy, now, currentRun } = options;
   const runsDir = path.join(rootDir, runsRelativeDir(stateDir));
   const doDir = path.join(rootDir, doRelativeDir(stateDir));
 
@@ -181,7 +168,7 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
   const ranked: RunStart[] = ended.some((run) => run.runId === currentRun.runId) ? ended : [currentRun, ...ended];
   const plan = planRunRetention(ranked, policy.runs);
   const dropped = plan.dropped.filter((runId) => runId !== currentRun.runId);
-  for (const runId of dropped) await removeRunDir(rootDir, stateDir, runId, messagesOutputRel);
+  for (const runId of dropped) await removeRunDir(rootDir, stateDir, runId);
 
   // --- The age rule ---
   let unownedRemoved = 0;
@@ -194,7 +181,7 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
     runEntries.push({ id: runId, at: await mtimeOf(path.join(runsDir, runId)) });
   }
   for (const runId of planAgeRetention(runEntries, cutoff)) {
-    await removeRunDir(rootDir, stateDir, runId, messagesOutputRel);
+    await removeRunDir(rootDir, stateDir, runId);
     unownedRemoved += 1;
   }
 

@@ -241,6 +241,35 @@ This part does not change release to release.
   - An Allure history keyed on the old history ids starts over once: the
     environment is now part of a result's identity.
 
+- **`nuka run` writes no Allure results or messages stream; `nuka report`
+  renders them after the run.** The `allure` and `messages` config keys
+  are refused with `config-key-removed`, and `nuka run --summary` with
+  `removed-command`.
+  - Delete the `allure` and `messages` keys from the config.
+  - Where a script or CI step read `.nukadoko/export/allure-results/`
+    after `nuka run`, run `nuka report --format allure` after the run
+    first. Where `allure.resultsDir` moved it, pass that directory as
+    `--out`.
+  - Where it read `messages.ndjson`, run `nuka report --format messages
+    --out <path>`; where it read `messages.<run_id>.ndjson`, render that run
+    with `nuka report .nukadoko/runs/<run_id> --format messages --out
+    <path>`.
+  - Where `nuka run --summary <path>` wrote a pull request comment, run
+    `nuka report --format markdown --out <path>` in a step after the run,
+    with `if: always()` so a red run is posted too.
+  - A run from an earlier release has no `sources.json` and is refused
+    with `run-sources-missing`: run the scenarios again to render them.
+  - An Allure history carries on: the result identity is unchanged. The
+    `host` and `thread` labels are gone, and `allure watch` shows a run
+    when it is rendered, not while it runs.
+  - A JUnit or HTML report built from a messages stream of a run over
+    several environments shows each scenario once per environment, named
+    `<scenario> (<environment>)`.
+  - A script that matched the `emitter-failed` or
+    `export-path-outside-project` code matches `report-incomplete`; the
+    second has no successor, since `nuka clean` no longer reads paths from
+    the config.
+
 ## 0.16.1 to 0.17.0
 
 - **`nuka run` writes no scenario record to stdout when stdout is a

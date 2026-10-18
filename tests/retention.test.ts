@@ -1,14 +1,11 @@
-import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { runCli } from "../src/cli/run-cli.js";
-import { messagesRunOutputPath } from "../src/record/messages-output.js";
 import {
   applyRetention,
   formatRetention,
@@ -18,7 +15,7 @@ import {
 } from "../src/record/retention.js";
 import { readExportsManifest, runExportsManifestPath } from "../src/record/run-exports.js";
 import { runResultPath, writeRunResult } from "../src/record/run-result.js";
-import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir, sourceNodeArgs, stepRecordIds } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir, stepRecordIds } from "./helpers/fixtures.js";
 
 // Responsibility: what retention removes and what it must never touch.
 // The two planners are pure and get properties; `applyRetention` gets a
@@ -89,7 +86,6 @@ describe("planAgeRetention", () => {
 describe("applyRetention", () => {
   let rootDir: string;
   const stateDir = ".nukadoko";
-  const messagesOutputRel = path.join(stateDir, "export", "messages.ndjson");
   const now = new Date("2026-09-02T12:00:00Z");
   const policy = { runs: 2, adHocDays: 7 };
 
@@ -133,8 +129,8 @@ describe("applyRetention", () => {
   }
 
   /** One run directory: `count` scenarios, each with an evidence directory
-   * and one step record, one manifest naming one export file per scenario,
-   * and one messages stream. An unmarked run has no run.json. The run
+   * and one step record, and one manifest naming one export file per
+   * scenario. An unmarked run has no run.json. The run
    * directory carries its start as the time it was last written. */
   async function seedRun(runId: string, startedAt: string, count = 1, marked = true): Promise<void> {
     const resultsDir = abs(stateDir, "export", "allure-results");
@@ -163,7 +159,6 @@ describe("applyRetention", () => {
     await writeFile(manifestPath, `${manifestLines.join("\n")}\n`);
     if (marked) writeEnded(runId, startedAt, scenarios);
     await utimes(inRun(runId), at, at);
-    await writeFile(messagesRunOutputPath(abs(messagesOutputRel), runId), "line\n");
   }
 
   async function seedDoStep(stepId: string, finishedAt: string): Promise<void> {
@@ -182,7 +177,7 @@ describe("applyRetention", () => {
     rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it("removes every run directory older than the newest `runs` whole, with its export files and messages stream", async () => {
+  it("removes every run directory older than the newest `runs` whole, with its export files", async () => {
     await seedRun("run-a", "2026-09-01T00:00:00Z", 2);
     await seedRun("run-b", "2026-09-01T06:00:00Z");
     await seedRun("run-c", "2026-09-01T12:00:00Z");
@@ -191,14 +186,13 @@ describe("applyRetention", () => {
 
     // The run applying retention counts as one of the newest three.
     const threeRuns = { runs: 3, adHocDays: 7 };
-    const outcome = await applyRetention({ rootDir, stateDir, policy: threeRuns, now, messagesOutputRel, currentRun: current });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: threeRuns, now, currentRun: current });
     expect(outcome).toEqual({ runsKept: 3, runsRemoved: 1, unownedRemoved: 0 });
 
     for (const gone of [
       inRun("run-a"),
       abs(stateDir, "export", "allure-results", "run-a-0-result.json"),
       abs(stateDir, "export", "allure-results", "run-a-1-result.json"),
-      messagesRunOutputPath(abs(messagesOutputRel), "run-a"),
     ]) {
       expect(existsSync(gone), gone).toBe(false);
     }
@@ -208,7 +202,6 @@ describe("applyRetention", () => {
       abs(stateDir, "export", "allure-results", "run-b-0-result.json"),
       abs(stateDir, "export", "allure-results", "run-c-0-result.json"),
       abs(stateDir, "export", "allure-results", "environment.properties"),
-      messagesRunOutputPath(abs(messagesOutputRel), "run-c"),
       runExportsManifestPath(rootDir, stateDir, "run-b"),
     ]) {
       expect(existsSync(kept), kept).toBe(true);
@@ -221,7 +214,7 @@ describe("applyRetention", () => {
     await seedRun("run-newest", "2026-09-01T00:00:00Z");
     await seedRun("run-undated", "not a date");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 2, adHocDays: 7 }, now, messagesOutputRel, currentRun: current });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 2, adHocDays: 7 }, now, currentRun: current });
     expect(outcome).toEqual({ runsKept: 2, runsRemoved: 1, unownedRemoved: 0 });
     expect(existsSync(inRun("run-older"))).toBe(false);
     expect(existsSync(inRun("run-newest"))).toBe(true);
@@ -233,7 +226,7 @@ describe("applyRetention", () => {
     await seedRun("run-long", "2026-09-01T00:00:00Z");
     await seedRun("run-short", "2026-09-01T01:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 2, adHocDays: 7 }, now, messagesOutputRel, currentRun: current });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 2, adHocDays: 7 }, now, currentRun: current });
     expect(outcome.runsRemoved).toBe(1);
     expect(existsSync(inRun("run-short"))).toBe(true);
     expect(existsSync(inRun("run-long"))).toBe(false);
@@ -244,7 +237,7 @@ describe("applyRetention", () => {
     await seedRun("run-young", "2026-08-30T00:00:00Z", 1, false);
     await seedRun("run-new", "2026-09-01T00:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
     // The old run's directory, as one.
     expect(outcome).toEqual({ runsKept: 2, runsRemoved: 0, unownedRemoved: 1 });
     expect(existsSync(inRun("run-old"))).toBe(false);
@@ -263,7 +256,6 @@ describe("applyRetention", () => {
       stateDir,
       policy: { runs: 1, adHocDays: 7 },
       now,
-      messagesOutputRel,
       currentRun: { runId: "run-self", startedAt: Date.parse("2026-09-01T00:00:00Z") },
     });
     expect(outcome.runsRemoved).toBe(0);
@@ -275,7 +267,7 @@ describe("applyRetention", () => {
     await seedDoStep("step-old-do", "2026-08-20T00:00:00Z");
     await seedDoStep("step-new-do", "2026-09-01T00:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
     expect(outcome).toEqual({ runsKept: 2, runsRemoved: 0, unownedRemoved: 1 });
     expect(existsSync(abs(stateDir, "do", "step-old-do"))).toBe(false);
     expect(existsSync(abs(stateDir, "do", "step-new-do"))).toBe(true);
@@ -299,7 +291,7 @@ describe("applyRetention", () => {
     await writeFile(path.join(brokenDo, "record.json"), "not json");
     await utimes(brokenDo, old, old);
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
     expect(outcome.unownedRemoved).toBe(2);
     expect(existsSync(inRun("run-crashed"))).toBe(false);
     expect(existsSync(path.join(resultsDir, "crashed-result.json"))).toBe(false);
@@ -317,7 +309,7 @@ describe("applyRetention", () => {
       await writeFile(manifestPath, `${path.relative(rootDir, victim)}\n`);
       await utimes(path.dirname(manifestPath), old, old);
 
-      await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
+      await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
       expect(existsSync(victim)).toBe(true);
     } finally {
       rmSync(outside, { recursive: true, force: true });
@@ -326,7 +318,7 @@ describe("applyRetention", () => {
 
   it("says nothing when nothing was removed", async () => {
     await seedRun("run-a", "2026-09-01T00:00:00Z");
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
     expect(formatRetention(outcome, policy)).toBeNull();
   });
 });
@@ -338,7 +330,7 @@ describe("nuka run applies retention", () => {
     rootDir = await copyFixtureToTempDir("pure-step-project");
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
-      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 }, allure: {}, messages: {} });\n',
+      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 } });\n',
     );
   });
 
@@ -346,51 +338,52 @@ describe("nuka run applies retention", () => {
     await removeTempDir(rootDir);
   });
 
-  it("keeps only the newest run's directory and export files, and says what it removed", async () => {
-    const first = createCaptureSink();
-    expect(await runCli(["run", "features/greeting.feature"], { rootDir, stdout: createCaptureSink(), stderr: first })).toBe(0);
-    expect(first.text()).not.toContain("retention:");
+  async function runAndReport(): Promise<string> {
+    const stderr = createCaptureSink();
+    expect(await runCli(["run", "features/greeting.feature"], { rootDir, stdout: createCaptureSink(), stderr })).toBe(0);
+    expect(await runCli(["report", "--format", "allure"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
+    expect(
+      await runCli(["report", "--format", "messages", "--out", ".nukadoko/export/messages.ndjson"], {
+        rootDir,
+        stdout: createCaptureSink(),
+        stderr: createCaptureSink(),
+      }),
+    ).toBe(0);
+    return stderr.text();
+  }
 
-    const second = createCaptureSink();
-    expect(await runCli(["run", "features/greeting.feature"], { rootDir, stdout: createCaptureSink(), stderr: second })).toBe(0);
-    expect(second.text()).toContain("retention: removed 1 run older than the newest 1 (retention.runs)");
+  it("keeps only the newest run's directory and the files nuka report wrote of it, and says what it removed", async () => {
+    expect(await runAndReport()).not.toContain("retention:");
+    const [firstRunId] = readdirSync(path.join(rootDir, ".nukadoko", "runs"));
+    const firstManifest = readExportsManifest(runExportsManifestPath(rootDir, ".nukadoko", firstRunId!));
+    expect(firstManifest.filter((name) => name.endsWith("-result.json"))).toHaveLength(1);
+    expect(firstManifest).toContain(path.join(".nukadoko", "export", "messages.ndjson"));
 
-    const { readdirSync } = await import("node:fs");
+    expect(await runAndReport()).toContain("retention: removed 1 run older than the newest 1 (retention.runs)");
+    // The second render of messages wrote the same path again, so every
+    // other file the first run's renders wrote is gone.
+    for (const relative of firstManifest.filter((name) => !name.endsWith("messages.ndjson"))) {
+      expect(existsSync(path.join(rootDir, relative)), relative).toBe(false);
+    }
     const kept = latestRunJson(rootDir).scenarios.flatMap((scenario: { steps: { step_record_id: string }[] }) =>
       scenario.steps.map((step) => step.step_record_id),
     );
     expect(stepRecordIds(rootDir)).toEqual(kept.sort());
-    const runs = readdirSync(path.join(rootDir, ".nukadoko", "runs"));
-    expect(runs.length).toBe(1);
+    expect(readdirSync(path.join(rootDir, ".nukadoko", "runs"))).toHaveLength(1);
     const results = readdirSync(path.join(rootDir, ".nukadoko", "export", "allure-results")).filter((name) =>
       name.endsWith("-result.json"),
     );
-    expect(results.length).toBe(1);
-    const messages = readdirSync(path.join(rootDir, ".nukadoko", "export")).filter((name) => name.startsWith("messages.run-"));
-    expect(messages.length).toBe(1);
+    expect(results).toHaveLength(1);
   });
 
-  it("removes an older run's messages stream from where that run wrote it, after messages.output moved", async () => {
+  it("notes nothing in the manifest for a report written outside the state directory", async () => {
     expect(await runCli(["run", "features/greeting.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
-    const exportDir = path.join(rootDir, ".nukadoko", "export");
-    expect(readdirSync(exportDir).filter((name) => name.startsWith("messages.run-"))).toHaveLength(1);
-
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      'import { defineConfig } from "./nukadoko-shim.js";\n\n' +
-        'export default defineConfig({ retention: { runs: 1 }, allure: {}, messages: { output: "reports/messages.ndjson" } });\n',
-    );
-    // A separate process: this one has already loaded and kept the first config.
-    const repoRoot = path.resolve(import.meta.dirname, "..");
-    const { stderr } = await promisify(execFile)(
-      process.execPath,
-      [...sourceNodeArgs, path.join(repoRoot, "src", "cli.ts"), "run", "features/greeting.feature"],
-      { cwd: rootDir },
-    );
-    expect(stderr).toContain("retention: removed 1 run older than the newest 1 (retention.runs)");
-
-    expect(readdirSync(exportDir).filter((name) => name.startsWith("messages.run-"))).toEqual([]);
-    expect(readdirSync(path.join(rootDir, "reports")).filter((name) => name.startsWith("messages.run-"))).toHaveLength(1);
+    expect(
+      await runCli(["report", "--format", "allure", "--out", "reports/allure"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() }),
+    ).toBe(0);
+    const [runId] = readdirSync(path.join(rootDir, ".nukadoko", "runs"));
+    expect(readExportsManifest(runExportsManifestPath(rootDir, ".nukadoko", runId!))).toEqual([]);
+    expect(readdirSync(path.join(rootDir, "reports", "allure")).filter((name) => name.endsWith("-result.json"))).toHaveLength(1);
   });
 });
 
@@ -407,7 +400,7 @@ describe("nuka run --concurrency applies retention", () => {
     rootDir = await copyFixtureToTempDir("run-concurrency-project");
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
-      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 }, allure: {}, messages: {} });\n',
+      'import { defineConfig } from "./nukadoko-shim.js";\n\nexport default defineConfig({ retention: { runs: 1 } });\n',
     );
   });
 
@@ -415,22 +408,18 @@ describe("nuka run --concurrency applies retention", () => {
     await removeTempDir(rootDir);
   });
 
-  it("collects every export file the worker processes wrote into the run's manifest, and prunes them by it next run", async () => {
-    // The parent never sees the names a worker's writer chose, so the
-    // manifest is the only account of them. Fresh directory: every file
-    // under allure-results/ except the two shared ones is this run's.
+  it("renders every scenario the worker processes ran, notes each file in the run's manifest, and prunes them by it next run", async () => {
     const first = createCaptureSink();
     expect(
       await runCli(["run", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr: first }),
       first.text(),
     ).toBe(0);
+    expect(await runCli(["report", "--format", "allure"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
     const runsDir = path.join(rootDir, ".nukadoko", "runs");
     const [firstRunId] = readdirSync(runsDir);
     expect(readdirSync(runsDir)).toHaveLength(1);
     const firstManifest = readExportsManifest(path.join(runsDir, firstRunId!, "exports"));
-    expect([...firstManifest].sort()).toEqual(
-      [...runFiles(rootDir), path.join(".nukadoko", "export", `messages.${firstRunId}.ndjson`)].sort(),
-    );
+    expect([...firstManifest].sort()).toEqual(runFiles(rootDir));
     const resultFiles = firstManifest.filter((name) => name.endsWith("-result.json"));
     expect(resultFiles).toHaveLength(2);
     const resultTexts = resultFiles.map((relative) => readFileSync(path.join(rootDir, relative), "utf8"));
@@ -448,10 +437,6 @@ describe("nuka run --concurrency applies retention", () => {
     }
     expect(existsSync(path.join(runsDir, firstRunId!))).toBe(false);
     expect(readdirSync(runsDir)).toHaveLength(1);
-    const kept = latestRunJson(rootDir).scenarios.flatMap((scenario: { steps: { step_record_id: string }[] }) =>
-      scenario.steps.map((step) => step.step_record_id),
-    );
-    expect(stepRecordIds(rootDir)).toEqual(kept.sort());
     expect(existsSync(path.join(resultsDir(rootDir), "environment.properties"))).toBe(true);
   });
 });

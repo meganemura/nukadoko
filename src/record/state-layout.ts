@@ -30,6 +30,11 @@ export function runRelativeDir(stateDir: string, runId: string): string {
   return path.join(runsRelativeDir(stateDir), runId);
 }
 
+/** `<stateDir>/export`, where `nuka report` writes by default. */
+export function exportRelativeDir(stateDir: string): string {
+  return path.join(stateDir, "export");
+}
+
 /** `<stateDir>/do`, the parent of every `nuka do` step record. */
 export function doRelativeDir(stateDir: string): string {
   return path.join(stateDir, "do");
@@ -53,4 +58,21 @@ export function scenarioRelativeDir(stateDir: string, runId: string, scenarioRec
  * downloaded. `relativePath` is project-root-relative. */
 export function relativeToRun(stateDir: string, runId: string, relativePath: string): string {
   return path.relative(runRelativeDir(stateDir, runId), relativePath);
+}
+
+/** Where a path a record names lies on disk once its run directory is at
+ * `runDir`. A record names its files relative to the project root
+ * (`<stateDir>/runs/<run_id>/...`), so a run directory copied off a CI
+ * machine would point back into a project that is not there. The first
+ * `runs/<run_id>` pair in the path marks where the run directory starts;
+ * a path without one is not inside the run and resolves against `rootDir`.
+ * Pure: `runDir` and `rootDir` are joined, never read. */
+export function resolveRecordedPath(recorded: string, runId: string, runDir: string, rootDir: string): string {
+  const segments = recorded.split(/[\\/]/);
+  for (let index = 0; index + 1 < segments.length; index += 1) {
+    if (segments[index] === "runs" && segments[index + 1] === runId) {
+      return path.join(runDir, ...segments.slice(index + 2));
+    }
+  }
+  return path.resolve(rootDir, recorded);
 }

@@ -5,6 +5,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import {
   doRelativeDir,
   relativeToRun,
+  resolveRecordedPath,
   runRelativeDir,
   runsRelativeDir,
   scenarioRelativeDir,
@@ -64,5 +65,35 @@ describe("state layout", () => {
     expect(relativeToRun(".nukadoko", "run-1", path.join(".nukadoko", "runs", "run-1", "steps", "step-1"))).toBe(
       path.join("steps", "step-1"),
     );
+  });
+
+  it("resolves every path inside a run into wherever the run directory is now, and the same path for the run in place", () =>
+    hegel.test((tc) => {
+      const stateDir = tc.draw(stateDirGen);
+      const runId = tc.draw(segment);
+      const id = tc.draw(segment);
+      const rootDir = path.join(path.sep, "project", tc.draw(segment));
+      const movedTo = path.join(path.sep, "elsewhere", tc.draw(segment));
+      for (const file of [stepRecordRelativeDir(stateDir, runId, id), scenarioRelativeDir(stateDir, runId, id)]) {
+        const inRun = relativeToRun(stateDir, runId, file);
+        expect(resolveRecordedPath(file, runId, movedTo, rootDir)).toBe(path.join(movedTo, inRun));
+        expect(resolveRecordedPath(file, runId, path.join(rootDir, runRelativeDir(stateDir, runId)), rootDir)).toBe(
+          path.join(rootDir, file),
+        );
+      }
+    }));
+
+  it("resolves a path outside the run against the project root", () =>
+    hegel.test((tc) => {
+      const runId = tc.draw(segment);
+      const recorded = path.join(tc.draw(segment), tc.draw(segment));
+      expect(resolveRecordedPath(recorded, `${runId}x`, "/elsewhere/run", "/project")).toBe(path.join("/project", recorded));
+    }));
+
+  it("joins at the first runs/<run_id> pair", () => {
+    expect(resolveRecordedPath(".nukadoko/runs/run-1/steps/runs/run-1/a.txt", "run-1", "/copy", "/project")).toBe(
+      path.join("/copy", "steps", "runs", "run-1", "a.txt"),
+    );
+    expect(resolveRecordedPath("features/a.feature", "run-1", "/copy", "/project")).toBe(path.join("/project", "features", "a.feature"));
   });
 });

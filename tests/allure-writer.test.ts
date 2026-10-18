@@ -132,7 +132,6 @@ describe("createAtomicWriter", () => {
     writer.writeEnvironmentInfo({ environment: "default" });
     writer.writeCategoriesDefinitions([]);
     writer.writeGlobals("globals.json", {} as never);
-    writer.writeProgressSnapshot({ uuid: "r1" } as never, 1);
     expect(written).toEqual(["r1-result.json", "g1-container.json", "a1-attachment.txt", "a2-attachment.zip"]);
   });
 

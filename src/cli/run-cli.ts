@@ -58,7 +58,7 @@ import {
 // Each handler loads its own command's module with `import()` when it runs,
 // while every option table stays static here: yargs needs the tables to
 // parse and to print `--help`, and nothing else. A static import of every
-// command made `nuka --version` load the run engine, the report emitters,
+// command made `nuka --version` load the run engine, the report writers,
 // the compat layer, and zod before it printed one line, and every command
 // paid for every other command's modules. tests/cli-lazy-load.test.ts holds
 // `--help` and `--version` to that.
@@ -114,8 +114,6 @@ interface RunArgs {
    * (that file's own header explains why the check lives there and not
    * here). */
   concurrency?: number;
-  /** `--summary <path>`: one more copy of the Markdown run summary. */
-  summary?: string;
   /** `--probe`: re-run each passed read-only Then with one capture
    * changed. */
   probe?: boolean;
@@ -160,6 +158,13 @@ interface TendArgs {
 
 interface CleanArgs {
   dryRun?: boolean;
+  json?: boolean;
+}
+
+interface ReportArgs {
+  run?: string;
+  format?: string;
+  out?: string;
   json?: boolean;
 }
 
@@ -533,6 +538,9 @@ export async function runCli(
           "its feature names.",
         quiet:
           "nuka run --quiet is removed: nuka run --json prints one document on stdout and nothing on stderr.",
+        summary:
+          "nuka run --summary is removed: nuka report --format markdown --out <path> writes the run summary of the " +
+          "newest run to a path.",
       })
         .positional("feature", {
           type: "string",
@@ -591,13 +599,7 @@ export async function runCli(
             "number +1, a boolean flipped); a Then that still passes is a then-passed-with-changed-capture note. " +
             "Never changes the exit code",
         })
-        .option("summary", {
-          type: "string",
-          describe:
-            "also write the Markdown run summary to this path, for a CI step that posts it on a pull request " +
-            "(it is always written to the run's directory, and appended to $GITHUB_STEP_SUMMARY when that is set)",
-        })
-        .check(rejectRepeatedFlags(["concurrency", "repeat", "summary"])) as Argv<RunArgs>,
+        .check(rejectRepeatedFlags(["concurrency", "repeat"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
@@ -612,7 +614,6 @@ export async function runCli(
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
         probe: args.probe ?? false,
-        summaryPath: args.summary ?? null,
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
         stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,
@@ -671,7 +672,7 @@ export async function runCli(
       })
         .option("allure", {
           type: "boolean",
-          describe: "turn the Allure emitter on in the generated config and write allurerc.mjs",
+          describe: "write allurerc.mjs and an empty <stateDir>/export/allure-results/ for nuka report --format allure",
         })
         .option("server", {
           type: "string",
@@ -861,7 +862,7 @@ export async function runCli(
   const cleanCommand: CommandModule<Record<string, never>, CleanArgs> = {
     command: "clean",
     describe:
-      "delete accumulated runs, do records, cache, and export under the state directory; refuses an allure.resultsDir or messages.output that is the project root, outside the project, or a parent of the state directory",
+      "delete accumulated runs, do records, and what nuka report wrote under export/ in the state directory (export/allure-history.jsonl stays)",
     builder: (y: Argv) =>
       refuseRemovedFlags(y, {
         records: `nuka clean --records is removed: ${CLEAN_REMOVES_EVERY_CATEGORY}`,
@@ -885,6 +886,50 @@ export async function runCli(
         notices,
         rootDir,
         dryRun: args.dryRun ?? false,
+        json: args.json ?? false,
+        stdout,
+        stderr,
+      });
+    },
+  };
+
+  const reportCommand: CommandModule<Record<string, never>, ReportArgs> = {
+    command: "report [run]",
+    describe: "render a finished run as Markdown, Allure results, or a cucumber-messages stream, from its run directory alone",
+    builder: (y: Argv) =>
+      y
+        .positional("run", {
+          type: "string",
+          describe: "a run directory (the newest run under the state directory when omitted); a copy taken off another machine renders the same",
+        })
+        .option("format", {
+          type: "string",
+          choices: ["markdown", "allure", "messages"],
+          demandOption: true,
+          describe: "markdown: the run summary; allure: an allure-results directory; messages: a cucumber-messages NDJSON stream",
+        })
+        .option("out", {
+          type: "string",
+          nargs: 1,
+          describe:
+            "where to write: a file for markdown and messages (stdout without it), a directory for allure " +
+            "(<stateDir>/export/allure-results without it)",
+        })
+        .option("json", {
+          type: "boolean",
+          default: false,
+          describe: "print the result (run id, format, what was written) as one JSON document; needs --out for markdown and messages",
+        })
+        .check(rejectRepeatedFlags(["format", "out"])) as Argv<ReportArgs>,
+    handler: async (args: Arguments<ReportArgs>) => {
+      if (argsFailed) return;
+      const { runReport } = await import("./report.js");
+      exitCode = await runReport({
+        notices,
+        rootDir,
+        runDir: args.run,
+        format: args.format as "markdown" | "allure" | "messages",
+        out: args.out,
         json: args.json ?? false,
         stdout,
         stderr,
@@ -963,6 +1008,7 @@ export async function runCli(
         scaffoldCommand,
         namingMissingConfig(checkCommand),
         namingMissingConfig(runCommand),
+        namingMissingConfig(reportCommand),
         namingMissingConfig(stepsCommand),
         namingMissingConfig(describeCommand),
       ],

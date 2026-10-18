@@ -13,11 +13,6 @@ export interface RunCodeInfo {
 }
 
 const RUN_CODES = {
-  "emitter-failed": {
-    severity: "warning",
-    description: "The Allure or the messages emitter could not write part of its output; the run and its records are not affected.",
-    fix: "Correct what the message names, such as the output directory's permissions, and run again.",
-  },
   "fixture-teardown-failed": {
     severity: "warning",
     description: "A fixture's teardown threw after its scenario or the run finished.",
@@ -30,7 +25,7 @@ const RUN_CODES = {
   },
   "record-unmatched": {
     severity: "warning",
-    description: "A worker reported a record that matches no selected scenario, so the messages stream leaves it out.",
+    description: "A worker reported a record that matches no selected scenario, so nuka report cannot render it.",
     fix: "Run again without changing feature files while the run is in progress.",
   },
   "retention-failed": {
@@ -43,10 +38,20 @@ const RUN_CODES = {
     description: "A signal or a worker that exited early stopped the run before every scenario had a record.",
     fix: "Run the scenarios again; the message names what stopped the run.",
   },
+  "report-incomplete": {
+    severity: "warning",
+    description: "nuka report left out part of the run it renders: a scenario, a step, or an attachment it could not read or map. The rest is written.",
+    fix: "Correct what the message names, such as a step record removed from the run directory, and run nuka report again.",
+  },
   "run-result-not-written": {
     severity: "warning",
     description: "The run finished, and run.json could not be written.",
     fix: "Correct what the message names, such as the state directory's permissions.",
+  },
+  "run-sources-not-written": {
+    severity: "warning",
+    description: "The run finished, and sources.json, the feature text nuka report renders the run from, could not be written.",
+    fix: "Correct what the message names, such as the state directory's permissions, and run again.",
   },
   "scenario-failed": {
     severity: "failed",

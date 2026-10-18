@@ -216,12 +216,14 @@ jobs:
 - **pull request のコメントとしての run サマリ。**
   ジョブのサマリページにはすでに表示されますが、レビュアーが読むのは pull request です。
   差分の中の feature とその横のサマリを読み、pull request の承認が sign-off になります(docs/spec.ja.md の「レビュー」を参照)。
-  `--summary <path>` は同じ Markdown をファイルにも書き、もう 1 つの step がそれを投稿します。
+  `nuka report --format markdown --out <path>` は最新の run の同じ Markdown をファイルに書き、もう 1 つの step がそれを投稿します。
 
   ```yaml
   # in the `run` job, which then needs `pull-requests: write` beside
   # `contents: read`
-  - run: npx nuka run features/ --summary nukadoko-summary.md
+  - run: npx nuka run features/
+  - run: npx nuka report --format markdown --out nukadoko-summary.md
+    if: always()
   - name: Comment the run summary on the pull request
     if: always() && github.event_name == 'pull_request' && hashFiles('nukadoko-summary.md') != ''
     env:
@@ -299,7 +301,7 @@ jobs:
 アップロードの step そのものは実行していません。
 この workflow は、実際のランナー上で green になるのを見届けたファイルとしてではなく、手を加えるための出発点として読んでください。
 
-ジョブの後で Allure の出力がどこへ行くかについても、このページは何も言いません。
+`nuka report --format allure` で Allure の出力を描き出すプロジェクトについて、ジョブの後でそれがどこへ行くかも、このページは何も言いません(run 自身は何も書きません)。
 trace と screenshot は伏せられません(docs/spec.ja.md の「Environment、secret」を参照)。
 隣の `http.jsonl` は秘密を置き換えてありますが、trace はブラウザ自身の状態を cookie ごと持ち、screenshot は画面に出ていたものをそのまま持ちます。
 artifact としてアップロードした run ディレクトリや `allure-results/`、チャットに貼った生成済みレポートは、そのすべてを運びます。

@@ -54,8 +54,8 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // since it only ever sees its own slice of the whole run's pickles.
 //
 // `"note"` is every other single line a worker would otherwise have written
-// straight to stderr under `--concurrency 1`: a version-probe warning, an
-// Allure emitter setup failure, a BeforeAll/AfterAll failure. None of these
+// straight to stderr under `--concurrency 1`: a version-probe warning or a
+// BeforeAll/AfterAll failure. None of these
 // are scoped to one scenario, so they carry no completion-order index and
 // the parent simply relays the text as its own stderr line.
 

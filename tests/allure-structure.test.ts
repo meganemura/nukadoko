@@ -4,11 +4,11 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import {
-  createAllureEmitter,
-  type AllureEmitter,
+  createScenarioWriter,
+  type ScenarioWriter,
   type BeginScenarioInput,
   type EmitStepInput,
-} from "../src/report/allure/emitter.js";
+} from "./helpers/allure-scenario.js";
 import type { ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
@@ -64,17 +64,16 @@ function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "
 describe("Allure structure: one pickle, one result, GWT steps nested inside it", () => {
   let rootDir: string;
   let resultsDir: string;
-  let emitter: AllureEmitter;
+  let emitter: ScenarioWriter;
 
   beforeEach(() => {
     rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-allure-structure-"));
     writeFileSync(path.join(rootDir, "package.json"), JSON.stringify({ name: "acme-checkout" }));
     resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
-    emitter = createAllureEmitter({
+    emitter = createScenarioWriter({
       resultsDir,
       rootDir,
       environment: "staging",
-      secrets: [],
       stderr: createCaptureSink(),
     });
     emitter.begin();

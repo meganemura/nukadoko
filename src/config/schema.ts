@@ -104,14 +104,11 @@ type _ParameterTypeConfigMatchesBinding = [ParameterTypeConfig] extends [Binding
 const _parameterTypeConfigMatchesBinding: _ParameterTypeConfigMatchesBinding = true;
 
 /** `stepTimeout`'s default: twenty minutes. Not a guess about how long a
- * step should take, but the horizon this tool already had. The Allure
- * emitter draws a running step for at most `HEARTBEAT_TICK_CAP` ticks of
- * `HEARTBEAT_INTERVAL_MS` (120 x 10s, src/run/run-scenario.ts), which is
- * where its author already decided a step has stopped being worth watching.
- * Setting the limit anywhere else would give one run two horizons. It is
- * deliberately far above what steps actually take: 800 step records
- * sampled from a real browser suite ran a median of 66ms, a 99th
- * percentile of 10.7s, and a maximum of 14s, with none over 30s. */
+ * step should take, but a horizon past which a step that has not returned
+ * is taken to be stuck. It is deliberately far above what steps actually
+ * take: 800 step records sampled from a real browser suite ran a median of
+ * 66ms, a 99th percentile of 10.7s, and a maximum of 14s, with none over
+ * 30s. */
 export const DEFAULT_STEP_TIMEOUT_MS = 1_200_000;
 /** `retention.runs`'s default. 20 is a judgment, not a measurement: the
  * heaviest suite measured so far costs about 50 MB per run once trace
@@ -390,30 +387,6 @@ export const configSchema = z
         }
       })
       .default({ public: [], redact: [] }),
-    /** `resultsDir` is resolved against the project root, so an absolute
-     * path is used as given; omitted, it defaults to
-     * `<stateDir>/export/allure-results` (docs/spec.md "The state directory") —
-     * that default is applied where `stateDir` is resolved (src/cli/run.ts),
-     * not here, since this schema alone doesn't know `stateDir`'s final
-     * value. The key's presence is the switch: `allure: {}` turns the
-     * emitter on, and without the key it is off
-     * (src/config/emitter-targets.ts), so a project that reads no Allure
-     * report gets no results directory. No CLI flag: a report a project
-     * reads belongs in its config, not in each invocation. */
-    allure: z.object({ resultsDir: z.string().optional() }).strict().optional(),
-    /** `output` is resolved against the project root, so an absolute path
-     * is used as given; omitted, it defaults to
-     * `<stateDir>/export/messages.ndjson` — that default is applied where
-     * `stateDir` is resolved (src/cli/run.ts), not here, same split as
-     * `allure.resultsDir` above. `output` itself only ever holds the most
-     * recently *completed* run's own stream, written there atomically once
-     * that run finishes; each invocation's real, in-progress write target
-     * is a run-id-suffixed sibling file beside it instead
-     * (src/report/messages/emitter.ts), so two concurrent `nuka run`
-     * invocations against this same path never interleave their writes.
-     * The key's presence is the switch, same as `allure` above:
-     * `messages: {}` turns the emitter on. No CLI flag either. */
-    messages: z.object({ output: z.string().optional() }).strict().optional(),
     /** How long a typed step's own `run` may take before the execution is
      * failed with `error.kind: "timeout"`, in milliseconds. A step's own
      * `timeout` overrides it. Compat steps are deliberately not covered:
@@ -432,8 +405,8 @@ export const configSchema = z
      * wants more history raises the number, and the measurement that
      * motivated the defaults (one heavy suite reached 19 GB in four days
      * with nothing removed) is why "keep everything" is not a setting.
-     * Export files are removed only inside the project root: an
-     * `allure.resultsDir` above it keeps its files. */
+     * Export files are removed only inside the project root: a
+     * `nuka report --out` above it keeps its files. */
     retention: z
       .object({
         runs: z.number().int().min(1).default(DEFAULT_RETENTION_RUNS),

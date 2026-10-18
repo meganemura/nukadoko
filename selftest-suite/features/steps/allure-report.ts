@@ -8,12 +8,12 @@ import { After, Before, Given, Then, When } from "./runtime.js";
 import type { SelftestWorld } from "../support/world.js";
 
 // Responsibility: stage 2 of this suite -- opens the
-// Allure report `nuka run` writes for selftest-suite/fixture-project's own
+// Allure report `nuka report` renders for selftest-suite/fixture-project's own
 // mixed.feature run in a real, headless browser and reads back only
 // data-dependent content (a count, a tree row, a status). docs/spec.md's
 // own gap, before this file existed: "An official HTML report or a
 // third-party formatter has not been exercised against this stream" was
-// true of the *messages* emitter's stream (still is; unrelated to this
+// true of the *messages* stream (still is; unrelated to this
 // file) and, separately, no one had opened the Allure report the way an
 // actual reader would either -- this file is the first thing that does.
 //
@@ -243,7 +243,7 @@ When(
     // (allurerc.{js,mjs,cjs,json,yaml,yml}) reads the current working
     // directory, not `-o`'s target, so allurerc.mjs must sit exactly where
     // this command runs from for the categories it declares to apply at
-    // all (docs/spec.md "Allure emitter").
+    // all (docs/spec.md "Allure results").
     await execFileAsync(process.execPath, [allureBin, "generate", "-o", path.join(".nukadoko", "allure-report")], {
       cwd: fixtureProjectDir,
     });
@@ -445,7 +445,7 @@ Then("the timeline step's section and poll appear as its own child steps", async
 
 Then("the before-hook-stopped scenario's step shows skipped, not failed", async function (this: SelftestWorld) {
   // Known, accepted limit, pinned rather than hidden (docs/spec.md "Allure
-  // emitter"): a step still has nowhere of its own to put a failure that
+  // results"): a step still has nowhere of its own to put a failure that
   // happened before it ever ran, so it still shows skipped even though the
   // scenario around it failed. `nuka run`'s own exit code, record.json, and
   // now this scenario's own tree leaf (the next Then step) all say

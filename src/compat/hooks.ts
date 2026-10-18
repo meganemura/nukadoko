@@ -91,7 +91,7 @@ export interface HookParameter {
   /** AfterStep only. The step record id of the step that just ran.
    * cucumber-js's `testStepId` names a `TestStep` assigned when the test
    * case is built. This executor does not assign cucumber-messages ids
-   * until the emitter runs, after the hook has already been called, so
+   * until `nuka report` renders the run, long after the hook was called, so
    * the field uses the id the executor already holds for that step. Same
    * reason `testCaseStartedId` above is the scenario id: a read of the
    * name real glue already uses has to resolve to a real, stable, per-step

@@ -6,10 +6,8 @@ import path from "node:path";
 import type { Pickle } from "@cucumber/messages";
 import type { WritableSink } from "../sink/writable-sink.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
-import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import type { SecretSet } from "../secrets/types.js";
 import {
   failedScenarioOf,
@@ -62,16 +60,10 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // worker's own stdout together still guarantees no worker can see on its
 // own.
 //
-// Allure's `begin()` (sweeps the whole results directory, writes
-// categories.json/environment.properties) is called exactly once, here,
-// before any worker starts; every worker builds its own `AllureEmitter` for
-// its own scenarios but never calls `begin()` itself (see run-worker-
-// entry.ts's own header). The messages stream needs one well-formed
-// envelope sequence for the whole invocation, so it is built and driven
-// entirely here too — no worker ever touches it — matched against each
-// arriving record's own `{ feature, line }` pair (`pickleByKey`, below)
-// against the `Pickle` this parent already parsed while selecting which
-// files to hand out.
+// Each arriving record is matched against its `{ feature, line }` pair
+// (`pickleByKey`, below) in the pickles this parent parsed while selecting
+// which files to hand out. Those parses are what sources.json keeps, so a
+// record with no match there is one `nuka report` cannot render.
 //
 // A worker that exits non-zero without ever reporting a record for one of
 // its own assigned files is treated as that file never having run at all
@@ -131,10 +123,6 @@ export interface RunConcurrentOptions {
   readonly probe: boolean;
   readonly selected: SelectedScenarios;
   readonly flatPickles: readonly { readonly feature: SelectedFeature; readonly pickle: Pickle }[];
-  /** `null`: the emitter is off (src/config/emitter-targets.ts). */
-  readonly allureResultsDirRel: string | null;
-  /** `null`: the emitter is off. */
-  readonly messagesOutputRel: string | null;
   /** Hears every scenario record the parent forwards, so the parent builds
    * one run.json for the whole run, and streams it under `--records`. */
   readonly onRecord: (record: ScenarioRecord) => void;
@@ -159,8 +147,6 @@ export interface RunConcurrentResult {
   readonly scenariosWritten: number;
   readonly scenariosPassed: number;
   readonly stepRecordsWritten: number;
-  readonly allureEmitter: AllureEmitter | null;
-  readonly messagesEmitter: MessagesEmitter | null;
   readonly failedScenarios: readonly FailedScenario[];
   /** Empty unless `repeat` is above 1. */
   readonly repeatTallies: readonly RepeatTally[];
@@ -186,8 +172,6 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     probe,
     selected,
     flatPickles,
-    allureResultsDirRel,
-    messagesOutputRel,
     onRecord,
     progress,
     warn,
@@ -201,54 +185,6 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const pickleByKey = new Map<string, { readonly feature: SelectedFeature; readonly pickle: Pickle }>();
   for (const entry of flatPickles) {
     pickleByKey.set(pickleKey(entry.feature.relativePath, entry.pickle.location?.line ?? 0), entry);
-  }
-
-  let allureEmitter: AllureEmitter | null = null;
-  if (hasPickles && allureResultsDirRel !== null) {
-    try {
-      const resultsDir = path.resolve(rootDir, allureResultsDirRel);
-      allureEmitter = createAllureEmitter({
-        resultsDir,
-        rootDir,
-        exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
-        // Each worker's emitter writes its own environment onto its
-        // results; this one writes environment.properties for the run.
-        environment: conditions.map((condition) => condition.environment).join(", "),
-        ...(conditions.length === 1 && conditions[0]!.targetVersion !== undefined
-          ? { targetVersion: conditions[0]!.targetVersion }
-          : {}),
-        secrets: conditions.flatMap((condition) => condition.secrets),
-        stderr: warnings("emitter-failed"),
-      });
-      allureEmitter.begin();
-    } catch (error) {
-      allureEmitter = null;
-      warnings("emitter-failed").write(`allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
-    }
-  }
-
-  let messagesEmitter: MessagesEmitter | null = null;
-  if (hasPickles && messagesOutputRel !== null) {
-    try {
-      const output = path.resolve(rootDir, messagesOutputRel);
-      messagesEmitter = createMessagesEmitter({
-        output,
-        rootDir,
-        stderr: warnings("emitter-failed"),
-        runId,
-        exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
-      });
-      messagesEmitter.begin({
-        features: selected.features.map((feature) => ({
-          relativeFeaturePath: feature.relativePath,
-          gherkinDocument: feature.gherkinDocument,
-          pickles: feature.pickles,
-        })),
-      });
-    } catch (error) {
-      messagesEmitter = null;
-      warnings("emitter-failed").write(`messages emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
-    }
   }
 
   let allPassed = true;
@@ -330,19 +266,17 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       // A worker parses its own assigned files, so its pickles normally
       // match the ones selected here exactly. They can diverge when a
       // feature file changes on disk between this parent's own selection
-      // and the worker's own parse. The record itself is already in run.json; what would be lost without this line is the
-      // messages stream's own entry for it, which would leave that stream
-      // one scenario short with nothing saying so.
+      // and the worker's own parse. The record itself is already in
+      // run.json; without this line `nuka report` would leave it out with
+      // nothing saying so.
       warn({
         severity: "warning",
         code: "record-unmatched",
         file: record.feature,
         line: record.line,
-        message: "No selected scenario matches the record a worker reported here; the messages stream omits it",
+        message: "No selected scenario matches the record a worker reported here; nuka report cannot render it",
       });
-      return;
     }
-    messagesEmitter?.emitScenario({ record, pickle: match.pickle });
   }
 
   const liveWorkers = new Set<ChildProcess>();
@@ -525,8 +459,6 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     scenariosPassed,
     stepRecordsWritten,
     repeatTallies: repeatTally.list(),
-    allureEmitter,
-    messagesEmitter,
     failedScenarios,
     interruptedBy,
   };

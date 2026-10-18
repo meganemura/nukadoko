@@ -13,7 +13,7 @@ import { Before } from "nukadoko/compat";
 // stops shows every one of its steps as "skipped" in the Allure report, not
 // red, because step became the test-result unit and there is no longer a
 // scenario-level test for the hook's own failure to turn red instead
-// (docs/spec.md "Allure emitter"). `nuka run`'s own exit code and
+// (docs/spec.md "Allure results"). `nuka run`'s own exit code and
 // record.json are unaffected either way; only the report's own display is.
 Before({ tags: "@hook-fails" }, function () {
   throw new Error("hook always fails, on purpose, to pin the skipped-not-red report limit");

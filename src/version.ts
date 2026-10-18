@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 
 // Responsibility: the one place that reads nukadoko's own installed
 // package.json `version` at runtime — for `nuka --version` (src/cli/run-
-// cli.ts, wiring yargs' `.version()`) and for the cucumber-messages `Meta.
-// implementation.version` field (src/report/messages/emitter.ts's
-// buildMeta()). Both need *this* package's own version, never the host
+// cli.ts, wiring yargs' `.version()`) and for the version every record and
+// run.json names, which the cucumber-messages `Meta.implementation.version`
+// later reads back. Both need *this* package's own version, never the host
 // project's: that's a different, already-separate concern (src/report/
 // allure/identity.ts's resolveProjectName reads `rootDir`'s own
 // package.json — the project under test — and stays that way; this module
@@ -57,9 +57,7 @@ function packageRoot(): string {
  * runSkillPath uses for its "(a packaging bug, not a project issue)"
  * message). It is not swallowed into a guessed fallback string here; each
  * caller decides how to surface the failure (src/cli/run-cli.ts fails the
- * whole invocation before parsing any command; src/report/messages/
- * emitter.ts's buildMeta() is already called inside begin()'s own
- * try/catch, so this module doesn't need a second one).
+ * whole invocation before parsing any command).
  */
 export function readOwnVersion(): string {
   const pkgPath = path.join(packageRoot(), "package.json");

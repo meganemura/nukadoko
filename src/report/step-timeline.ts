@@ -1,4 +1,4 @@
-// Responsibility: the one rule both report emitters use to place a
+// Responsibility: the one rule both report formats use to place a
 // scenario's steps in time. Pure: no I/O, no report format.
 //
 // A step with a step record keeps that record's own started_at/finished_at.

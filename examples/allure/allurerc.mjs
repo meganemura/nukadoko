@@ -10,9 +10,9 @@
 // auto-detects `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current
 // working directory; no `--config` flag needed.
 //
-// Allure 2 users don't need this file at all: nukadoko's own emitter
+// Allure 2 users don't need this file at all: `nuka report --format allure`
 // already writes a matching categories.json straight into allure-results/
-// each run.
+// on each render.
 //
 // `historyPath` points Allure's own generate/watch/report at a file (not a
 // directory) where each run's own history point is appended, kept beside
@@ -20,7 +20,7 @@
 // clearing results between runs (a fresh CI checkout, a local rerun) never
 // discards it. Without this, Allure never builds history, trend, or
 // flaky-across-runs detection at all, no matter how stable a scenario's
-// own identity is (docs/spec.md "Allure emitter").
+// own identity is (docs/spec.md "Allure results").
 //
 // Already have your own allurerc? Merge this `categories` array (and
 // `historyPath`, if you don't already set one of your own) into it rather

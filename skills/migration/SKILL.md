@@ -39,10 +39,11 @@ CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
 `nukadoko.config.mts` there instead, and step files need the same `.mts`
 extension. A hand-written `nukadoko.config.ts` there loads with a Node
 warning on every run (`nuka tend` reports it as `package-type-missing`), and fails to import under `"type": "commonjs"`, with
-an error that names the file. Both report emitters are off by default: a suite
-whose existing formatter or JUnit-based CI reads cucumber messages turns
-the stream on with `messages: {}` in the config, and `allure: {}` (or
-`nuka init --allure`) does the same for Allure results.
+an error that names the file. `nuka run` writes no report of its own: a
+suite whose existing formatter or JUnit-based CI reads cucumber messages
+renders the stream after each run with `nuka report --format messages
+--out <path>`, and `nuka report --format allure` does the same for Allure
+results.
 nukadoko uses the project's own `playwright`, an optional peer dependency
 at an exact version (`npm view nukadoko peerDependencies`). A suite that
 drives a browser keeps `playwright` in its `devDependencies` at that

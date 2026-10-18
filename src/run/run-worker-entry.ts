@@ -7,7 +7,6 @@ import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { formatVocabularyError } from "../discover/format-vocabulary-error.js";
 import type { WritableSink } from "../sink/writable-sink.js";
-import { emitterTargets } from "../config/emitter-targets.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
@@ -17,20 +16,15 @@ import { probeVersion } from "../environment/probe-version.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
-import { createAllureEmitter, type AllureEmitter } from "../report/allure/emitter.js";
-import { runExportsManifestPath } from "../record/run-exports.js";
 import { hookDisplayTitle } from "../record/scenario-record.js";
 import { buildStepBindings, type StepBinding } from "./match-step.js";
 import { probeGitState } from "./probe-git.js";
 import { createStepProgressLogger } from "./progress-log.js";
 import {
   doneCallbackMessage,
-  HEARTBEAT_TICK_CAP,
   pendingOrSkippedMessage,
   runScenario,
   runWithTimeout,
-  type StepFinishedInfo,
-  type StepHeartbeatInfo,
 } from "./run-scenario.js";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "./process-signal.js";
 import { selectPickles } from "./select-pickles.js";
@@ -68,13 +62,7 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 // a worker is a process (docs/spec.md "Fixtures", "Scenarios (the scripted
 // path)") — this is a deliberate difference from `--concurrency 1`, where
 // the same two things are properties of the one process running everything,
-// never a difference this file introduces on its own. Same for its own
-// Allure emitter: this worker writes every result file its own scenarios
-// produce, but never calls `begin()` (that sweeps the whole results
-// directory and is the parent's job, once, before any worker starts) and
-// never touches the messages stream at all (that emitter needs one
-// well-formed stream for the whole invocation, so only the parent, which
-// sees every worker's records, holds it).
+// never a difference this file introduces on its own.
 //
 // Every line this worker writes to its own stdout is a `WorkerEnvelope`
 // (src/run/worker-protocol.ts's own header explains why, and why nothing
@@ -82,8 +70,8 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 // that writes to `process.stdout` reaches this process's stderr instead
 // (src/run/step-stdout.ts), which the parent relays raw. `note` and
 // `notes`, below, take every warning a helper would otherwise write
-// straight to stderr at `--concurrency 1` (a version-probe warning, an
-// Allure emitter setup failure, a BeforeAll/AfterAll failure, a fixture
+// straight to stderr at `--concurrency 1` (a version-probe warning, a
+// BeforeAll/AfterAll failure, a fixture
 // teardown failure). Each becomes a `"note"` envelope holding one finding
 // in its text grammar. A probe failure and a teardown failure are the
 // caller's own text and can carry a loaded secret, so those two notes are
@@ -169,8 +157,8 @@ async function main(): Promise<void> {
   });
   // Same gate src/cli/run.ts applies at `--concurrency 1`: a file with no
   // scenario at all (a Background-only feature, a real but unusual case)
-  // must not trigger this worker's own BeforeAll/AfterAll or Allure
-  // emitter — there is nothing here for either to prepare or tear down.
+  // must not trigger this worker's own BeforeAll/AfterAll: there is
+  // nothing here for either to prepare or tear down.
   const hasPickles = flatPickles.length > 0;
 
   const envFiles = resolvedEnv.envFiles;
@@ -197,28 +185,6 @@ async function main(): Promise<void> {
   const onUnknownTraceVersion = createTraceVersionWarner(notes("trace-version-unknown"));
 
   const runConfig = { ...config, baseURL: resolvedEnv.baseURL };
-
-  const allureResultsDirRel = emitterTargets(config).allureResultsDir;
-
-  let allureEmitter: AllureEmitter | null = null;
-  if (hasPickles && allureResultsDirRel !== null) {
-    try {
-      allureEmitter = createAllureEmitter({
-        resultsDir: path.resolve(rootDir, allureResultsDirRel),
-        rootDir,
-        exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
-        environment: resolvedEnv.name,
-        targetVersion,
-        secrets,
-        stderr: notes("emitter-failed"),
-        heartbeatCap: HEARTBEAT_TICK_CAP,
-      });
-      // Never `.begin()` here — see this file's own header.
-    } catch (error) {
-      allureEmitter = null;
-      notes("emitter-failed").write(`allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
-    }
-  }
 
   const runOneRunHook = async (
     hook: (typeof compatRunHooks)[number],
@@ -327,41 +293,7 @@ async function main(): Promise<void> {
           { stateDir: config.stateDir, runId },
         );
 
-        allureEmitter?.beginScenario({
-          pickle,
-          gherkinDocument: feature.gherkinDocument,
-          relativeFeaturePath: feature.relativePath,
-          environment: resolvedEnv.name,
-          startedAt: new Date(),
-        });
-
-        const onStepFinished: ((info: StepFinishedInfo) => void) | undefined = allureEmitter
-          ? (info) => {
-              allureEmitter?.emitStep({
-                ...info,
-                gherkinDocument: feature.gherkinDocument,
-                pickle,
-                relativeFeaturePath: feature.relativePath,
-                environment: resolvedEnv.name,
-                targetVersion,
-                runId,
-              });
-            }
-          : undefined;
-
-        const onStepProgress: ((info: StepHeartbeatInfo) => void) | undefined = allureEmitter
-          ? (info) => {
-              allureEmitter?.emitStepProgress({
-                ...info,
-                gherkinDocument: feature.gherkinDocument,
-                pickle,
-                relativeFeaturePath: feature.relativePath,
-              });
-            }
-          : undefined;
-
-        const record = await runScenario({
-          rootDir,
+        const record = await runScenario({          rootDir,
           config: runConfig,
           pickle,
           relativeFeaturePath: feature.relativePath,
@@ -384,8 +316,6 @@ async function main(): Promise<void> {
           defaultTimeoutMs,
           onUnknownTraceVersion,
           onStepEnd,
-          onStepFinished,
-          onStepProgress,
           fixtureGraph,
           fixtureProcessCache,
           processSignal,
@@ -400,13 +330,6 @@ async function main(): Promise<void> {
           }).replace(/\n$/, ""),
         );
         emit({ kind: "scenario", record, stepLines, notes: teardownNotes });
-
-        allureEmitter?.endScenario({
-          record,
-          gherkinDocument: feature.gherkinDocument,
-          pickle,
-          relativeFeaturePath: feature.relativePath,
-        });
 
         if (record.status !== "passed") {
           allPassed = false;

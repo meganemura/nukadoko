@@ -1,6 +1,3 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
@@ -25,7 +22,7 @@ describe("nuka run: World constructor throw", () => {
     await removeTempDir(rootDir);
   });
 
-  it("fails that scenario with one setup message, then runs the next and finalizes messages", async () => {
+  it("fails that scenario with one setup message, then runs the next, and the run still renders as messages", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "features/world-throw.feature"], {
@@ -79,9 +76,8 @@ describe("nuka run: World constructor throw", () => {
     expect(err).not.toContain("instantiateWorldForPickle");
     expect(err).not.toContain("throw new Error");
 
-    const messagesPath = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
-    expect(existsSync(messagesPath)).toBe(true);
-    const messages = await readFile(messagesPath, "utf8");
-    expect(messages).toContain('"testRunFinished"');
+    const report = createCaptureSink();
+    expect(await runCli(["report", "--format", "messages"], { rootDir, stdout: report, stderr: createCaptureSink() })).toBe(0);
+    expect(report.text()).toContain('"testRunFinished"');
   });
 });

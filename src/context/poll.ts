@@ -149,15 +149,6 @@ export interface PollOutcome {
  * function only ever observes it to classify it as `"failed"`, never
  * swallows it, because a failure that vanishes cannot be traced.
  *
- * `onProgress`, when given, is called once per loop iteration, right after
- * `attempts` is incremented and before `fn` runs. A poll waiting on a value
- * that never arrives for minutes is still visible attempt by attempt this
- * way, not only once the whole call finally settles. It must never throw:
- * this function does not guard the call with its own `try`/`catch`, so a
- * throwing `onProgress` would escape as if it were `fn`'s own failure. The
- * one caller today (create-context.ts) only ever assigns into a plain map,
- * which cannot throw.
- *
  * `timeout` is a budget for the whole call, not a check that runs once an
  * attempt has already returned. Each attempt, and each sleep between
  * attempts, is raced against the time still left. An attempt that does not
@@ -170,7 +161,6 @@ export async function pollWithRecording<T>(
   fn: () => Promise<T | undefined>,
   options: PollOptions,
   onFinish: (outcome: PollOutcome) => void,
-  onProgress?: (attempts: number) => void,
 ): Promise<T> {
   const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
   const interval = options.interval ?? DEFAULT_INTERVAL_MS;
@@ -190,7 +180,6 @@ export async function pollWithRecording<T>(
       const budget = timeout - (Date.now() - startedAt);
       if (!(budget > 0)) failTimedOut();
       attempts += 1;
-      onProgress?.(attempts);
       let value: T | undefined;
       let attempt: BudgetResult<T | undefined>;
       try {

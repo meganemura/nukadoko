@@ -1,8 +1,9 @@
 // Responsibility: the scenario record, one per pickle, the scenario-level
 // counterpart to a step's own step record (src/record/types.ts). It is the
 // in-process shape a scenario's outcome travels in: from the executor to
-// `nuka run`, from a `--concurrency` worker to its parent, and into the
-// Allure and messages emitters. It is never written as a file of its own:
+// `nuka run`, and from a `--concurrency` worker to its parent; `nuka report`
+// rebuilds it from run.json (src/report/load-run.ts) for the Allure and
+// messages writers. It is never written as a file of its own:
 // run.json's scenario entry (src/run/run-document.ts) is built from it. `steps` mirrors the pickle's own step order; a
 // step's `status` widens beyond a step record's ok/failed to also say *why*
 // no step record exists for it (`skipped`/`undefined`/`ambiguous`) — the
@@ -28,7 +29,7 @@
 // either (see src/record/types.ts's own header for the enum itself and why
 // it exists), so this is where a hook's own failure gets the same machine-
 // readable classification a step's own step record does — the Allure
-// emitter maps a hook to a fixture the same way it maps a step to a test
+// writer maps a hook to a fixture the same way it maps a step to a test
 // result. Only four of the seven `ErrorKind` values are reachable here: a
 // hook has no args/returns/binding concept of its own —
 // only `timeout`, `unsupported` (done-callback arity, pending/skipped

@@ -8,7 +8,7 @@ import { readOwnVersion } from "../src/version.js";
 import { copyFixtureToTempDir, createCaptureSink, initGitRepo, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: the Markdown run summary as `nuka run` actually writes it:
-// to the run's own directory, to `--summary <path>`, and appended to
+// to the run's own directory, and appended to
 // `$GITHUB_STEP_SUMMARY`; once for a whole `--concurrency` run; and with a
 // real declared/observed disagreement measured against a local HTTP server.
 // The exact layout of each section is pinned in run-summary-render.test.ts;
@@ -138,28 +138,17 @@ describe("nuka run: the run summary", () => {
     expect(await readFile(stepSummary, "utf8")).toBe(`earlier step\n${firstSummary}${secondSummary}`);
   });
 
-  it("writes the same summary to --summary <path>, replacing an older file there", async () => {
-    await writeFile(path.join(rootDir, "old.md"), "stale\n");
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    await runCli(["run", "--no-check", "features/passing.feature", "--summary", "out/pr-comment.md"], { rootDir, stdout, stderr });
-
-    const runId = newestRunId(rootDir);
-    const runCopy = await readRunSummary(rootDir, runId);
-    expect(await readFile(path.join(rootDir, "out", "pr-comment.md"), "utf8")).toBe(runCopy);
-    expect(nonEmptyLines(stderr.text())).toContain(`summary   ${path.join(".nukadoko", "runs", runId, "summary.md")}`);
-  });
-
   it("names a summary it could not write on stderr and keeps the run's exit code", async () => {
     await writeFile(path.join(rootDir, "blocker"), "a file, not a directory\n");
+    vi.stubEnv("GITHUB_STEP_SUMMARY", path.join(rootDir, "blocker", "summary.md"));
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/passing.feature", "--summary", "blocker/summary.md"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
     });
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toMatch(/^warning\tsummary-not-written\t-\tthe run summary was not written to blocker\/summary\.md: /m);
+    expect(stderr.text()).toMatch(/^warning\tsummary-not-written\t-\t[Tt]he run summary was not written to GITHUB_STEP_SUMMARY: ENOTDIR/m);
   });
 });
 

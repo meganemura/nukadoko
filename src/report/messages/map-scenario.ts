@@ -27,7 +27,7 @@ import { ownStepSpan, placeSteps } from "../step-timeline.js";
 // the filesystem — `(record, stepRecords,
 // pickle, newId, hookIds) -> cucumber-messages envelope material for one
 // scenario`. No `node:fs` anywhere in this file: every input is already
-// resolved by the caller (src/report/messages/emitter.ts reads record.json
+// resolved by the caller (src/report/messages/write-stream.ts reads record.json
 // files via src/report/step-records.ts before calling this), so this module can
 // be driven entirely from fixture data in a test, no real NDJSON stream and
 // no real IdGenerator anywhere in the call graph — `newId` is passed in
@@ -48,18 +48,18 @@ import { ownStepSpan, placeSteps } from "../step-timeline.js";
 //
 // This module never builds a `Hook`/`TestCase`/... envelope wrapper
 // (`{ hook: ... }`, `{ testCase: ... }`) itself — it returns the bare
-// message bodies; src/report/messages/emitter.ts (the only place that
+// message bodies; src/report/messages/write-stream.ts (the only place that
 // touches `node:fs`) wraps each one and decides the on-disk order.
 
 /** A declared file attachment still needs its bytes read and base64-encoded
- * (I/O — emitter.ts's job); a declared log line is already a complete
+ * (I/O — write-stream.ts's job); a declared log line is already a complete
  * `Attachment` body (no file to read, so the always-BASE64-since-either-
  * encoding-is-lossless reasoning below doesn't apply
  * to it — IDENTITY is pinned for logs specifically) and so is built here in
  * full. Keeping
  * both cases in one discriminated union (rather than two parallel lists)
  * preserves declared.attachments-then-declared.logs order as a single
- * ordered sequence for the emitter to walk. */
+ * ordered sequence for write-stream.ts to walk. */
 export type MessagesAttachmentPlan =
   | {
       readonly kind: "file";
@@ -67,7 +67,7 @@ export type MessagesAttachmentPlan =
       readonly testStepId: string;
       readonly fileName: string;
       readonly mediaType: string;
-      /** Root-relative path (rootDir + this) — emitter.ts resolves and
+      /** Root-relative path (rootDir + this) — write-stream.ts resolves and
        * reads it. */
       readonly relativePath: string;
     }
@@ -232,7 +232,7 @@ function mapHookSteps(
     // Before-hook = scenario start, after-hook (both "after" and
     // "after_step") = scenario finish, all zero-width (record.json carries
     // no per-hook timestamp of its own,
-    // the same known limit src/report/allure/emitter.ts's own header
+    // the same known limit src/report/allure/write-results.ts's own header
     // documents, and the same collapse src/report/allure/map-scenario.ts's
     // own `mapHooks` already makes for "after_step").
     return {
@@ -276,7 +276,7 @@ export interface MapScenarioInput {
   /** The `Hook` id(s) already assigned earlier in this run — `undefined`/
    * absent means not yet assigned; this call
    * then allocates one via `newId` and returns it in `newHooks` for the
-   * caller (emitter.ts) to remember for every later scenario.
+   * caller (write-stream.ts) to remember for every later scenario.
    * `afterStep` is keyed by `step_index` — one id per index, not one for
    * the whole run, since each
    * index gets its own `AfterStep[<index>]`-named Hook. */
@@ -336,7 +336,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenario {
   // AfterStep: one Hook
   // definition per distinct `step_index`, created lazily and reused across
   // the run the same way before/after are (`hookIds.afterStep`, threaded in
-  // by emitter.ts) — not folded onto the existing "after" Hook id, since
+  // by write-stream.ts) — not folded onto the existing "after" Hook id, since
   // that would give every AfterStep occurrence the same "After" name and
   // erase the one fact this preserves (which step it
   // ran after). `type: HookType.AFTER_TEST_STEP` is the protocol's own

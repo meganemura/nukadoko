@@ -146,22 +146,19 @@ describe("nuka run --concurrency", () => {
     expect(stderr.text()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
   });
 
-  it("uses an absolute messages.output and allure.resultsDir as given at --concurrency 2", async () => {
+  it("renders a --concurrency 2 run to an absolute --out as given", async () => {
     const outside = await mkdtemp(path.join(os.tmpdir(), "nukadoko-absolute-export-"));
     try {
       const output = path.join(outside, "messages.ndjson");
       const resultsDir = path.join(outside, "allure-results");
-      await writeFile(
-        path.join(rootDir, "nukadoko.config.ts"),
-        'import { defineConfig } from "./nukadoko-shim.js";\n\n' +
-          `export default defineConfig({ messages: { output: ${JSON.stringify(output)} }, allure: { resultsDir: ${JSON.stringify(resultsDir)} } });\n`,
-      );
-
       const stderr = createCaptureSink();
       expect(
         await runCli(["run", "--records", "--no-check", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr }),
         stderr.text(),
       ).toBe(0);
+      const sinks = { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() };
+      expect(await runCli(["report", "--format", "messages", "--out", output], sinks)).toBe(0);
+      expect(await runCli(["report", "--format", "allure", "--out", resultsDir], sinks)).toBe(0);
 
       expect(existsSync(output)).toBe(true);
       expect(readdirSync(resultsDir).filter((name) => name.endsWith("-result.json"))).toHaveLength(2);

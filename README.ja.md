@@ -393,7 +393,7 @@ Feature: greet API
 
 - [Wrong before it runs](#wrong-before-it-runs): 何かが実行される前に `nuka check` が捕まえるもの、および `nuka do` で 1 つの step だけを実行すること。
 - [The compat door](#the-compat-door): import を 1 つ切り替えて、既存の cucumber-js のスイートを取り込む。
-- [Reports fill themselves](#reports-fill-themselves): Allure と cucumber-messages の emitter。
+- [Reports fill themselves](#reports-fill-themselves): 終わった run を Allure の結果、cucumber-messages のストリーム、Markdown のサマリとして描き出す `nuka report`。
 - [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`。
 - environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md) の「Environment、secret」): 名前付きの environment、redact。
 - [Skills for coding agents](#skills-for-coding-agents): agent がこのループを回すために読み込む 2 つの skill。
@@ -582,7 +582,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、environment、secret、`nukadoko/compat`、Allure と cucumber-messages の emitter、Markdown の run サマリ、tending(`nuka tend`)、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、step record、environment、secret、`nukadoko/compat`、`nuka report` による Allure と cucumber-messages の出力、Markdown の run サマリ、tending(`nuka tend`)、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
@@ -614,7 +614,7 @@ API の形は [An HTTP API](#an-http-api) にあります。
 これは `tsc` がどのオプションの下でも受け付ける名前で、`nuka` は `run-greet.ts` として読み込みます。
 そのことは stderr の 1 行の `note:` で伝えます。
 `init` が受け付けるフラグは 1 つです。
-`--allure` は Allure emitter を有効にして `allurerc.mjs` を書きます([Reports fill themselves](#reports-fill-themselves) を参照)。
+`--allure` は `allurerc.mjs` を書き、`nuka report` が Allure の結果を書くディレクトリを作ります([Reports fill themselves](#reports-fill-themselves) を参照)。
 `init` は常に `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
 `.env` を意図してコミットするプロジェクトでは、その行を削除します。
 `nuka` は config があるディレクトリ、workspace ならそのパッケージで実行します。
@@ -775,8 +775,8 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 
 従来型の Cucumber の実行は、チームが自分で仕込んだ evidence だけをレポートに映します。
 各プロジェクトが、trace やスクリーンショットのための hook の boilerplate を書いて保守します。
-[Allure](https://allurereport.org/) はテストレポートのダッシュボードで、nukadoko はその形式で結果を emit するだけで、HTML 自体は決してレンダリングしません。
-emitter は、追加の設定なしで、あらゆる step record からレポートを満たします。
+[Allure](https://allurereport.org/) はテストレポートのダッシュボードで、nukadoko はその形式で結果を書くだけで、HTML 自体は決してレンダリングしません。
+`nuka report --format allure` は、追加の設定なしで、終わった run のあらゆる step record からレポートを満たします。
 バリデーション済みの result、trace、HTTP log、observed な読み書き、environment、version を追加します。
 そのうち、各 step のバリデーション済み result は、従来型の Cucumber ではレポート側から追加できません。
 Cucumber が step の返り値を捨てるためです。
@@ -790,14 +790,24 @@ Cucumber が step の返り値を捨てるためです。
 step record も全文がそのまま添付され、それがこの一覧を古びさせずにいる理由です。
 step record が後から何を得ても、2 つ目の対応表を覚える必要なくレポートに届きます。
 
-あわせて cucumber-messages(NDJSON)の emitter も同梱されており、移行するチームの既存フォーマッタと JUnit ベースの CI をそのまま動かし続けます。
+`nuka report --format messages` は同じ run の cucumber-messages(NDJSON)ストリームを書くので、移行するチームの既存フォーマッタと JUnit ベースの CI をそのまま動かし続けます。
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
-[Allure emitter](docs/spec.ja.md#allure-emitter) と [Messages emitter](docs/spec.ja.md#messages-emitter) を参照してください。
+[Allure results](docs/spec.ja.md#allure-results) と [Messages stream](docs/spec.ja.md#messages-stream) を参照してください。
 
-どちらの emitter も既定では無効です。
-`nukadoko.config.ts` の `allure: {}` または `messages: {}` というキーが、それぞれを有効にします。
-`nuka init --allure` は前者を書きます。
-キーの中の `allure.resultsDir` と `messages.output` は、出力先を既定の `.nukadoko/export/allure-results` と `.nukadoko/export/messages.ndjson` から移します。
+`nuka run` はどちらも書きません。
+`nuka report` が run の後に、run ディレクトリだけから描き出します。
+そのため CI のマシンから持ち出した run ディレクトリも描き出せ、1 つの run を別の形式で描き直すこともできます。
+
+```sh
+npx nuka run
+npx nuka report --format allure                        # .nukadoko/export/allure-results
+npx nuka report --format messages --out messages.ndjson
+npx nuka report .nukadoko/runs/<run_id> --format allure --out reports/allure
+```
+
+run ディレクトリを渡さなければ、最新の run を描き出します。
+`--out` は出力先を移します。
+渡さなければ、Allure の結果は `.nukadoko/export/allure-results` へ、ほかの 2 つの形式は stdout へ出ます。
 
 nukadoko が書くのは結果であって HTML ではないため、それを描画するのは Allure 3 の CLI です(`npm i -g allure`、または以下のように `npx allure`)。
 
@@ -824,18 +834,15 @@ Allure はこれを省くとカレントディレクトリの `allure-report/` �
 `.nukadoko/` の下へ出せば、`nuka init` がすでに gitignore に入れた場所に収まります。
 
 反復中は `watch` を使います。
-片方の端末で動かしたまま、もう片方で `nuka run` を実行します。
-一時的な scenario snapshot が、完了した step ごとにレポートを更新します。
-scenario が終わると、最終 result がライブ表示を置き換えます。
+片方の端末で動かしたまま、もう片方で `nuka run` に続けて `nuka report --format allure` を実行します。
+描き出した結果が届くと、レポートが更新されます。
 待ち受けるポートはランダムで、`--port` で指定できます。
 ブラウザを開くのは `--open` を渡したときだけです。
-`nuka init --allure` は `.nukadoko/export/allure-results/` を作るため、最初の `nuka run` より前に `watch` を開始できます。
-snapshot の仕組みとライブ視聴中のリトライ表示は [Allure emitter](docs/spec.ja.md#allure-emitter) を参照してください。
+`nuka init --allure` は `.nukadoko/export/allure-results/` を作るため、最初に描き出すより前に `watch` を開始できます。
 
-`allure-results/` にある完了済みのファイルは書き換えられません。
-run のファイルは、その run が最新 `retention.runs` 回(既定 20)より古くなった時点で run と一緒に消えるので、レポートに載るのはその回数ぶんの run です。
-`nuka clean` は record と cache とあわせて、このディレクトリを一度に空にします。
-一時的な `*-progress-result.json` は scenario の終了時と次の run の開始時に削除されます。
+同じ run を描き直すと、前回その run を描き出したときに書いたものが置き換わるので、ディレクトリには各 scenario が 1 つずつだけ残ります。
+run のファイルは、その run が最新 `retention.runs` 回(既定 20)より古くなった時点で run と一緒に消えるので、レポートに載るのは多くてもその回数ぶんの run です。
+`nuka clean` は record とあわせて、このディレクトリを一度に空にします。
 
 ## Self-healing, with the deviation on the record
 
@@ -1054,7 +1061,8 @@ failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
 ```
 
 同じ事実は、ログではなく人のために書かれた Markdown の run サマリにも入ります。
-毎回の run で `.nukadoko/runs/<run_id>/summary.md` に書かれ、`$GITHUB_STEP_SUMMARY` が設定されていればそこに追記され、PR のコメント step 向けには `--summary <path>` にも書かれます。
+毎回の run で `.nukadoko/runs/<run_id>/summary.md` に書かれ、`$GITHUB_STEP_SUMMARY` が設定されていればそこに追記されます。
+終わった run であれば `nuka report --format markdown` が同じものをもう一度出し、PR のコメント step 向けには `--out <path>` で書きます。
 その 1 行目は `<!-- nukadoko:run -->` なので、CI の step は前の push で投稿したコメントを更新できます。
 
 **記録を置き換える retry は恒久的にスコープ外であり、「いまはまだ」ではありません。**
@@ -1168,7 +1176,7 @@ run サマリを読んで、何がどの commit で走ったかを確かめま�
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
 `nuka run` は毎回そのサマリを Markdown で書きます。
 commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
-GitHub Actions では設定なしでジョブのサマリページに載り、`--summary <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
+GitHub Actions では設定なしでジョブのサマリページに載り、`nuka report --format markdown --out <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
 
 PR の承認が sign-off です。
 forge がすでに CI のチェックと承認を 1 つの commit に結び付けるので、nukadoko は feature の隣に独自の記録を書きません([レビュー](docs/spec.ja.md#レビュー)を参照)。

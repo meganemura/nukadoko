@@ -404,7 +404,7 @@ Everything past the loop above, one line each:
 
 - [Wrong before it runs](#wrong-before-it-runs): what `nuka check` catches before anything executes, and running one step alone with `nuka do`.
 - [The compat door](#the-compat-door): bring an existing cucumber-js suite in by switching one import.
-- [Reports fill themselves](#reports-fill-themselves): the Allure and cucumber-messages emitters.
+- [Reports fill themselves](#reports-fill-themselves): `nuka report`, which renders a finished run as Allure results, a cucumber-messages stream, or the Markdown summary.
 - [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, and `--repeat`.
 - Environments and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Environments and secrets" in [docs/spec.md](docs/spec.md#environments-and-secrets)): named environments, redaction.
 - [Skills for coding agents](#skills-for-coding-agents): the two skills an agent loads to run this loop.
@@ -614,8 +614,8 @@ whole 0.x range, not a stretch that ends at 0.1: reaching 0.1 will mean
 more of the roadmap has landed, not that the surface has frozen.
 
 Implemented and covered by tests: typed steps, step records,
-environments, secrets, `nukadoko/compat`, the Allure and cucumber-messages
-emitters, the Markdown run summary, tending (`nuka tend`), and two
+environments, secrets, `nukadoko/compat`, Allure and cucumber-messages
+output through `nuka report`, the Markdown run summary, tending (`nuka tend`), and two
 agent skills. Not implemented: an AI-assisted glue converter. See the [roadmap](docs/spec.md#roadmap).
 
 Maintenance is one person working in the open. Every claim below that
@@ -651,8 +651,9 @@ file there names it, or `init` cannot read one, `init` says so on
 stderr. In a project whose `tsconfig.json` sets neither option to true,
 `nuka scaffold --from` writes `./run-greet.js` instead, the name `tsc`
 accepts under any options and `nuka` loads as `run-greet.ts`, and says so
-in one `note:` line on stderr. `init` takes one flag: `--allure` turns on
-the Allure emitter and writes `allurerc.mjs` (see
+in one `note:` line on stderr. `init` takes one flag: `--allure` writes
+`allurerc.mjs` and creates the directory `nuka report` writes Allure
+results to (see
 [Reports fill themselves](#reports-fill-themselves)). `init` always adds
 `.env`, `.env.*`, and `!.env.example` to `.gitignore`; delete those lines
 if the project commits a `.env` on purpose.
@@ -825,8 +826,9 @@ but the step record presents the count as a fact, not a verdict.
 A classic Cucumber run shows only the evidence that a team wires up. Each
 project must write and maintain hook boilerplate for traces and screenshots.
 [Allure](https://allurereport.org/) is a test-report dashboard; nukadoko
-emits results in its format and never renders HTML itself. The emitter
-fills the report from every step record without additional wiring. It adds
+writes results in its format and never renders HTML itself.
+`nuka report --format allure` fills the report from every step record of a
+finished run without additional wiring. It adds
 the validated result, trace, HTTP log, observed reads and writes,
 environment, and version. One item cannot be added on the report side in
 classic Cucumber because Cucumber discards step return values: the
@@ -848,17 +850,27 @@ attached whole as well, which is what keeps this list from going stale:
 anything a step record gains later arrives in the report without a second
 mapping to remember.
 
-A cucumber-messages (NDJSON) emitter ships alongside it so a migrating
-team's existing formatters and JUnit-based CI keep working: confirmed by
-running our own stream through `@cucumber/junit-xml-formatter`, not just
-asserted. See [Allure emitter](docs/spec.md#allure-emitter) and
-[Messages emitter](docs/spec.md#messages-emitter).
+`nuka report --format messages` writes a cucumber-messages (NDJSON) stream
+of the same run, so a migrating team's existing formatters and JUnit-based
+CI keep working: confirmed by running our own stream through
+`@cucumber/junit-xml-formatter`, not just asserted. See
+[Allure results](docs/spec.md#allure-results) and
+[Messages stream](docs/spec.md#messages-stream).
 
-Both emitters are off by default. The key turns one on: `allure: {}` or
-`messages: {}` in `nukadoko.config.ts`, and `nuka init --allure` writes
-the first. Inside the key, `allure.resultsDir` and `messages.output` move
-where the output lands, from the defaults
-`.nukadoko/export/allure-results` and `.nukadoko/export/messages.ndjson`.
+`nuka run` writes neither. `nuka report` renders them after the run, from
+the run directory alone, so a run directory copied off a CI machine renders
+too, and one run can be rendered again in another format:
+
+```sh
+npx nuka run
+npx nuka report --format allure                        # .nukadoko/export/allure-results
+npx nuka report --format messages --out messages.ndjson
+npx nuka report .nukadoko/runs/<run_id> --format allure --out reports/allure
+```
+
+With no run directory it renders the newest run. `--out` moves where the
+output lands; without it, Allure results go to
+`.nukadoko/export/allure-results` and the other two formats go to stdout.
 
 Since nukadoko writes results and never HTML, rendering them is Allure 3's
 CLI (`npm i -g allure`, or `npx allure` as below):
@@ -891,20 +903,18 @@ leaves a generated report sitting in your repository root, untracked and
 un-ignored, from nothing more than looking at a report. Sending it under
 `.nukadoko/` puts it where `nuka init` already added a gitignore entry.
 
-Use `watch` while iterating. Leave it running in one terminal and run
-`nuka run` in another. Temporary scenario snapshots update the report
-after each completed step. The final result replaces their live view when
-the scenario ends. `watch` serves on a random port (`--port` selects one)
-and opens a browser only with `--open`. `nuka init --allure` creates
-`.nukadoko/export/allure-results/` so `watch` can start before the first
-`nuka run`. See [Allure emitter](docs/spec.md#allure-emitter) for the
-snapshot mechanics and the live retry display.
+Use `watch` while iterating. Leave it running in one terminal, and run
+`nuka run` then `nuka report --format allure` in another; the report
+updates when the render lands. `watch` serves on a random port (`--port`
+selects one) and opens a browser only with `--open`. `nuka init --allure`
+creates `.nukadoko/export/allure-results/` so `watch` can start before the
+first render.
 
-Completed files in `allure-results/` are never rewritten. A run's files
-leave with the run once it is older than the newest `retention.runs` runs
-(default 20), so a report shows that many runs; `nuka clean` empties the
-directory at once, together with the records and the cache. Temporary `*-progress-result.json` files
-are removed when their scenario ends and when the next run starts.
+Rendering the same run again replaces what its last render wrote, so the
+directory holds one copy of each scenario. A run's files leave with the
+run once it is older than the newest `retention.runs` runs (default 20),
+so a report shows at most that many runs; `nuka clean` empties the
+directory at once, together with the records.
 
 ## Self-healing, with the deviation on the record
 
@@ -1150,8 +1160,9 @@ failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
 
 The same facts go into a Markdown run summary, written for a person rather
 than a log: `.nukadoko/runs/<run_id>/summary.md` on every run,
-appended to `$GITHUB_STEP_SUMMARY` when that is set, and to `--summary
-<path>` for a PR comment step. Its first line is `<!-- nukadoko:run -->`, so
+appended to `$GITHUB_STEP_SUMMARY` when that is set, and printed again for
+any finished run by `nuka report --format markdown` (`--out <path>` for a
+PR comment step). Its first line is `<!-- nukadoko:run -->`, so
 a CI step can update the comment it posted on an earlier push.
 
 **A retry that replaces the record is out of scope permanently, not "not
@@ -1287,8 +1298,8 @@ the browser, one table per feature with each scenario's verdict in each
 environment, its duration, and its failing step, a closing section naming any step that declared
 `mutates: false` while measured making a write, and the command that reruns
 each failed scenario. On GitHub Actions it lands on the job's summary page
-with no configuration, and `--summary <path>` writes a copy a CI step can
-post as a PR comment ([docs/ci.md](docs/ci.md)). Approving the PR is the
+with no configuration, and `nuka report --format markdown --out <path>`
+writes a copy a CI step can post as a PR comment ([docs/ci.md](docs/ci.md)). Approving the PR is the
 sign-off: the forge already binds the CI check and the approval to one
 commit, so nukadoko writes no record of its own beside the feature (see
 [Review](docs/spec.md#review)).

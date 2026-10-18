@@ -13,14 +13,14 @@ import path from "node:path";
 // own test can never make that promise honestly, and why a scenario's own
 // test now can). `buildFullName` stays a plain, readable identifier,
 // `{project}:{featurePath}#{name}`, where the caller decides what `name`
-// is: emitter.ts passes `${pickle.name}#${step name}` for a step's own
+// is: write-results.ts passes `${pickle.name}#${step name}` for a step's own
 // test (the historic `{project}:{featurePath}#{scenario}#{step text}`
 // shape) and bare `pickle.name` for a scenario's own test — the
 // run/scenario/step-scoped values that deliberately keep two runs of a
 // *step's* own test from linking live in `mapStep`'s own
 // `identityParameters` instead, never mixed into this string either way.
 //
-// Deliberately does NOT compute `testCaseId`: emitter.ts leaves that field
+// Deliberately does NOT compute `testCaseId`: write-results.ts leaves that field
 // unset on the `TestResult` it builds and lets allure-js-commons' own
 // `ReporterRuntime.stopTest` fill it in from `fullName` itself (`md5(
 // fullName)`, verified against that SDK's own `getTestResultTestCaseId`) the
@@ -54,7 +54,7 @@ export function toPosixPath(relativePath: string): string {
 }
 
 /** `${projectName}:${posixPath}#${name}`, or `${posixPath}#${name}` when
- * there is no project name. emitter.ts calls this once per scenario's own
+ * there is no project name. write-results.ts calls this once per scenario's own
  * test, `name` = bare `pickle.name` — this file's own header. */
 export function buildFullName(projectName: string | null, posixPath: string, name: string): string {
   return projectName === null ? `${posixPath}#${name}` : `${projectName}:${posixPath}#${name}`;

@@ -1,6 +1,6 @@
 Feature: a browser-driven scenario, so its trace/hook/action/page-event evidence can be read in a real report
 
-  # Kept apart from passing.feature, mixed.feature, and slow.feature on
+  # Kept apart from passing.feature and mixed.feature on
   # purpose: this is the only
   # fixture-project feature whose own step and Before hook launch a
   # browser. Nothing else in this project may join it here -- doing so

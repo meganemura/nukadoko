@@ -4,21 +4,12 @@ import type { StepRecord } from "../record/types.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 
 // Responsibility: read every record.json a scenario record's own steps
-// reference, once per record — pulled up from
-// src/report/allure/emitter.ts's own `stepRecordsForRecord`
-// (its original home) into src/report/ itself because
-// src/report/messages/emitter.ts now needs the identical read for the
-// identical reason (both emitters map the same scenario record and its
-// step records' record.json files, just onto different output shapes).
-//
-// `AllureEmitterOptions`/`MessagesEmitterOptions` each carry no `stateDir`
-// of their own — a step's own record directory is instead derived from
+// reference, once per record, for the run summary cli/run.ts builds as
+// each scenario finishes. A step's own record directory is derived from
 // `record.evidence.dir` (`"<stateDir>/runs/<run_id>/scenarios/<scenarioId>"`,
 // src/record/state-layout.ts): two levels up is the run's own directory,
 // the one every step record of this run was written under
-// (`<stateDir>/runs/<run_id>/steps/<recordId>`). Deriving it
-// from a value the record already carries — rather than growing either
-// emitter's own pinned options shape — keeps both interfaces untouched.
+// (`<stateDir>/runs/<run_id>/steps/<recordId>`).
 //
 // A missing or unparseable record.json collapses to `null`
 // (read-step-record.ts itself makes that call); this function only decides

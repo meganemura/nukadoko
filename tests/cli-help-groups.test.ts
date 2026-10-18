@@ -41,6 +41,7 @@ describe("nuka --help", () => {
       "scaffold",
       "check",
       "run",
+      "report",
       "steps",
       "describe",
       "Exploring:",

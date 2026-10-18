@@ -18,6 +18,20 @@ describe("removed flags", () => {
     );
   });
 
+  it("refuses nuka run --summary and names nuka report in its place", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/x.feature", "--summary", "out.md"], { rootDir: fixture("basic-project"), stdout, stderr });
+
+    expect(exitCode).toBe(2);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      "refused\tremoved-command\t-\tnuka run --summary is removed: nuka report --format markdown --out <path> writes the run " +
+        "summary of the newest run to a path.\n" +
+        "  fix: Use what the message names in its place.\n  do: nuka run --help\n",
+    );
+  });
+
   it("refuses nuka do --session and names a fixture in its place", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
@@ -77,5 +91,35 @@ describe("Markdown oaths, removed", () => {
         "from .feature files only\n" +
         "  fix: Write the scenarios of features/x.md as Gherkin in a .feature file, and name that file.\n",
     );
+  });
+});
+
+describe("run-time emitters, removed", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await createEmptyTempDir();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("refuses a config that still sets allure and messages, naming nuka report for each", async () => {
+    await writeFile(path.join(rootDir, "nukadoko.config.ts"), 'export default { allure: {}, messages: { output: "m.ndjson" } };\n');
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(2);
+    expect(stderr.text()).toBe("");
+    const findings = (JSON.parse(stdout.text()) as { findings: { code: string; message: string; fix: string }[] }).findings;
+    expect(findings.map((finding) => finding.code)).toEqual(["config-key-removed"]);
+    expect(findings[0]!.message).toBe(
+      `Invalid config at ${path.join(rootDir, "nukadoko.config.ts")}: allure was removed: nuka run writes no Allure results. ` +
+        "Run nuka report --format allure after a run; it writes <stateDir>/export/allure-results, or the directory --out names. " +
+        "messages was removed: nuka run writes no cucumber-messages stream. Run nuka report --format messages --out <path> after a run.",
+    );
+    expect(findings[0]!.fix).toBe("Remove allure and messages from nukadoko.config.ts.");
   });
 });

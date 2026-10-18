@@ -312,7 +312,7 @@
     {
       "en": ["run summary"],
       "ja": "run サマリ",
-      "note": "nuka run が書く Markdown(summary.md、$GITHUB_STEP_SUMMARY、--summary)。stderr に出る 1 行のサマリ(サマリ行)とは別物。run は英語のまま"
+      "note": "nuka run が書く Markdown(summary.md、$GITHUB_STEP_SUMMARY)と、nuka report --format markdown が出す同じ本文。stderr に出る 1 行のサマリ(サマリ行)とは別物。run は英語のまま"
     },
     {
       "en": ["several people in one scenario", "person", "people"],
@@ -461,7 +461,7 @@
     "docs/spec.ja.md": {
       "rule": "見出しの主題が keep_english に載っている語なら英語のまま。説明的な句なら日本語化。どちらとも言い切れない英語の術語が単独で立つ場合だけ、丸括弧で短い日本語の言い換えを添える",
       "examples": {
-        "english": ["Context API", "Records", "Allure emitter", "CLI summary"],
+        "english": ["Context API", "Records", "Allure results", "CLI summary"],
         "japanese": ["nukadoko とは", "課題", "成果物", "キーワードの意味論", "実行", "ロードマップ"],
         "parenthetical": [
           "Compat steps(移行の扉)",

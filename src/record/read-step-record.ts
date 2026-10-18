@@ -3,37 +3,26 @@ import path from "node:path";
 import { doRelativeDir, runsRelativeDir, stepRecordRelativeDir } from "./state-layout.js";
 import type { StepRecord } from "./types.js";
 
-// Responsibility: the read-side counterpart to write-step-record.ts, built
-// specifically for src/report/allure/emitter.ts. The whole allure-js-commons
-// `ReporterRuntime`/`Writer` surface that emitter drives is synchronous by
-// contract (every `Writer` method returns `void`, never a `Promise` —
-// verified against allure-js-commons' own `Writer` type), and the emitter's
-// own public `emitScenario(...): void` is pinned to that same synchronous
-// shape. write-step-record.ts's own `fs/promises` style would force
-// `emitScenario` to become `async`,
-// contradicting that pinned signature — so this reads synchronously instead
-// (`readFileSync`), the same convention src/feature/load-features.ts already
-// uses for its own filesystem reads, keeping the emitter's body free of
-// `await` end to end.
+// Responsibility: the read-side counterpart to write-step-record.ts. It
+// reads synchronously (`readFileSync`): the allure-js-commons
+// `ReporterRuntime`/`Writer` surface that src/report/allure/write-results.ts
+// drives is synchronous by contract (every `Writer` method returns `void`),
+// and the run summary and `nuka report` read step records on the same
+// synchronous path, the convention src/feature/load-features.ts already
+// uses for its own filesystem reads.
 //
 // Takes the step record's own directory directly (mirrors `writeStepRecord
-// (evidenceDir, record)`'s own parameter shape) rather than a step record id
-// — the id-to-directory convention (src/record/state-layout.ts) belongs
-// to the writers, and the caller here (emitter.ts) already has to
-// derive that path itself from the scenario record it is reading; growing
-// this module's own contract to duplicate that convention isn't worth it for
-// a one-line `path.join`. `readStepRecordById` below is the one exception:
-// `nuka do --use` has no record to derive a directory from, only a bare id
-// typed on the command line, so it is worth this module knowing the
-// convention for that one caller.
+// (evidenceDir, record)`'s own parameter shape) rather than a step record id:
+// a caller reading a run already holds the directory run.json names.
+// `readStepRecordById` below is the one exception: `nuka do --use` has no
+// record to derive a directory from, only a bare id typed on the command
+// line, so it is worth this module knowing the convention for that one
+// caller.
 //
 // A missing or unparseable record.json is not this module's failure to
-// surface: the emitter's own mapping treats a `null` result as "fall back
-// to the record's own coarser status", so every read failure — file not
-// found, malformed JSON, any other I/O error — collapses to the same
-// `null` rather than being distinguished;
-// a caller that cannot act differently on any of them has no use for the
-// difference.
+// surface: every read failure (file not found, malformed JSON, any other
+// I/O error) collapses to the same `null`, and the caller decides what a
+// missing record means for what it renders.
 
 // A record written by nukadoko 0.16.1 or earlier says `"ok"` where it now
 // says `"passed"`.

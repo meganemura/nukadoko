@@ -121,10 +121,11 @@ there is not checked and not run, and the skip reports nothing.
    writes to stdout directly. The run also
    writes a Markdown run summary for the person reviewing it, to
    `.nukadoko/runs/<run_id>/summary.md` (the `summary` line names
-   it), to `$GITHUB_STEP_SUMMARY` when that is set, and to
-   `--summary <path>` when a CI step posts it as a pull request comment. A compat World
+   it), and to `$GITHUB_STEP_SUMMARY` when that is set; `nuka report
+   --format markdown --out <path>` writes it again for a CI step that posts
+   it as a pull request comment. A compat World
    constructor that throws fails that scenario only: stderr gets one setup
-   line, later scenarios still run, and the messages export is finalized.
+   line, and later scenarios still run.
    There is no step record for that failure. With no target, `nuka run`
    runs `featuresDir`, which is what `npm run test:scenarios` does.
    When a scenario fails, diagnose it before repeating the whole run
@@ -159,38 +160,33 @@ run that a later run fixed is history the pull request can show.
 
 ## What a run writes
 
-`nuka run` can also write two report streams, each off until its key is
-in `nukadoko.config.ts`: `allure: {}` writes Allure results under
-`.nukadoko/export/allure-results/`, and `messages: {}` writes a
-cucumber-messages NDJSON stream under `.nukadoko/export/messages.ndjson`.
-`nuka init --allure` writes the first key. `allure.resultsDir` and
-`messages.output` inside them move where each writes. `nuka run`'s own
-stderr names every path it actually wrote at the end of the run, so where
-output landed is never a guess.
+`nuka run` writes its records, `run.json`, and the run summary, and no
+report. `nuka report` renders a finished run afterwards, from the run
+directory alone, so a run directory downloaded from CI renders too:
 
-Open the two for different reasons. Allure is nukadoko's own dashboard:
-every step's trace, HTTP log, and validated result, plus a per-step
-timeline of what it waited for and what it clicked, all in one place with
-zero project wiring. Render it with Allure's own CLI. During iteration,
-`npx allure watch <dir> --output <report-dir>` reads temporary scenario
-snapshots that arrive after each completed step. Use `npx allure generate`
-and `npx allure open` for a completed run. Nukadoko never renders HTML
-itself. `messages.ndjson` is for the
-opposite reason: feeding a suite's existing cucumber-js-era formatter or
-JUnit-based CI while it migrates, not for reading by hand.
+```sh
+nuka report --format allure                        # .nukadoko/export/allure-results/
+nuka report --format messages --out messages.ndjson
+nuka report --format markdown                      # the run summary, on stdout
+nuka report .nukadoko/runs/<run_id> --format allure --out reports/allure
+```
 
-`messages.ndjson` at the configured path is not that run's own stream
-while the run is happening; it is a copy of the most recently *completed*
-run, replaced atomically once a run's own `end()` runs. Each invocation
-writes its own stream first, to a run-id-suffixed file beside the
-configured path (`messages.<run_id>.ndjson`), so tailing the configured
-path to watch a run live shows nothing until that run finishes; use
-`npx allure watch` for a live view instead. Each of those per-run files
-stays on disk for as long as its run does: `nuka run` keeps the newest
-`retention.runs` runs (default 20) and removes older ones, records and
-export files alike, at the end of every run, printing one `retention:`
-line when it did. `nuka clean` removes all of them at once
-along with the configured path's own copy, when that path stays inside
-the project. It refuses, and removes nothing, when `messages.output` or
-`allure.resultsDir` resolves to the project root, to a path outside the
-project, or to a parent of the state directory.
+With no run directory it renders the newest run. Each command names on
+stderr the path it wrote, so where output landed is never a guess.
+
+Open the two report formats for different reasons. Allure is nukadoko's
+own dashboard: every step's trace, HTTP log, and validated result, plus a
+per-step timeline of what it waited for and what it clicked, all in one
+place with zero project wiring. Render it with Allure's own CLI:
+`npx allure watch <dir> --output <report-dir>` picks up each render while
+you iterate, and `npx allure generate` and `npx allure open` serve a
+finished one. Nukadoko never renders HTML itself. The messages stream is
+for the opposite reason: feeding a suite's existing cucumber-js-era
+formatter or JUnit-based CI while it migrates, not for reading by hand.
+
+Rendering the same run again replaces what its last render wrote under the
+state directory. Those files leave with their run: `nuka run` keeps the
+newest `retention.runs` runs (default 20) and removes older ones, records
+and export files alike, at the end of every run, printing one
+`retention:` line when it did. `nuka clean` removes all of them at once. A
+report written with `--out` outside the state directory is yours to keep.

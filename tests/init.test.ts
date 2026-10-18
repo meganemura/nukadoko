@@ -154,9 +154,7 @@ describe("nuka init", () => {
       scripts: { "test:scenarios": "nuka run" },
     });
 
-    const config = await loadConfig(rootDir);
-    expect(config.allure).toBeUndefined();
-    expect(config.messages).toBeUndefined();
+    await expect(loadConfig(rootDir)).resolves.toMatchObject({ featuresDir: "features" });
   });
 
   it("with --server and --server-url, writes baseURL, a server fixture that starts the command, and a request that needs it", async () => {
@@ -263,7 +261,7 @@ describe("nuka init", () => {
     expect(`${run.stdout.text()}${run.stderr.text()}`).toMatch(/^1 scenario(s)?: 1 passed, 0 failed {2}\(\d+s\)$/m);
   });
 
-  it("with --allure, also writes allurerc.mjs and the results directory, and turns the Allure emitter on", async () => {
+  it("with --allure, also writes allurerc.mjs and the results directory, and adds no config key", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
 
@@ -290,11 +288,8 @@ describe("nuka init", () => {
       "nukadoko.config.ts",
       "package.json",
     ]);
-    expect(await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8")).toContain("  allure: {},\n");
-
-    const config = await loadConfig(rootDir);
-    expect(config.allure).toEqual({});
-    expect(config.messages).toBeUndefined();
+    expect(await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8")).not.toContain("allure");
+    await expect(loadConfig(rootDir)).resolves.toMatchObject({ featuresDir: "features" });
   });
 
   it("keeps an existing test:scenarios script and the file's own indentation, and says it kept it", async () => {
@@ -944,9 +939,7 @@ describe("nuka init: allurerc.mjs is actually read by `allure generate`", () => 
       stderr: createCaptureSink(),
     });
     expect(runExit).toBe(1);
-
-    const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
-    expect(existsSync(resultsDir)).toBe(true);
+    expect(await runCli(["report", "--format", "allure"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(0);
 
     const reportDir = path.join(rootDir, "allure-report");
     const allureBin = path.join(repoRoot, "node_modules", ".bin", "allure");

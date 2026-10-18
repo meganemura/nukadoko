@@ -249,13 +249,16 @@ Five things the workflow above leaves to the team, each small.
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
   the diff and the summary beside it, and approving the pull request is the
-  sign-off (see "Review" in [docs/spec.md](spec.md#review)). `--summary
-  <path>` writes the same Markdown to a file, and one more step posts it:
+  sign-off (see "Review" in [docs/spec.md](spec.md#review)).
+  `nuka report --format markdown --out <path>` writes the same Markdown of
+  the newest run to a file, and one more step posts it:
 
   ```yaml
   # in the `run` job, which then needs `pull-requests: write` beside
   # `contents: read`
-  - run: npx nuka run features/ --summary nukadoko-summary.md
+  - run: npx nuka run features/
+  - run: npx nuka report --format markdown --out nukadoko-summary.md
+    if: always()
   - name: Comment the run summary on the pull request
     if: always() && github.event_name == 'pull_request' && hashFiles('nukadoko-summary.md') != ''
     env:
@@ -353,8 +356,8 @@ The upload step itself was not run. Read the workflow as a starting shape to ada
 file this project has watched go green on a real runner.
 
 It also says nothing about where the Allure output goes after the job,
-for a project that turns the Allure emitter on (`allure: {}`; it is off by
-default).
+for a project that renders it with `nuka report --format allure` (a run
+writes none of its own).
 Traces and screenshots are not redacted (see "Environments and
 secrets" in [docs/spec.md](spec.md#environments-and-secrets)): the
 `http.jsonl` beside them has secrets replaced, but a trace holds the

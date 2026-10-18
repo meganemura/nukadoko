@@ -7,6 +7,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  latestRunJson,
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
@@ -83,7 +84,7 @@ describe("measured mutates: request-side observed counts", () => {
 
   it("nuka run: a step that reached no HTTP channel records null counts, and one through request keeps its count", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "features/unobserved.feature", "--records", "--summary", "summary.md"], {
+    const exitCode = await runCli(["run", "features/unobserved.feature", "--records"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
@@ -103,7 +104,7 @@ describe("measured mutates: request-side observed counts", () => {
       [3, "only-a-read-happens", { http_reads: 1, http_writes: 0, processes: null }],
       [3, "a-fetch-read-happens", { http_reads: null, http_writes: null, processes: null }],
     ]);
-    expect(await readFile(path.join(rootDir, "summary.md"), "utf8")).toContain(
+    expect(await readFile(path.join(rootDir, ".nukadoko", "runs", latestRunJson(rootDir).run_id, "summary.md"), "utf8")).toContain(
       "2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`), so nothing was compared for them.",
     );
   });

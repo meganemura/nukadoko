@@ -49,7 +49,7 @@ import type { TendIssue } from "./types.js";
 //
 // Reads every live step record, under `<stateDir>/do/` and each run's
 // `<stateDir>/runs/<run_id>/steps/` (`listStepRecordDirs`, `readStepRecord`, src/record/read-step-record.ts - the same reader
-// src/report/allure/emitter.ts and `nuka do --use` already share). `do`,
+// src/report/allure/write-results.ts and `nuka do --use` already share). `do`,
 // `run`, and `external` step records all count the same way: this note is
 // about a step's own body, and that body runs the same whichever of the
 // three executors ran it.

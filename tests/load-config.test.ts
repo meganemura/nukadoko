@@ -739,68 +739,6 @@ describe("configSchema: requestContext", () => {
   });
 });
 
-describe("configSchema: allure", () => {
-  it("leaves allure undefined when omitted (the <stateDir>/allure-results default is applied by the caller, not this schema)", () => {
-    const result = configSchema.safeParse({});
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.allure).toBeUndefined();
-    }
-  });
-
-  it("accepts an explicit, root-relative resultsDir", () => {
-    const result = configSchema.safeParse({ allure: { resultsDir: "reports/allure-results" } });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.allure).toEqual({ resultsDir: "reports/allure-results" });
-    }
-  });
-
-  it("accepts allure with no fields at all", () => {
-    const result = configSchema.safeParse({ allure: {} });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.allure).toEqual({});
-    }
-  });
-
-  it("rejects an unknown key inside allure (there is no `enabled`)", () => {
-    const result = configSchema.safeParse({ allure: { enabled: false } });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe("configSchema: messages", () => {
-  it("leaves messages undefined when omitted (the <stateDir>/messages.ndjson default is applied by the caller, not this schema)", () => {
-    const result = configSchema.safeParse({});
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.messages).toBeUndefined();
-    }
-  });
-
-  it("accepts an explicit, root-relative output path", () => {
-    const result = configSchema.safeParse({ messages: { output: "reports/messages.ndjson" } });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.messages).toEqual({ output: "reports/messages.ndjson" });
-    }
-  });
-
-  it("accepts messages with no fields at all", () => {
-    const result = configSchema.safeParse({ messages: {} });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.messages).toEqual({});
-    }
-  });
-
-  it("rejects an unknown key inside messages (there is no `enabled`)", () => {
-    const result = configSchema.safeParse({ messages: { enabled: false } });
-    expect(result.success).toBe(false);
-  });
-});
-
 // Responsibility: schema-level unit tests for P5's own `fixtures`/
 // `fixtureTimeout` fields (src/config/schema.ts) — the shape checks
 // (function or [function, options] tuple, `auto: true` refused with its

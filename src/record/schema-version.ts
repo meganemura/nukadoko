@@ -9,6 +9,7 @@
 
 export const SCHEMA_VERSIONS = {
   step_record: 3,
+  run_sources: 1,
 } as const;
 
 export type DocumentKind = keyof typeof SCHEMA_VERSIONS;

@@ -103,13 +103,17 @@ async function setUpProject(): Promise<SameScenarioState> {
 // (features/steps/nuka-run.ts's own "clean copy" step does that, but that
 // would delete allure-history.jsonl too, discarding the exact history this
 // suite exists to prove survives). The writer recreates this directory on
-// its own on the next `nuka run` (src/report/allure/writer.ts's own
+// its own on the next `nuka report` (src/report/allure/writer.ts's own
 // `mkdirSync`), so nothing needs to recreate it here.
 async function clearAllureResults(state: SameScenarioState): Promise<void> {
   await rm(path.join(state.tempDir, ".nukadoko", "export", "allure-results"), { recursive: true, force: true });
 }
 
 async function generateReport(state: SameScenarioState): Promise<void> {
+  const rendered = await runNuka(["report", "--format", "allure"], state.tempDir);
+  if (rendered.exitCode !== 0) {
+    throw new Error(`expected nuka report to exit 0, got ${rendered.exitCode}: ${rendered.stdout} ${rendered.stderr}`);
+  }
   state.reportCounter += 1;
   const outputRelative = `report-${state.reportCounter}`;
   // No results-directory argument: `allure generate`'s own default glob
@@ -143,11 +147,9 @@ interface ScenarioTestResult {
 }
 
 // Every result in data/test-results/ is scenario-grain now: one pickle
-// becomes exactly one Allure test result, and the per-step progress
-// snapshots a run writes on the side are already deleted by the time the
-// scenario (and so the run) has ended, before `allure generate` reads the
-// directory. No label filter is needed to isolate the scenario-level
-// result any more; there is no other grain left to filter out.
+// becomes exactly one Allure test result. No label filter is needed to
+// isolate the scenario-level result; there is no other grain to filter
+// out.
 async function readScenarioResults(reportDir: string): Promise<ScenarioTestResult[]> {
   const dir = path.join(reportDir, "data", "test-results");
   const fileNames = await readdir(dir);

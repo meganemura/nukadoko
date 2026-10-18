@@ -76,6 +76,9 @@ export interface SelectedFeature {
    * file's pickle borrow a different file's document). */
   readonly gherkinDocument: GherkinDocument;
   readonly pickles: readonly Pickle[];
+  /** The text the document was parsed from, which the run keeps in its
+   * sources.json so `nuka report` parses the same scenarios later. */
+  readonly source: string;
   /** `null` selects the full file. Otherwise, workers use these lines to
    * preserve this file's partial selection. */
   readonly selectedLines: readonly number[] | null;
@@ -87,9 +90,8 @@ export interface SelectedScenarios {
    * target, one entry per file `walkFeatureFiles` found — sorted
    * deterministically, this file's own header — for a directory target.
    * cli/run.ts flattens this into `{ feature, pickle }` pairs for its own
-   * loop; grouped by file is kept here because the messages emitter
-   * (src/report/messages/emitter.ts) needs that same per-file grouping for
-   * its own `begin()` call. */
+   * loop; grouped by file is kept here because sources.json
+   * (src/record/run-sources.ts) keeps one entry per file. */
   readonly features: readonly SelectedFeature[];
   /** How many pickles the target has in total, whether or not `:line` cut
    * a single file's own selection down. A directory target never filters,
@@ -110,7 +112,7 @@ function readFeatureSource(rootDir: string, relativePath: string): string {
 
 function parseSelectedSource(relativePath: string, source: string): SelectedFeature {
   const { gherkinDocument, pickles } = parseFeatureSource(source, relativePath);
-  return { relativePath, gherkinDocument, pickles, selectedLines: null };
+  return { relativePath, gherkinDocument, pickles, source, selectedLines: null };
 }
 
 /** One selected file for `nuka run`: a file that does not parse refuses

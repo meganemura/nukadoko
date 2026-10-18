@@ -2,20 +2,20 @@ import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { runRelativeDir } from "./state-layout.js";
 
-// Responsibility: which export files one `nuka run` invocation wrote, kept
-// as an append-only manifest in the run's own directory,
-// `<stateDir>/runs/<run_id>/` (src/record/state-layout.ts).
-// Retention (src/record/retention.ts) reads it to remove a run's own
-// Allure output and messages stream together with its records; nothing else
-// does.
+// Responsibility: which export files were written for one run, kept as an
+// append-only manifest in the run's own directory,
+// `<stateDir>/runs/<run_id>/` (src/record/state-layout.ts). `nuka report`
+// notes each file it writes under the state directory for one of this
+// project's runs (src/cli/report.ts); retention (src/record/retention.ts)
+// reads the manifest to remove a run's export output together with its
+// records, and a second render of the same run reads it to replace the
+// first.
 //
-// Why a file, and why append-only: under `--concurrency <n>` the Allure
-// files are written by worker processes (src/run/run-worker-entry.ts owns
-// its own emitter), so the parent that decides what to remove never sees
-// their names in memory. Each writer appends one root-relative path per
-// line as it writes the file; `appendFileSync` opens with O_APPEND, so
-// concurrent appends from several workers land whole, in some order, and
-// order does not matter to a reader that treats the file as a set.
+// Why a file, and why append-only: a run directory is what retention,
+// CI uploads, and `nuka report` share, and a render can happen in a later
+// process, long after the run. `appendFileSync` opens with O_APPEND, so two
+// renders at once land whole lines, in some order, and order does not
+// matter to a reader that treats the file as a set.
 //
 // Why the names cannot be derived instead: an attachment's file name is
 // chosen by allure-js-commons and written into the result's own `source`
@@ -23,9 +23,8 @@ import { runRelativeDir } from "./state-layout.js";
 // name without breaking the link from result to attachment. Recording the
 // name at write time is the only way the run keeps ownership of it.
 //
-// Root-relative paths, not results-dir-relative: `allure.resultsDir` and
-// `messages.output` can be changed between the run that wrote a file and
-// the run that removes it, and a removal must target where the file
+// Root-relative paths, not results-dir-relative: one run can be rendered
+// into more than one directory, and a removal must target where each file
 // actually is.
 //
 // Not a run record. The manifest carries no status, no timing, and no

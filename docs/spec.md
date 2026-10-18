@@ -7,8 +7,8 @@ Status: M1 (engine core) implemented (`steps`/`describe`/`do`/`run`/
 below) is implemented too (`nukadoko/compat`, typed World measurement, and
 a migration guide). Both real-world gates have now been run: typed steps
 drafted against real feature files, and the compat door audited against
-real cucumber-js glue (below). Still 0.x; of M3+, the Allure emitter and the
-messages emitter are both implemented, and so are both of M5's skills. Compat gap detection in `nuka check` (the
+real cucumber-js glue (below). Still 0.x; of M3+, the Allure results and the
+messages stream are both implemented (rendered by `nuka report`), and so are both of M5's skills. Compat gap detection in `nuka check` (the
 migration skill's own prerequisite) is implemented too (see "Compat steps"
 and docs/migration.md's "The dashboard is `nuka check`"), closing out
 M1-M5.
@@ -113,14 +113,14 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/runs/<run_id>/`, one directory per `nuka run` (`run.json`, the run's result; `summary.md`, its Markdown summary; `steps/<id>/`, each step record with its evidence; `scenarios/<id>/`, a scenario's own evidence, when it wrote any; `exports`, which export files that run wrote), and `.nukadoko/do/<id>/` (a `nuka do` step record) | the tool | no | the newest `retention.runs` runs; a `nuka do` record or an unfinished run, `retention.adHocDays` days | a person reviewing the run (its summary), the Allure and messages emitters, `nuka do --use`, `nuka tend` |
-| Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter), each only while its emitter is on | the tool | no | with the run that wrote it | other tools |
+| Measurement | `.nukadoko/runs/<run_id>/`, one directory per `nuka run` (`run.json`, the run's result; `summary.md`, its Markdown summary; `steps/<id>/`, each step record with its evidence; `scenarios/<id>/`, a scenario's own evidence, when it wrote any; `sources.json`, the feature text the run parsed; `exports`, which export files `nuka report` wrote of that run), and `.nukadoko/do/<id>/` (a `nuka do` step record) | the tool | no | the newest `retention.runs` runs; a `nuka do` record or an unfinished run, `retention.adHocDays` days | a person reviewing the run (its summary), `nuka report`, `nuka do --use`, `nuka tend` |
+| Export | `.nukadoko/export/allure-results/`, and any other file `nuka report --out` writes under `.nukadoko/export/` | the tool | no | with the run it renders | other tools |
 
 The table names files. The distinctions between its columns answer two
 questions: "what happens if this is deleted" and "who gets to change it":
 
-- **Export is disposable because it is derived.** Delete it, and the next
-  `nuka run` writes a fresh one. It exists for readers outside nukadoko,
+- **Export is disposable because it is derived.** Delete it, and
+  `nuka report` renders it again from the run directory. It exists for readers outside nukadoko,
   such as Allure's CLI or a CI formatter. Nukadoko never reads it itself.
 - **Only Contract is committed.** Contract is the promise that a human wrote
   and reviewed. Whether the promise ran green is in the run summary CI posts
@@ -159,12 +159,9 @@ questions: "what happens if this is deleted" and "who gets to change it":
   nukadoko did not write is not nukadoko's to remove.
   `nuka clean [--dry-run] [--json]` is the whole-category operation that
   remains. It cleans all three categories together. `--dry-run` prints the
-  same plan that the real run would use, but removes nothing. An `allure.resultsDir` or
-  `messages.output` that resolves to the project root, to a path outside the
-  project, or to a parent of the state directory is refused before anything
-  is removed. `--dry-run` refuses those paths too. `clean` still removes a
-  results directory that stays inside the project, unless that directory is
-  a parent of the state directory. One export file is exempt
+  same plan that the real run would use, but removes nothing. A report
+  `nuka report --out` wrote outside the state directory is the caller's
+  file, and `clean` does not read or remove it. One export file is exempt
   from both retention and `clean`. `export/allure-history.jsonl` sits
   beside `allure-results/`, not inside it. It is the only artifact here
   that a new run cannot reproduce.
@@ -626,8 +623,8 @@ The fixture names:
   and `outcome` to the step record. These fields provide the only way to
   distinguish "resolved on the first attempt, the wait did nothing" from
   "resolved four seconds in" after the event. This is the same boundary between
-  self-reporting and measurement that the Allure emitter marks with its
-  `declared:` prefix (see "Allure emitter"). Here, that boundary separates a
+  self-reporting and measurement that the Allure results mark with their
+  `declared:` prefix (see "Allure results"). Here, that boundary separates a
   wait that the tool measured from one that occurred invisibly in Playwright.
 - `evidence.attach(name, body)` / `evidence.path(name)`: fills the one gap that
   the other fixtures do not cover. Every other fixture above returns something
@@ -1142,11 +1139,9 @@ release read, is not refused, because it changes nothing at run time.
 with the step file. `tsc` reports the same key as an excess property, but
 only in a project whose `tsconfig.json` includes its step files.
 
-The default is not a guess about how long a step should take. It is the
-horizon this tool already had: the Allure emitter draws a running step for
-at most 120 heartbeat ticks of ten seconds (see "Allure emitter"), which is
-where a step stops being worth watching. One run, one horizon. It sits far
-above what steps actually take: 800 step records sampled from a real
+The default is not a guess about how long a step should take. It is a
+horizon past which a step that has not returned is taken to be stuck. It
+sits far above what steps actually take: 800 step records sampled from a real
 browser suite ran a median of 66ms and a maximum of 14s, none over 30s.
 
 A compat step is deliberately not covered. It runs unbounded unless its own
@@ -1688,7 +1683,7 @@ import { Given, When, Then } from "nukadoko/compat";
   receives `pickleStep`, the pickle step that just ran, and
   `testStepId`, that step's step record id. The id is the same kind of
   stand-in `testCaseStartedId` already is: a real stable id the
-  executor holds, not the id the cucumber-messages emitter assigns
+  executor holds, not the id the cucumber-messages stream assigns
   later. The other members, `PENDING`, `SKIPPED`, `UNDEFINED`, and
   `AMBIGUOUS`, cannot match. Nukadoko has no corresponding concept for a
   hook result. Migrated glue never takes a branch that compares these
@@ -1905,7 +1900,7 @@ However, its location shows that the existing suite owns it.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--records] [--json] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--records] [--json]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2319,10 +2314,9 @@ a script reads the whole result with one parse. It also prints for a run
 that selected no scenario, with empty `scenarios`. A refusal before anything
 runs prints nothing on stdout, as without `--json`. stderr is unchanged.
 
-The paths line names an `allure` or `messages` location only while that
-emitter is on, which is while its config key is present (see "Allure
-emitter" and "Messages emitter"). A line for an emitter that wrote nothing
-would send a reader to a path that does not exist.
+The paths lines name what the run wrote: its step records and its run
+summary. `nuka report` names the paths it writes the same way, after the
+run (see "Allure results" and "Messages stream").
 
 A scenario's own `browser` field in `run.json` (`{ "type": "firefox", "version":
 "133.0" }`) names the engine and version this particular run actually
@@ -2976,8 +2970,9 @@ holds:
 It is written to `.nukadoko/runs/<run_id>/summary.md` every time,
 appended to the file `$GITHUB_STEP_SUMMARY` names when that is set (GitHub
 Actions sets it for every step, so the job's summary page shows the run with
-no configuration), and written to `--summary <path>` when the flag is given,
-replacing what was there. Error text in it is `run.json`'s, so secrets are
+no configuration). `nuka report --format markdown` prints the same text for
+any finished run, and `--out <path>` writes it to a file, such as one a CI
+step posts as a pull request comment. Error text in it is `run.json`'s, so secrets are
 already redacted. A summary that cannot be written is a warning
 on stderr; it never changes the exit code. A setup failure, which writes no
 record, writes no summary.
@@ -3090,8 +3085,6 @@ missing file.
 | `fixtures` | user-defined fixtures (see "Fixtures") |
 | `fixtureTimeout` | default setup/teardown timeout per fixture instance, in ms (see "Fixtures") |
 | `stepTimeout` | how long a typed step's own `run` may take, in ms (default 1,200,000; `defineStep({ timeout })` overrides it, compat steps are not covered) |
-| `allure` | turns the Allure emitter on when present; only `resultsDir` inside (see "Allure emitter") |
-| `messages` | turns the messages emitter on when present; only `output` inside (see "Messages emitter") |
 
 `additionalFeatureDirs` defaults to `[]` and has a different purpose from
 `featuresDir`. `featuresDir` defines the set that runs unattended. With no
@@ -3249,7 +3242,8 @@ kinds, measurement and export (see "Artifacts"):
   everything that run measured, so CI uploads one directory per run and
   retention and `clean` remove one (see "Artifacts"):
   - `run.json`, the run's result, and `summary.md`, its run summary (see
-    "Records")
+    "Records"); `sources.json`, the text of every feature file the run
+    parsed, so `nuka report` can render the run from this directory alone
   - `steps/<id>/`: one directory per step record: the record JSON and its
     evidence files (trace.zip, screenshots, http.jsonl)
   - `scenarios/<id>/`: one directory per scenario run that wrote evidence
@@ -3263,41 +3257,31 @@ kinds, measurement and export (see "Artifacts"):
     under that step's own `steps/<id>/` instead (see "Running"). A
     scenario that wrote none of these leaves no directory: its entry in
     `run.json` is its record
-  - `exports`: every result, container, and attachment file that run wrote
-    under `export/`, and its messages stream wherever `messages.output`
-    put it, one root-relative path per line, appended by whichever process
-    wrote the file (under `--concurrency`, the worker processes do). It is
-    what lets a run's export output leave with the run. It carries no
-    status or timing: `run.json` does
+  - `exports`: every file `nuka report` wrote of that run under the state
+    directory (Allure results, containers, and attachments, and a messages
+    stream or summary written there with `--out`), one root-relative path
+    per line. It is what lets a run's export output leave with the run, and
+    what a second render of the same run replaces. It carries no status or
+    timing: `run.json` does
 - `do/<id>/`: one directory per `nuka do` step record, the same shape as a
   run's `steps/<id>/`. A `nuka do` call belongs to no run, so its record
   sits apart from every run directory
-- `export/allure-results/`: the emitter's output, holding the same runs
-  `runs/` holds, since a run's files leave with the run (see
-  "Artifacts"), and safe to delete whenever a fresh Allure launch is
-  wanted; `init --allure` also
-  creates it empty, since Allure's own CLI refuses to start against a
-  missing directory but accepts an empty one, letting `allure watch` already
-  be running before the first `nuka run`
-- `export/messages.ndjson`: the messages emitter's output. This path only
-  ever holds the most recently *completed* run's own stream, replaced
-  atomically once that run finishes; each invocation's real, in-progress
-  write target is a run-id-suffixed sibling beside it instead
-  (`messages.<run_id>.ndjson`, truncated at that invocation's own start),
-  one per `nuka run` invocation, removed with its run (see "Messages
-  emitter")
+- `export/allure-results/`: where `nuka report --format allure` writes
+  by default, holding at most the runs `runs/` holds, since a run's files
+  leave with the run (see "Artifacts"), and safe to delete whenever a fresh
+  Allure launch is wanted; `init --allure` also creates it empty, since
+  Allure's own CLI refuses to start against a missing directory but
+  accepts an empty one, letting `allure watch` already be running before
+  the first render
 
 The routine removal is retention, which `nuka run` applies itself at the end
 of every run (see "Artifacts").
 `nuka clean [--dry-run] [--json]` deletes both kinds at once: every
-run directory, every `do/` record, and the export output. It is also the
-operation for an `allure-results/` directory written before runs kept a
-manifest of their files, which retention never touches.
-It refuses, before removing anything, when `allure.resultsDir` or
-`messages.output` resolves to the project root, to a path outside the
-project, or to a parent of the state directory. `--dry-run` refuses those
-paths too. A results directory inside the project is still removed, unless
-that directory is a parent of the state directory.
+run directory, every `do/` record, and every entry of `export/` but the
+Allure history file. It is also the operation for an `allure-results/`
+directory written before runs kept a manifest of their files, which
+retention never touches. A report written with `--out` outside the state
+directory is the caller's file, and `nuka clean` does not read or remove it.
 A results directory that existed is recreated empty, so an `allure watch`
 pointed at it keeps finding it; an empty one is not listed, so a clean
 right after a clean prints `ok: nothing to clean`; and a results directory
@@ -3380,23 +3364,27 @@ that ran the `nuka do` sequence knows each step and its args, and writes the
 scenario from them, keywords and claims included. `nuka check` then reads
 the lines back against the vocabulary before anything runs.
 
-## Allure emitter
+## Allure results
 
-`nuka run` writes one Allure test result for each scenario pickle.
-The emitter uses the Allure 2 file format, which Allure 2 and Allure 3 can read.
-The emitter is off by default and on while the config has an `allure` key: `allure: {}` turns it on, and `nuka init --allure` writes that key.
-Most projects that run nukadoko beside their unit tests read no Allure report, and a two-step scenario used to leave a dozen export files behind for nobody.
-When on, nukadoko writes results to `.nukadoko/export/allure-results/`.
+`nuka report --format allure` writes one Allure test result for each scenario execution of one finished run.
+It reads the run directory alone: run.json, the step records, and `sources.json`, the feature text the run parsed.
+A run directory copied off a CI machine therefore renders the same results as the one in the project that ran it.
+The results use the Allure 2 file format, which Allure 2 and Allure 3 can read.
 nukadoko does not render HTML.
 
-`allure.resultsDir` moves the output to another path.
-A relative path is resolved against the project root, and an absolute path is used as given.
-`nuka clean` removes that directory when it stays inside the project, unless the directory is a parent of the state directory.
-It refuses the command when the path resolves to the project root, to a path outside the project, or to a parent of the state directory.
-There is no CLI flag: a report a project reads belongs in its config, not in each invocation. When on, the emitter runs when an invocation selects at least one pickle.
-It is skipped, the same reason BeforeAll/AfterAll are, when an invocation selects zero pickles: no `allure-results/` directory is created at all in that case.
-`categories.json` and `environment.properties` are written once, at the very start of a run, before the first step runs.
-`nuka init --allure` creates the default directory so `allure watch` can start before the first run.
+`nuka run` writes no Allure results.
+Most projects that run nukadoko beside their unit tests read no Allure report, and a run that wrote one anyway left a dozen export files behind for nobody.
+Rendering after the run also lets one run be rendered again, in another format or into another directory, without running anything again.
+
+The results go to `.nukadoko/export/allure-results/`, or to the directory `--out` names.
+A relative `--out` is resolved against the project root, and an absolute one is used as given.
+`nuka report` with no run directory renders the newest run; a run directory as its argument renders that run.
+When the run is one of this project's runs, each file written under the state directory is noted in that run's exports manifest, so retention removes it with the run.
+Rendering the same run into the same directory again first removes the files the last render of that run wrote there, so the directory holds one copy of each scenario.
+A render of a different run adds its results beside the others; whether two runs count as one Allure launch or two is the caller's choice.
+`nuka clean` empties `.nukadoko/export/allure-results/`, and a directory written with `--out` outside the state directory is the caller's to remove.
+`categories.json` and `environment.properties` are written on every render.
+`nuka init --allure` creates the default directory so `allure watch` can start before the first render.
 
 Each result uses the pickle name and stores its Gherkin steps in `steps[]`.
 A step name preserves the Gherkin keyword and its AST whitespace, including `And`.
@@ -3412,7 +3400,7 @@ The result uses these labels and paths:
   Both forms also accept `=` in place of `:`, and neither becomes a `tag` label.
 - The scenario result receives all declared labels and links.
 - `titlePath` contains the project name, feature directory segments, and Feature name.
-- The emitter leaves `parentSuite` and `suite` unset.
+- The results leave `parentSuite` and `suite` unset.
   Users who need that hierarchy can add suite labels through declared labels.
 
 `fullName` is `{project}:{feature path}#{scenario name}`.
@@ -3431,7 +3419,7 @@ A wrong link is worse than no link, so this identity never guesses past what it 
 
 This identity preserves a plain scenario's history across the structure change.
 A Scenario Outline row starts one new history after the change because its visible parameters change the identity.
-The emitter does not write the TestOps migration field `_fallbackTestCaseId`.
+`nuka report` does not write the TestOps migration field `_fallbackTestCaseId`.
 
 A step entry has no identity that survives across runs. The Allure step-result model has no `labels`, `links`, or `historyId` field that could store one.
 Four ways of computing one anyway were tried before this design: step text (two steps can share the exact same wording), position (an edit anywhere earlier in the feature file shifts it), and counting occurrences (an inserted duplicate is indistinguishable from the original it landed next to).
@@ -3456,7 +3444,7 @@ Scenario evidence, such as `final.png`, attaches directly to the scenario result
 
 Every step entry with a step record includes the complete record as `record.json`, whether the step passed or failed.
 It is the same object that reached disk, already redacted there, so nothing here redacts it a second time.
-It attaches whole rather than picked apart field by field, on purpose: a field added to `record.json` later shows up in the report on its own, with no emitter change needed to carry it there.
+It attaches whole rather than picked apart field by field, on purpose: a field added to `record.json` later shows up in the report on its own, with no change to the mapping needed to carry it there.
 The individually mapped fields elsewhere in this section stay too, since a reader who wants one fact should not have to open an attachment to get it; `record.json` is the fallback that keeps the report complete where an individual mapping was never written.
 
 A declared attachment carries a name prefixed `declared:`.
@@ -3464,7 +3452,7 @@ Once everything is sitting in the same result file, that prefix is the one place
 
 Declared logs, measured timeline entries, and part calls appear as nested steps under their Gherkin step.
 
-A step entry combines its `sections`, `polls`, and `actions` into one nested child-step timeline (see "Records"). The emitter merges them in ascending `at` order.
+A step entry combines its `sections`, `polls`, and `actions` into one nested child-step timeline (see "Records"). They are merged in ascending `at` order.
 Two entries that land on the exact same millisecond keep a fixed order, sections before polls before actions, so a rerun of the same step record never reshuffles the timeline into an unreadable diff.
 A section renders as a zero-width marker named after its own label.
 A poll spans its own start through `waited_ms` later, named `<description> (<attempts> attempts)`: the duration alone cannot tell a wait that resolved on the first attempt from one that took forty, and the count is the one fact only the name can carry.
@@ -3474,7 +3462,7 @@ Neither `ms` nor `timeout_ms` ever lands in the name: `ms` is already visible as
 When `actions` itself was capped at 100 entries (see "Records", `truncated.actions`), the timeline gets one more child step at its own tail, zero-width and passed, naming the cut (e.g. `... 4113 more actions not shown`), so a reader scanning only the timeline never mistakes a capped list for everything that happened.
 Never clamped to the parent step entry's own start/stop range: a timeline entry outside that range already happened, and hiding it would make it unreadable rather than making it not true.
 
-The emitter presents `page_events` as up to three parameters (see "Records"): `console errors (observed)`, `page errors (observed)`, and `failed requests (observed)`. It adds a parameter only when that category has an entry, so readers can see the count without opening `record.json`.
+`page_events` becomes up to three parameters (see "Records"): `console errors (observed)`, `page errors (observed)`, and `failed requests (observed)`. It adds a parameter only when that category has an entry, so readers can see the count without opening `record.json`.
 A category the collector truncated reports its true total beside the shown count, e.g. `100 of 4213`: the shown count alone would understate what actually happened.
 
 A step entry's parameters carry its declaration and what was actually observed side by side: `mutates (declared)` next to the measured `http reads (observed)` / `http writes (observed)`, each `not observed` when the step reached no HTTP channel (and, for a compat step, `world reads (observed)` / `world writes (observed)`), not because the two are checked against each other automatically, but so a reviewer can.
@@ -3486,13 +3474,13 @@ It writes the original error message in `statusDetails.trace`.
 The marker names the same `error.kind` a failed step's step record (or, when a hook stopped the scenario, that hook's own record) already carries, and the same `error.kind` is also written as a `nukadoko.failure` result label.
 The two Allure generations turn that into a category by different paths, and they need different things from a user.
 
-- **Allure 2** has no category field for each result, so the emitter also writes `categories.json` on every run.
+- **Allure 2** has no category field for each result, so `nuka report` also writes `categories.json` on every render.
   It contains all seven rules, one for each `error.kind`, and matches the message prefix by regular expression.
   The message prefix and category rule represent the same classification, so users do not need extra configuration.
 - **Allure 3** does not read `categories.json` from a results directory during `allure generate` or `allure report`.
   Allure 3 gets categories only from its configuration and matches them against result labels.
   `nukadoko.failure` supplies that label.
-  `nuka init --allure` writes `allurerc.mjs` at the project root with seven label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the emitter itself uses.
+  `nuka init --allure` writes `allurerc.mjs` at the project root with seven label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the results themselves use.
   Dropped at a project's root it is picked up automatically (Allure 3 auto-detects `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory, no `--config` flag needed).
   `nuka init` checks all six extensions first and writes nothing, naming the file it found on stderr, when a project already has one.
   Without any of them, every nukadoko failure lands in Allure 3's one built-in "Product errors" category instead.
@@ -3504,129 +3492,52 @@ A hook's own trace and `actions` attach to that hook's own fixture, mapped the s
 A hook carries no `sections`/`polls` of its own, since it has no fixture bag to call `section`/`poll` from; only its trace-derived `actions` still render.
 A hook invocation that never touched `this.openPage()` gets neither: no trace attachment, no timeline entries, the same "nothing to show" a step entry that never touched the page already gets.
 A Before hook failure makes the scenario result failed and leaves each planned Gherkin step skipped.
-BeforeAll and AfterAll still have no run-level record that the emitter can map.
+BeforeAll and AfterAll still have no run-level record that the results can map.
 Hook duration still uses scenario boundaries because scenario records do not contain per-hook timestamps.
 
-`allure-results/` is safe to read while `nuka run` is still going: every file lands through a temp-file rename, so a reader never sees a half-written result.
-A scenario's one real result only exists once that scenario ends; what a live reader sees update before then is the progress snapshot below.
-
-The emitter writes the first progress snapshot when a scenario starts.
-This initial snapshot lists every planned step without a status, so Allure displays each step as unknown.
-The emitter writes a new `<uuid>-<sequence>-progress-result.json` after each completed step.
-Each snapshot uses the completed statuses and timings available at that point.
-
-For a long-running step, the emitter also writes a snapshot every ten seconds between those two points.
-That snapshot draws the running step with no status, a `stop` set to the moment it was written, and its live activity listed as child steps, one flat level deep.
-Two sources feed those children, and both carry words a person wrote: a `poll` call still retrying contributes `waiting for: <description> (attempt N)`, and each `section` label reached so far contributes `section: <label>`.
-A live child is redacted where it is built. Every other value on a snapshot arrives off a step record that was redacted when it was written, and a live child has no such earlier pass to inherit.
-
-When a running step has neither activity to report, the emitter does not write a heartbeat snapshot.
-A tick that could only say how long the step has been running would be telling a reader something they can already see, and paying a whole-page reload for it.
-The consequence to know: a step that runs for a minute with no poll and no section looks exactly like a step that has not started.
-
-The interval is ten seconds and is not configurable, since it answers how long a person waits before a live view reads as stalled, and that does not vary by project.
-One step stops after 120 ticks. The bound exists because each tick spends a snapshot out of the `start` budget below, and because a step's own retry listing gains one row per snapshot it wrote.
-
-All snapshots for one scenario share a uuid generated at scenario start, but each uses a new file name.
-Both halves are needed. A detail page's route is a hash of the result's own uuid, so a moving uuid moves the route out from under any page already open on it, and `allure watch` discovers a new file path while ignoring a rewrite of one it has read.
-Allure reads a result's uuid out of the JSON body rather than off the file name, which is what lets one value stay fixed while the other changes.
-
-A snapshot has the final result's `historyId`, but excludes attachments, hook fixtures, and excluded context parameters.
-Each snapshot gets its own `start`, one millisecond above the snapshot before it.
-The first sits `stepCount * (121) + 2` milliseconds below the scenario start, so the last one still stays below it.
-That budget covers one snapshot per step plus the 120 heartbeat ticks each step may add, since a formula sized for one write per step would run out the moment a step ran long enough to tick.
-The final result keeps the scenario start, so Allure selects it as the canonical retry result.
-
-Allure 3 merges files as retries when they share a `retryHash`, a hash over `testCaseId`, the non-excluded parameters, and the environment id.
-`historyId` rides along on every snapshot for history and known-issue matching, and takes no part in that grouping.
-Allure selects the result with the greatest `start` as canonical, and falls back to ingest order when two results share one `start`.
-Distinct values per snapshot are what keep that fallback out of the decision.
-Ingest order is safe to rely on under `allure watch` and unsafe under `allure generate`, which sorts the directory by file name and reads it concurrently.
-This behavior was measured with Allure 3.14.3, the version this project pins, and confirmed in the `@allurereport/core` source.
-The Allure README does not document this behavior.
-
-The fixed uuid and the climbing `start` only work as a pair.
-Every snapshot in a scenario resolves to one store id, so Allure records that id's ingest position once and reads the same value back for every later write.
-Two snapshots tied on `start` would therefore tie on ingest position too, the comparison would return zero, and a stable sort would leave the earliest snapshot holding the canonical slot for the rest of the run.
-Everything written after it, including whatever step the run had actually reached, would count as a retry and drop out of the scenario list.
-A change to the `start` formula that lets two snapshots tie brings that back, even with the uuid scheme untouched.
-
-Two measured limits remain under Allure 3.14.3.
-A detail page opened during a watch session follows its scenario to the end of the run and then stops there: the real result lands on a route of its own, and a reload keeps the URL fragment, so reaching it means walking in from the list again.
-The same page also tops out one step short of the end. A scenario of N steps writes N+1 snapshots, and the last one is written between the final step and the cleanup below, inside the 300ms the watcher waits between polls.
-
-Allure appends to a result's retry list on every read without checking whether that id is already there, so a scenario's retry listing carries one row per snapshot it wrote.
-The row count is the same one a fresh uuid per snapshot produced. What changed is that every row now opens the one page rather than a different frozen snapshot each.
-Those rows exist only in a live watch session; a report generated from a finished results directory carries none of them.
-
-During a live watch session, older unknown snapshots can appear in the running scenario's retries.
-When the scenario ends, nukadoko writes the final result and removes that scenario's progress files.
-At run start, it removes progress files left by an interrupted prior run.
-This cleanup assumes one active run for each results directory.
-
-Completed result files remain append-only. The emitter does not clear or replace an existing `allure-results/` directory.
-Progress files are nukadoko work files and form the only exception.
-Whether two `nuka run` invocations count as one Allure launch or two is left to the caller; a user who wants a fresh launch removes the directory themselves.
-A completed results directory contains final results, containers, attachments, and launch metadata.
-
-If a future Allure version changes retry merging, the live view can lose step-level fidelity.
-The completed directory still contains only final results, so generated reports remain correct.
+Every file lands through a temp-file rename, so a reader such as `allure watch` never sees a half-written result.
+A run's results appear when `nuka report` renders it, after the run; the live view of a run in progress is the progress output `nuka run` prints on stderr.
 
 Ad-hoc `nuka do` records stay outside the dashboard.
-An exploration becomes reportable when a feature records it and `nuka run` executes that scenario.
+An exploration becomes reportable when a feature records it, `nuka run` executes that scenario, and `nuka report` renders the run.
 
 Allure displays each run; nukadoko has no web UI.
-History, trend, and flakiness are Allure features too; per the identity paragraphs above, this emitter feeds them at scenario grain, once `historyPath` is set, and never at step grain: nothing about a later invocation links a step entry back to an earlier invocation's, only a scenario does.
+History, trend, and flakiness are Allure features too; per the identity paragraphs above, these results feed them at scenario grain, once `historyPath` is set, and never at step grain: nothing about a later invocation links a step entry back to an earlier invocation's, only a scenario does.
 
 Not yet built: link-template configuration for tags such as `@issue:123`.
 
 The point is not format politics: a classic cucumber run fills an Allure report only where glue authors hand-attached evidence, while nukadoko's harness measures everything anyway, and Allure's own model (attachments, labels, parameters) already had a first-class place for all of it.
-The Allure emitter is where nukadoko's measurement surplus becomes visible, automatically, today; the messages emitter below is the second, narrower output, and its job is compat fidelity rather than measurement surplus.
+The Allure results are where nukadoko's measurement surplus becomes visible; the messages stream below is the second, narrower output, and its job is compat fidelity rather than measurement surplus.
 
-## Messages emitter
+## Messages stream
 
-For each invocation, `nuka run` writes one cucumber messages stream through
-`@cucumber/messages`. The stream uses NDJSON with one envelope per line and
-defaults to `.nukadoko/export/messages.ndjson`. The emitter is off by
-default and on while the config has a `messages` key, so `messages: {}`
-turns it on. `messages.output` in
-`nukadoko.config.ts` can set another path. A relative path is resolved
-against the project root, and an absolute path is used as given. `nuka clean` removes
-that file, and the run-id-suffixed files beside it, when the path stays
-inside the project, unless the path is a parent of the state directory. It refuses
-the command when the path resolves to the project root, to a path outside
-the project, or to a parent of the state directory. Like Allure, this
-emitter has no CLI flag. When on, it runs unless the invocation selects
-zero pickles.
+`nuka report --format messages` writes one finished run as one cucumber
+messages stream through `@cucumber/messages`: NDJSON, one envelope per line.
+It goes to stdout, or to the file `--out` names. A relative `--out` is
+resolved against the project root, and an absolute one is used as given.
+Like the Allure results, the stream is rendered from the run directory
+alone, after the run, and `nuka run` writes none. A file written under the
+state directory of this project's own run is noted in that run's exports
+manifest, so retention removes it with the run, and `nuka clean` removes
+every entry of `.nukadoko/export/`.
 
-- One run produces one stream in one file, and concurrent invocations use
-  separate files. Each invocation's real file is the
-  configured path's own name with the run id spliced in
-  (`messages.<run_id>.ndjson` under the default path; `messages.output:
-  "out/stream.ndjson"` gets `out/stream.<run_id>.ndjson` instead), beside
-  the configured path; `begin`
-  truncates that file, never the configured path, because appending would
-  leave two `testRunStarted` envelopes in what must read back as a single
-  well-formed stream, the same reason two concurrent invocations must
-  never truncate one shared file between them (they used to: whichever
-  began second erased the first's own start of stream while both still
-  appended their own finish to it, a combination no single run can ever
-  produce on its own). `end` then replaces the configured path with a
-  full, atomic copy of this invocation's now-complete file, as its very
-  last action, so a reader of the configured path never observes a
-  half-written run: always either the previous run's complete stream or
-  this one's, never a mix of the two.
-- The configured path remains unchanged while a run is in progress. It
-  changes once, when `end` places
-  the finished copy. A crash mid-run leaves the previous run's own
-  complete file at the configured path, never a truncated one; watching a
-  run live is Allure's job (`npx allure watch`), not this stream's.
-- Each invocation file remains beside the configured path for as long as
-  its run does, under the retention rule "Artifacts" gives for every other
-  measurement artifact; `nuka clean` removes all of them at once
-  along with the configured path's own copy.
-- This emitter has the inverse role of the Allure emitter. Allure exposes
-  nukadoko's measurement surplus, while this emitter preserves compat
+- One render is one stream of one run. Two runs never share a stream, and
+  the stream never changes after it is written, so there is no partial
+  stream for a reader to see. Watching a run live is the job of the
+  progress output on stderr, not of this stream.
+- `meta` names the nukadoko version that ran the scenarios, and
+  `testRunStarted` and `testRunFinished` carry the run's own start and
+  finish, as run.json records them. Rendering the same run twice gives the
+  same stream apart from its ids.
+- cucumber-messages has no field for the environment a test case ran
+  against. A run over more than one environment (`--env a --env b`)
+  therefore gives each pickle one copy per environment, with fresh ids and
+  the environment in parentheses after the name (`checkout (staging)`), the
+  same way an Examples row gets a pickle of its own. A run over one
+  environment keeps the pickles as parsed. Each `--repeat` execution of one
+  pickle in one environment is the next `attempt` of its test case.
+- This stream has the inverse role of the Allure results. Allure exposes
+  nukadoko's measurement surplus, while this stream preserves compat
   fidelity. Its only job is to ensure that a migrated suite's existing
   formatters and JUnit-based CI keep reading a nukadoko-produced run the
   way they read a classic cucumber-js one.
@@ -3651,17 +3562,17 @@ zero pickles.
   same scenario record. A step with a step record keeps that record's
   `started_at` and `finished_at`. A step with no step record (skipped,
   undefined, ambiguous, or refused before it began) has no time of its own,
-  so both emitters place it zero-width at the previous step's stop, or at
+  so both formats place it zero-width at the previous step's stop, or at
   the scenario's `started_at` when it comes first. That anchor is read from
   `record.json` alone, so a report built from the record after the run
   gives the same timeline.
-- `testRunFinished.success` always matches the run's exit code.
+- `testRunFinished.success` always matches the run's verdict.
   BeforeAll/AfterAll have no place to write into this stream (no
-  run-scope record exists for the emitter to draw from), so a run whose
+  run-scope record exists to draw from), so a run whose
   run-scope hook failed shows up only here, never inside any one
   scenario.
 - A real consumer confirms the stream's behavior, beyond its internal
-  consistency. Passing nukadoko's `messages.ndjson` through
+  consistency. Passing the stream through
   `@cucumber/junit-xml-formatter@0.14.0` (which drives `@cucumber/query`
   over the envelope stream) throws nothing, and every id it needs to
   resolve (pickle to testCase to testStepFinished, `pickleStepId` back to
@@ -3681,7 +3592,7 @@ Before and one generic After, because one Hook envelope is shared by every
 hook of that type (a stored `name` titles the Allure fixture, the
 run summary's failing hook, the trace chunk, and the failure message, and is not
 that envelope's name); a hook's own duration is always zero,
-the same limit the Allure emitter carries; `declared` labels, links, and
+the same limit the Allure results carry; `declared` labels, links, and
 parameters have no slot in the protocol's closed schema and are dropped;
 no `stepDefinition` envelope is emitted, because the record keeps no
 location for a step's own definition and emitting one anyway would be a
@@ -3976,8 +3887,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
                               files to n worker processes while the parent
-                              keeps one run_id, one summary, one exit code, one
-                              messages stream and one Allure results tree.
+                              keeps one run_id, one run.json, one summary,
+                              and one exit code.
                               Above 1, stdout lands in completion order and the
                               progress lines are held per scenario. A file
                               tagged @nukadoko:serial runs while no other file runs.
@@ -3992,8 +3903,24 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               exit code is unchanged.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
-                              to $GITHUB_STEP_SUMMARY when set; --summary
-                              <path> writes one more copy there
+                              to $GITHUB_STEP_SUMMARY when set, and writes
+                              no export file
+nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json]
+                              render one finished run from its run directory
+                              alone (run.json, the step records,
+                              sources.json); with no run dir, the newest
+                              run. markdown: the run summary, on stdout or
+                              to --out; allure: an allure-results directory,
+                              .nukadoko/export/allure-results or --out;
+                              messages: a cucumber-messages NDJSON stream, on
+                              stdout or to --out. Files written under the
+                              state directory leave with the run, and a
+                              second render of the same run replaces the
+                              first. --json prints {run_id, format, written}
+                              and needs --out for markdown and messages.
+                              A run directory with no run.json is refused
+                              (run-not-found), and one with no sources.json
+                              (run-sources-missing)
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               --env as on nuka run; each call starts clean.
@@ -4257,12 +4184,7 @@ nuka clean [--dry-run] [--json]
                               delete accumulated runs/do/export under
                               the state directory, all together; --dry-run
                               prints the same plan the real run would act on
-                              without removing anything; refuses, before
-                              removing anything, an
-                              allure.resultsDir or messages.output that
-                              resolves to the project root, outside the
-                              project, or to a parent of the state
-                              directory, including on --dry-run;
+                              without removing anything;
                               export/allure-history.jsonl is never
                               removed
 nuka tend [--json] [--fail-on <code>]
@@ -4302,8 +4224,9 @@ nuka init [--allure] [--server "<command>" --server-url <url>]
                               exists; appends the steps and the config to
                               tsconfig.json's include when it leaves them out,
                               or prints one stderr line naming them when the
-                              file has comments. --allure turns the
-                              Allure emitter on and writes allurerc.mjs.
+                              file has comments. --allure writes
+                              allurerc.mjs and creates
+                              .nukadoko/export/allure-results.
                               --server with --server-url also writes
                               baseURL: <url>, a server fixture that calls
                               runServer on the command (split on
@@ -4547,10 +4470,11 @@ would be running against glue it never actually read.
   environments, `check`, `init`. Secrets onboarding redesigned.
 - **M2 (compat API)**: `nukadoko/compat` (Given/When/Then/World/hooks subset),
   migration guide for cucumber-js + Playwright suites.
-- **M3 (reporting interop)**: a cucumber messages (NDJSON) emitter for
+- **M3 (reporting interop)**: a cucumber messages (NDJSON) stream for
   scenario runs (the compatibility surface that keeps a migrating team's
-  existing formatters, JUnit-based CI, and HTML reports working), plus the
-  allure-results emitter as the flagship dashboard.
+  existing formatters, JUnit-based CI, and HTML reports working), plus
+  allure-results as the flagship dashboard. Both were written during the
+  run at first; `nuka report` now renders each from a finished run.
 - **M4 (sign-off)**: implemented as a command that froze a green run into a
   committed record beside the feature, then removed: no project kept the
   records, and the run summary on the pull request carries the same claim,

@@ -53,10 +53,6 @@ const REFUSAL_CODES = {
     description: "defineWorld is called more than once in the step files.",
     fix: "Keep one defineWorld call, and remove the others.",
   },
-  "export-path-outside-project": {
-    description: "allure.resultsDir or messages.output points outside the project, so nuka clean does not read or remove it.",
-    fix: "Point the path in the config file at a directory inside the project.",
-  },
   "fail-on-unknown-code": {
     description: "--fail-on names a code that nuka tend does not report.",
     fix: "Name a code that nuka tend --codes lists.",
@@ -108,6 +104,14 @@ const REFUSAL_CODES = {
   "removed-command": {
     description: "The command line names a command, a flag, or a flag value that an earlier release removed or moved.",
     fix: "Use what the message names in its place.",
+  },
+  "run-not-found": {
+    description: "nuka report found no run to render: the directory it names holds no run.json, or the state directory holds no run that ended.",
+    fix: "Name a run directory that holds a run.json, or run nuka run first.",
+  },
+  "run-sources-missing": {
+    description: "The run directory holds no readable sources.json, the feature text nuka report parses the run's scenarios from. A run an earlier release wrote has none.",
+    fix: "Run the scenarios again with this release, and render that run.",
   },
   "step-args-invalid": {
     description: "nuka do has no --args, or --args is not valid JSON.",

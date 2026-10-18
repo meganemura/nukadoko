@@ -30,16 +30,9 @@ export class SelftestWorld extends World {
   page: Page | null = null;
   // The rest are null/empty outside the @allure-watch scenario
   // (features/steps/allure-watch.ts): `allure watch`'s own subprocess and
-  // the URL it printed, the fixture project's `nuka run` subprocess spawned
-  // without being awaited, that subprocess's own eventual result (never a
-  // rejecting promise -- see allure-watch.ts's own comment on why), and the
-  // one count read back from the report while that subprocess was still
-  // running, which is this whole scenario's reason to exist.
+  // the URL it printed.
   watchProcess: ChildProcess | null = null;
   watchBaseUrl = "";
-  runProcess: ChildProcess | null = null;
-  runCompletion: Promise<{ code: number; stdout: string; stderr: string }> | null = null;
-  midRunResultCount: number | null = null;
 }
 
 setWorldConstructor(SelftestWorld);

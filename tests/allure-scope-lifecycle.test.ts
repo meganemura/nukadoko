@@ -4,23 +4,20 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import {
-  createAllureEmitter,
-  type AllureEmitter,
+  createScenarioWriter,
+  type ScenarioWriter,
   type BeginScenarioInput,
   type EmitStepInput,
-} from "../src/report/allure/emitter.js";
+} from "./helpers/allure-scenario.js";
 import type { ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
 
-// Responsibility: tests/allure-emitter.test.ts already drives the full
-// beginScenario/emitStep/endScenario cycle and one failure-isolation case
-// inside emitStep. This file covers what it leaves untouched: emitStep/
-// endScenario called with no scope open at all (never throws, silently
-// does nothing), endScenario's own failure isolation (the same "genuine
-// internal failure must never escape" contract emitStep already has,
-// exercised here for endScenario's own try block instead), and a custom
-// ALLURE_LABEL_* environment label actually reaching a test's own labels,
-// redacted the same as everything else options.secrets covers.
+// Responsibility: tests/allure-write-results.test.ts drives the full
+// mapping. This file covers a scenario whose writing fails partway (a
+// scenario evidence file that is not there): the failure is warned once
+// and costs that scenario only, never an earlier scenario's output. It also
+// covers a custom ALLURE_LABEL_* environment label reaching a result's
+// labels.
 
 const FEATURE_SOURCE = `Feature: Checkout
   Handles the checkout flow.
@@ -77,22 +74,21 @@ function baseScenarioRecord(overrides: Partial<ScenarioRecord> & Pick<ScenarioRe
   };
 }
 
-describe("createAllureEmitter: scope lifecycle", () => {
+describe("writeAllureResults: scope lifecycle", () => {
   let rootDir: string;
   let resultsDir: string;
   let sink: { write(chunk: string): boolean; text(): string };
-  let emitter: AllureEmitter;
+  let emitter: ScenarioWriter;
 
   beforeEach(() => {
     rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-allure-scope-"));
     writeFileSync(path.join(rootDir, "package.json"), JSON.stringify({ name: "acme-checkout" }));
     resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     sink = createCaptureSink();
-    emitter = createAllureEmitter({
+    emitter = createScenarioWriter({
       resultsDir,
       rootDir,
       environment: "staging",
-      secrets: [],
       stderr: sink,
     });
     emitter.begin();
@@ -100,50 +96,6 @@ describe("createAllureEmitter: scope lifecycle", () => {
 
   afterEach(() => {
     rmSync(rootDir, { recursive: true, force: true });
-  });
-
-  it("emitStep is a silent no-op when no scope is open (beginScenario never ran)", () => {
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    const pickle = pickles[0]!;
-    const record: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
-
-    const before = new Set(readdirSync(resultsDir));
-    expect(() =>
-      emitter.emitStep(baseStepInput({ record, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-no-scope" })),
-    ).not.toThrow();
-    expect(new Set(readdirSync(resultsDir))).toEqual(before);
-  });
-
-  it("endScenario is a silent no-op when no scope is open (beginScenario never ran)", () => {
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    const pickle = pickles[0]!;
-    const record = baseScenarioRecord({
-      scenario_record_id: "scn-no-scope-end",
-      steps: [{ text: "the cart has items", status: "passed", step_record_id: null }],
-    });
-
-    const before = new Set(readdirSync(resultsDir));
-    expect(() =>
-      emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" }),
-    ).not.toThrow();
-    expect(new Set(readdirSync(resultsDir))).toEqual(before);
-  });
-
-  it("endScenario is a silent no-op the second time in a row (its own beginScenario/endScenario pairing, not just emitStep's)", () => {
-    const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
-    const pickle = pickles[0]!;
-    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: null };
-    const record = baseScenarioRecord({ scenario_record_id: "scn-double-end", steps: [step] });
-
-    emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
-    emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-double-end" }));
-    emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
-    const afterFirstEnd = new Set(readdirSync(resultsDir));
-
-    expect(() =>
-      emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" }),
-    ).not.toThrow();
-    expect(new Set(readdirSync(resultsDir))).toEqual(afterFirstEnd);
   });
 
   it("catches a genuine internal failure in endScenario (a scenario evidence file that isn't actually there), warns once to stderr, and leaves an earlier scenario's own already-written output intact", () => {
@@ -201,20 +153,17 @@ describe("createAllureEmitter: scope lifecycle", () => {
   });
 });
 
-describe("createAllureEmitter: ALLURE_LABEL_* environment labels", () => {
-  it("adds a redacted custom label from process.env, the same way every other label field is redacted", () => {
+describe("writeAllureResults: ALLURE_LABEL_* environment labels", () => {
+  it("adds a custom label from the environment of the process rendering the report, as given", () => {
     const rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-allure-env-label-"));
     writeFileSync(path.join(rootDir, "package.json"), JSON.stringify({ name: "acme-checkout" }));
     const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
-    const secretValue = "s3cr3t-token-value";
-
-    process.env.ALLURE_LABEL_TOKEN_SECRET = secretValue;
+    process.env.ALLURE_LABEL_TEAM = "checkout";
     try {
-      const emitter = createAllureEmitter({
+      const emitter = createScenarioWriter({
         resultsDir,
         rootDir,
         environment: "staging",
-        secrets: [{ name: "TOKEN", value: secretValue }],
         stderr: createCaptureSink(),
       });
       emitter.begin();
@@ -230,10 +179,9 @@ describe("createAllureEmitter: ALLURE_LABEL_* environment labels", () => {
 
       const results = readResultFiles(resultsDir) as { name?: string; labels?: { name: string; value: string }[] }[];
       const test = results.find((r) => r.name === "a customer checks out")!;
-      expect(test.labels).toContainEqual({ name: "TOKEN_SECRET", value: "{{secret.TOKEN}}" });
-      expect(JSON.stringify(test.labels)).not.toContain(secretValue);
+      expect(test.labels).toContainEqual({ name: "TEAM", value: "checkout" });
     } finally {
-      delete process.env.ALLURE_LABEL_TOKEN_SECRET;
+      delete process.env.ALLURE_LABEL_TEAM;
       rmSync(rootDir, { recursive: true, force: true });
     }
   });

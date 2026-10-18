@@ -136,8 +136,7 @@ describe("nuka run: progress output", () => {
       .replace(/\(\d+(h|m|s)[^)]*\)/g, "(<duration>)")
       .replaceAll(path.sep, "/")
       .replace(/runs\/run-[a-z0-9-]+/g, "runs/<run>")
-      .replace(/steps\/step-[a-z0-9-]+/g, "steps/<id>")
-      .replace(/messages\.run-[a-z0-9-]+\.ndjson/g, "messages.<run>.ndjson");
+      .replace(/steps\/step-[a-z0-9-]+/g, "steps/<id>");
   }
 
   it("names a failed step's error and step record, and how to rerun the scenario", async () => {
@@ -155,8 +154,6 @@ describe("nuka run: progress output", () => {
         "      record  .nukadoko/runs/<run>/steps/<id>",
         "  step 3/3  skipped  <d>s  this step never runs",
         "steps     .nukadoko/runs/<run>/steps/  2",
-        "allure    .nukadoko/export/allure-results/",
-        "messages  .nukadoko/export/messages.<run>.ndjson",
         "summary   .nukadoko/runs/<run>/summary.md",
         "run       .nukadoko/runs/<run>/run.json",
         "1 scenario: 0 passed, 1 failed  (<duration>)",
@@ -218,67 +215,6 @@ describe("nuka run: progress output", () => {
     // The summary line is unconditional even here — a run that did nothing
     // still gets told so.
     expect(stderr.text()).toContain("0 scenarios: 0 passed, 0 failed");
-  });
-
-  it("an output-location line names the moved path once config.allure.resultsDir/messages.output relocate it", async () => {
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        "",
-        "export default defineConfig({",
-        '  allure: { resultsDir: "reports/allure" },',
-        '  messages: { output: "reports/messages.ndjson" },',
-        "});",
-        "",
-      ].join("\n"),
-    );
-
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
-      rootDir,
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    const text = stderr.text();
-    expect(text).toContain(path.join("reports", "allure"));
-    // The messages row names this run's own run-id-suffixed file inside
-    // the moved directory, not the bare configured name (this file's own
-    // "run-id-suffixed" test above covers why) — checked by directory plus
-    // id, not by the exact "messages.ndjson" name, which a suffixed file
-    // never contains contiguously.
-    const runId = latestRunJson(rootDir).run_id as string;
-    expect(text).toContain(path.join("reports", `messages.${runId}.ndjson`));
-    // The default locations are named nowhere — the config moved the
-    // output, this line reports where it actually landed, not where it
-    // would have landed by default.
-    expect(text).not.toContain(".nukadoko/export/allure-results");
-    expect(text).not.toContain(".nukadoko/export/messages.ndjson");
-  });
-
-  it("the messages output-location line names this run's own run-id-suffixed file, not the stable configured path", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
-      rootDir,
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    const runId = latestRunJson(rootDir).run_id as string;
-    const messagesLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("messages"));
-    expect(messagesLine).toBeDefined();
-    // A concurrent run can overwrite the stable configured path before a
-    // reader gets to it (this file's own header) — checking for a fixed
-    // "messages.ndjson" substring alone would pass even for the stable
-    // path, since a run-id-suffixed name never contains it contiguously
-    // (the id sits between the basename and the extension), so this
-    // asserts the id actually named is *this* run's own.
-    expect(messagesLine).toContain(`messages.${runId}.ndjson`);
   });
 
   it("stdout carries only each scenario's run.json entry under --records; every non-empty line parses, one per scenario", async () => {

@@ -188,6 +188,25 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   - 古い history id を鍵にした Allure の履歴は、一度だけ最初からになります。
     environment が result の identity の一部になったからです。
 
+- **`nuka run` は Allure の result も messages ストリームも書かず、run の後に `nuka report` がそれを描き出します。**
+  `allure` と `messages` の config キーは `config-key-removed` で、`nuka run --summary` は `removed-command` で拒否されます。
+  - config から `allure` と `messages` のキーを消します。
+  - `nuka run` の後に `.nukadoko/export/allure-results/` を読んでいたスクリプトや CI の step は、run の後にまず `nuka report --format allure` を実行します。
+    `allure.resultsDir` で出力先を移していたなら、そのディレクトリを `--out` に渡します。
+  - `messages.ndjson` を読んでいたところでは、`nuka report --format messages --out <path>` を実行します。
+    `messages.<run_id>.ndjson` を読んでいたところでは、その run を `nuka report .nukadoko/runs/<run_id> --format messages --out <path>` で描き出します。
+  - `nuka run --summary <path>` で pull request のコメントを書いていたところでは、run の後の step で `nuka report --format markdown --out <path>` を実行します。
+    赤い run も投稿されるよう、その step には `if: always()` を付けます。
+  - 以前のリリースの run には `sources.json` がなく、`run-sources-missing` で拒否されます。
+    描き出すには、scenario をもう一度実行します。
+  - Allure の履歴はそのまま続きます。
+    result の identity は変わっていません。
+    `host` と `thread` の label はなくなり、`allure watch` が run を映すのは、run の実行中ではなく描き出したときです。
+  - 複数の environment にわたる run の messages ストリームから作った JUnit や HTML のレポートは、各 scenario を environment ごとに 1 回ずつ、`<scenario> (<environment>)` という名前で示します。
+  - `emitter-failed` や `export-path-outside-project` のコードに合わせていたスクリプトは、前者を `report-incomplete` に合わせます。
+    後者に後継はありません。
+    `nuka clean` が config からパスを読まなくなったからです。
+
 ## 0.16.1 から 0.17.0 へ
 
 - **`nuka run` は、stdout が端末のとき、stdout に scenario record を出力しません。**

@@ -5,11 +5,11 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import {
-  createAllureEmitter,
-  type AllureEmitter,
+  createScenarioWriter,
+  type ScenarioWriter,
   type BeginScenarioInput,
   type EmitStepInput,
-} from "../src/report/allure/emitter.js";
+} from "./helpers/allure-scenario.js";
 import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 import { createCaptureSink } from "./helpers/fixtures.js";
@@ -90,23 +90,22 @@ function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "
   };
 }
 
-describe("createAllureEmitter", () => {
+describe("writeAllureResults", () => {
   let rootDir: string;
   let resultsDir: string;
   let sink: { write(chunk: string): boolean; text(): string };
-  let emitter: AllureEmitter;
+  let emitter: ScenarioWriter;
 
   beforeEach(() => {
     rootDir = mkdtempSync(path.join(os.tmpdir(), "nukadoko-allure-emitter-"));
     writeFileSync(path.join(rootDir, "package.json"), JSON.stringify({ name: "acme-checkout" }));
     resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
     sink = createCaptureSink();
-    emitter = createAllureEmitter({
+    emitter = createScenarioWriter({
       resultsDir,
       rootDir,
       environment: "staging",
       targetVersion: "9.9.9",
-      secrets: [],
       stderr: sink,
     });
     emitter.begin();
@@ -205,7 +204,6 @@ describe("createAllureEmitter", () => {
           index: 0,
           gherkinDocument,
           pickle,
-          targetVersion: "9.9.9",
         }),
       );
       emitter.emitStep(
@@ -215,7 +213,6 @@ describe("createAllureEmitter", () => {
           index: 1,
           gherkinDocument,
           pickle,
-          targetVersion: "9.9.9",
         }),
       );
 
@@ -544,11 +541,10 @@ describe("createAllureEmitter", () => {
     // A second emitter, same resultsDir (the same shape a second `nuka run`
     // pointed at the same state directory would produce) — begin() must not
     // clear anything either.
-    const secondEmitter = createAllureEmitter({
+    const secondEmitter = createScenarioWriter({
       resultsDir,
       rootDir,
       environment: "staging",
-      secrets: [],
       stderr: createCaptureSink(),
     });
     secondEmitter.begin();
@@ -946,8 +942,8 @@ describe("createAllureEmitter", () => {
   });
 });
 
-describe("createAllureEmitter: begin() failure isolation", () => {
-  it("warns to stderr instead of throwing when categories.json can't be written", () => {
+describe("writeAllureResults: a shared file that cannot be written", () => {
+  it("warns instead of throwing when categories.json can't be written", () => {
     // A deterministic, environment-independent way to make begin()'s own
     // write fail: pre-create resultsDir with a *directory* already sitting
     // at the exact path categories.json would be written to. writer.ts's
@@ -960,11 +956,10 @@ describe("createAllureEmitter: begin() failure isolation", () => {
     mkdirSync(path.join(resultsDir, "categories.json"), { recursive: true });
     const sink = createCaptureSink();
 
-    const emitter = createAllureEmitter({
+    const emitter = createScenarioWriter({
       resultsDir,
       rootDir,
       environment: "staging",
-      secrets: [],
       stderr: sink,
     });
 

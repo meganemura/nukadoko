@@ -132,14 +132,9 @@ within the window, or raise `adHocDays` for a longer exploration.
 `nuka clean [--dry-run]` is the wider
 version of the same idea, once you are done exploring rather than mid-way
 through it: it removes every step record, run directory, and
-the Allure/messages export output at once, all disposable by design
-(see "Artifacts" in `docs/spec.md`). `--dry-run` prints the same plan the
-real run would act on without removing anything. It refuses, before
-removing anything, when `allure.resultsDir` or
-`messages.output` resolves to the project root, to a path outside the
-project, or to a parent of the state directory. `--dry-run` refuses those
-paths too. A results directory inside the project is still removed, unless
-that directory is a parent of the state directory.
+the export output `nuka report` wrote under the state directory at once,
+all disposable by design (see "Artifacts" in `docs/spec.md`). `--dry-run`
+prints the same plan the real run would act on without removing anything.
 `export/allure-history.jsonl` survives regardless: it sits beside
 `allure-results/`, not inside it, and is the one export artifact no
 re-run can reproduce.

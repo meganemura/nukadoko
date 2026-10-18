@@ -41,9 +41,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //     (src/cli/tsconfig-edit.ts),
 //     printing each path actually written to stdout as it happens
 //     (diagnostics go to stderr: an agent parses stdout, so it carries
-//     only paths). The default targets a CLI or API project: the Allure
-//     and messages emitters are off, so nothing Allure-shaped is written
-//     unless `--allure` asks for it.
+//     only paths). The default targets a CLI or API project, so nothing
+//     Allure-shaped is written unless `--allure` asks for it. A run
+//     writes no Allure results either way; `nuka report --format allure`
+//     renders them after a run.
 //   - Finish with a self-check: load the config just written and discover
 //     its vocabulary for real, the same two calls `nuka steps`/`nuka do`
 //     make. A failure here is reported (stderr + exit 1) but the generated
@@ -64,7 +65,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 
 export interface RunInitOptions {
   rootDir: string;
-  /** `--allure`: write `allurerc.mjs` and turn the Allure emitter on. */
+  /** `--allure`: write `allurerc.mjs` and the empty results directory
+   * `nuka report --format allure` writes into. */
   allure: boolean;
   /** `--server`: the command that starts the program under test, or `null`. */
   server?: string | null;
@@ -124,10 +126,9 @@ export function readServerFlags(server: string | null, serverUrl: string | null)
   return { argv: words as [string, ...string[]], url: serverUrl };
 }
 
-function configTemplate(allure: boolean, server: ServerSpec | null): string {
-  const fields = allure ? ["  allure: {},"] : [];
+function configTemplate(server: ServerSpec | null): string {
   if (server === null) {
-    const body = `{\n${[CONFIG_KEYS_COMMENT, ...fields].join("\n")}\n}`;
+    const body = `{\n${CONFIG_KEYS_COMMENT}\n}`;
     return ['import { defineConfig } from "nukadoko";', "", `export default defineConfig(${body});`, ""].join("\n");
   }
   const [command, ...args] = server.argv;
@@ -136,7 +137,6 @@ function configTemplate(allure: boolean, server: ServerSpec | null): string {
     "",
     "export default defineConfig({",
     CONFIG_KEYS_COMMENT,
-    ...fields,
     `  baseURL: ${JSON.stringify(server.url)},`,
     "  fixtures: defineFixtures({",
     "    // The program under test, started for each scenario that sends a request and stopped",
@@ -299,8 +299,8 @@ function allurercTemplate(historyPathRelative: string): string {
     "// historyPath, if you don't already set one) into it instead of",
     "// replacing the whole file.",
     "//",
-    "// Using Allure 2 instead? This file is not needed: nukadoko's own emitter",
-    "// already writes a matching categories.json into export/allure-results/ every run.",
+    "// Using Allure 2 instead? This file is not needed: nuka report --format allure",
+    "// already writes a matching categories.json into export/allure-results/.",
     "export default {",
     `  historyPath: ${JSON.stringify(historyPathRelative)},`,
     "  categories: [",
@@ -424,7 +424,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   const featuresDirRelative = defaults.featuresDir;
   const stepsDirRelative = path.join(featuresDirRelative, "steps");
 
-  await writeFile(configPath, configTemplate(allure, server));
+  await writeFile(configPath, configTemplate(server));
   stdout.write(`${configFileName}\n`);
   // Said now rather than at the first nuka check: the install is the next
   // command either way, and init already knows it is needed.
@@ -471,7 +471,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     // results directory that doesn't exist yet, but an empty one is enough
     // (verified against allure 3.14.3: `watch` serves and `generate`
     // produces an empty report). Creating it here lets `allure watch`
-    // already be running before the first `nuka run`.
+    // already be running before the first `nuka report --format allure`.
     const allureResultsDirRelative = path.join(defaults.stateDir, "export", "allure-results");
     await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
     stdout.write(`${allureResultsDirRelative}\n`);

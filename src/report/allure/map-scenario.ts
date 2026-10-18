@@ -23,12 +23,12 @@ import { ownStepSpan, placeSteps, type StepSpan } from "../step-timeline.js";
 // entry of that result's own `steps[]`, never a test of its own; `mapHooks`
 // turns a scenario's own before/after hooks into fixtures, as it already
 // did. No `allure-js-commons` import (not even a type-only one) and no
-// `node:fs`: every input here is already resolved by a caller (emitter.ts
-// reads/redacts step records itself, resolves the project name via
-// identity.ts, and buffers each `mapGwtStep` call's own result until the
-// scenario ends), so every function here can be driven entirely from
+// `node:fs`: every input here is already resolved by a caller (the step
+// records and the project name come from the run directory, and
+// write-results.ts maps every step before it maps the scenario), so every
+// function here can be driven entirely from
 // fixture data in a test, with no real allure-results directory and no
-// disk-touching allure-js runtime anywhere in the call graph. emitter.ts is
+// disk-touching allure-js runtime anywhere in the call graph. write-results.ts is
 // the only place that turns the plain data these functions return into
 // actual `ReporterRuntime` calls.
 //
@@ -45,7 +45,7 @@ import { ownStepSpan, placeSteps, type StepSpan } from "../step-timeline.js";
 // of its own to build a stable identity from — its own gherkin name, its own
 // Examples row (when it has one), and its own ordered step text — none of
 // which need position or an invented counter to stay meaningful across
-// runs. `mapScenario`'s own `fullName` (built by emitter.ts) carries only
+// runs. `mapScenario`'s own `fullName` (built by write-results.ts) carries only
 // the scenario's name (never a run id), and every one of its parameters
 // that participates in `historyId` is deterministic from the scenario's own
 // definition: two runs of the same scenario hash the same, and two Scenario
@@ -91,7 +91,7 @@ export interface MappedParameter {
    * `ParameterMode` enum import: that type is itself already `"hidden" |
    * "masked" | "default"`, a plain string union, so this narrower field is
    * directly assignable to it with no cast needed at the one call site
-   * (emitter.ts) that hands these straight to the SDK. */
+   * (write-results.ts) that hands these straight to the SDK. */
   readonly mode?: "hidden";
 }
 
@@ -101,7 +101,7 @@ export interface MappedParameter {
  * `actions` timeline (`mapTimelineChildSteps`, below), or one of a step's
  * own `calls` (`mapCalls`, below), each of which carries its own real
  * duration and outcome. One shape for all three keeps `writeChildSteps`
- * (emitter.ts) from needing to know which kind of child step it is
+ * (write-results.ts) from needing to know which kind of child step it is
  * rendering. */
 export interface MappedChildStep {
   readonly name: string;
@@ -121,7 +121,7 @@ export interface MappedChildStep {
   readonly childSteps?: readonly MappedChildStep[];
 }
 
-/** A file-path attachment names its *source* file (emitter.ts resolves it
+/** A file-path attachment names its *source* file (write-results.ts resolves it
  * against `rootDir` and lets allure-js-commons copy it); a buffer attachment
  * carries content this module already built in memory (a CSV table, a step
  * record's own JSON) and must be paired with an explicit `fileExtension`
@@ -207,17 +207,14 @@ export interface MapGwtStepInput {
    * its own `argument` (data table/doc string), below. */
   readonly index: number;
   readonly record: ScenarioStepEntry;
-  /** The exact in-memory object `run-scenario.ts`'s own `writeStepRecord`
-   * call just persisted for this step, or `null` for a step with no step
-   * record of its own at all (skipped, undefined, ambiguous, or a
-   * never-began refusal) — never a step record that exists on disk but
-   * could not be read back: `pushStepRecord`'s own seam hands the caller
-   * the object it already has, so there is nothing to re-read. */
+  /** This step's step record as the run wrote it, or `null` for a step
+   * with no step record of its own (skipped, undefined, ambiguous, or a
+   * never-began refusal) or one the run directory no longer holds. */
   readonly stepRecord: StepRecord | null;
   /** The previous step's stop as far as the caller knows it, or the
    * scenario's start for the first step: where a step with no step record
    * sits until `mapScenario` places every step against `record.started_at`
-   * (step-timeline.ts). Only a progress snapshot ever shows this value. */
+   * (step-timeline.ts). */
   readonly previousStopMs: number;
   readonly gherkinDocument: GherkinDocument;
   readonly pickle: Pickle;
@@ -330,13 +327,7 @@ function resolveStepKeyword(
 }
 
 /** `"<keyword><text>"` for pickle step `index`, or bare `text` when the
- * keyword can't be resolved — shared by `mapGwtStep` (a step that has
- * already run, `text` read off its own step record) and emitter.ts's own
- * progress snapshot (a step only planned so far, `text` read straight off
- * `pickle.steps[index]`), so a step's own name is identical whether a
- * viewer is looking at it before it ran or after: a name that changed
- * shape the moment a step actually finished would read as a different step
- * entirely, not an update to the same one. */
+ * keyword can't be resolved. */
 export function buildStepName(gherkinDocument: GherkinDocument, pickle: Pickle, index: number, text: string): string {
   const stepIds = collectGherkinSteps(gherkinDocument);
   const keyword = resolveStepKeyword(stepIds, pickle.steps, index);
@@ -391,11 +382,8 @@ export function buildExampleParameters(doc: GherkinDocument, pickle: Pickle): Ma
  * every one of this pickle's own step texts, joined in order. Reads
  * `pickle.steps[].text`, never `record.steps[].text`: the two mirror each
  * other exactly (src/record/scenario-record.ts: `steps` mirrors the pickle's
- * own step order), and `pickle` is the one of the two already frozen
- * before a single step of this scenario ever runs — `mapScenario`'s own
- * header explains why that is exactly what lets a progress snapshot
- * (written before a `ScenarioRecord` exists at all) land on the same
- * historyId a later final result confirms. */
+ * own step order), and the pickle is parsed from the feature text the run
+ * kept, so the value does not depend on how the record was read back. */
 export function buildScenarioStepsSignature(pickle: Pickle): string {
   return pickle.steps.map((step) => step.text).join("\n");
 }
@@ -590,12 +578,9 @@ function mapDeclared(
   // one `excluded` here would change nothing about historyId at all. The
   // parameters that *do* feed historyId — `buildExampleParameters`'s own
   // Examples-row cells and `buildScenarioStepsSignature`'s own hidden
-  // step-text join, both below — are read straight off `pickle`, frozen
-  // before a single step of this scenario ever runs. That is the premise
-  // emitter.ts's own progress snapshot relies on: written before a
-  // `ScenarioRecord` exists at all, it can still compute the exact same
-  // historyId the final result will, because neither of those two
-  // parameter sources ever needed one to exist in the first place.
+  // step-text join, both below — are read straight off `pickle`, so a
+  // result rendered from the feature text a run kept has the same
+  // historyId whichever nukadoko version renders it.
   const parameters: MappedParameter[] = (declared.parameters ?? []).map((parameter) => ({
     name: parameter.name,
     value: parameter.value,
@@ -1088,12 +1073,7 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
  * exists; falling back to a hook only covers the case a step-only search
  * would otherwise leave with no category at all (Allure 3's own "Product
  * errors" catch-all) despite the scenario having failed for a perfectly
- * classifiable reason.
- *
- * Exported for emitter.ts's own progress snapshot, which calls this with
- * `hooks: []` (a hook's own outcome is never known mid-scenario — hooks are
- * only mapped once, at `endScenario`) to classify whatever the buffered
- * steps have already shown by the time a given step finished. */
+ * classifiable reason. */
 export function firstFailure(
   steps: readonly MappedGwtStepOutcome[],
   hooks: readonly ScenarioHookRecord[],
@@ -1120,17 +1100,16 @@ export interface MapScenarioInput {
   readonly pickle: Pickle;
   /** The feature file's root-relative path, already POSIX-normalized
    * (identity.ts's own `toPosixPath`) — used for the `package` label here
-   * (`fullName`/`titlePath` themselves are built by emitter.ts, which
+   * (`fullName`/`titlePath` themselves are built by write-results.ts, which
    * already has this same value). */
   readonly posixPath: string;
   /** The host project's own `package.json` name, or `null` — resolved once
-   * by emitter.ts (identity.ts's own `resolveProjectName`), never read from
+   * by write-results.ts (identity.ts's own `resolveProjectName`), never read from
    * disk here (this module's own header). */
   readonly projectName: string | null;
   /** Every one of this pickle's own steps, already mapped by `mapGwtStep`
-   * and buffered by the caller (emitter.ts) in `record.steps`' own order —
-   * `endScenario` only runs once every step has already finished, so this
-   * function never calls `mapGwtStep` itself. */
+   * by the caller (write-results.ts) in `record.steps`' own order, so
+   * this function never calls `mapGwtStep` itself. */
   readonly steps: readonly MappedGwtStepOutcome[];
 }
 
@@ -1142,7 +1121,7 @@ export interface MappedScenarioTest {
   readonly message?: string;
   /** The same classified failure's own raw, unmarked text (`firstFailure`'s
    * own `rawMessage`) — set exactly when `message` is, never on its own.
-   * emitter.ts wires this into `statusDetails.trace`, a pane distinct from
+   * write-results.ts wires this into `statusDetails.trace`, a pane distinct from
    * `statusDetails.message`, which keeps carrying the `[nukadoko.failure=
    * <kind>]`-marked summary categories.ts's own regexes need. */
   readonly trace?: string;
@@ -1172,10 +1151,8 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   // `buildScenarioStepsSignature` reads `pickle.steps[].text` directly, not
   // `record.steps[].text` — the two mirror each other exactly
   // (src/record/scenario-record.ts: `steps` mirrors the pickle's own step
-  // order), and reading the pickle is what lets
-  // emitter.ts's own progress snapshot compute this identical value before
-  // a `ScenarioRecord` exists at all (this module's own header, just
-  // above). `status` is deliberately excluded from this join: a step's
+  // order), and reading the pickle keeps the value a function of the
+  // feature text alone. `status` is deliberately excluded from this join: a step's
   // outcome changing from one run to the next is exactly the "regressed"/
   // "fixed" transition this identity exists to make visible, not a reason
   // to treat the two runs as different scenarios.
@@ -1221,10 +1198,9 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
     attachments.push(examplesAttachment);
   }
   // The final-state screenshot `dispose()` takes attaches directly to this
-  // result, never a synthetic fixture of its own: by the time `endScenario`
-  // runs, `record.evidence` already carries this run's own final capture
-  // (run-scenario.ts's own `dispose()` call populates it before this
-  // function's caller ever sees the record).
+  // result, never a synthetic fixture of its own: `record.evidence` carries
+  // the run's own final capture (run-scenario.ts's own `dispose()` call
+  // populates it before the record is written).
   for (const screenshot of record.evidence.screenshots) {
     attachments.push({
       kind: "path",
@@ -1251,9 +1227,9 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   };
 }
 
-// The final placement, against `record.started_at`: the emitter only had a
-// provisional anchor for a step with no step record while the scenario ran
-// (`MapGwtStepInput.previousStopMs`), and the cucumber-messages emitter
+// The final placement, against `record.started_at`: `mapGwtStep` only has
+// a provisional anchor for a step with no step record
+// (`MapGwtStepInput.previousStopMs`), and the cucumber-messages stream
 // places the same record with the same rule.
 function placedSteps(scenarioStartMs: number, steps: readonly MappedGwtStepOutcome[]): MappedGwtStep[] {
   const spans = placeSteps(scenarioStartMs, steps.map((outcome) => outcome.ownSpan));

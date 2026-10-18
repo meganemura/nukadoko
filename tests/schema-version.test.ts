@@ -46,6 +46,8 @@ describe("schema_version", () => {
     const runId = envelopes.get("run")!.run_id as string;
     const runDir = path.join(runProject, ".nukadoko", "runs");
     envelopes.set("run.json", parse(readFileSync(path.join(runDir, runId, "run.json"), "utf8")));
+    documents.set("run_sources", parse(readFileSync(path.join(runDir, runId, "sources.json"), "utf8")));
+    envelopes.set("report", parse(await cli(runProject, ["report", "--format", "allure", "--json"])));
     envelopes.set("clean", parse(await cli(runProject, ["clean", "--dry-run", "--json"])));
   }, 120_000);
 
@@ -74,6 +76,7 @@ describe("schema_version", () => {
     ["removed", "session", "refused"],
     ["run", "run", "passed"],
     ["run.json", "run", "passed"],
+    ["report", "report", "passed"],
     ["clean", "clean", "passed"],
   ])("nuka %s --json prints the envelope first", (name, command, verdict) => {
     const document = envelopes.get(name)!;

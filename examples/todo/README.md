@@ -340,7 +340,8 @@ launched". The summary is built only from what the run measured, so the
 `.nukadoko/` records stay out of git and the summary is what a person
 keeps.
 
-In CI, `nuka run --summary <path>` writes a copy that a workflow step posts
+In CI, `nuka report --format markdown --out <path>` writes a copy of the
+newest run's summary that a workflow step posts
 on the pull request, and under GitHub Actions the job's own summary page
 shows it with no configuration (`docs/ci.md` has the workflow). A reviewer
 who writes no code then reads two things in the PR: the `.feature` in the
