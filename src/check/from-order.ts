@@ -125,7 +125,16 @@ export function fromOrderDo(issue: FromOrderIssue, steps: readonly FromOrderLine
     lines.length === 1
       ? `${lines[0]}, which no step matches yet,`
       : `one of ${lines.join(", ")}, which no step matches yet,`;
-  return `${put}. Or, if ${which} should produce ${key}: give its step ${key} in returns, and ${another}.`;
+  const target = candidates.length === 1 ? `step "${candidates[0]}"` : `one of steps ${quotedNames(candidates)}`;
+  // The rewording comes first: a line written just before its consumer
+  // that matches nothing is most often the producer with a typo or a
+  // drifted wording, and a new step that also returns the key would
+  // duplicate the one the from entry already names.
+  return (
+    `${put}. If ${which} is meant to run ${target}, reword that line to match that step's pattern. ` +
+    `If it should run a new step that produces ${key}, give that step ${key} in returns, and ` +
+    `list it as another [step, "${key}"] candidate in from.${key} of step "${stepName}".`
+  );
 }
 
 /** One candidate's own order status against the consuming line — computed

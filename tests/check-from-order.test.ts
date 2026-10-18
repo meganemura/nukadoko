@@ -140,9 +140,9 @@ describe("nuka check: from-order-violation's do line", () => {
     }
   }
 
-  it("names an earlier line no step matches as a possible producer, and how to add it as a candidate", async () => {
+  it("names an earlier line no step matches as the producer reworded, or as a new candidate", async () => {
     expect(await doLines()).toEqual({
-      5: 'Put a line that runs step "create-project" earlier in the scenario. Or, if line 4 "a project id comes from an import", which no step matches yet, should produce projectId: give its step projectId in returns, and list that step as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
+      5: 'Put a line that runs step "create-project" earlier in the scenario. If line 4 "a project id comes from an import", which no step matches yet, is meant to run step "create-project", reword that line to match that step\'s pattern. If it should run a new step that produces projectId, give that step projectId in returns, and list it as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
       9: 'Put a line that runs step "create-project" earlier in the scenario. Or, if a step that an earlier line runs returns projectId, list that step as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
     });
   });
@@ -183,6 +183,7 @@ describe("fromOrderDo", () => {
         expect(text.includes(`line ${step.line} `)).toBe(undefinedBefore.includes(index));
       });
       expect(text.includes("which no step matches yet")).toBe(undefinedBefore.length > 0);
+      expect(text.includes('is meant to run step "produce", reword that line')).toBe(undefinedBefore.length > 0);
       expect(text).toContain('another [step, "id"] candidate in from.id of step "consume"');
     }));
 });

@@ -181,9 +181,10 @@ just until 0.1.
   which breaks every scenario that already chains through it. The `do:`
   is now built for each finding: it names the step to run earlier (or the
   candidates, one of which must run), and when an earlier line has no
-  step yet it names that line and says how to make it the producer (give
-  its step the key in `returns`, then list it as another
-  `[step, "key"]` candidate in `from`). When two candidates ran earlier,
+  step yet it names that line and says to reword it to the producer's
+  pattern if it is meant to run that step, or, if it should run a new
+  step, to give that step the key in `returns` and list it as another
+  `[step, "key"]` candidate in `from`. When two candidates ran earlier,
   it says to keep one. The finding still fires: the scenario fails
   as written until one of those changes is made.
 - **`undefined-step-check-suppressed` names the findings that held the undefined lines back.**
