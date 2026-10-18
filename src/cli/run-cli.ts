@@ -138,6 +138,8 @@ interface SessionClearArgs {
 
 interface InitArgs {
   allure?: boolean;
+  server?: string;
+  serverUrl?: string;
 }
 
 interface ScaffoldArgs {
@@ -744,13 +746,27 @@ export async function runCli(
         .option("allure", {
           type: "boolean",
           describe: "turn the Allure emitter on in the generated config and write allurerc.mjs",
-        }) as Argv<InitArgs>,
+        })
+        .option("server", {
+          type: "string",
+          nargs: 1,
+          describe:
+            '"<command>" with --server-url: write a server fixture that starts this command (split on whitespace, no shell) for each scenario that sends a request, and stops it after',
+        })
+        .option("server-url", {
+          type: "string",
+          nargs: 1,
+          describe: "<url> the URL the --server command listens at, written as baseURL; the fixture waits until its port accepts a connection",
+        })
+        .check(rejectRepeatedFlags(["server", "server-url"])) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
       if (argsFailed) return;
       const { runInit } = await import("./init.js");
       exitCode = await runInit({
         rootDir,
         allure: args.allure ?? false,
+        server: args.server ?? null,
+        serverUrl: args.serverUrl ?? null,
         stdout,
         stderr,
       });

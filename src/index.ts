@@ -43,6 +43,8 @@ export type {
 } from "./record/types.js";
 export { runCommand } from "./context/run-command.js";
 export type { RunCommandOptions, RunCommandResult } from "./context/run-command.js";
+export { runServer } from "./context/run-server.js";
+export type { RunningServer, RunServerOptions } from "./context/run-server.js";
 export type { DeclaredLabel, DeclaredLink, DeclaredParameter, DeclaredSnapshot } from "./compat/declared.js";
 export type {
   CallEntry,

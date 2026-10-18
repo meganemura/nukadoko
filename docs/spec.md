@@ -995,6 +995,30 @@ An override that destructures none of `page`, `context`, and `pageAs` cannot
 return a page that the executor still owns and measures.
 Therefore, `check` refuses it with `page-override-unowned`.
 
+An override can also add a dependency.
+`nuka init --server "<command>" --server-url <url>` writes a `server`
+fixture that starts the program under test with `runServer` and a
+`request` override that destructures the builtin `request` and `server`
+and hands back the builtin unchanged.
+Every step that destructures `request` then starts the server first, and
+the feature still names what ran, through the steps it binds.
+`runServer(command, args, { url, cwd, env, timeout })` is an import from
+`nukadoko`, not a fixture, for the reason `runCommand` is one.
+It runs the program with no shell and resolves to `{ url, stop() }` once
+the URL's host and port accept a TCP connection.
+Readiness is that observation and nothing else: a log line or an HTTP
+probe would be a guess at what each program prints or which path answers.
+It rejects when the port already accepts connections before the program
+starts, since every request would then reach a server it did not start;
+when the program exits first, naming its exit and its stderr; and when the
+timeout passes (10 seconds by default), after it stops the program.
+It does not tell the program a port: a `PORT` variable is a convention, so
+the program listens at the URL by its own means.
+`stop()` sends SIGTERM, then SIGKILL after 5 seconds.
+The generated fixture keeps the default `scenario` scope, the one that
+never shares server state between scenarios; `{ scope: "process" }` is the
+author's declaration that the server keeps none.
+
 A project that already declares its own `scratch` fixture keeps it.
 Its `config.fixtures` entry replaces the builtin at run time, as any
 override does.
@@ -4416,7 +4440,7 @@ nuka session list [--json]    list every session, across all environments,
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given
-nuka init [--allure]
+nuka init [--allure] [--server "<command>" --server-url <url>]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
                               .nukadoko/, .env, .env.*, and !.env.example in
@@ -4427,6 +4451,19 @@ nuka init [--allure]
                               or prints one stderr line naming them when the
                               file has comments. --allure turns the
                               Allure emitter on and writes allurerc.mjs.
+                              --server with --server-url also writes
+                              baseURL: <url>, a server fixture that calls
+                              runServer on the command (split on
+                              whitespace only, no shell) and stops it
+                              after the scenario, a request override that
+                              destructures the builtin request and
+                              server, so every step that sends a request
+                              starts the program first, and the
+                              StepFixtures declaration for server. One
+                              without the other, an empty command, or a
+                              URL that is not http(s) is refused with
+                              nothing written. Without playwright
+                              installed, stderr names its install line.
                               After a passing self-check, its last
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project

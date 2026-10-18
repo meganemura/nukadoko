@@ -773,6 +773,23 @@ use(page); }`)。
 `page`、`context`、`pageAs` のどれも分割代入しない上書きは、executor が引き続き所有して計測するページを返せません。
 したがって、`check` は `page-override-unowned` で拒否します。
 
+上書きは依存を足すこともできます。
+`nuka init --server "<command>" --server-url <url>` は、テスト対象のプログラムを `runServer` で起動する `server` fixture と、builtin の `request` と `server` を分割代入して builtin をそのまま返す `request` の上書きを書きます。
+これで `request` を分割代入するすべての step が先にサーバを起動し、feature は束ねる step を通して、実行したものを引き続きすべて名指しします。
+`runServer(command, args, { url, cwd, env, timeout })` は、`runCommand` と同じ理由で、fixture ではなく `nukadoko` からの import です。
+プログラムを shell なしで実行し、URL のホストとポートが TCP 接続を受け付けた時点で `{ url, stop() }` に解決します。
+起動完了の判定はこの観測だけです。
+ログの行や HTTP のプローブは、プログラムごとに何を出力するか、どの path が応答するかの推測になります。
+プログラムを起動する前からそのポートが接続を受け付けているときは reject します。
+そのままでは、すべての request が自分の起動していないサーバに届くからです。
+プログラムが先に終了したときは、その終了の仕方と stderr を挙げて reject します。
+timeout(既定は 10 秒)を過ぎたときは、プログラムを止めてから reject します。
+プログラムにポートは伝えません。
+`PORT` 変数は慣習にすぎないので、プログラムは自分の手段でその URL で待ち受けます。
+`stop()` は SIGTERM を送り、5 秒後に SIGKILL を送ります。
+生成される fixture は既定の `scenario` scope のままです。
+これはシナリオ間でサーバの状態を共有しない scope で、`{ scope: "process" }` はサーバが状態を持たないという作者の宣言です。
+
 自分の `scratch` fixture をすでに宣言しているプロジェクトは、それをそのまま使えます。
 その `config.fixtures` エントリは、他の上書きと同じく、実行時に builtin を置き換えます。
 型もプロジェクトのものが優先されます。
@@ -3828,7 +3845,7 @@ nuka session list [--json]    list every session, across all environments,
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given
-nuka init [--allure]
+nuka init [--allure] [--server "<command>" --server-url <url>]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
                               .nukadoko/, .env, .env.*, and !.env.example in
@@ -3839,6 +3856,19 @@ nuka init [--allure]
                               or prints one stderr line naming them when the
                               file has comments. --allure turns the
                               Allure emitter on and writes allurerc.mjs.
+                              --server with --server-url also writes
+                              baseURL: <url>, a server fixture that calls
+                              runServer on the command (split on
+                              whitespace only, no shell) and stops it
+                              after the scenario, a request override that
+                              destructures the builtin request and
+                              server, so every step that sends a request
+                              starts the program first, and the
+                              StepFixtures declaration for server. One
+                              without the other, an empty command, or a
+                              URL that is not http(s) is refused with
+                              nothing written. Without playwright
+                              installed, stderr names its install line.
                               After a passing self-check, its last
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project

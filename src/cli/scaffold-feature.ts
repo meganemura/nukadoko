@@ -365,7 +365,7 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
 }
 
 export const REDO_HEADER =
-  "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:";
+  "next: redo a stub in place with its line below, adding --command, --request, --from, or --description; --replace overwrites the stub while nobody has edited it:";
 
 /** The single scaffold that writes this stub again, as typed. */
 export function redoCommand(name: string, pattern: string, then: boolean): string {

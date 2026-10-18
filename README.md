@@ -261,10 +261,74 @@ in plaintext, and `nuka init` already ignores it.
 
 ## An HTTP API
 
-`nuka init` sets up an API project the same way. Two things differ from
-the CLI walkthrough above: a fixture starts the server, and the When step
-calls it with `fetch`. Here `src/server.ts` exports `startServer()`, which
-listens on a free port and resolves to `{ url, close() }`:
+`nuka init` sets up an API project the same way. Name the command that
+starts the server and the URL it listens at, and init writes the fixture
+that starts it. The When step sends its request through Playwright's
+`request`, so install `playwright` too (init names the line when it is
+missing):
+
+```sh
+npx nuka init --server "node src/server.ts" --server-url http://127.0.0.1:3000
+npm install -D -E playwright@1.61.1
+```
+
+The config gets `baseURL` and two fixtures. `server` calls `runServer`,
+which starts the command (split on whitespace, no shell) and waits until
+the URL's port accepts a connection; the program has to listen there
+itself, since nukadoko tells it no port. `request` destructures
+Playwright's own `request` and `server` and hands the builtin back, so
+every step that sends a request starts the server first, once per
+scenario:
+
+```ts
+// nukadoko.config.ts (the server fixture)
+server: async ({ baseURL }, use) => {
+  const server = await runServer("node", ["src/server.ts"], { url: baseURL });
+  await use(server);
+  await server.stop();
+},
+```
+
+Here `src/server.ts` listens at `127.0.0.1:3000` and answers
+`/greet/<name>` with the text `Hello, <name>!`. With this feature:
+
+```gherkin
+# features/greet.feature
+Feature: greet API
+
+  Scenario: greets by name
+    When I request the greeting for "Ada"
+    Then the greeting is "Hello, Ada!"
+```
+
+scaffold the When step and its Then, and the scenario runs with no edit:
+
+```sh
+npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
+npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
+```
+
+`get-greeting` is one ``request.fetch(`/greet/${name}`, { method: "GET" })``
+call that returns `status` and `body` (the response text). Each request
+lands in the step record's `http.jsonl` and in `observed.http_reads` and
+`observed.http_writes`.
+
+`--request "<METHOD> <path>"` resolves the path against `baseURL`. Each
+`{key}` in the path is that args key's value, put in as it is, and
+`--body <key>` sends an args key (the line's `docstring`, say) as the
+request's data. A value the request does not read throws by name until
+it is placed. The step writes `mutates: true`: the method is a proxy for
+write semantics, so the author sets `false`.
+
+A server that picks its own free port, or starts in-process, is
+[a server you start yourself](#a-server-you-start-yourself).
+
+## A server you start yourself
+
+A server you start from your own code takes a fixture you write, and its
+steps call it with `fetch`. Here
+`src/server.ts` exports `startServer()`, which listens on a free port and
+resolves to `{ url, close() }`:
 
 ```ts
 // nukadoko.config.ts
@@ -319,16 +383,6 @@ export default defineStep({
 `playwright` installed, and it is what counts the step's calls in the step
 record's `observed.http_reads` and `observed.http_writes`. A `fetch` call
 leaves both at 0.
-
-`nuka scaffold <name> --pattern "<line>" --request "<METHOD> <path>"`
-writes the `request` form: one `request.fetch(path, { method })` call,
-resolved against `baseURL`, returning `status` and the body as text, so a
-Then is scaffolded `--from` it at once. Each `{key}` in the path is that
-args key's value, put in as it is, and `--body <key>` sends an args key
-(the line's `docstring`, say) as the request's data. A value the request
-does not read throws by name until it is placed. The step writes
-`mutates: true`: the method is a proxy for write semantics, so the
-author sets `false`.
 
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way

@@ -63,6 +63,11 @@ fixture depending on a `scenario`-scope one, and a fixture that destructures
 fixture's own destructuring cannot be read, or names a fixture nukadoko
 does not know. The finding names the fixture.
 
+A program under test that listens on a URL starts in a fixture through
+`runServer(command, args, { url })`, which `nuka init --server` writes
+(`running.md`, "Setting up"); a `request` override that destructures
+`server` makes every request step start it.
+
 An MCP server over stdio is the same pattern: `connectMcpServer`/
 `callMcpTool` (`"nukadoko/mcp"`) belong in a fixture. A server's tools
 are never step vocabulary.

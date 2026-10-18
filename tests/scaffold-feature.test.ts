@@ -78,7 +78,7 @@ describe("nuka scaffold --feature", () => {
         "",
       ].join("\n"),
       stderr:
-        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "next: redo a stub in place with its line below, adding --command, --request, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
         "  nuka scaffold a-config-file-with --pattern 'a config file with {value:string}' --replace\n" +
         "  nuka scaffold i-run-greet-with-times --pattern 'I run greet with {value:string} {value2:int} times' --replace\n" +
         "  nuka scaffold the-output-is --pattern 'the output is {value:string}' --then --replace\n" +
@@ -232,7 +232,7 @@ describe("nuka scaffold --feature", () => {
       stdout: "features/steps/3-items-in-the-cart.ts\n",
       stderr:
         'note: features/cart.feature:3: "3 items in (the) cart" reads as "{int} items in \\\\(the) cart" or "{count} items in \\\\(the) cart" or "{float} items in \\\\(the) cart", so the stub\'s pattern is the line as written, with no capture; put a {key:type} capture in it by hand\n' +
-        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "next: redo a stub in place with its line below, adding --command, --request, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
         "  nuka scaffold 3-items-in-the-cart --pattern '3 items in \\(the) cart' --replace\n",
     });
     expect(await stepFile(rootDir, "3-items-in-the-cart")).toContain('  pattern: "3 items in \\\\(the) cart",\n  // Give');
@@ -255,7 +255,7 @@ describe("nuka scaffold --feature", () => {
       stdout: "features/steps/i-have-3-apples.ts\n",
       stderr:
         'note: features/apples.feature:3: "I have {value:int} apples" would also match "I have 5 apples" (features/other.feature:3), so the stub\'s pattern is the line as written, with no capture\n' +
-        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "next: redo a stub in place with its line below, adding --command, --request, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
         "  nuka scaffold i-have-3-apples --pattern 'I have 3 apples' --replace\n",
     });
     expect((await cli(rootDir, ["check"])).exitCode).toBe(0);
@@ -287,7 +287,7 @@ describe("nuka scaffold --feature", () => {
       exitCode: 0,
       stdout: "features/steps/i-send.ts\nfeatures/steps/it-answers.ts\n",
       stderr:
-        "next: redo a stub in place with its line below, adding --command, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
+        "next: redo a stub in place with its line below, adding --command, --request, --from, or --description; --replace overwrites the stub while nobody has edited it:\n" +
         "  nuka scaffold it-answers --pattern 'it answers {value:string}' --then --replace\n",
     });
   });

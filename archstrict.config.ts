@@ -206,6 +206,7 @@ export default {
         "load-playwright.ts",
         "poll.ts",
         "run-command.ts",
+        "run-server.ts",
         "trace-actions.ts",
         "used.ts",
       ],

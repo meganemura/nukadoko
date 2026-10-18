@@ -16,6 +16,14 @@ config to `tsconfig.json`'s `include`, and
 comments and trailing commas. When `compilerOptions` comes only through
 `extends`, `init` says on stderr what to add instead of editing.
 
+For an HTTP API, `nuka init --server "node src/server.ts" --server-url
+http://127.0.0.1:3000` also writes `baseURL` and a `server` fixture that
+starts the command with `runServer` for each scenario that sends a request
+(`nuka scaffold --request`), so no fixture is written by hand. The
+program has to listen at that URL on its own; `runServer` waits for the
+port and fails by name when the program exits first, never listens, or
+finds the port already taken. Install `playwright` when init says so.
+
 A CommonJS project (no `"type": "module"` in `package.json`) gets
 `nukadoko.config.mts`, and step files need `.mts` too. A hand-written
 `nukadoko.config.ts` there loads with a Node warning on every run (`nuka

@@ -253,8 +253,66 @@ CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.j
 **HTTP API**
 
 `nuka init` は API のプロジェクトも同じように準備します。
-上の CLI の手順と違うのは 2 点です。
-fixture がサーバを起動し、When の step は `fetch` でそのサーバを呼びます。
+サーバを起動するコマンドと、そのサーバが待ち受ける URL を指定すると、init がサーバを起動する fixture を書きます。
+When の step は Playwright の `request` で request を送るので、`playwright` もインストールしてください(入っていなければ init がその行を示します):
+
+```sh
+npx nuka init --server "node src/server.ts" --server-url http://127.0.0.1:3000
+npm install -D -E playwright@1.61.1
+```
+
+config には `baseURL` と 2 つの fixture が入ります。
+`server` は `runServer` を呼びます。
+`runServer` はコマンドを(空白で分割し、shell を通さずに)起動し、URL のポートが接続を受け付けるまで待ちます。
+nukadoko はプログラムにポートを伝えないので、プログラムは自分でそこで待ち受ける必要があります。
+`request` は Playwright 自身の `request` と `server` を分割代入して builtin をそのまま返します。
+そのため、request を送るすべての step が、シナリオごとに一度、先にサーバを起動します:
+
+```ts
+// nukadoko.config.ts (the server fixture)
+server: async ({ baseURL }, use) => {
+  const server = await runServer("node", ["src/server.ts"], { url: baseURL });
+  await use(server);
+  await server.stop();
+},
+```
+
+ここでの `src/server.ts` は `127.0.0.1:3000` で待ち受け、`/greet/<name>` に `Hello, <name>!` というテキストで答えます。
+次の feature があるとします:
+
+```gherkin
+# features/greet.feature
+Feature: greet API
+
+  Scenario: greets by name
+    When I request the greeting for "Ada"
+    Then the greeting is "Hello, Ada!"
+```
+
+When の step とその Then を scaffold するだけで、編集なしでシナリオが動きます:
+
+```sh
+npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
+npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
+```
+
+`get-greeting` は ``request.fetch(`/greet/${name}`, { method: "GET" })`` の呼び出し 1 つで、`status` と `body`(レスポンスのテキスト)を返します。
+各 request は step record の `http.jsonl` と、`observed.http_reads` と `observed.http_writes` に記録されます。
+
+`--request "<METHOD> <path>"` は path を `baseURL` を基準に解決します。
+path の中の `{key}` はその args キーの値で、そのまま埋め込まれます。
+`--body <key>` は args キー(たとえばその行の `docstring`)を request の data として送ります。
+request が読まない値は、置き場所が決まるまで名前を挙げて throw します。
+step は `mutates: true` を書きます。
+メソッドは書き込みの意味の代わりにすぎないので、`false` にするのは作者です。
+
+自分で空いているポートを選ぶサーバや、プロセス内で起動するサーバは、[A server you start yourself](#a-server-you-start-yourself) の形を使います。
+
+## A server you start yourself
+
+**自分で起動するサーバ**
+
+自分のコードから起動するサーバには、自分で書く fixture を使い、step は `fetch` でそれを呼びます。
 ここでは `src/server.ts` が `startServer()` を export します。
 `startServer()` は空いているポートで待ち受け、`{ url, close() }` で resolve します:
 
@@ -311,14 +369,6 @@ export default defineStep({
 こちらは `playwright` のインストールが必要です。
 step の呼び出しを step record の `observed.http_reads` と `observed.http_writes` に数えるのは `ctx.request()` だけです。
 `fetch` の呼び出しでは、どちらも 0 のままです。
-
-`nuka scaffold <name> --pattern "<line>" --request "<METHOD> <path>"` は `request` を使う形を書きます。
-中身は `baseURL` を基準にした `request.fetch(path, { method })` の呼び出し 1 つで、`status` と本文のテキストを返すので、Then はすぐに `--from` で scaffold できます。
-path の中の `{key}` はその args キーの値で、そのまま埋め込まれます。
-`--body <key>` は args キー(たとえばその行の `docstring`)を request の data として送ります。
-request が読まない値は、置き場所が決まるまで名前を挙げて throw します。
-step は `mutates: true` を書きます。
-メソッドは書き込みの意味の代わりにすぎないので、`false` にするのは作者です。
 
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。

@@ -52,6 +52,30 @@ just until 0.1.
   such a stub now says it still holds the stub, and its `do:` line is the
   same command with `--replace`. `--feature` refuses `--replace`, and what
   it writes is unchanged.
+- **`nuka init --server "<command>" --server-url <url>` writes the fixture that starts an HTTP server, and `runServer` is exported.**
+  The other hand edit in an HTTP project was the config fixture that
+  starts the server and its `StepFixtures` declaration, about 25 lines
+  copied from a worked example. With both flags, `init` also writes
+  `baseURL: <url>`, a `server` fixture that calls `runServer` on the
+  command and stops it after the scenario, a `request` override that
+  destructures Playwright's own `request` and `server` and hands the
+  builtin back, so every step that sends a request starts the server
+  first, and the `declare module "nukadoko"` block. The command is split on
+  whitespace only and runs with no shell. `runServer(command, args, { url,
+  cwd, env, timeout })`, a new export beside `runCommand`, resolves to `{
+  url, stop() }` once the URL's host and port accept a TCP connection: a
+  log line or an HTTP probe would be a guess. It rejects, naming the
+  program's stderr, when the port already accepts connections before the
+  program starts (a request would reach a server it did not start), when
+  the program exits first, and when the timeout passes (10 seconds by
+  default, after stopping it), and refuses a `url` that is `undefined` or
+  not http(s). It tells the program no port. `stop()` sends SIGTERM, then
+  SIGKILL 5 seconds later. One flag without the other, an empty command,
+  or a URL that is not http(s) is refused with nothing written, and a
+  project without `playwright` gets its install line on stderr. Measured
+  from an empty node:http project to a green scenario: 10 commands and 2
+  hand edits before, 9 commands and no hand edit after. The `--feature`
+  `next:` line now names `--request` beside `--command`.
 - **`nuka scaffold <name> --request "<METHOD> <path>"` writes the When step of an HTTP API.**
   An HTTP project wrote its request step by hand: `returns`, the call, and
   the base URL, before any Then could be scaffolded `--from` it. The step

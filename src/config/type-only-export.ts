@@ -56,6 +56,8 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ReplaceableFixtures",
     "RunCommandOptions",
     "RunCommandResult",
+    "RunServerOptions",
+    "RunningServer",
     "Scratch",
     "ScreenshotEntry",
     "SectionEntry",

@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -6,14 +8,22 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { repoRoot } from "./helpers/fixtures.js";
 
-// Responsibility: README.md's "An HTTP API" section works as written. Its
-// config block (the process-scope server fixture and the `StepFixtures`
+// Responsibility: README.md's two HTTP sections work as written.
+//
+// "A server you start yourself": its config block (the process-scope server fixture and the `StepFixtures`
 // augmentation) and its When step compile under `tsc --strict`, with
 // `skipLibCheck: false`, in a project with no Playwright installed. The
 // Then step comes from the scaffold command the section names, and
 // `nuka run` takes the feature it shows to green. README.ja.md carries the same blocks.
 //
-// `src/server.ts` is the one file the section describes without showing,
+// "An HTTP API": its `nuka init --server` line and its two scaffold lines,
+// run as written in a project with Playwright, write a config holding the
+// server fixture it shows, and `nuka run` takes its feature to green with
+// the request counted. Only the port differs: a fixed 3000 could already be
+// taken on the machine running the test, and runServer refuses a taken
+// port.
+//
+// `src/server.ts` is the one file each section describes without showing,
 // so this test writes its own. The project lives under the OS temp
 // directory, as in optional-playwright.test.ts: from inside this
 // repository, Node's walk up through ancestor node_modules reaches the
@@ -23,6 +33,7 @@ import { repoRoot } from "./helpers/fixtures.js";
 const execFileAsync = promisify(execFile);
 const HIDDEN = new Set(["playwright", "playwright-core", ".bin", "nukadoko"]);
 const tsc = path.join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+const SELF_STARTED = "A server you start yourself";
 const THEN_SCAFFOLD = 'nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message';
 
 interface Block {
@@ -140,7 +151,7 @@ beforeAll(async () => {
   await mkdir(path.join(projectDir, "src"), { recursive: true });
   await writeFile(path.join(projectDir, "src", "server.ts"), SERVER);
   const readme = await readFile(path.join(repoRoot, "README.md"), "utf8");
-  blocks = sectionBlocks(readme, "An HTTP API");
+  blocks = sectionBlocks(readme, SELF_STARTED);
   for (const block of blocks) {
     const target = path.join(projectDir, filePath(block));
     await mkdir(path.dirname(target), { recursive: true });
@@ -162,10 +173,10 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-describe("README.md: An HTTP API", () => {
+describe(`README.md: ${SELF_STARTED}`, () => {
   it("README.ja.md shows the same blocks", async () => {
-    const en = sectionBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"), "An HTTP API");
-    const ja = sectionBlocks(await readFile(path.join(repoRoot, "README.ja.md"), "utf8"), "An HTTP API");
+    const en = sectionBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"), SELF_STARTED);
+    const ja = sectionBlocks(await readFile(path.join(repoRoot, "README.ja.md"), "utf8"), SELF_STARTED);
     expect(en.map((block) => block.lang)).toEqual(["ts", "ts", "gherkin"]);
     expect(en.map(filePath)).toEqual(["nukadoko.config.ts", "features/steps/get-greeting.ts", "features/greet.feature"]);
     expect(ja).toEqual(en);
@@ -211,5 +222,117 @@ describe("README.md: An HTTP API", () => {
       ),
     ) as { observed: { http_reads: number; http_writes: number } };
     expect(when.observed).toMatchObject({ http_reads: 0, http_writes: 0 });
+  }, 120_000);
+});
+
+// The section's `sh` lines, split the way a shell splits these: on spaces,
+// with a double-quoted run kept as one word. None of them holds anything else.
+function shellWords(line: string): string[] {
+  return [...line.matchAll(/"([^"]*)"|(\S+)/g)].map((match) => match[1] ?? match[2]!);
+}
+
+function freePort(): Promise<number> {
+  return new Promise((resolve) => {
+    const probe = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = probe.address() as AddressInfo;
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+describe("README.md: An HTTP API", () => {
+  let apiRoot: string;
+  let apiDir: string;
+  let apiCli: string;
+  let apiBlocks: Block[];
+  let port: number;
+  const nukaIn = (args: string[]) => {
+    const { GITHUB_STEP_SUMMARY: _summary, ...env } = process.env;
+    return execFileAsync(process.execPath, [apiCli, ...args], { cwd: apiDir, env }).then(
+      ({ stdout, stderr }) => ({ code: 0, stdout, stderr }),
+      (error: { code?: number; stdout?: string; stderr?: string }) => ({
+        code: error.code ?? 1,
+        stdout: error.stdout ?? "",
+        stderr: error.stderr ?? "",
+      }),
+    );
+  };
+
+  beforeAll(async () => {
+    apiRoot = await mkdtemp(path.join(os.tmpdir(), "nukadoko-readme-server-"));
+    apiDir = path.join(apiRoot, "project");
+    const modules = path.join(apiDir, "node_modules");
+    const installed = path.join(modules, "nukadoko");
+    await mkdir(installed, { recursive: true });
+    await cp(path.join(repoRoot, "package.json"), path.join(installed, "package.json"));
+    await cp(path.join(repoRoot, "dist"), path.join(installed, "dist"), { recursive: true });
+    // Playwright stays visible here: the section installs it, for `request`.
+    for (const name of await readdir(path.join(repoRoot, "node_modules"))) {
+      if (name === "nukadoko" || name === ".bin") continue;
+      await symlink(path.join(repoRoot, "node_modules", name), path.join(modules, name), "dir");
+    }
+    apiCli = path.join(installed, "dist", "cli.js");
+    await writeFile(path.join(apiDir, "package.json"), `${JSON.stringify({ name: "greet-api", private: true, type: "module" }, null, 2)}\n`);
+    port = await freePort();
+    await mkdir(path.join(apiDir, "src"), { recursive: true });
+    await writeFile(
+      path.join(apiDir, "src", "server.ts"),
+      'import { createServer } from "node:http";\n' +
+        "createServer((req, res) => {\n" +
+        '  res.end(`Hello, ${decodeURIComponent((req.url ?? "").replace(/^\\/greet\\//, ""))}!`);\n' +
+        `}).listen(${port}, "127.0.0.1");\n`,
+    );
+    apiBlocks = sectionBlocks(await readFile(path.join(repoRoot, "README.md"), "utf8"), "An HTTP API");
+  }, 120_000);
+
+  afterAll(async () => {
+    await rm(apiRoot, { recursive: true, force: true });
+  });
+
+  it("README.ja.md shows the same blocks", async () => {
+    const ja = sectionBlocks(await readFile(path.join(repoRoot, "README.ja.md"), "utf8"), "An HTTP API");
+    expect(apiBlocks.map((block) => block.lang)).toEqual(["sh", "ts", "gherkin", "sh"]);
+    expect(ja).toEqual(apiBlocks);
+  });
+
+  it("its commands, run as written, write the fixture it shows, and the feature runs green", async () => {
+    const [setup, fixture, feature, scaffolds] = apiBlocks;
+    const setupLines = setup!.body.trim().split("\n");
+    expect(setupLines).toEqual([
+      'npx nuka init --server "node src/server.ts" --server-url http://127.0.0.1:3000',
+      "npm install -D -E playwright@1.61.1",
+    ]);
+    // The pin the section installs is the one this repository tests against.
+    const own = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8")) as {
+      devDependencies: Record<string, string>;
+    };
+    expect(`playwright@${own.devDependencies.playwright}`).toBe(shellWords(setupLines[1]!).at(-1));
+
+    const init = await nukaIn(shellWords(setupLines[0]!.replace(":3000", `:${port}`)).slice(2));
+    expect(init.code, init.stderr).toBe(0);
+    const config = await readFile(path.join(apiDir, "nukadoko.config.ts"), "utf8");
+    const squash = (text: string) => text.replace(/\s+/g, " ").trim();
+    const shown = fixture!.body.split("\n").slice(1).join("\n");
+    expect(squash(config)).toContain(squash(shown));
+
+    await writeFile(path.join(apiDir, filePath(feature!)), feature!.body);
+    for (const line of scaffolds!.body.trim().split("\n")) {
+      const words = shellWords(line);
+      expect(words.slice(0, 3)).toEqual(["npx", "nuka", "scaffold"]);
+      const scaffold = await nukaIn(words.slice(2));
+      expect(scaffold.code, scaffold.stderr).toBe(0);
+    }
+
+    const result = await nukaIn(["run"]);
+    expect(result.code, result.stderr).toBe(0);
+    const record = JSON.parse(result.stdout.trim().split("\n").at(-1)!) as {
+      status: string;
+      steps: Array<{ step_record_id: string }>;
+    };
+    expect(record.status).toBe("passed");
+    const when = JSON.parse(
+      await readFile(path.join(apiDir, ".nukadoko", "records", "steps", record.steps[0]!.step_record_id, "record.json"), "utf8"),
+    ) as { observed: { http_reads: number; http_writes: number } };
+    expect(when.observed).toMatchObject({ http_reads: 1, http_writes: 0 });
   }, 120_000);
 });
