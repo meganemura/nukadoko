@@ -49,6 +49,12 @@ just until 0.1.
 
 ### Fixed
 
+- **The README no longer names `nuka init --env`.** 0.17.0 removed the
+  flag and made `init` always add `.env`, `.env.*`, and `!.env.example`
+  to `.gitignore`, but README.md and README.ja.md still called those lines
+  opt-in and pointed at `--env` in Setup details. Both now say `init`
+  takes one flag, `--allure`, and writes the env lines every time, as
+  `nuka init --help` and `llms.txt` already did.
 - **`undefined-step-check-suppressed` names the findings that held the undefined lines back.**
   When the only step files that did not import lacked Playwright, the
   warning's `do:` told the reader to correct a `step-file-import-failed`

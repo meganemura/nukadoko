@@ -72,8 +72,9 @@ tsconfig.json
 `init` adds `.nukadoko/` to `.gitignore`, a `test:scenarios` script to
 `package.json` (the one command a person or CI runs), and the steps and the
 config to the `include` of `tsconfig.json`, with the compiler option that
-lets `tsc` accept an import that names a `.ts` file. The CommonJS case and the
-`--allure` and `--env` flags are in [Setup details](#setup-details).
+lets `tsc` accept an import that names a `.ts` file. It also adds `.env`,
+`.env.*`, and `!.env.example` to `.gitignore`. The CommonJS case and the
+`--allure` flag are in [Setup details](#setup-details).
 
 Scaffold the When step. `--command` writes a step that runs a program
 in `scratch.dir()`, an empty directory that is removed after the scenario,
@@ -618,10 +619,11 @@ file there names it, or `init` cannot read one, `init` says so on
 stderr. In a project whose `tsconfig.json` sets neither option to true,
 `nuka scaffold --from` writes `./run-greet.js` instead, the name `tsc`
 accepts under any options and `nuka` loads as `run-greet.ts`, and says so
-in one `note:` line on stderr. Two flags
-add more: `--allure` turns on the Allure emitter and writes `allurerc.mjs`
-(see [Reports fill themselves](#reports-fill-themselves)), and `--env` adds `.env`, `.env.*`, and
-`!.env.example` to `.gitignore` for a project that keeps env files.
+in one `note:` line on stderr. `init` takes one flag: `--allure` turns on
+the Allure emitter and writes `allurerc.mjs` (see
+[Reports fill themselves](#reports-fill-themselves)). `init` always adds
+`.env`, `.env.*`, and `!.env.example` to `.gitignore`; delete those lines
+if the project commits a `.env` on purpose.
 Run `nuka` from the directory that holds the config, the package in a
 workspace: a command run where there is none says so on stderr, names a
 config in a parent directory if one exists, and `nuka scaffold` then

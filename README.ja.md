@@ -68,7 +68,8 @@ tsconfig.json
 `init` は `.gitignore` に `.nukadoko/` を追加し、`package.json` に `test:scenarios` script を追加します。
 人も CI も、この 1 つのコマンドを実行します。
 `tsconfig.json` の `include` には steps と config を追加し、`.ts` ファイルを名指しする import を `tsc` が受け付けるためのコンパイラオプションも追加します。
-CommonJS の場合と、`--allure` と `--env` のフラグは [Setup details](#setup-details) にあります。
+`.gitignore` には `.env`、`.env.*`、`!.env.example` も追加します。
+CommonJS の場合と `--allure` フラグは [Setup details](#setup-details) にあります。
 
 When の step を scaffold します。
 `--command` は、プログラムを `scratch.dir()` で実行し、その `exitCode`、`stdout`、`stderr` を返す step を書きます。
@@ -583,8 +584,10 @@ API の形は [An HTTP API](#an-http-api) にあります。
 `tsconfig.json` がどちらのオプションも true にしていないプロジェクトでは、`nuka scaffold --from` は代わりに `./run-greet.js` を書きます。
 これは `tsc` がどのオプションの下でも受け付ける名前で、`nuka` は `run-greet.ts` として読み込みます。
 そのことは stderr の 1 行の `note:` で伝えます。
-2 つのフラグで書くものを増やせます。
-`--allure` は Allure emitter を有効にして `allurerc.mjs` を書き([Reports fill themselves](#reports-fill-themselves) を参照)、`--env` は env ファイルを置くプロジェクトのために `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
+`init` が受け付けるフラグは 1 つです。
+`--allure` は Allure emitter を有効にして `allurerc.mjs` を書きます([Reports fill themselves](#reports-fill-themselves) を参照)。
+`init` は常に `.env`、`.env.*`、`!.env.example` を `.gitignore` に追加します。
+`.env` を意図してコミットするプロジェクトでは、その行を削除します。
 `nuka` は config があるディレクトリ、workspace ならそのパッケージで実行します。
 config が無い場所で実行したコマンドはそのことを stderr に書き、親ディレクトリに config があればそれを示し、そのとき `nuka scaffold` は書き込みを拒否します。
 
