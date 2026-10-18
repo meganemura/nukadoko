@@ -163,14 +163,18 @@ describe("nuka scaffold", () => {
     const original = await readFile(filePath, "utf8");
 
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["scaffold", "send-invite"], {
+    const exitCode = await runCli(["scaffold", "send-invite", "--pattern", "I invite {email:string} to Bob's team"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
     });
 
     expect(exitCode).toBe(2);
-    expect(stderr.text()).not.toBe("");
+    expect(stderr.text()).toBe(
+      "Refusing to scaffold: features/steps/send-invite.ts already exists\n" +
+        "do: rm features/steps/send-invite.ts if it holds no step to keep (or choose another step name), " +
+        "then run nuka scaffold send-invite --pattern 'I invite {email:string} to Bob'\\''s team'\n",
+    );
     expect(await readFile(filePath, "utf8")).toBe(original);
   });
 

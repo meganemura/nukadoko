@@ -395,7 +395,7 @@ export function writeFailedScenarios(
 // quoted, so a feature path with a space still pastes as one argument.
 const SHELL_SAFE = /^[A-Za-z0-9_./:=+,-]+$/;
 
-function shellWord(word: string): string {
+export function shellWord(word: string): string {
   return SHELL_SAFE.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`;
 }
 

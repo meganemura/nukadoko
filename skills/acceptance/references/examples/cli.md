@@ -160,7 +160,7 @@ was still a stub:
 ```
 $ npx nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir
 Refusing to scaffold: a-csv-file-with declares no returns, so it has no key to chain; declare returns with "dir" in features/steps/a-csv-file-with.ts
-do: nuka scaffold --help
+do: add returns: z.object({ dir: <its schema> }) to features/steps/a-csv-file-with.ts and return dir from its run(), then run nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir
 ```
 
 Once both Givens returned `dir`, one command wrote the When step: each

@@ -3817,6 +3817,7 @@ discovery は、どのファイルが hook を登録したかを記録しない�
 `--json` がないとき、stderr はメッセージを出し、続けて `do: <command>` の 1 行を出します。
 次のコマンドがわかっているとき、`do` はそれを名指しします。
 知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、削除された live session のサブコマンドには `nuka do --help`、`check` が受け付けない `:line` には `nuka check <file>` です。
+プロジェクトのファイルが `nuka scaffold` を妨げるとき(step ファイルがすでにある、または `--from` が名指す step の `returns` がそのキーを持たない)、`do` はそのファイルへの変更を名指しし、続けて同じ `nuka scaffold` のコマンドラインを POSIX シェル向けにクォートして示します。
 それ以外では、そのコマンド自身の `--help` です。
 finding、失敗した scenario、失敗した step は報告であって拒否ではなく、それぞれの出力を保ちます。
 

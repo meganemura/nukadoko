@@ -4409,8 +4409,11 @@ way. Without `--json`, stderr carries the message and then one line,
 `do: <command>`. `do` names the next command when one is known: `nuka
 steps` for an unknown step, the install line for a missing peer
 dependency, `nuka do --help` for a removed live-session subcommand,
-`nuka check <file>` for a `:line` that `check` does not take. Otherwise it
-is the command's own `--help`. A finding, a failed scenario, or a failed
+`nuka check <file>` for a `:line` that `check` does not take. When a
+project file stands in the way of `nuka scaffold` (the step file already
+exists, or a `--from` producer's `returns` does not hold the key), `do`
+names the change to that file, then the same `nuka scaffold` command line,
+quoted for a POSIX shell. Otherwise it is the command's own `--help`. A finding, a failed scenario, or a failed
 step is a report, not a refusal, and keeps its own output.
 
 ### Streams and exit codes

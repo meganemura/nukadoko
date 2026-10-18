@@ -49,6 +49,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka scaffold` names the way past a refusal that a project file causes.**
+  When the step file already existed, or a `--from` producer declared no
+  `returns`, a `returns` that is not a `z.object`, or no such key, the
+  `do:` line was `nuka scaffold --help`, which lists no flag that gets
+  past either. The `do:` line now names the change to make (`rm` the
+  existing file if it holds no step to keep, or add the key to the
+  producer's `returns` and return it from `run()`), then the same
+  command line, quoted for a POSIX shell, so it does not have to be typed
+  again.
 - **The README no longer names `nuka init --env`.** 0.17.0 removed the
   flag and made `init` always add `.env`, `.env.*`, and `!.env.example`
   to `.gitignore`, but README.md and README.ja.md still called those lines

@@ -21,6 +21,7 @@ import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-s
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { shellWord } from "../run/progress-log.js";
 
 // Responsibility: `nuka scaffold <name>`'s actual work, kept out of
 // run-cli.ts so it's unit-testable without going
@@ -160,6 +161,9 @@ export interface RunScaffoldOptions {
   /** `--cwd`: the args key whose value is `--command`'s working
    * directory, or `null` for a new `scratch.dir()`. */
   cwd: string | null;
+  /** The words typed after `nuka`, so a refusal the project has to be
+   * changed for can name this same command as the one to run after. */
+  argv: readonly string[];
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -650,7 +654,7 @@ function resolveChain(
   importFailureCount: number,
   moduleNames: ReadonlySet<string>,
   spelling: ImportSpelling,
-): { chained: readonly ChainedField[] } | { refusal: string } {
+): { chained: readonly ChainedField[] } | { refusal: string; fix?: string } {
   const identifiers = importIdentifiers(requests.map((request) => request.step), moduleNames);
   const byKey = new Map<string, { producers: [Producer, ...Producer[]]; schema: z.ZodType }>();
   for (const request of requests) {
@@ -661,19 +665,28 @@ function resolveChain(
       return { refusal: `no typed step is named "${request.step}" (\`nuka steps\` lists the vocabulary)${unread}` };
     }
     const returns = producer.step.returns as z.ZodTypeAny;
+    const producerFile = path.relative(rootDir, path.resolve(rootDir, producer.filePath));
+    const returnIt = `return ${request.key} from its run()`;
     if (!declaresReturns(producer.step)) {
       return {
-        refusal: `${request.step} declares no returns, so it has no key to chain; declare returns with "${request.key}" in ${path.relative(rootDir, path.resolve(rootDir, producer.filePath))}`,
+        refusal: `${request.step} declares no returns, so it has no key to chain; declare returns with "${request.key}" in ${producerFile}`,
+        fix: `add returns: z.object({ ${request.key}: <its schema> }) to ${producerFile} and ${returnIt}`,
       };
     }
     if (returns.type !== "object") {
-      return { refusal: `${request.step}'s returns is not a z.object, so it has no key to chain` };
+      return {
+        refusal: `${request.step}'s returns is not a z.object, so it has no key to chain`,
+        fix: `make returns in ${producerFile} a z.object with a "${request.key}" key and ${returnIt}`,
+      };
     }
     const shape = (returns as z.ZodObject).shape;
     const returnKeys = Object.keys(shape);
     if (!returnKeys.includes(request.key)) {
       const named = returnKeys.length === 0 ? "it returns no keys" : `its keys are ${returnKeys.join(", ")}`;
-      return { refusal: `${request.step} does not return "${request.key}"; ${named}` };
+      return {
+        refusal: `${request.step} does not return "${request.key}"; ${named}`,
+        fix: `add "${request.key}" to returns in ${producerFile} and ${returnIt}`,
+      };
     }
     const schema = shape[request.key] as z.ZodType;
     const resolved: Producer = {
@@ -771,6 +784,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const { rootDir, name, pattern, then, command, entryPoint, cwd, description, from, stdout, stderr } = options;
   const sinks = { json: false, stdout, stderr };
   const help = helpFor("scaffold");
+  const thenRerun = (fix: string): string => `${fix}, then run ${["nuka", ...options.argv].map(shellWord).join(" ")}`;
 
   if (!VALID_STEP_NAME.test(name)) {
     return refuse(sinks, `Invalid step name "${name}": must match [a-z0-9-]+ (kebab-case; it becomes the step's file name)`, help);
@@ -848,7 +862,11 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const filePath = path.join(rootDir, relativeFilePath);
 
   if (existsSync(filePath)) {
-    return refuse(sinks, `Refusing to scaffold: ${relativeFilePath} already exists`, help);
+    return refuse(
+      sinks,
+      `Refusing to scaffold: ${relativeFilePath} already exists`,
+      thenRerun(`rm ${shellWord(relativeFilePath)} if it holds no step to keep (or choose another step name)`),
+    );
   }
 
   // A project whose tsc refuses `./x.ts` gets the `.js` name instead, so the
@@ -888,7 +906,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       spelling,
     );
     if ("refusal" in resolved) {
-      return refuse(sinks, `Refusing to scaffold: ${resolved.refusal}`, help);
+      return refuse(sinks, `Refusing to scaffold: ${resolved.refusal}`, resolved.fix === undefined ? help : thenRerun(resolved.fix));
     }
     chained = resolved.chained;
   }

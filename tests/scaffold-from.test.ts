@@ -260,13 +260,6 @@ describe("nuka scaffold --from", () => {
   });
 
   it.each([
-    [["--from", "run-greet.stdot"], 'run-greet does not return "stdot"; its keys are exitCode, stdout'],
-    [["--from", "make-dir.stdout"], 'make-dir does not return "stdout"; its keys are cwd'],
-    [["--from", "list-names.length"], "list-names's returns is not a z.object, so it has no key to chain"],
-    [
-      ["--from", "touch-file.path"],
-      'touch-file declares no returns, so it has no key to chain; declare returns with "path" in features/steps/touch-file.ts',
-    ],
     [["--from", "no-such-step.stdout"], 'no typed step is named "no-such-step" (`nuka steps` lists the vocabulary)'],
     [["--from", "run-greet"], '--from takes <step>.<key>, a step name and one identifier that is not a reserved word, and got "run-greet"'],
     [["--from", "run-greet.std-out"], '--from takes <step>.<key>, a step name and one identifier that is not a reserved word, and got "run-greet.std-out"'],
@@ -281,6 +274,37 @@ describe("nuka scaffold --from", () => {
     const result = await cli(rootDir, ["scaffold", "broken", "--then", ...flags]);
 
     expect(result.stderr).toContain(`Refusing to scaffold: ${message}`);
+    expect(result.exitCode).toBe(2);
+    expect(existsSync(path.join(rootDir, "features", "steps", "broken.ts"))).toBe(false);
+  });
+
+  it.each([
+    [
+      "run-greet.stdot",
+      'run-greet does not return "stdot"; its keys are exitCode, stdout',
+      'add "stdot" to returns in features/steps/run-greet.ts and return stdot from its run()',
+    ],
+    [
+      "make-dir.stdout",
+      'make-dir does not return "stdout"; its keys are cwd',
+      'add "stdout" to returns in features/steps/make-dir.ts and return stdout from its run()',
+    ],
+    [
+      "list-names.length",
+      "list-names's returns is not a z.object, so it has no key to chain",
+      'make returns in features/steps/list-names.ts a z.object with a "length" key and return length from its run()',
+    ],
+    [
+      "touch-file.path",
+      'touch-file declares no returns, so it has no key to chain; declare returns with "path" in features/steps/touch-file.ts',
+      "add returns: z.object({ path: <its schema> }) to features/steps/touch-file.ts and return path from its run()",
+    ],
+  ])("refuses --from %s with the producer change, then this command, as its do line", async (from, message, fix) => {
+    const result = await cli(rootDir, ["scaffold", "broken", "--pattern", "the output is {text:string}", "--then", "--from", from]);
+
+    expect(result.stderr).toBe(
+      `Refusing to scaffold: ${message}\ndo: ${fix}, then run nuka scaffold broken --pattern 'the output is {text:string}' --then --from ${from}\n`,
+    );
     expect(result.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "broken.ts"))).toBe(false);
   });

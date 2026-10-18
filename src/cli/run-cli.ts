@@ -846,6 +846,7 @@ export async function runCli(
         description: args.description ?? null,
         from: args.from ?? [],
         cwd: args.cwd ?? null,
+        argv,
         stdout,
         stderr,
       });
