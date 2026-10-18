@@ -70,7 +70,9 @@ describe("a record id already taken on disk", () => {
     const stepIds = scenarios.flatMap((record) => record.steps.map((step: { step_record_id: string }) => step.step_record_id));
     expect(new Set(scenarioIds).size).toBe(2);
     expect(new Set(stepIds).size).toBe(3);
-    expect(await recordIdsOnDisk(rootDir, "scenarios")).toEqual([...scenarioIds].sort());
+    // Neither scenario left evidence, so the run removed both directories
+    // once it was over: only then could a later run draw either id again.
+    expect(await recordIdsOnDisk(rootDir, "scenarios")).toEqual([]);
     expect(await recordIdsOnDisk(rootDir, "steps")).toEqual([...stepIds].sort());
   });
 

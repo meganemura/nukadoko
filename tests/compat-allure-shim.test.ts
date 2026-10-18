@@ -8,6 +8,7 @@ import {
   createCaptureSink,
   removeTempDir,
   stripRunProgressLines,
+  latestRunJsonText,
 } from "./helpers/fixtures.js";
 
 // Responsibility: coverage for the allure-js
@@ -203,8 +204,6 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     expect(stepRecordText).toContain("{{secret.SHIM_SECRET}}");
     expect(stepRecordText).not.toContain("sekrit-declared-456");
 
-    const recordPath = path.join(rootDir, record.evidence.dir, "record.json");
-    const recordText = await readFile(recordPath, "utf8");
-    expect(recordText).not.toContain("sekrit-declared-456");
+    expect(latestRunJsonText(rootDir)).not.toContain("sekrit-declared-456");
   });
 });

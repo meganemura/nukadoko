@@ -17,8 +17,8 @@ import {
   type RunSummary,
 } from "../src/record/retention.js";
 import { readExportsManifest, runExportsManifestPath } from "../src/record/run-exports.js";
-import { buildRunResult, runResultPath, writeRunResult } from "../src/record/run-result.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir, sourceNodeArgs } from "./helpers/fixtures.js";
+import { runResultPath, writeRunResult } from "../src/record/run-result.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir, sourceNodeArgs } from "./helpers/fixtures.js";
 
 // Responsibility: what retention removes and what it must never touch.
 // The two planners are pure and get properties; `applyRetention` gets a
@@ -97,44 +97,68 @@ describe("applyRetention", () => {
     return path.join(rootDir, ...segments);
   }
 
-  function writeEnded(runId: string, at: Date): void {
+  const current = { runId: "run-current", startedAt: Date.parse("2026-09-02T00:00:00Z") };
+
+  /** A run.json naming `scenarios`, each with its step record ids and its
+   * evidence directory. */
+  function writeEnded(runId: string, startedAt: string, scenarios: readonly { id: string; steps: readonly string[] }[] = []): void {
     writeRunResult(
       rootDir,
       stateDir,
-      buildRunResult({ nukadoko: "0.0.0-test", runId, verdict: "passed", startedAt: at, finishedAt: at, environment: "default", scenarios: [], summary: null }),
+      runId,
+      JSON.stringify({
+        schema_version: 2,
+        nukadoko: "0.0.0-test",
+        command: "run",
+        verdict: "passed",
+        findings: [],
+        run_id: runId,
+        started_at: startedAt,
+        finished_at: startedAt,
+        scenarios: scenarios.map((scenario) => ({
+          scenario_record_id: scenario.id,
+          started_at: startedAt,
+          finished_at: startedAt,
+          steps: scenario.steps.map((id) => ({ text: "x", status: "passed", step_record_id: id, record: path.join(stateDir, "records", "steps", id) })),
+          hooks: [],
+          evidence: { dir: path.join(stateDir, "records", "scenarios", scenario.id), screenshots: [] },
+        })),
+      }),
     );
   }
 
-  /** One run: `count` scenario records, each citing one step record, one
-   * manifest naming one export file per scenario, and one messages stream. */
+  /** One run: `count` scenarios, each with an evidence directory and one
+   * step record, one manifest naming one export file per scenario, and one
+   * messages stream. An unmarked run has no run.json, and every file it
+   * wrote carries its start as the time it was written. */
   async function seedRun(runId: string, startedAt: string, count = 1, marked = true): Promise<void> {
     const resultsDir = abs(stateDir, "export", "allure-results");
     await mkdir(resultsDir, { recursive: true });
     const manifestPath = runExportsManifestPath(rootDir, stateDir, runId);
     await mkdir(path.dirname(manifestPath), { recursive: true });
     const manifestLines: string[] = [];
+    const scenarios: { id: string; steps: string[] }[] = [];
+    const at = new Date(Number.isNaN(Date.parse(startedAt)) ? now.getTime() : Date.parse(startedAt));
     for (let index = 0; index < count; index += 1) {
       const scenarioId = `scn-${runId}-${index}`;
       const stepId = `step-${runId}-${index}`;
-      await mkdir(abs(stateDir, "records", "scenarios", scenarioId), { recursive: true });
-      await writeFile(
-        abs(stateDir, "records", "scenarios", scenarioId, "record.json"),
-        JSON.stringify({
-          scenario_record_id: scenarioId,
-          run_id: runId,
-          started_at: startedAt,
-          finished_at: startedAt,
-          steps: [{ text: "x", status: "passed", step_record_id: stepId }],
-        }),
-      );
+      const scenarioDir = abs(stateDir, "records", "scenarios", scenarioId);
+      await mkdir(scenarioDir, { recursive: true });
+      await writeFile(path.join(scenarioDir, "final.png"), "png");
+      await utimes(scenarioDir, at, at);
+      scenarios.push({ id: scenarioId, steps: [stepId] });
       await mkdir(abs(stateDir, "records", "steps", stepId), { recursive: true });
-      await writeFile(abs(stateDir, "records", "steps", stepId, "record.json"), JSON.stringify({ run_id: runId }));
+      await writeFile(
+        abs(stateDir, "records", "steps", stepId, "record.json"),
+        JSON.stringify({ run_id: runId, started_at: at.toISOString(), finished_at: at.toISOString() }),
+      );
       const exportFile = path.join(stateDir, "export", "allure-results", `${runId}-${index}-result.json`);
       await writeFile(abs(exportFile), "{}");
       manifestLines.push(exportFile);
     }
     await writeFile(manifestPath, `${manifestLines.join("\n")}\n`);
-    if (marked) writeEnded(runId, new Date(startedAt));
+    if (marked) writeEnded(runId, startedAt, scenarios);
+    await utimes(path.dirname(manifestPath), at, at);
     await writeFile(messagesRunOutputPath(abs(messagesOutputRel), runId), "line\n");
   }
 
@@ -161,8 +185,10 @@ describe("applyRetention", () => {
     // A shared file: written by every run, listed by none.
     await writeFile(abs(stateDir, "export", "allure-results", "environment.properties"), "x=y\n");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
-    expect(outcome).toEqual({ runsKept: 2, runsRemoved: 1, unownedRemoved: 0 });
+    // The run applying retention counts as one of the newest three.
+    const threeRuns = { runs: 3, adHocDays: 7 };
+    const outcome = await applyRetention({ rootDir, stateDir, policy: threeRuns, now, messagesOutputRel, currentRun: current });
+    expect(outcome).toEqual({ runsKept: 3, runsRemoved: 1, unownedRemoved: 0 });
 
     for (const gone of [
       abs(stateDir, "records", "scenarios", "scn-run-a-0"),
@@ -187,49 +213,42 @@ describe("applyRetention", () => {
     ]) {
       expect(existsSync(kept), kept).toBe(true);
     }
-    expect(formatRetention(outcome, policy)).toBe("retention: removed 1 run older than the newest 2 (retention.runs)");
+    expect(formatRetention(outcome, threeRuns)).toBe("retention: removed 1 run older than the newest 3 (retention.runs)");
   });
 
-  it("reads a record whose started_at does not parse as unreadable, so its run never takes the newest run's place", async () => {
+  it("leaves a run.json whose started_at does not parse out of the ranking, so its run never takes the newest run's place", async () => {
     await seedRun("run-older", "2026-08-31T00:00:00Z");
     await seedRun("run-newest", "2026-09-01T00:00:00Z");
-    await seedRun("run-undated", "not a date", 1, false);
-    writeEnded("run-undated", now);
+    await seedRun("run-undated", "not a date");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, currentRunId: "run-current" });
-
-    expect(outcome).toEqual({ runsKept: 1, runsRemoved: 1, unownedRemoved: 0 });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 2, adHocDays: 7 }, now, messagesOutputRel, currentRun: current });
+    expect(outcome).toEqual({ runsKept: 2, runsRemoved: 1, unownedRemoved: 0 });
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-older-0"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-newest-0"))).toBe(true);
-    // Unreadable records leave by age, from their directory's own mtime.
+    // What the undated run wrote leaves by age, from its own dates.
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-undated-0"))).toBe(true);
   });
 
-  it("dates a run by its earliest scenario, so a long run that began first is the older one", async () => {
+  it("dates a run by the start in its run.json, so a long run that began first is the older one", async () => {
     await seedRun("run-long", "2026-09-01T00:00:00Z");
-    // A second scenario of the long run finished after the short run began.
-    await mkdir(abs(stateDir, "records", "scenarios", "scn-long-late"), { recursive: true });
-    await writeFile(
-      abs(stateDir, "records", "scenarios", "scn-long-late", "record.json"),
-      JSON.stringify({ scenario_record_id: "scn-long-late", run_id: "run-long", started_at: "2026-09-01T02:00:00Z", steps: [] }),
-    );
     await seedRun("run-short", "2026-09-01T01:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, messagesOutputRel, currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy: { runs: 2, adHocDays: 7 }, now, messagesOutputRel, currentRun: current });
     expect(outcome.runsRemoved).toBe(1);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-short-0"))).toBe(true);
-    expect(existsSync(abs(stateDir, "records", "scenarios", "scn-long-late"))).toBe(false);
+    expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-long-0"))).toBe(false);
   });
 
   it("keeps a run without a marker until it is older than adHocDays, then removes it like any other", async () => {
     await seedRun("run-old", "2026-08-20T00:00:00Z", 1, false);
     await seedRun("run-young", "2026-08-30T00:00:00Z", 1, false);
     await seedRun("run-new", "2026-09-01T00:00:00Z");
-    const oneRun = { runs: 1, adHocDays: 7 };
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy: oneRun, now, messagesOutputRel, currentRunId: "run-current" });
-    expect(outcome.runsRemoved).toBe(1);
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
+    // The old run's step record, scenario directory, and run directory.
+    expect(outcome).toEqual({ runsKept: 2, runsRemoved: 0, unownedRemoved: 3 });
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-old-0"))).toBe(false);
+    expect(existsSync(abs(stateDir, "export", "allure-results", "run-old-0-result.json"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-young-0"))).toBe(true);
     expect(existsSync(abs(stateDir, "export", "allure-results", "run-young-0-result.json"))).toBe(true);
     expect(existsSync(runResultPath(rootDir, stateDir, "run-new"))).toBe(true);
@@ -245,8 +264,7 @@ describe("applyRetention", () => {
       policy: { runs: 1, adHocDays: 7 },
       now,
       messagesOutputRel,
-     
-      currentRunId: "run-self",
+      currentRun: { runId: "run-self", startedAt: Date.parse("2026-09-01T00:00:00Z") },
     });
     expect(outcome.runsRemoved).toBe(0);
     expect(existsSync(abs(stateDir, "records", "scenarios", "scn-run-self-0"))).toBe(true);
@@ -257,8 +275,8 @@ describe("applyRetention", () => {
     await seedAdHocStep("step-old-do", "2026-08-20T00:00:00Z");
     await seedAdHocStep("step-new-do", "2026-09-01T00:00:00Z");
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
-    expect(outcome).toEqual({ runsKept: 1, runsRemoved: 0, unownedRemoved: 1 });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
+    expect(outcome).toEqual({ runsKept: 2, runsRemoved: 0, unownedRemoved: 1 });
     expect(existsSync(abs(stateDir, "records", "steps", "step-old-do"))).toBe(false);
     expect(existsSync(abs(stateDir, "records", "steps", "step-new-do"))).toBe(true);
     expect(formatRetention(outcome, policy)).toBe(
@@ -266,7 +284,7 @@ describe("applyRetention", () => {
     );
   });
 
-  it("dates an unreadable scenario directory and a manifest without scenarios by mtime, and removes the manifest's export files with it", async () => {
+  it("dates an unowned scenario directory and a manifest without a run.json by mtime, and removes the manifest's export files with it", async () => {
     const old = new Date("2026-08-01T00:00:00Z");
     const brokenDir = abs(stateDir, "records", "scenarios", "scn-broken");
     await mkdir(brokenDir, { recursive: true });
@@ -281,7 +299,7 @@ describe("applyRetention", () => {
     await writeFile(manifestPath, `${path.join(stateDir, "export", "allure-results", "crashed-result.json")}\n`);
     await utimes(path.dirname(manifestPath), old, old);
 
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
     expect(outcome.unownedRemoved).toBe(2);
     expect(existsSync(brokenDir)).toBe(false);
     expect(existsSync(path.join(resultsDir, "crashed-result.json"))).toBe(false);
@@ -299,7 +317,7 @@ describe("applyRetention", () => {
       await writeFile(manifestPath, `${path.relative(rootDir, victim)}\n`);
       await utimes(path.dirname(manifestPath), old, old);
 
-      await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
+      await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
       expect(existsSync(victim)).toBe(true);
     } finally {
       rmSync(outside, { recursive: true, force: true });
@@ -308,7 +326,7 @@ describe("applyRetention", () => {
 
   it("says nothing when nothing was removed", async () => {
     await seedRun("run-a", "2026-09-01T00:00:00Z");
-    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRunId: "run-current" });
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, messagesOutputRel, currentRun: current });
     expect(formatRetention(outcome, policy)).toBeNull();
   });
 });
@@ -338,8 +356,10 @@ describe("nuka run applies retention", () => {
     expect(second.text()).toContain("retention: removed 1 run older than the newest 1 (retention.runs)");
 
     const { readdirSync } = await import("node:fs");
-    const scenarios = readdirSync(path.join(rootDir, ".nukadoko", "records", "scenarios"));
-    expect(scenarios.length).toBe(1);
+    const kept = latestRunJson(rootDir).scenarios.flatMap((scenario: { steps: { step_record_id: string }[] }) =>
+      scenario.steps.map((step) => step.step_record_id),
+    );
+    expect(readdirSync(path.join(rootDir, ".nukadoko", "records", "steps")).sort()).toEqual(kept.sort());
     const runs = readdirSync(path.join(rootDir, ".nukadoko", "records", "runs"));
     expect(runs.length).toBe(1);
     const results = readdirSync(path.join(rootDir, ".nukadoko", "export", "allure-results")).filter((name) =>
@@ -428,7 +448,10 @@ describe("nuka run --concurrency applies retention", () => {
     }
     expect(existsSync(path.join(runsDir, firstRunId!))).toBe(false);
     expect(readdirSync(runsDir)).toHaveLength(1);
-    expect(readdirSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toHaveLength(2);
+    const kept = latestRunJson(rootDir).scenarios.flatMap((scenario: { steps: { step_record_id: string }[] }) =>
+      scenario.steps.map((step) => step.step_record_id),
+    );
+    expect(readdirSync(path.join(rootDir, ".nukadoko", "records", "steps")).sort()).toEqual(kept.sort());
     expect(existsSync(path.join(resultsDir(rootDir), "environment.properties"))).toBe(true);
   });
 });

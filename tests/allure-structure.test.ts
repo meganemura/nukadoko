@@ -98,7 +98,6 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
       emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index }));
     });
     const record: ScenarioRecord = {
-      schema_version: 1,
       nukadoko: "0.0.0-test",
       scenario_record_id: "scn-1",
       run_id: "run-1",
@@ -135,7 +134,6 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
       emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index }));
     });
     const record: ScenarioRecord = {
-      schema_version: 1,
       nukadoko: "0.0.0-test",
       scenario_record_id: "scn-2",
       run_id: "run-1",
@@ -171,7 +169,6 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     emitter.emitStep(baseStepInput({ record: step, stepRecord: null, gherkinDocument, pickle, index: 0 }));
     const record: ScenarioRecord = {
-      schema_version: 1,
       nukadoko: "0.0.0-test",
       scenario_record_id: "scn-3",
       run_id: "run-1",

@@ -45,9 +45,8 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 //
 // Every worker's own stdout is a stream of `WorkerEnvelope` lines
 // (src/run/worker-protocol.ts): a `"scenario"` envelope is this run's own
-// real signal (its `record` is forwarded to this invocation's own stdout
-// completely unchanged, so a reader of that stream cannot tell a record
-// apart from one `--concurrency 1` would have written), while a `"note"`
+// real signal (its `record` is handed to `onRecord` unchanged, so run.json
+// cannot tell it apart from one `--concurrency 1` would have written), while a `"note"`
 // envelope is everything a worker would otherwise have written straight to
 // stderr. Both ride the worker's stdout, reassembled into whole lines by
 // src/run/line-buffer.ts before either is ever touched, so a NDJSON record
@@ -123,12 +122,9 @@ export interface RunConcurrentOptions {
   readonly allureResultsDirRel: string | null;
   /** `null`: the emitter is off. */
   readonly messagesOutputRel: string | null;
-  /** Hears every scenario record the parent forwards, so the parent writes
-   * one run summary for the whole run (src/run/run-summary.ts). */
+  /** Hears every scenario record the parent forwards, so the parent builds
+   * one run.json for the whole run, and streams it under `--records`. */
   readonly onRecord: (record: ScenarioRecord) => void;
-  /** Where each forwarded record goes. Without `--records`, src/cli/run.ts
-   * passes a sink that drops it, the same rule as at 1. */
-  readonly stdout: WritableSink;
   /** Scenario boundaries and a failed step's lines; src/cli/run.ts passes
    * a sink that drops them under `--json`. */
   readonly progress: WritableSink;
@@ -183,7 +179,6 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     allureResultsDirRel,
     messagesOutputRel,
     onRecord,
-    stdout,
     progress,
     warn,
     stderr,
@@ -294,7 +289,6 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     filesWithRecords.add(record.feature);
     completedCount += 1;
 
-    stdout.write(`${JSON.stringify(record)}\n`);
     scenariosWritten += 1;
     if (record.status === "passed") {
       scenariosPassed += 1;
@@ -327,8 +321,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       // A worker parses its own assigned files, so its pickles normally
       // match the ones selected here exactly. They can diverge when a
       // feature file changes on disk between this parent's own selection
-      // and the worker's own parse. The record itself is already on stdout
-      // and already on disk; what would be lost without this line is the
+      // and the worker's own parse. The record itself is already in run.json; what would be lost without this line is the
       // messages stream's own entry for it, which would leave that stream
       // one scenario short with nothing saying so.
       warn({

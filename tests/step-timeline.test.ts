@@ -66,7 +66,6 @@ describe("Allure and cucumber-messages place the steps of one record the same wa
         return { text: pickle.steps[index]!.text, status: "passed", step_record_id: `step-${index}` };
       });
       const record: ScenarioRecord = {
-        schema_version: 1,
         nukadoko: "0.0.0-test",
         scenario_record_id: "scn-1",
         run_id: "run-1",

@@ -4,7 +4,8 @@ import path from "node:path";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { runCli } from "../src/cli/run-cli.js";
-import { buildRunResult, type RunResultScenario } from "../src/record/run-result.js";
+import { countScenarios, readRunResult } from "../src/record/run-result.js";
+import { renderRunSummary } from "../src/run/run-summary.js";
 import { readOwnVersion } from "../src/version.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
@@ -32,7 +33,7 @@ describe("nuka run: run.json", () => {
     await removeTempDir(rootDir);
   });
 
-  it("names every scenario of a mixed run with its record and the rerun command stderr prints", async () => {
+  it("names the commit, the condition, every scenario with its steps, and how to rerun a failed one", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/failure/"], { rootDir, stdout, stderr });
@@ -40,49 +41,106 @@ describe("nuka run: run.json", () => {
     expect(exitCode).toBe(1);
     const runId = onlyRunId(rootDir);
     const result = readRunJson(rootDir, runId);
-    const records = stdout
-      .text()
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-    const failed = records.find((record) => record.status === "failed")!;
-    const passed = records.find((record) => record.status === "passed")!;
+    const passedStep = result.scenarios.find((s: { status: string }) => s.status === "passed").steps[0];
 
     expect(result).toEqual({
-      schema_version: 1,
+      schema_version: 2,
       nukadoko: readOwnVersion(),
-      run_id: runId,
+      command: "run",
       verdict: "failed",
+      findings: [
+        {
+          severity: "failed",
+          code: "scenario-failed",
+          file: "features/failure/a.feature",
+          line: 3,
+          message: 'named concurrent failure: No step definition matches "a missing concurrent step"',
+          do: "nuka run features/failure/a.feature:3",
+        },
+      ],
+      run_id: runId,
       started_at: expect.any(String),
       finished_at: expect.any(String),
+      // The fixture copy sits inside this repository's own working tree.
+      commit: { sha: expect.stringMatching(/^[0-9a-f]{40}$/), dirty: expect.any(Boolean) },
       environment: "default",
+      target_version: null,
+      selection: "full",
       counts: { scenarios: 2, passed: 1, failed: 1 },
-      scenarios: expect.arrayContaining([
+      scenarios: [
         {
-          scenario_record_id: failed.scenario_record_id,
+          scenario_record_id: expect.stringMatching(/^scn-/),
           feature: "features/failure/a.feature",
           line: 3,
           scenario: "named concurrent failure",
           status: "failed",
-          record: path.join(".nukadoko", "records", "scenarios", failed.scenario_record_id, "record.json"),
-          rerun: "nuka run features/failure/a.feature:3",
+          started_at: expect.any(String),
+          finished_at: expect.any(String),
+          steps: [
+            {
+              line: 4,
+              text: "a missing concurrent step",
+              step: null,
+              status: "undefined",
+              step_record_id: null,
+              record: null,
+              error: { kind: null, message: 'No step definition matches "a missing concurrent step"' },
+            },
+          ],
+          hooks: [],
+          do: "nuka run features/failure/a.feature:3",
         },
         {
-          scenario_record_id: passed.scenario_record_id,
+          scenario_record_id: expect.stringMatching(/^scn-/),
           feature: "features/failure/b.feature",
           line: 3,
           scenario: "concurrent pass",
           status: "passed",
-          record: path.join(".nukadoko", "records", "scenarios", passed.scenario_record_id, "record.json"),
-          rerun: "nuka run features/failure/b.feature:3",
+          started_at: expect.any(String),
+          finished_at: expect.any(String),
+          steps: [
+            {
+              line: 4,
+              text: 'a thing "parallel" exists',
+              step: "thing-exists",
+              status: "passed",
+              step_record_id: passedStep.step_record_id,
+              record: path.join(".nukadoko", "records", "steps", passedStep.step_record_id),
+              mutates: true,
+              observed: { http_reads: null, http_writes: null, processes: null },
+            },
+          ],
+          hooks: [],
         },
-      ]),
-      summary: path.join(".nukadoko", "records", "runs", runId, "summary.md"),
+      ],
     });
-    expect(result.scenarios).toHaveLength(2);
-    for (const scenario of result.scenarios) expect(existsSync(path.join(rootDir, scenario.record))).toBe(true);
+    expect(existsSync(path.join(rootDir, passedStep.record, "record.json"))).toBe(true);
+    // The --records stream is the same scenario entries, one per line.
+    expect(
+      stdout
+        .text()
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line)),
+    ).toEqual(result.scenarios);
+    // No scenario record file is written: run.json holds the scenario.
+    expect(readdirSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toEqual([]);
     expect(stderr.text()).toContain("  do: nuka run features/failure/a.feature:3\n");
     expect(stderr.text()).toContain(`run       ${path.join(".nukadoko", "records", "runs", runId, "run.json")}\n`);
+  });
+
+  it("is the one source of summary.md: the summary renders again, byte for byte, from run.json read off disk", async () => {
+    const exitCode = await runCli(["run", "--no-check", "features/"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(1);
+    const runDir = path.join(rootDir, ".nukadoko", "records", "runs", onlyRunId(rootDir));
+    const document = readRunResult(path.join(runDir, "run.json"));
+    expect(document).not.toBe(null);
+    expect(renderRunSummary(document!)).toBe(readFileSync(path.join(runDir, "summary.md"), "utf8"));
   });
 
   it("prints run.json's fields in the --json envelope, the one document on stdout, also at --concurrency 2", async () => {
@@ -115,7 +173,7 @@ describe("nuka run: run.json", () => {
       expect(exitCode).toBe(1);
       const printed = JSON.parse(stdout.text());
       expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1 }]);
-      expect(printed.scenarios.find((s: { status: string }) => s.status === "failed").rerun).toBe(
+      expect(printed.scenarios.find((s: { status: string }) => s.status === "failed").do).toBe(
         "nuka run features/failure/a.feature:3",
       );
     }
@@ -124,27 +182,11 @@ describe("nuka run: run.json", () => {
   it("counts what its scenarios say, for any mix of outcomes", () =>
     hegel.test((tc) => {
       const statuses = tc.draw(gs.arrays(gs.sampledFrom(["passed", "failed"] as const), { maxSize: 12 }));
-      const scenarios: RunResultScenario[] = statuses.map((status, index) => ({
-        scenario_record_id: `scn-${index}`,
-        feature: "features/a.feature",
-        line: index + 1,
-        scenario: `s${index}`,
-        status,
-        record: `.nukadoko/records/scenarios/scn-${index}/record.json`,
-        rerun: `nuka run features/a.feature:${index + 1}`,
-      }));
-      const result = buildRunResult({
-        nukadoko: "0.0.0-test",
-        runId: "run-1",
-        verdict: "failed",
-        startedAt: new Date(0),
-        finishedAt: new Date(1),
-        environment: "default",
-        scenarios,
-        summary: null,
-      });
       const failed = statuses.filter((status) => status === "failed").length;
-      expect(result.counts).toEqual({ scenarios: statuses.length, passed: statuses.length - failed, failed });
-      expect(result.scenarios).toEqual(scenarios);
+      expect(countScenarios(statuses.map((status) => ({ status })))).toEqual({
+        scenarios: statuses.length,
+        passed: statuses.length - failed,
+        failed,
+      });
     }));
 });

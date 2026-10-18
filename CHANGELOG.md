@@ -9,6 +9,33 @@ just until 0.1.
 
 ### Breaking
 
+- **`run.json` holds the whole run, and the run summary is rendered from
+  it.** An agent or an auditor that read `run.json` still had to open each
+  scenario record, then each step record, to learn which step failed, on
+  which line, and why. `run.json` is now the `nuka run --json` envelope
+  itself, byte for byte what `--json` prints, with `commit` (`sha`,
+  `dirty`), `environment`, `target_version`, `selection`, `counts`, every
+  scenario with its steps (each with `line`, `text`, the `step` it matched,
+  `status`, `step_record_id`, `record`, `mutates`, `observed`, and for a
+  failure `error` with `kind` and `message` and the `used` results it
+  read), a failed scenario's `do`, and every finding the run raised,
+  warnings included. `selection` is `partial` when a `:line` target left
+  out a scenario of its file; it replaces the "Partial run" paragraph on
+  stderr, which is gone. The scenario record files under
+  `records/scenarios/<id>/record.json` are no longer written: a scenario's
+  entry in `run.json` is its record, and `--records` streams those entries.
+  `records/scenarios/<id>/` now holds only a scenario's own evidence (its
+  final screenshot, a hook's trace or attachment) and is removed when it
+  stays empty. The `rerun`, `record`, and `summary` fields are gone (a
+  failed scenario's `do` replaces `rerun`), `run.json`'s `schema_version`
+  is the envelope's 2, and the `scenario_record` and `run_result` schema
+  versions are retired. `summary.md` is rendered by one pure function from
+  the `run.json` document, so it cannot say what `run.json` does not, and
+  it can be rendered again from a `run.json` copied off a CI machine; it
+  gains a `- selection:` condition line and a "Findings" section for the
+  warnings a run raised. Retention and `nuka tend` read runs from
+  `run.json` alone. Step records, the Allure results, and the messages
+  stream do not change. See docs/upgrading.md.
 - **One grammar for every finding, refusal, and failed scenario, and one
   `--json` envelope for every command.** A finding is one line,
   `<severity>\t<code>\t<where>\t<message>`, then at most one `  fix:`

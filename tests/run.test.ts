@@ -6,6 +6,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  latestRunJson,
   removeTempDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
@@ -37,7 +38,7 @@ describe("nuka run", () => {
     await removeTempDir(rootDir);
   });
 
-  it("runs a pure-step scenario to completion: record + step records + JSONL stdout + exit 0", async () => {
+  it("runs a pure-step scenario to completion: run.json + step records + JSONL stdout + exit 0", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
@@ -57,21 +58,23 @@ describe("nuka run", () => {
     expect(record.scenario).toBe("create and check a thing");
     expect(record.line).toBe(3);
     expect(record.status).toBe("passed");
-    expect(record.environment).toBe("default");
-    expect(record.session).toBeNull();
     expect(record.steps).toHaveLength(2);
     for (const step of record.steps) {
       expect(step.status).toBe("passed");
       expect(typeof step.step_record_id).toBe("string");
+      expect(step.record).toBe(path.join(".nukadoko", "records", "steps", step.step_record_id));
       expect(step.error).toBeUndefined();
     }
-    expect(record.evidence.dir).toBe(path.join(".nukadoko", "records", "scenarios", record.scenario_record_id));
-    expect(record.evidence.screenshots).toEqual([]);
-    expect(record.evidence.trace).toBeUndefined();
+    expect(record.steps.map((step: { line: number }) => step.line)).toEqual([4, 5]);
+    // A scenario that wrote no screenshot, trace, or attachment names no
+    // evidence, and leaves no directory behind.
+    expect(record.evidence).toBeUndefined();
+    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "scenarios", record.scenario_record_id))).toBe(false);
 
-    const recordPath = path.join(rootDir, record.evidence.dir, "record.json");
-    expect(existsSync(recordPath)).toBe(true);
-    expect(JSON.parse(await readFile(recordPath, "utf8"))).toEqual(record);
+    // The stdout line is run.json's own entry for the scenario.
+    const document = latestRunJson(rootDir);
+    expect(document.scenarios).toEqual([record]);
+    expect(document.environment).toBe("default");
 
     for (const step of record.steps) {
       const stepRecord = await readStepRecord(rootDir, step.step_record_id);
@@ -236,11 +239,11 @@ describe("nuka run", () => {
     const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect((stepRecord as { result: { label: string } }).result.label).toBe("second");
 
-    const scenariosDir = path.join(rootDir, ".nukadoko", "records", "scenarios");
-    expect(await readdir(scenariosDir)).toHaveLength(1);
+    const document = latestRunJson(rootDir);
+    expect(document.scenarios.map((scenario: { line: number }) => scenario.line)).toEqual([6]);
   });
 
-  it("stderr announces a partial run when :line is given, naming the selected/total scenario counts, without touching stdout's record JSON", async () => {
+  it("run.json says selection: partial when :line leaves out a scenario of its file, and stderr says nothing beyond progress", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature:6"], {
@@ -250,8 +253,8 @@ describe("nuka run", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toContain("Partial run: features/lines.feature:6 selects 1 of 2 scenarios");
-    expect(stderr.text()).toContain("Its run summary covers only those scenarios");
+    expect(stripRunProgressLines(stderr.text())).toBe("");
+    expect(latestRunJson(rootDir).selection).toBe("partial");
 
     const lines = nonEmptyLines(stdout.text());
     expect(lines).toHaveLength(1);
@@ -259,7 +262,7 @@ describe("nuka run", () => {
     expect(record.scenario).toBe("second scenario");
   });
 
-  it("stderr says nothing about a partial run when :line selects the file's only scenario", async () => {
+  it("run.json says selection: full when :line selects the file's only scenario", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature:3"], {
       rootDir,
@@ -269,9 +272,10 @@ describe("nuka run", () => {
 
     expect(exitCode).toBe(0);
     expect(stripRunProgressLines(stderr.text())).toBe("");
+    expect(latestRunJson(rootDir).selection).toBe("full");
   });
 
-  it("stderr says nothing about a partial run when the :line targets together select every scenario of the file", async () => {
+  it("run.json says selection: full when the :line targets together select every scenario of the file", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature:3", "features/lines.feature:6"], {
       rootDir,
@@ -281,9 +285,10 @@ describe("nuka run", () => {
 
     expect(exitCode).toBe(0);
     expect(stripRunProgressLines(stderr.text())).toBe("");
+    expect(latestRunJson(rootDir).selection).toBe("full");
   });
 
-  it("stderr says nothing about a partial run when no :line is given", async () => {
+  it("run.json says selection: full when no :line is given", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/lines.feature"], {
       rootDir,
@@ -293,6 +298,7 @@ describe("nuka run", () => {
 
     expect(exitCode).toBe(0);
     expect(stripRunProgressLines(stderr.text())).toBe("");
+    expect(latestRunJson(rootDir).selection).toBe("full");
   });
 
   it("an invalid :line is a setup failure: stderr + exit 2, nothing written", async () => {

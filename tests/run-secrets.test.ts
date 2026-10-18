@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunJsonText, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: proves docs/spec.md "Secrets" reaches `nuka run`'s own
 // artifacts — both the step's record.json *and* the owning scenario
@@ -47,10 +47,9 @@ describe("nuka run: secret redaction", () => {
     expect(record.steps[0].error.message).not.toContain(API_TOKEN);
     expect(stdout.text()).not.toContain(API_TOKEN);
 
-    const recordPath = path.join(rootDir, record.evidence.dir, "record.json");
-    const recordText = await readFile(recordPath, "utf8");
-    expect(recordText).toContain("{{secret.API_TOKEN}}");
-    expect(recordText).not.toContain(API_TOKEN);
+    const runJsonText = latestRunJsonText(rootDir);
+    expect(runJsonText).toContain("{{secret.API_TOKEN}}");
+    expect(runJsonText).not.toContain(API_TOKEN);
 
     const stepRecordPath = path.join(
       rootDir,

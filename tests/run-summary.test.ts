@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { readOwnVersion } from "../src/version.js";
-import { copyFixtureToTempDir, createCaptureSink, initGitRepo, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, initGitRepo, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: the Markdown run summary as `nuka run` actually writes it:
 // to the run's own directory, to `--summary <path>`, and appended to
@@ -19,8 +19,8 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-function runIdOf(stdoutText: string): string {
-  return (JSON.parse(nonEmptyLines(stdoutText)[0]!) as { run_id: string }).run_id;
+function newestRunId(rootDir: string): string {
+  return latestRunJson(rootDir).run_id as string;
 }
 
 async function readRunSummary(rootDir: string, runId: string): Promise<string> {
@@ -51,10 +51,10 @@ describe("nuka run: the run summary", () => {
   it("writes a green run's summary to the run directory", async () => {
     await initGitRepo(rootDir);
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
 
-    const runId = runIdOf(stdout.text());
+    const runId = newestRunId(rootDir);
     const summary = normalize(await readRunSummary(rootDir, runId), runId).replace(/`[0-9a-f]{7}`/, "`<sha>`");
     expect(summary).toBe(
       [
@@ -64,6 +64,7 @@ describe("nuka run: the run summary", () => {
         "- commit: `<sha>`",
         "- environment: default",
         "- browser: none launched",
+        "- selection: full",
         "- nukadoko: <version>",
         "- run: <run>",
         "- started <t>, finished <t> (<duration>)",
@@ -87,10 +88,10 @@ describe("nuka run: the run summary", () => {
   it("writes a red run's failing step, its error, its record, and the rerun command", async () => {
     await initGitRepo(rootDir);
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/failing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
+    const exitCode = await runCli(["run", "--no-check", "features/failing.feature"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(1);
 
-    const runId = runIdOf(stdout.text());
+    const runId = newestRunId(rootDir);
     const summary = normalize(await readRunSummary(rootDir, runId), runId).replace(/`[0-9a-f]{7}`/, "`<sha>`");
     expect(summary).toBe(
       [
@@ -100,6 +101,7 @@ describe("nuka run: the run summary", () => {
         "- commit: `<sha>`",
         "- environment: default",
         "- browser: none launched",
+        "- selection: full",
         "- nukadoko: <version>",
         "- run: <run>",
         "- started <t>, finished <t> (<duration>)",
@@ -129,13 +131,10 @@ describe("nuka run: the run summary", () => {
     await writeFile(stepSummary, "earlier step\n");
     vi.stubEnv("GITHUB_STEP_SUMMARY", stepSummary);
 
-    const first = createCaptureSink();
-    await runCli(["run", "--records", "--no-check", "features/passing.feature"], { rootDir, stdout: first, stderr: createCaptureSink() });
-    const second = createCaptureSink();
-    await runCli(["run", "--records", "--no-check", "features/failing.feature"], { rootDir, stdout: second, stderr: createCaptureSink() });
-
-    const firstSummary = await readRunSummary(rootDir, runIdOf(first.text()));
-    const secondSummary = await readRunSummary(rootDir, runIdOf(second.text()));
+    await runCli(["run", "--no-check", "features/passing.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+    const firstSummary = await readRunSummary(rootDir, newestRunId(rootDir));
+    await runCli(["run", "--no-check", "features/failing.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+    const secondSummary = await readRunSummary(rootDir, newestRunId(rootDir));
     expect(await readFile(stepSummary, "utf8")).toBe(`earlier step\n${firstSummary}${secondSummary}`);
   });
 
@@ -143,9 +142,9 @@ describe("nuka run: the run summary", () => {
     await writeFile(path.join(rootDir, "old.md"), "stale\n");
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    await runCli(["run", "--records", "--no-check", "features/passing.feature", "--summary", "out/pr-comment.md"], { rootDir, stdout, stderr });
+    await runCli(["run", "--no-check", "features/passing.feature", "--summary", "out/pr-comment.md"], { rootDir, stdout, stderr });
 
-    const runId = runIdOf(stdout.text());
+    const runId = newestRunId(rootDir);
     const runCopy = await readRunSummary(rootDir, runId);
     expect(await readFile(path.join(rootDir, "out", "pr-comment.md"), "utf8")).toBe(runCopy);
     expect(nonEmptyLines(stderr.text())).toContain(`summary   ${path.join(".nukadoko", "records", "runs", runId, "summary.md")}`);
@@ -154,7 +153,7 @@ describe("nuka run: the run summary", () => {
   it("names a summary it could not write on stderr and keeps the run's exit code", async () => {
     await writeFile(path.join(rootDir, "blocker"), "a file, not a directory\n");
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature", "--summary", "blocker/summary.md"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature", "--summary", "blocker/summary.md"], {
       rootDir,
       stdout: createCaptureSink(),
       stderr,
@@ -175,15 +174,13 @@ describe("nuka run --concurrency: the run summary", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes one summary for the whole run, with one row per scenario record", async () => {
-    const stdout = createCaptureSink();
-    await runCli(["run", "--records", "--no-check", "features/basic/", "--concurrency", "2"], { rootDir, stdout, stderr: createCaptureSink() });
+  it("writes one summary for the whole run, with one row per scenario", async () => {
+    await runCli(["run", "--no-check", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
 
-    const records = nonEmptyLines(stdout.text()).map(
-      (line) => JSON.parse(line) as { run_id: string; feature: string; line: number; scenario: string },
-    );
+    const document = latestRunJson(rootDir);
+    const records = document.scenarios as { feature: string; line: number; scenario: string }[];
     expect(records.length).toBeGreaterThan(1);
-    const summary = await readRunSummary(rootDir, records[0]!.run_id);
+    const summary = await readRunSummary(rootDir, document.run_id as string);
     const rows = summary.split("\n").filter((line) => /^\| .* \| (passed|failed) \|/.test(line));
     expect(rows).toHaveLength(records.length);
     for (const record of records) {
@@ -218,14 +215,14 @@ describe("nuka run: the summary's declared vs observed section", () => {
 
   it("lists a step that declared mutates: false and was measured posting", async () => {
     const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/read-only-policy.feature:7"], {
+    const exitCode = await runCli(["run", "--no-check", "features/read-only-policy.feature:7"], {
       rootDir,
       stdout,
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
 
-    const summary = await readRunSummary(rootDir, runIdOf(stdout.text()));
+    const summary = await readRunSummary(rootDir, newestRunId(rootDir));
     expect(summary.slice(summary.indexOf("## Declared vs observed"))).toBe(
       [
         "## Declared vs observed",

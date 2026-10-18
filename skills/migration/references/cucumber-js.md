@@ -73,7 +73,7 @@ A compat step, a hook, a BeforeAll or AfterAll, or a World constructor
 that writes through `console.log` or `process.stdout.write` has that text
 delivered on stderr under `nuka run`. A typed step and its fixtures do the
 same under `nuka do` and `nuka run`. stdout stays the record stream
-(`nuka run` writes one only under `--records`). A child process spawned
+(`nuka run` writes one scenario line each only under `--records`). A child process spawned
 with `stdio: "inherit"` writes to file descriptor 1 directly, so its
 output still lands on stdout.
 

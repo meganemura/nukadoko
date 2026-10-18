@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
@@ -10,19 +10,14 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 
 // Responsibility: every document kind in SCHEMA_VERSIONS, produced the way a
 // user produces it, starts with its own `schema_version`, and the records
-// and run.json also name the nukadoko version that wrote them.
+// run.json, which is the `nuka run --json` envelope, also name the nukadoko
+// version that wrote them.
 
 async function cli(rootDir: string, argv: string[]): Promise<string> {
   const stdout = createCaptureSink();
   const stderr = createCaptureSink();
   await runCli(argv, { rootDir, stdout, stderr });
   return stdout.text();
-}
-
-function onlyRecord(rootDir: string, kind: "steps" | "scenarios"): Record<string, unknown> {
-  const dir = path.join(rootDir, ".nukadoko", "records", kind);
-  const ids = readdirSync(dir);
-  return JSON.parse(readFileSync(path.join(dir, ids[0]!, "record.json"), "utf8"));
 }
 
 // Every command's `--json` is one envelope with its own version; the
@@ -49,14 +44,10 @@ describe("schema_version", () => {
     envelopes.set("session list", parse(await cli(runProject, ["session", "list", "--json"])));
     documents.set("step_record", parse(await cli(runProject, ["do", "thing-exists", "--args", '{"name":"widget"}'])));
     await cli(runProject, ["clean"]);
-    const runStdout = await cli(runProject, ["run", "--records", "--no-check", "features/basic/a.feature"]);
-    documents.set("scenario_record", parse(runStdout.trim().split("\n")[0]!));
     envelopes.set("run", parse(await cli(runProject, ["run", "--no-check", "--json", "features/basic/b.feature"])));
-    // Both runs can start in one second, and a run id's suffix is random, so
-    // the envelope names the run directory to read.
     const runId = envelopes.get("run")!.run_id as string;
     const runDir = path.join(runProject, ".nukadoko", "records", "runs");
-    documents.set("run_result", JSON.parse(readFileSync(path.join(runDir, runId, "run.json"), "utf8")));
+    envelopes.set("run.json", parse(readFileSync(path.join(runDir, runId, "run.json"), "utf8")));
     envelopes.set("clean", parse(await cli(runProject, ["clean", "--dry-run", "--json"])));
     envelopes.set(
       "experimental explore",
@@ -76,7 +67,7 @@ describe("schema_version", () => {
   it.each(Object.keys(SCHEMA_VERSIONS) as DocumentKind[])("%s starts with its schema_version", (kind) => {
     const document = documents.get(kind)!;
     expect(Object.keys(document)[0]).toBe("schema_version");
-    expect(document.schema_version).toBe(kind === "step_record" ? 2 : 1);
+    expect(document.schema_version).toBe(SCHEMA_VERSIONS[kind]);
   });
 
   it.each([
@@ -89,6 +80,7 @@ describe("schema_version", () => {
     ["refused", "check", "refused"],
     ["session list", "session list", "passed"],
     ["run", "run", "passed"],
+    ["run.json", "run", "passed"],
     ["clean", "clean", "passed"],
     ["experimental explore", "experimental explore", "failed"],
   ])("nuka %s --json prints the envelope first", (name, command, verdict) => {
@@ -98,14 +90,11 @@ describe("schema_version", () => {
     expect(Array.isArray(document.findings)).toBe(true);
   });
 
-  it("names the nukadoko version on the step record, the scenario record, and run.json", () => {
+  it("names the nukadoko version on the step record and run.json, which is the run's --json document", () => {
     const version = readOwnVersion();
     expect(documents.get("step_record")!.nukadoko).toBe(version);
-    expect(documents.get("scenario_record")!.nukadoko).toBe(version);
-    expect(documents.get("run_result")!.nukadoko).toBe(version);
-    expect(envelopes.get("run")!.run_id).toBe(documents.get("run_result")!.run_id);
-    const onDisk = onlyRecord(runProject, "scenarios");
-    expect([onDisk.schema_version, onDisk.nukadoko]).toEqual([1, version]);
+    expect(envelopes.get("run.json")!.nukadoko).toBe(version);
+    expect(envelopes.get("run.json")).toEqual(envelopes.get("run"));
   });
 
   it("puts schema_version first and keeps every key of the body", () =>

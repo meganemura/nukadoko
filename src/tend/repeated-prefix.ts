@@ -1,10 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
-import path from "node:path";
 import { PickleStepType, type PickleStepArgument } from "@cucumber/messages";
 import type { FeatureFile, FeaturePickleStep } from "../feature/load-features.js";
-import { groupRunsNewestFirst } from "../record/newest-run.js";
+import { rankRunsNewestFirst } from "../record/newest-run.js";
 import { readStepRecordById } from "../record/read-step-record.js";
-import type { ScenarioRecord } from "../record/scenario-record.js";
+import { readEndedRuns } from "../record/run-result.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: find repeated scenario openings in the latest run's live
@@ -49,46 +47,45 @@ function comesBefore(a: SourcePosition, b: SourcePosition): boolean {
   return a.feature < b.feature || (a.feature === b.feature && a.line < b.line);
 }
 
-function isScenarioRecord(value: unknown): value is ScenarioRecord {
-  if (value === null || typeof value !== "object") return false;
-  const record = value as Record<string, unknown>;
-  if (
-    typeof record.run_id !== "string" ||
-    typeof record.feature !== "string" ||
-    typeof record.started_at !== "string" ||
-    typeof record.finished_at !== "string" ||
-    !Array.isArray(record.steps)
-  ) return false;
-  return record.steps.every((value) => {
-    if (value === null || typeof value !== "object") return false;
-    const step = value as Record<string, unknown>;
-    return (
-      typeof step.text === "string" &&
-      (step.step_record_id === null || typeof step.step_record_id === "string")
-    );
-  });
+/** One scenario of the latest run, as its run.json entry names it. */
+interface ScenarioRecord {
+  readonly feature: string;
+  readonly line: number;
+  readonly started_at: string;
+  readonly finished_at: string;
+  readonly steps: readonly { readonly text: string; readonly step_record_id: string | null }[];
 }
 
-function readScenarioRecords(rootDir: string, stateDir: string): ScenarioRecord[] {
-  const recordsDir = path.join(rootDir, stateDir, "records", "scenarios");
-  let entries: string[];
-  try {
-    entries = readdirSync(recordsDir).sort();
-  } catch {
-    return [];
+function asScenario(value: unknown): ScenarioRecord | null {
+  if (value === null || typeof value !== "object") return null;
+  const entry = value as Record<string, unknown>;
+  if (
+    typeof entry.feature !== "string" ||
+    typeof entry.line !== "number" ||
+    typeof entry.started_at !== "string" ||
+    typeof entry.finished_at !== "string" ||
+    !Array.isArray(entry.steps)
+  ) return null;
+  const steps: { text: string; step_record_id: string | null }[] = [];
+  for (const value of entry.steps) {
+    if (value === null || typeof value !== "object") return null;
+    const step = value as Record<string, unknown>;
+    if (typeof step.text !== "string" || (step.step_record_id !== null && typeof step.step_record_id !== "string")) return null;
+    steps.push({ text: step.text, step_record_id: step.step_record_id });
   }
+  return { feature: entry.feature, line: entry.line, started_at: entry.started_at, finished_at: entry.finished_at, steps };
+}
 
-  const records: ScenarioRecord[] = [];
-  for (const entry of entries) {
-    try {
-      const record: unknown = JSON.parse(readFileSync(path.join(recordsDir, entry, "record.json"), "utf8"));
-      if (isScenarioRecord(record)) records.push(record);
-    } catch {
-      // A damaged record cannot support measured timing, but it must not hide
-      // healthy records from the same run.
-    }
-  }
-  return records;
+/** The scenarios of the newest run that wrote its run.json. A damaged entry
+ * cannot support measured timing, but it must not hide healthy entries from
+ * the same run. */
+function readLatestRunScenarios(rootDir: string, stateDir: string): ScenarioRecord[] {
+  const latest = rankRunsNewestFirst(readEndedRuns(rootDir, stateDir))[0]?.run;
+  if (latest === undefined) return [];
+  return latest.scenarios.flatMap((entry) => {
+    const scenario = asScenario(entry);
+    return scenario === null ? [] : [scenario];
+  });
 }
 
 function elapsedMs(startedAt: string, finishedAt: string): number {
@@ -277,12 +274,7 @@ function toIssue(node: TrieNode, totalScenarioMs: number): TendIssue {
 function onePerScenario(records: readonly ScenarioRecord[]): ScenarioRecord[] {
   const latest = new Map<string, ScenarioRecord>();
   for (const record of records) {
-    // A record with no numeric `line` (an older or hand-written one) is its
-    // own scenario: never folded into another, never dropped.
-    const key =
-      typeof record.line === "number"
-        ? `${record.feature}\u0000${record.line}`
-        : `${record.feature}\u0000${String(record.scenario_record_id ?? Math.random())}`;
+    const key = `${record.feature}\u0000${record.line}`;
     const previous = latest.get(key);
     if (previous === undefined || Date.parse(record.started_at) >= Date.parse(previous.started_at)) {
       latest.set(key, record);
@@ -296,7 +288,7 @@ export function findRepeatedScenarioPrefixes(
   stateDir: string,
   features: readonly FeatureFile[] = [],
 ): TendIssue[] {
-  const records = onePerScenario(groupRunsNewestFirst(readScenarioRecords(rootDir, stateDir))[0]?.records ?? []);
+  const records = onePerScenario(readLatestRunScenarios(rootDir, stateDir));
   if (records.length === 0) return [];
   const totalScenarioMs = records.reduce(
     (total, record) => total + elapsedMs(record.started_at, record.finished_at),

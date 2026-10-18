@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -10,8 +10,8 @@ import { analyzeTend } from "../src/tend/analyze.js";
 import { findRepeatedScenarioPrefixes, stepPrefixKey } from "../src/tend/repeated-prefix.js";
 import { copyFixtureToTempDir, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: verify the measured repeated-prefix note at its record-file
-// boundary. These tests do not inspect the trie used to group scenario steps.
+// Responsibility: verify the measured repeated-prefix note at its run.json
+// and step record boundary. These tests do not inspect the trie used to group scenario steps.
 
 interface StepInput {
   readonly text: string;
@@ -30,14 +30,17 @@ interface ScenarioInput {
   readonly steps: readonly StepInput[];
 }
 
-function writeScenario(rootDir: string, input: ScenarioInput): void {
-  const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", input.id);
-  mkdirSync(scenarioDir, { recursive: true });
+function runJsonPath(rootDir: string, runId: string): string {
+  return path.join(rootDir, ".nukadoko", "records", "runs", runId, "run.json");
+}
 
+/** Appends one scenario to its run's run.json, writing the step records it
+ * cites. A run starts at its earliest scenario. */
+function writeScenario(rootDir: string, input: ScenarioInput): void {
   const steps = [];
   for (const [index, step] of input.steps.entries()) {
     const stepId = step.record === false ? null : `step-${input.id}-${index}`;
-    steps.push({ text: step.text, status: "passed", step_record_id: stepId });
+    steps.push({ text: step.text, status: "passed", step_record_id: stepId, record: stepId === null ? null : `.nukadoko/records/steps/${stepId}` });
     if (stepId !== null) {
       const stepDir = path.join(rootDir, ".nukadoko", "records", "steps", stepId);
       mkdirSync(stepDir, { recursive: true });
@@ -53,20 +56,23 @@ function writeScenario(rootDir: string, input: ScenarioInput): void {
     }
   }
 
-  const startedAt = Date.parse(input.startedAt);
-  writeFileSync(
-    path.join(scenarioDir, "record.json"),
-    JSON.stringify({
-      scenario_record_id: input.id,
-      run_id: input.runId,
-      feature: input.feature,
-      ...(input.line === undefined ? {} : { line: input.line }),
-      scenario: input.id,
-      started_at: input.startedAt,
-      finished_at: new Date(startedAt + input.durationMs).toISOString(),
-      steps,
-    }),
-  );
+  const filePath = runJsonPath(rootDir, input.runId);
+  const run = existsSync(filePath)
+    ? JSON.parse(readFileSync(filePath, "utf8"))
+    : { command: "run", verdict: "passed", run_id: input.runId, started_at: input.startedAt, scenarios: [] };
+  if (Date.parse(input.startedAt) < Date.parse(run.started_at)) run.started_at = input.startedAt;
+  run.scenarios.push({
+    scenario_record_id: input.id,
+    feature: input.feature,
+    line: input.line ?? 1,
+    scenario: input.id,
+    status: "passed",
+    started_at: input.startedAt,
+    finished_at: new Date(Date.parse(input.startedAt) + input.durationMs).toISOString(),
+    steps,
+  });
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  writeFileSync(filePath, JSON.stringify(run));
 }
 
 describe("nuka tend: repeated-scenario-prefix", () => {
@@ -156,15 +162,17 @@ describe("nuka tend: repeated-scenario-prefix", () => {
     expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")).toEqual([]);
   });
 
-  it("ignores a valid JSON scenario record whose shape cannot supply steps", async () => {
-    const recordDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "broken");
-    await mkdir(recordDir, { recursive: true });
+  it("ignores a run.json scenario whose shape cannot supply steps", async () => {
+    const filePath = runJsonPath(rootDir, "run-new");
+    await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(
-      path.join(recordDir, "record.json"),
+      filePath,
       JSON.stringify({
+        command: "run",
+        verdict: "passed",
         run_id: "run-new",
         started_at: "2026-08-30T00:00:00.000Z",
-        finished_at: "2026-08-30T00:00:01.000Z",
+        scenarios: [{ feature: "features/a.feature", line: 3, started_at: "2026-08-30T00:00:00.000Z", finished_at: "2026-08-30T00:00:01.000Z" }],
       }),
     );
     expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")).toEqual([]);

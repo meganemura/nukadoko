@@ -1,113 +1,168 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
-import { SCHEMA_VERSIONS } from "./schema-version.js";
+import type { ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
+import type { ErrorKind, ObservedCounts } from "./types.js";
 
-// Responsibility: run.json, the one machine-readable result a `nuka run`
-// leaves in its `records/runs/<run_id>/`, and what `nuka run --json` prints.
-// It names the run, its verdict, its counts, each scenario record with the
-// command that reruns it, and the run summary, so an agent acts on a red run
-// without parsing stderr or joining scenario records by `run_id`.
+// Responsibility: run.json, the one document a `nuka run` leaves in its
+// `records/runs/<run_id>/`, and what `nuka run --json` prints. It holds what
+// an agent or an auditor needs without opening another file: the commit and
+// condition the run ran under, every scenario with its steps, each failed
+// step's message and the values it read, the command that reruns a failed
+// scenario, and every finding the run raised. The run summary is rendered
+// from this document alone (src/run/run-summary.ts), so the two cannot
+// disagree, and a summary can be rendered again from a run.json copied off
+// a CI machine. Step records stay beside it for the detail: traces,
+// screenshots, `http.jsonl`, and the full args and result of each step.
 //
-// It is also the run's completion marker. A scenario record says how one
-// scenario went. It cannot say the run is over (a later scenario may still
-// be waiting to write its own), and it cannot say a run-scope hook failed
-// after every scenario passed. Only the invocation that ran everything
-// knows both, so it writes this file last, and retention reads its presence
-// as proof that the run ended. A run that was killed, or written before
-// this file existed, has none. Retention treats that as "not proven
-// finished", never as "failed".
-//
+// It is also the run's completion marker. Only the invocation that ran
+// everything knows the run is over and how it ended (a run-scope hook can
+// fail after every scenario passed), so it writes this file last, and
+// retention and `nuka tend` read its presence as proof that the run ended.
 // A rename makes the write atomic, so retention in another process never
 // reads half a file as "no marker".
 
 export const RUN_RESULT_FILE_NAME = "run.json";
 
-export interface RunResultScenario {
+export interface RunUsed {
+  readonly step: string;
+  /** The producer's step record, relative to the project root. */
+  readonly record: string;
+  readonly result: unknown;
+}
+
+export interface RunStep {
+  /** The step's line in its feature file; `null` when the pickle step names
+   * no line in the document. */
+  readonly line: number | null;
+  readonly text: string;
+  /** The step name the line matched, or `null` when it matched none or
+   * more than one. */
+  readonly step: string | null;
+  readonly status: ScenarioStepStatus;
+  /** The step record's id, the value `nuka do --use` takes; `null` when
+   * none was written (the step never began). */
+  readonly step_record_id: string | null;
+  /** The step record's directory, relative to the project root; `null`
+   * when none was written. */
+  readonly record: string | null;
+  /** The step's `mutates` declaration, present when it has a step record. */
+  readonly mutates?: boolean | null;
+  /** What the step record measured, present when it has one. */
+  readonly observed?: ObservedCounts;
+  /** Present when the step failed, or never began for a reason
+   * (`undefined`, `ambiguous`). `kind` is the step record's `error.kind`,
+   * and `null` when no step record says. */
+  readonly error?: { readonly kind: ErrorKind | null; readonly message: string };
+  /** For a failed step that read results from earlier steps: each one, and
+   * the result it read. */
+  readonly used?: readonly RunUsed[];
+}
+
+export interface RunScenario {
   readonly scenario_record_id: string;
   readonly feature: string;
   readonly line: number;
   readonly scenario: string;
   readonly status: "passed" | "failed";
-  /** The scenario record's file, relative to the project root. */
-  readonly record: string;
-  /** The command that runs this scenario alone, in the same environment. */
-  readonly rerun: string;
-}
-
-export interface RunResult {
-  readonly schema_version: typeof SCHEMA_VERSIONS.run_result;
-  readonly nukadoko: string;
-  readonly run_id: string;
-  /** The exit verdict. It also counts a BeforeAll or AfterAll failure that
-   * no scenario record carries, so it can be `failed` with every scenario
-   * passed. */
-  readonly verdict: "passed" | "failed";
   readonly started_at: string;
   readonly finished_at: string;
+  /** The browser this scenario launched, when it launched one. */
+  readonly browser?: { readonly type: string; readonly version: string };
+  readonly steps: readonly RunStep[];
+  readonly hooks: readonly ScenarioHookRecord[];
+  /** The scenario's own evidence directory (hook traces and attachments,
+   * the final screenshot), relative to the project root. Absent when the
+   * scenario left none of them, since the directory is then removed. */
+  readonly evidence?: ScenarioEvidence;
+  readonly teardown_errors?: readonly { readonly fixture: string; readonly message: string }[];
+  /** For a failed scenario: the command that runs it alone, in the same
+   * environment. */
+  readonly do?: string;
+}
+
+/** The fields `nuka run` puts beside the envelope's `findings`. */
+export type RunFields = {
+  readonly run_id: string;
+  readonly started_at: string;
+  readonly finished_at: string;
+  /** The commit and whether the working tree had uncommitted changes when
+   * the run started; `null` outside git or before the first commit. */
+  readonly commit: { readonly sha: string; readonly dirty: boolean } | null;
   readonly environment: string;
+  readonly target_version: string | null;
+  /** `partial` when a `:line` target left out some scenarios of its file,
+   * so the run covers less than the files it names. */
+  readonly selection: "full" | "partial";
   readonly counts: { readonly scenarios: number; readonly passed: number; readonly failed: number };
-  /** One entry per scenario record the run wrote, in the order written. */
-  readonly scenarios: readonly RunResultScenario[];
-  /** The run summary in the run directory, relative to the project root;
-   * `null` when it could not be written. */
-  readonly summary: string | null;
-}
+  /** One entry per scenario execution, in the order they finished. */
+  readonly scenarios: readonly RunScenario[];
+};
 
-export interface RunResultInput {
+/** run.json as a reader gets it: the envelope every `--json` shares, and
+ * the run's own fields. */
+export interface RunDocument extends RunFields {
+  readonly schema_version: number;
   readonly nukadoko: string;
-  readonly runId: string;
+  readonly command: "run";
   readonly verdict: "passed" | "failed";
-  readonly startedAt: Date;
-  readonly finishedAt: Date;
-  readonly environment: string;
-  readonly scenarios: readonly RunResultScenario[];
-  readonly summary: string | null;
+  readonly findings: readonly Finding[];
 }
 
-export function buildRunResult(input: RunResultInput): RunResult {
-  const passed = input.scenarios.filter((scenario) => scenario.status === "passed").length;
-  return {
-    schema_version: SCHEMA_VERSIONS.run_result,
-    nukadoko: input.nukadoko,
-    run_id: input.runId,
-    verdict: input.verdict,
-    started_at: input.startedAt.toISOString(),
-    finished_at: input.finishedAt.toISOString(),
-    environment: input.environment,
-    counts: { scenarios: input.scenarios.length, passed, failed: input.scenarios.length - passed },
-    scenarios: input.scenarios,
-    summary: input.summary,
-  };
+export function countScenarios(scenarios: readonly Pick<RunScenario, "status">[]): RunFields["counts"] {
+  const passed = scenarios.filter((scenario) => scenario.status === "passed").length;
+  return { scenarios: scenarios.length, passed, failed: scenarios.length - passed };
 }
 
 export function runResultPath(rootDir: string, stateDir: string, runId: string): string {
   return path.join(runDir(rootDir, stateDir, runId), RUN_RESULT_FILE_NAME);
 }
 
-/** The run.json path relative to the project root, as stderr and the
- * summary name it. */
+/** The run.json path relative to the project root, as stderr names it. */
 export function runResultRelativePath(stateDir: string, runId: string): string {
   return path.join(stateDir, "records", "runs", runId, RUN_RESULT_FILE_NAME);
 }
 
-export function writeRunResult(rootDir: string, stateDir: string, result: RunResult): void {
-  const filePath = runResultPath(rootDir, stateDir, result.run_id);
+/** Writes the document text as it is, so the file and `--json` stdout are
+ * the same bytes. */
+export function writeRunResult(rootDir: string, stateDir: string, runId: string, text: string): void {
+  const filePath = runResultPath(rootDir, stateDir, runId);
   mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
-  writeFileSync(temporary, `${JSON.stringify(result, null, 2)}\n`);
+  writeFileSync(temporary, text);
   renameSync(temporary, filePath);
 }
 
-/** Whether the run wrote a run.json that reads as one: an object with a
- * verdict. */
-export function runEnded(rootDir: string, stateDir: string, runId: string): boolean {
+/** The document at `filePath` when it reads as a run.json: an object for
+ * `nuka run` with a verdict, a parsable `started_at`, and a `scenarios`
+ * list. `null` for anything else, so a damaged file never dates a run. */
+export function readRunResult(filePath: string): RunDocument | null {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(runResultPath(rootDir, stateDir, runId), "utf8"));
-    if (parsed === null || typeof parsed !== "object") return false;
-    const { verdict } = parsed as Record<string, unknown>;
-    return verdict === "passed" || verdict === "failed";
+    const parsed: unknown = JSON.parse(readFileSync(filePath, "utf8"));
+    if (parsed === null || typeof parsed !== "object") return null;
+    const document = parsed as Record<string, unknown>;
+    if (document.command !== "run") return null;
+    if (document.verdict !== "passed" && document.verdict !== "failed") return null;
+    if (typeof document.run_id !== "string" || typeof document.started_at !== "string") return null;
+    if (Number.isNaN(Date.parse(document.started_at)) || !Array.isArray(document.scenarios)) return null;
+    return parsed as RunDocument;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** Every run that ended, read from its run.json, in no particular order. */
+export function readEndedRuns(rootDir: string, stateDir: string): RunDocument[] {
+  const runsDir = path.join(rootDir, stateDir, "records", "runs");
+  let ids: string[];
+  try {
+    ids = readdirSync(runsDir).sort();
+  } catch {
+    return [];
+  }
+  return ids.flatMap((id) => {
+    const document = readRunResult(path.join(runsDir, id, RUN_RESULT_FILE_NAME));
+    return document === null || document.run_id !== id ? [] : [document];
+  });
 }

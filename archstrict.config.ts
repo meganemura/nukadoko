@@ -309,6 +309,7 @@ export default {
         "process-signal.ts",
         "progress-log.ts",
         "run-concurrent.ts",
+        "run-document.ts",
         "run-id.ts",
         "run-scenario.ts",
         "run-summary.ts",

@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka run`'s own progress output end to end —
 // everything src/run/progress-log.ts writes, reached
@@ -125,7 +125,7 @@ describe("nuka run: progress output", () => {
 
     const text = stderr.text();
     expect(text).toContain("steps");
-    expect(text).toContain("scenarios");
+    expect(text).toContain("run.json");
     expect(text).toContain("allure");
     expect(text).toContain("messages");
     expect(text).toMatch(/1 scenario: 1 passed, 0 failed {2}\(/);
@@ -176,7 +176,6 @@ describe("nuka run: progress output", () => {
         "      record  .nukadoko/records/steps/<id>",
         "  step 3/3  skipped  <d>s  this step never runs",
         "steps     .nukadoko/records/steps/      2",
-        "scenarios .nukadoko/records/scenarios/  1",
         "allure    .nukadoko/export/allure-results/",
         "messages  .nukadoko/export/messages.<run>.ndjson",
         "summary   .nukadoko/records/runs/<run>/summary.md",
@@ -287,7 +286,7 @@ describe("nuka run: progress output", () => {
     // "run-id-suffixed" test above covers why) — checked by directory plus
     // id, not by the exact "messages.ndjson" name, which a suffixed file
     // never contains contiguously.
-    const runId = (JSON.parse(nonEmptyLines(stdout.text())[0]!) as { run_id: string }).run_id;
+    const runId = latestRunJson(rootDir).run_id as string;
     expect(text).toContain(path.join("reports", `messages.${runId}.ndjson`));
     // The default locations are named nowhere — the config moved the
     // output, this line reports where it actually landed, not where it
@@ -306,7 +305,7 @@ describe("nuka run: progress output", () => {
     });
 
     expect(exitCode).toBe(0);
-    const runId = (JSON.parse(nonEmptyLines(stdout.text())[0]!) as { run_id: string }).run_id;
+    const runId = latestRunJson(rootDir).run_id as string;
     const messagesLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("messages"));
     expect(messagesLine).toBeDefined();
     // A concurrent run can overwrite the stable configured path before a
@@ -318,7 +317,7 @@ describe("nuka run: progress output", () => {
     expect(messagesLine).toContain(`messages.${runId}.ndjson`);
   });
 
-  it("stdout carries only the NDJSON scenario records; every non-empty line parses, one per scenario", async () => {
+  it("stdout carries only each scenario's run.json entry under --records; every non-empty line parses, one per scenario", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "--no-check", "features/table.feature"], {
@@ -354,15 +353,13 @@ describe("nuka run: progress output", () => {
     expect(stderr.text()).toContain("2 scenarios: 1 passed, 1 failed");
 
     const stepsLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("steps"));
-    const scenariosLine = nonEmptyLines(stderr.text()).find((line) => line.startsWith("scenarios"));
     expect(stepsLine).toBeDefined();
-    expect(scenariosLine).toBeDefined();
     // Both scenarios reach their own step-record-writing step (this file's
     // own header) — the first because it passes outright, the second because
     // a binding failure still writes a step record (docs/spec.md: "an
     // execution that never began" only covers undefined/ambiguous/never-began
     // steps, not a matched step that fails to bind).
     expect(stepsLine).toMatch(/\b2\s*$/);
-    expect(scenariosLine).toMatch(/\b2\s*$/);
+    expect(latestRunJson(rootDir).counts).toEqual({ scenarios: 2, passed: 1, failed: 1 });
   });
 });

@@ -11,6 +11,7 @@ import {
   fixture,
   removeTempDir,
   stripRunProgressLines,
+  latestRunJson,
 } from "./helpers/fixtures.js";
 
 // Responsibility: two
@@ -184,8 +185,7 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
     expect(second.step_record_id).toBeNull();
     expect(second.error).toBeUndefined();
 
-    const recordPath = path.join(rootDir, record.evidence.dir, "record.json");
-    expect(existsSync(recordPath)).toBe(true);
+    expect(latestRunJson(rootDir).scenarios).toEqual([expect.objectContaining({ status: "failed", line: record.line })]);
 
     // No step record was ever written for this scenario — the throw happened
     // before this step's execution phase began, the same "never began"

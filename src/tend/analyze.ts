@@ -96,9 +96,9 @@ const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
 // walk found, the files whose loads print Node's reparse warning.
 //
 // `findRepeatedScenarioPrefixes` also reads live records, but starts from
-// `<stateDir>/records/scenarios/`. It limits its timing groups to the latest
-// run before it reads the cited step records, so two runs never count the
-// same scenario work twice.
+// the newest run.json. It reads only that run's scenarios before it reads
+// the cited step records, so two runs never count the same scenario work
+// twice.
 
 function loadedConfigFile(rootDir: string): string[] {
   const fileName = resolveConfigFileName(rootDir);

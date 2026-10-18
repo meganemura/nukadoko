@@ -126,7 +126,6 @@ describe("createMessagesEmitter", () => {
       const beforeHook: ScenarioHookRecord = { type: "before", status: "passed" };
       const afterHook: ScenarioHookRecord = { type: "after", status: "passed" };
       const record: ScenarioRecord = {
-        schema_version: 1,
         nukadoko: "0.0.0-test",
         scenario_record_id: "scn-1",
         run_id: "run-1",
@@ -148,7 +147,6 @@ describe("createMessagesEmitter", () => {
       emitter.emitScenario({ record, pickle });
 
       const record2: ScenarioRecord = {
-        schema_version: 1,
         nukadoko: "0.0.0-test",
         scenario_record_id: "scn-2",
         run_id: "run-1",
@@ -422,7 +420,6 @@ describe("createMessagesEmitter", () => {
     writeStepRecordFile(rootDir, stepRecord);
 
     const record: ScenarioRecord = {
-      schema_version: 1,
       nukadoko: "0.0.0-test",
       scenario_record_id: "scn-missing-file",
       run_id: "run-1",
@@ -488,7 +485,6 @@ describe("createMessagesEmitter", () => {
       expect(sink.text()).toContain("warning:");
 
       const record: ScenarioRecord = {
-        schema_version: 1,
         nukadoko: "0.0.0-test",
         scenario_record_id: "scn-1",
         run_id: "run-1",

@@ -8,7 +8,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // Responsibility: retention against a run that is still writing. Two real
 // `nuka run` invocations overlap; the newer one ends first.
 
-const scenariosDir = (rootDir: string): string => path.join(rootDir, ".nukadoko", "records", "scenarios");
+const stepsDir = (rootDir: string): string => path.join(rootDir, ".nukadoko", "records", "steps");
 
 // The bound is time, not attempts, and sits under the 60 s test timeout: a
 // loaded machine can take well over ten seconds to start the first run.
@@ -38,18 +38,17 @@ describe("two overlapping nuka run processes", () => {
   it("keeps the older run's records while it is in flight, and after it ends", async () => {
     const slowStderr = createCaptureSink();
     const slow = runCli(["run", "features/slow.feature"], { rootDir, stdout: createCaptureSink(), stderr: slowStderr });
-    // The slow run has written its first scenario record and is now waiting in
-    // the second scenario, whose directory exists from the moment it starts.
+    // The slow run has finished its first scenario's step and is now waiting
+    // in the second scenario's step, whose record directory exists from the
+    // moment it starts.
     await until(
       () =>
-        existsSync(scenariosDir(rootDir)) &&
-        readdirSync(scenariosDir(rootDir)).length === 2 &&
-        readdirSync(scenariosDir(rootDir)).some((id) =>
-          existsSync(path.join(scenariosDir(rootDir), id, "record.json")),
-        ),
+        existsSync(stepsDir(rootDir)) &&
+        readdirSync(stepsDir(rootDir)).length === 2 &&
+        readdirSync(stepsDir(rootDir)).some((id) => existsSync(path.join(stepsDir(rootDir), id, "record.json"))),
       () => `the slow run never reached the gate; its stderr:\n${slowStderr.text()}`,
     );
-    const slowRecords = readdirSync(scenariosDir(rootDir));
+    const slowRecords = readdirSync(stepsDir(rootDir));
 
     const fastStderr = createCaptureSink();
     expect(
@@ -57,15 +56,15 @@ describe("two overlapping nuka run processes", () => {
       fastStderr.text(),
     ).toBe(0);
     expect(fastStderr.text()).not.toContain("retention: removed");
-    expect(readdirSync(scenariosDir(rootDir))).toEqual(expect.arrayContaining(slowRecords));
+    expect(readdirSync(stepsDir(rootDir))).toEqual(expect.arrayContaining(slowRecords));
 
     await writeFile(path.join(rootDir, "gate"), "");
     expect(await slow, slowStderr.text()).toBe(0);
     // The slow run is older than the fast one and retention.runs is 1, but a
     // run never removes itself.
     expect(slowStderr.text()).not.toContain("retention: removed");
-    const records = readdirSync(scenariosDir(rootDir));
-    expect(records).toHaveLength(3);
+    const records = readdirSync(stepsDir(rootDir));
+    expect(records).toHaveLength(4);
     expect(records).toEqual(expect.arrayContaining(slowRecords));
   });
 });

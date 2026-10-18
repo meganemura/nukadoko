@@ -73,8 +73,7 @@ describe("nuka run: a scenario that never destructures page never launches a bro
       // proxy tests/run-browser.test.ts's own "no chunk" assertion uses):
       // no trace, no screenshot for the page-less scenario; both present
       // for the one that touched the browser.
-      expect(pageLess!.evidence.trace).toBeUndefined();
-      expect(pageLess!.evidence.screenshots).toEqual([]);
+      expect(pageLess!.evidence).toBeUndefined();
       expect(pageNaming!.evidence.screenshots).toHaveLength(1);
     } finally {
       launchSpy.mockRestore();

@@ -1,3 +1,4 @@
+import { rmdirSync } from "node:fs";
 import path from "node:path";
 import { analyzeRunSelectionKeepingSteps } from "../check/analyze.js";
 import { checkBindings } from "../check/binding-check.js";
@@ -44,14 +45,17 @@ import {
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
-import { createRunSummaryCollector, renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
+import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
+import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
+import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
 import {
-  buildRunResult,
+  countScenarios,
   runResultRelativePath,
   writeRunResult,
-  type RunResultScenario,
+  type RunFields,
+  type RunScenario,
 } from "../record/run-result.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
@@ -82,6 +86,7 @@ import { formatFinding, warningSink, type Finding } from "../finding/finding.js"
 import { checkCodeFix } from "../check/codes.js";
 import type { RefusalCode } from "./refusal-codes.js";
 import { RefusalError, formatEnvelope, refuse, withHint, type Hint } from "./refusal.js";
+import { stepRecordPath } from "../run/progress-log.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s work, kept out of run-cli.ts so it is
@@ -277,11 +282,12 @@ export interface RunRunOptions {
    * output-location and summary lines at the
    * end of a run are written either way; see this file's own header. */
   quiet: boolean;
-  /** `--records`: write the scenario records to stdout, one per line.
+  /** `--records`: write each scenario's run.json entry to stdout, one per
+   * line, as the scenario finishes.
    * Without it stdout stays empty, terminal or not. */
   records: boolean;
   /** `--json`: print run.json on stdout at the end, and no scenario
-   * record stream, so stdout holds exactly one JSON document. */
+   * entry stream, so stdout holds exactly one JSON document. */
   json: boolean;
   /** `--concurrency`'s raw value; default 1 (cli/run-cli.ts's own `??`). At
    * 1, every other paragraph in this file's own header describes what
@@ -326,12 +332,29 @@ function exportLocations(
   ];
 }
 
+/** The step records row, when the run wrote a scenario, then the export
+ * rows. Scenarios have no directory of their own to name: run.json holds
+ * them. */
+function stepsLocation(
+  stateDir: string,
+  scenariosWritten: number,
+  stepRecordsWritten: number,
+  exports: ReturnType<typeof exportLocations>,
+): Array<{ label: string; relativePath: string; kind: "dir" | "file"; count?: number }> {
+  return [
+    ...(scenariosWritten > 0
+      ? [{ label: "steps", relativePath: path.join(stateDir, "records", "steps"), kind: "dir" as const, count: stepRecordsWritten }]
+      : []),
+    ...exports,
+  ];
+}
+
 export async function runRun(options: RunRunOptions): Promise<number> {
   const { rootDir, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
   const notices = options.notices ?? [];
   const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint, before: readonly Finding[] = []): number =>
     refuse({ json: options.json, stdout: options.stdout, stderr, command: "run" }, error, code, hint, [...notices, ...before]);
-  // The records are on disk, and the `scenarios` line names them. An
+  // The records are on disk, and the `run` line names run.json. An
   // agent's shell is no terminal and reads stdout together with stderr, so
   // a stream that was on by default would put a line of JSON per scenario
   // between its progress lines. A reader that wants the stream asks for it.
@@ -347,8 +370,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // empty and the document says everything the run found.
   const runFindings: Finding[] = [...notices];
   const warn = (finding: Finding): void => {
-    if (options.json) runFindings.push(finding);
-    else stderr.write(formatFinding(withHint(finding)));
+    runFindings.push(finding);
+    if (!options.json) stderr.write(formatFinding(withHint(finding)));
   };
   const warnings = (code: string): WritableSink => warningSink(code, warn);
 
@@ -481,27 +504,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       feature.pickles.map((pickle) => ({ feature, pickle })),
     );
 
-    // See this file's own header — no
-    // notice at all when `:line` wasn't given, so a normal full run stays
-    // silent every time. `:line` on a directory target is refused in setup
-    // (src/run/select-pickles.ts's `DirectoryTargetLineError`), so reaching
-    // here with a non-null `line` always means a single-file target. A line
-    // that selects every scenario of its file (a one-scenario feature, the
-    // `rerun` line of its failure) already produced the summary a pull
-    // request carries, so telling the reader to run the whole feature would
-    // send them to repeat the same run.
+    // A `:line` target that leaves out other scenarios of its file makes
+    // the run cover less than the files it names. run.json says so, and the
+    // summary says so in its header, so a summary is not read as the whole
+    // feature. `:line` on a directory target is refused in setup, so a
+    // non-null line here always names one file.
     const lineTargets = featureArgs.filter((featureArg) => parseFeatureTarget(featureArg).line !== null);
-    if (lineTargets.length > 0 && flatPickles.length < selected.totalPickles) {
-      const selectionDescription =
-        featureArgs.length === 1
-          ? `${lineTargets[0]} selects ${flatPickles.length} of ${selected.totalPickles} scenarios.`
-          : `this run includes line targets ${lineTargets.join(", ")} and selects ${flatPickles.length} of ` +
-            `${selected.totalPickles} scenarios across all targets.`;
-      progress.write(
-        `Partial run: ${selectionDescription} ` +
-          "Its run summary covers only those scenarios; run the whole feature for the summary a pull request carries.\n",
-      );
-    }
+    const selection: RunFields["selection"] =
+      lineTargets.length > 0 && flatPickles.length < selected.totalPickles ? "partial" : "full";
 
     // --- Execution phase: from here, every pickle that begins gets a
     // scenario record written, whatever happens inside it. ---
@@ -632,47 +642,40 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     const runId = generateRunId();
     const git = await probeGitState(rootDir);
-    const summary = createRunSummaryCollector(rootDir, config.stateDir);
-    const runScenarios: RunResultScenario[] = [];
+    // Each scenario's run.json entry is built when its record arrives, from
+    // the step records it cites, so a `--repeat` run never holds more than
+    // one scenario's step records at a time. The lines and step names come
+    // from the pickle the record ran, found by its feature and line.
+    const pickleLines = new Map<string, (index: number) => number | null>();
+    const documentLines = new Map<string, Map<string, number>>();
+    for (const { feature, pickle } of flatPickles) {
+      let lines = documentLines.get(feature.relativePath);
+      if (lines === undefined) {
+        lines = gherkinStepLines(feature.gherkinDocument);
+        documentLines.set(feature.relativePath, lines);
+      }
+      pickleLines.set(`${feature.relativePath}\u0000${pickle.location?.line ?? 0}`, pickleStepLines(pickle, lines));
+    }
+    const runScenarios: RunScenario[] = [];
+    // A scenario's evidence directory is made before it runs, so its id is
+    // taken on disk for every worker of the run, and most scenarios leave it
+    // empty. Those are removed once the run is over, not when the scenario
+    // ends: a later scenario of the same run must not draw the same id.
+    const emptyEvidenceDirs: string[] = [];
     const noteRecord = (record: ScenarioRecord): void => {
-      summary.note(record);
-      runScenarios.push({
-        scenario_record_id: record.scenario_record_id,
-        feature: record.feature,
-        line: record.line,
-        scenario: record.scenario,
-        status: record.status,
-        record: path.join(config.stateDir, "records", "scenarios", record.scenario_record_id, "record.json"),
+      const entry = buildRunScenario(record, {
+        stepRecords: readStepRecordsForScenario(rootDir, record),
+        stepLine: pickleLines.get(`${record.feature}\u0000${record.line}`) ?? (() => null),
+        stepName: (text) => {
+          const { stepNames } = matchPickleStepText(text, patterns);
+          return stepNames.length === 1 ? stepNames[0]! : null;
+        },
+        recordPath: (stepRecordId) => stepRecordPath(config.stateDir, stepRecordId),
         rerun: formatRerunCommand(record, rerunFlags),
       });
-    };
-    // Written after every record and hook of the run, before the output
-    // locations so that list can name it. A run with no pickle wrote no
-    // record and gets no summary, the same rule as run.json. Returns
-    // the root-relative path of the run directory's copy, or `null`.
-    const emitRunSummary = (verdict: "passed" | "failed"): string | null => {
-      if (flatPickles.length === 0) return null;
-      const markdown = renderRunSummary({
-        ...summary.collected(),
-        runId,
-        verdict,
-        startedAt: invocationStartedAt,
-        finishedAt: new Date(),
-        nukadokoVersion: readOwnVersion(),
-        environment: resolvedEnv.name,
-        targetVersion,
-        git,
-        rerunFlags,
-      });
-      const result = writeRunSummaryFiles(markdown, {
-        rootDir,
-        stateDir: config.stateDir,
-        runId,
-        summaryPath: summaryPath ?? undefined,
-        stepSummaryPath,
-      });
-      for (const warning of result.warnings) warnings("summary-not-written").write(`${warning}\n`);
-      return result.runSummaryPath;
+      runScenarios.push(entry);
+      if (entry.evidence === undefined) emptyEvidenceDirs.push(path.join(rootDir, record.evidence.dir));
+      stdout.write(`${JSON.stringify(entry)}\n`);
     };
     const summaryLocation = (relativePath: string | null) => [
       ...(relativePath === null ? [] : [{ label: "summary", relativePath, kind: "file" as const }]),
@@ -681,35 +684,24 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         : [{ label: "run", relativePath: runResultRelativePath(config.stateDir, runId), kind: "file" as const }]),
     ];
 
-    // Retention (src/record/retention.ts) runs last in both branches
-    // below, after this run's own records and export files are complete,
-    // so run.json can say the run ended. Another `nuka run` may have
-    // finished meanwhile and ranked this one older, which is why retention is
-    // told which run is this one and never removes it. Its line goes out under `--quiet` too: a deletion is worth
-    // a line to the person whose state directory just shrank. A failure
-    // here never changes the exit code, which is the run's own verdict.
-    const finishRun = async (verdict: "passed" | "failed", runSummaryPath: string | null): Promise<void> => {
-      const result = buildRunResult({
-        nukadoko: readOwnVersion(),
-        runId,
-        verdict,
-        startedAt: invocationStartedAt,
-        finishedAt: new Date(),
-        environment: resolvedEnv.name,
-        scenarios: runScenarios,
-        summary: runSummaryPath,
-      });
-      // run.json is the run's last write before retention: it says the run
-      // ended and how (src/record/run-result.ts). A run with no pickle wrote
-      // no records and gets none. A failed write is a warning, as a failed
-      // summary is: the exit code is the run's verdict either way.
-      if (flatPickles.length > 0) {
+    // The end of a run, in the order each part needs the one before it.
+    // Retention runs first, so run.json holds the findings it raises; the
+    // run being finished counts as a run but is never removed. The document
+    // is built next, the summary is rendered from it, and run.json is the
+    // last write: it says the run ended (src/record/run-result.ts). A run
+    // with no pickle wrote nothing and gets neither file. A failed write is
+    // a warning: the exit code is the run's verdict either way. Returns the
+    // root-relative path of the summary in the run directory, or `null`.
+    const finishRun = async (verdict: "passed" | "failed", failedScenarios: readonly FailedScenario[]): Promise<{ summaryPath: string | null; retention: string | null }> => {
+      runFindings.push(...failedScenarioFindings(failedScenarios, rerunFlags));
+      for (const dir of emptyEvidenceDirs) {
         try {
-          writeRunResult(rootDir, config.stateDir, result);
-        } catch (error) {
-          warn({ severity: "warning", code: "run-result-not-written", message: `run.json was not written: ${error instanceof Error ? error.message : String(error)}` });
+          rmdirSync(dir);
+        } catch {
+          // Not empty after all, or already gone: nothing to remove.
         }
       }
+      let retention: string | null = null;
       try {
         const outcome = await applyRetention({
           rootDir,
@@ -717,19 +709,68 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           policy: config.retention,
           now: new Date(),
           messagesOutputRel: messagesOutputPath(config),
-          currentRunId: runId,
+          currentRun: { runId, startedAt: invocationStartedAt.getTime() },
         });
-        const line = formatRetention(outcome, config.retention);
-        if (line !== null) progress.write(`${line}\n`);
+        retention = formatRetention(outcome, config.retention);
       } catch (error) {
         warn({ severity: "warning", code: "retention-failed", message: `retention failed: ${error instanceof Error ? error.message : String(error)}` });
       }
-      // Last, so the document holds every finding the run raised, the
-      // retention warning included, and the run.json fields beside them.
-      if (options.json) {
-        const { schema_version: _version, nukadoko: _nukadoko, verdict: _verdict, ...fields } = result;
-        options.stdout.write(formatEnvelope("run", verdict === "passed" ? 0 : 1, runFindings, fields));
+      const fields: RunFields = {
+        run_id: runId,
+        started_at: invocationStartedAt.toISOString(),
+        finished_at: new Date().toISOString(),
+        commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean },
+        environment: resolvedEnv.name,
+        target_version: targetVersion ?? null,
+        selection,
+        counts: countScenarios(runScenarios),
+        scenarios: runScenarios,
+      };
+      const exitCode = verdict === "passed" ? 0 : 1;
+      let summaryPath: string | null = null;
+      if (flatPickles.length > 0) {
+        const markdown = renderRunSummary(JSON.parse(formatEnvelope("run", exitCode, runFindings, fields)));
+        const written = writeRunSummaryFiles(markdown, {
+          rootDir,
+          stateDir: config.stateDir,
+          runId,
+          summaryPath: options.summaryPath ?? undefined,
+          stepSummaryPath,
+        });
+        for (const warning of written.warnings) warnings("summary-not-written").write(`${warning}\n`);
+        summaryPath = written.runSummaryPath;
       }
+      const document = formatEnvelope("run", exitCode, runFindings, fields);
+      if (flatPickles.length > 0) {
+        try {
+          writeRunResult(rootDir, config.stateDir, runId, document);
+        } catch (error) {
+          warn({ severity: "warning", code: "run-result-not-written", message: `run.json was not written: ${error instanceof Error ? error.message : String(error)}` });
+        }
+      }
+      if (options.json) options.stdout.write(document);
+      return { summaryPath, retention };
+    };
+    // The text a person reads at the end, after the files are written: where
+    // they are, the count, each failed scenario, the repeat tallies, and
+    // what retention removed.
+    const writeRunEnd = (
+      locations: Parameters<typeof writeOutputLocations>[1],
+      counts: { total: number; passed: number },
+      failedScenarios: readonly FailedScenario[],
+      tallies: Parameters<typeof writeRepeatTallies>[1],
+      end: { summaryPath: string | null; retention: string | null },
+    ): void => {
+      writeOutputLocations(progress, [...locations, ...summaryLocation(end.summaryPath)]);
+      writeRunSummary(progress, {
+        total: counts.total,
+        passed: counts.passed,
+        failed: counts.total - counts.passed,
+        durationMs: Date.now() - invocationStartedAt.getTime(),
+      });
+      for (const finding of failedScenarioFindings(failedScenarios, rerunFlags)) progress.write(formatFinding(withHint(finding)));
+      writeRepeatTallies(progress, tallies);
+      if (end.retention !== null) progress.write(`${end.retention}\n`);
     };
     // One instance for this whole `nuka run` invocation — passed unchanged
     // into every `runScenario` call below, so a run whose several steps
@@ -829,47 +870,26 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           allureResultsDirRel,
           messagesOutputRel,
           onRecord: noteRecord,
-          stdout,
           progress,
           warn,
           stderr,
         });
 
       messagesEmitter?.end(allPassed);
-      const runSummaryPath = emitRunSummary(allPassed ? "passed" : "failed");
-
-      writeOutputLocations(progress, [
-        ...(scenariosWritten > 0
-          ? [
-              {
-                label: "steps",
-                relativePath: path.join(config.stateDir, "records", "steps"),
-                kind: "dir" as const,
-                count: stepRecordsWritten,
-              },
-              {
-                label: "scenarios",
-                relativePath: path.join(config.stateDir, "records", "scenarios"),
-                kind: "dir" as const,
-                count: scenariosWritten,
-              },
-            ]
-          : []),
-        ...(flatPickles.length > 0 ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
-        ...summaryLocation(runSummaryPath),
-      ]);
-      writeRunSummary(progress, {
-        total: scenariosWritten,
-        passed: scenariosPassed,
-        failed: scenariosWritten - scenariosPassed,
-        durationMs: Date.now() - invocationStartedAt.getTime(),
-      });
-      for (const finding of failedScenarioFindings(failedScenarios, rerunFlags)) warn(finding);
-      writeRepeatTallies(progress, repeatTallies);
-      // An interrupted run prunes nothing, as at `--concurrency 1`, where
-      // the signal handler exits before the prune.
-      if (interruptedBy !== null) return exitCodeForSignal(interruptedBy);
-      await finishRun(allPassed ? "passed" : "failed", runSummaryPath);
+      // An interrupted run prunes nothing and writes no run.json, as at
+      // `--concurrency 1`, where the signal handler exits first.
+      if (interruptedBy !== null) {
+        writeRunEnd(stepsLocation(config.stateDir, scenariosWritten, stepRecordsWritten, exportLocations(allureResultsDirRel, messagesOutputRel, runId)), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null });
+        return exitCodeForSignal(interruptedBy);
+      }
+      const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
+      writeRunEnd(
+        stepsLocation(config.stateDir, scenariosWritten, stepRecordsWritten, flatPickles.length > 0 ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
+        { total: scenariosWritten, passed: scenariosPassed },
+        failedScenarios,
+        repeatTallies,
+        end,
+      );
 
       return allPassed ? 0 : 1;
     }
@@ -1133,7 +1153,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // One JSON line per completed scenario record, streamed as it
           // finishes; everything else about
           // this run goes to stderr, never stdout.
-          stdout.write(`${JSON.stringify(record)}\n`);
           noteRecord(record);
           scenariosWritten += 1;
           if (record.status === "passed") {
@@ -1210,53 +1229,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // had their chance to flip `allPassed`, immediately before the
       // `return` below that turns it into this run's own exit code.
       messagesEmitter?.end(allPassed);
-      const runSummaryPath = emitRunSummary(allPassed ? "passed" : "failed");
-
-      // Where this run actually
-      // wrote, then a one-line summary — both unconditional, `--quiet`
-      // included (see this file's own header). `steps`/`scenarios` are
-      // gated on `scenariosWritten > 0`, not `hasPickles`: a BeforeAll
-      // failure leaves `hasPickles` true with zero scenario records ever
-      // written, and this table only ever names what this run actually
-      // wrote. `allure`/`messages` are gated on `hasPickles` itself
-      // (the same condition that gates their construction above): each
-      // writes its own environment/categories or
-      // stream-header data as soon as it is constructed, before any one
-      // scenario's own record exists to write. `messages` names this run's
-      // own run-id-suffixed file, not `messagesOutputRel` itself — that
-      // stable path is a copy destination a concurrent second invocation
-      // can replace before a reader gets to it (see `messagesOutputRel`'s
-      // own comment above), so only the suffixed file is guaranteed to
-      // still hold this run's own stream when read.
-      writeOutputLocations(progress, [
-        ...(scenariosWritten > 0
-          ? [
-              {
-                label: "steps",
-                relativePath: path.join(config.stateDir, "records", "steps"),
-                kind: "dir" as const,
-                count: stepRecordsWritten,
-              },
-              {
-                label: "scenarios",
-                relativePath: path.join(config.stateDir, "records", "scenarios"),
-                kind: "dir" as const,
-                count: scenariosWritten,
-              },
-            ]
-          : []),
-        ...(hasPickles ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
-        ...summaryLocation(runSummaryPath),
-      ]);
-      writeRunSummary(progress, {
-        total: scenariosWritten,
-        passed: scenariosPassed,
-        failed: scenariosWritten - scenariosPassed,
-        durationMs: Date.now() - invocationStartedAt.getTime(),
-      });
-      for (const finding of failedScenarioFindings(failedScenarios, rerunFlags)) warn(finding);
-      writeRepeatTallies(progress, repeatTally.list());
-      await finishRun(allPassed ? "passed" : "failed", runSummaryPath);
+      const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
+      writeRunEnd(
+        stepsLocation(config.stateDir, scenariosWritten, stepRecordsWritten, hasPickles ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
+        { total: scenariosWritten, passed: scenariosPassed },
+        failedScenarios,
+        repeatTally.list(),
+        end,
+      );
 
       return allPassed ? 0 : 1;
     } finally {

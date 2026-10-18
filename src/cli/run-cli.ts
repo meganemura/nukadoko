@@ -111,9 +111,10 @@ interface RunArgs {
    * output-location and summary lines still print; run.ts's own header
    * explains why those two are exempt. */
   quiet?: boolean;
-  /** Writes the scenario records to stdout; without it stdout stays empty. */
+  /** Writes run.json's scenario entries to stdout, one per line; without
+   * it stdout stays empty. */
   records?: boolean;
-  /** Prints run.json on stdout instead of the scenario record stream. */
+  /** Prints run.json on stdout instead of the scenario entry stream. */
   json?: boolean;
   /** Same `NaN`/fraction caveat as `concurrency` below; run.ts refuses
    * anything but a whole number of 1 or more. */
@@ -560,7 +561,7 @@ export async function runCli(
   const runCommand: CommandModule<Record<string, never>, RunArgs> = {
     command: "run [feature..]",
     describe:
-      "check, then execute scenarios from a feature file, a Markdown oath, or a directory of them (featuresDir when none is given); step records + scenario records",
+      "check, then execute scenarios from a feature file, a Markdown oath, or a directory of them (featuresDir when none is given); step records + run.json",
     builder: (y: Argv) =>
       refuseRemovedFlags(y, {
         session:
@@ -596,8 +597,8 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe:
-            "write one JSON scenario record per line to stdout (without it, stdout stays empty; " +
-            "the records are written under .nukadoko/records/scenarios/ either way)",
+            "write each scenario's run.json entry to stdout as one JSON line, as the scenario finishes " +
+            "(without it, stdout stays empty; run.json holds every entry either way)",
         })
         .option("json", {
           type: "boolean",

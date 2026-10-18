@@ -62,7 +62,6 @@ function baseStepInput(overrides: Partial<EmitStepInput> & Pick<EmitStepInput, "
 
 function baseScenarioRecord(overrides: Partial<ScenarioRecord> & Pick<ScenarioRecord, "scenario_record_id" | "steps">): ScenarioRecord {
   return {
-    schema_version: 1,
     nukadoko: "0.0.0-test",
     run_id: "run-1",
     feature: "features/checkout.feature",

@@ -1,7 +1,9 @@
-// Responsibility: the scenario record shape from docs/spec.md "Running" /
-// "The state directory" — one record per
-// pickle, the scenario-level counterpart to a step's own step record
-// (src/record/types.ts). `steps` mirrors the pickle's own step order; a
+// Responsibility: the scenario record, one per pickle, the scenario-level
+// counterpart to a step's own step record (src/record/types.ts). It is the
+// in-process shape a scenario's outcome travels in: from the executor to
+// `nuka run`, from a `--concurrency` worker to its parent, and into the
+// Allure and messages emitters. It is never written as a file of its own:
+// run.json's scenario entry (src/run/run-document.ts) is built from it. `steps` mirrors the pickle's own step order; a
 // step's `status` widens beyond a step record's ok/failed to also say *why*
 // no step record exists for it (`skipped`/`undefined`/`ambiguous`) — the
 // scenario record is what is allowed to say that, per docs/spec.md "an
@@ -92,7 +94,6 @@
 // at all — see the field's own doc comment for why.
 
 import type { DeclaredSnapshot } from "../compat/declared.js";
-import type { SCHEMA_VERSIONS } from "./schema-version.js";
 import type { ActionEntry, ErrorKind, NamedTraceEntry, ScreenshotEntry } from "./types.js";
 
 export type ScenarioStepStatus = "passed" | "failed" | "skipped" | "undefined" | "ambiguous";
@@ -179,9 +180,6 @@ export interface ScenarioEvidence {
 }
 
 export interface ScenarioRecord {
-  /** `SCHEMA_VERSIONS.scenario_record` (src/record/schema-version.ts). A
-   * record without it was written by nukadoko 0.16.1 or earlier. */
-  readonly schema_version: typeof SCHEMA_VERSIONS.scenario_record;
   /** The version of nukadoko that wrote this record. */
   readonly nukadoko: string;
   readonly scenario_record_id: string;

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -6,22 +7,16 @@ import {
   copyFixtureToTempDir,
   createCaptureSink,
   initGitRepo,
+  latestRunJson,
   removeTempDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka run`'s own `run_id`/`git` provenance fields end to
-// end — companion to
+// Responsibility: `nuka run`'s own `run_id`/`commit` provenance fields end
+// to end, as run.json and the step records carry them. Companion to
 // run.test.ts (matching/skip/record mechanics, neither field), following
 // that file's own "each concern gets its own file" convention
 // (run-browser.test.ts, run-session.test.ts, run-secrets.test.ts).
-
-function records(stdoutText: string): Record<string, unknown>[] {
-  return stdoutText
-    .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line));
-}
 
 describe("nuka run: run_id", () => {
   let rootDir: string;
@@ -34,24 +29,28 @@ describe("nuka run: run_id", () => {
     await removeTempDir(rootDir);
   });
 
-  it("is the same on every scenario record one invocation writes, across multiple pickles", async () => {
-    const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/table.feature"], {
+  it("is run.json's own run_id, and the same on every step record its scenarios cite, across multiple pickles", async () => {
+    const exitCode = await runCli(["run", "--no-check", "features/table.feature"], {
       rootDir,
-      stdout,
+      stdout: createCaptureSink(),
       stderr: createCaptureSink(),
     });
 
     // features/table.feature has two scenarios, the second of which fails
-    // its own binding (see run.test.ts's own "binds a table..." test) —
-    // exit 1 either way, both still get a scenario record.
+    // its own binding (see run.test.ts's own "binds a table..." test), so
+    // the run exits 1 and run.json still holds both.
     expect(exitCode).toBe(1);
-    const [first, second] = records(stdout.text());
-    expect(records(stdout.text())).toHaveLength(2);
-
-    expect(typeof first!.run_id).toBe("string");
-    expect(first!.run_id).toMatch(/^run-\d{8}-\d{6}-[a-z0-9]{4}$/);
-    expect(second!.run_id).toBe(first!.run_id);
+    const document = latestRunJson(rootDir);
+    expect(document.run_id).toMatch(/^run-\d{8}-\d{6}-[a-z0-9]{4}$/);
+    expect(document.scenarios).toHaveLength(2);
+    const records = (document.scenarios as { steps: { record: string | null }[] }[])
+      .flatMap((scenario) => scenario.steps)
+      .flatMap((step) => (step.record === null ? [] : [step.record]));
+    expect(records.length).toBeGreaterThan(0);
+    for (const record of records) {
+      const stepRecord = JSON.parse(readFileSync(path.join(rootDir, record, "record.json"), "utf8")) as { run_id: string };
+      expect(stepRecord.run_id).toBe(document.run_id);
+    }
   });
 });
 
@@ -66,38 +65,34 @@ describe("nuka run: git provenance", () => {
     await removeTempDir(rootDir);
   });
 
-  it("records git.commit (matching `git rev-parse HEAD`) and git.clean: true for an untouched repo", async () => {
+  it("records commit.sha (matching `git rev-parse HEAD`) and commit.dirty: false for an untouched repo", async () => {
     const commit = await initGitRepo(rootDir);
 
-    const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
-      stdout,
+      stdout: createCaptureSink(),
       stderr: createCaptureSink(),
     });
 
     expect(exitCode).toBe(0);
-    const [record] = records(stdout.text());
-    expect(record!.git).toEqual({ commit, clean: true });
+    expect(latestRunJson(rootDir).commit).toEqual({ sha: commit, dirty: false });
   });
 
-  it("records git.clean: false once the working tree has an untracked file", async () => {
+  it("records commit.dirty: true once the working tree has an untracked file", async () => {
     await initGitRepo(rootDir);
     await writeFile(path.join(rootDir, "untracked.txt"), "never added or committed");
 
-    const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
       rootDir,
-      stdout,
+      stdout: createCaptureSink(),
       stderr: createCaptureSink(),
     });
 
     expect(exitCode).toBe(0);
-    const [record] = records(stdout.text());
-    expect((record!.git as { clean: boolean }).clean).toBe(false);
+    expect(latestRunJson(rootDir).commit.dirty).toBe(true);
   });
 
-  it("omits git entirely, without failing the run, outside any git repository", async () => {
+  it("writes commit: null, without failing the run, outside any git repository", async () => {
     // rootDir itself has no .git — but it is nested inside this very repo's
     // own working tree (tests/helpers/fixtures.ts's `tempFixturesRoot`), so
     // git would otherwise walk up and resolve this repository's own commit.
@@ -113,18 +108,16 @@ describe("nuka run: git provenance", () => {
     const previousCeiling = process.env.GIT_CEILING_DIRECTORIES;
     process.env.GIT_CEILING_DIRECTORIES = path.dirname(rootDir);
     try {
-      const stdout = createCaptureSink();
       const stderr = createCaptureSink();
-      const exitCode = await runCli(["run", "--records", "--no-check", "features/passing.feature"], {
+      const exitCode = await runCli(["run", "--no-check", "features/passing.feature"], {
         rootDir,
-        stdout,
+        stdout: createCaptureSink(),
         stderr,
       });
 
       expect(exitCode).toBe(0);
       expect(stripRunProgressLines(stderr.text())).toBe("");
-      const [record] = records(stdout.text());
-      expect(record!.git).toBeUndefined();
+      expect(latestRunJson(rootDir).commit).toBe(null);
     } finally {
       if (previousCeiling === undefined) {
         delete process.env.GIT_CEILING_DIRECTORIES;

@@ -189,8 +189,8 @@ scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  passed  0.0s  the output says "Hello, Ada!"
 steps     .nukadoko/records/steps/      2
-scenarios .nukadoko/records/scenarios/  1
 summary   .nukadoko/records/runs/run-20261016-123947-b4q6/summary.md
+run       .nukadoko/records/runs/run-20261016-123947-b4q6/run.json
 1 scenario: 1 passed, 0 failed  (2s)
 ```
 
@@ -208,8 +208,8 @@ scenario 1/1  features/greet.feature:4  greets by name
       text: expected "Hi, Ada!", got "Hello, Ada!"
       record  .nukadoko/records/steps/step-20261016-123950-kjs1
 steps     .nukadoko/records/steps/      2
-scenarios .nukadoko/records/scenarios/  1
 summary   .nukadoko/records/runs/run-20261016-123950-zrhr/summary.md
+run       .nukadoko/records/runs/run-20261016-123950-zrhr/run.json
 1 scenario: 0 passed, 1 failed  (1s)
 failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
   do: nuka run features/greet.feature:4
@@ -1072,12 +1072,12 @@ run が遅いときは、`nuka check` を単独で速い PR ゲート(数秒、�
 
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
 stdout には、求めたときだけ出力されます。
-`nuka run --records` は、1 行 1 件の JSON の scenario record を stdout に出力します。
-`nuka run --json` は、代わりに 1 つの文書を出力します。
-それはすべての `--json` が出力する envelope で、`findings` の隣に run の `run.json` のフィールドが入ります。
-そこには件数、各 scenario の status、record のパス、再実行のコマンドが入ります。
+`nuka run --records` は、scenario が終わるたびに、その scenario の `run.json` のエントリを 1 行 1 件の JSON として stdout に出力します。
+`nuka run --json` は、代わりに `run.json` そのものを出力します。
+それはすべての `--json` が出力する envelope で、`findings` の隣に run のフィールドが入ります。
+そこにはコミットと作業ツリーが dirty だったかどうか、environment、`:line` の対象が run を `partial` にしたかどうか、件数、各 scenario の step(行、status、step record、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
 `--json` のときは stderr は空で、警告は文書の中の finding になるので、エージェントのシェルに見えるのはその文書だけです。
-record は、フラグにかかわらず `.nukadoko/records/` の下に書かれます。
+`run.json` と step record は、フラグにかかわらず `.nukadoko/records/` の下に書かれ、run サマリは `run.json` だけから描画されます。
 stdout や stderr が端末かどうかで変わる出力はありません。
 失敗した step は、進捗行の下にエラーの 1 行目と step record のパスを出力します。
 そのため、CI のログだけで失敗の理由が分かります。

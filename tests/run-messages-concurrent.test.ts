@@ -4,7 +4,6 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { isMessagesRunOutputFileName } from "../src/record/messages-output.js";
-import type { ScenarioRecord } from "../src/record/scenario-record.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: two `nuka run` invocations against the same project,
@@ -75,26 +74,23 @@ describe("nuka run: two concurrent invocations against the same project", () => 
   });
 
   it("also leaves each run's own run-id-suffixed file behind, independently well-formed", async () => {
-    const stdoutA = createCaptureSink();
-    const stdoutB = createCaptureSink();
 
     const [exitA, exitB] = await Promise.all([
-      runCli(["run", "--records", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: stdoutA, stderr: createCaptureSink() }),
-      runCli(["run", "--records", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: stdoutB, stderr: createCaptureSink() }),
+      runCli(["run", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() }),
+      runCli(["run", "--no-check", "features/two-steps-timing.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() }),
     ]);
     expect(exitA).toBe(0);
     expect(exitB).toBe(0);
 
-    const recordA = JSON.parse(stdoutA.text().trim()) as ScenarioRecord;
-    const recordB = JSON.parse(stdoutB.text().trim()) as ScenarioRecord;
-    expect(recordA.run_id).not.toBe(recordB.run_id);
+    const runIds = readdirSync(path.join(rootDir, ".nukadoko", "records", "runs"));
+    expect(runIds).toHaveLength(2);
 
     const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");
     const exportDir = path.dirname(output);
     const runFiles = readdirSync(exportDir).filter((name) => isMessagesRunOutputFileName(output, name));
 
     expect(runFiles.sort()).toEqual(
-      [`messages.${recordA.run_id}.ndjson`, `messages.${recordB.run_id}.ndjson`].sort(),
+      runIds.map((runId) => `messages.${runId}.ndjson`).sort(),
     );
 
     for (const runFile of runFiles) {

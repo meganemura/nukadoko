@@ -200,8 +200,8 @@ scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  passed  0.0s  the output says "Hello, Ada!"
 steps     .nukadoko/records/steps/      2
-scenarios .nukadoko/records/scenarios/  1
 summary   .nukadoko/records/runs/run-20261016-123947-b4q6/summary.md
+run       .nukadoko/records/runs/run-20261016-123947-b4q6/run.json
 1 scenario: 1 passed, 0 failed  (2s)
 ```
 
@@ -219,8 +219,8 @@ scenario 1/1  features/greet.feature:4  greets by name
       text: expected "Hi, Ada!", got "Hello, Ada!"
       record  .nukadoko/records/steps/step-20261016-123950-kjs1
 steps     .nukadoko/records/steps/      2
-scenarios .nukadoko/records/scenarios/  1
 summary   .nukadoko/records/runs/run-20261016-123950-zrhr/summary.md
+run       .nukadoko/records/runs/run-20261016-123950-zrhr/run.json
 1 scenario: 0 passed, 1 failed  (1s)
 failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
   do: nuka run features/greet.feature:4
@@ -972,7 +972,7 @@ wrong. The repair loop nukadoko is built for:
    repair, not its proof, and the agent cites them in the PR as exactly
    that.
 3. The PR updates the typed steps or the feature file, and its proof is the
-   repaired scenario running green: a scenario record and its step records,
+   repaired scenario running green: its entry in `run.json` and its step records,
    reviewed like any other change.
 
 Step 2 is the critical part. **Self-healing without an audit trail lets a
@@ -1171,13 +1171,17 @@ target leaves out.
 
 `nuka run` also prints its own progress and where it wrote to stderr as it
 goes (`--quiet` quiets the progress only). stdout stays empty unless you
-ask: `nuka run --records` writes one JSON scenario record per line there,
-and `nuka run --json` prints one document instead, the envelope every
-`--json` prints with the run's `run.json` fields beside `findings`: its
-counts, and each scenario's status, record path, and rerun command. Under
-`--json` stderr is empty, and a warning is a finding in the document, so
-the document is the only thing an agent's shell shows. The records are on disk under
-`.nukadoko/records/` either way. No output depends on whether stdout or
+ask: `nuka run --records` writes each scenario's `run.json` entry there,
+one JSON line per scenario as it finishes, and `nuka run --json` prints
+`run.json` itself instead, the envelope every `--json` prints with the
+run's fields beside `findings`: the commit and whether the tree was dirty,
+the environment, whether a `:line` target made the run `partial`, the
+counts, and each scenario's steps with their line, status, step record,
+and, for a failure, its error, the results it read, and the command that
+reruns it. Under `--json` stderr is empty, and a warning is a finding in
+the document, so the document is the only thing an agent's shell shows.
+`run.json` and the step records are on disk under `.nukadoko/records/`
+either way, and the run summary is rendered from `run.json` alone. No output depends on whether stdout or
 stderr is a terminal.
 A failed step prints the first line of its error and the path of its step
 record under its progress line, so a CI log says why it failed. When the

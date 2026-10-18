@@ -141,7 +141,7 @@ within the window, or raise `adHocDays` for a longer exploration.
 
 `nuka clean [--dry-run]` is the wider
 version of the same idea, once you are done exploring rather than mid-way
-through it: it removes every step/scenario record, session cache file, and
+through it: it removes every step record, run directory, session cache file, and
 the Allure/messages export output at once, all disposable by design
 (see "Artifacts" in `docs/spec.md`). `--dry-run` prints the same plan the
 real run would act on without removing anything. It refuses, before

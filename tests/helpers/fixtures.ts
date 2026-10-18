@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -260,4 +261,23 @@ export function stripRunProgressLines(text: string): string {
  */
 export function withoutNoConfigLine(text: string): string {
   return text.replace(/^warning\tconfig-missing\t-\tno nukadoko\.config\.ts or nukadoko\.config\.mts in [^\n]*\n(  fix: [^\n]*\n)?/m, "");
+}
+
+/** The run.json of the newest run in `rootDir`'s state directory, as text.
+ * A test that ran one `nuka run` reads its run's document here. */
+export function latestRunJsonText(rootDir: string, stateDir = ".nukadoko"): string {
+  const runsDir = path.join(rootDir, stateDir, "records", "runs");
+  // Two runs in one second share the id's time and differ in a random
+  // suffix, so the newest is the one that started last, not the last id.
+  const texts = readdirSync(runsDir)
+    .filter((id) => existsSync(path.join(runsDir, id, "run.json")))
+    .map((id) => readFileSync(path.join(runsDir, id, "run.json"), "utf8"));
+  if (texts.length === 0) throw new Error(`no run.json under ${runsDir}`);
+  const startOf = (text: string): number => Date.parse((JSON.parse(text) as { started_at: string }).started_at);
+  return texts.reduce((newest, text) => (startOf(text) > startOf(newest) ? text : newest));
+}
+
+/** The newest run's run.json, parsed. */
+export function latestRunJson(rootDir: string, stateDir = ".nukadoko"): Record<string, any> {
+  return JSON.parse(latestRunJsonText(rootDir, stateDir)) as Record<string, any>;
 }

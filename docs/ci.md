@@ -284,7 +284,8 @@ Four things the workflow above leaves to the team, each small.
   stderr: `nuka run features/ --json > run.json` prints it, and the run
   writes the same file to `.nukadoko/records/runs/<run_id>/run.json`
   either way. Its `scenarios` entries carry each scenario's status, its
-  record path, and the `rerun` command (see "Scenarios (the scripted
+  steps with their line, status, step record, and error, and for a failed
+  one the `do` command that reruns it (see "Scenarios (the scripted
   path)" in [docs/spec.md](spec.md)).
 - **A notification step on the `tend` job.** Its findings are notes, and
   a weekly job whose output stays in the Actions tab is a job nobody reads;

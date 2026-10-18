@@ -79,9 +79,10 @@ interface CleanPlan {
   export: string[];
 }
 
-/** Every step/scenario record id directory under `records/steps/` and
- * `records/scenarios/`, and every run's own directory under
- * `records/runs/` (its exports manifest, src/record/run-exports.ts),
+/** Every step record directory under `records/steps/`, every scenario
+ * evidence directory under `records/scenarios/`, and every run's own
+ * directory under `records/runs/` (run.json, summary.md, and its exports
+ * manifest, src/record/run-exports.ts),
  * rootDir-relative — one entry per accumulated run's
  * own leftovers, which is the granularity a preview of "what five `nuka
  * run`s left behind" needs (a single "records/" line would say nothing

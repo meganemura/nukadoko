@@ -38,6 +38,27 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.17.0 から次のリリースへ
 
+- **`run.json` が run のすべてを持ち、scenario record のファイルはなくなりました。**
+  `run.json` や `nuka run --json` を読むスクリプトは、次の読み方を変えます。
+  - `schema_version` は envelope の 2 で、文書は `command: "run"`、`verdict`、`findings` で始まります。
+    `findings` は、失敗した各 scenario に加えて、run が出したすべての警告を持つようになりました。
+  - scenario の `rerun` は `do` になり、失敗した scenario にだけあります。
+    その `record`(scenario record のファイルのパス)はなくなりました。
+    代わりに `steps` を読みます。
+    各 step は `line`、`text`、`step`、`status`、`step_record_id`、`record`(step record のディレクトリ)を持ち、失敗なら `error.kind`、`error.message`、`used` も持ちます。
+  - 最上位の `summary` のパスはなくなりました。
+    サマリは、`run.json` と同じディレクトリの `summary.md` です。
+  - `commit`(`sha`、`dirty`)、`target_version`、`selection` が加わりました。
+    scenario record の `git.clean` を調べていたスクリプトは、`!commit.dirty` を調べます。
+  - `.nukadoko/records/scenarios/<id>/record.json` を読んでいたスクリプトは、`run.json` の中のその scenario のエントリを読みます。
+    このファイルはもう書かれません。
+    スクリーンショット、hook の trace、添付のどれも書かなかった scenario は、`records/scenarios/<id>/` のディレクトリを残しません。
+  - stderr の「Partial run」の段落に一致させていたスクリプトは、`run.json` の `selection`(`partial` か `full`)か、run サマリの `- selection:` の行を読みます。
+  - `--records` の行は、いまは scenario の `run.json` のエントリです。
+    `run_id`、`environment`、`session`、`git`、`nukadoko`、`schema_version` は持たないので、それらは `run.json` から読みます。
+  run サマリには `- selection:` の行と「Findings」の節が加わります。
+  サマリを投稿するだけの CI の step は、何も変える必要がありません。
+
 - **すべてのコマンドの `--json` は 1 つのenvelopeになり、すべての finding は 1 つの文法になりました。**
   `--json` を読むスクリプトは `{ schema_version: 2, nukadoko, command, verdict, findings, ... }` を読みます。
   - `errors`、`warnings`、`notes` はなくなりました。
@@ -63,7 +84,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   それを実行するスクリプトは、そのまま実行できます。
 - **失敗した scenario は `scenario-failed` の finding です。**
   stderr の `failed` と `rerun` の行はなくなりました。
-  `rerun` を grep していたスクリプトは、各 `failed\tscenario-failed\t` の行の下にある `  do: nuka run <feature>:<line>` の行か、`run.json` の各 scenario の `rerun` を読みます。
+  `rerun` を grep していたスクリプトは、各 `failed\tscenario-failed\t` の行の下にある `  do: nuka run <feature>:<line>` の行か、`run.json` の失敗した各 scenario の `do` を読みます。
 - **警告は code を持つ finding です。**
   config が無いことを伝える行は stderr の `warning\tconfig-missing\t-\t...` になり、`--json` では `findings` に入って stderr は空です。
   fixture の teardown の失敗(`fixture-teardown-failed`)、emitter の失敗(`emitter-failed`)、応答しなかった version probe(`version-probe-failed`)、そして `nuka check --codes` が挙げるそのほかの run の警告も同じです。
@@ -76,9 +97,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **`nuka run` は、`--records` のときだけ scenario record を stdout に出力します。**
   パイプ、ファイル、CI のログ、エージェントのシェルには、既定では 1 行 1 件の JSON の record が出力されなくなり、stdout は空のままです。
   その列を解析していたスクリプトは、次の 3 つから 1 つを選びます。
-  読んでいる `nuka run` に `--records` を足します(これまでと同じ行が出力されます)。
-  または `--json` に切り替えて `run.json` を読みます(断定、件数、各 scenario の status、record のパス、`rerun` コマンドが 1 つの文書に入ります)。
-  または、run がフラグにかかわらず書く `.nukadoko/records/scenarios/` の下のファイルを読みます。
+  読んでいる `nuka run` に `--records` を足します(各行はいまは scenario の `run.json` のエントリで、下の `run.json` の項目で述べます)。
+  または `--json` に切り替えます。
+  または、run がフラグにかかわらず書く `.nukadoko/records/runs/<run_id>/run.json` を読みます。
   ログを表示するだけの CI の step は、何も変える必要がありません。
   run サマリ、stderr の行、`nuka do` の stdout は変わりません。
 - **`evidence.attach` と `evidence.path` は `trace.<name>.zip` と `final.<name>.png` を拒否します。**
@@ -98,7 +119,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `processes` キーが無いことを調べていたスクリプトは、`null` を調べます。
   0 という件数に意味を持たせたい step は、`fetch` ではなく `request` fixture を通じてサーバを呼びます。
 - **`--json` は 1 つの文書を出し、その周りには何も出しません。**
-  `nuka run --json` の stderr から `run` のパス、件数の行、`rerun` の行を拾っていたスクリプトは、それらを文書から読みます: `counts`、各 scenario の `rerun`、`summary` です。
+  `nuka run --json` の stderr から `run` のパス、件数の行、`rerun` の行を拾っていたスクリプトは、それらを文書から読みます: `counts` と、失敗した各 scenario の `do` です。
   `--json` の拒否を行で区切っていたスクリプトは、stdout を 1 つの JSON 値として解析します。
   拒否はいまは整形されて出力されます。
   `nuka steps` のテキストを 80 以外の端末幅で比べていたテストは、80 で比べます。

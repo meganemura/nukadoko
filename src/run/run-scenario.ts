@@ -68,7 +68,6 @@ import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
 import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../record/scenario-record.js";
 import { generateScenarioId } from "./scenario-id.js";
-import { writeScenarioRecord } from "./write-record.js";
 
 // Responsibility: execute one pickle end to end — the scenario-level
 // counterpart to cli/do.ts's execution
@@ -1018,7 +1017,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     );
     const finishedAt = new Date();
     const record: ScenarioRecord = {
-      schema_version: SCHEMA_VERSIONS.scenario_record,
       nukadoko: readOwnVersion(),
       scenario_record_id: scenarioId,
       run_id: runId,
@@ -1037,7 +1035,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       evidence: { dir: relativeScenarioDir, screenshots: [] },
     };
     const redactedRecord = redact(record, secrets) as ScenarioRecord;
-    await writeScenarioRecord(scenarioDir, redactedRecord);
     return redactedRecord;
   }
 
@@ -1574,7 +1571,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     });
     const setupFinishedAt = new Date();
     const setupRecord: ScenarioRecord = {
-      schema_version: SCHEMA_VERSIONS.scenario_record,
       nukadoko: readOwnVersion(),
       scenario_record_id: scenarioId,
       run_id: runId,
@@ -1594,7 +1590,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       ...(fixtureTeardownErrors.length > 0 ? { teardown_errors: fixtureTeardownErrors } : {}),
     };
     const redactedSetupRecord = redact(setupRecord, secrets) as ScenarioRecord;
-    await writeScenarioRecord(scenarioDir, redactedSetupRecord);
     setActiveDeclaredCollector(undefined);
     onWorldSetupFailure?.(setupMessage);
     return redactedSetupRecord;
@@ -2591,7 +2586,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const { evidence: browserEvidence, browser: browserInfo } = disposeResult;
 
   const record: ScenarioRecord = {
-    schema_version: SCHEMA_VERSIONS.scenario_record,
     nukadoko: readOwnVersion(),
     scenario_record_id: scenarioId,
     run_id: runId,
@@ -2619,7 +2613,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   };
 
   const redactedRecord = redact(record, secrets) as ScenarioRecord;
-  await writeScenarioRecord(scenarioDir, redactedRecord);
   // This pickle is done — repoint "the currently active declared collector"
   // to nothing, so a stray facade call between this pickle and the next
   // (there shouldn't be one, but this mirrors `used`/`observed`'s own "never

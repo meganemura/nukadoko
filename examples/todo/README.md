@@ -84,7 +84,7 @@ nuka run features/todo.md
 ```
 
 `nuka check` needs no server. `nuka run` needs the app from above, the
-same as the `.feature` file. The oath is four scenario records: the
+same as the `.feature` file. The oath is four scenarios: the
 three from the feature file, plus one outline row (`Buy milk`). What
 the Markdown slice reads is in
 [docs/spec.md](../../docs/spec.md#markdown-oaths).
@@ -248,8 +248,8 @@ ok: no issues found
 nuka run --records features/todo.feature
 ```
 
-Three scenario records stream to stdout (`--records` asks for them), one
-JSON line each, every one `"status":"passed"`, and the exit code is `0`. The vocabulary gap from step 1 is closed,
+Three scenarios stream to stdout (`--records` asks for them), one
+JSON line each, the same entries `run.json` holds, every one `"status":"passed"`, and the exit code is `0`. The vocabulary gap from step 1 is closed,
 reviewably: the diff is one new step file, and this green run is its proof.
 
 Nothing here left a lasting change: you either restored the exact file this
@@ -271,13 +271,19 @@ Nothing else changed — not the feature file, not the typed steps, not their
 nuka run --records features/todo.feature
 ```
 
-exit `1`. The first scenario record's first step:
+exit `1`. The first scenario's first step, as its stdout line and
+`run.json` carry it (the record id differs from run to run):
 
 ```json
 {
+  "line": 4,
   "text": "a todo titled \"Buy milk\" is added",
+  "step": "add-todo",
   "status": "failed",
+  "step_record_id": "step-...",
+  "record": ".nukadoko/records/steps/step-...",
   "error": {
+    "kind": "result_invalid",
     "message": "returns validation failed: title: Invalid input: expected string, received undefined"
   }
 }

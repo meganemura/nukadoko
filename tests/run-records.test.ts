@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { readdirSync } from "node:fs";
-import path from "node:path";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: whether `nuka run` writes its scenario records to stdout,
+// Responsibility: whether `nuka run` writes its run.json scenario entries to
+// stdout,
 // decided by `--records` alone, at --concurrency 1 and above. `nuka do` is
 // here as the command the rule leaves alone.
 
@@ -32,15 +31,15 @@ describe("nuka run: scenario records on stdout", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes nothing to a stdout that is not a terminal, and still writes the records to disk", async () => {
+  it("writes nothing to a stdout that is not a terminal, and still writes run.json to disk", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--no-check", "features/basic/"], { rootDir, stdout, stderr });
 
     expect(exitCode, stderr.text()).toBe(0);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toMatch(/^scenarios \.nukadoko\/records\/scenarios\/\s+2$/m);
-    expect(readdirSync(path.join(rootDir, ".nukadoko/records/scenarios"))).toHaveLength(2);
+    expect(stderr.text()).toMatch(/^run {7}\.nukadoko\/records\/runs\/run-[a-z0-9-]+\/run\.json$/m);
+    expect(latestRunJson(rootDir).scenarios).toHaveLength(2);
   });
 
   it("writes nothing to a terminal stdout", async () => {

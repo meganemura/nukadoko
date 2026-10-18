@@ -350,7 +350,7 @@
     },
     {
       "term": "scenario record",
-      "why": "step record と同じ問いを scenario 粒度で答える記録。ScenarioRecord 型、scenario record 自身の record.json と直接対応する"
+      "why": "step record と同じ問いを scenario 粒度で答える記録。ファイルではなく、run.json の scenarios の 1 要素(src/record/run-result.ts の RunScenario)を指す"
     },
     { "term": "scenario", "why": "Gherkin の Scenario: キーワードと直接対応する" },
     {

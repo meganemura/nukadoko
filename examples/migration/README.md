@@ -204,9 +204,10 @@ Run it:
 node ../../dist/cli.js run --records features/migration.feature
 ```
 
-Real captured output, one JSON line per scenario (reformatted here for
-readability; `scenario_record_id`/`step_record_id` ids and timestamps will differ on your
-own run):
+Real captured output, one JSON line per scenario, each the scenario's
+entry in `run.json` (reformatted here for readability, and trimmed to
+`scenario`, `status`, each step's `text`, `status`, and `step_record_id`,
+and `hooks`; ids and timestamps will differ on your own run):
 
 ```json
 {
@@ -232,7 +233,7 @@ own run):
 ```
 
 Green -- exit `0` -- with nothing rewritten but the import and one hook
-body. `hooks: [{ "type": "before", "status": "passed" }]` on both records is
+body. `hooks: [{ "type": "before", "status": "passed" }]` on both lines is
 this suite's one Before hook, reported once per scenario; a hook never gets
 a step record of its own (docs/spec.md "Running": it runs against the pickle's
 shared World, outside any step's own boundary).
@@ -284,8 +285,9 @@ difference is enforcement, not visibility: as a hands-on check, temporarily
 change `seed-legacy-todos.ts`'s own `this.seededCount = rows.length;` to
 `this.seededCount = String(rows.length) as unknown as number;` (a
 deliberately wrong type TypeScript can't catch through the cast) and rerun
-`node ../../dist/cli.js run --records features/migration.feature`. Real captured
-output from doing exactly that:
+`node ../../dist/cli.js run --records features/migration.feature`. The failed
+step from the real output of doing exactly that, trimmed to its text,
+status, and error message:
 
 ```json
 {

@@ -4,12 +4,11 @@
 // tests the number before it trusts a shape. A record's number moves when
 // a field it already had changes meaning, type, or name, or is removed; an
 // added field does not move it. Each kind has its own number, so a change
-// to the run result does not tell a step record reader to look again.
+// to one kind does not tell a reader of another to look again. run.json is
+// the `nuka run --json` envelope, so the envelope's number versions it.
 
 export const SCHEMA_VERSIONS = {
   step_record: 2,
-  scenario_record: 1,
-  run_result: 1,
 } as const;
 
 export type DocumentKind = keyof typeof SCHEMA_VERSIONS;

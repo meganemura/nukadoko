@@ -243,7 +243,7 @@ jobs:
 - **run の結果に基づいて動くスクリプト。**
   失敗した scenario ごとに issue を作る step や、それらを再実行する step は、stderr ではなく `run.json` を読みます。
   `nuka run features/ --json > run.json` がそれを出力し、run はどちらの場合も同じファイルを `.nukadoko/records/runs/<run_id>/run.json` に書きます。
-  その `scenarios` のエントリは、各 scenario の status、record のパス、`rerun` コマンドを持ちます(docs/spec.ja.md の「Scenario(スクリプト化された経路)」を参照)。
+  その `scenarios` のエントリは、各 scenario の status と、行、status、step record、エラーを持つ step を持ち、失敗した scenario はそれを再実行する `do` コマンドを持ちます(docs/spec.ja.md の「Scenario(スクリプト化された経路)」を参照)。
 - **`tend` のジョブへの通知 step。**
   `tend` の finding はどれも note です。
   出力が Actions のタブに留まる週次のジョブは、誰も読まないジョブです。

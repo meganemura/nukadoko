@@ -114,7 +114,7 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>`, `.nukadoko/records/runs/<run_id>/` (which export files that run wrote, its verdict, its Markdown summary) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | a person reviewing the run (its summary), the Allure and messages emitters, `nuka do --use`, `nuka tend` |
+| Measurement | `.nukadoko/records/steps/<id>/` (`record.json` and its evidence), `.nukadoko/records/scenarios/<id>/` (a scenario's own evidence, when it wrote any), `.nukadoko/records/runs/<run_id>/` (`run.json`, the run's result; `summary.md`, its Markdown summary; which export files that run wrote) | the tool | no | the newest `retention.runs` runs; a record no run owns, `retention.adHocDays` days | a person reviewing the run (its summary), the Allure and messages emitters, `nuka do --use`, `nuka tend` |
 | Export | `.nukadoko/export/allure-results/`, `.nukadoko/export/messages.ndjson` (plus one run-id-suffixed file per `nuka run` invocation beside the latter), each only while its emitter is on | the tool | no | with the run that wrote it | other tools |
 | Cache | `.nukadoko/cache/sessions/` | the tool | no | disposable | `nuka run` / `nuka do` |
 
@@ -135,27 +135,22 @@ questions: "what happens if this is deleted" and "who gets to change it":
   nothing about the next run.
 - **Measurement has a lifetime, and `nuka run` enforces it.** At the end of
   every run, the newest `retention.runs` runs (default 20) keep everything
-  they wrote. Every older run loses its scenario records, the step records
-  they cite, the export files its own `records/runs/<run_id>/exports`
-  lists, and its messages stream. A run is every scenario record that
-  shares one `run_id`, dated by its earliest `started_at`: the same rule
-  `nuka tend` uses to name the newest run, so the two commands never
-  disagree about which run that is. Both read a
-  scenario record whose `started_at` does not parse as one whose
-  `record.json` cannot be read: it belongs to no run. A run that may still be
-  writing is never removed. When a run ends, `nuka run` writes
-  `records/runs/<run_id>/run.json`, its result (see "Scenarios (the
-  scripted path)"), holding the run's verdict (`passed` or `failed`), its
-  counts, and the time it ended. Retention removes a run
-  without that file only once its newest record is older than
-  `retention.adHocDays`: a run still in flight, a run that was killed, and a
-  run written before the file existed look alike, and nothing here removes
-  what it cannot prove finished. The run that applies retention is never
-  removed by its own pass, even when newer runs ended first. A record no retained
-  run owns (a `nuka do` record, a record whose run is
-  gone, a scenario directory whose `record.json` cannot be read or has a
-  `started_at` that does not parse, a run
-  that stopped before its first scenario finished) is removed once it is
+  they wrote. A run is the `records/runs/<run_id>/run.json` it wrote when it
+  ended (see "Scenarios (the scripted path)"), dated by its `started_at`:
+  the same rule `nuka tend` uses to name the newest run, so the two
+  commands never disagree about which run that is. Every older run loses
+  the step records its `run.json` cites, the scenario evidence directories
+  it names, the export files its own `records/runs/<run_id>/exports`
+  lists, and its messages stream. A `run.json` that cannot be read, or
+  whose `started_at` does not parse, dates no run. A run that may still be
+  writing is never removed: a run in flight, a run that was killed, and a
+  run written before `run.json` held its scenarios have no `run.json` that
+  reads as one, and nothing here removes what it cannot prove finished. What they wrote falls
+  to the age rule below. The run that applies retention is never removed by
+  its own pass, even when newer runs ended first. A record no retained run
+  owns (a `nuka do` record, a step record or scenario directory whose run is
+  gone or never wrote its `run.json`, a run directory with no `run.json`) is
+  removed once it is
   older than `retention.adHocDays` (default 7). `nuka do --use`
   reads those across days by design, which is why they get days
   rather than a run count, and a `--use` on a record that aged out is
@@ -179,12 +174,11 @@ questions: "what happens if this is deleted" and "who gets to change it":
   from both retention and `clean`. `export/allure-history.jsonl` sits
   beside `allure-results/`, not inside it. It is the only artifact here
   that a new run cannot reproduce.
-- **Step records and scenario records share one row.** They differ only in
-  grain. A scenario record and each of its step records answer the same
-  question at two resolutions, not two different questions. `nuka do` has no
-  scenario for which it can write a record, so it writes only a step record.
-  "Record" names both types. The file split represents grain, not a second
-  concept.
+- **Step records and run.json share one row.** They differ only in
+  grain. A scenario's entry in `run.json` and each of its step records
+  answer the same question at two resolutions, not two different questions.
+  `nuka do` has no scenario or run to write, so it writes only a step
+  record. The file split represents grain, not a second concept.
 
 ## Typed steps
 
@@ -2049,9 +2043,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
 The compiler merges Background, expands Scenario Outline, and attaches tables.
 nukadoko matches each pickle step against the committed patterns, then executes
-the steps in order. It writes one step record for each step and one scenario
-record for each pickle. The scenario record contains the feature path, scenario
-name, ordered step record ids, and per-step status.
+the steps in order. It writes one step record for each step that began, and
+when the run ends, one `run.json` that holds every scenario: its feature
+path, line, and name, and each step's line, text, status, and step record.
 
 Before it executes anything, `nuka run` reports what `nuka check` would
 report for the scenarios it selected, and when one of those findings is an
@@ -2147,7 +2141,7 @@ colliding with a suite's existing meaning for a short name.
 `--repeat <n>` runs every selected scenario `n` times in this one
 invocation: the whole selection once, then again, so a failure that depends
 on what ran before it meets the same neighbours on every pass. Each
-execution is its own scenario record under the one run_id, the summary
+execution is its own entry in `run.json`'s `scenarios`, the summary
 counts executions, and a scenario that failed at least once gets a `repeat`
 line after the failed list, `<passed> of <n> passed`, with no verdict
 attached: a scenario that fails every time is not flaky, and the count is
@@ -2193,10 +2187,11 @@ config file is the wrong place to keep it.
 
 Each run uses two output channels for two readers. stdout is for scripts,
 and it carries only what one asked for: under `--records`, NDJSON with one
-scenario record per line, and under `--json`, the one run result described
-below. Without either flag, stdout stays empty, on a terminal or not. The
-records are on disk either way, and the `scenarios` line names their
-directory. A person and an agent both read stderr, and an agent's shell is
+scenario per line, each line the scenario's entry in `run.json`, written as
+the scenario finishes, and under `--json`, the `run.json` document described
+below. Without either flag, stdout stays empty, on a terminal or not.
+`run.json` is on disk either way, and the `run` line names it.
+A person and an agent both read stderr, and an agent's shell is
 no terminal and reads stdout together with stderr, so a line of JSON per
 scenario there by default would bury the progress lines. The same rule
 holds under `--concurrency`. Text project code
@@ -2246,66 +2241,147 @@ followed by a `  do:` line: `nuka run <feature>:<line>`, plus `--env <name>`
 when the run was given one, quoted for a POSIX shell where a word needs
 it. These lines appear for serial and concurrent runs, and `--quiet` keeps
 them. Under `--json`, stderr is empty: it carries none of the lines this
-paragraph and the two above it name, nor the partial-run notice or the
-retention line, and the document on stdout holds the result, since an
+paragraph and the two above it name, nor the retention line, and the
+document on stdout holds the result, since an
 agent's shell reads both streams as one. A warning that something went
 wrong (a file that was not written, a hook or a fixture teardown that
 failed, the `nuka check` errors before a refusal) is a finding with its
 code: on stderr in text, and in the envelope's `findings` under `--json`.
 
-The run's result for a machine is `records/runs/<run_id>/run.json`, written
-when the run ends, after its last record and its run summary, for serial
-and concurrent runs alike:
+The run's result for a machine and for an auditor is
+`records/runs/<run_id>/run.json`, written when the run ends, after its last
+step record and its run summary, for serial and concurrent runs alike. It is
+the `nuka run --json` envelope (see "The envelope"), so its
+`schema_version` is the envelope's, and it holds everything a reader needs
+to act on the run without opening another file:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "nukadoko": "...",
-  "run_id": "run-20260801-143022-a1b2",
+  "command": "run",
   "verdict": "failed",
+  "findings": [
+    {
+      "severity": "failed",
+      "code": "scenario-failed",
+      "file": "features/greet.feature",
+      "line": 4,
+      "message": "greets by name: text: expected \"Hi, Ada!\", got \"Hello, Ada!\"",
+      "do": "nuka run features/greet.feature:4"
+    }
+  ],
+  "run_id": "run-20260801-143022-a1b2",
   "started_at": "...",
   "finished_at": "...",
+  "commit": { "sha": "<40 hex characters>", "dirty": false },
   "environment": "default",
-  "counts": { "scenarios": 2, "passed": 1, "failed": 1 },
+  "target_version": null,
+  "selection": "full",
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
       "feature": "features/greet.feature",
-      "line": 5,
-      "scenario": "wrong expectation",
+      "line": 4,
+      "scenario": "greets by name",
       "status": "failed",
-      "record": ".nukadoko/records/scenarios/scn-20260801-143023-c3d4/record.json",
-      "rerun": "nuka run features/greet.feature:5"
+      "started_at": "...",
+      "finished_at": "...",
+      "steps": [
+        {
+          "line": 5,
+          "text": "I run greet with \"Ada\"",
+          "step": "run-greet",
+          "status": "passed",
+          "step_record_id": "step-20260801-143023-e5f6",
+          "record": ".nukadoko/records/steps/step-20260801-143023-e5f6",
+          "mutates": false,
+          "observed": {
+            "http_reads": null,
+            "http_writes": null,
+            "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41 }]
+          }
+        },
+        {
+          "line": 6,
+          "text": "the output says \"Hi, Ada!\"",
+          "step": "output-says",
+          "status": "failed",
+          "step_record_id": "step-20260801-143023-g7h8",
+          "record": ".nukadoko/records/steps/step-20260801-143023-g7h8",
+          "mutates": false,
+          "observed": { "http_reads": null, "http_writes": null, "processes": null },
+          "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
+          "used": [
+            {
+              "step": "run-greet",
+              "record": ".nukadoko/records/steps/step-20260801-143023-e5f6",
+              "result": { "exitCode": 0, "stdout": "Hello, Ada!\n", "stderr": "" }
+            }
+          ]
+        }
+      ],
+      "hooks": [],
+      "do": "nuka run features/greet.feature:4"
     }
-  ],
-  "summary": ".nukadoko/records/runs/run-20260801-143022-a1b2/summary.md"
+  ]
 }
 ```
 
-`scenarios` has one entry per scenario record the run wrote, in the order
-written (the example shows one of two), and `rerun` is the same command the
-`scenario-failed` finding's `do:` line prints. Under `nuka run --json`
-stdout is the envelope with these fields beside `findings`: the
-`schema_version` is the envelope's, and `verdict` is the envelope's. `verdict` is the exit code's: it also counts a
-BeforeAll or AfterAll failure that no scenario record carries, so it can be
-`failed` while `counts.failed` is 0. `summary` is `null` when the run
-summary could not be written. Every path is relative to the project root.
-The paths line on stderr names it as `run`. A run that selects no scenario
-writes no record and no `run.json`. A run that was killed has none either,
-which is how retention tells it from a run that ended.
+- `commit` is the commit `HEAD` named when the run started, and `dirty`
+  says whether the working tree then had a change `git status --porcelain`
+  reports, an untracked file included. It is `null` outside a git
+  repository or before the first commit. `environment` is the `--env` the
+  run targeted, and `target_version` what that environment's version probe
+  answered, `null` without one.
+- `selection` is `partial` when a `:line` target left out a scenario of its
+  file, and `full` otherwise. A partial run is a debugging result, not
+  what a reviewer should read as the feature passing (see "Review").
+- `scenarios` has one entry per scenario execution, in the order each
+  finished. Each step has its `line` in the feature file, its `text`, the
+  `step` it matched (`null` when none or more than one), and its `status`.
+  A step that began has a `step_record_id` (the value `nuka do --use`
+  takes) and a `record`, the step record's directory, with its `mutates`
+  declaration and what it `observed`. A step that failed, or never began
+  for a reason (`undefined`, `ambiguous`), has an `error` with the step
+  record's `kind` (`null` when no step record says) and its first message.
+  A failed step that read earlier results through `from` has `used`, each
+  producer's step, record, and the result it read. Args and a step's own
+  result stay in its step record: they can be large, and the next decision
+  does not need them.
+- A failed scenario has `do`, the command that runs it alone: the same
+  command the `scenario-failed` finding's `do:` line prints. A scenario that
+  wrote its own evidence (a final screenshot, a hook's trace or attachment)
+  has `evidence`, its directory under `records/scenarios/`. A scenario that
+  wrote none has no `evidence`, and its empty directory is removed when the
+  run ends.
+- `findings` holds every finding the run raised: each failed scenario, and
+  each warning (a file that was not written, a hook or a fixture teardown
+  that failed, a version probe that threw), the same findings stderr prints
+  in text.
+- `verdict` is the exit code's: it also counts a BeforeAll or AfterAll
+  failure that no scenario carries, so it can be `failed` while
+  `counts.failed` is 0.
 
-`--json` prints that same object on stdout as the one JSON document there,
-instead of the scenario records `--records` prints, so a script reads the whole
-result with one parse. It also prints for a run that selected no scenario,
-with empty `scenarios`. A refusal before anything runs prints nothing on
-stdout, as without `--json`. stderr is unchanged.
+Every path is relative to the project root. The paths line on stderr names
+the file as `run`. A run that selects no scenario writes no record and no
+`run.json`. A run that was killed has none either, which is how retention
+tells it from a run that ended. There is no scenario record file: a
+scenario's entry in `run.json` is its record.
+
+`--json` prints that same document on stdout as the one JSON document there,
+byte for byte the file, instead of the scenario lines `--records` prints, so
+a script reads the whole result with one parse. It also prints for a run
+that selected no scenario, with empty `scenarios`. A refusal before anything
+runs prints nothing on stdout, as without `--json`. stderr is unchanged.
 
 The paths line names an `allure` or `messages` location only while that
 emitter is on, which is while its config key is present (see "Allure
 emitter" and "Messages emitter"). A line for an emitter that wrote nothing
 would send a reader to a path that does not exist.
 
-A scenario record's own `browser` field (`{ "type": "firefox", "version":
+A scenario's own `browser` field in `run.json` (`{ "type": "firefox", "version":
 "133.0" }`) names the engine and version this particular run actually
 launched, read from the real `Browser` object Playwright returns, never
 from `config.browserType`. The two can disagree (a step can override the
@@ -2320,16 +2396,17 @@ run costs every scenario's minutes, and getting one of them right is
 usually what the next few runs are about. It is not a smaller version of
 the same thing: its run summary covers only the scenarios it selected, so a
 green one is a debugging result and nothing else, not what a reviewer
-should read as the feature passing (see "Review"). `nuka run` says so on
-stderr where the line number is given and selects fewer scenarios than the
-file holds. A line that selects every scenario of its file, as in a
-one-scenario feature, already gave the full run, so no notice is written.
+should read as the feature passing (see "Review"). `run.json` and the run
+summary say so with `selection: partial` when the line number is given and
+selects fewer scenarios than the file holds. A line that selects every
+scenario of its file, as in a one-scenario feature, already gave the full
+run, so `selection` is `full`.
 
 Steps in one pickle share one context (the World semantics Cucumber users
 expect): a Background that logs in hands its browser and cookies to every
 later step. A failed step skips the rest of the scenario, and skipped steps
 get no step record (an execution that never began must not be citable; the
-scenario record is what says "skipped"). Evidence follows its natural scope:
+scenario's entry in `run.json` is what says "skipped"). Evidence follows its natural scope:
 each step's record carries that step's own http.jsonl and its own
 Playwright trace alike. The trace used to span the whole shared context and
 live in the scenario's own directory instead, one file, opened once at the
@@ -2446,8 +2523,8 @@ to manage, a socket holding live credentials, and an idle timeout, and
 buy nothing the host's server does not already do.
 
 Nothing that server does is evidence. It writes no step record and no
-scenario record, and the run summary a reviewer reads is built from
-scenario records (see "Review"), so the path from an exploration to that
+`run.json`, and the run summary a reviewer reads is built from `run.json`
+(see "Review"), so the path from an exploration to that
 summary runs through a feature someone wrote and a real `nuka run`, or it
 does not exist. A world thirty calls deep is not reproducible, by anyone,
 which is why what comes out of an exploration is a scenario written from
@@ -2465,8 +2542,10 @@ A step record contains the tool's measurements for one step execution. Its
 shape is the same whether the step ran in a scenario or through `do`. A
 scenario record (see "Running") answers the same question at the next level.
 It shows what one pickle run did across its ordered steps. Both records show
-the same concept at different resolutions. The scenario record's `steps`
-array identifies each step record by id, so either record leads to the other.
+the same concept at different resolutions. A scenario record is not a file
+of its own: it is the scenario's entry in its run's `run.json`. Its `steps`
+array identifies each step record by id and path, and a step record names
+its scenario record's id, so either record leads to the other.
 
 ```json
 {
@@ -2498,7 +2577,7 @@ array identifies each step record by id, so either record leads to the other.
 
 - `schema_version` comes first, so a reader can test which shape it holds
   before it reads the rest (see "CLI summary"). `nukadoko` is the version
-  that wrote the record. A scenario record carries both too.
+  that wrote the record. `run.json` carries both too, as the envelope's.
 - `result` provides the trust anchor: it passed the returns schema and the tool
   (not the caller) produced it. On failure, `error: { kind, message }`
   replaces it. Compat steps record `result: null`.
@@ -2526,8 +2605,8 @@ array identifies each step record by id, so either record leads to the other.
   the owning scenario record's id and the `nuka run` invocation's own id
   for a `run`-originated step (`kind: "run"`), both `null` for a
   `do`-originated one, which belongs to neither. Without `run_id`, telling
-  which run one step record came from meant opening the scenario record
-  beside it first; a step record answers that on its own now, the same way
+  which run one step record came from meant opening another file first; a
+  step record answers that on its own, the same way
   it already answers everything else about what this one execution did.
 - `error.kind` uses a closed set and sits beside the message a person reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
@@ -2890,28 +2969,29 @@ array identifies each step record by id, so either record leads to the other.
   already closed, so a `scenario`-scope fixture's own teardown failure
   lands on the scenario record's `teardown_errors` instead (see
   "Fixtures").
-- A scenario record's `git` is `{ "commit", "clean" }`: the full 40-character
+- `run.json`'s `commit` is `{ "sha", "dirty" }`: the full 40-character
   sha the working tree was at when the run started, and whether
   `git status --porcelain=v2 --branch` (untracked files included) printed
-  nothing but its `#` header lines then. It is measured once when the run
-  starts, not once per pickle, so every scenario record of one `nuka run`
-  carries the same value even when a step edits a tracked file mid-run
-  (with `--concurrency`, each worker measures it once as it starts). It is
-  absent outside a git repository, before the first commit, and when the
-  git call fails; the run itself never fails over it. The run summary
-  reports it (below), so a reviewer sees which commit ran and whether the
-  tree had uncommitted changes.
-- Step records are stored under `.nukadoko/records/steps/<id>/`. Scenario
-  records are stored under `.nukadoko/records/scenarios/<id>/` (see
-  "Artifacts"). Both are
+  more than its `#` header lines then. It is measured once when the run
+  starts, not once per pickle, so it holds even when a step edits a tracked
+  file mid-run. It is `null` outside a git repository, before the first
+  commit, and when the git call fails; the run itself never fails over it.
+  The run summary reports it (below), so a reviewer sees which commit ran
+  and whether the tree had uncommitted changes.
+- Step records are stored under `.nukadoko/records/steps/<id>/`, and
+  `run.json` under `.nukadoko/records/runs/<run_id>/` (see "Artifacts").
+  Both are
   local working measurements; what a person keeps is the run summary on the
   pull request (below).
 
 **The run summary.** Records are written for a machine and an agent. Each
 `nuka run` that runs at least one pickle also writes one Markdown summary of
-the whole run, for the person who reviews it. It is built only from what the
-run measured, after every record and run-scope hook, so a `--concurrency`
-run gets one summary from the parent, not one per worker. It holds:
+the whole run, for the person who reviews it. It is rendered from the run's
+`run.json` document alone, by one pure function, after every record and
+run-scope hook, so a `--concurrency` run gets one summary from the parent,
+not one per worker, the summary cannot say what `run.json` does not, and a
+summary can be rendered again from a `run.json` copied off a CI machine. It
+holds:
 
 - the line `<!-- nukadoko:run -->` first, so a CI step can find and update a
   pull request comment it posted earlier;
@@ -2919,10 +2999,11 @@ run gets one summary from the parent, not one per worker. It holds:
   with every scenario green still reads `failed`, with a sentence saying the
   failure was outside every scenario) and its scenario counts;
 - the condition: the short commit sha and whether the tree had uncommitted
-  changes (from `git`, or "unknown" without one), the environment and its
+  changes (from `commit`, or "unknown" without one), the environment and its
   target version, every browser a scenario launched or "none launched", the
-  nukadoko version, the run id, and the start and finish times;
-- one table per feature file, by path, with a row per scenario record in line
+  `selection` (`partial` says a line target left out other scenarios of its
+  file), the nukadoko version, the run id, and the start and finish times;
+- one table per feature file, by path, with a row per scenario in line
   order: scenario, line, status, duration, and for a failed one where it
   failed (the first step that did not pass or skip, otherwise the first
   failed hook), the first line of that error, each `used` step whose process
@@ -2946,15 +3027,18 @@ run gets one summary from the parent, not one per worker. It holds:
   found nothing" stays distinguishable from "never compared". A compat step
   (`mutates: null`, see "Compat steps (the migration door)") has no
   declaration to compare and is counted separately;
-- for a failed run, the `nuka run <feature>:<line>` command for each failed
-  scenario, with `--env` when the run had one.
+- "Findings", when the run raised any finding other than a failed scenario
+  (a warning such as a file that was not written or a teardown that
+  failed), one line each with its severity, code, location, and message;
+- for a failed run, each failed scenario's `do`, the `nuka run
+  <feature>:<line>` command, with `--env` when the run had one.
 
 It is written to `.nukadoko/records/runs/<run_id>/summary.md` every time,
 appended to the file `$GITHUB_STEP_SUMMARY` names when that is set (GitHub
 Actions sets it for every step, so the job's summary page shows the run with
 no configuration), and written to `--summary <path>` when the flag is given,
-replacing what was there. Error text in it is the scenario record's, so
-secrets are already redacted. A summary that cannot be written is a warning
+replacing what was there. Error text in it is `run.json`'s, so secrets are
+already redacted. A summary that cannot be written is a warning
 on stderr; it never changes the exit code. A setup failure, which writes no
 record, writes no summary.
 
@@ -3233,25 +3317,25 @@ for separate purposes (see "Artifacts"):
 
 - `records/steps/<id>/`: one directory per step record: the record JSON
   and its evidence files (trace.zip, screenshots, http.jsonl)
-- `records/scenarios/<id>/`: one directory per scenario run: `record.json`,
-  the scenario's own final screenshot, and one trace chunk per Before/After/
+- `records/scenarios/<id>/`: one directory per scenario run that wrote
+  evidence of its own: the scenario's final screenshot, and one trace chunk per Before/After/
   AfterStep hook invocation that touched the browser (named uniquely per
   invocation, e.g. `hook-before-0.zip`, `hook-after_step-1-2.zip`, since
   more than one hook can share this one directory, unlike a step, which
   never shares its own `records/steps/<id>/`), mirroring Playwright's own
   per-test `test-results/` convention one level up. No whole-scenario
   trace.zip here: each step's own trace lives under that step's own
-  `records/steps/<id>/` instead (see "Running")
+  `records/steps/<id>/` instead (see "Running"). A scenario that wrote none
+  of these leaves no directory: its entry in `run.json` is its record
 - `records/runs/<run_id>/`: one directory per `nuka run` invocation,
   holding `exports`: every result, container, and attachment file that run
   wrote under `export/`, and its messages stream wherever `messages.output`
   put it, one root-relative path per line, appended by
   whichever process wrote the file (under `--concurrency`, the worker
   processes do). It is what lets a run's export output leave with the run
-  (see "Artifacts"). It carries no status or timing: every scenario record
-  already carries its run's `run_id` and `started_at`. The same directory
-  holds `run.json`, the run's result, and `summary.md`, its run
-  summary (see "Records")
+  (see "Artifacts"). It carries no status or timing: `run.json` does. The
+  same directory holds `run.json`, the run's result, and `summary.md`, its
+  run summary (see "Records")
 - `cache/sessions/<env>/<name>.json`: storageState; live credentials in
   plaintext, created with restricted permissions
 - `export/allure-results/`: the emitter's output, holding the same runs
@@ -3817,8 +3901,8 @@ The following findings show what `tend` inspects and why each item is rot rather
   reasonably start by getting to that page. It turns into rot when the
   opening is expensive and nothing has been lifted out of it, because the
   cost grows with every scenario added. This finding is measured rather
-  than read off the feature files. It groups the most recent run's
-  scenario records by their leading step text, reads those steps' own
+  than read off the feature files. It groups the scenarios of the most
+  recent run that wrote its `run.json` by their leading step text, reads those steps' own
   records for what each took, and names the group, its steps, and the
   total. One finding per family, so one nested group is never counted
   again at three depths. The depth it names does not depend on timing: the
@@ -3831,9 +3915,8 @@ The following findings show what `tend` inspects and why each item is rot rather
   suite, where it removed exactly the groups whose cost rounded to zero
   and gave up 0.2 of the 101.5 seconds the finding otherwise named. The
   denominator is summed scenario time rather than wall clock, so this
-  reads the same at any `--concurrency`. A run still in progress is read
-  as far as it has got, and its shares are of what it has written so far,
-  since a scenario record carries no mark saying its run has finished. A
+  reads the same at any `--concurrency`. A run still in progress has no
+  `run.json` yet, so the finding reads the newest run that ended. A
   scenario that ran more than once in that run (`--repeat`) counts once,
   as its last execution. It
   stops at the number. What to do about a shared opening depends on
@@ -4123,16 +4206,17 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
-                              --json drops every one of these lines and
-                              keeps only warnings on stderr.
+                              --json drops every one of these lines, and
+                              warnings go into run.json's findings.
                               stdout is empty unless asked: --records
-                              prints NDJSON, one record per scenario, on a
-                              terminal or not. --json prints run.json
-                              (run id, verdict, counts, each scenario's
-                              record path and rerun command, the summary
-                              path) as the one document on stdout instead;
-                              run.json is written to records/runs/<run_id>/
-                              either way. Text project code (a step, a hook, a
+                              prints NDJSON, each scenario's run.json
+                              entry, on a terminal or not. --json prints
+                              run.json (commit, environment, selection,
+                              counts, each scenario's steps with line,
+                              status, record, and error, each failed
+                              scenario's do, the findings) as the one
+                              document on stdout instead; run.json is
+                              written to records/runs/<run_id>/ either way. Text project code (a step, a hook, a
                               fixture) writes through console.log or
                               process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
@@ -4515,11 +4599,11 @@ or stderr, depends on whether a stream is a terminal: `nuka steps` wraps at
 
 Every JSON document nukadoko writes or prints starts with
 `schema_version`, an integer that belongs to that kind of document: the
-step record, the scenario record, `run.json`, and the envelope. The
+step record and the envelope. `run.json` is the `nuka run --json`
+envelope, so it carries the envelope's. The
 number moves when a field the document already has changes its meaning,
 its type, or its name, or is removed. An added field does not move it. A
-reader checks the number before it trusts the shape. The scenario record
-and `run.json` are 1. The step record is 2 (an `observed` channel the
+reader checks the number before it trusts the shape. The step record is 2 (an `observed` channel the
 execution never reached is `null`, and `observed.processes` is always
 present). The envelope is 2. A record without `schema_version` was written
 by nukadoko 0.16.1 or earlier. The `experimental` commands print the
@@ -4631,7 +4715,7 @@ reading either stream.
 
 | Command | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | one scenario record per line under `--records`, the envelope under `--json`, nothing otherwise | progress, the locations written, the summary line, the `scenario-failed` findings, warnings; nothing under `--json` |
+| `nuka run` | one scenario's `run.json` entry per line under `--records`, `run.json` (the envelope) under `--json`, nothing otherwise | progress, the locations written, the summary line, the `scenario-failed` findings, warnings; nothing under `--json` |
 | `nuka do` | the step record, also for a failed step | session notices, warning findings |
 | `nuka check`, `nuka tend` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and `nuka tend`'s `fail-on` lines |
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |

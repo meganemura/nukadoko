@@ -45,6 +45,34 @@ This part does not change release to release.
 
 ## 0.17.0 to the next release
 
+- **`run.json` holds the whole run, and scenario record files are gone.**
+  A script that read `run.json` or `nuka run --json` changes these reads:
+  - `schema_version` is 2, the envelope's, and the document starts with
+    `command: "run"`, `verdict`, and `findings`, which now holds every
+    warning the run raised as well as each failed scenario.
+  - A scenario's `rerun` is its `do`, present only on a failed scenario.
+    Its `record` (the path of a scenario record file) is gone; read its
+    `steps` instead: each step has `line`, `text`, `step`, `status`,
+    `step_record_id`, `record` (the step record's directory), and for a
+    failure `error.kind`, `error.message`, and `used`.
+  - The top-level `summary` path is gone. The summary is
+    `summary.md` in the same directory as `run.json`.
+  - `commit` (`sha`, `dirty`), `target_version`, and `selection` are new.
+    A script that tested a scenario record's `git.clean` tests
+    `!commit.dirty`.
+  - A script that read `.nukadoko/records/scenarios/<id>/record.json`
+    reads that scenario's entry in `run.json`; the file is no longer
+    written, and a scenario that wrote no screenshot, hook trace, or
+    attachment leaves no `records/scenarios/<id>/` directory.
+  - A script that matched the "Partial run" paragraph on stderr reads
+    `selection` in `run.json`, `partial` or `full`, or the
+    `- selection:` line of the run summary.
+  - A `--records` line is now a scenario's `run.json` entry: it has no
+    `run_id`, `environment`, `session`, `git`, `nukadoko`, or
+    `schema_version`; read those from `run.json`.
+  The run summary gains a `- selection:` line and a "Findings" section; a
+  CI step that only posts it needs nothing.
+
 - **Every command's `--json` is one envelope, and every finding has one
   grammar.** A script that reads `--json` reads
   `{ schema_version: 2, nukadoko, command, verdict, findings, ... }`:
@@ -73,7 +101,7 @@ This part does not change release to release.
 - **A failed scenario is a `scenario-failed` finding.** The `failed` and
   `rerun` lines on stderr are gone. A script that grepped `rerun` reads
   the `  do: nuka run <feature>:<line>` line under each
-  `failed\tscenario-failed\t` line, or each scenario's `rerun` in
+  `failed\tscenario-failed\t` line, or each failed scenario's `do` in
   `run.json`.
 - **Warnings are findings with codes.** The no-config line is
   `warning\tconfig-missing\t-\t...` on stderr, and under `--json` it is
@@ -92,11 +120,10 @@ This part does not change release to release.
   A pipe, a file, a CI log, and an agent's shell no longer get one JSON
   record per line by default; stdout stays empty. A script that parsed
   that stream picks one of three: add `--records` to the `nuka run` it
-  reads (the same lines as before), switch to `--json` and read
-  `run.json` (the verdict, the counts, and each scenario's status, record
-  path, and `rerun` command in one document), or read the files under
-  `.nukadoko/records/scenarios/`, which the run writes either way. A
-  CI step that only shows the log needs nothing. The run summary, the
+  reads (each line is now a scenario's `run.json` entry, see the
+  `run.json` item below), switch to `--json`, or read
+  `.nukadoko/records/runs/<run_id>/run.json`, which the run writes either
+  way. A CI step that only shows the log needs nothing. The run summary, the
   stderr lines, and `nuka do`'s stdout do not change.
 - **`evidence.attach` and `evidence.path` refuse `trace.<name>.zip` and
   `final.<name>.png`.** A `pageAs(name)` context writes those files beside
@@ -123,8 +150,8 @@ This part does not change release to release.
   `fetch`.
 - **`--json` prints one document and nothing around it.** A script that
   scraped `nuka run --json`'s stderr for the `run` path, the count line, or
-  a `rerun` line reads them from the document instead: `counts`, each
-  scenario's `rerun`, and `summary`. A script that split a `--json`
+  a `rerun` line reads them from the document instead: `counts` and each
+  failed scenario's `do`. A script that split a `--json`
   refusal by lines parses stdout as one JSON value; it is pretty-printed
   now. A test that compared `nuka steps` text at a terminal width other
   than 80 compares at 80.

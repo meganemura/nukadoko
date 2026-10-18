@@ -113,7 +113,7 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
 | 目的 | 成果物 | 書く | コミット | 寿命 | 読む |
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
-| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>`、`.nukadoko/records/runs/<run_id>/`(その run が書いた export ファイルの一覧、その断定、その Markdown のサマリ) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、Allure emitter と messages emitter、`nuka do --use`、`nuka tend` |
+| Measurement | `.nukadoko/records/steps/<id>/`(`record.json` とその evidence)、`.nukadoko/records/scenarios/<id>/`(scenario 自身の evidence、書いたときだけ)、`.nukadoko/records/runs/<run_id>/`(run の結果である `run.json`、その Markdown のサマリである `summary.md`、その run が書いた export ファイルの一覧) | ツール | しない | 最新 `retention.runs` 回分の run。どの run にも属さない record は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、Allure emitter と messages emitter、`nuka do --use`、`nuka tend` |
 | Export | `.nukadoko/export/allure-results/`、`.nukadoko/export/messages.ndjson`(その隣に、`nuka run` の呼び出し 1 回につき 1 つ増える run-id 付きファイルも)。どちらも、その emitter が有効なときだけ | ツール | しない | 書いた run と同じ | 他のツール |
 | Cache | `.nukadoko/cache/sessions/` | ツール | しない | 使い捨て | `nuka run` / `nuka do` |
 
@@ -137,16 +137,15 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   1 回の run の作業記録は、次の run について何も語らないからです。
 - **Measurement には寿命があり、`nuka run` がそれを守らせます。**
   毎回の run の終わりに、最新 `retention.runs` 回分(既定 20)の run は、書いたものをすべて保ちます。
-  それより古い run は、scenario record、それが引用する step record、その run 自身の `records/runs/<run_id>/exports` が列挙する export ファイル、そして messages ストリームを失います。
-  run とは、1 つの `run_id` を共有する scenario record の全体で、最も早い `started_at` で日付を持ちます。
+  run とは、終わったときに書いた `records/runs/<run_id>/run.json` のことで(「Scenario(スクリプト化された経路)」を参照)、その `started_at` で日付を持ちます。
   `nuka tend` が最新の run を名指すときの規則と同じなので、2 つのコマンドが「どの run か」で食い違うことはありません。
-  どちらも、`started_at` を日時として解釈できない scenario record を、`record.json` が読めない record と同じに扱い、どの run にも属させません。
+  それより古い run は、その `run.json` が引用する step record、それが名指す scenario の evidence ディレクトリ、その run 自身の `records/runs/<run_id>/exports` が列挙する export ファイル、そして messages ストリームを失います。
+  読めない `run.json` や、`started_at` を日時として解釈できない `run.json` は、どの run の日付にもなりません。
   まだ書いている可能性のある run は消されません。
-  run が終わると、`nuka run` はその結果である `records/runs/<run_id>/run.json` を書き(「Scenario(スクリプト化された経路)」を参照)、run の断定(`passed` か `failed`)、件数、終了時刻を入れます。
-  このファイルのない run は、最も新しい record が `retention.adHocDays` より古くなって初めて retention が消します。
-  実行中の run、強制終了された run、このファイルができる前に書かれた run は見分けがつかず、終わったと証明できないものは消しません。
+  実行中の run、強制終了された run、`run.json` が scenario を持つ前に書かれた run には、run.json として読める `run.json` がなく、終わったと証明できないものは消しません。
+  それらが書いたものは、下の日数の規則に任されます。
   retention を適用する run 自身は、より新しい run が先に終わっていても、自分の適用で消されることはありません。
-  保持された run のどれにも属さない record(`nuka do` の record、run が消えた record、`record.json` が読めないか `started_at` を日時として解釈できない scenario ディレクトリ、最初の scenario が終わる前に止まった run)は、`retention.adHocDays` 日(既定 7)より古くなった時点で消えます。
+  保持された run のどれにも属さない record(`nuka do` の record、run が消えたか `run.json` を書かなかった step record や scenario ディレクトリ、`run.json` のない run ディレクトリ)は、`retention.adHocDays` 日(既定 7)より古くなった時点で消えます。
   `nuka do --use` は設計上、日をまたいでそれらを読むため、run の回数ではなく日数を与えています。
   寿命を過ぎた record への `--use` は、有効な方針を添えて拒否され、何も返さないまま終わることはありません。
   どちらの数字にも「無効」の値はなく、履歴を長く持ちたいプロジェクトは数字を上げます。
@@ -164,11 +163,10 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   1 つの export ファイルだけは、retention と `clean` の両方の例外です。
   `export/allure-history.jsonl` は `allure-results/` の中ではなく、その隣にあります。
   ここにある成果物のうち、新しい run で再現できないものはこのファイルだけです。
-- **step record と scenario record は同じ 1 行にいます。**
+- **step record と run.json は同じ 1 行にいます。**
   違うのは粒度だけです。
-  scenario record と各 step record は、異なる 2 つの問いではなく、同じ問いに 2 つの解像度で答えます。
-  `nuka do` には record を書く対象の scenario がないため、step record だけを書きます。
-  「record」は両方の種類を指します。
+  `run.json` の中の scenario のエントリと各 step record は、異なる 2 つの問いではなく、同じ問いに 2 つの解像度で答えます。
+  `nuka do` には書く対象の scenario も run もないため、step record だけを書きます。
   ファイルの分割が表すのは粒度であり、別の概念ではありません。
 
 ## 型付き step
@@ -1747,8 +1745,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
 コンパイラは Background をマージし、Scenario Outline を展開して、table を結び付けます。
 nukadoko は各 pickle の step をコミットされた pattern と照合してから、step を順番に実行します。
-各 step に 1 つの step record を書き込み、各 pickle に 1 つの scenario record を書き込みます。
-scenario record は feature のパス、scenario 名、順序付けられた step record id、step ごとの status を含みます。
+始まった各 step に 1 つの step record を書き込み、run が終わるとすべての scenario を持つ 1 つの `run.json` を書き込みます。
+`run.json` は、各 scenario の feature のパス、行、名前と、各 step の行、テキスト、status、step record を持ちます。
 
 `nuka run` は何かを実行する前に、選んだ scenario について `nuka check` が報告するはずの内容を報告します。
 その中に error が 1 つでもあれば、error を stderr に書き、record を書かずに `1` で終了します。
@@ -1791,7 +1789,7 @@ scenario record は feature のパス、scenario 名、順序付けられた ste
 nukadoko は、作業を worker プロセスに分散します。
 親プロセスが pickle を選び、feature ファイルをまるごと各 worker に渡し、各 worker は `--concurrency 1` の run と同じ直列エンジンで、渡されたファイルを実行します。
 親プロセスは、run の identity を最後まで保ちます: 1 つの run_id、1 つの stdout ストリーム、1 つの messages ストリーム、1 つの Allure results ツリー、1 つのサマリ、1 つの exit code です。
-そのため scenario record は、worker が作ったものでも直列の run が作ったものでも同じように読めます。
+そのため `run.json` の scenario のエントリは、worker が作ったものでも直列の run が作ったものでも同じように読めます。
 run サマリも、feature のすべての行をカバーする 1 つの run として記述します。
 
 この spec が worker プロセスを名指すのは、その選択がこのフラグの約束の中身を決めるからです。
@@ -1818,7 +1816,7 @@ Gherkin のタグは自由記述なので、名前空間は、短いタグ名を
 `--repeat <n>` は、選ばれたすべての scenario をこの 1 回の呼び出しの中で `n` 回実行します。
 選択全体を 1 回、それからもう 1 回、という順です。
 前に走ったものに依存する失敗が、毎回同じ隣人と出会うためです。
-各実行は 1 つの run_id の下でそれぞれ自分の scenario record になり、summary は実行の回数を数えます。
+各実行は `run.json` の `scenarios` でそれぞれ自分のエントリになり、summary は実行の回数を数えます。
 1 回でも失敗した scenario は、failed の一覧の後に `repeat` の行を 1 つ得ます。
 `<passed> of <n> passed` の形で、判定は付けません。
 毎回失敗する scenario は flaky ではなく、読み手に要るのは回数だからです。
@@ -1856,10 +1854,11 @@ stderr の step ごとの進捗行は、その scenario 自身が終わるまで
 
 各 run は、2 種類の読み手に 2 つの出力チャネルを使います。
 stdout はスクリプトのためのもので、求められたものだけを出力します。
-`--records` のときは、1 行 1 件の scenario record を NDJSON として出力します。
-`--json` のときは、下で述べる 1 つの run の結果を出力します。
+`--records` のときは、scenario が終わるたびに、1 行 1 件の scenario を NDJSON として出力します。
+各行は、その scenario の `run.json` のエントリです。
+`--json` のときは、下で述べる `run.json` の文書を出力します。
 どちらのフラグもなければ、端末かどうかにかかわらず stdout には何も出力しません。
-record はフラグにかかわらずディスクにあり、`scenarios` の行がそのディレクトリを示します。
+`run.json` はフラグにかかわらずディスクにあり、`run` の行がそれを示します。
 人もエージェントも stderr を読みます。
 エージェントのシェルは端末ではなく、stdout を stderr と一緒に読みます。
 そのため、既定で scenario ごとの JSON の行を出すと、進捗の行が埋もれます。
@@ -1902,53 +1901,121 @@ exit code は結果であって、失敗ではないからです。
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
 この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
 `--json` のとき、stderr は空です。
-この段落とその前の 2 つの段落が挙げる行がどれも出ず、部分実行の通知も retention の行も出ません。
+この段落とその前の 2 つの段落が挙げる行がどれも出ず、retention の行も出ません。
 stdout の文書が結果を持っていて、エージェントのシェルは 2 つのストリームを 1 つとして読むからです。
 何かがうまくいかなかったことを知らせる警告(書けなかったファイル、失敗した hook や fixture の teardown、拒否の前の `nuka check` のエラー)は、code を持つ所見です。
 テキストでは stderr に出て、`--json` では envelope の `findings` に入ります。
 
-機械向けの run の結果は `records/runs/<run_id>/run.json` です。
-run が終わったとき、最後の record と run サマリの後に、直列実行でも並行実行でも書かれます。
+機械と監査する人向けの run の結果は `records/runs/<run_id>/run.json` です。
+run が終わったとき、最後の step record と run サマリの後に、直列実行でも並行実行でも書かれます。
+これは `nuka run --json` の envelope(「envelope」を参照)なので、`schema_version` は envelope のものです。
+読み手が別のファイルを開かずに run について行動するのに要るものを、すべて持っています。
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "nukadoko": "...",
-  "run_id": "run-20260801-143022-a1b2",
+  "command": "run",
   "verdict": "failed",
+  "findings": [
+    {
+      "severity": "failed",
+      "code": "scenario-failed",
+      "file": "features/greet.feature",
+      "line": 4,
+      "message": "greets by name: text: expected \"Hi, Ada!\", got \"Hello, Ada!\"",
+      "do": "nuka run features/greet.feature:4"
+    }
+  ],
+  "run_id": "run-20260801-143022-a1b2",
   "started_at": "...",
   "finished_at": "...",
+  "commit": { "sha": "<40 hex characters>", "dirty": false },
   "environment": "default",
-  "counts": { "scenarios": 2, "passed": 1, "failed": 1 },
+  "target_version": null,
+  "selection": "full",
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
       "feature": "features/greet.feature",
-      "line": 5,
-      "scenario": "wrong expectation",
+      "line": 4,
+      "scenario": "greets by name",
       "status": "failed",
-      "record": ".nukadoko/records/scenarios/scn-20260801-143023-c3d4/record.json",
-      "rerun": "nuka run features/greet.feature:5"
+      "started_at": "...",
+      "finished_at": "...",
+      "steps": [
+        {
+          "line": 5,
+          "text": "I run greet with \"Ada\"",
+          "step": "run-greet",
+          "status": "passed",
+          "step_record_id": "step-20260801-143023-e5f6",
+          "record": ".nukadoko/records/steps/step-20260801-143023-e5f6",
+          "mutates": false,
+          "observed": {
+            "http_reads": null,
+            "http_writes": null,
+            "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41 }]
+          }
+        },
+        {
+          "line": 6,
+          "text": "the output says \"Hi, Ada!\"",
+          "step": "output-says",
+          "status": "failed",
+          "step_record_id": "step-20260801-143023-g7h8",
+          "record": ".nukadoko/records/steps/step-20260801-143023-g7h8",
+          "mutates": false,
+          "observed": { "http_reads": null, "http_writes": null, "processes": null },
+          "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
+          "used": [
+            {
+              "step": "run-greet",
+              "record": ".nukadoko/records/steps/step-20260801-143023-e5f6",
+              "result": { "exitCode": 0, "stdout": "Hello, Ada!\n", "stderr": "" }
+            }
+          ]
+        }
+      ],
+      "hooks": [],
+      "do": "nuka run features/greet.feature:4"
     }
-  ],
-  "summary": ".nukadoko/records/runs/run-20260801-143022-a1b2/summary.md"
+  ]
 }
 ```
 
-`scenarios` には、run が書いた scenario record ごとに 1 件のエントリが、書いた順に入ります(例は 2 件のうち 1 件を示しています)。
-`rerun` は、`scenario-failed` の所見の `do:` 行が出すのと同じコマンドです。
-`nuka run --json` のとき、stdout はこれらのフィールドを `findings` の隣に持つ envelope です。
-`schema_version` と `verdict` は envelope のものです。
-`verdict` は終了コードの断定です。
-どの scenario record も持たない BeforeAll や AfterAll の失敗も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
-`summary` は、run サマリを書けなかったときは `null` です。
+- `commit` は、run の開始時に `HEAD` が指していたコミットです。
+  `dirty` は、そのとき作業ツリーに `git status --porcelain` が報告する変更(未追跡ファイルを含む)があったかどうかです。
+  git リポジトリの外や最初のコミットの前では `null` です。
+  `environment` は run が対象にした `--env` で、`target_version` はその environment のバージョン probe が答えた値です(probe がなければ `null`)。
+- `selection` は、`:line` の対象がそのファイルの scenario を 1 つでも外したとき `partial` で、それ以外は `full` です。
+  部分実行はデバッグの結果であり、レビュアーが feature が通ったと読むべきものではありません(「レビュー」を参照)。
+- `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入ります。
+  各 step は、feature ファイルでの `line`、`text`、一致した `step`(一致がないか複数あれば `null`)、`status` を持ちます。
+  始まった step は、`step_record_id`(`nuka do --use` が受け取る値)と、step record のディレクトリである `record` を持ち、その `mutates` の宣言と `observed` の計測も持ちます。
+  失敗した step、または理由があって始まらなかった step(`undefined`、`ambiguous`)は、step record の `kind`(step record が言わなければ `null`)と最初のメッセージを持つ `error` を持ちます。
+  `from` で前の結果を読んで失敗した step は `used` を持ち、各 producer の step、record、読んだ結果を載せます。
+  args と step 自身の結果は step record に残ります。
+  大きくなりうるうえ、次の判断には要らないからです。
+- 失敗した scenario は、それだけを走らせるコマンドである `do` を持ちます。
+  `scenario-failed` の所見の `do:` 行が出すのと同じコマンドです。
+  自分の evidence(最終スクリーンショット、hook の trace や添付)を書いた scenario は、`records/scenarios/` の下のそのディレクトリを `evidence` に持ちます。
+  何も書かなかった scenario は `evidence` を持たず、その空のディレクトリは run の終わりに消されます。
+- `findings` は、run が出したすべての所見を持ちます。
+  失敗した各 scenario と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
+- `verdict` は終了コードの断定です。
+  どの scenario も持たない BeforeAll や AfterAll の失敗も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
+
 パスはすべてプロジェクトのルートからの相対パスです。
-stderr の書き込み先の行は、これを `run` として示します。
+stderr の書き込み先の行は、このファイルを `run` として示します。
 scenario を 1 つも選ばなかった run は record を書かず、`run.json` も書きません。
 強制終了された run にもありません。
 retention は、それによって終わった run と見分けます。
+scenario record のファイルはありません。
+`run.json` の中の scenario のエントリが、その record です。
 
-`--json` は、同じオブジェクトを stdout の唯一の JSON 文書として、`--records` が出力する scenario record の代わりに出力します。
+`--json` は、同じ文書をファイルとバイト単位で同じまま stdout の唯一の JSON 文書として、`--records` が出力する scenario の行の代わりに出力します。
 スクリプトは 1 回の解析で結果全体を読めます。
 scenario を 1 つも選ばなかった run でも、空の `scenarios` とともに出力します。
 何かが実行される前の拒否では、`--json` なしのときと同じく stdout に何も出力しません。
@@ -1957,7 +2024,7 @@ stderr は変わりません。
 書き込み先の行が `allure` や `messages` の場所を出すのは、その emitter が有効なとき、つまり config にそのキーがあるときだけです(「Allure emitter」と「Messages emitter」を参照)。
 何も書かなかった emitter の行は、読み手を存在しないパスへ送ってしまいます。
 
-scenario record 自身の `browser` フィールド(`{ "type": "firefox", "version": "133.0" }`)には、この run が実際に起動したエンジンとバージョンが入ります。
+`run.json` の scenario 自身の `browser` フィールド(`{ "type": "firefox", "version": "133.0" }`)には、この run が実際に起動したエンジンとバージョンが入ります。
 これは Playwright が返す実際の `Browser` オブジェクトから読んだ値であり、`config.browserType` から読んだ値ではありません。
 両者は食い違うことがあります(step が `page` fixture をこの run 自身の `ctx` が一度も起動していない別のブラウザで上書きすることがあるからです)。
 記録に足るだけの信頼性があるのは計測された側だけです。
@@ -1967,12 +2034,12 @@ run の pickle が一度もブラウザを起動しなかった場合、この�
 `:12` は 1 つの scenario だけを選び、これが反復のための経路です。
 feature のフル実行はすべての scenario の分数を消費し、その中の 1 つを正しくすることが、たいてい次の数回の実行の目的です。
 これは同じものの縮小版ではありません: 部分実行の run サマリは選んだ scenario しか扱わないので、green になったところでそれはデバッグの結果でしかなく、レビュアーが feature が通ったと読むべきものではないからです(「レビュー」を参照)。
-`nuka run` は行番号が与えられ、それがファイルの持つ scenario より少ない数を選んだその場で、stderr にそれを告げます。
-行番号がファイルのすべての scenario を選ぶ場合(scenario が 1 つの feature など)、それはすでにフル実行なので、告知は書きません。
+行番号が与えられ、それがファイルの持つ scenario より少ない数を選んだとき、`run.json` と run サマリは `selection: partial` でそれを告げます。
+行番号がファイルのすべての scenario を選ぶ場合(scenario が 1 つの feature など)、それはすでにフル実行なので、`selection` は `full` です。
 
 1 つの pickle 内の step は 1 つの context を共有します(Cucumber ユーザーが期待する World の意味論です)。
 ログインする Background は、以降のすべての step にブラウザと cookie を引き継ぎます。
-失敗した step は scenario の残りをスキップし、スキップされた step には step record が作られません(始まってすらいない実行が引用可能であってはならず、「skipped」と言うのは scenario record の役目です)。
+失敗した step は scenario の残りをスキップし、スキップされた step には step record が作られません(始まってすらいない実行が引用可能であってはならず、「skipped」と言うのは `run.json` の scenario のエントリの役目です)。
 Evidence は自然なスコープに従います。
 各 step の record は、その step 自身の http.jsonl と、その step 自身の Playwright trace の両方を持ちます。
 trace はかつて、共有された context 全体にまたがる 1 本のファイルとして scenario 自身のディレクトリに置かれ、`page` を bag に名指した最初の step で一度だけ開かれ、最後に一度だけ閉じられていました。
@@ -2053,8 +2120,8 @@ nukadoko 自身のプロセスで同じことをすると、管理すべき 2 �
 それでいて、ホストのサーバがすでにしていること以上のものは何も得られません。
 
 そのサーバがすることは何も evidence にはなりません。
-step record も scenario record も書きません。
-レビュアーが読む run サマリは scenario record から組み立てられます(「レビュー」を参照)。
+step record も `run.json` も書きません。
+レビュアーが読む run サマリは `run.json` から組み立てられます(「レビュー」を参照)。
 だから探索からそのサマリへの道は、誰かが書いた feature と本物の `nuka run` を通るか、そもそも存在しないかのどちらかです。
 30 回の呼び出しを経た世界は、誰にも再現できません。
 だからこそ、探索から出てくるのは、それをもとに書かれ、`nuka check` で確かめられ、ゼロからもう一度実行される scenario です。
@@ -2071,7 +2138,8 @@ step が scenario 内で実行された場合も、`do` で実行された場合
 scenario record(「実行」を参照)は、次の粒度で同じ問いに答えます。
 1 つの pickle の run が、順序付けられた step 全体で何をしたかを示します。
 2 つの record は、同じ概念を異なる粒度で示します。
-scenario record の `steps` 配列は各 step record を id で示すため、どちらの record からでも他方にたどり着けます。
+scenario record は独立したファイルではなく、その run の `run.json` の中の scenario のエントリです。
+その `steps` 配列は各 step record を id とパスで示し、step record は自分の scenario record の id を持つので、どちらの record からでも他方にたどり着けます。
 
 ```json
 {
@@ -2103,7 +2171,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 
 - `schema_version` が先頭に来るので、読み手は残りを読む前に、どの形を持っているかを確かめられます(「CLI summary」を参照)。
   `nukadoko` は record を書いたバージョンです。
-  scenario record も両方を持ちます。
+  `run.json` も、envelope のものとして両方を持ちます。
 - `result` は信頼の錨です。
   returns のスキーマを通過しており、それを作ったのは(呼び出し側ではなく)ツールです。
   失敗時には `error: { kind, message }` がそれに置き換わります。
@@ -2127,7 +2195,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   union のどれかの選択肢が、与えられた文字列をそのまま受け付けるなら、選択肢を宣言した順序にかかわらず、文字列はそのまま残ります。
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
-  `run_id` が無かったころは、ある step record がどの run のものかを知るのに隣の scenario record を開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
+  `run_id` が無かったころは、ある step record がどの run のものかを知るのに別のファイルを開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
 - `error.kind` は閉じた集合を使い、人が読むメッセージの隣に置かれます: `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`step_error`。
   閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
   最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
@@ -2365,22 +2433,22 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `{ "name", "scope", "setup_ms"?, "at"?, "reused" }` です(完全な形と、`setup_ms`/`at` が新しく構築されたエントリにしか存在しない理由は「Fixtures」を参照)。
   teardown 自体はこのリストに含まれません。
   teardown はこの step record がすでに閉じたあとに走るので、`scenario` scope の fixture 自身の teardown 失敗は scenario record の `teardown_errors` に載ります(「Fixtures」を参照)。
-- scenario record の `git` は `{ "commit", "clean" }` です。
-  `commit` は run が始まったときに working tree があったコミットの 40 文字の完全な sha で、`clean` はそのとき `git status --porcelain=v2 --branch`(untracked なファイルを含む)が `#` で始まるヘッダ行以外を何も出さなかったかどうかです。
-  pickle ごとではなく run の開始時に 1 回だけ計測するので、step が実行中に追跡対象のファイルを編集しても、1 回の `nuka run` のすべての scenario record は同じ値を持ちます(`--concurrency` では、各 worker が起動時に 1 回計測します)。
-  git リポジトリの外、最初のコミットより前、git の呼び出しが失敗したときは、このフィールドはありません。
+- `run.json` の `commit` は `{ "sha", "dirty" }` です。
+  `sha` は run が始まったときに working tree があったコミットの 40 文字の完全な sha で、`dirty` はそのとき `git status --porcelain=v2 --branch`(untracked なファイルを含む)が `#` で始まるヘッダ行以外を出したかどうかです。
+  pickle ごとではなく run の開始時に 1 回だけ計測するので、step が実行中に追跡対象のファイルを編集しても値は変わりません。
+  git リポジトリの外、最初のコミットより前、git の呼び出しが失敗したときは `null` です。
   そのことで run 自体が失敗することはありません。
   run サマリがこれを報告するので(後述)、レビュアーはどのコミットが実行されたか、working tree に未コミットの変更があったかを見られます。
-- step record は `.nukadoko/records/steps/<id>/` の下に置かれます。
-  scenario record は `.nukadoko/records/scenarios/<id>/` の下に置かれます(「成果物」を参照)。
+- step record は `.nukadoko/records/steps/<id>/` の下に、`run.json` は `.nukadoko/records/runs/<run_id>/` の下に置かれます(「成果物」を参照)。
   どちらもローカルな作業上の計測であり、人が手元に残すのは pull request 上の run サマリです(後述)。
 
 **run サマリ。**
 record は機械とエージェントのために書かれます。
 pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまとめた Markdown のサマリも書きます。
 これは run をレビューする人のためのものです。
-run が計測したものだけから、すべての record と run scope の hook の後に組み立てられます。
+すべての record と run scope の hook の後に、run の `run.json` の文書だけから、1 つの純粋な関数で描画されます。
 そのため `--concurrency` の run でも、worker ごとではなく親プロセスが 1 つのサマリを書きます。
+サマリが `run.json` の言わないことを言うことはなく、CI のマシンからコピーした `run.json` からサマリを描画し直すこともできます。
 中身は次のとおりです。
 
 - 先頭の `<!-- nukadoko:run -->` という行。
@@ -2389,9 +2457,9 @@ run が計測したものだけから、すべての record と run scope の ho
   断定は終了コードのものです。
   そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗がどの scenario の外で起きたかを述べる 1 文が付きます。
 - 条件。
-  短いコミット sha と未コミットの変更があったかどうか(`git` から読み、無ければ unknown)、environment とその target version、scenario が起動したすべてのブラウザ(無ければ none launched)、nukadoko のバージョン、run id、開始と終了の時刻です。
+  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、environment とその target version、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - feature ファイルごとの表(パス順)。
-  scenario record ごとに 1 行を行番号順に並べ、scenario、行、状態、所要時間を載せます。
+  scenario ごとに 1 行を行番号順に並べ、scenario、行、状態、所要時間を載せます。
   失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
   `--repeat` では、実行のそれぞれが 1 行になります。
 - 「Declared vs observed」。
@@ -2404,13 +2472,15 @@ run が計測したものだけから、すべての record と run scope の ho
   `mutates: false` を宣言しながら HTTP のチャネルに届かなかった step(`observed.http_writes` が `null`)は比べられておらず、この節はそれらを 1 行で数えます("2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes ...")。
   そのため、`fetch` を呼んだ step が書き込まなかったと報告されることはありません。
   compat step(`mutates: null`、「Compat steps(移行の扉)」を参照)には比べる宣言が無く、別に数えます。
-- 失敗した run では、失敗した各 scenario の `nuka run <feature>:<line>` コマンド。
+- 「Findings」。
+  失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。
+- 失敗した run では、失敗した各 scenario の `do` である `nuka run <feature>:<line>` コマンド。
   run に `--env` があればそれも付きます。
 
 サマリは毎回 `.nukadoko/records/runs/<run_id>/summary.md` に書かれます。
 `$GITHUB_STEP_SUMMARY` が設定されていれば、それが指すファイルに追記されます(GitHub Actions はすべての step にこれを設定するので、設定なしでジョブのサマリページに run が載ります)。
 `--summary <path>` が与えられれば、そこにも書かれ、前の中身は置き換えられます。
-サマリの中のエラー文は scenario record のものなので、secret はすでに伏せてあります。
+サマリの中のエラー文は `run.json` のものなので、secret はすでに伏せてあります。
 書けなかったサマリは stderr の警告になり、終了コードを変えることはありません。
 record を何も書かない setup の失敗は、サマリも書きません。
 
@@ -2554,7 +2624,7 @@ firefox と webkit はそれぞれ専用のバイナリのインストールが�
 そのため `nuka check` はそれについて何も主張しません。
 バイナリが無い場合は、Playwright 自身のエラーがそのまま起動時に現れます。
 握り潰したり言い換えたりはしません。
-scenario record 自身の `browser` フィールド(「実行」を参照)には、run が実際に起動したエンジンとバージョンが、同じように計測されて載ります。
+`run.json` の scenario 自身の `browser` フィールド(「実行」を参照)には、run が実際に起動したエンジンとバージョンが、同じように計測されて載ります。
 
 `browser` は Playwright 自身の `LaunchOptions` 型をそのまま受け取ります。
 zod は「これがオブジェクトかどうか」以上には形を再検証しません。
@@ -2664,20 +2734,22 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 目的別に 3 つのディレクトリへ分かれています(「成果物」を参照):
 
 - `records/steps/<id>/`(step record ごとに 1 つのディレクトリ: record の JSON とその evidence ファイル(trace.zip、screenshots、http.jsonl))
-- `records/scenarios/<id>/`(scenario の実行ごとに 1 つのディレクトリ: `record.json`、scenario 自身の最終スクリーンショット、そしてブラウザに触れた Before/After/AfterStep フックの呼び出しごとの trace chunk)。
+- `records/scenarios/<id>/`(自分の evidence を書いた scenario の実行ごとに 1 つのディレクトリ: scenario 自身の最終スクリーンショット、そしてブラウザに触れた Before/After/AfterStep フックの呼び出しごとの trace chunk)。
   各呼び出しに一意な名前が付きます(例えば `hook-before-0.zip`、`hook-after_step-1-2.zip`)。
   複数の hook がこの 1 つのディレクトリを共有しうるからです。
   自分自身の `records/steps/<id>/` を決して共有しない step とは違います。
   これは Playwright 自身のテストごとの `test-results/` という規約を 1 階層上でなぞったものです。
   scenario 全体をまたぐ trace.zip はここにはありません。
   各 step 自身の trace は、その step 自身の `records/steps/<id>/` の下に置かれます(「実行」を参照)。
+  これらを何も書かなかった scenario はディレクトリを残しません。
+  `run.json` の中のそのエントリが、その record です。
 - `records/runs/<run_id>/`(`nuka run` の呼び出しごとに 1 つのディレクトリ。
   `exports` を持ちます)。
   `exports` は、その run が `export/` の下に書いた result、container、attachment のすべてのファイルと、`messages.output` が置いた場所にあるその run の messages ストリームを、ルートからの相対パスで 1 行に 1 つ列挙したものです。
   ファイルを書いたプロセス自身が追記します(`--concurrency` では worker プロセスが書きます)。
   これがあるので、run の export 出力は run と一緒に消えます(「成果物」を参照)。
   状態や時刻は持ちません。
-  各 scenario record が自分の run の `run_id` と `started_at` を既に持っているからです。
+  それは `run.json` が持ちます。
   同じディレクトリには、run の結果である `run.json` と、run サマリである `summary.md` も置かれます(「Records」を参照)。
 - `cache/sessions/<env>/<name>.json`(storageState。生の認証情報を平文で持ち、制限されたパーミッションで作成されます)
 - `export/allure-results/`(emitter の出力。
@@ -3254,7 +3326,7 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   1 つのページについて扱う複数の scenario が、どれもそのページへ移動するところから始まるのは自然です。
   その始まりに時間がかかるのに何も切り出されていない場合は腐敗となり、scenario が増えるたびにコストも増えます。
   この所見は実行記録を計測して得られます。
-  直近の run の scenario record を先頭の step のテキストでグループ化し、各 step 自身の record から所要時間を読み、そのグループ、step、合計時間を名指しします。
+  `run.json` を書いた直近の run の scenario を先頭の step のテキストでグループ化し、各 step 自身の record から所要時間を読み、そのグループ、step、合計時間を名指しします。
   同じ始まりを持つ一群ごとに所見を 1 件だけ出すため、入れ子になった 1 つのグループが 3 つの深さで重複して数えられることはありません。
   どの深さを名指すかは所要時間に左右されません。
   共有する step の実行回数(scenario の数と共有する step の数の積)が最も多い始まりを選び、同じなら長いほうを、それも同じなら feature ファイルで先に出てくるほうを選びます。
@@ -3264,9 +3336,7 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   この下限は実際のスイートを 1 つ計測して決めました。
   そのスイートでは、コストを丸めるとゼロになるグループだけが除かれ、名指せる 101.5 秒のうち失ったのは 0.2 秒でした。
   分母に scenario の合計時間を使うため、どの `--concurrency` でも同じ結果になります。
-  実行中の run は、そこまでに書かれたところまでを読みます。
-  割合もそこまでに書かれたぶんに対する割合になります。
-  scenario record には、その run が終わったことを示す印が無いためです。
+  実行中の run にはまだ `run.json` が無いので、この所見は終わった run のうち最新のものを読みます。
   その run で 2 回以上走った scenario(`--repeat`)は、最後の実行として 1 回だけ数えます。
   この所見が報告するのは数値までです。
   同じ始まりに対する処置は、その step が後の scenario の読む状態へ書き込むかどうかに左右されます。
@@ -3524,16 +3594,17 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
-                              --json drops every one of these lines and
-                              keeps only warnings on stderr.
+                              --json drops every one of these lines, and
+                              warnings go into run.json's findings.
                               stdout is empty unless asked: --records
-                              prints NDJSON, one record per scenario, on a
-                              terminal or not. --json prints run.json
-                              (run id, verdict, counts, each scenario's
-                              record path and rerun command, the summary
-                              path) as the one document on stdout instead;
-                              run.json is written to records/runs/<run_id>/
-                              either way. Text project code (a step, a hook, a
+                              prints NDJSON, each scenario's run.json
+                              entry, on a terminal or not. --json prints
+                              run.json (commit, environment, selection,
+                              counts, each scenario's steps with line,
+                              status, record, and error, each failed
+                              scenario's do, the findings) as the one
+                              document on stdout instead; run.json is
+                              written to records/runs/<run_id>/ either way. Text project code (a step, a hook, a
                               fixture) writes through console.log or
                               process.stdout.write is delivered on stderr.
                               --concurrency <n> (default 1) hands whole feature
@@ -3917,11 +3988,11 @@ stdout でも stderr でも、ストリームが端末かどうかで変わる�
 
 nukadoko が書く、または出力する JSON の文書はすべて `schema_version` で始まります。
 これはその種類の文書に固有の整数です。
-対象は step record、scenario record、`run.json`、envelope です。
+対象は step record と envelope です。
+`run.json` は `nuka run --json` の envelope なので、envelope の番号を持ちます。
 この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
 フィールドが追加されただけでは上がりません。
 読み手は、形を信頼する前にこの番号を確かめます。
-scenario record と `run.json` は 1 です。
 step record は 2 です。
 実行が届かなかった `observed` のチャネルは `null` になり、`observed.processes` は常に存在するからです。
 envelope は 2 です。
@@ -4015,7 +4086,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 
 | コマンド | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | `--records` なら 1 行に 1 つの scenario record、`--json` なら envelope、それ以外は何も出さない | 進捗、書き込んだ場所、summary の行、`scenario-failed` の所見、警告。`--json` なら何も出さない |
+| `nuka run` | `--records` なら 1 行に 1 つの scenario の `run.json` のエントリ、`--json` なら `run.json`(envelope)、それ以外は何も出さない | 進捗、書き込んだ場所、summary の行、`scenario-failed` の所見、警告。`--json` なら何も出さない |
 | `nuka do` | step record(失敗した step でも) | session の通知、警告の所見 |
 | `nuka check`、`nuka tend` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`nuka tend` の `fail-on` の行を除く) |
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |

@@ -44,19 +44,27 @@ describe("nuka run: World constructor throw", () => {
     expect(first.hooks).toEqual([]);
     expect(first.steps).toEqual([
       {
+        line: 4,
         text: "the step runs",
+        step: "compat: the step runs",
         status: "failed",
         step_record_id: null,
-        error: { message: "World setup failed: world constructor boom" },
+        record: null,
+        error: { kind: null, message: "World setup failed: world constructor boom" },
       },
     ]);
     expect(second.scenario).toBe("second");
     expect(second.status).toBe("passed");
     expect(second.steps).toEqual([
       {
+        line: 7,
         text: "the step runs",
+        step: "compat: the step runs",
         status: "passed",
-        step_record_id: expect.any(String),
+        step_record_id: second.steps[0].step_record_id,
+        record: `.nukadoko/records/steps/${second.steps[0].step_record_id}`,
+        mutates: null,
+        observed: { http_reads: null, http_writes: null, processes: null },
       },
     ]);
 

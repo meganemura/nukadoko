@@ -1,39 +1,31 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
-import type { ScenarioRecord } from "../record/scenario-record.js";
-import type { StepRecord } from "../record/types.js";
+import type { RunDocument, RunScenario } from "../record/run-result.js";
 import {
   collectDeclaredVsObserved,
   renderDeclaredVsObserved,
-  type DeclaredVsObserved,
-  type DeclaredVsObservedMismatch,
+  type ComparedStep,
 } from "../report/summary/declared-vs-observed.js";
 import { hookLabel } from "../report/summary/hook-label.js";
-import { readStepRecordsForScenario } from "../report/step-records.js";
 import {
   exitedProducers,
   firstErrorLine,
-  formatRerunCommand,
   formatStepDuration,
   formatSummaryDuration,
-  stepRecordPath,
   type ExitedProducer,
 } from "./progress-log.js";
 
 // Responsibility: the Markdown run summary one `nuka run` invocation leaves
 // for a person: in its own run directory always, appended to
 // `$GITHUB_STEP_SUMMARY` when that is set, and at `--summary <path>` when
-// asked. A reviewer reads two things on a pull request: the `.feature` in
-// the diff, and this summary of the run at the pull request's commit. The
-// summary therefore says what ran, at which commit, under which condition,
-// and how each scenario ended, using only what the run measured.
+// asked. It says what ran, at which commit, under which condition, and how
+// each scenario ended.
 //
-// The collector keeps one small row per scenario record instead of the
-// records themselves: a `--repeat` run can write many records, and the
-// summary needs a few display values from each. Step records are read once,
-// when their scenario record arrives, for the "Declared vs observed" section
-// and for the command a failed step ran.
+// The renderer reads run.json and nothing else, so the summary is a view of
+// the run's one record and can never say something run.json does not. The
+// same function renders a run.json copied off a CI machine.
 //
 // A write failure here is a warning, never a run failure: the exit code is
 // the run's verdict, and a summary that could not be written does not
@@ -45,48 +37,17 @@ export const RUN_SUMMARY_FILE_NAME = "summary.md";
  * comment it posted earlier instead of posting another one. */
 export const RUN_SUMMARY_MARKER = "<!-- nukadoko:run -->";
 
-export interface SummaryFailure {
+interface SummaryFailure {
   /** `step "<text>"` or a hook's label: where the scenario failed. */
   readonly where: string;
   readonly errorLine: string;
-  /** Root-relative step record directory, or the scenario's evidence
-   * directory for a hook failure; `null` when nothing was written. */
+  /** The failed step's record, or the scenario's evidence directory for a
+   * hook failure; `null` when nothing was written. */
   readonly recordPath: string | null;
-  /** The last command the failed step ran that did not exit 0, as its
-   * words joined by spaces. */
+  /** The last command the failed step ran that did not exit 0. */
   readonly command?: string;
   /** The steps the failed step read from whose process exited nonzero. */
   readonly exited?: readonly ExitedProducer[];
-}
-
-export interface SummaryScenario {
-  readonly feature: string;
-  readonly line: number;
-  readonly scenario: string;
-  readonly status: "passed" | "failed";
-  readonly durationMs: number;
-  /** Present when `status` is `"failed"` and the record says why. */
-  readonly failure?: SummaryFailure;
-}
-
-export interface RunSummaryInput {
-  readonly runId: string;
-  /** The run's exit verdict, which also counts a BeforeAll or AfterAll
-   * failure that no scenario record carries. */
-  readonly verdict: "passed" | "failed";
-  readonly startedAt: Date;
-  readonly finishedAt: Date;
-  readonly nukadokoVersion: string;
-  readonly environment: string;
-  readonly targetVersion: string | undefined;
-  readonly git: { readonly commit: string; readonly clean: boolean } | undefined;
-  /** Every distinct browser a scenario of the run launched. */
-  readonly browsers: readonly { readonly type: string; readonly version: string }[];
-  /** One entry per scenario record, in the order the run wrote them. */
-  readonly scenarios: readonly SummaryScenario[];
-  readonly declaredVsObserved: DeclaredVsObserved;
-  /** Flags a rerun line needs to land in the same environment. */
-  readonly rerunFlags: readonly string[];
 }
 
 // Text a reader sees in a table cell. A `|` would end the cell, and `<`
@@ -109,45 +70,87 @@ function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 
-function renderTitle(input: RunSummaryInput): string[] {
-  const failed = input.scenarios.filter((scenario) => scenario.status === "failed").length;
-  const passed = input.scenarios.length - failed;
-  const counts = [plural(input.scenarios.length, "scenario"), `${passed} passed`];
+/** Findings the scenario tables do not already show. */
+function runFindings(document: RunDocument): readonly Finding[] {
+  return document.findings.filter((finding) => finding.code !== "scenario-failed");
+}
+
+function renderTitle(document: RunDocument): string[] {
+  const failed = document.scenarios.filter((scenario) => scenario.status === "failed").length;
+  const passed = document.scenarios.length - failed;
+  const counts = [plural(document.scenarios.length, "scenario"), `${passed} passed`];
   if (failed > 0) counts.push(`${failed} failed`);
-  const lines = [`# nukadoko run ${input.verdict}: ${counts.join(", ")}`];
-  if (input.verdict === "failed" && failed === 0) {
+  const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
+  if (document.verdict === "failed" && failed === 0) {
     lines.push(
       "",
-      "No scenario record failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no record, " +
-        "failed outside every scenario. The run's stderr names it.",
+      "No scenario failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, " +
+        "failed outside every scenario. The findings below name it.",
     );
   }
   return lines;
 }
 
-function renderCondition(input: RunSummaryInput): string[] {
+function renderCondition(document: RunDocument): string[] {
   const commit =
-    input.git === undefined
+    document.commit === null
       ? "- commit: unknown (no git state was readable when the run started)"
-      : `- commit: \`${input.git.commit.slice(0, 7)}\`${input.git.clean ? "" : " with uncommitted changes"}`;
+      : `- commit: \`${document.commit.sha.slice(0, 7)}\`${document.commit.dirty ? " with uncommitted changes" : ""}`;
   const environment =
-    input.targetVersion === undefined
-      ? `- environment: ${input.environment}`
-      : `- environment: ${input.environment} (target version ${input.targetVersion})`;
-  const browser =
-    input.browsers.length === 0
-      ? "- browser: none launched"
-      : `- browser: ${input.browsers.map((entry) => `${entry.type} ${entry.version}`).join(", ")}`;
-  const elapsed = input.finishedAt.getTime() - input.startedAt.getTime();
+    document.target_version === null
+      ? `- environment: ${document.environment}`
+      : `- environment: ${document.environment} (target version ${document.target_version})`;
+  const browsers = new Map<string, string>();
+  for (const scenario of document.scenarios) {
+    if (scenario.browser !== undefined) {
+      browsers.set(`${scenario.browser.type}\u0000${scenario.browser.version}`, `${scenario.browser.type} ${scenario.browser.version}`);
+    }
+  }
+  const browser = browsers.size === 0 ? "- browser: none launched" : `- browser: ${[...browsers.values()].join(", ")}`;
+  const selection =
+    document.selection === "full"
+      ? "- selection: full"
+      : "- selection: partial (a line target left out other scenarios of its file)";
+  const elapsed = Date.parse(document.finished_at) - Date.parse(document.started_at);
   return [
     "",
     commit,
     environment,
     browser,
-    `- nukadoko: ${input.nukadokoVersion}`,
-    `- run: ${input.runId}`,
-    `- started ${input.startedAt.toISOString()}, finished ${input.finishedAt.toISOString()} (${formatSummaryDuration(elapsed)})`,
+    selection,
+    `- nukadoko: ${document.nukadoko}`,
+    `- run: ${document.run_id}`,
+    `- started ${document.started_at}, finished ${document.finished_at} (${formatSummaryDuration(elapsed)})`,
   ];
+}
+
+function failedProcess(step: RunScenario["steps"][number]): string | undefined {
+  const processes = step.observed?.processes ?? [];
+  for (let index = processes.length - 1; index >= 0; index -= 1) {
+    const entry = processes[index]!;
+    if (entry.exit_code !== 0) return entry.command.join(" ");
+  }
+  return undefined;
+}
+
+function describeFailure(scenario: RunScenario): SummaryFailure | undefined {
+  const step = scenario.steps.find((entry) => entry.status !== "passed" && entry.status !== "skipped");
+  if (step !== undefined) {
+    const command = failedProcess(step);
+    const exited = exitedProducers(step.used);
+    return {
+      where: `step "${step.text}"`,
+      errorLine: firstErrorLine(step.error?.message ?? ""),
+      recordPath: step.record,
+      ...(exited.length === 0 ? {} : { exited }),
+      ...(command === undefined ? {} : { command }),
+    };
+  }
+  const hook = scenario.hooks.find((entry) => entry.status === "failed");
+  if (hook !== undefined) {
+    return { where: hookLabel(hook), errorLine: firstErrorLine(hook.error?.message ?? ""), recordPath: scenario.evidence?.dir ?? null };
+  }
+  return undefined;
 }
 
 function renderFailureCell(failure: SummaryFailure | undefined): string {
@@ -161,11 +164,15 @@ function renderFailureCell(failure: SummaryFailure | undefined): string {
   return parts.join("<br>");
 }
 
+function durationOf(scenario: RunScenario): number {
+  return Date.parse(scenario.finished_at) - Date.parse(scenario.started_at);
+}
+
 // One table per feature file, features by path and scenarios by line, so
 // the same run reads the same way at any concurrency. A stable sort keeps
 // the executions of one scenario under `--repeat` in the order they ran.
-function renderFeatures(scenarios: readonly SummaryScenario[]): string[] {
-  const byFeature = new Map<string, SummaryScenario[]>();
+function renderFeatures(scenarios: readonly RunScenario[]): string[] {
+  const byFeature = new Map<string, RunScenario[]>();
   for (const scenario of scenarios) {
     const rows = byFeature.get(scenario.feature) ?? [];
     rows.push(scenario);
@@ -182,120 +189,59 @@ function renderFeatures(scenarios: readonly SummaryScenario[]): string[] {
       "| --- | --- | --- | --- | --- |",
     );
     for (const row of rows) {
+      const failure = row.status === "failed" ? describeFailure(row) : undefined;
       lines.push(
-        `| ${cellText(row.scenario)} | ${row.line} | ${row.status} | ${formatStepDuration(row.durationMs)} | ${renderFailureCell(row.failure)} |`,
+        `| ${cellText(row.scenario)} | ${row.line} | ${row.status} | ${formatStepDuration(durationOf(row))} | ${renderFailureCell(failure)} |`,
       );
     }
   }
   return lines;
 }
 
-function renderRerun(input: RunSummaryInput): string[] {
+// Only steps with a step record carry a declaration and a measurement. A
+// step that never began has nothing to set against its declaration.
+function comparedSteps(scenarios: readonly RunScenario[]): ComparedStep[] {
+  return scenarios.flatMap((scenario) =>
+    scenario.steps.flatMap((step) =>
+      step.mutates === undefined || step.observed === undefined
+        ? []
+        : [{ scenarioName: scenario.scenario, stepText: step.text, stepRecord: { mutates: step.mutates, observed: step.observed } }],
+    ),
+  );
+}
+
+function renderFindings(document: RunDocument): string[] {
+  const findings = runFindings(document);
+  if (findings.length === 0) return [];
+  return [
+    "",
+    "## Findings",
+    "",
+    ...findings.map((finding) => `- ${finding.severity} \`${finding.code}\` ${cellText(whereOf(finding))}: ${cellText(finding.message)}`),
+  ];
+}
+
+function renderRerun(document: RunDocument): string[] {
   const commands = new Set<string>();
-  for (const scenario of input.scenarios) {
-    if (scenario.status === "failed") commands.add(formatRerunCommand(scenario, input.rerunFlags));
+  for (const scenario of document.scenarios) {
+    if (scenario.do !== undefined) commands.add(scenario.do);
   }
   if (commands.size === 0) return [];
   return ["", "## Rerun a failed scenario", "", "```sh", ...commands, "```"];
 }
 
-export function renderRunSummary(input: RunSummaryInput): string {
+/** The summary of the run `document` records. */
+export function renderRunSummary(document: RunDocument): string {
   const lines = [
     RUN_SUMMARY_MARKER,
-    ...renderTitle(input),
-    ...renderCondition(input),
-    ...renderFeatures(input.scenarios),
-    ...renderDeclaredVsObserved(input.declaredVsObserved),
-    ...renderRerun(input),
+    ...renderTitle(document),
+    ...renderCondition(document),
+    ...renderFeatures(document.scenarios),
+    ...renderDeclaredVsObserved(collectDeclaredVsObserved(comparedSteps(document.scenarios))),
+    ...renderFindings(document),
+    ...renderRerun(document),
   ];
   return `${lines.join("\n")}\n`;
-}
-
-function failedProcess(stepRecord: StepRecord | null | undefined): string | undefined {
-  const processes = stepRecord?.observed.processes ?? [];
-  for (let index = processes.length - 1; index >= 0; index -= 1) {
-    const entry = processes[index]!;
-    if (entry.exit_code !== 0) return entry.command.join(" ");
-  }
-  return undefined;
-}
-
-function describeFailure(
-  record: ScenarioRecord,
-  stepRecords: ReadonlyMap<string, StepRecord | null>,
-  stateDir: string,
-): SummaryFailure | undefined {
-  const step = record.steps.find((entry) => entry.status !== "passed" && entry.status !== "skipped");
-  if (step !== undefined) {
-    const stepRecord = step.step_record_id === null ? undefined : stepRecords.get(step.step_record_id);
-    const command = failedProcess(stepRecord);
-    const exited = stepRecord?.status === "failed" ? exitedProducers(stepRecord.used) : [];
-    return {
-      where: `step "${step.text}"`,
-      errorLine: firstErrorLine(step.error?.message ?? ""),
-      recordPath: step.step_record_id === null ? null : stepRecordPath(stateDir, step.step_record_id),
-      ...(exited.length === 0 ? {} : { exited }),
-      ...(command === undefined ? {} : { command }),
-    };
-  }
-  const hook = record.hooks.find((entry) => entry.status === "failed");
-  if (hook !== undefined) {
-    return { where: hookLabel(hook), errorLine: firstErrorLine(hook.error?.message ?? ""), recordPath: record.evidence.dir };
-  }
-  return undefined;
-}
-
-export interface RunSummaryCollector {
-  /** Called once for each scenario record the run writes. */
-  note(record: ScenarioRecord): void;
-  /** Everything the records gave; the caller adds what only the run knows. */
-  collected(): Pick<RunSummaryInput, "scenarios" | "browsers" | "declaredVsObserved">;
-}
-
-export function createRunSummaryCollector(rootDir: string, stateDir: string): RunSummaryCollector {
-  const scenarios: SummaryScenario[] = [];
-  const browsers = new Map<string, { type: string; version: string }>();
-  const mismatches: DeclaredVsObservedMismatch[] = [];
-  let compatStepCount = 0;
-  let unobservedReadOnlyCount = 0;
-  return {
-    note(record): void {
-      const stepRecords = readStepRecordsForScenario(rootDir, record);
-      const failure = record.status === "failed" ? describeFailure(record, stepRecords, stateDir) : undefined;
-      scenarios.push({
-        feature: record.feature,
-        line: record.line,
-        scenario: record.scenario,
-        status: record.status,
-        durationMs: Date.parse(record.finished_at) - Date.parse(record.started_at),
-        ...(failure === undefined ? {} : { failure }),
-      });
-      if (record.browser !== undefined) {
-        browsers.set(`${record.browser.type}\u0000${record.browser.version}`, record.browser);
-      }
-      // Only steps that ran have a step record to compare. A step that never
-      // began, or whose record cannot be read, has no measurement to set
-      // against its declaration.
-      const compared = collectDeclaredVsObserved(
-        record.steps.flatMap((step) => {
-          const stepRecord = step.step_record_id === null ? null : stepRecords.get(step.step_record_id);
-          return stepRecord === null || stepRecord === undefined
-            ? []
-            : [{ scenarioName: record.scenario, stepText: step.text, stepRecord }];
-        }),
-      );
-      mismatches.push(...compared.mismatches);
-      compatStepCount += compared.compatStepCount;
-      unobservedReadOnlyCount += compared.unobservedReadOnlyCount;
-    },
-    collected() {
-      return {
-        scenarios,
-        browsers: [...browsers.values()],
-        declaredVsObserved: { mismatches, compatStepCount, unobservedReadOnlyCount },
-      };
-    },
-  };
 }
 
 export interface RunSummaryTargets {
