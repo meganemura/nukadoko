@@ -2282,7 +2282,9 @@ usually what the next few runs are about. It is not a smaller version of
 the same thing: its run summary covers only the scenarios it selected, so a
 green one is a debugging result and nothing else, not what a reviewer
 should read as the feature passing (see "Review"). `nuka run` says so on
-stderr where the line number is given.
+stderr where the line number is given and selects fewer scenarios than the
+file holds. A line that selects every scenario of its file, as in a
+one-scenario feature, already gave the full run, so no notice is written.
 
 Steps in one pickle share one context (the World semantics Cucumber users
 expect): a Background that logs in hands its browser and cookies to every

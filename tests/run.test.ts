@@ -259,6 +259,30 @@ describe("nuka run", () => {
     expect(record.scenario).toBe("second scenario");
   });
 
+  it("stderr says nothing about a partial run when :line selects the file's only scenario", async () => {
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "--no-check", "features/passing.feature:3"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stripRunProgressLines(stderr.text())).toBe("");
+  });
+
+  it("stderr says nothing about a partial run when the :line targets together select every scenario of the file", async () => {
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "--no-check", "features/lines.feature:3", "features/lines.feature:6"], {
+      rootDir,
+      stdout: createCaptureSink(),
+      stderr,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stripRunProgressLines(stderr.text())).toBe("");
+  });
+
   it("stderr says nothing about a partial run when no :line is given", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--no-check", "features/lines.feature"], {

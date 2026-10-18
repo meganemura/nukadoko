@@ -205,8 +205,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // inside src/run/run-scenario.ts, because it needs that pickle's own step
 // order.
 //
-// A `:line` target writes one stderr line after `selectPickles`, naming
-// that the run is partial and that its run summary covers only the
+// A `:line` target that selects fewer scenarios than its file holds writes
+// one stderr line after `selectPickles`, naming that the run is partial and that its run summary covers only the
 // selected scenarios, so a summary pasted onto a pull request is not read
 // as the whole feature (docs/spec.md "Scenarios (the scripted path)"). stdout is untouched: its
 // one-record-per-line contract is read by machines, and this notice is not
@@ -463,9 +463,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // notice at all when `:line` wasn't given, so a normal full run stays
     // silent every time. `:line` on a directory target is refused in setup
     // (src/run/select-pickles.ts's `DirectoryTargetLineError`), so reaching
-    // here with a non-null `line` always means a single-file target.
+    // here with a non-null `line` always means a single-file target. A line
+    // that selects every scenario of its file (a one-scenario feature, the
+    // `rerun` line of its failure) already produced the summary a pull
+    // request carries, so telling the reader to run the whole feature would
+    // send them to repeat the same run.
     const lineTargets = featureArgs.filter((featureArg) => parseFeatureTarget(featureArg).line !== null);
-    if (lineTargets.length > 0) {
+    if (lineTargets.length > 0 && flatPickles.length < selected.totalPickles) {
       const selectionDescription =
         featureArgs.length === 1
           ? `${lineTargets[0]} selects ${flatPickles.length} of ${selected.totalPickles} scenarios.`

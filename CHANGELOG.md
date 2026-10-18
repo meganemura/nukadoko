@@ -51,6 +51,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka run <feature>:<line>` prints the partial-run notice only when the run is partial.**
+  The notice fired for every `:line` target, so the `rerun` line of a
+  failed scenario in a one-scenario feature printed "selects 1 of 1
+  scenarios" and told the reader to run the whole feature it had just
+  run. It is now written only when the line targets select fewer
+  scenarios than the targeted files hold.
 - **`nuka clean` reports nothing after a clean, and creates no Allure results directory that was not there.**
   Clean removed the results directory and always recreated it empty, and
   listed it whenever it existed, so every second `nuka clean` printed
