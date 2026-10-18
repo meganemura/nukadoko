@@ -79,7 +79,7 @@ describe("nuka session clear: setup failures", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
-      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: nuka session clear --help\n',
+      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: Leave out --env (the config defines no environments), or add environments.stagign to the config file.\n',
     );
     expect(stdout.text()).toBe("");
   });
@@ -95,7 +95,7 @@ describe("nuka session clear: setup failures", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
-      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: nuka session clear --help\n',
+      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: Leave out --env (the config defines no environments), or add environments.stagign to the config file.\n',
     );
     expect(stdout.text()).toBe("");
   });

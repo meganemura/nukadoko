@@ -49,6 +49,11 @@ just until 0.1.
 
 ### Fixed
 
+- **An unknown `--env` names the environments the config defines as its `do:` line.**
+  `nuka run`, `nuka do`, and `nuka session clear` ended this refusal with
+  their own `--help`. The `do:` line now lists the names the config
+  defines, or says to leave out `--env` when it defines none, and in both
+  cases names the `environments` entry to add instead.
 - **`nuka do <step>` without `--args`, or with `--args` that is not JSON, names `nuka describe <step>` as its `do:` line.**
   Both refusals ended with `do: nuka do --help`, which says only that
   `--args` takes JSON. `nuka describe <step>` prints the args schema the

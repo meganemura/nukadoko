@@ -20,13 +20,22 @@ export class InvalidEnvironmentNameError extends Error {
  * when `environments.default` is undefined — see resolve-environment.ts. */
 export class UnknownEnvironmentError extends Error {
   readonly environmentName: string;
+  /** The names the config defines, which a CLI refusal's `do:` line offers
+   * in place of the unknown one (src/cli/refusal.ts reads `do` off any
+   * error). */
+  readonly do: string;
 
-  constructor(environmentName: string) {
+  constructor(environmentName: string, definedNames: readonly string[]) {
     super(
       `Unknown environment "${environmentName}": not defined in nukadoko.config.ts's "environments"`,
     );
     this.name = "UnknownEnvironmentError";
     this.environmentName = environmentName;
+    const add = `add environments.${environmentName} to the config file`;
+    this.do =
+      definedNames.length === 0
+        ? `Leave out --env (the config defines no environments), or ${add}.`
+        : `Pass --env with a name the config defines (${[...definedNames].sort().join(", ")}), or ${add}.`;
   }
 }
 

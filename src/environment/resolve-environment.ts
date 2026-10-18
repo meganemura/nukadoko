@@ -47,7 +47,7 @@ export function resolveEnvironment(
       ? environments[name]
       : undefined;
   if (envConfig === undefined && explicit) {
-    throw new UnknownEnvironmentError(name);
+    throw new UnknownEnvironmentError(name, Object.keys(environments ?? {}));
   }
 
   return {
