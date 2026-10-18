@@ -160,6 +160,7 @@ function findConfigFile(rootDir: string): ResolvedConfigFile | null {
     throw new ConfigError(
       `Both ${paths} exist; nukadoko cannot tell which one to read. Delete one and keep the other.`,
       found[0]!.path,
+      `Delete ${found[0]!.fileName} or ${found[1]!.fileName}, and keep the one that holds the project's config.`,
     );
   }
   return found[0] ?? null;
@@ -216,6 +217,29 @@ function configFileStamp(rootDir: string): string {
   }).join("|");
 }
 
+// A config that cannot find `nukadoko` itself has one fix: the project
+// installs the package. Any other missing package may be a typo in the
+// import, so it is named, not installed.
+function importFailureDo(
+  fileName: string,
+  missingPackage: { readonly name: string; readonly importedBy?: string } | undefined,
+  explanation: string,
+): string {
+  if (missingPackage?.name === "nukadoko" && missingPackage.importedBy === undefined) {
+    return "npm install -D -E nukadoko";
+  }
+  if (explanation !== "") return renameToMts(fileName);
+  if (missingPackage !== undefined) {
+    return `Install ${missingPackage.name} in the project, or correct the import of it in ${missingPackage.importedBy ?? fileName}.`;
+  }
+  return `Correct the error the message names in ${fileName}, then run nuka check.`;
+}
+
+function renameToMts(configPath: string): string {
+  const fileName = path.basename(configPath);
+  return `mv ${fileName} ${fileName.replace(/\.ts$/, ".mts")}`;
+}
+
 async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const resolved = findConfigFile(rootDir);
   const configPath = resolved?.path ?? path.join(rootDir, CONFIG_FILE_NAME);
@@ -236,10 +260,11 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
       // rejection does not name the config file: a missing export names
       // nukadoko's package.json, and a syntax error names no file at all,
       // so its location is added the way a step file's is.
-      const causeText = describeImportFailure(error, configPath, rootDir).message;
+      const cause = describeImportFailure(error, configPath, rootDir);
       throw new ConfigError(
-        `Could not import config at ${configPath}: ${causeText}${explanation}`,
+        `Could not import config at ${configPath}: ${cause.message}${explanation}`,
         configPath,
+        importFailureDo(resolved.fileName, cause.missingPackage, explanation),
         { cause: error },
       );
     }
@@ -247,12 +272,14 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
       throw new ConfigError(
         `${configPath} has no default export. nukadoko reads the default export as the config.`,
         configPath,
+        `Export the config as the default export of ${resolved.fileName}: export default defineConfig({ ... }).`,
       );
     }
     if (isThenable(mod.default)) {
       throw new ConfigError(
         `${configPath} has a Promise as its default export. Export the config object, not a Promise of it.`,
         configPath,
+        `Export the config object itself as the default export of ${resolved.fileName}, not a Promise of it.`,
       );
     }
     raw = mod.default;
@@ -263,6 +290,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
     throw new ConfigError(
       `Invalid config at ${configPath}: ${formatIssues(result.error.issues)}${explanation}`,
       configPath,
+      explanation === "" ? `Correct the fields the message names in ${resolved?.fileName ?? CONFIG_FILE_NAME}.` : renameToMts(configPath),
     );
   }
   return result.data;

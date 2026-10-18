@@ -8,7 +8,7 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
 import { llmsTxtPath } from "./skill.js";
 import { ensureTsconfig } from "./tsconfig-edit.js";
-import { RefusalError, helpFor, refuse } from "./refusal.js";
+import { RefusalError, helpFor, refusalOf, refuse } from "./refusal.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
@@ -416,7 +416,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     const config = await loadConfig(rootDir);
     await discoverSteps(rootDir, config.featuresDir);
   } catch (error) {
-    stderr.write(`Self-check failed: ${formatVocabularyError(error)}\n`);
+    stderr.write(`Self-check failed: ${formatVocabularyError(error)}\ndo: ${refusalOf(error, "nuka check").do}\n`);
     return 1;
   }
 

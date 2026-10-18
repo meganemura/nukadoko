@@ -49,6 +49,16 @@ just until 0.1.
 
 ### Fixed
 
+- **A config that does not load names its own fix as the refusal's `do:` line.**
+  Every command printed `do: nuka <command> --help` for a config error,
+  and no flag fixes a config. The `do:` line now names the edit or the
+  command: `npm install -D -E nukadoko` when the config cannot find the
+  `nukadoko` package, `mv nukadoko.config.ts nukadoko.config.mts` for a
+  `.ts` config in a CommonJS project, and otherwise the change to make in
+  the config file it names (a default export, the fields the message
+  names, the error the import hit, or which of two config files to
+  delete). `nuka init`'s failed self-check printed no `do:` line at all;
+  it now prints the same one, and still exits 1.
 - **`nuka check` reports `playwright-missing` for a step file that reaches a missing Playwright through another file.**
   A step file that imported a helper, or another step file, which
   imported `playwright/test` got `step-file-import-failed` with Node's

@@ -150,7 +150,7 @@ describe("a --json command that cannot report prints { error, do } on stdout", (
     expect(result.stderr).toBe("");
     const report = JSON.parse(result.stdout) as { error: string; do: string };
     expect(report.error).toMatch(/^Invalid config at .*nukadoko\.config\.ts: /);
-    expect(report.do).toBe(`nuka ${argv.filter((word) => !word.startsWith("-")).join(" ")} --help`);
+    expect(report.do).toBe("Correct the fields the message names in nukadoko.config.ts.");
     expect(result.exitCode).toBe(2);
   });
 

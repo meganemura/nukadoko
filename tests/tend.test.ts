@@ -295,6 +295,6 @@ describe("nuka tend", () => {
     expect(stderr.text()).toBe("");
     const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
     expect(refusal.error).toContain("typo");
-    expect(refusal.do).toBe("nuka tend --help");
+    expect(refusal.do).toBe("Correct the fields the message names in nukadoko.config.ts.");
   });
 });
