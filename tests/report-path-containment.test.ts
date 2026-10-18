@@ -105,11 +105,13 @@ describe("nuka report on an edited run directory", () => {
       const copy = await copiedRun(evidence, attachments, link);
       const allureDir = path.join(outside, "allure");
       const allure = await cli(["report", copy, "--format", "allure", "--out", allureDir]);
-      expect(allure.stderr).toMatch(/^warning\treport-incomplete\t-\tallure: could not attach .* resolves outside the run directory, so it is not read$/m);
+      expect(allure.exitCode).toBe(1);
+      expect(allure.stderr).toMatch(/^failed\treport-incomplete\t-\tallure: could not attach .* resolves outside the run directory, so it is not read$/m);
       expect(everything(allureDir)).not.toContain(SECRET);
       expect(everything(allureDir)).not.toContain(Buffer.from(SECRET).toString("base64"));
       const messages = await cli(["report", copy, "--format", "messages"]);
-      expect(messages.stderr).toMatch(/^warning\treport-incomplete\t-\tmessages: could not read attachment .* resolves outside the run directory, so it is not read$/m);
+      expect(messages.exitCode).toBe(1);
+      expect(messages.stderr).toMatch(/^failed\treport-incomplete\t-\tmessages: could not read attachment .* resolves outside the run directory, so it is not read$/m);
       expect(messages.stdout).not.toContain(Buffer.from(SECRET).toString("base64"));
       expect(messages.stdout).not.toContain(SECRET);
     });

@@ -206,6 +206,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   - `emitter-failed` や `export-path-outside-project` のコードに合わせていたスクリプトは、前者を `report-incomplete` に合わせます。
     後者に後継はありません。
     `nuka clean` が config からパスを読まなくなったからです。
+    `emitter-failed` は警告でしたが、`report-incomplete` では `nuka report` が 1 で終了します。
+    ファイルを失った run ディレクトリを描き出す CI の step は失敗するので、run ディレクトリ全体をアップロードします。
 
 ## 0.16.1 から 0.17.0 へ
 

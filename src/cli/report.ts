@@ -7,12 +7,13 @@ import { createExportsManifest, readExportsManifest, runExportsManifestPath } fr
 import { readEndedRuns } from "../record/run-result.js";
 import { exportRelativeDir, runRelativeDir } from "../record/state-layout.js";
 import { writeAllureResults } from "../report/allure/write-results.js";
-import { loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
+import { isOwnRun, loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
 import { writeMessagesStream } from "../report/messages/write-stream.js";
 import { renderRunSummary } from "../run/run-summary.js";
 import { writeOutputLocations } from "../run/progress-log.js";
 import type { WritableSink } from "../sink/writable-sink.js";
-import { formatEnvelope, refuse, withHint } from "./refusal.js";
+import { FAILED_EXIT_CODE, formatEnvelope, refuse, withHint } from "./refusal.js";
+import type { RefusalCode } from "./refusal-codes.js";
 
 // Responsibility: `nuka report`, which renders one finished run directory
 // as Markdown, Allure results, or a cucumber-messages stream, after the
@@ -93,118 +94,142 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   const findings: Finding[] = [...notices];
   const outPath = options.out === undefined ? undefined : path.resolve(rootDir, options.out);
 
-  if (format === "markdown") {
-    const read = loadRunDocument(runDir);
-    if ("refusal" in read) return refuse(sinks, read.refusal.message, read.refusal.code, undefined, notices);
-    const document = read.document;
-    const markdown = renderRunSummary(document);
-    if (outPath === undefined) {
-      for (const finding of findings) stderr.write(formatFinding(withHint(finding)));
-      stdout.write(markdown);
-      return 0;
+  const output = produce();
+  if ("refusal" in output) return refuse(sinks, output.refusal.message, output.refusal.code, undefined, notices);
+  return deliver(output);
+
+  // Each format only produces its output: one text, or a directory of
+  // files and the function that writes them. Where it goes, what the
+  // manifest notes, and the exit code are one tail for all three
+  // (`deliver`), so a format cannot skip a step the others take.
+  function produce(): ReportOutput | { refusal: { code: RefusalCode; message: string } } {
+    if (format === "markdown") {
+      const read = loadRunDocument(runDir);
+      if ("refusal" in read) return read;
+      return { kind: "text", runId: read.document.run_id, ownRun: isOwnRun(runDir, rootDir, stateDir, read.document.run_id), text: renderRunSummary(read.document), problems: [] };
     }
-    writeFile(outPath, markdown);
-    return finish({ runId: document.run_id, written: [outPath], kind: "file" });
-  }
-
-  const loaded = loadRun(runDir, rootDir, stateDir);
-  if ("refusal" in loaded) {
-    return refuse(sinks, loaded.refusal.message, loaded.refusal.code, undefined, notices);
-  }
-  const run = loaded.run;
-  const ownRun = run.ownRun;
-  const problems: string[] = [...run.problems];
-
-  if (format === "messages") {
-    const lines: string[] = [];
-    writeMessagesStream(
-      {
-        write: (line) => lines.push(line),
-        resolvePath: run.resolvePath,
-        readFile: (absolutePath) => readFileSync(absolutePath),
-        warn: (message) => problems.push(message),
-        nukadokoVersion: run.document.nukadoko,
-        startedAt: run.document.started_at,
-        finishedAt: run.document.finished_at,
-        success: run.document.verdict === "passed",
-      },
-      run.features.map((feature) => ({ ...feature, relativeFeaturePath: feature.relativePath, pickles: selectedPickles(run, feature.relativePath) })),
-      run.scenarios.map((scenario) => ({ record: scenario.record, pickle: scenario.pickle, stepRecords: scenario.stepRecords })),
-    );
-    noteProblems(problems);
-    if (outPath === undefined) {
-      for (const finding of findings) stderr.write(formatFinding(withHint(finding)));
-      stdout.write(lines.join(""));
-      return 0;
+    const loaded = loadRun(runDir, rootDir, stateDir);
+    if ("refusal" in loaded) return loaded;
+    const run = loaded.run;
+    const problems: string[] = [...run.problems];
+    if (format === "messages") {
+      const lines: string[] = [];
+      writeMessagesStream(
+        {
+          write: (line) => lines.push(line),
+          resolvePath: run.resolvePath,
+          readFile: (absolutePath) => readFileSync(absolutePath),
+          warn: (message) => problems.push(message),
+          nukadokoVersion: run.document.nukadoko,
+          startedAt: run.document.started_at,
+          finishedAt: run.document.finished_at,
+          success: run.document.verdict === "passed",
+        },
+        run.features.map((feature) => ({ ...feature, relativeFeaturePath: feature.relativePath, pickles: selectedPickles(run, feature.relativePath) })),
+        run.scenarios.map((scenario) => ({ record: scenario.record, pickle: scenario.pickle, stepRecords: scenario.stepRecords })),
+      );
+      return { kind: "text", runId: run.document.run_id, ownRun: run.ownRun, text: lines.join(""), problems };
     }
-    replaceOwnFiles(run, ownRun, outPath, "file");
-    writeFile(outPath, lines.join(""));
-    noteOwnFiles(run, ownRun, [outPath]);
-    return finish({ runId: run.document.run_id, written: [outPath], kind: "file" });
+    const environments = run.document.environments;
+    return {
+      kind: "dir",
+      runId: run.document.run_id,
+      ownRun: run.ownRun,
+      dir: outPath ?? path.join(rootDir, exportRelativeDir(stateDir!), REPORT_FILE_DIRS.allure),
+      problems,
+      write: (resultsDir, onWrite) =>
+        writeAllureResults(
+          {
+            resultsDir,
+            projectName: run.projectName,
+            environment: environments.map((environment) => environment.name).join(", "),
+            ...(environments.length === 1 && environments[0]!.target_version !== null ? { targetVersion: environments[0]!.target_version } : {}),
+            resolvePath: run.resolvePath,
+            onWrite,
+            warn: (message) => problems.push(message),
+          },
+          run.scenarios.map((scenario) => ({
+            record: scenario.record,
+            stepRecords: scenario.stepRecords,
+            gherkinDocument: scenario.feature.gherkinDocument,
+            pickle: scenario.pickle,
+            relativeFeaturePath: scenario.feature.relativePath,
+          })),
+        ),
+    };
   }
 
-  const resultsDir = outPath ?? path.join(rootDir, exportRelativeDir(stateDir!), REPORT_FILE_DIRS.allure);
-  replaceOwnFiles(run, ownRun, resultsDir, "dir");
-  const written: string[] = [];
-  const environments = run.document.environments;
-  writeAllureResults(
-    {
-      resultsDir,
-      projectName: run.projectName,
-      environment: environments.map((environment) => environment.name).join(", "),
-      ...(environments.length === 1 && environments[0]!.target_version !== null ? { targetVersion: environments[0]!.target_version } : {}),
-      resolvePath: run.resolvePath,
-      onWrite: (absolutePath) => written.push(absolutePath),
-      warn: (message) => problems.push(message),
-    },
-    run.scenarios.map((scenario) => ({
-      record: scenario.record,
-      stepRecords: scenario.stepRecords,
-      gherkinDocument: scenario.feature.gherkinDocument,
-      pickle: scenario.pickle,
-      relativeFeaturePath: scenario.feature.relativePath,
-    })),
-  );
-  noteProblems(problems);
-  noteOwnFiles(run, ownRun, written);
-  return finish({ runId: run.document.run_id, written: [resultsDir], kind: "dir", count: run.scenarios.length });
-
-  function noteProblems(messages: readonly string[]): void {
-    for (const message of messages) findings.push({ severity: "warning", code: "report-incomplete", message });
-  }
-
-  function finish(result: { runId: string; written: readonly string[]; kind: "file" | "dir"; count?: number }): number {
-    const relative = result.written.map((written) => path.relative(rootDir, written) || ".");
+  function deliver(output: ReportOutput): number {
+    if (output.kind === "text" && outPath === undefined) {
+      noteProblems(output.problems);
+      const exitCode = output.problems.length > 0 ? FAILED_EXIT_CODE : 0;
+      for (const finding of findings) stderr.write(formatFinding(withHint(finding)));
+      stdout.write(output.text);
+      return exitCode;
+    }
+    const target = output.kind === "text" ? outPath! : output.dir;
+    replaceOwnFiles(output, target, output.kind === "text" ? "file" : "dir");
+    const written: string[] = [];
+    if (output.kind === "text") {
+      writeFile(target, output.text);
+      written.push(target);
+    } else {
+      output.write(target, (absolutePath) => written.push(absolutePath));
+    }
+    noteOwnFiles(output, written);
+    noteProblems(output.problems);
+    const exitCode = output.problems.length > 0 ? FAILED_EXIT_CODE : 0;
+    const relative = path.relative(rootDir, target) || ".";
     if (json) {
-      stdout.write(formatEnvelope("report", 0, findings, { run_id: result.runId, format, written: relative }));
-      return 0;
+      stdout.write(formatEnvelope("report", exitCode, findings, { run_id: output.runId, format, written: [relative] }));
+      return exitCode;
     }
     for (const finding of findings) stderr.write(formatFinding(withHint(finding)));
-    writeOutputLocations(
-      stderr,
-      relative.map((relativePath) => ({ label: format, relativePath, kind: result.kind, ...(result.count !== undefined ? { count: result.count } : {}) })),
-    );
-    return 0;
+    // A directory's count is the results that landed in it, not the
+    // scenarios the run holds: a scenario whose result failed to write is
+    // a problem above, and counting it here would say otherwise.
+    const count = output.kind === "dir" ? written.filter((file) => file.endsWith("-result.json")).length : undefined;
+    writeOutputLocations(stderr, [{ label: format, relativePath: relative, kind: output.kind === "dir" ? "dir" : "file", ...(count !== undefined ? { count } : {}) }]);
+    return exitCode;
+  }
+
+  // A report that left part of the run out is red: a script that publishes
+  // it must not take it for the whole run.
+  function noteProblems(messages: readonly string[]): void {
+    for (const message of messages) findings.push({ severity: "failed", code: "report-incomplete", message });
   }
 
   // A file this project's run already noted, inside where this render
   // writes, is the previous render of the same run, so it goes before the
   // new one is written instead of piling up beside it.
-  function replaceOwnFiles(loadedRun: LoadedRun, own: boolean, target: string, kind: "file" | "dir"): void {
-    if (!own || stateDir === null) return;
-    for (const relativePath of readExportsManifest(runExportsManifestPath(rootDir, stateDir, loadedRun.document.run_id))) {
+  function replaceOwnFiles(output: ReportOutput, target: string, kind: "file" | "dir"): void {
+    if (!output.ownRun || stateDir === null) return;
+    for (const relativePath of readExportsManifest(runExportsManifestPath(rootDir, stateDir, output.runId))) {
       const absolutePath = path.resolve(rootDir, relativePath);
       if (kind === "file" ? absolutePath === target : isInside(target, absolutePath)) rmSync(absolutePath, { force: true });
     }
   }
 
-  function noteOwnFiles(loadedRun: LoadedRun, own: boolean, files: readonly string[]): void {
-    if (!own || stateDir === null) return;
+  function noteOwnFiles(output: ReportOutput, files: readonly string[]): void {
+    if (!output.ownRun || stateDir === null) return;
     const stateRoot = path.resolve(rootDir, stateDir);
-    const manifest = createExportsManifest(runExportsManifestPath(rootDir, stateDir, loadedRun.document.run_id), rootDir);
+    const manifest = createExportsManifest(runExportsManifestPath(rootDir, stateDir, output.runId), rootDir);
     for (const file of files) if (isInside(stateRoot, file)) manifest.note(file);
   }
 }
+
+/** What one format produced, before the shared tail writes it. */
+type ReportOutput =
+  | { readonly kind: "text"; readonly runId: string; readonly ownRun: boolean; readonly text: string; readonly problems: readonly string[] }
+  | {
+      readonly kind: "dir";
+      readonly runId: string;
+      readonly ownRun: boolean;
+      readonly dir: string;
+      /** Filled while `write` runs. */
+      readonly problems: readonly string[];
+      readonly write: (dir: string, onWrite: (absolutePath: string) => void) => void;
+    };
 
 /** The pickles of `relativePath` the run selected, in file order: a `:line`
  * run selected fewer than the file holds. */

@@ -745,7 +745,7 @@ describe("writeAllureResults", () => {
       expect(results.some((r) => (r as { name?: string }).name === "a customer checks out")).toBe(true);
     });
 
-    it("catches a genuine internal failure at endScenario (a step record claims an evidence file that isn't actually there), warns once to stderr, and leaves an earlier scenario's own output intact", () => {
+    it("skips an evidence file a step record claims and the run directory does not hold, warns once, and still writes that scenario's result and an earlier scenario's output", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
 
@@ -830,13 +830,15 @@ describe("writeAllureResults", () => {
         emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" }),
       ).not.toThrow();
 
-      expect(sink.text()).toContain("warning:");
-      expect(sink.text()).toContain("scn-broken");
+      expect(sink.text().match(/warning:/g)).toHaveLength(1);
+      expect(sink.text()).toContain("could not attach .nukadoko/runs/run-1/steps/step-broken/http.jsonl");
 
       const afterFiles = new Set(readdirSync(resultsDir));
       for (const name of healthyFiles) {
         expect(afterFiles.has(name)).toBe(true);
       }
+      const results = [...afterFiles].filter((name) => name.endsWith("-result.json"));
+      expect(results).toHaveLength(2);
     });
   });
 

@@ -2800,7 +2800,7 @@ run.json、step record、そして run が parse した feature の本文であ�
 そのため CI のマシンから持ち出した run ディレクトリも、それを実行したプロジェクトにある run ディレクトリと同じ result を描き出します。
 そうしたディレクトリは信頼できない入力なので、record が名指すパスはどれも、symlink も含めて解決し、run ディレクトリの中にとどまるときだけ読みます。
 このプロジェクト自身の run は、プロジェクトの中のファイルも名指せます。
-外へ出るパスは読まず、`report-incomplete` の警告になり、そのファイルが result にも messages ストリームにも入ることはありません。
+外へ出るパスは読まず、`report-incomplete` の finding になり、そのファイルが result にも messages ストリームにも入ることはありません。
 result は Allure 2 のファイル形式を使い、Allure 2 と Allure 3 の両方が読めます。
 nukadoko は HTML をレンダリングしません。
 
@@ -2818,6 +2818,16 @@ run ディレクトリを渡さない `nuka report` は最新の run を描き�
 `nuka clean` は `.nukadoko/export/allure-results/` を空にし、state directory の外へ `--out` で書いたディレクトリを消すのは呼び出し側です。
 `categories.json` と `environment.properties` は、描き出すたびに書かれます。
 `nuka init --allure` は既定のディレクトリを作るため、最初に描き出すより前に `allure watch` を開始できます。
+
+描き出しは、読めたものを書き、書かなかったものを名指します。
+読めなかった、対応づけられなかった、書けなかった scenario、step record、attachment は、どれも severity が `failed` の `report-incomplete` の finding になり、report は 1 で終了します。
+そのため、それを公開するスクリプトが run の全体だと取り違えることはありません。
+attachment が 1 つ欠けても、失うのはその attachment だけで、result の残りは書かれます。
+run が書いた step record がディレクトリにもうない step は `broken` になり、その record と run.json がその step に与えた状態を名指すメッセージを持ちます。
+そうした step を含む passed の scenario も `broken` になります。
+詳細のない passed の result は、完全なものに見えてしまうからです。
+messages ストリームでは、同じ step は `UNKNOWN` です。
+`nuka report` がディレクトリの隣に出す数は、書いた result の数です。
 
 各 result は pickle の名前を使い、Gherkin の step を `steps[]` に格納します。
 step 名は Gherkin keyword と AST の空白を保ち、`And` も正規化しません。
@@ -3351,7 +3361,9 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               one this release reads (run-invalid), one
                               with no sources.json (run-sources-missing),
                               and one whose sources.json is corrupt or of
-                              another version (run-sources-invalid)
+                              another version (run-sources-invalid). A
+                              render that left out part of the run exits
+                              1 with report-incomplete
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               --env as on nuka run; each call starts clean.
@@ -3783,7 +3795,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka tend` が報告した `--fail-on` の code |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka tend` が報告した `--fail-on` の code |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 

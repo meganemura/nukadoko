@@ -3407,7 +3407,7 @@ the lines back against the vocabulary before anything runs.
 It reads the run directory alone: run.json, the step records, and `sources.json`, the feature text the run parsed.
 A run directory copied off a CI machine therefore renders the same results as the one in the project that ran it.
 Such a directory is untrusted input, so every path a record names is resolved, symlinks included, and read only while it stays inside the run directory; a run of this project's own may also name a file inside the project.
-A path that leaves is not read: it is a `report-incomplete` warning, and the file it names never reaches the results or the messages stream.
+A path that leaves is not read: it is a `report-incomplete` finding, and the file it names never reaches the results or the messages stream.
 The results use the Allure 2 file format, which Allure 2 and Allure 3 can read.
 nukadoko does not render HTML.
 
@@ -3424,6 +3424,13 @@ A render of a different run adds its results beside the others; whether two runs
 `nuka clean` empties `.nukadoko/export/allure-results/`, and a directory written with `--out` outside the state directory is the caller's to remove.
 `categories.json` and `environment.properties` are written on every render.
 `nuka init --allure` creates the default directory so `allure watch` can start before the first render.
+
+A render writes what it can read and names what it left out.
+Each scenario, step record, or attachment it could not read, map, or write is a `report-incomplete` finding of severity `failed`, and the report exits 1, so a script that publishes it does not take it for the whole run.
+One missing attachment costs that attachment only; the rest of its result is written.
+A step whose step record the run wrote and the directory no longer holds is `broken`, with a message that names the record and the status run.json gives the step, and a passed scenario with such a step is `broken` too: a passed result with no detail would read as complete.
+In the messages stream the same step is `UNKNOWN`.
+The count `nuka report` prints beside the directory is the results it wrote.
 
 Each result uses the pickle name and stores its Gherkin steps in `steps[]`.
 A step name preserves the Gherkin keyword and its AST whitespace, including `And`.
@@ -3964,7 +3971,9 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               one this release reads (run-invalid), one
                               with no sources.json (run-sources-missing),
                               and one whose sources.json is corrupt or of
-                              another version (run-sources-invalid)
+                              another version (run-sources-invalid). A
+                              render that left out part of the run exits
+                              1 with report-incomplete
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               --env as on nuka run; each call starts clean.
@@ -4408,7 +4417,7 @@ reading either stream.
 | Exit | Meaning | Examples |
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 

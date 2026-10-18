@@ -199,6 +199,8 @@ export interface MappedGwtStepOutcome {
    * `mapScenario`'s own `trace` field (fed by `firstFailure`, below) is
    * for: a detail pane distinct from the one-line marked summary. */
   readonly failure?: { readonly kind: ErrorKind; readonly message: string; readonly rawMessage: string };
+  /** The step's record could not be read (`MapGwtStepInput.stepRecordUnreadable`). */
+  readonly unreadable?: true;
 }
 
 export interface MapGwtStepInput {
@@ -211,6 +213,11 @@ export interface MapGwtStepInput {
    * with no step record of its own (skipped, undefined, ambiguous, or a
    * never-began refusal) or one the run directory no longer holds. */
   readonly stepRecord: StepRecord | null;
+  /** The run wrote a step record for this step and it could not be read:
+   * the step is broken with a message that says so, never the status
+   * run.json gives it, since a passed step with no detail would read as a
+   * complete one. */
+  readonly stepRecordUnreadable?: boolean;
   /** The previous step's stop as far as the caller knows it, or the
    * scenario's start for the first step: where a step with no step record
    * sits until `mapScenario` places every step against `record.started_at`
@@ -605,7 +612,10 @@ interface Outcome {
  * `stepRecord` is `null` exactly when `step.step_record_id` is `null` (a
  * step that never began at all — skipped, undefined, ambiguous, or a
  * never-began refusal). */
-function resolveStepOutcome(step: ScenarioStepEntry, stepRecord: StepRecord | null): Outcome {
+function resolveStepOutcome(step: ScenarioStepEntry, stepRecord: StepRecord | null, unreadable: boolean): Outcome {
+  if (unreadable) {
+    return { status: "broken", message: `step record ${step.step_record_id} could not be read; run.json records this step as ${step.status}` };
+  }
   if (step.status === "passed") {
     return { status: "passed" };
   }
@@ -879,7 +889,7 @@ function mapCalls(calls: readonly CallEntry[] | undefined): MappedChildStep[] {
 export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
   const { index, record, stepRecord, previousStopMs, gherkinDocument, pickle } = input;
 
-  const outcome = resolveStepOutcome(record, stepRecord);
+  const outcome = resolveStepOutcome(record, stepRecord, input.stepRecordUnreadable === true);
 
   const ownSpan = ownStepSpan(stepRecord);
   const [{ startMs, stopMs }] = placeSteps(previousStopMs, [ownSpan]) as [StepSpan];
@@ -1060,6 +1070,7 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
       outcome.kind !== undefined && outcome.message !== undefined
         ? { kind: outcome.kind, message: outcome.message, rawMessage: outcome.rawMessage ?? outcome.message }
         : undefined,
+    ...(input.stepRecordUnreadable === true ? { unreadable: true as const } : {}),
   };
 }
 
@@ -1178,6 +1189,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   const declaredLinks = steps.flatMap((outcome) => outcome.declaredLinks);
 
   const classifiedFailure = record.status === "failed" ? firstFailure(steps, record.hooks) : undefined;
+  const unreadable = steps.find((outcome) => outcome.unreadable === true);
 
   const labels: MappedLabel[] = [
     { name: "feature", value: featureName },
@@ -1214,8 +1226,11 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
     name: pickle.name,
     featureName,
     description: resolveDescription(gherkinDocument, scenario),
-    status: record.status,
-    message: classifiedFailure?.message,
+    // A passed scenario with a step whose record could not be read is not
+    // shown passed: the result would read as complete. A failed one keeps
+    // its own status and failure.
+    status: record.status === "passed" && unreadable !== undefined ? "broken" : record.status,
+    message: classifiedFailure?.message ?? (record.status === "passed" ? unreadable?.step.message : undefined),
     trace: classifiedFailure?.rawMessage,
     startMs,
     stopMs,

@@ -157,6 +157,14 @@ export function loadRunDocument(
   return { document: parsed.document };
 }
 
+/** Whether `runDir` is the directory this project's own state directory
+ * holds for run `runId`: only then does a render note its files in the
+ * run's exports manifest, and only then may a recorded path resolve into
+ * the project root. `stateDir` is `null` when the config does not load. */
+export function isOwnRun(runDir: string, rootDir: string, stateDir: string | null, runId: string): boolean {
+  return stateDir !== null && path.resolve(runDir) === path.resolve(rootDir, runRelativeDir(stateDir, runId));
+}
+
 /** `rootDir` is where a path that is not inside the run resolves, the
  * project the run directory sits in when it does. `stateDir` is that
  * project's, or `null` when its config does not load, which makes no run
@@ -175,7 +183,7 @@ export function loadRun(runDir: string, rootDir: string, stateDir: string | null
     };
   }
   const sources = read.sources;
-  const ownRun = stateDir !== null && path.resolve(runDir) === path.resolve(rootDir, runRelativeDir(stateDir, document.run_id));
+  const ownRun = isOwnRun(runDir, rootDir, stateDir, document.run_id);
   const resolvePath = containedResolver(document.run_id, runDir, rootDir, ownRun);
   const problems: string[] = [];
   const features: LoadedFeature[] = [];

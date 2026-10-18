@@ -277,9 +277,10 @@ export function writeAllureResults(options: WriteAllureResultsOptions, scenarios
     const steps: MappedGwtStepOutcome[] = [];
     for (const [index, entry] of record.steps.entries()) {
       const stepRecord = entry.step_record_id === null ? null : (stepRecords.get(entry.step_record_id) ?? null);
+      const stepRecordUnreadable = entry.step_record_id !== null && stepRecords.has(entry.step_record_id) && stepRecord === null;
       const previousStopMs = steps.at(-1)?.step.stopMs ?? Date.parse(record.started_at);
       try {
-        steps.push(mapGwtStep({ index, record: entry, stepRecord, previousStopMs, gherkinDocument, pickle }));
+        steps.push(mapGwtStep({ index, record: entry, stepRecord, stepRecordUnreadable, previousStopMs, gherkinDocument, pickle }));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         options.warn(`allure: step ${index} of scenario ${record.scenario_record_id} was not mapped: ${message}`);

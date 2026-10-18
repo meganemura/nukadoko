@@ -57,7 +57,7 @@ just until 0.1.
   Such a directory is untrusted input: every path a record names is
   resolved, symlinks included, and read only while it stays inside the
   run directory (or, for a run of this project's own, inside the
-  project); a path that leaves is a `report-incomplete` warning and is
+  project); a path that leaves is a `report-incomplete` finding and is
   never read.
   - `nuka report [<run dir>] --format markdown|allure|messages [--out
     <path>] [--json]` renders one run: the newest one when no run
@@ -99,9 +99,19 @@ just until 0.1.
   - `nuka clean` removes every entry of `.nukadoko/export/` but
     `allure-history.jsonl`, and no longer reads paths from the config, so
     the `export-path-outside-project` refusal code is gone. The
-    `emitter-failed` run code is gone; a render that could not write part
-    of its output warns with the new `report-incomplete`, and a run that
-    could not write `sources.json` warns with `run-sources-not-written`.
+    `emitter-failed` run code is gone. A render that left out part of the
+    run (a scenario, a step record, or an attachment it could not read,
+    map, or write) writes the rest, reports the new `report-incomplete`
+    with severity `failed`, and exits 1, so a script that publishes the
+    report does not take it for the whole run. One missing attachment
+    costs that attachment only. A step whose step record is gone is
+    `broken` in Allure, and so is its passed scenario, and `UNKNOWN` in
+    the messages stream; it is never shown passed. The count beside the
+    Allure directory is the results written. Every format goes through
+    one tail that writes, notes the exports manifest, and sets the exit
+    code, so a Markdown file written under the state directory is noted
+    in the manifest too. A run that could not write `sources.json` warns
+    with `run-sources-not-written`.
   - `run.json`'s `target_version` is redacted like the rest of the run.
 
 - **One directory per run: `.nukadoko/runs/<run_id>/` holds everything a

@@ -135,6 +135,11 @@ function statusForStep(status: ScenarioStepStatus): TestStepResultStatus {
   }
 }
 
+/** The message a step carries when its step record could not be read. */
+export function unreadableStepMessage(step: ScenarioStepEntry): string {
+  return `step record ${step.step_record_id} could not be read; run.json records this step as ${step.status}`;
+}
+
 function statusForHook(status: "passed" | "failed"): TestStepResultStatus {
   return status === "passed" ? TestStepResultStatus.PASSED : TestStepResultStatus.FAILED;
 }
@@ -174,6 +179,12 @@ function mapPickleSteps(
   const resolved = record.steps.map((step) =>
     step.step_record_id !== null ? (stepRecords.get(step.step_record_id) ?? undefined) : undefined,
   );
+  // A step record the run wrote and this render could not read leaves the
+  // step UNKNOWN, not the status run.json gives it: a PASSED step with no
+  // detail would read as a complete one.
+  const unreadable = record.steps.map(
+    (step) => step.step_record_id !== null && stepRecords.has(step.step_record_id) && stepRecords.get(step.step_record_id) === null,
+  );
   const spans = placeSteps(scenarioStartMs, resolved.map(ownStepSpan));
   return record.steps.map((step, index): MappedTestStep => {
     const stepRecord = resolved[index];
@@ -203,7 +214,9 @@ function mapPickleSteps(
         testCaseStartedId,
         testStepId,
         timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(stopMs),
-        testStepResult: buildResult(statusForStep(step.status), step.error?.message, startMs, stopMs),
+        testStepResult: unreadable[index]
+          ? buildResult(TestStepResultStatus.UNKNOWN, unreadableStepMessage(step), startMs, stopMs)
+          : buildResult(statusForStep(step.status), step.error?.message, startMs, stopMs),
       },
       attachments,
     };

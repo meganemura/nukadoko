@@ -272,7 +272,9 @@ This part does not change release to release.
   - A script that matched the `emitter-failed` or
     `export-path-outside-project` code matches `report-incomplete`; the
     second has no successor, since `nuka clean` no longer reads paths from
-    the config.
+    the config. `emitter-failed` was a warning, and `report-incomplete`
+    makes `nuka report` exit 1: a CI step that renders a run whose
+    directory lost a file fails, so upload the whole run directory.
 
 ## 0.16.1 to 0.17.0
 

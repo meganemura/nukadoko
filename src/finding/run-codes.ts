@@ -39,8 +39,8 @@ const RUN_CODES = {
     fix: "Run the scenarios again; the message names what stopped the run.",
   },
   "report-incomplete": {
-    severity: "warning",
-    description: "nuka report left out part of the run it renders: a scenario, a step, or an attachment it could not read or map. The rest is written.",
+    severity: "failed",
+    description: "nuka report left out part of the run it renders: a scenario, a step record, or an attachment it could not read or map. The rest is written, and the report exits 1.",
     fix: "Correct what the message names, such as a step record removed from the run directory, and run nuka report again.",
   },
   "run-result-not-written": {
