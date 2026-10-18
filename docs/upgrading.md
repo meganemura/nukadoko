@@ -61,6 +61,14 @@ This part does not change release to release.
   every valid context name, in any case, with
   `ReservedEvidenceNameError`. A step that attached a file under such a
   name renames it, for example `trace-aki.zip` or `aki-final.png`.
+- **`nuka tend` reports every code, and `--all` is removed.** A plain
+  `nuka tend` now reports `schema-field-undescribed` too, in text and in
+  `--json`. `nuka tend --all` exits 2 and says so; drop the flag. A job
+  that reads plain `--json` and acts on some codes only filters `notes` by
+  `code`, or passes `--fail-on` for each code it acts on. A script that
+  reads `nuka tend --codes` text reads three columns now (code, meaning,
+  do), and one that reads `nuka tend --codes --json` gets
+  `schema_version` 2, with no `reportedByDefault` on an entry.
 
 ## 0.16.1 to 0.17.0
 

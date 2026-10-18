@@ -89,7 +89,6 @@ interface CheckCodeEntry {
 
 interface TendCodeEntry {
   readonly code: string;
-  readonly reportedByDefault: boolean;
   readonly description: string;
   readonly do: string;
 }
@@ -105,13 +104,8 @@ export function checkTable(entries: readonly CheckCodeEntry[]): CodeTable {
 export function tendTable(entries: readonly TendCodeEntry[]): CodeTable {
   return {
     marker: "<!-- generated: nuka tend --codes --json -->",
-    header: ["Code", "Reported", "Meaning", "Do"],
-    rows: entries.map((entry) => [
-      `\`${entry.code}\``,
-      entry.reportedByDefault ? "default" : "--all",
-      entry.description,
-      entry.do,
-    ]),
+    header: ["Code", "Meaning", "Do"],
+    rows: entries.map((entry) => [`\`${entry.code}\``, entry.description, entry.do]),
   };
 }
 

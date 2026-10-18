@@ -3681,8 +3681,7 @@ neglect.
 still healthy.
 
 `nuka tend --codes` lists every code a tend finding can carry, each with a
-one-line description, whether a run without `--all` reports it, and the
-code's general `do`; with `--json` it prints the same list as JSON, under
+one-line description and the code's general `do`; with `--json` it prints the same list as JSON, under
 `codes`.
 
 It is a separate command, rather than another set of `check` warnings,
@@ -3709,8 +3708,8 @@ do need acting on):
   and how many typed steps declare `mutates: false`
   (read-only).
 - `declared:` shows how many schema fields of typed steps carry a
-  `.describe()`. When the default report left the notes behind that count
-  out (see below), the line says that `nuka tend --all` names each one.
+  `.describe()`. Each field without one is also a `schema-field-undescribed`
+  note.
 
 Under `--json`, the same summary is the `summary` object, in snake_case
 like every other document nukadoko prints: `typed_steps`, `compat_steps`,
@@ -3868,16 +3867,11 @@ command, is refused by name, with what replaced it (see
 --codes`, which lists every code. This is how a PR job gates on `pattern-unbound`
 without `tend` turning red for everyone else.
 
-One of the findings above is reported only on request: a schema field
-with no `.describe()` (`schema-field-undescribed`). `nuka tend --all`
-reports it, and so does naming the code in `--fail-on`, since a gate that
-cannot see its own code would pass without saying so. It is a gap in a
-declaration, not a declaration drifting away from what it describes, and a
-project may keep it. Reported on every run, it was most of what a young
-project's `tend` printed. The `declared:` line still counts it, so the gap
-stays in view without a note per step. The default report keeps every
-finding that names something structurally rotting: an unused declaration,
-an unbound step, a stale fixture.
+Every run reports every code. No code is held back for a flag: every
+tend finding is already a note that leaves the exit code alone, so a
+default-off code would only save output, and it would cost a gate that
+reads plain `--json` the findings it never sees. A team picks what gates
+with `--fail-on`, not by what a plain run prints.
 
 `tend` reports but does not repair. Repair means writing a description,
 deleting a step, or moving a feature: decisions with an author behind
@@ -4402,7 +4396,7 @@ nuka clean [--dry-run] [--json]
                               directory, including on --dry-run;
                               export/allure-history.jsonl is never
                               removed
-nuka tend [--json] [--all] [--fail-on <code>]
+nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
@@ -4422,16 +4416,13 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page, context, or pageAs, a step that
                               made a call soon
-                              after its own navigation, and scenarios that
+                              after its own navigation, scenarios that
                               open with the same steps up to the first When,
                               docstrings and tables compared too (measured,
-                              no advice);
-                              --all adds a schema field with no
-                              `.describe()`, and --fail-on naming that code
-                              adds it too
+                              no advice), and a schema field with no
+                              `.describe()`
 nuka tend --codes [--json]    list every finding code nuka tend can report,
-                              whether a plain run reports it or only --all
-                              does, a one-line description, and the code's
+                              a one-line description, and the code's
                               general do, instead of tending a project
 nuka session list [--json]    list every session, across all environments,
                               one line each: name, updated_at, alive or
@@ -4500,7 +4491,8 @@ codes }`), `clean --json`, `explore --json`, and `session list --json`
 (`{ schema_version, error, do }`, see "Refusals"). The number moves
 when a field the document already has changes its meaning, its type, or
 its name, or is removed. An added field does not move it. A reader checks
-the number before it trusts the shape. Each number is 1 today, and a
+the number before it trusts the shape. Each number is 1 today, except
+`tend --codes --json`, which is 2 (each entry lost `reportedByDefault`), and a
 record without `schema_version` was written by nukadoko 0.16.1 or
 earlier. The `experimental` commands print the server's own tool list, a
 shape nukadoko does not own, so they carry no number.

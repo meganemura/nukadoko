@@ -3,7 +3,6 @@ import { analyzeTend } from "../tend/analyze.js";
 import {
   listTendCodes,
   REMOVED_TEND_CODES,
-  selectReportedNotes,
   TEND_CODES,
   type TendFinding,
   type TendIssue,
@@ -41,10 +40,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // fourth line, since it is counted in the exact same vocabulary walk as
 // `typed`/`compat` (src/tend/summary.ts).
 //
-// The declaration code (src/tend/note-selection.ts) is left out of both
-// text and `--json` unless `--all` is given or `--fail-on` names it. The
-// `declared:` line still counts it, and says `--all` names each one when
-// any was left out, so the gap stays visible without a note per field.
+// Every code is reported. A default-off code once kept the declaration
+// note out of plain runs, and a CI gate that parsed plain `--json` passed
+// without ever seeing it; `--fail-on` is the way to choose what gates.
 
 export interface RunTendOptions {
   rootDir: string;
@@ -57,9 +55,6 @@ export interface RunTendOptions {
   /** `--fail-on`: codes whose presence turns this invocation's exit code
    * red. Empty by default, so a note stays a note (docs/spec.md "Tending"). */
   failOn: readonly string[];
-  /** `--all`: also report the declaration note (a schema field with no
-   * `.describe()`), which is left out by default. */
-  all: boolean;
 }
 
 function formatLocation(issue: TendIssue): string {
@@ -92,13 +87,11 @@ function formatIssueLine(severity: "error" | "note", issue: TendFinding): string
 // stays as counts; it is still on `report.summary` for `--json`, which
 // dumps the whole report as-is below, because naming the actual steps is
 // more useful than a count to whatever reads that machine-readable form.
-function formatSummaryLines(summary: TendSummary, declarationNotesLeftOut: boolean): string[] {
-  const declared =
-    `declared: describe ${summary.describe.declared}/${summary.describe.total}`;
+function formatSummaryLines(summary: TendSummary): string[] {
   return [
     `scanned: ${summary.scanned_feature_dirs.join(", ")}`,
     `bed: typed ${summary.typed_steps}, compat ${summary.compat_steps}, read-only ${summary.read_only_steps}`,
-    declarationNotesLeftOut ? `${declared} (nuka tend --all names each one)` : declared,
+    `declared: describe ${summary.describe.declared}/${summary.describe.total}`,
   ];
 }
 
@@ -107,19 +100,18 @@ function formatSummaryLines(summary: TendSummary, declarationNotesLeftOut: boole
  * caller asked for. A `--fail-on` with no code left is dropped. */
 export function tendCommandWithout(
   removed: ReadonlySet<string>,
-  options: { readonly json: boolean; readonly all: boolean; readonly failOn: readonly string[] },
+  options: { readonly json: boolean; readonly failOn: readonly string[] },
 ): string {
   const kept = options.failOn.filter((code) => !removed.has(code));
   return [
     "nuka tend",
-    ...(options.all ? ["--all"] : []),
     ...(options.json ? ["--json"] : []),
     ...(kept.length > 0 ? ["--fail-on", kept.join(",")] : []),
   ].join(" ");
 }
 
 export async function runTend(options: RunTendOptions): Promise<number> {
-  const { rootDir, json, failOn, all, stdout, stderr } = options;
+  const { rootDir, json, failOn, stdout, stderr } = options;
 
   if (options.codes) {
     const entries = listTendCodes();
@@ -127,7 +119,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
       stdout.write(`${JSON.stringify(versioned("tend_codes", { codes: entries }), null, 2)}\n`);
     } else {
       for (const entry of entries) {
-        stdout.write(`${entry.code}\t${entry.reportedByDefault ? "default" : "--all"}\t${entry.description}\t${entry.do}\n`);
+        stdout.write(`${entry.code}\t${entry.description}\t${entry.do}\n`);
       }
     }
     return 0;
@@ -142,7 +134,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   const removed = failOn.filter((code) => REMOVED_TEND_CODES.has(code));
   if (removed.length > 0) {
     const lines = removed.map((code) => `--fail-on: "${code}" ${REMOVED_TEND_CODES.get(code)}.`);
-    return refuse(sinks, lines.join("\n"), tendCommandWithout(new Set(removed), { json, all, failOn }));
+    return refuse(sinks, lines.join("\n"), tendCommandWithout(new Set(removed), { json, failOn }));
   }
   const unknown = failOn.filter((code) => !TEND_CODES.has(code));
   if (unknown.length > 0) {
@@ -154,14 +146,12 @@ export async function runTend(options: RunTendOptions): Promise<number> {
     );
   }
 
-  let analyzed;
+  let report;
   try {
-    analyzed = await analyzeTend(rootDir);
+    report = await analyzeTend(rootDir);
   } catch (error) {
     return refuse(sinks, error, helpFor("tend"));
   }
-  const notes = selectReportedNotes(analyzed.notes, { all, failOn });
-  const report = { ...analyzed, notes };
 
   if (json) {
     stdout.write(`${JSON.stringify(versioned("tend_report", report), null, 2)}\n`);
@@ -171,7 +161,7 @@ export async function runTend(options: RunTendOptions): Promise<number> {
     // header), then notes — and `analyzeTend` already builds `notes` as consecutive
     // per-finding blocks, so printing it in order is grouping, with no sort
     // needed here.
-    for (const line of formatSummaryLines(report.summary, notes.length < analyzed.notes.length)) {
+    for (const line of formatSummaryLines(report.summary)) {
       stdout.write(`${line}\n`);
     }
     for (const issue of report.errors) {

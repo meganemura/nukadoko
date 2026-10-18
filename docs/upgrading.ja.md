@@ -50,6 +50,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `pageAs(name)` の context は、step 自身の `trace.zip` と `final.png` の隣にそれらのファイルを書きます。
   そのため、有効なすべての context 名について、大文字小文字を問わず、これらの名前は `ReservedEvidenceNameError` で予約されます。
   そのような名前でファイルを添付していた step は、たとえば `trace-aki.zip` や `aki-final.png` に名前を変えます。
+- **`nuka tend` はすべての code を報告し、`--all` は削除されました。**
+  素の `nuka tend` は、テキストでも `--json` でも `schema-field-undescribed` を報告するようになりました。
+  `nuka tend --all` はそう告げて終了コード 2 で終わるので、このフラグを外します。
+  素の `--json` を読んで一部の code にだけ対応するジョブは、`notes` を `code` で絞り込むか、対応する code ごとに `--fail-on` を渡します。
+  `nuka tend --codes` のテキストを読むスクリプトが読む列は 3 つ(code、意味、do)になりました。
+  `nuka tend --codes --json` を読むスクリプトは `schema_version` 2 を受け取り、エントリに `reportedByDefault` はありません。
 
 ## 0.16.1 から 0.17.0 へ
 

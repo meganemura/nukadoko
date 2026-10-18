@@ -169,7 +169,6 @@ interface CheckArgs {
 interface TendArgs {
   json?: boolean;
   codes?: boolean;
-  all?: boolean;
   /** `--fail-on`; yargs collects a repeated flag into an array. */
   "fail-on"?: string[];
 }
@@ -968,18 +967,13 @@ export async function runCli(
     command: "tend",
     describe: "what is rotting rather than what is broken: unused declarations, unbound steps, stale fixtures",
     builder: (y: Argv) =>
-      y
+      refuseRemovedFlags(y, {
+        all: "nuka tend --all is removed: a plain nuka tend reports every code.",
+      })
         .option("json", {
           type: "boolean",
           default: false,
           describe: "machine-readable output",
-        })
-        .option("all", {
-          type: "boolean",
-          default: false,
-          describe:
-            "also report schema-field-undescribed, which is left out by default " +
-            "(naming it in --fail-on reports it too)",
         })
         .option("fail-on", {
           type: "string",
@@ -993,8 +987,7 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe:
-            "list every finding code nuka tend can report, whether a plain run reports it (default) or only --all does, " +
-            "and a one-line description, instead of tending a project",
+            "list every finding code nuka tend can report, with a one-line description, instead of tending a project",
         }) as Argv<TendArgs>,
     handler: async (args: Arguments<TendArgs>) => {
       if (argsFailed) return;
@@ -1003,7 +996,6 @@ export async function runCli(
         rootDir,
         json: args.json ?? false,
         codes: args.codes ?? false,
-        all: args.all ?? false,
         failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
         stdout,
         stderr,

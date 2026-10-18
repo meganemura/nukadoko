@@ -26,6 +26,17 @@ just until 0.1.
   reserved for every valid context name, opened or not, because whether a
   later step opens one is not known when a step attaches. Breaking for a
   step that attached a file under such a name: see docs/upgrading.md.
+- **`nuka tend` reports every code, and `--all` is removed.**
+  `schema-field-undescribed` was the one code a plain run left out. Every
+  tend finding is a note that leaves the exit code alone, so holding one
+  back saved only output, and a gate that parsed plain `nuka tend --json`
+  passed without ever seeing that code. `nuka tend --all` now exits 2
+  with "nuka tend --all is removed: a plain nuka tend reports every
+  code."; `--fail-on <code>` stays the way to gate. `nuka tend --codes`
+  drops its default/--all column, and `nuka tend --codes --json` drops
+  `reportedByDefault` from each entry, so its `schema_version` is 2. The
+  `declared:` line no longer adds "(nuka tend --all names each one)".
+  See docs/upgrading.md.
 
 ### Added
 

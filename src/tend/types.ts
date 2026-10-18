@@ -88,9 +88,6 @@ export interface TendReport {
   readonly summary: TendSummary;
 }
 
-// Which notes a run reports by default lives beside the codes it selects
-// from, so callers outside this module reach both through this file.
-export { DECLARATION_TEND_CODES, selectReportedNotes, type NoteSelection } from "./note-selection.js";
 // The placeholder scaffold writes is the one the note matches, so both
 // read it from here.
 export { DESCRIPTION_TODO_PREFIX } from "./description-todo.js";

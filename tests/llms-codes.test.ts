@@ -38,20 +38,10 @@ describe("llms.txt code tables", () => {
     expect(rows, regenerate).toEqual(expected);
   });
 
-  it("lists every nuka tend code with when it is reported, its description, and do", () => {
+  it("lists every nuka tend code with its description and do", () => {
     const rows = parseTable(readGenerated(llms, tendTable([]).marker));
-    const expected = listTendCodes().map((entry) => [
-      `\`${entry.code}\``,
-      entry.reportedByDefault ? "default" : "--all",
-      entry.description,
-      entry.do,
-    ]);
+    const expected = listTendCodes().map((entry) => [`\`${entry.code}\``, entry.description, entry.do]);
     expect(rows, regenerate).toEqual(expected);
-  });
-
-  it("names the one tend code only --all reports", () => {
-    const rows = parseTable(readGenerated(llms, tendTable([]).marker));
-    expect(rows.filter((row) => row[1] === "--all").map((row) => row[0])).toEqual(["`schema-field-undescribed`"]);
   });
 });
 
@@ -65,17 +55,17 @@ describe("nuka tend --codes", () => {
     const lines = stdout.text().trimEnd().split("\n");
     expect(lines).toHaveLength(14);
     expect(lines[0]).toBe(
-      "fixture-replaces-builtin\tdefault\tA config.fixtures definition has the name of a builtin fixture that a project may replace (scratch), so it replaces the builtin.\tDelete the fixture and its StepFixtures declaration if the builtin covers what it does; keep both if the project needs its own shape.",
+      "fixture-replaces-builtin\tA config.fixtures definition has the name of a builtin fixture that a project may replace (scratch), so it replaces the builtin.\tDelete the fixture and its StepFixtures declaration if the builtin covers what it does; keep both if the project needs its own shape.",
     );
     expect(lines[1]).toBe(
-      "fixture-touches-app\tdefault\tA config.fixtures definition reaches page, context, or pageAs, directly or through another fixture, so it can set up a precondition that no feature line names.\tIf a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary.",
+      "fixture-touches-app\tA config.fixtures definition reaches page, context, or pageAs, directly or through another fixture, so it can set up a precondition that no feature line names.\tIf a scenario depends on what the fixture sets up, write that setup as a feature line. If not, no change is necessary.",
     );
     expect(lines.find((line) => line.startsWith("schema-field-undescribed\t"))).toBe(
-      "schema-field-undescribed\t--all\tA field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.\tAdd a .describe() that says what the field means to each field that the message names.",
+      "schema-field-undescribed\tA field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.\tAdd a .describe() that says what the field means to each field that the message names.",
     );
   });
 
-  it("--json prints schema_version, then code, description, and reportedByDefault per code", async () => {
+  it("--json prints schema_version, then code, description, and do per code", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend", "--codes", "--json"], {
       rootDir: fixture("invalid-config-project"),
@@ -85,12 +75,12 @@ describe("nuka tend --codes", () => {
     expect(exitCode).toBe(0);
     const document = JSON.parse(stdout.text()) as { schema_version: number; codes: Array<{ code: string }> };
     expect(Object.keys(document)).toEqual(["schema_version", "codes"]);
+    expect(document.schema_version).toBe(2);
     const entries = document.codes;
     expect(entries).toHaveLength(14);
     expect(entries.find((entry) => entry.code === "pattern-unbound")).toEqual({
       code: "pattern-unbound",
       description: "A typed step has a pattern, and no feature line resolves to that step alone.",
-      reportedByDefault: true,
       do: "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
     });
   });

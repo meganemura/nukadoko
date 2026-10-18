@@ -3138,7 +3138,7 @@ nukadoko はすべての段階を記録します。
 この語彙と、それが生み出した記録は、いまも健全か、です。
 
 `nuka tend --codes` は、tend の所見が持ちうるコードをすべて一覧にします。
-各コードには 1 行の説明、`--all` なしで報告されるかどうか、そのコードの一般的な `do` が付きます。
+各コードには 1 行の説明と、そのコードの一般的な `do` が付きます。
 `--json` を付けると、同じ一覧を `codes` の下に JSON で出力します。
 
 これが `check` への警告の追加ではなく別のコマンドである理由は、この 2 つが異なる瞬間に読まれ、異なる意味を持つからです。
@@ -3159,7 +3159,7 @@ nukadoko はすべての段階を記録します。
 - `bed:` は、語彙のうちどれだけが compat ではなく型付けされているかを示します。
   加えて、いくつの型付き step が `mutates: false`(読み取り専用)を宣言しているかも示します。
 - `declared:` は、型付き step のスキーマフィールドのうち、いくつが `.describe()` を持つかを示します。
-  その件数の元になる注記を既定の報告が外したときは(下記を参照)、`nuka tend --all` がそれぞれを名指すことをこの行が告げます。
+  `.describe()` を持たないフィールドは、それぞれ `schema-field-undescribed` の注記にもなります。
 
 `--json` では、同じサマリーが `summary` オブジェクトになり、nukadoko が出力するほかの文書と同じく snake_case です。
 キーは `typed_steps`、`compat_steps`、`compat_step_names`、`read_only_steps`、`scanned_feature_dirs` と、`{ declared, total }` の `describe` です。
@@ -3293,16 +3293,11 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
 未知の code を拒否するときは、すべての code を一覧する `nuka tend --codes` を案内します。
 これが、他の全員の `tend` を赤くせずに、PR のジョブが `pattern-unbound` でゲートを掛ける方法です。
 
-上の所見のうち 1 つは、求められたときだけ報告されます。
-`.describe()` を持たないスキーマフィールド(`schema-field-undescribed`)です。
-`nuka tend --all` はそれを報告します。
-`--fail-on` がその code を名指したときも、それを報告します。
-自分の code を見られないゲートは、何も言わずに通ってしまうからです。
-それは宣言の欠けであって、宣言が記述対象からずれていく腐敗ではなく、プロジェクトはそれを抱えたままでいられます。
-毎回報告されていたころは、若いプロジェクトの `tend` が出力するもののほとんどがこれでした。
-`declared:` の行は引き続きそれを数えるので、step ごとの注記がなくても欠けは見えたままです。
-既定の報告は、構造的に腐っているものを名指す所見をすべて残します。
-使われていない宣言、束ねられていない step、古くなった fixture です。
+どの run も、すべての code を報告します。
+フラグの陰に控えさせる code はありません。
+tend の所見はどれもすでに exit code を変えない注記なので、既定で外す code が減らせるのは出力の量だけです。
+その代わりに、素の `--json` を読むゲートは、一度も見ない所見を失います。
+チームは、素の run が何を出力するかではなく、`--fail-on` でゲートに掛けるものを選びます。
 
 `tend` は報告するだけで、修復はしません。
 直すということは、description を書くこと、step を削除すること、feature を移すことを意味します。
@@ -3809,7 +3804,7 @@ nuka clean [--dry-run] [--json]
                               directory, including on --dry-run;
                               export/allure-history.jsonl is never
                               removed
-nuka tend [--json] [--all] [--fail-on <code>]
+nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
                               rather than what is broken: how much of the
@@ -3829,16 +3824,13 @@ nuka tend [--json] [--all] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page, context, or pageAs, a step that
                               made a call soon
-                              after its own navigation, and scenarios that
+                              after its own navigation, scenarios that
                               open with the same steps up to the first When,
                               docstrings and tables compared too (measured,
-                              no advice);
-                              --all adds a schema field with no
-                              `.describe()`, and --fail-on naming that code
-                              adds it too
+                              no advice), and a schema field with no
+                              `.describe()`
 nuka tend --codes [--json]    list every finding code nuka tend can report,
-                              whether a plain run reports it or only --all
-                              does, a one-line description, and the code's
+                              a one-line description, and the code's
                               general do, instead of tending a project
 nuka session list [--json]    list every session, across all environments,
                               one line each: name, updated_at, alive or
@@ -3903,7 +3895,9 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
 フィールドが追加されただけでは上がりません。
 読み手は、形を信頼する前にこの番号を確かめます。
-どの番号も現在は 1 で、`schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
+どの番号も現在は 1 です。
+例外は `tend --codes --json` で、各エントリから `reportedByDefault` が消えたため 2 です。
+`schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
 `experimental` のコマンドは、nukadoko が持たない形であるサーバー自身の tool 一覧を出力するので、番号を持ちません。
 
 `nuka check` と `nuka tend` のすべての所見は `file` と `do` を持ちます。

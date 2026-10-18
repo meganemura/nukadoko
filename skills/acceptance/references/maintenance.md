@@ -45,11 +45,10 @@ code with a one-line meaning before any of them has fired. Each note also
 names a `file` and a `do:` line: what to open, and the change to make if
 the note calls for one.
 
-By default it leaves out one declaration note: `schema-field-undescribed`
-(a field with no `.describe()`). A gap there is a choice the project may
-keep, not something that rots, so the `declared:` line only counts it
-(`describe 7/9`). `nuka tend --all` names each one, and naming the code in
-`--fail-on` reports it too.
+Every run reports every code, `schema-field-undescribed` (a field with no
+`.describe()`) included. The `declared:` line counts the same gaps
+(`describe 7/9`). A gate that acts on some codes and not others filters
+the notes by `code`, or passes `--fail-on` for each code it acts on.
 
 `step-description-todo` names a typed step whose description is still
 the `TODO: describe <name>` that `nuka scaffold` wrote without

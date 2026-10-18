@@ -140,12 +140,12 @@ describe("the do line of a removed --fail-on code", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["tend", "--all", "--json", "--fail-on", "pattern-unbound,step-rationale-missing", "--fail-on", "fixture-unused"],
+      ["tend", "--json", "--fail-on", "pattern-unbound,step-rationale-missing", "--fail-on", "fixture-unused"],
       { rootDir: repoRoot, stdout, stderr },
     );
     expect(exitCode).toBe(2);
     expect((JSON.parse(stdout.text()) as { do: string }).do).toBe(
-      "nuka tend --all --json --fail-on pattern-unbound,fixture-unused",
+      "nuka tend --json --fail-on pattern-unbound,fixture-unused",
     );
   });
 
@@ -154,7 +154,7 @@ describe("the do line of a removed --fail-on code", () => {
       const codes = tc.draw(gs.arrays(gs.sampledFrom([...TEND_CODES, ...REMOVED_TEND_CODES.keys()]), { maxSize: 6 }));
       const removed = new Set(codes.filter((code) => REMOVED_TEND_CODES.has(code)));
       const kept = codes.filter((code) => !removed.has(code));
-      expect(tendCommandWithout(removed, { json: false, all: false, failOn: codes })).toBe(
+      expect(tendCommandWithout(removed, { json: false, failOn: codes })).toBe(
         kept.length === 0 ? "nuka tend" : `nuka tend --fail-on ${kept.join(",")}`,
       );
     }));

@@ -144,7 +144,7 @@ describe("the do line in text output", () => {
 
   it("prints a do line under each nuka tend note", async () => {
     const stdout = createCaptureSink();
-    await runTend({ rootDir, json: false, failOn: [], all: false, stdout, stderr: createCaptureSink() });
+    await runTend({ rootDir, json: false, failOn: [], stdout, stderr: createCaptureSink() });
 
     expect(stdout.text().split("\n").slice(3)).toEqual([
       'note\tpattern-unbound\tfeatures/steps/broken.ts\tStep "broken" declares a pattern, but no feature line under the scanned directories binds it. It has no place in any scenario right now.',
@@ -167,7 +167,7 @@ describe("the do line in text output", () => {
     const check = createCaptureSink();
     await runCheck({ rootDir, json: true, codes: true, stdout: check, stderr: createCaptureSink() });
     const tend = createCaptureSink();
-    await runTend({ rootDir, json: false, codes: true, failOn: [], all: false, stdout: tend, stderr: createCaptureSink() });
+    await runTend({ rootDir, json: false, codes: true, failOn: [], stdout: tend, stderr: createCaptureSink() });
 
     expect(JSON.parse(check.text()).codes.find((entry: { code: string }) => entry.code === "serial-tag-on-scenario")).toEqual({
       code: "serial-tag-on-scenario",
@@ -177,7 +177,7 @@ describe("the do line in text output", () => {
       do: "Move @nukadoko:serial to the Feature line.",
     });
     expect(tend.text().split("\n").find((line) => line.startsWith("from-unused\t"))).toBe(
-      "from-unused\tdefault\tA step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture.\tRemove the from entry for the key, or keep it for nuka do --use.",
+      "from-unused\tA step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture.\tRemove the from entry for the key, or keep it for nuka do --use.",
     );
   });
 });

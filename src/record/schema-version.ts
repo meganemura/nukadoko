@@ -14,7 +14,7 @@ export const SCHEMA_VERSIONS = {
   steps: 1,
   describe: 1,
   tend_report: 1,
-  tend_codes: 1,
+  tend_codes: 2,
   clean_plan: 1,
   explore_result: 1,
   sessions: 1,

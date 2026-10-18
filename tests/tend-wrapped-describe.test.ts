@@ -5,7 +5,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 describe("nuka tend: schema-field-undescribed under wrappers", () => {
   it("counts a description kept on the inner schema of every wrapper", async () => {
     const stdout = createCaptureSink();
-    await runCli(["tend", "--json", "--all"], {
+    await runCli(["tend", "--json"], {
       rootDir: fixture("tend-wrapped-describe-project"),
       stdout,
       stderr: createCaptureSink(),
