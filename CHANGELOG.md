@@ -45,7 +45,9 @@ just until 0.1.
   reason was only in the step record. Its `Locator:`, `Expected:`,
   `Received:`, and `Error:` lines now follow, at most four, each cut to
   200 characters (code points, so a cut never splits a surrogate pair),
-  and the `Call log:` stays in the step record.
+  and the `Call log:` stays in the step record. An `expect(value, message)`
+  puts its message first; the lines after the `expect(...)` line still
+  follow.
 
 ### Fixed
 

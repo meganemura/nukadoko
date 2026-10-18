@@ -39,6 +39,23 @@ describe("assertionDetailLines", () => {
     ]);
   });
 
+  it("names both values when expect was given a message of its own", () => {
+    const message =
+      'playmodel open exit code (stderr: {\n  "error": "playmodel open requires the repository viewer."\n}\n)\n\n' +
+      "expect(received).toBe(expected) // Object.is equality\n\nExpected: 0\nReceived: 2";
+    expect(formatStepFailure({ errorMessage: message, recordPath: null })).toEqual([
+      "playmodel open exit code (stderr: {",
+      "Expected: 0",
+      "Received: 2",
+    ]);
+  });
+
+  it("reads the values after the matcher line, whatever the message before it says", () =>
+    hegel.test((tc) => {
+      const custom = tc.draw(gs.text({ maxSize: 200 })).replace(/Call log:/g, "");
+      expect(assertionDetailLines(`${custom}\n\n${valueMessage}`)).toEqual(["Expected: 3", "Received: 2"]);
+    }));
+
   it("adds nothing to a message that is not an expect call", () =>
     hegel.test((tc) => {
       const message = tc.draw(gs.text({ maxSize: 200 })).replace(/expect\(/g, "");

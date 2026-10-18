@@ -1850,7 +1850,8 @@ step の行は、その成否を step record と同じ語で示します: `passe
 失敗した step の行の後には、字下げした 2 行が続きます。
 1 行目はエラーメッセージの最初の行で、端末の色コードを除いたものです。
 2 行目はその step record のパス(`<stateDir>/records/steps/<id>`)です。
-1 行目が Playwright の `expect(...)` の呼び出しであるときは、何を比べたかを示すその後の行が 1 行目に続きます。
+メッセージが Playwright の `expect(...)` の行を含むときは、何を比べたかを示すその行の後の行が 1 行目に続きます。
+`expect(...)` の行は 1 行目のこともあり、`expect(value, message)` に渡したメッセージの後の行のこともあります。
 `Locator:`、`Expected:`、`Received:`、そして `element(s) not found` のような `Error:` で、最大 4 行、各行は 200 文字で切られ、`Call log:` からは取りません。
 matcher の名前だけでは、ページが間違っているのか期待が間違っているのかを区別できず、2 つの値ならそれができます。
 始まらなかった step には step record がないため、エラーの行だけが付きます。

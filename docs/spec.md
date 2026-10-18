@@ -2187,9 +2187,10 @@ A step's line names its outcome with the word a step record uses:
 and summary still appear because the flag makes the terminal quieter, not
 silent. A failed step's line is followed by two indented lines: the first
 line of its error message, without terminal color codes, and the path of
-its step record (`<stateDir>/records/steps/<id>`). When that first line is a
-Playwright `expect(...)` call, the lines after it that say what was
-compared follow it: `Locator:`, `Expected:`, `Received:`, and an `Error:`
+its step record (`<stateDir>/records/steps/<id>`). When the message holds a
+Playwright `expect(...)` line (its first line, or the line after the
+message an `expect(value, message)` call was given), the lines after that
+`expect(...)` line that say what was compared follow the first line: `Locator:`, `Expected:`, `Received:`, and an `Error:`
 such as `element(s) not found`, at most four, each cut to 200 characters,
 and none from the `Call log:`. The matcher's name alone does not tell a
 wrong page from a wrong expectation; the two values do. A step that never began

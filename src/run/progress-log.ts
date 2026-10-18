@@ -86,23 +86,27 @@ function firstVisibleLine(text: string): string | undefined {
 // failed") names the matcher and leaves out both values, which is the part
 // a reader of stderr needs to tell a wrong page from a wrong expectation.
 // The `Call log:` that follows is long and stays in the step record.
-const ASSERTION_FIRST_LINE = /^(?:Error: )?expect\(/;
+const ASSERTION_MATCHER_LINE = /^(?:Error: )?expect\(/;
 const ASSERTION_DETAIL = /^(?:Locator|Expected|Received|Error)\b[^:]*:/;
 const MAX_ASSERTION_DETAIL_LINES = 4;
 const MAX_ASSERTION_DETAIL_LENGTH = 200;
 
 /** The `Locator:`/`Expected:`/`Received:`/`Error:` lines of an `expect`
- * message, trimmed, before its `Call log:`, at most four, each cut to 200
- * characters. `[]` for a message whose first visible line is not an
- * `expect(...)` call, so any other error keeps its one line. */
+ * message, trimmed, after its `expect(...)` line and before its `Call
+ * log:`, at most four, each cut to 200 characters. `[]` for a message with
+ * no `expect(...)` line, so any other error keeps its one line. */
 export function assertionDetailLines(message: string): string[] {
   const lines = message.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/);
-  const first = lines.findIndex((line) => line.trim().length > 0);
-  if (first === -1 || !ASSERTION_FIRST_LINE.test(lines[first]!.trim())) return [];
+  const callLog = lines.findIndex((line) => line.trim() === "Call log:");
+  const beforeCallLog = callLog === -1 ? lines : lines.slice(0, callLog);
+  // The last `expect(` line, not the first visible one: `expect(value,
+  // message)` puts the caller's message first, and that message can quote
+  // text of its own (a command's stderr) that holds an `expect(` line.
+  const matcher = beforeCallLog.findLastIndex((line) => ASSERTION_MATCHER_LINE.test(line.trim()));
+  if (matcher === -1) return [];
   const details: string[] = [];
-  for (const line of lines.slice(first + 1)) {
+  for (const line of beforeCallLog.slice(matcher + 1)) {
     const trimmed = line.trim();
-    if (trimmed === "Call log:") break;
     if (!ASSERTION_DETAIL.test(trimmed)) continue;
     // Cut by code point, not by UTF-16 unit: a slice at a unit index can
     // split a surrogate pair and print half of an emoji as a lone surrogate.
