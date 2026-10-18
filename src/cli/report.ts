@@ -108,12 +108,12 @@ export async function runReport(options: RunReportOptions): Promise<number> {
     return finish({ runId: document.run_id, written: [outPath], kind: "file" });
   }
 
-  const loaded = loadRun(runDir, rootDir);
+  const loaded = loadRun(runDir, rootDir, stateDir);
   if ("refusal" in loaded) {
     return refuse(sinks, loaded.refusal.message, loaded.refusal.code, undefined, notices);
   }
   const run = loaded.run;
-  const ownRun = stateDir !== null && path.resolve(runDir) === path.resolve(rootDir, runRelativeDir(stateDir, run.document.run_id));
+  const ownRun = run.ownRun;
   const problems: string[] = [...run.problems];
 
   if (format === "messages") {

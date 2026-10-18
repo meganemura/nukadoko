@@ -2798,6 +2798,9 @@ scenario がチケットの求めたことを述べているか、そしてサ�
 読むのは run ディレクトリだけです。
 run.json、step record、そして run が parse した feature の本文である `sources.json` です。
 そのため CI のマシンから持ち出した run ディレクトリも、それを実行したプロジェクトにある run ディレクトリと同じ result を描き出します。
+そうしたディレクトリは信頼できない入力なので、record が名指すパスはどれも、symlink も含めて解決し、run ディレクトリの中にとどまるときだけ読みます。
+このプロジェクト自身の run は、プロジェクトの中のファイルも名指せます。
+外へ出るパスは読まず、`report-incomplete` の警告になり、そのファイルが result にも messages ストリームにも入ることはありません。
 result は Allure 2 のファイル形式を使い、Allure 2 と Allure 3 の両方が読めます。
 nukadoko は HTML をレンダリングしません。
 

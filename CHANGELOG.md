@@ -54,6 +54,11 @@ just until 0.1.
   concurrent run write its own share, and left nothing to render a run
   again from. A run directory now holds everything a report needs, so a
   run directory copied off a CI machine renders the same as one in place.
+  Such a directory is untrusted input: every path a record names is
+  resolved, symlinks included, and read only while it stays inside the
+  run directory (or, for a run of this project's own, inside the
+  project); a path that leaves is a `report-incomplete` warning and is
+  never read.
   - `nuka report [<run dir>] --format markdown|allure|messages [--out
     <path>] [--json]` renders one run: the newest one when no run
     directory is given. `markdown` is the run summary, on stdout or to

@@ -123,12 +123,18 @@ export function writeAllureResults(options: WriteAllureResultsOptions, scenarios
     options.warn(`allure categories.json or environment.properties not written: ${error instanceof Error ? error.message : String(error)}`);
   }
 
+  // An attachment that cannot be read, or whose path is refused, costs
+  // that attachment only: the result is written without it.
   function writeMappedAttachment(rootUuid: string, parentStepUuid: string | null, attachment: MappedAttachment): void {
     if (attachment.kind === "path") {
-      runtime.writeAttachment(rootUuid, parentStepUuid, attachment.name, options.resolvePath(attachment.path), {
-        contentType: attachment.contentType,
-        wrapInStep: false,
-      });
+      try {
+        runtime.writeAttachment(rootUuid, parentStepUuid, attachment.name, options.resolvePath(attachment.path), {
+          contentType: attachment.contentType,
+          wrapInStep: false,
+        });
+      } catch (error) {
+        options.warn(`allure: could not attach ${attachment.path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     } else {
       runtime.writeAttachment(rootUuid, parentStepUuid, attachment.name, Buffer.from(attachment.content, "utf8"), {
         contentType: attachment.contentType,
