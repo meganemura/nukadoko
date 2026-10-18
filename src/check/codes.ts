@@ -145,6 +145,12 @@ const CHECK_CODES = {
     severity: "error",
     do: "Give the function one object-destructuring parameter that names only known fixtures. The message names the name that is not known.",
   },
+  "from-order-check-suppressed": {
+    description:
+      "A step's from names a producer that no earlier line runs, but a line before it matches no step and may be meant to run that producer, so the from-order-violation findings that line could explain are held back until it matches a step.",
+    severity: "warning",
+    do: "Reword the undefined line to match the producer's pattern if it is meant to run that producer. Otherwise fix the undefined-step finding first, then run nuka check again.",
+  },
   "from-order-violation": {
     description:
       "A step declares from for a key, and the step or steps it names have not run earlier in the same scenario, or (when the key names more than one candidate) more than one candidate has.",

@@ -1103,6 +1103,11 @@ pickle は Background の step を含みます。
 
 先行する生産者がない **required** なキーはエラーです。
 run は必ず `args` のバリデーションに失敗するため、このチェックは偽陽性を作りません。
+先行する行がどの step にも一致しない場合、その判定は条件付きになります。
+その行は、タイプミスを含んだ生産者かもしれないからです。
+そのとき `nuka check` は、そうした所見をその行の `undefined-step` の所見の後ろに保留します。
+scenario ごとに 1 つの `from-order-check-suppressed` 警告が、保留したすべての消費側、キー、生産者を挙げます。
+その行が step に一致した後もまだ当てはまる所見は、次のチェックで報告されます。
 生産者がない **optional** なキーは、schema が欠落を許すため所見を出しません。
 その場合の警告は、有効な契約を問題として報告します。
 先行する生産者が 2 つ以上なら、required と optional のどちらのキーでもエラーになります。
@@ -3658,9 +3663,11 @@ nuka check [feature..] [--json]
                               that captures the same key twice, a required
                               args key nothing on that line could fill, a
                               required `from` key whose producer is absent,
-                              bound later in the scenario, or ambiguous
-                              between two producers, a `from` naming a step
-                              discovery never registered, a fixture
+                              bound later in the scenario (held back while
+                              an earlier line matches no step), or
+                              ambiguous between two producers, a `from`
+                              naming a step discovery never registered, a
+                              fixture
                               dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page
                               override that owns none of page, context, and

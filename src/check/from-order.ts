@@ -82,7 +82,8 @@ export interface FromOrderIssue {
   readonly candidates: readonly string[];
   /** Indexes of earlier lines no step matches. Such a line is often the
    * producer the author meant, written before its step, and nothing can
-   * tell from here whether it is, so the do line names it as a condition. */
+   * tell from here whether it is, so `nuka check` holds the issue back
+   * behind that line's own finding (`isHeldBackByUndefinedLine`). */
   readonly undefinedBefore: readonly number[];
 }
 
@@ -95,12 +96,14 @@ function quotedNames(names: readonly string[]): string {
   return names.map((name) => `"${name}"`).join(", ");
 }
 
-/** The do line for one issue. Each sentence either names a change that
- * resolves the issue as stated, or is conditional on a fact only the author
- * knows (which earlier line is meant to produce the key). Removing the from
- * entry is not offered: the key stays required, and another scenario may
- * depend on the producer it names. */
-export function fromOrderDo(issue: FromOrderIssue, steps: readonly FromOrderLine[]): string {
+/** The do line for one issue `nuka check` reports. Each sentence either
+ * names a change that resolves the issue as stated, or is conditional on a
+ * fact only the author knows (which earlier line is meant to produce the
+ * key). Removing the from entry is not offered: the key stays required, and
+ * another scenario may depend on the producer it names. An issue with a
+ * line before it that no step matches never reaches here: it is held back
+ * (`isHeldBackByUndefinedLine`). */
+export function fromOrderDo(issue: FromOrderIssue): string {
   const { key, stepName, candidates } = issue;
   if (issue.kind === "ambiguous") {
     return `Remove or move lines so that exactly one of steps ${quotedNames(candidates)} runs before this line.`;
@@ -109,32 +112,77 @@ export function fromOrderDo(issue: FromOrderIssue, steps: readonly FromOrderLine
     candidates.length === 1
       ? `Put a line that runs step "${candidates[0]}" earlier in the scenario`
       : `Put a line that runs exactly one of steps ${quotedNames(candidates)} earlier in the scenario`;
-  const another = `list that step as another [step, "${key}"] candidate in from.${key} of step "${stepName}"`;
   if (issue.stepIndex === 0) {
     return `${put}.`;
   }
-  if (issue.undefinedBefore.length === 0) {
-    return `${put}. Or, if a step that an earlier line runs returns ${key}, ${another}.`;
+  return `${put}. Or, if a step that an earlier line runs returns ${key}, list that step as another [step, "${key}"] candidate in from.${key} of step "${stepName}".`;
+}
+
+/** A "missing" issue with a line before it that no step matches depends on
+ * what that line becomes: it is most often the producer with a typo or a
+ * drifted wording, and rewording it settles every issue it explains at
+ * once, so reporting each as an error would bury the one fix. An
+ * "ambiguous" issue stays an error: a line that matches nothing cannot
+ * lower how many candidates already ran. */
+export function isHeldBackByUndefinedLine(issue: FromOrderIssue): boolean {
+  return issue.kind === "missing" && issue.undefinedBefore.length > 0;
+}
+
+export interface FromOrderHold {
+  /** 0-based index into `pickle.steps`: the first undefined line before a
+   * held-back issue, which every held-back issue of the pickle has before
+   * it. */
+  readonly stepIndex: number;
+  readonly message: string;
+  readonly do: string;
+}
+
+function describeLine(steps: readonly FromOrderLine[], index: number): string {
+  const step = steps[index];
+  const at = step?.line === undefined ? "" : `line ${step.line} `;
+  return `${at}"${step?.text ?? ""}"`;
+}
+
+function stepsPhrase(names: readonly string[]): string {
+  return names.length === 1 ? `step "${names[0]}"` : `one of steps ${quotedNames(names)}`;
+}
+
+/** The one warning that stands for every issue of one pickle held back by
+ * an undefined line, or `undefined` when none was. It names each held-back
+ * consumer, its keys, and their producers, so nothing it holds back goes
+ * unsaid. */
+export function fromOrderHold(held: readonly FromOrderIssue[], steps: readonly FromOrderLine[]): FromOrderHold | undefined {
+  if (held.length === 0) {
+    return undefined;
   }
-  const lines = issue.undefinedBefore.map((index) => {
-    const step = steps[index];
-    const at = step?.line === undefined ? "" : `line ${step.line} `;
-    return `${at}"${step?.text ?? ""}"`;
+  const undefinedLines = [...new Set(held.flatMap((issue) => issue.undefinedBefore))].sort((a, b) => a - b);
+  const consumers = new Map<string, { stepIndex: number; stepName: string; candidates: readonly string[]; keys: string[] }>();
+  for (const issue of held) {
+    const id = JSON.stringify([issue.stepIndex, issue.candidates]);
+    const consumer = consumers.get(id);
+    if (consumer === undefined) {
+      consumers.set(id, { stepIndex: issue.stepIndex, stepName: issue.stepName, candidates: issue.candidates, keys: [issue.key] });
+    } else {
+      consumer.keys.push(issue.key);
+    }
+  }
+  const needs = [...consumers.values()].map((consumer) => {
+    const at = steps[consumer.stepIndex]?.line === undefined ? "" : `line ${steps[consumer.stepIndex]!.line} `;
+    return `${at}step "${consumer.stepName}" needs ${stepsPhrase(consumer.candidates)} for ${consumer.keys.join(", ")}`;
   });
-  const which =
-    lines.length === 1
-      ? `${lines[0]}, which no step matches yet,`
-      : `one of ${lines.join(", ")}, which no step matches yet,`;
-  const target = candidates.length === 1 ? `step "${candidates[0]}"` : `one of steps ${quotedNames(candidates)}`;
-  // The rewording comes first: a line written just before its consumer
-  // that matches nothing is most often the producer with a typo or a
-  // drifted wording, and a new step that also returns the key would
-  // duplicate the one the from entry already names.
-  return (
-    `${put}. If ${which} is meant to run ${target}, reword that line to match that step's pattern. ` +
-    `If it should run a new step that produces ${key}, give that step ${key} in returns, and ` +
-    `list it as another [step, "${key}"] candidate in from.${key} of step "${stepName}".`
-  );
+  const producers = [...new Set(held.flatMap((issue) => issue.candidates))];
+  const lines = undefinedLines.map((index) => describeLine(steps, index));
+  const which = lines.length === 1 ? lines[0]! : `one of ${lines.join(", ")}`;
+  const count = held.length === 1 ? "1 from-order-violation finding" : `${held.length} from-order-violation findings`;
+  return {
+    stepIndex: undefinedLines[0]!,
+    message:
+      `Held back ${count} while ${lines.join(", ")} ${lines.length === 1 ? "matches" : "match"} no step, ` +
+      `because such a line may be meant to run the producer they need: ${needs.join("; ")}`,
+    do:
+      `If ${which} is meant to run ${stepsPhrase(producers)}, reword that line to match that step's pattern. ` +
+      "Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.",
+  };
 }
 
 /** One candidate's own order status against the consuming line — computed

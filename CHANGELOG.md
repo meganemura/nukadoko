@@ -57,6 +57,18 @@ just until 0.1.
   scenarios" and told the reader to run the whole feature it had just
   run. It is now written only when the line targets select fewer
   scenarios than the targeted files hold.
+- **A line that matches no step holds back the `from-order-violation` findings it could explain, in one `from-order-check-suppressed` warning.**
+  One typo in a producer's line gave one `undefined-step` error and one
+  `from-order-violation` error for every key a later line takes from that
+  producer: seven errors in a real suite, each with its own do line,
+  for one fix. While a line before the consumer matches no step, the
+  order verdict depends on what that line becomes, so `nuka check` now
+  reports those findings as one warning per scenario at the first such
+  line. It names each consumer line, step, key, and producer, and its do
+  line says to reword the line to the producer's pattern if it is meant
+  to run it. The undefined line is still reported, so a check that
+  failed before still fails. A finding with no such line before it, and
+  one where two producers already ran, is reported as before.
 - **`nuka clean` reports nothing after a clean, and creates no Allure results directory that was not there.**
   Clean removed the results directory and always recreated it empty, and
   listed it whenever it existed, so every second `nuka clean` printed
@@ -194,10 +206,8 @@ just until 0.1.
   line's step exists, and the `do:` then said to remove the `from` entry,
   which breaks every scenario that already chains through it. The `do:`
   is now built for each finding: it names the step to run earlier (or the
-  candidates, one of which must run), and when an earlier line has no
-  step yet it names that line and says to reword it to the producer's
-  pattern if it is meant to run that step, or, if it should run a new
-  step, to give that step the key in `returns` and list it as another
+  candidates, one of which must run), and, if a step an earlier line
+  runs returns the key, says to list that step as another
   `[step, "key"]` candidate in `from`. When two candidates ran earlier,
   it says to keep one. The finding still fires: the scenario fails
   as written until one of those changes is made.

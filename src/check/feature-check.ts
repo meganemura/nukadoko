@@ -10,7 +10,7 @@ import type { FeatureFile } from "../feature/load-features.js";
 import { attachmentTypeMismatch } from "./attachment-type.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { declaresDoneCallback, doneCallbackMessage, passedArgCountForStep } from "./done-callback.js";
-import { checkFromOrder, fromOrderDo } from "./from-order.js";
+import { checkFromOrder, fromOrderDo, fromOrderHold, isHeldBackByUndefinedLine } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
 
@@ -405,14 +405,31 @@ export function checkFeatures(
       // step, though (`issue.stepIndex`, the consuming line) — resolved back
       // to that step's own line here, the same way the per-step loop above
       // does, rather than the pickle's Scenario line.
-      for (const issue of checkFromOrder(pickle, vocabulary, match)) {
+      const orderIssues = checkFromOrder(pickle, vocabulary, match);
+      for (const issue of orderIssues) {
+        if (isHeldBackByUndefinedLine(issue)) {
+          continue;
+        }
         errors.push({
           code: "from-order-violation",
           message: issue.message,
           file: feature.relativePath,
           line: pickle.steps[issue.stepIndex]?.line,
           step: issue.stepName,
-          do: fromOrderDo(issue, pickle.steps),
+          do: fromOrderDo(issue),
+        });
+      }
+      // The undefined line that held these back is reported above as an
+      // error (or as undefined-step-check-suppressed beside the pattern
+      // error that is one), so holding them back never lets a check pass.
+      const hold = fromOrderHold(orderIssues.filter(isHeldBackByUndefinedLine), pickle.steps);
+      if (hold !== undefined) {
+        warnings.push({
+          code: "from-order-check-suppressed",
+          message: hold.message,
+          file: feature.relativePath,
+          line: pickle.steps[hold.stepIndex]?.line,
+          do: hold.do,
         });
       }
 

@@ -1356,6 +1356,10 @@ Thus, an omitted `nuka check` does not waste a browser session.
 
 A **required** key without an earlier producer is an error.
 The run would certainly fail `args` validation, so this check creates no false positive.
+An earlier line that matches no step makes that verdict conditional, because the line may be the producer written with a typo.
+`nuka check` then holds back each such finding behind the `undefined-step` finding for that line.
+One `from-order-check-suppressed` warning per scenario names every consumer, key, and producer it holds back.
+A held-back finding that still applies once the line matches a step is reported on the next check.
 An **optional** key without a producer causes no finding because the schema permits its absence.
 A warning in that case would report a valid contract as a problem.
 Two or more earlier producers cause an error for both required and optional keys.
@@ -4247,9 +4251,11 @@ nuka check [feature..] [--json]
                               that captures the same key twice, a required
                               args key nothing on that line could fill, a
                               required `from` key whose producer is absent,
-                              bound later in the scenario, or ambiguous
-                              between two producers, a `from` naming a step
-                              discovery never registered, a fixture
+                              bound later in the scenario (held back while
+                              an earlier line matches no step), or
+                              ambiguous between two producers, a `from`
+                              naming a step discovery never registered, a
+                              fixture
                               dependency cycle, a process-scope fixture
                               depending on a scenario-scope one, a page
                               override that owns none of page, context, and

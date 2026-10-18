@@ -4,7 +4,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { fromOrderDo, type FromOrderIssue as CheckedIssue } from "../src/check/from-order.js";
+import { fromOrderDo, fromOrderHold, type FromOrderIssue as CheckedIssue } from "../src/check/from-order.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka check`'s scenario-order check (docs/spec.md
@@ -112,39 +112,60 @@ describe("nuka check: from's scenario-order check", () => {
   });
 });
 
-describe("nuka check: from-order-violation's do line", () => {
+describe("nuka check: from-order-violation's do line, and the findings an undefined line holds back", () => {
   const feature = [
     "Feature: a producer written before its step",
     "",
     "  Scenario: the earlier line has no step yet",
     "    Given a project id comes from an import",
     "    Then the project is archived",
+    "    Then the project is closed",
     "",
     "  Scenario: the earlier line runs a step that is not the producer",
     '    Given a plain args failure on count "1"',
     "    Then the project is archived",
     "",
+    "  Scenario: the line with no step comes after the consumer",
+    "    Then the project is archived",
+    "    Given a project id comes from somewhere later",
+    "",
   ].join("\n");
 
-  async function doLines(): Promise<Record<number, string | undefined>> {
+  async function producerReport() {
     const rootDir = await copyFixtureToTempDir("from-project");
     try {
       await writeFile(path.join(rootDir, "features", "producer.feature"), feature);
-      const { report } = await checkReport(rootDir);
-      const issues = (report.errors as FromOrderIssue[]).filter(
-        (issue) => issue.code === "from-order-violation" && issue.file === "features/producer.feature",
-      );
-      return Object.fromEntries(issues.map((issue) => [issue.line, issue.do]));
+      const { exitCode, report } = await checkReport(rootDir);
+      const inFile = (issues: unknown[]) =>
+        (issues as FromOrderIssue[]).filter(
+          (issue) => issue.code.startsWith("from-order") && issue.file === "features/producer.feature",
+        );
+      return { exitCode, errors: inFile(report.errors), warnings: inFile(report.warnings) };
     } finally {
       await removeTempDir(rootDir);
     }
   }
 
-  it("names an earlier line no step matches as the producer reworded, or as a new candidate", async () => {
-    expect(await doLines()).toEqual({
-      5: 'Put a line that runs step "create-project" earlier in the scenario. If line 4 "a project id comes from an import", which no step matches yet, is meant to run step "create-project", reword that line to match that step\'s pattern. If it should run a new step that produces projectId, give that step projectId in returns, and list it as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
-      9: 'Put a line that runs step "create-project" earlier in the scenario. Or, if a step that an earlier line runs returns projectId, list that step as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
-    });
+  it("holds back the findings after a line no step matches in one warning at that line, and reports the rest", async () => {
+    const { exitCode, errors, warnings } = await producerReport();
+    expect(exitCode).toBe(1);
+    expect(warnings).toEqual([
+      {
+        code: "from-order-check-suppressed",
+        message:
+          'Held back 2 from-order-violation findings while line 4 "a project id comes from an import" matches no step, because such a line may be meant to run the producer they need: line 5 step "archive-project" needs step "create-project" for projectId; line 6 step "close-project" needs step "create-project" for projectId',
+        file: "features/producer.feature",
+        line: 4,
+        do: 'If line 4 "a project id comes from an import" is meant to run step "create-project", reword that line to match that step\'s pattern. Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.',
+      },
+    ]);
+    expect(errors.map((issue) => [issue.line, issue.do])).toEqual([
+      [
+        10,
+        'Put a line that runs step "create-project" earlier in the scenario. Or, if a step that an earlier line runs returns projectId, list that step as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
+      ],
+      [13, 'Put a line that runs step "create-project" earlier in the scenario.'],
+    ]);
   });
 
   it("never offers removing the from entry", async () => {
@@ -159,31 +180,45 @@ describe("nuka check: from-order-violation's do line", () => {
   });
 });
 
-describe("fromOrderDo", () => {
+describe("fromOrderHold", () => {
   const lineText = gs.text({ minSize: 1, maxSize: 10, alphabet: "abc xyz" });
 
-  it("names exactly the earlier lines no step matches, each by its line number", () =>
+  it("stands at the first undefined line, counts every held-back issue, and names every undefined line, consumer line, and key", () =>
     hegel.test((tc) => {
-      const texts = tc.draw(gs.arrays(lineText, { minSize: 1, maxSize: 6 }));
-      const steps = [...texts.map((text, index) => ({ line: 100 + index, text })), { line: 200, text: "consumer" }];
-      const flags = tc.draw(gs.arrays(gs.booleans(), { minSize: texts.length, maxSize: texts.length }));
-      const undefinedBefore = flags.flatMap((flag, index) => (flag ? [index] : []));
-      const issue: CheckedIssue = {
-        stepIndex: texts.length,
-        stepName: "consume",
-        message: "",
-        key: "id",
-        kind: "missing",
-        candidates: ["produce"],
-        undefinedBefore,
-      };
-      const text = fromOrderDo(issue, steps);
-      expect(text.startsWith('Put a line that runs step "produce" earlier in the scenario.')).toBe(true);
-      steps.slice(0, texts.length).forEach((step, index) => {
-        expect(text.includes(`line ${step.line} `)).toBe(undefinedBefore.includes(index));
+      const texts = tc.draw(gs.arrays(lineText, { minSize: 2, maxSize: 8 }));
+      const steps = texts.map((text, index) => ({ line: 100 + index, text }));
+      const undefinedFlags = tc.draw(gs.arrays(gs.booleans(), { minSize: texts.length, maxSize: texts.length }));
+      const consumerIndexes = tc.draw(gs.arrays(gs.integers({ minValue: 1, maxValue: texts.length - 1 }), { minSize: 1, maxSize: 5 }));
+      const held: CheckedIssue[] = [];
+      consumerIndexes.forEach((stepIndex, n) => {
+        const undefinedBefore = undefinedFlags.slice(0, stepIndex).flatMap((flag, index) => (flag ? [index] : []));
+        if (undefinedBefore.length === 0) return;
+        held.push({
+          stepIndex,
+          stepName: `consume${stepIndex}`,
+          message: "",
+          key: `k${n}`,
+          kind: "missing",
+          candidates: ["produce"],
+          undefinedBefore,
+        });
       });
-      expect(text.includes("which no step matches yet")).toBe(undefinedBefore.length > 0);
-      expect(text.includes('is meant to run step "produce", reword that line')).toBe(undefinedBefore.length > 0);
-      expect(text).toContain('another [step, "id"] candidate in from.id of step "consume"');
+      const hold = fromOrderHold(held, steps);
+      if (held.length === 0) {
+        expect(hold).toBeUndefined();
+        return;
+      }
+      const union = new Set(held.flatMap((issue) => issue.undefinedBefore));
+      expect(hold!.stepIndex).toBe(Math.min(...union));
+      expect(hold!.message.startsWith(`Held back ${held.length} from-order-violation finding`)).toBe(true);
+      const undefinedPart = hold!.message.slice(0, hold!.message.indexOf(" no step, "));
+      steps.forEach((step, index) => {
+        expect(undefinedPart.includes(`line ${step.line} `)).toBe(union.has(index));
+      });
+      for (const issue of held) {
+        expect(hold!.message).toContain(`line ${steps[issue.stepIndex]!.line} step "${issue.stepName}" needs step "produce" for `);
+        expect(hold!.message).toMatch(new RegExp(`for [^;]*\\b${issue.key}\\b`));
+      }
+      expect(hold!.do).toContain('is meant to run step "produce", reword that line');
     }));
 });
