@@ -154,8 +154,8 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   3 つのカテゴリをまとめて消します。
   `--dry-run` は実際の run と同じ計画を出力しますが、何も消しません。
   `nuka report --out` が state directory の外に書いたレポートは呼び出し側のファイルであり、`clean` は読みも消しもしません。
-  1 つの export ファイルだけは、retention と `clean` の両方の例外です。
-  `export/allure-history.jsonl` は `allure-results/` の中ではなく、その隣にあります。
+  `export/` の下で `clean` が消すのは、run の manifest が名指すファイルと `allure-results/` の中身だけです。
+  `export/allure-history.jsonl` は `allure-results/` の中ではなくその隣にあるので、retention も `clean` も消しません。
   ここにある成果物のうち、新しい run で再現できないものはこのファイルだけです。
 - **step record と run.json は同じ 1 行にいます。**
   違うのは粒度だけです。
@@ -2711,7 +2711,10 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 
 日常の削除は retention で、`nuka run` 自身が毎回の run の終わりに適用します(「成果物」を参照)。
 `nuka clean [--dry-run] [--json]` は、2 種類を一度に消すコマンドです。
-すべての run ディレクトリ、すべての `do/` の record、そして Allure の history ファイルを除く `export/` のすべての entry を消します。
+すべての run ディレクトリ、すべての `do/` の record、run の exports manifest が名指す `export/` の下のファイル、そして `export/allure-results/` の中身を消します。
+`export/` のそれ以外の entry は残ります。
+Allure の history ファイル、`allure generate` のレポート、人が置いたファイルなどです。
+nukadoko が消すのは、自分が書いたものだけです。
 run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。
 retention はそこに決して触れません。
 以前のリリースが state directory の下に書き、今は何も読まない `cache/` と `records/` のディレクトリも、一覧に出して消します。
@@ -3010,8 +3013,7 @@ Allure の result は、nukadoko の計測の余剰が見えるようになる�
 出力先は stdout、または `--out` が名指すファイルです。
 相対の `--out` はプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 Allure の result と同じく、ストリームは run の後に run ディレクトリだけから描き出され、`nuka run` は何も書きません。
-このプロジェクト自身の run について state directory の下に書いたファイルは、その run の exports manifest に記されるので、retention が run と一緒に消します。
-`nuka clean` は `.nukadoko/export/` のすべての entry を消します。
+このプロジェクト自身の run について state directory の下に書いたファイルは、その run の exports manifest に記されるので、retention と `nuka clean` が run と一緒に消します。
 
 - 1 回の描き出しは、1 つの run の 1 つのストリームです。
   2 つの run がストリームを共有することはなく、書き終えたストリームは変わらないので、読み手が目にする書きかけのストリームはありません。
@@ -3630,10 +3632,11 @@ nuka clean [--dry-run] [--json]
                               delete accumulated runs/do/export under
                               the state directory, all together; --dry-run
                               prints the same plan the real run would act on
-                              without removing anything;
-                              export/allure-history.jsonl is never
-                              removed; the cache/ and records/
-                              directories earlier releases left go too
+                              without removing anything; under export/,
+                              only the files a run's manifest names and
+                              the contents of allure-results/; the cache/
+                              and records/ directories earlier releases
+                              left go too
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting

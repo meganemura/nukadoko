@@ -208,6 +208,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
     `nuka clean` が config からパスを読まなくなったからです。
     `emitter-failed` は警告でしたが、`report-incomplete` では `nuka report` が 1 で終了します。
     ファイルを失った run ディレクトリを描き出す CI の step は失敗するので、run ディレクトリ全体をアップロードします。
+  - `nuka clean` が `.nukadoko/export/` の下で消すのは、run の exports manifest が名指すファイルと `allure-results/` の中身だけです。
+    `allure generate` のレポートのように nukadoko が書いていないファイルはそこに残ります。
+    以前の clean で消えていたなら、自分で消します。
 
 ## 0.16.1 から 0.17.0 へ
 

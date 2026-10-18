@@ -101,8 +101,11 @@ just until 0.1.
   - The live Allure progress snapshots (`*-progress-result.json`) and the
     ten-second heartbeat that fed them are gone; the progress output on
     stderr is the live view of a run.
-  - `nuka clean` removes every entry of `.nukadoko/export/` but
-    `allure-history.jsonl`, and no longer reads paths from the config, so
+  - Under `.nukadoko/export/`, `nuka clean` removes only what nukadoko
+    wrote: the files a run's exports manifest names, and the contents of
+    `allure-results/`. Every other entry stays, such as an Allure history
+    file or an `allure generate` report. It no longer reads paths from the
+    config, so
     the `export-path-outside-project` refusal code is gone. The
     `emitter-failed` run code is gone. A render that left out part of the
     run (a scenario, a step record, or an attachment it could not read,

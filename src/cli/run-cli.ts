@@ -877,7 +877,7 @@ export async function runCli(
   const cleanCommand: CommandModule<Record<string, never>, CleanArgs> = {
     command: "clean",
     describe:
-      "delete accumulated runs, do records, what nuka report wrote under export/ (export/allure-history.jsonl stays), " +
+      "delete accumulated runs, do records, what nuka report wrote under export/ (the files a run's manifest names and the contents of allure-results; every other file stays), " +
       "and the cache/ and records/ directories earlier releases left, in the state directory",
     builder: (y: Argv) =>
       refuseRemovedFlags(y, {

@@ -275,6 +275,10 @@ This part does not change release to release.
     the config. `emitter-failed` was a warning, and `report-incomplete`
     makes `nuka report` exit 1: a CI step that renders a run whose
     directory lost a file fails, so upload the whole run directory.
+  - `nuka clean` removes under `.nukadoko/export/` only the files a run's
+    exports manifest names and the contents of `allure-results/`. A file
+    nukadoko did not write there, such as an `allure generate` report,
+    stays; delete it yourself if a clean used to.
 
 ## 0.16.1 to 0.17.0
 

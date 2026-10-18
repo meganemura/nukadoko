@@ -1,7 +1,8 @@
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
-import { doRelativeDir, exportRelativeDir, runsRelativeDir } from "../record/state-layout.js";
+import { readExportsManifest, RUN_EXPORTS_FILE_NAME } from "../record/run-exports.js";
+import { allureResultsRelativeDir, doRelativeDir, exportRelativeDir, runsRelativeDir } from "../record/state-layout.js";
 import type { Finding } from "../finding/finding.js";
 import { formatEnvelope, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -18,12 +19,17 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //
 // The measurement directories, `runs/<run_id>/` and `do/<id>/`, come from
 // src/record/state-layout.ts, the same place every writer gets them.
-// `export/` holds what `nuka report` wrote there: every entry in it is
-// removed, except `allure-history.jsonl`, Allure's own cross-run trend file
-// (named via `historyPath` in the allurerc.mjs `nuka init --allure`
-// writes), which clearing results between runs must never discard. A
-// report written with `--out` somewhere else is the caller's file, not
-// this tool's to delete.
+// Under `export/`, a clean removes what nukadoko wrote and nothing else:
+// the files a run's exports manifest names (src/record/run-exports.ts), and
+// everything in `export/allure-results/`, the default directory `nuka
+// report --format allure` writes into, which also takes the results of a
+// copied run no manifest names. Every other entry stays: an Allure history
+// file (`allure-history.jsonl`, which the allurerc.mjs `nuka init --allure`
+// writes names), an `allure generate` report, or any file a person put
+// there. The alternative refused: emptying all of `export/` but one
+// hard-coded name, which deleted a configured history path or a generated
+// report nukadoko never wrote. A report written with `--out` outside the
+// state directory is the caller's file, not this tool's to delete.
 //
 // `export/allure-results/` is removed and immediately recreated empty,
 // mirroring cli/init.ts's own reasoning for creating it that way in the
@@ -96,12 +102,8 @@ async function buildRecordsPlan(rootDir: string, stateDir: string): Promise<stri
   return paths;
 }
 
-/** The Allure history file `nuka init --allure` names, kept by a clean. */
-const ALLURE_HISTORY_FILE_NAME = "allure-history.jsonl";
-const ALLURE_RESULTS_DIR_NAME = "allure-results";
-
 interface ExportPlan {
-  /** Root-relative, each entry of `export/` a clean removes, sorted. */
+  /** Root-relative, each path under `export/` a clean removes, sorted. */
   paths: string[];
   /** `export/allure-results/` existed, so it is recreated empty. */
   resultsDirExists: boolean;
@@ -115,26 +117,48 @@ async function isEmptyDirectory(dir: string): Promise<boolean> {
   }
 }
 
-/** Every entry of `export/` but the Allure history file. An empty
- * `allure-results/` is what the previous clean left behind, so listing it
- * would make every second clean report a path. A missing `export/` is
- * nothing to remove, not an error. */
-async function buildExportPlan(rootDir: string, stateDir: string): Promise<ExportPlan> {
-  const exportDir = exportRelativeDir(stateDir);
-  let names: string[];
+async function exists(filePath: string): Promise<boolean> {
   try {
-    names = (await readdir(path.join(rootDir, exportDir))).sort((a, b) => a.localeCompare(b));
+    await stat(filePath);
+    return true;
   } catch {
-    return { paths: [], resultsDirExists: false };
+    return false;
   }
-  const resultsDirExists = names.includes(ALLURE_RESULTS_DIR_NAME);
-  const paths: string[] = [];
-  for (const name of names) {
-    if (name === ALLURE_HISTORY_FILE_NAME) continue;
-    if (name === ALLURE_RESULTS_DIR_NAME && (await isEmptyDirectory(path.join(rootDir, exportDir, name)))) continue;
-    paths.push(path.join(exportDir, name));
+}
+
+function isInside(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return relative !== "" && !path.isAbsolute(relative) && !relative.startsWith("..");
+}
+
+/** `export/allure-results/` when it holds anything, then every file a run's
+ * exports manifest names that is still there, inside `export/` and outside
+ * `allure-results/`. An empty `allure-results/` is what the previous clean
+ * left behind, so listing it would make every second clean report a path.
+ * A manifest line that leaves `export/` is not followed: a manifest is a
+ * file in the run directory, and a clean deletes only what nukadoko writes
+ * there. */
+async function buildExportPlan(rootDir: string, stateDir: string): Promise<ExportPlan> {
+  const exportDir = path.resolve(rootDir, exportRelativeDir(stateDir));
+  const resultsRelative = allureResultsRelativeDir(stateDir);
+  const resultsDir = path.resolve(rootDir, resultsRelative);
+  const resultsDirExists = await exists(resultsDir);
+  const paths = new Set<string>();
+  if (resultsDirExists && !(await isEmptyDirectory(resultsDir))) paths.add(resultsRelative);
+  let runNames: string[] = [];
+  try {
+    runNames = await readdir(path.join(rootDir, runsRelativeDir(stateDir)));
+  } catch {
+    // No runs: no manifest to read.
   }
-  return { paths, resultsDirExists };
+  for (const runName of runNames) {
+    for (const relativePath of readExportsManifest(path.join(rootDir, runsRelativeDir(stateDir), runName, RUN_EXPORTS_FILE_NAME))) {
+      const absolutePath = path.resolve(rootDir, relativePath);
+      if (!isInside(exportDir, absolutePath) || absolutePath === resultsDir || isInside(resultsDir, absolutePath)) continue;
+      if (await exists(absolutePath)) paths.add(path.relative(rootDir, absolutePath));
+    }
+  }
+  return { paths: [...paths].sort((a, b) => a.localeCompare(b)), resultsDirExists };
 }
 
 function writePlan(
@@ -191,7 +215,7 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   // (an `allure watch` already pointed at this directory must keep finding
   // it). A directory that was not there is not created.
   if (exportPlan.resultsDirExists) {
-    await mkdir(path.join(rootDir, exportRelativeDir(config.stateDir), ALLURE_RESULTS_DIR_NAME), { recursive: true });
+    await mkdir(path.join(rootDir, allureResultsRelativeDir(config.stateDir)), { recursive: true });
   }
 
   return 0;

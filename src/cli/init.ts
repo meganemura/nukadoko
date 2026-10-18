@@ -14,6 +14,7 @@ import { formatVocabularyError } from "./vocabulary.js";
 import { listenAddress } from "../context/run-server.js";
 import { isPlaywrightInstalled, PlaywrightMissingError } from "../context/load-playwright.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { allureResultsRelativeDir } from "../record/state-layout.js";
 
 // Responsibility: `nuka init`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs
@@ -472,7 +473,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     // (verified against allure 3.14.3: `watch` serves and `generate`
     // produces an empty report). Creating it here lets `allure watch`
     // already be running before the first `nuka report --format allure`.
-    const allureResultsDirRelative = path.join(defaults.stateDir, "export", "allure-results");
+    const allureResultsDirRelative = allureResultsRelativeDir(defaults.stateDir);
     await mkdir(path.join(rootDir, allureResultsDirRelative), { recursive: true });
     stdout.write(`${allureResultsDirRelative}\n`);
 

@@ -32,6 +32,13 @@ async function seedExport(rootDir: string): Promise<void> {
   await writeFile(path.join(resultsDir, "some-result.json"), "{}");
   await writeFile(path.join(stateDir(rootDir), "export", "allure-history.jsonl"), '{"kept":true}\n');
   await writeFile(path.join(stateDir(rootDir), "export", "messages.ndjson"), "line1\n");
+  // messages.ndjson is a file nuka report wrote of run-ccc, so its manifest
+  // names it; the two files beside it are a person's own.
+  await mkdir(path.join(stateDir(rootDir), "runs", "run-ccc"), { recursive: true });
+  await writeFile(path.join(stateDir(rootDir), "runs", "run-ccc", "exports"), `${path.join(".nukadoko", "export", "messages.ndjson")}\n`);
+  await mkdir(path.join(stateDir(rootDir), "export", "allure-report"), { recursive: true });
+  await writeFile(path.join(stateDir(rootDir), "export", "allure-report", "index.html"), "<html></html>");
+  await writeFile(path.join(stateDir(rootDir), "export", "my-history.jsonl"), "{}\n");
 }
 
 describe("nuka clean", () => {
@@ -79,7 +86,7 @@ describe("nuka clean", () => {
       spy.mockRestore();
     }
     expect(logged.join("\n").replace(/\s+/g, " ")).toContain(
-      "delete accumulated runs, do records, what nuka report wrote under export/ (export/allure-history.jsonl stays), " +
+      "delete accumulated runs, do records, what nuka report wrote under export/ (the files a run's manifest names and the contents of allure-results; every other file stays), " +
         "and the cache/ and records/ directories earlier releases left, in the state directory",
     );
   });
@@ -149,7 +156,7 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(stateDir(rootDir), "runs", "run-ccc"))).toBe(false);
   });
 
-  it("deletes every entry of export/, recreates allure-results empty, and never touches allure-history.jsonl", async () => {
+  it("deletes what a run's exports manifest names and the contents of allure-results, recreates allure-results empty, and keeps every other file in export/", async () => {
     await seedExport(rootDir);
 
     const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
@@ -162,6 +169,17 @@ describe("nuka clean", () => {
 
     const historyPath = path.join(stateDir(rootDir), "export", "allure-history.jsonl");
     expect(existsSync(historyPath)).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "allure-report", "index.html"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "export", "my-history.jsonl"))).toBe(true);
+  });
+
+  it("does not follow a manifest line that leaves export/", async () => {
+    await mkdir(path.join(stateDir(rootDir), "runs", "run-ddd"), { recursive: true });
+    await writeFile(path.join(stateDir(rootDir), "runs", "run-ddd", "exports"), "nukadoko.config.ts\n");
+    const stdout = createCaptureSink();
+    expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+    expect(stdout.text()).toBe(`${path.join(".nukadoko", "runs", "run-ddd")}\n`);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
   });
 
   it.each(["--records", "--cache", "--export"])("refuses %s by name, says clean removes every category, and deletes nothing", async (flag) => {
@@ -214,7 +232,7 @@ describe("nuka clean", () => {
     const stdout = createCaptureSink();
     expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
     expect(stdout.text()).toBe(
-      `${path.join(".nukadoko", "export", "allure-results")}\n${path.join(".nukadoko", "export", "messages.ndjson")}\n`,
+      `${path.join(".nukadoko", "runs", "run-ccc")}\n${path.join(".nukadoko", "export", "allure-results")}\n${path.join(".nukadoko", "export", "messages.ndjson")}\n`,
     );
     expect(existsSync(path.join(rootDir, "reports", "allure", "some-result.json"))).toBe(true);
     expect(existsSync(path.join(rootDir, "reports", "messages.ndjson"))).toBe(true);

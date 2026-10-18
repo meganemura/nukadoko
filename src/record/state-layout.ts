@@ -35,6 +35,13 @@ export function exportRelativeDir(stateDir: string): string {
   return path.join(stateDir, "export");
 }
 
+/** `<stateDir>/export/allure-results`, where `nuka report --format allure`
+ * writes without `--out`, the directory `nuka init --allure` creates, and
+ * the one directory under `export/` that `nuka clean` empties whole. */
+export function allureResultsRelativeDir(stateDir: string): string {
+  return path.join(exportRelativeDir(stateDir), "allure-results");
+}
+
 /** `<stateDir>/do`, the parent of every `nuka do` step record. */
 export function doRelativeDir(stateDir: string): string {
   return path.join(stateDir, "do");

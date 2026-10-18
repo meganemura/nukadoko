@@ -161,10 +161,12 @@ questions: "what happens if this is deleted" and "who gets to change it":
   remains. It cleans all three categories together. `--dry-run` prints the
   same plan that the real run would use, but removes nothing. A report
   `nuka report --out` wrote outside the state directory is the caller's
-  file, and `clean` does not read or remove it. One export file is exempt
-  from both retention and `clean`. `export/allure-history.jsonl` sits
-  beside `allure-results/`, not inside it. It is the only artifact here
-  that a new run cannot reproduce.
+  file, and `clean` does not read or remove it. Under `export/`, `clean`
+  removes the files a run's manifest names and the contents of
+  `allure-results/`, and nothing else. `export/allure-history.jsonl` sits
+  beside `allure-results/`, not inside it, so neither retention nor
+  `clean` removes it. It is the only artifact here that a new run cannot
+  reproduce.
 - **Step records and run.json share one row.** They differ only in
   grain. A scenario's entry in `run.json` and each of its step records
   answer the same question at two resolutions, not two different questions.
@@ -3310,8 +3312,11 @@ kinds, measurement and export (see "Artifacts"):
 The routine removal is retention, which `nuka run` applies itself at the end
 of every run (see "Artifacts").
 `nuka clean [--dry-run] [--json]` deletes both kinds at once: every
-run directory, every `do/` record, and every entry of `export/` but the
-Allure history file. It is also the operation for an `allure-results/`
+run directory, every `do/` record, every file under `export/` that a run's
+exports manifest names, and the contents of `export/allure-results/`.
+Every other entry of `export/` stays, such as the Allure history file, an
+`allure generate` report, or a file a person put there: nukadoko removes
+only what it wrote. It is also the operation for an `allure-results/`
 directory written before runs kept a manifest of their files, which
 retention never touches. It also lists and removes the `cache/` and
 `records/` directories an earlier release wrote under the state directory,
@@ -3565,8 +3570,7 @@ resolved against the project root, and an absolute one is used as given.
 Like the Allure results, the stream is rendered from the run directory
 alone, after the run, and `nuka run` writes none. A file written under the
 state directory of this project's own run is noted in that run's exports
-manifest, so retention removes it with the run, and `nuka clean` removes
-every entry of `.nukadoko/export/`.
+manifest, so retention and `nuka clean` remove it with the run.
 
 - One render is one stream of one run. Two runs never share a stream, and
   the stream never changes after it is written, so there is no partial
@@ -4238,10 +4242,11 @@ nuka clean [--dry-run] [--json]
                               delete accumulated runs/do/export under
                               the state directory, all together; --dry-run
                               prints the same plan the real run would act on
-                              without removing anything;
-                              export/allure-history.jsonl is never
-                              removed; the cache/ and records/
-                              directories earlier releases left go too
+                              without removing anything; under export/,
+                              only the files a run's manifest names and
+                              the contents of allure-results/; the cache/
+                              and records/ directories earlier releases
+                              left go too
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting
