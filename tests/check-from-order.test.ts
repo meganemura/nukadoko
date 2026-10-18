@@ -168,6 +168,42 @@ describe("nuka check: from-order-violation's do line, and the findings an undefi
     ]);
   });
 
+  it("under run --no-check, fails the undefined line itself and prints each line of a scenario the guard stops", async () => {
+    const rootDir = await copyFixtureToTempDir("from-project");
+    try {
+      await writeFile(path.join(rootDir, "features", "producer.feature"), feature);
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["run", "--no-check", "features/producer.feature"], { rootDir, stdout, stderr });
+
+      expect(exitCode).toBe(1);
+      const records = stdout
+        .text()
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line) => JSON.parse(line) as { steps: { text: string; status: string; error?: { message: string } }[] });
+      expect(records[0]!.steps.map((step) => [step.status, step.error?.message])).toEqual([
+        [
+          "undefined",
+          'No step definition matches "a project id comes from an import"; run `nuka scaffold --feature features/producer.feature` to add one',
+        ],
+        ["skipped", undefined],
+        ["skipped", undefined],
+      ]);
+      expect(stderr.text()).toContain(
+        [
+          "scenario 3/3  features/producer.feature:12  the line with no step comes after the consumer",
+          "  step 1/2  failed  0.0s  the project is archived",
+          '      Step "archive-project"\'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty',
+          "  step 2/2  skipped  0.0s  a project id comes from somewhere later",
+          "",
+        ].join("\n"),
+      );
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
+
   it("never offers removing the from entry", async () => {
     const { report } = await checkReport(fixture("from-project"));
     const dos = (report.errors as FromOrderIssue[])

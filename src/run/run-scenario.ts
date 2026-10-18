@@ -18,7 +18,7 @@ import {
   SCENARIO_HOOK_ARG_COUNT,
 } from "../check/done-callback.js";
 import { createStepTextMatcher } from "../check/feature-check.js";
-import { checkFromOrder } from "../check/from-order.js";
+import { checkFromOrder, isHeldBackByUndefinedLine } from "../check/from-order.js";
 import { checkUnfillableKeys } from "../check/unfillable-key.js";
 import { DataTable } from "../compat/data-table.js";
 import {
@@ -964,7 +964,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // judgment `nuka check` makes, same "never began" shape, one shared list of
   // per-step messages below rather than a second guard block.
   const match = createStepTextMatcher(patterns);
-  const orderIssues = checkFromOrder(pickle, vocabulary, match);
+  // An issue behind a line that matches no step is the check's held-back
+  // finding, not a verdict: under --no-check that line runs and fails as
+  // undefined, which names the cause instead of a consequence of it.
+  const orderIssues = checkFromOrder(pickle, vocabulary, match).filter((issue) => !isHeldBackByUndefinedLine(issue));
   const unfillableKeyIssues = checkUnfillableKeys(pickle, vocabulary, match);
   if (orderIssues.length > 0 || unfillableKeyIssues.length > 0) {
     // Mirrors the existing undefined-step shape (docs/spec.md "an execution
@@ -996,6 +999,19 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         error: { message: messages.join("; ") },
       };
     });
+    // Each line still gets its progress line, so stderr says which step
+    // failed and why instead of a scenario line with nothing under it.
+    stepRecords.forEach((entry, index) =>
+      onStepEnd?.({
+        stepIndex: index + 1,
+        totalSteps: pickle.steps.length,
+        status: entry.status === "failed" ? "failed" : "skipped",
+        durationMs: 0,
+        text: entry.text,
+        errorMessage: entry.error === undefined ? undefined : redactString(entry.error.message, secrets),
+        stepRecordId: null,
+      }),
+    );
     const finishedAt = new Date();
     const record: ScenarioRecord = {
       schema_version: SCHEMA_VERSIONS.scenario_record,

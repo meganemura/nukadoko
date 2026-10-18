@@ -1360,6 +1360,7 @@ An earlier line that matches no step makes that verdict conditional, because the
 `nuka check` then holds back each such finding behind the `undefined-step` finding for that line.
 One `from-order-check-suppressed` warning per scenario names every consumer, key, and producer it holds back.
 A held-back finding that still applies once the line matches a step is reported on the next check.
+`nuka run --no-check` holds back the same findings, so the undefined line itself fails the scenario, and the steps after it are skipped.
 An **optional** key without a producer causes no finding because the schema permits its absence.
 A warning in that case would report a valid contract as a problem.
 Two or more earlier producers cause an error for both required and optional keys.

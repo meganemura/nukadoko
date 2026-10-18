@@ -51,6 +51,17 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka run --no-check` fails a scenario at the line that matches no step, not at the from-order consequence of it.**
+  `nuka check` holds back a from-order finding behind an earlier line that
+  matches no step, but the guard `nuka run` applies before a scenario
+  still reported it. Under `--no-check` such a scenario failed on the
+  consumer line with "would fail args validation with certainty", and the
+  undefined line, the cause, was only `skipped`. The guard now holds back
+  the same findings, so the undefined line fails with its own message.
+  A scenario the guard does stop now prints a progress line for each of
+  its lines on stderr, the failed one with its message; before, stderr
+  showed the scenario line and nothing under it.
+
 - **A Then that `nuka scaffold --then --from <step>.stdout` writes passes against a program that ends its output with a newline.**
   The body compared `stdout` as it was, and a program that prints a line
   ends with a newline that neither a quoted capture nor a docstring
