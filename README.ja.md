@@ -211,8 +211,8 @@ steps     .nukadoko/records/steps/      2
 scenarios .nukadoko/records/scenarios/  1
 summary   .nukadoko/records/runs/run-20261016-123950-zrhr/summary.md
 1 scenario: 0 passed, 1 failed  (1s)
-failed  features/greet.feature:4  greets by name
-  rerun  nuka run features/greet.feature:4
+failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
+  do: nuka run features/greet.feature:4
 ```
 
 同じ事実が Markdown の run サマリにも入ります。
@@ -436,9 +436,9 @@ agent の探索ループも、この呼び出しから始まります。
 }
 ```
 
-この項目は、`{ schema_version, steps, import_failures }` のフィールドの 1 つである `steps` の下にあります。
-`import_failures` は、この呼び出しが import できなかった各 step ファイルを名指しします。
-このフィールドは常に存在し、すべての import が成功すれば空です。
+この項目は `steps` の下にあり、`steps` はすべての `--json` が出力する envelope `{ schema_version, nukadoko, command, verdict, findings, steps }` の中で `findings` の隣にあります。
+この呼び出しが import できなかった各 step ファイルは `step-file-import-failed` の finding になります(足りないパッケージが Playwright のときは `playwright-missing` です)。
+すべての import が成功すれば `findings` は空です。
 
 何かが実行される前に、`nuka check` があらゆる feature ファイルと step ファイルを読み、各問題を報告します。
 未定義の step は、最も単純なケースです。
@@ -447,7 +447,7 @@ agent の探索ループも、この呼び出しから始まります。
 対象を渡さなければ、プロジェクト全体を check します。
 
 ```
-error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold --feature features/todo.feature` to add one
+error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"
   do: nuka scaffold --feature features/todo.feature
 ```
 
@@ -488,7 +488,7 @@ step B が `from` を宣言して step A の返り値を読むとして、この
 
 ```
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
-  do: Put a line that runs step "create-project" earlier in the scenario.
+  fix: Put a line that runs step "create-project" earlier in the scenario.
 ```
 
 この 2 つのケースは一例にすぎません。
@@ -1073,9 +1073,10 @@ run が遅いときは、`nuka check` を単独で速い PR ゲート(数秒、�
 `nuka run` は自身の進捗と書き込み先も、走りながら stderr に出力します(`--quiet` は進捗だけを黙らせます)。
 stdout には、求めたときだけ出力されます。
 `nuka run --records` は、1 行 1 件の JSON の scenario record を stdout に出力します。
-`nuka run --json` は、代わりに 1 つの文書として run の `run.json` を出力します。
-そこには断定、件数、各 scenario の status、record のパス、再実行のコマンドが入ります。
-`--json` のときは stderr に進捗もパスも件数も出ないので、エージェントのシェルに見えるのはその文書と、何かがうまくいかなかったことを知らせる警告だけです。
+`nuka run --json` は、代わりに 1 つの文書を出力します。
+それはすべての `--json` が出力する envelope で、`findings` の隣に run の `run.json` のフィールドが入ります。
+そこには件数、各 scenario の status、record のパス、再実行のコマンドが入ります。
+`--json` のときは stderr は空で、警告は文書の中の finding になるので、エージェントのシェルに見えるのはその文書だけです。
 record は、フラグにかかわらず `.nukadoko/records/` の下に書かれます。
 stdout や stderr が端末かどうかで変わる出力はありません。
 失敗した step は、進捗行の下にエラーの 1 行目と step record のパスを出力します。
@@ -1083,7 +1084,7 @@ stdout や stderr が端末かどうかで変わる出力はありません。
 失敗した step が、プログラムが 0 以外で終わった step から値を読んでいたときは、その 2 行の間に `used` 行が入ります。
 その行は、その step、exit code、stderr の最初の行を示します。
 空の stdout を受け取った Then step は、たいていそこで失敗しています。
-サマリの後では、失敗した各 scenario に、それを再実行するコマンドを載せた `rerun` 行が付きます。
+サマリの後では、失敗した各 scenario が `scenario-failed` の finding になり、その `do:` 行が scenario を再実行します。
 `--quiet` でも、これらの行はすべて残ります。
 
 ```text
@@ -1091,8 +1092,8 @@ stdout や stderr が端末かどうかで変わる出力はありません。
       expected 5, got 4
       record  .nukadoko/records/steps/<id>
 ...
-failed  features/sum.feature:3  two and two
-  rerun  nuka run features/sum.feature:3
+failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
+  do: nuka run features/sum.feature:3
 ```
 
 同じ事実は、ログではなく人のために書かれた Markdown の run サマリにも入ります。

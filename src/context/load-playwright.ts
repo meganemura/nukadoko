@@ -24,16 +24,17 @@ export const PLAYWRIGHT_VERSION = "1.61.1";
 export type PlaywrightModule = typeof Playwright;
 
 /** Thrown when a step needs Playwright and the project has not installed it.
- * The message is one line: what needed it, and the command that fixes it. */
+ * The message says what needed it; `do` is the command that fixes it, so
+ * the message does not repeat it. */
 export class PlaywrightMissingError extends Error {
+  readonly code = "playwright-missing";
   readonly neededBy: string;
-  /** The next command a CLI refusal names (src/cli/refusal.ts). */
   readonly do = `npm install -D -E ${SPECIFIER}@${PLAYWRIGHT_VERSION}`;
 
   constructor(neededBy: string) {
     super(
-      `${neededBy} needs "${SPECIFIER}", and this project has not installed it. ` +
-        `Install the version nukadoko is tested against: npm install -D -E ${SPECIFIER}@${PLAYWRIGHT_VERSION}`,
+      `${neededBy} needs "${SPECIFIER}", and this project has not installed it; ` +
+        `nukadoko is tested against ${SPECIFIER}@${PLAYWRIGHT_VERSION}`,
     );
     this.name = "PlaywrightMissingError";
     this.neededBy = neededBy;
@@ -63,7 +64,7 @@ export function playwrightPackageMissing(
       ? `the step file imports "${missing.name}"`
       : `the step file imports "${missing.name}" through ${missing.importedBy}`;
   return {
-    message: `${reaches}, and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`,
+    message: `${reaches}, and this project has not installed it, so the file does not import; nukadoko is tested against ${missing.name}@${PLAYWRIGHT_VERSION}`,
     do: install,
   };
 }

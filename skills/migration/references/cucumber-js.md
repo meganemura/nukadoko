@@ -105,8 +105,8 @@ line.
 
 `nuka steps` and `nuka describe` stay usable throughout Stage 1, even while
 some glue files still fail to import: both read step files one at a time,
-so a file still failing to import is named (`import_failures` on `--json`,
-stderr otherwise) instead of emptying the whole vocabulary. Read the
+so a file still failing to import is named (a `step-file-import-failed`
+finding) instead of emptying the whole vocabulary. Read the
 vocabulary as you go rather than waiting for every file to import cleanly
 first; `nuka run <feature>` and `nuka do <step>` still refuse outright on
 an unreadable glue file, and the refusal names that file, on purpose,

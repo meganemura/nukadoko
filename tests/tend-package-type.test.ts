@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 const STEP = [
   'import { z } from "zod";',
@@ -24,7 +25,7 @@ type Note = { code: string; file?: string; message: string; do: string };
 async function tendNotes(rootDir: string): Promise<{ exitCode: number; notes: Note[] }> {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["tend", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-  const report = JSON.parse(stdout.text()) as { notes: Note[] };
+  const report = bySeverity(stdout.text()) as { notes: Note[] };
   return { exitCode, notes: report.notes.filter((note) => note.code === "package-type-missing") };
 }
 
@@ -53,7 +54,7 @@ describe("nuka tend: package-type-missing", () => {
         file: "package.json",
         message:
           'package.json has no "type" field, and it governs 2 .ts or .js files nukadoko loads, so Node parses each one twice and prints a MODULE_TYPELESS_PACKAGE_JSON warning on every load',
-        do: 'Add "type": "module" to package.json, or rename those files to .mts if the project\'s own .js files are CommonJS.',
+        fix: 'Add "type": "module" to package.json, or rename those files to .mts if the project\'s own .js files are CommonJS.',
       },
     ]);
     expect(exitCode).toBe(0);
@@ -71,7 +72,7 @@ describe("nuka tend: package-type-missing", () => {
         file: "features/package.json",
         message:
           'features/package.json has no "type" field, and it governs 1 .ts or .js file nukadoko loads, so Node parses it twice and prints a MODULE_TYPELESS_PACKAGE_JSON warning on every load',
-        do: 'Add "type": "module" to features/package.json, or rename that file to .mts if the project\'s own .js files are CommonJS.',
+        fix: 'Add "type": "module" to features/package.json, or rename that file to .mts if the project\'s own .js files are CommonJS.',
       },
     ]);
   });

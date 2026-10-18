@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check [target..]` selects files the way `nuka run`
 // does: several files, a directory walked for .feature files, or both.
@@ -15,18 +16,18 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 const UNBOUND =
   '; patterned steps no scanned feature line binds: unknown-type-step ("an unknown type {value:frobnicate} thing", features/steps/unknown-type-step.ts)';
 const PROJECT_WIDE = "error\tunknown-parameter-type\tfeatures/steps/unknown-type-step.ts\t";
-const PROJECT_WIDE_DO = "  do: Register the type in config.parameterTypes, or use a built-in type such as {key:string}.";
+const PROJECT_WIDE_DO = "  fix: Register the type in config.parameterTypes, or use a built-in type such as {key:string}.";
 const OUTSIDE =
   "error\tundefined-step\tacceptance/outside.feature:4\t" +
-  'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold --feature acceptance/outside.feature` to add one' + UNBOUND;
+  'No step definition matches "this step is undefined outside featuresDir"' + UNBOUND;
 const OUTSIDE_DO = "  do: nuka scaffold --feature acceptance/outside.feature";
 const INSIDE =
   "error\tundefined-step\tfeatures/inside.feature:4\t" +
-  'No step definition matches "this step is undefined inside featuresDir"; run `nuka scaffold --feature features/inside.feature` to add one' + UNBOUND;
+  'No step definition matches "this step is undefined inside featuresDir"' + UNBOUND;
 const INSIDE_DO = "  do: nuka scaffold --feature features/inside.feature";
 const EXTRA =
   "error\tundefined-step\tacceptance/nested/extra.feature:4\t" +
-  'No step definition matches "this step is undefined in a nested file"; run `nuka scaffold --feature acceptance/nested/extra.feature` to add one' + UNBOUND;
+  'No step definition matches "this step is undefined in a nested file"' + UNBOUND;
 const EXTRA_DO = "  do: nuka scaffold --feature acceptance/nested/extra.feature";
 
 async function check(rootDir: string, argv: string[]) {
@@ -97,7 +98,11 @@ describe("nuka check [target..]", () => {
 
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
-    expect(result.stderr).toBe("nuka check: feature file not found: acceptance/missing.feature\ndo: nuka check --help\n");
+    expect(result.stderr).toBe(
+      "refused\ttarget-not-found\t-\tnuka check: feature file not found: acceptance/missing.feature\n" +
+        "  fix: Name a file or a directory that exists.\n" +
+        "  do: nuka check --help\n",
+    );
   });
 
   it("refuses :line on a file named among other targets", async () => {
@@ -106,9 +111,9 @@ describe("nuka check [target..]", () => {
     expect(result.exitCode).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
-      "nuka check: acceptance/outside.feature:4: :line is not supported; " +
-        "check analyzes the whole file, not one scenario. Run: nuka check acceptance/outside.feature\n" +
-        "do: nuka check acceptance/outside.feature\n",
+      "refused\tline-not-supported\t-\tnuka check: acceptance/outside.feature:4: :line is not supported; " +
+        "check analyzes the whole file, not one scenario\n" +
+        "  do: nuka check acceptance/outside.feature\n",
     );
   });
 
@@ -117,7 +122,7 @@ describe("nuka check [target..]", () => {
     const result = await check(rootDir, ["--json", "acceptance"]);
 
     expect(result.exitCode).toBe(1);
-    const report = JSON.parse(result.stdout) as { errors: { code: string; file?: string }[] };
+    const report = bySeverity(result.stdout) as { errors: { code: string; file?: string }[] };
     expect(report.errors.map((issue) => [issue.code, issue.file])).toEqual([
       ["unknown-parameter-type", "features/steps/unknown-type-step.ts"],
       ["feature-parse-error", "acceptance/broken.feature"],
@@ -130,12 +135,13 @@ describe("nuka check [target..]", () => {
     const targeted = JSON.parse((await check(rootDir, ["--json", "acceptance", "features"])).stdout) as object;
     const whole = JSON.parse((await check(rootDir, ["--json"])).stdout) as object;
 
-    expect(Object.keys(targeted)).toEqual(["schema_version", "errors", "warnings"]);
+    expect(Object.keys(targeted)).toEqual(["schema_version", "nukadoko", "command", "verdict", "findings"]);
     expect(Object.keys(targeted)).toEqual(Object.keys(whole));
-    expect((targeted as { errors: { code: string; file?: string; line?: number }[] }).errors[2]).toEqual({
+    expect((targeted as { findings: { code: string; file?: string; line?: number }[] }).findings[2]).toEqual({
+      severity: "error",
       code: "undefined-step",
       message:
-        'No step definition matches "this step is undefined outside featuresDir"; run `nuka scaffold --feature acceptance/outside.feature` to add one' +
+        'No step definition matches "this step is undefined outside featuresDir"' +
         UNBOUND,
       file: "acceptance/outside.feature",
       line: 4,

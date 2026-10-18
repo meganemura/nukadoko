@@ -15,7 +15,8 @@ import { createParameterTypeRegistry } from "../binding/registry.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import type { PrimitiveClass } from "../binding/schema-shape.js";
 import { availableParameterTypeNames, CAPTURED_CLASS } from "../check/binding-check.js";
-import { helpFor, refuse, type RefusalSinks } from "./refusal.js";
+import { formatFinding } from "../finding/finding.js";
+import { configMissingFinding, refuse, type RefusalSinks } from "./refusal.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import { DESCRIPTION_TODO_PREFIX } from "../tend/types.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
@@ -1147,7 +1148,7 @@ function argvKeyRefusal(
   cwd: string | null,
   captures: readonly Capture[],
   typed: readonly string[],
-): { refusal: string; do?: string } | null {
+): { refusal: string; fix?: string; do?: string } | null {
   if (!command) return { refusal: "--argv names the capture a --command step splits into argv, and only a --command step runs a program" };
   if (key === cwd) return { refusal: `--argv ${key} and --cwd ${key} name one key, and --cwd takes its key out of argv` };
   const captured = captures.find((capture) => capture.key === key);
@@ -1159,7 +1160,7 @@ function argvKeyRefusal(
       : `--argv ${key} names a {${key}:${captured.type}} capture, which does not hand the step a string`;
   const first = strings[0];
   if (first === undefined) {
-    return { refusal: `${why}, and the pattern captures no string`, do: `put a {args:string} capture where the arguments go in --pattern, and pass --argv args` };
+    return { refusal: `${why}, and the pattern captures no string`, fix: "Put an {args:string} capture where the arguments go in --pattern, and pass --argv args." };
   }
   const rerun = typed.flatMap((word, index) =>
     word.startsWith("--argv=") ? [`--argv=${first}`] : typed[index - 1] === "--argv" ? [first] : [word],
@@ -1177,46 +1178,46 @@ function argvKeyRefusal(
 export function refusedBelowParentConfig(rootDir: string, sinks: RefusalSinks): number | null {
   const presence = locateConfig(rootDir);
   const refusal = scaffoldParentRefusal(rootDir, presence);
-  if (refusal !== null) return refuse(sinks, `Refusing to scaffold: ${refusal}`, helpFor("scaffold"));
+  if (refusal !== null) return refuse(sinks, `Refusing to scaffold: ${refusal}`, "config-in-parent");
   const line = noConfigLine(rootDir, presence);
-  if (line !== null) sinks.stderr.write(`${line}\n`);
+  if (line !== null) sinks.stderr.write(formatFinding(configMissingFinding(line)));
   return null;
 }
 
 export async function runScaffold(options: RunScaffoldOptions): Promise<number> {
   const { rootDir, name, pattern, then, command, entryPoint, cwd, description, from, stdout, stderr } = options;
-  const sinks = { json: false, stdout, stderr };
-  const help = helpFor("scaffold");
-  const thenRerun = (fix: string): string => `${fix}, then run ${["nuka", ...options.argv].map(shellWord).join(" ")}`;
+  const sinks = { json: false, stdout, stderr, command: "scaffold" };
+  // After the edit a refusal names, the same command runs again as typed.
+  const rerun = ["nuka", ...options.argv].map(shellWord).join(" ");
 
   if (!VALID_STEP_NAME.test(name)) {
-    return refuse(sinks, `Invalid step name "${name}": must match [a-z0-9-]+ (kebab-case; it becomes the step's file name)`, help);
+    return refuse(sinks, `Invalid step name "${name}": must match [a-z0-9-]+ (kebab-case; it becomes the step's file name)`, "invalid-value");
   }
 
   if (command && then) {
-    return refuse(sinks, "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false", help);
+    return refuse(sinks, "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false", "invalid-arguments");
   }
   let request: RequestShape | null = null;
   if (options.request !== null) {
-    if (command) return refuse(sinks, "Refusing to scaffold: --request and --command together; one When step either sends a request or runs a program", help);
+    if (command) return refuse(sinks, "Refusing to scaffold: --request and --command together; one When step either sends a request or runs a program", "invalid-arguments");
     if (then) {
-      return refuse(sinks, "Refusing to scaffold: --request and --then together; the step that sends the request is a When, and a Then step reads its status or body with --from", help);
+      return refuse(sinks, "Refusing to scaffold: --request and --then together; the step that sends the request is a When, and a Then step reads its status or body with --from", "invalid-arguments");
     }
     const parsed = parseRequestFlag(options.request);
-    if ("refusal" in parsed) return refuse(sinks, `Refusing to scaffold: ${parsed.refusal}`, help);
+    if ("refusal" in parsed) return refuse(sinks, `Refusing to scaffold: ${parsed.refusal}`, "invalid-value");
     request = parsed;
   }
   if (options.bodyKey !== null && request === null) {
-    return refuse(sinks, "Refusing to scaffold: --body names the args key a --request step sends, and only a --request step sends one", help);
+    return refuse(sinks, "Refusing to scaffold: --body names the args key a --request step sends, and only a --request step sends one", "invalid-arguments");
   }
   if (cwd !== null && !command) {
-    return refuse(sinks, "Refusing to scaffold: --cwd names the directory the program runs in, and only a --command step runs one", help);
+    return refuse(sinks, "Refusing to scaffold: --cwd names the directory the program runs in, and only a --command step runs one", "invalid-arguments");
   }
   const variant: Variant = command ? "command" : request !== null ? "request" : then ? "then" : "when";
   const variantShape = VARIANTS[variant];
 
   if (description === "") {
-    return refuse(sinks, "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports", help);
+    return refuse(sinks, "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports", "invalid-value");
   }
 
   if (entryPoint !== null) {
@@ -1224,13 +1225,13 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       (await entryPointRefusal(rootDir, entryPoint, options.commandBeforeName)) ??
       (await unloadableImportRefusal(rootDir, entryPoint));
     if (refusal !== null) {
-      return refuse(sinks, `Refusing to scaffold: ${refusal}`, help);
+      return refuse(sinks, `Refusing to scaffold: ${refusal}`, "invalid-value");
     }
   }
 
   const read: ReadPattern | { refusal: string } = pattern === null ? { captures: [], projectTypes: [] } : readPattern(pattern);
   if ("refusal" in read) {
-    return refuse(sinks, `Refusing to scaffold: ${read.refusal}`, help);
+    return refuse(sinks, `Refusing to scaffold: ${read.refusal}`, "invalid-value");
   }
   const fromKeys = new Set(from.map((text) => text.slice(text.indexOf(".") + 1)));
   // The entry-point guard throws an `Error`, and the unplaced-value guard
@@ -1251,12 +1252,12 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
         : variantShape;
   const fromFlags = readFromFlags(from, read.captures, shape.bodyNames);
   if ("refusal" in fromFlags) {
-    return refuse(sinks, `Refusing to scaffold: ${fromFlags.refusal}`, help);
+    return refuse(sinks, `Refusing to scaffold: ${fromFlags.refusal}`, "invalid-value");
   }
   const argsKeys = [...read.captures.map((capture) => capture.key), ...new Set(fromFlags.requests.map((request) => request.key))];
   if (cwd !== null && !argsKeys.includes(cwd)) {
     const keys = argsKeys.length === 0 ? "it has none" : `its keys are ${argsKeys.join(", ")}`;
-    return refuse(sinks, `Refusing to scaffold: --cwd ${cwd} names no args key of this step (${keys}); pass the key a --from or a capture fills`, help);
+    return refuse(sinks, `Refusing to scaffold: --cwd ${cwd} names no args key of this step (${keys}); pass the key a --from or a capture fills`, "invalid-value");
   }
 
   if (request !== null) {
@@ -1266,14 +1267,19 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       return refuse(
         sinks,
         `Refusing to scaffold: --request's path names ${unknown.map((key) => `{${key}}`).join(", ")}, which no capture or --from fills (${keys}); a {key} in the path is put in by that args key's value`,
-        help,
+        "invalid-value",
       );
     }
   }
 
   if (options.argvKey !== null) {
     const refusal = argvKeyRefusal(options.argvKey, command, cwd, read.captures, options.argv);
-    if (refusal !== null) return refuse(sinks, `Refusing to scaffold: ${refusal.refusal}`, refusal.do ?? help);
+    if (refusal !== null) {
+      return refuse(sinks, `Refusing to scaffold: ${refusal.refusal}`, "invalid-arguments", {
+        ...(refusal.fix !== undefined ? { fix: refusal.fix } : {}),
+        ...(refusal.do !== undefined ? { do: refusal.do } : {}),
+      });
+    }
   }
 
   const belowParent = refusedBelowParentConfig(rootDir, sinks);
@@ -1283,7 +1289,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    return refuse(sinks, error, help);
+    return refuse(sinks, error, "unexpected-error");
   }
 
   // The same `isCommonJsProject` call `nuka init` already defers to
@@ -1299,20 +1305,25 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   if (existsSync(filePath)) {
     const posixPath = relativeFilePath.split(path.sep).join("/");
     const unedited = isUneditedStub(await readFile(filePath, "utf8"), name, posixPath);
-    const removeIt = thenRerun(`rm ${shellWord(relativeFilePath)} if it holds no step to keep (or choose another step name)`);
+    const removeIt = {
+      fix: `Delete ${relativeFilePath} if it holds no step to keep, or choose another step name.`,
+      do: rerun,
+    };
     if (!options.replace) {
       return unedited
         ? refuse(
             sinks,
             `Refusing to scaffold: ${relativeFilePath} already exists, and it still holds what scaffold wrote`,
-            ["nuka", ...options.argv, "--replace"].map(shellWord).join(" "),
+            "file-exists",
+            { do: ["nuka", ...options.argv, "--replace"].map(shellWord).join(" ") },
           )
-        : refuse(sinks, `Refusing to scaffold: ${relativeFilePath} already exists`, removeIt);
+        : refuse(sinks, `Refusing to scaffold: ${relativeFilePath} already exists`, "file-exists", removeIt);
     }
     if (!unedited) {
       return refuse(
         sinks,
         `Refusing to scaffold: ${relativeFilePath} is not what scaffold writes (someone edited it, or scaffold did not write it), so --replace leaves it`,
+        "file-edited",
         removeIt,
       );
     }
@@ -1338,7 +1349,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
         importFailures.length,
       );
       if (refusal !== null) {
-        return refuse(sinks, `Refusing to scaffold: ${refusal}`, help);
+        return refuse(sinks, `Refusing to scaffold: ${refusal}`, "invalid-value");
       }
     }
     const typedSteps = new Map<string, TypedVocabularyEntry>();
@@ -1355,7 +1366,12 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       spelling,
     );
     if ("refusal" in resolved) {
-      return refuse(sinks, `Refusing to scaffold: ${resolved.refusal}`, resolved.fix === undefined ? help : thenRerun(resolved.fix));
+      return refuse(
+        sinks,
+        `Refusing to scaffold: ${resolved.refusal}`,
+        "step-inputs-invalid",
+        resolved.fix === undefined ? undefined : { fix: `${resolved.fix.charAt(0).toUpperCase()}${resolved.fix.slice(1)}.`, do: rerun },
+      );
     }
     chained = resolved.chained;
   }
@@ -1365,7 +1381,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     return refuse(
       sinks,
       `Refusing to scaffold: --cwd ${cwdField.key} may hold a value that is not a string, and runCommand takes cwd as a string; chain a key whose schema is a bare z.string(), or capture it as {${cwdField.key}:string}`,
-      help,
+      "invalid-value",
     );
   }
 
@@ -1381,7 +1397,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       return refuse(
         sinks,
         `Refusing to scaffold: --body ${options.bodyKey} names no args key of this step (${sendable.length === 0 ? "it has none" : `its keys are ${sendable.join(", ")}`})${attached}`,
-        help,
+        "invalid-value",
       );
     }
   }

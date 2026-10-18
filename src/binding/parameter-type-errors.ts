@@ -24,6 +24,7 @@ export interface PreferredRegexp {
 }
 
 export class ParameterTypeCollisionError extends Error {
+  readonly code = "parameter-type-collision";
   readonly typeName: string;
   readonly reason: ParameterTypeCollisionReason;
 

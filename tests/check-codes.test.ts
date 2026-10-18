@@ -2,6 +2,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { listCheckCodes } from "../src/check/codes.js";
+import { listRefusalCodes } from "../src/cli/refusal-codes.js";
+import { parseFindings } from "../src/finding/finding.js";
+import { listRunCodes } from "../src/finding/run-codes.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture, repoRoot } from "./helpers/fixtures.js";
 
@@ -10,7 +13,7 @@ import { createCaptureSink, fixture, repoRoot } from "./helpers/fixtures.js";
 // answers "what is wrong with this project", a different question) — the
 // gap a migrating agent hit against the published README, which pointed at
 // `nuka check --json` for a code catalog that command has never produced
-// (only `{ errors, warnings }` for the current project).
+// (only the findings of the current project).
 // `check-clean-project` is reused for every case here on purpose: `--codes`
 // must answer the same way regardless of which project it is run from, so
 // picking the fixture with the least going on makes that independence
@@ -27,12 +30,12 @@ describe("nuka check --codes", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; description: string; severity?: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; message: string; severity: string }>;
     expect(codes.some((entry) => entry.code === "step-file-import-failed")).toBe(true);
     expect(exitCode).toBe(0);
   });
 
-  it("every registered code has a non-empty description", async () => {
+  it("every registered code has a non-empty description and fix", async () => {
     const stdout = createCaptureSink();
     await runCli(["check", "--codes", "--json"], {
       rootDir: fixture("check-clean-project"),
@@ -40,11 +43,12 @@ describe("nuka check --codes", () => {
       stderr: createCaptureSink(),
     });
 
-    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; description: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; message: string; fix: string }>;
     expect(codes.length).toBeGreaterThan(0);
     for (const entry of codes) {
-      expect(typeof entry.description).toBe("string");
-      expect(entry.description.length).toBeGreaterThan(0);
+      expect(typeof entry.message).toBe("string");
+      expect(entry.message.length).toBeGreaterThan(0);
+      expect(entry.fix.length).toBeGreaterThan(0);
     }
   });
 
@@ -61,7 +65,7 @@ describe("nuka check --codes", () => {
     expect(codes.map((entry) => entry.code)).toEqual(sorted);
   });
 
-  it("--codes without --json prints one human-readable line per code, code ascending", async () => {
+  it("--codes without --json prints one note-shaped finding per code, code ascending", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--codes"], {
       rootDir: fixture("check-clean-project"),
@@ -69,12 +73,12 @@ describe("nuka check --codes", () => {
       stderr: createCaptureSink(),
     });
 
-    const lines = stdout.text().trim().split("\n");
-    expect(lines.length).toBeGreaterThan(0);
-    expect(lines.some((line) => line.includes("step-file-import-failed"))).toBe(true);
-    const codesInOutput = lines.map((line) => line.split("\t")[0]);
-    const sorted = [...codesInOutput].sort((a, b) => (a ?? "").localeCompare(b ?? ""));
-    expect(codesInOutput).toEqual(sorted);
+    const findings = parseFindings(stdout.text());
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings.every((finding) => finding.fix !== undefined)).toBe(true);
+    const codesInOutput = findings.map((finding) => finding.code);
+    expect(codesInOutput).toContain("step-file-import-failed");
+    expect(codesInOutput).toEqual([...codesInOutput].sort((a, b) => a.localeCompare(b)));
     expect(exitCode).toBe(0);
   });
 
@@ -116,15 +120,16 @@ describe("nuka check --codes", () => {
   // outside. Every registered code has to appear as a literal in the source
   // that raises it.
   it("registers no code that nothing in src/ can raise", async () => {
+    const registries = [path.join("check", "codes.ts"), path.join("run", "codes.ts"), path.join("cli", "refusal-codes.ts")];
     const sources = await collectSourceFiles(path.join(repoRoot, "src"));
     const bodies = await Promise.all(
       sources
-        .filter((file) => !file.endsWith(path.join("check", "codes.ts")))
+        .filter((file) => !registries.some((registry) => file.endsWith(registry)))
         .map((file) => readFile(file, "utf8")),
     );
     const haystack = bodies.join("\n");
 
-    const unraisable = listCheckCodes()
+    const unraisable = [...listCheckCodes(), ...listRunCodes(), ...listRefusalCodes()]
       .map((entry) => entry.code)
       .filter((code) => !haystack.includes(`"${code}"`));
 

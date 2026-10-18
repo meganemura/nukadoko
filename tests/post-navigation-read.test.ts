@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka tend`'s `post-navigation-read` note end to end. One
 // test runs a real chromium navigation
@@ -60,7 +61,7 @@ async function runTendJson(rootDir: string): Promise<{ report: Report; exitCode:
   const stderr = createCaptureSink();
   const exitCode = await runCli(["tend", "--json"], { rootDir, stdout, stderr });
   expect(stderr.text()).toBe("");
-  return { report: JSON.parse(stdout.text()) as Report, exitCode };
+  return { report: bySeverity(stdout.text()) as Report, exitCode };
 }
 
 /** Writes one step record directly under `<rootDir>/.nukadoko/records/

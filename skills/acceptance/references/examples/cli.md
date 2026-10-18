@@ -159,8 +159,9 @@ was still a stub:
 
 ```
 $ npx nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir --argv argv
-Refusing to scaffold: a-csv-file-with declares no returns, so it has no key to chain; declare returns with "dir" in features/steps/a-csv-file-with.ts
-do: add returns: z.object({ dir: <its schema> }) to features/steps/a-csv-file-with.ts and return dir from its run(), then run nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir --argv argv
+refused	step-inputs-invalid	-	Refusing to scaffold: a-csv-file-with declares no returns, so it has no key to chain; declare returns with "dir" in features/steps/a-csv-file-with.ts
+  fix: Add returns: z.object({ dir: <its schema> }) to features/steps/a-csv-file-with.ts and return dir from its run().
+  do: nuka scaffold run-tally --pattern 'I run tally with {argv:string}' --command src/cli.ts --from a-csv-file-with.dir --argv argv
 ```
 
 Once both Givens returned `dir`, one command wrote the When step: each
@@ -212,13 +213,14 @@ scenario with no Then (S2):
 
 ```
 warning	scenario-without-then	probe/no-then.feature:3	Scenario "a run with no claim" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.
-  do: Add a Then line that checks the outcome the scenario is for.
+  fix: Add a Then line that checks the outcome the scenario is for.
 ```
 
 The action under test written as a Given, with no Given before it (S10):
 
 ```
 error	from-order-violation	probe/given-run.feature:4	Step "run-tally"'s from.dir needs exactly one of its candidate producers ("a-csv-file-with", "an-empty-directory") to have already run earlier in this scenario, but none has: "a-csv-file-with" is never bound anywhere in this scenario; "an-empty-directory" is never bound anywhere in this scenario. This line would fail args validation with certainty
+  fix: Put a line that runs exactly one of steps "a-csv-file-with", "an-empty-directory" earlier in the scenario.
 ```
 
 ## Decisions

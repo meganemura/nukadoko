@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `auto: true` is refused with its own dedicated
 // message, and `nuka check`
@@ -24,7 +25,7 @@ describe("nuka check: fixture definition findings", () => {
     });
 
     expect(exitCode).toBe(1);
-    const report = JSON.parse(stdout.text()) as { errors: { code: string; message: string; file?: string }[] };
+    const report = bySeverity(stdout.text()) as { errors: { code: string; message: string; file?: string }[] };
     const codes = report.errors.map((issue) => issue.code);
 
     expect(codes).toContain("fixture-cycle");
@@ -84,7 +85,7 @@ describe("nuka check: a fixture that destructures call", () => {
       const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr });
 
       expect(exitCode).toBe(1);
-      const report = JSON.parse(stdout.text()) as { errors: { code: string; message: string; file?: string }[] };
+      const report = bySeverity(stdout.text()) as { errors: { code: string; message: string; file?: string }[] };
       const issues = report.errors.filter(
         (issue) => issue.code === "fixture-structural-violation" && issue.message.includes("callFixture"),
       );
@@ -105,7 +106,7 @@ describe("nuka check: a fixture that destructures call", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(1);
-    const report = JSON.parse(stdout.text()) as { errors: { code: string; message: string; step?: string }[] };
+    const report = bySeverity(stdout.text()) as { errors: { code: string; message: string; step?: string }[] };
     const issues = report.errors.filter(
       (issue) => issue.code === "fixture-structural-violation" && issue.step === "valid-composite",
     );

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: check-integration
 // tests — a broken glue file becomes a `step-file-import-failed` report
@@ -21,7 +22,7 @@ describe("nuka check: import-failure gap detection", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string; file?: string }>;
       warnings: Array<{ code: string; message: string }>;
     };
@@ -50,7 +51,7 @@ describe("nuka check: import-failure gap detection", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string }>;
       warnings: Array<{ code: string }>;
     };
@@ -75,7 +76,7 @@ describe("nuka check: hook tag expression gap detection", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string; file?: string }>;
     };
 

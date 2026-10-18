@@ -225,11 +225,11 @@ const RUN_SUMMARY_LINE = /^\d+ scenarios?: \d+ passed, \d+ failed {2}\(/;
 // The per-failure lines the summary is followed by, one per scenario that
 // did not pass. Chrome of the same kind as the summary itself, so a test
 // asserting "nothing unexpected happened" should not see them either.
-const FAILED_SCENARIO_LINE = /^failed {2}\S+:\d+ {2}/;
+const FAILED_SCENARIO_LINE = /^failed\tscenario-failed\t/;
 // A failed step's error and step record lines sit under its step line, and
-// each failed scenario line is followed by its rerun command.
+// each failed scenario finding is followed by its rerun command.
 const STEP_FAILURE_LINE = /^ {6}\S/;
-const RERUN_LINE = /^ {2}rerun {2}nuka run /;
+const RERUN_LINE = /^ {2}do: nuka run /;
 
 /** Strips `nuka run`'s own progress-log lines
  * out of captured stderr text, leaving any warning/error line a test still
@@ -253,11 +253,11 @@ export function stripRunProgressLines(text: string): string {
 }
 
 /**
- * `text` without the one stderr line a command writes when the directory
- * it runs in has no config file. A fixture with no config gets that line
+ * `text` without the one finding a command writes when the directory it
+ * runs in has no config file. A fixture with no config gets that line
  * on every command; a test about something else drops it here instead of
  * writing a config into the fixture.
  */
 export function withoutNoConfigLine(text: string): string {
-  return text.replace(/^no nukadoko\.config\.ts or nukadoko\.config\.mts in [^\n]*\n/m, "");
+  return text.replace(/^warning\tconfig-missing\t-\tno nukadoko\.config\.ts or nukadoko\.config\.mts in [^\n]*\n(  fix: [^\n]*\n)?/m, "");
 }

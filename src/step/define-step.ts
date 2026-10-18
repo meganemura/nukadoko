@@ -470,6 +470,7 @@ const MAX_STEP_TIMEOUT_MS = 2_147_483_647;
  * already lost the definition. Discovery reports the throw as
  * `step-file-import-failed`, which is what names the file. */
 export class InvalidStepDefinitionError extends Error {
+  readonly code = "invalid-step-definition";
   constructor(message: string) {
     super(message);
     this.name = "InvalidStepDefinitionError";

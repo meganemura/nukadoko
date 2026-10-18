@@ -7,6 +7,7 @@
 // environment/errors.ts.
 
 export class FeatureFileNotFoundError extends Error {
+  readonly code = "target-not-found";
   readonly relativePath: string;
 
   constructor(relativePath: string) {
@@ -21,6 +22,7 @@ export class FeatureFileNotFoundError extends Error {
  * reader looking for a file that is right there, so the system error's own
  * text is kept. */
 export class FeatureReadFailedError extends Error {
+  readonly code = "target-unreadable";
   readonly relativePath: string;
 
   constructor(relativePath: string, cause: unknown) {
@@ -33,6 +35,7 @@ export class FeatureReadFailedError extends Error {
 }
 
 export class FeatureParseFailedError extends Error {
+  readonly code = "feature-parse-error";
   readonly relativePath: string;
 
   constructor(relativePath: string, cause: unknown) {
@@ -49,18 +52,19 @@ export class FeatureParseFailedError extends Error {
 /** Thrown when `:line` was given explicitly but no pickle in the file has a
  * gherkin `location.line` matching it. */
 export class NoMatchingScenarioError extends Error {
+  readonly code = "no-scenario-at-line";
   readonly relativePath: string;
   readonly line: number;
   /** The lines that do select a pickle, read from the parsed file, so the
    * refusal names a line that works rather than pointing at `--help`. */
-  readonly do: string;
+  readonly fix: string;
 
   constructor(relativePath: string, line: number, scenarioLines: readonly number[]) {
     super(`No scenario found at ${relativePath}:${line}`);
     this.name = "NoMatchingScenarioError";
     this.relativePath = relativePath;
     this.line = line;
-    this.do =
+    this.fix =
       scenarioLines.length === 0
         ? `Add a scenario to ${relativePath}; nothing in it can run yet.`
         : `Name a line a scenario or an Examples row starts on: ${scenarioLines.join(", ")}.`;
@@ -71,6 +75,7 @@ export class NoMatchingScenarioError extends Error {
  * selects one pickle inside a single file's own gherkin `location.line`, and
  * a directory names no single file for that to mean anything against. */
 export class DirectoryTargetLineError extends Error {
+  readonly code = "line-on-directory";
   readonly relativePath: string;
   readonly line: number;
   /** Every target as given, except that each directory loses its `:line`:
@@ -95,9 +100,10 @@ export class DirectoryTargetLineError extends Error {
  * (src/check/analyze.ts), so a run that would do nothing refuses loudly
  * instead of exiting 0 having run nothing at all. */
 export class NoFeatureFilesFoundError extends Error {
+  readonly code = "no-feature-files";
   readonly relativePath: string;
   readonly resolvedPath: string;
-  readonly do: string;
+  readonly fix: string;
 
   constructor(
     scannedPaths: readonly string[],
@@ -116,6 +122,6 @@ export class NoFeatureFilesFoundError extends Error {
     this.name = "NoFeatureFilesFoundError";
     this.relativePath = relativePath;
     this.resolvedPath = resolvedPath;
-    this.do = `Add a ${oathDirectory ? "Markdown" : ".feature"} file under ${scannedPaths.join(" or ")}.`;
+    this.fix = `Add a ${oathDirectory ? "Markdown" : ".feature"} file under ${scannedPaths.join(" or ")}.`;
   }
 }

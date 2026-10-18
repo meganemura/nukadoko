@@ -52,8 +52,8 @@ describe("nuka scaffold --replace", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        `Refusing to scaffold: ${STUB} already exists, and it still holds what scaffold wrote\n` +
-        "do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
+        `refused\tfile-exists\t-\tRefusing to scaffold: ${STUB} already exists, and it still holds what scaffold wrote\n` +
+        "  do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
     });
     expect(await readFile(path.join(rootDir, STUB), "utf8")).toBe(stub);
   });
@@ -82,13 +82,17 @@ describe("nuka scaffold --replace", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        `Refusing to scaffold: ${STUB} is not what scaffold writes (someone edited it, or scaffold did not write it), so --replace leaves it\n` +
-        `do: rm ${STUB} if it holds no step to keep (or choose another step name), then run ${rerun} --replace\n`,
+        `refused\tfile-edited\t-\tRefusing to scaffold: ${STUB} is not what scaffold writes (someone edited it, or scaffold did not write it), so --replace leaves it\n` +
+        `  fix: Delete ${STUB} if it holds no step to keep, or choose another step name.\n` +
+        `  do: ${rerun} --replace\n`,
     });
     expect(plain).toEqual({
       exitCode: 2,
       stdout: "",
-      stderr: `Refusing to scaffold: ${STUB} already exists\ndo: rm ${STUB} if it holds no step to keep (or choose another step name), then run ${rerun}\n`,
+      stderr:
+        `refused\tfile-exists\t-\tRefusing to scaffold: ${STUB} already exists\n` +
+        `  fix: Delete ${STUB} if it holds no step to keep, or choose another step name.\n` +
+        `  do: ${rerun}\n`,
     });
     expect(await readFile(path.join(rootDir, STUB), "utf8")).toBe(edited);
   });
@@ -113,8 +117,8 @@ describe("nuka scaffold --replace", () => {
     const refused = await cli(rootDir, [...COMMAND, "--replace"]);
 
     expect(offered.stderr).toBe(
-      `Refusing to scaffold: ${STUB} already exists, and it still holds what scaffold wrote\n` +
-        "do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
+      `refused\tfile-exists\t-\tRefusing to scaffold: ${STUB} already exists, and it still holds what scaffold wrote\n` +
+        "  do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
     );
     expect(refused.exitCode).toBe(2);
     expect(refused.stderr).toContain("so --replace leaves it\n");

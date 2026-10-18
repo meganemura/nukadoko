@@ -215,18 +215,20 @@ describe("nuka init", () => {
     expect(await refusal(["--server", "node src/server.ts"])).toEqual({
       exitCode: 2,
       stderr:
-        "Refusing to init: --server needs --server-url, the URL the program listens at: nukadoko waits for it and sends every request there, and the program alone knows it; nothing was written\n" +
-        'do: nuka init --server "node src/server.ts" --server-url http://127.0.0.1:<port>\n',
+        "refused\tinvalid-arguments\t-\tRefusing to init: --server needs --server-url, the URL the program listens at: nukadoko waits for it and sends every request there, and the program alone knows it; nothing was written\n" +
+        "  fix: Pass --server-url with the URL the program listens at, such as http://127.0.0.1:3000.\n",
     });
     expect(await refusal(["--server-url", "http://127.0.0.1:3000"])).toEqual({
       exitCode: 2,
       stderr:
-        "Refusing to init: --server-url names the URL the --server command listens at, and no --server was given; nothing was written\n" +
-        'do: nuka init --server "<command that starts the server>" --server-url http://127.0.0.1:3000\n',
+        "refused\tinvalid-arguments\t-\tRefusing to init: --server-url names the URL the --server command listens at, and no --server was given; nothing was written\n" +
+        "  fix: Pass --server with the command that starts the program under test, beside --server-url http://127.0.0.1:3000.\n",
     });
     expect(await refusal(["--server", "node src/server.ts", "--server-url", "127.0.0.1:3000"])).toEqual({
       exitCode: 2,
-      stderr: 'Refusing to init: --server-url needs an http or https URL, and got "127.0.0.1:3000"; nothing was written\ndo: nuka init --help\n',
+      stderr:
+        'refused\tinvalid-arguments\t-\tRefusing to init: --server-url needs an http or https URL, and got "127.0.0.1:3000"; nothing was written\n' +
+        "  fix: Pass --server-url as an http URL with a host and a port.\n",
     });
     expect(await fileSet(rootDir)).toEqual(["package.json"]);
   });
@@ -538,7 +540,7 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toBe(`${message}\ndo: nuka init --help\n`);
+    expect(stderr.text()).toBe(`refused\tremoved-command\t-\t${message}\n  fix: Use what the message names in its place.\n  do: nuka init --help\n`);
     expect(await fileSet(rootDir)).toEqual(["package.json"]);
   });
 

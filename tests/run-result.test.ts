@@ -81,11 +81,11 @@ describe("nuka run: run.json", () => {
     });
     expect(result.scenarios).toHaveLength(2);
     for (const scenario of result.scenarios) expect(existsSync(path.join(rootDir, scenario.record))).toBe(true);
-    expect(stderr.text()).toContain("  rerun  nuka run features/failure/a.feature:3\n");
+    expect(stderr.text()).toContain("  do: nuka run features/failure/a.feature:3\n");
     expect(stderr.text()).toContain(`run       ${path.join(".nukadoko", "records", "runs", runId, "run.json")}\n`);
   });
 
-  it("prints run.json under --json as the one document on stdout, also at --concurrency 2", async () => {
+  it("prints run.json's fields in the --json envelope, the one document on stdout, also at --concurrency 2", async () => {
     for (const extra of [[], ["--concurrency", "2"]]) {
       await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
       const stdout = createCaptureSink();
@@ -94,7 +94,8 @@ describe("nuka run: run.json", () => {
 
       expect(exitCode, stderr.text()).toBe(0);
       const printed = JSON.parse(stdout.text());
-      expect(printed).toEqual(readRunJson(rootDir, onlyRunId(rootDir)));
+      // The envelope carries run.json's fields beside its own five.
+      expect(printed).toEqual({ ...readRunJson(rootDir, onlyRunId(rootDir)), schema_version: 2, command: "run", findings: [] });
       expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0 }]);
       expect(printed.scenarios.map((s: { feature: string }) => s.feature).sort()).toEqual([
         "features/basic/a.feature",

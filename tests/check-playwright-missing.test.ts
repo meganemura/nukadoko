@@ -65,8 +65,8 @@ describe("findPlaywrightMissing", () => {
       {
         code: "playwright-missing",
         message:
-          'ctx.request() in "When fetch happens" needs "playwright", and this project has not installed it. ' +
-          `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+          'ctx.request() in "When fetch happens" needs "playwright", and this project has not installed it; ' +
+          `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}`,
         file: "features/a.feature",
         line: 3,
         step: "fetch",
@@ -225,8 +225,8 @@ describe("playwrightImportMissing", () => {
     expect(playwrightImportMissing({ filePath: "e2e/steps/a.ts", missingPackage: { name: "playwright" } })).toEqual({
       code: "playwright-missing",
       message:
-        'the step file imports "playwright", and this project has not installed it, so the file does not import. ' +
-        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+        'the step file imports "playwright", and this project has not installed it, so the file does not import; ' +
+        `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}`,
       file: "e2e/steps/a.ts",
       do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
     });
@@ -243,8 +243,8 @@ describe("playwrightImportMissing", () => {
     ).toEqual({
       code: "playwright-missing",
       message:
-        'the step file imports "playwright" through e2e/steps/run.ts, and this project has not installed it, so the file does not import. ' +
-        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+        'the step file imports "playwright" through e2e/steps/run.ts, and this project has not installed it, so the file does not import; ' +
+        `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}`,
       file: "e2e/steps/open.ts",
       do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
     });

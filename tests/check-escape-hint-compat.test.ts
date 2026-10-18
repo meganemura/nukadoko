@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: the undefined-step escape hint sees a parameter type that
 // compat code registered, the same registry matching uses. The fixture's
@@ -14,7 +15,7 @@ describe("nuka check: escape hint with a compat parameter type", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: readonly { code: string; message: string; line?: number }[];
     };
 
@@ -23,10 +24,10 @@ describe("nuka check: escape hint with a compat parameter type", () => {
       {
         code: "undefined-step",
         message:
-          'No step definition matches "the wall (north) is painted red"; run `nuka scaffold --feature features/wall.feature` to add one; hint: would match step "paint" pattern "the wall (north) is painted {c:color}" if its bare ( ) / were escaped; cucumber-expressions reads bare ( ) as optional text and / as alternation; patterned steps no scanned feature line binds: paint ("the wall (north) is painted {c:color}", features/steps/paint.ts)',
+          'No step definition matches "the wall (north) is painted red"; it would match step "paint" pattern "the wall (north) is painted {c:color}" if its bare ( ) / were escaped (cucumber-expressions reads bare ( ) as optional text and / as alternation); patterned steps no scanned feature line binds: paint ("the wall (north) is painted {c:color}", features/steps/paint.ts)',
         file: "features/wall.feature",
         line: 4,
-        do: 'Escape the bare ( ) and / in the pattern of step "paint" as \\( \\) and \\/.',
+        fix: 'Escape the bare ( ) and / in the pattern of step "paint" as \\( \\) and \\/.',
       },
     ]);
   });

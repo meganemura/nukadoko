@@ -7,6 +7,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { refuseExportTarget } from "../src/cli/clean.js";
 import { runCli } from "../src/cli/run-cli.js";
+import { readOwnVersion } from "../src/version.js";
 import { messagesRunOutputPath } from "../src/record/messages-output.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
@@ -236,8 +237,8 @@ describe("nuka clean", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      `nuka clean ${flag} is removed: nuka clean always removes records, cache, and export together; ` +
-        "nuka clean --dry-run lists what it would remove.\ndo: nuka clean --help\n",
+      `refused\tremoved-command\t-\tnuka clean ${flag} is removed: nuka clean always removes records, cache, and export together; ` +
+        "nuka clean --dry-run lists what it would remove.\n  fix: Use what the message names in its place.\n  do: nuka clean --help\n",
     );
     expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(true);
@@ -251,11 +252,21 @@ describe("nuka clean", () => {
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
     expect(JSON.parse(stdout.text())).toEqual({
-      schema_version: 1,
-      error:
-        "nuka clean --cache is removed: nuka clean always removes records, cache, and export together; " +
-        "nuka clean --dry-run lists what it would remove.",
-      do: "nuka clean --help",
+      schema_version: 2,
+      nukadoko: readOwnVersion(),
+      command: "clean",
+      verdict: "refused",
+      findings: [
+        {
+          severity: "refused",
+          code: "removed-command",
+          message:
+            "nuka clean --cache is removed: nuka clean always removes records, cache, and export together; " +
+            "nuka clean --dry-run lists what it would remove.",
+          fix: "Use what the message names in its place.",
+          do: "nuka clean --help",
+        },
+      ],
     });
   });
 

@@ -5,6 +5,7 @@
 // dependencies — same convention as session/errors.ts and config/errors.ts.
 
 export class InvalidEnvironmentNameError extends Error {
+  readonly code = "invalid-environment-name";
   readonly environmentName: string;
 
   constructor(environmentName: string) {
@@ -19,11 +20,11 @@ export class InvalidEnvironmentNameError extends Error {
  * "default" environment never throws this even
  * when `environments.default` is undefined — see resolve-environment.ts. */
 export class UnknownEnvironmentError extends Error {
+  readonly code = "unknown-environment";
   readonly environmentName: string;
-  /** The names the config defines, which a CLI refusal's `do:` line offers
-   * in place of the unknown one (src/cli/refusal.ts reads `do` off any
-   * error). */
-  readonly do: string;
+  /** The names the config defines, which a CLI refusal's `fix:` line offers
+   * in place of the unknown one. */
+  readonly fix: string;
 
   constructor(environmentName: string, definedNames: readonly string[]) {
     super(
@@ -32,7 +33,7 @@ export class UnknownEnvironmentError extends Error {
     this.name = "UnknownEnvironmentError";
     this.environmentName = environmentName;
     const add = `add environments.${environmentName} to the config file`;
-    this.do =
+    this.fix =
       definedNames.length === 0
         ? `Leave out --env (the config defines no environments), or ${add}.`
         : `Pass --env with a name the config defines (${[...definedNames].sort().join(", ")}), or ${add}.`;
@@ -44,6 +45,7 @@ export class UnknownEnvironmentError extends Error {
  * refusal as a plain message, and this class is the one home of that
  * message so the two cannot word it differently. */
 export class ReadOnlyEnvironmentError extends Error {
+  readonly code = "read-only-environment";
   readonly stepName: string;
   readonly environmentName: string;
 

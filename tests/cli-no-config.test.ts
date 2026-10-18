@@ -38,6 +38,12 @@ async function nuka(rootDir: string, argv: string[]): Promise<{ code: number; st
 }
 
 function missingLine(dir: string): string {
+  return `warning\tconfig-missing\t-\t${missingMessage(dir)}`;
+}
+
+const CONFIG_FIX = "Run nuka from the directory that holds the config file, or run nuka init to write one.";
+
+function missingMessage(dir: string): string {
   return `no nukadoko.config.ts or nukadoko.config.mts in ${dir}; nukadoko's defaults apply (featuresDir "features")`;
 }
 
@@ -61,9 +67,7 @@ describe("a command run in a directory with no config", () => {
 
   const commands: Array<{ argv: string[]; code: number }> = [
     { argv: ["check"], code: 0 },
-    { argv: ["check", "--json"], code: 0 },
     { argv: ["steps"], code: 0 },
-    { argv: ["steps", "--json"], code: 0 },
     { argv: ["tend"], code: 0 },
   ];
 
@@ -78,6 +82,23 @@ describe("a command run in a directory with no config", () => {
       expect(occurrences(without.stderr, `${missingLine(dir)}\n`)).toBe(1);
       expect(withConfig.stderr).not.toContain("no nukadoko.config.ts");
       expect(without.stdout).toBe(withConfig.stdout);
+    });
+  }
+
+  for (const argv of [
+    ["check", "--json"],
+    ["steps", "--json"],
+  ]) {
+    it(`nuka ${argv.join(" ")} puts the warning in its envelope, and keeps stderr empty and its exit code`, async () => {
+      const without = await nuka(dir, argv);
+      await writeFile(path.join(dir, "nukadoko.config.ts"), "export default {};\n");
+      const withConfig = await nuka(dir, argv);
+
+      expect([without.code, withConfig.code]).toEqual([0, 0]);
+      expect([without.stderr, withConfig.stderr]).toEqual(["", ""]);
+      const report = JSON.parse(without.stdout) as { findings: unknown[] };
+      expect(report.findings).toEqual([{ severity: "warning", code: "config-missing", message: missingMessage(dir), fix: CONFIG_FIX }]);
+      expect({ ...report, findings: [] }).toEqual(JSON.parse(withConfig.stdout));
     });
   }
 
@@ -97,10 +118,18 @@ describe("a command run in a directory with no config", () => {
   it("a failed parse prints only its own error", async () => {
     const unknown = await nuka(dir, ["check", "--nope"]);
     expect(unknown.code).toBe(2);
-    expect(unknown.stderr).toBe("Unknown argument: nope\ndo: nuka check --help\n");
+    expect(unknown.stderr).toBe(
+      "refused\tinvalid-arguments\t-\tUnknown argument: nope\n" +
+        "  fix: Correct the command line; the command's --help lists its flags.\n" +
+        "  do: nuka check --help\n",
+    );
     const repeated = await nuka(dir, ["run", "features/a.feature", "--env", "a", "--env", "b"]);
     expect(repeated.code).toBe(2);
-    expect(repeated.stderr).toBe("--env was given more than once.\ndo: nuka run --help\n");
+    expect(repeated.stderr).toBe(
+      "refused\tinvalid-arguments\t-\t--env was given more than once.\n" +
+        "  fix: Correct the command line; the command's --help lists its flags.\n" +
+        "  do: nuka run --help\n",
+    );
   });
 });
 
@@ -124,7 +153,7 @@ describe("a command run below a directory that has a config", () => {
     const result = await nuka(cwd, ["check"]);
     expect(result.code).toBe(0);
     expect(result.stderr).toBe(
-      `${missingLine(cwd)}; one exists at ../../nukadoko.config.ts: run nuka from that directory\n`,
+      `${missingLine(cwd)}; one exists at ../../nukadoko.config.ts: run nuka from that directory\n  fix: ${CONFIG_FIX}\n`,
     );
   });
 
@@ -133,9 +162,10 @@ describe("a command run below a directory that has a config", () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
-      `Refusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +
+      `refused\tconfig-in-parent\t-\tRefusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +
         "a step file written here is not one that config reads. Run nuka scaffold from that directory\n" +
-        "do: nuka scaffold --help\n",
+        "  fix: Run the command from the directory that holds the config file.\n" +
+        "  do: nuka scaffold --help\n",
     );
     expect(existsSync(path.join(cwd, "features", "steps", "stray.ts"))).toBe(false);
   });
@@ -146,9 +176,10 @@ describe("a command run below a directory that has a config", () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
-      `Refusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +
+      `refused\tconfig-in-parent\t-\tRefusing to scaffold: no nukadoko.config.ts or nukadoko.config.mts in ${cwd}, and one exists at ../../nukadoko.config.ts; ` +
         "a step file written here is not one that config reads. Run nuka scaffold from that directory\n" +
-        "do: nuka scaffold --help\n",
+        "  fix: Run the command from the directory that holds the config file.\n" +
+        "  do: nuka scaffold --help\n",
     );
     expect(existsSync(path.join(cwd, "features", "steps", "something-new-happens.ts"))).toBe(false);
   });
@@ -186,12 +217,12 @@ describe("locateConfig over an ancestor chain", () => {
         expect(line).toBeNull();
       } else if (nearest === undefined) {
         expect(presence).toEqual({ kind: "absent" });
-        expect(line).toBe(missingLine(cwd));
+        expect(line).toBe(missingMessage(cwd));
       } else {
         const configPath = path.join(dirs[nearest]!, configs.get(nearest)!);
         expect(presence).toEqual({ kind: "parent", configPath });
         expect(line).toBe(
-          `${missingLine(cwd)}; one exists at ${"../".repeat(depth - nearest)}${configs.get(nearest)}: run nuka from that directory`,
+          `${missingMessage(cwd)}; one exists at ${"../".repeat(depth - nearest)}${configs.get(nearest)}: run nuka from that directory`,
         );
       }
     }));

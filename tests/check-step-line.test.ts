@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: a feature-derived `nuka check` finding names the exact
 // line its own step is on, not the enclosing Scenario's line — against
@@ -25,7 +26,7 @@ async function checkReport(
     stdout,
     stderr: createCaptureSink(),
   });
-  const report = JSON.parse(stdout.text()) as { errors: readonly Issue[] };
+  const report = bySeverity(stdout.text()) as { errors: readonly Issue[] };
   return { exitCode, errors: report.errors };
 }
 

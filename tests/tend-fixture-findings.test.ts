@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka tend`'s two new
 // findings. `fixture-unused`: `fixtureReachesUnused` (tests/fixtures/
@@ -20,7 +21,7 @@ describe("nuka tend: fixture-unused / fixture-touches-app", () => {
     });
 
     expect(exitCode).toBe(0); // Notes never fail the exit code.
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       notes: { code: string; message: string; step?: string; fixture?: string }[];
     };
 
@@ -49,7 +50,7 @@ describe("nuka tend: fixture-unused / fixture-touches-app", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       notes: { code: string; step?: string; fixture?: string }[];
     };
 

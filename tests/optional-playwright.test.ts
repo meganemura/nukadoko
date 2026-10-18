@@ -5,7 +5,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PLAYWRIGHT_VERSION } from "../src/context/load-playwright.js";
+import { readOwnVersion } from "../src/version.js";
 import { repoRoot } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `playwright` is an optional peer dependency, so a project
 // that never opens a browser runs every everyday command without it, and a
@@ -159,8 +161,8 @@ describe("a project without playwright installed", () => {
     expect(check.code).toBe(1);
     expect(check.stdout).toContain(
       "error\tplaywright-missing\tfeatures/browser.feature:4\t" +
-        `ctx.page() in "Given a blank page is open" needs "playwright", and this project has not installed it. ` +
-        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}` +
+        `ctx.page() in "Given a blank page is open" needs "playwright", and this project has not installed it; ` +
+        `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}` +
         `\n  do: npm install -D -E playwright@${PLAYWRIGHT_VERSION}\n`,
     );
   }, 60_000);
@@ -169,27 +171,30 @@ describe("a project without playwright installed", () => {
     const check = await nuka(["check", "--json", "features/http.feature"]);
     expect(check.code).toBe(1);
     expect(JSON.parse(check.stdout)).toEqual({
-      schema_version: 1,
-      errors: [
+      schema_version: 2,
+      nukadoko: readOwnVersion(),
+      command: "check",
+      verdict: "failed",
+      findings: [
         {
+          severity: "error",
           code: "playwright-missing",
           message:
             `ctx.request() in "When the URL "http://127.0.0.1:9/" is fetched" needs "playwright", and this project ` +
-            `has not installed it. Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+            `has not installed it; nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}`,
           file: "features/http.feature",
           line: 4,
           step: "fetch-url",
           do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
         },
-      ],
-      warnings: [
         {
+          severity: "warning",
           code: "scenario-without-then",
           message:
             'Scenario "fetches" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.',
           file: "features/http.feature",
           line: 3,
-          do: "Add a Then line that checks the outcome the scenario is for.",
+          fix: "Add a Then line that checks the outcome the scenario is for.",
         },
       ],
     });
@@ -198,7 +203,7 @@ describe("a project without playwright installed", () => {
   it("check with no target reports each Playwright step once and passes over the CLI step", async () => {
     const check = await nuka(["check", "--json"]);
     expect(check.code).toBe(1);
-    const report = JSON.parse(check.stdout) as { errors: { code: string; step?: string }[] };
+    const report = bySeverity(check.stdout) as { errors: { code: string; step?: string }[] };
     expect(report.errors.map((issue) => [issue.code, issue.step])).toEqual([
       ["playwright-missing", "open-page"],
       ["playwright-missing", "fetch-url"],
@@ -217,8 +222,8 @@ describe("a project without playwright installed", () => {
     const run = await nuka(["run", "--no-check", "features/browser.feature"]);
     expect(run.code).not.toBe(0);
     expect(run.stderr).toContain(
-      `ctx.page() in "Given a blank page is open" needs "playwright", and this project has not installed it. ` +
-        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+      `ctx.page() in "Given a blank page is open" needs "playwright", and this project has not installed it; ` +
+        `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}`,
     );
   }, 60_000);
 
@@ -250,8 +255,8 @@ describe("a project without playwright installed", () => {
     await writeFile(path.join(steps, "expect-b.ts"), importing("b"));
     try {
       const message =
-        'the step file imports "playwright", and this project has not installed it, so the file does not import. ' +
-        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`;
+        'the step file imports "playwright", and this project has not installed it, so the file does not import; ' +
+        `nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}`;
       const check = await nuka(["check", "features/cli.feature"]);
       expect(check.code).toBe(1);
       expect(check.stdout).toContain(
@@ -262,7 +267,7 @@ describe("a project without playwright installed", () => {
       expect(check.stdout).not.toContain("step-file-import-failed");
       expect(check.stdout).not.toContain("Did you mean");
       const json = await nuka(["check", "--json", "features/cli.feature"]);
-      const report = JSON.parse(json.stdout) as { errors: { code: string; file?: string; message: string }[] };
+      const report = bySeverity(json.stdout) as { errors: { code: string; file?: string; message: string }[] };
       expect(report.errors).toEqual([
         { code: "playwright-missing", message, file: "features/steps/expect-a.ts", do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}` },
         { code: "playwright-missing", message, file: "features/steps/expect-b.ts", do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}` },
@@ -272,21 +277,20 @@ describe("a project without playwright installed", () => {
       const steps = await nuka(["steps"]);
       expect(steps.code).toBe(1);
       expect(steps.stderr).toBe(
-        "2 step files could not be imported:\n" +
-          `  features/steps/expect-a.ts: ${message}\n` +
-          `  features/steps/expect-b.ts: ${message}\n`,
+        `error\tplaywright-missing\tfeatures/steps/expect-a.ts\t${message}\n  do: ${install}\n` +
+          `error\tplaywright-missing\tfeatures/steps/expect-b.ts\t${message}\n  do: ${install}\n`,
       );
       const stepsJson = await nuka(["steps", "--json"]);
-      expect((JSON.parse(stepsJson.stdout) as { import_failures: unknown }).import_failures).toEqual([
-        { file: "features/steps/expect-a.ts", message },
-        { file: "features/steps/expect-b.ts", message },
+      expect(bySeverity(stepsJson.stdout).errors).toEqual([
+        { code: "playwright-missing", file: "features/steps/expect-a.ts", message, do: install },
+        { code: "playwright-missing", file: "features/steps/expect-b.ts", message, do: install },
       ]);
       const done = await nuka(["do", "node prints {word:string}", "--args", '{"word":"hi"}']);
       expect(done.code).toBe(2);
-      expect(done.stderr).toBe(`features/steps/expect-a.ts: ${message}\ndo: ${install}\n`);
+      expect(done.stderr).toBe(`refused\tplaywright-missing\t-\tfeatures/steps/expect-a.ts: ${message}\n  do: ${install}\n`);
       const run = await nuka(["run", "--no-check", "features/cli.feature"]);
       expect(run.code).toBe(2);
-      expect(run.stderr).toBe(`features/steps/expect-a.ts: ${message}\ndo: ${install}\n`);
+      expect(run.stderr).toBe(`refused\tplaywright-missing\t-\tfeatures/steps/expect-a.ts: ${message}\n  do: ${install}\n`);
     } finally {
       await rm(path.join(steps, "expect-a.ts"), { force: true });
       await rm(path.join(steps, "expect-b.ts"), { force: true });
@@ -317,10 +321,10 @@ describe("a project without playwright installed", () => {
     await writeFile(path.join(steps, "via-support.ts"), stepImporting("support", "../../support/pw.ts"));
     try {
       const install = `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`;
-      const tail = `, and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`;
+      const tail = `, and this project has not installed it, so the file does not import; nukadoko is tested against playwright@${PLAYWRIGHT_VERSION}`;
       const json = await nuka(["check", "--json", "features/cli.feature"]);
       expect(json.code).toBe(1);
-      expect((JSON.parse(json.stdout) as { errors: unknown[] }).errors).toEqual([
+      expect((bySeverity(json.stdout) as { errors: unknown[] }).errors).toEqual([
         { code: "playwright-missing", message: `the step file imports "playwright"${tail}`, file: "features/steps/expect-a.ts", do: install },
         {
           code: "playwright-missing",
@@ -375,7 +379,7 @@ describe("a project without playwright installed", () => {
     );
     try {
       const json = await nuka(["check", "--json", "features/expect.feature"]);
-      const report = JSON.parse(json.stdout) as { errors: { code: string }[]; warnings: unknown[] };
+      const report = bySeverity(json.stdout) as { errors: { code: string }[]; warnings: unknown[] };
       expect(report.errors.map((issue) => issue.code)).toEqual(["playwright-missing"]);
       expect(report.warnings).toEqual([
         {
@@ -383,7 +387,7 @@ describe("a project without playwright installed", () => {
           message:
             "Suppressed 1 undefined-step issue because 1 step file could not be read. undefined-step judgment is on hold until the unreadable glue is fixed",
           file: "features/steps/expect-a.ts",
-          do: `Run npm install -D -E playwright@${PLAYWRIGHT_VERSION} (see playwright-missing), then run nuka check again.`,
+          fix: `Run npm install -D -E playwright@${PLAYWRIGHT_VERSION} (see playwright-missing), then run nuka check again.`,
         },
       ]);
     } finally {

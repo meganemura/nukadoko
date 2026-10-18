@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { formatFinding, warningSink, withoutWarningPrefix, type Finding } from "../finding/finding.js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { checkBindings } from "../check/binding-check.js";
@@ -79,14 +80,15 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 // (src/run/worker-protocol.ts's own header explains why, and why nothing
 // meaningful goes to this process's real stderr instead). Project code
 // that writes to `process.stdout` reaches this process's stderr instead
-// (src/run/step-stdout.ts), which the parent relays raw. `noteSink`, below,
-// is the one `WritableSink` this file threads into every helper that would
-// otherwise write straight to stderr at `--concurrency 1` (a version-probe
-// warning, an Allure emitter setup failure, a BeforeAll/AfterAll failure, a
-// fixture teardown failure). Each becomes a `"note"` envelope instead. A
-// probe failure and a teardown failure are the caller's own text and can
-// carry a loaded secret, so those two notes are redacted before they are
-// written. The parent relays the text as its own stderr line.
+// (src/run/step-stdout.ts), which the parent relays raw. `note` and
+// `notes`, below, take every warning a helper would otherwise write
+// straight to stderr at `--concurrency 1` (a version-probe warning, an
+// Allure emitter setup failure, a BeforeAll/AfterAll failure, a fixture
+// teardown failure). Each becomes a `"note"` envelope holding one finding
+// in its text grammar. A probe failure and a teardown failure are the
+// caller's own text and can carry a loaded secret, so those two notes are
+// redacted before they are written. The parent parses each note back into
+// its finding and reports it as the serial path does.
 
 const [rootDirArg, runIdArg, envArg0, quietRawArg, featureListPathArg, repeatRawArg] = process.argv.slice(2);
 
@@ -126,13 +128,16 @@ function emit(envelope: WorkerEnvelope): void {
   envelopeStdout.write(serializeWorkerEnvelope(envelope));
 }
 
-const noteSink: WritableSink = {
-  write(chunk: string): boolean {
-    const text = chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk;
-    emit({ kind: "note", text });
-    return true;
-  },
-};
+// A note is a finding in its text grammar, so the parent reads it back
+// with the same parser and reports it with its code, as the serial path
+// does.
+function note(finding: Finding): void {
+  emit({ kind: "note", text: formatFinding(finding).replace(/\n$/, "") });
+}
+
+function notes(code: string): WritableSink {
+  return warningSink(code, note);
+}
 
 /** Reads `featureListPath` — one repo-relative `.feature` path per line, in
  * the order this worker must run them (blank lines skipped: `writeFile`
@@ -184,14 +189,12 @@ async function main(): Promise<void> {
     if (probeResult.ok) {
       targetVersion = probeResult.version;
     } else {
-      noteSink.write(
-        versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n",
-      );
+      notes("version-probe-failed").write(versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n");
     }
   }
 
   const git = await probeGitState(rootDir);
-  const onUnknownTraceVersion = createTraceVersionWarner(noteSink);
+  const onUnknownTraceVersion = createTraceVersionWarner(notes("trace-version-unknown"));
 
   const runConfig = { ...config, baseURL: resolvedEnv.baseURL };
 
@@ -207,13 +210,13 @@ async function main(): Promise<void> {
         environment: resolvedEnv.name,
         targetVersion,
         secrets,
-        stderr: noteSink,
+        stderr: notes("emitter-failed"),
         heartbeatCap: HEARTBEAT_TICK_CAP,
       });
       // Never `.begin()` here — see this file's own header.
     } catch (error) {
       allureEmitter = null;
-      noteSink.write(`Warning: allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      notes("emitter-failed").write(`allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
     }
   }
 
@@ -237,7 +240,7 @@ async function main(): Promise<void> {
       }
       return true;
     } catch (error) {
-      noteSink.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      note({ severity: "failed", code: "hook-failed", message: error instanceof Error ? error.message : String(error) });
       return false;
     }
   };
@@ -264,7 +267,7 @@ async function main(): Promise<void> {
     process.stdout.on("error", ignoreStreamError);
     process.stderr.on("error", ignoreStreamError);
     if (processSignal?.interrupted !== false) return;
-    if (process.ppid === parentPid) noteSink.write(`${CHANNEL_CLOSED_FROM_INSIDE}\n`);
+    if (process.ppid === parentPid) note({ severity: "failed", code: "run-incomplete", message: CHANNEL_CLOSED_FROM_INSIDE });
     processSignal.trigger("SIGHUP");
   };
   try {
@@ -277,9 +280,7 @@ async function main(): Promise<void> {
       const outcome = processSignal?.interrupted === true ? "failed" : processOutcome;
       const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
       for (const teardownError of processFixtureTeardownErrors) {
-        noteSink.write(
-          fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
-        );
+        notes("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n");
       }
     });
     processSignal.setProcessCleanup(tearDownProcessFixtures);
@@ -377,7 +378,7 @@ async function main(): Promise<void> {
           secrets,
           instantiateCompatWorld,
           onWorldSetupFailure: (message) => {
-            noteSink.write(`${message}\n`);
+            notes("world-setup-failed").write(`${message}\n`);
           },
           compatHooks,
           defaultTimeoutMs,
@@ -390,11 +391,14 @@ async function main(): Promise<void> {
           processSignal,
         });
 
-        const notes = (record.teardown_errors ?? []).map(
-          (teardownError) =>
-            fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets),
+        const teardownNotes = (record.teardown_errors ?? []).map((teardownError) =>
+          formatFinding({
+            severity: "warning",
+            code: "fixture-teardown-failed",
+            message: withoutWarningPrefix(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets)),
+          }).replace(/\n$/, ""),
         );
-        emit({ kind: "scenario", record, stepLines, notes });
+        emit({ kind: "scenario", record, stepLines, notes: teardownNotes });
 
         allureEmitter?.endScenario({
           record,
@@ -437,6 +441,6 @@ async function main(): Promise<void> {
 try {
   await main();
 } catch (error) {
-  noteSink.write(`${formatVocabularyError(error)}\n`);
+  note({ severity: "error", code: "unexpected-error", message: formatVocabularyError(error) });
   process.exitCode = 1;
 }

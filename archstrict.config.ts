@@ -56,9 +56,10 @@ export default {
   // Leaves and package doors that should not accumulate frozen debt.
   // A bypass here is fixed by extending that module's surface, not by
   // writing it into the todo file.
-  strict: ["binding", "check", "compat", "draft", "entry", "env", "explore", "feature", "issues", "matching", "mcp", "shell", "sink", "stored-form", "version"],
+  strict: ["binding", "check", "compat", "draft", "entry", "env", "explore", "feature", "finding", "issues", "matching", "mcp", "shell", "sink", "stored-form", "version"],
   classify: [
     { glob: "src/env/**", tags: ["layer:leaf", "pkghost:library"] },
+    { glob: "src/finding/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/issues/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/shell/**", tags: ["layer:leaf", "pkghost:library"] },
     { glob: "src/stored-form/**", tags: ["layer:leaf", "pkghost:library"] },
@@ -133,6 +134,7 @@ export default {
   },
   declaredModules: [
     { name: "env", glob: "src/env/**", surface: ["load-env-files.ts", "parse-env-file.ts"] },
+    { name: "finding", glob: "src/finding/**", surface: ["finding.ts", "run-codes.ts"] },
     { name: "issues", glob: "src/issues/**", surface: ["format-issues.ts"] },
     { name: "shell", glob: "src/shell/**", surface: ["shell-word.ts"] },
     { name: "stored-form", glob: "src/stored-form/**", surface: ["revive.ts", "stored-form.ts"] },
@@ -274,6 +276,7 @@ export default {
         "explore-check.ts",
         "feature-check.ts",
         "from-order.ts",
+        "playwright-check.ts",
         "types.ts",
         "unbound-patterned.ts",
         "unfillable-key.ts",

@@ -1,4 +1,3 @@
-import { versioned } from "../record/schema-version.js";
 import { readdir } from "node:fs/promises";
 import { loadConfig } from "../config/load-config.js";
 import { validateEnvironmentName } from "../environment/name.js";
@@ -6,7 +5,8 @@ import { DEFAULT_ENVIRONMENT_NAME, resolveEnvironment } from "../environment/res
 import { clearAllSessions, clearSession, listSessions } from "../session/manage.js";
 import { validateSessionName } from "../session/name.js";
 import { sessionsDir } from "../session/paths.js";
-import { failInShape, helpFor, refuse } from "./refusal.js";
+import { formatFinding, type Finding } from "../finding/finding.js";
+import { failInShape, formatEnvelope, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka session list`/`clear`'s CLI-facing wiring, kept out
@@ -17,24 +17,28 @@ import type { WritableSink } from "../sink/writable-sink.js";
 export interface RunSessionListOptions {
   rootDir: string;
   json: boolean;
+  /** Findings the invocation raised before the command ran, such as a
+   * missing config file, which `--json` carries in the envelope. */
+  notices?: readonly Finding[];
   stdout: WritableSink;
   stderr: WritableSink;
 }
 
 export async function runSessionList(options: RunSessionListOptions): Promise<number> {
   const { rootDir, json, stdout, stderr } = options;
+  const notices = options.notices ?? [];
 
   let config;
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    return refuse({ json, stdout, stderr }, error, helpFor("session list"));
+    return refuse({ json, stdout, stderr, command: "session list" }, error, "unexpected-error", undefined, notices);
   }
 
   const sessions = await listSessions(rootDir, config.stateDir);
 
   if (json) {
-    stdout.write(`${JSON.stringify(versioned("sessions", { sessions }), null, 2)}\n`);
+    stdout.write(formatEnvelope("session list", 0, notices, { sessions }));
   } else {
     // The environment is always the last column, so the first three keep
     // their place, and a session left under an environment the config no
@@ -78,13 +82,13 @@ async function environmentHasSessionFiles(
 export async function runSessionClear(options: RunSessionClearOptions): Promise<number> {
   const { rootDir, name, env, stdout, stderr } = options;
   const environment = env ?? DEFAULT_ENVIRONMENT_NAME;
-  const sinks = { json: false, stdout, stderr };
+  const sinks = { json: false, stdout, stderr, command: "session clear" };
 
   let config;
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    return refuse(sinks, error, helpFor("session clear"));
+    return refuse(sinks, error, "unexpected-error");
   }
 
   try {
@@ -104,7 +108,11 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
       if (unknown !== undefined) {
         if (await environmentHasSessionFiles(rootDir, config.stateDir, environment)) {
           stderr.write(
-            `Environment "${environment}" is not defined in nukadoko.config.ts's "environments"; clearing the sessions left under it\n`,
+            formatFinding({
+              severity: "warning",
+              code: "unknown-environment",
+              message: `Environment "${environment}" is not defined in nukadoko.config.ts's "environments"; clearing the sessions left under it`,
+            }),
           );
         } else {
           throw unknown;
@@ -113,7 +121,7 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
     }
     if (name !== null) validateSessionName(name);
   } catch (error) {
-    return refuse(sinks, error, helpFor("session clear"));
+    return refuse(sinks, error, "unexpected-error");
   }
 
   try {
@@ -123,7 +131,7 @@ export async function runSessionClear(options: RunSessionClearOptions): Promise<
       await clearSession(rootDir, config.stateDir, environment, name);
     }
   } catch (error) {
-    return failInShape(sinks, error, helpFor("session clear"));
+    return failInShape(sinks, error, "session-clear-failed");
   }
 
   // Silent on success for a known environment, like `rm`: stdout is

@@ -55,7 +55,7 @@ export function findTypelessPackageJsons(rootDir: string, files: readonly string
       code: "package-type-missing",
       message: `${relative} has no "type" field, and it governs ${files} nukadoko loads, so Node parses ${each} twice and prints a MODULE_TYPELESS_PACKAGE_JSON warning on every load`,
       file: relative,
-      do: `Add "type": "module" to ${relative}, or rename ${count === 1 ? "that file" : "those files"} to .mts if the project's own .js files are CommonJS.`,
+      fix: `Add "type": "module" to ${relative}, or rename ${count === 1 ? "that file" : "those files"} to .mts if the project's own .js files are CommonJS.`,
     };
   });
 }

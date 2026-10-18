@@ -13,8 +13,8 @@ describe("an unknown --env names the environments the config defines", () => {
     expect({ exitCode, stderr: stderr.text() }).toEqual({
       exitCode: 2,
       stderr:
-        'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\n' +
-        "do: Pass --env with a name the config defines (no-overrides, probe-ok, probe-throws, readonly, staging), or add environments.stagign to the config file.\n",
+        'refused\tunknown-environment\t-\tUnknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\n' +
+        "  fix: Pass --env with a name the config defines (no-overrides, probe-ok, probe-throws, readonly, staging), or add environments.stagign to the config file.\n",
     });
   });
 });

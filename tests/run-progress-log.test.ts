@@ -145,7 +145,7 @@ describe("nuka run: progress output", () => {
     const summaryIndex = lines.findIndex((line) => line.startsWith("1 scenario: 0 passed, 1 failed"));
     expect(summaryIndex).toBeGreaterThanOrEqual(0);
     expect(lines[summaryIndex + 1]).toBe(
-      "failed  features/failing.feature:3  an operation fails partway through",
+      "failed\tscenario-failed\tfeatures/failing.feature:3\tan operation fails partway through: operation failed on purpose",
     );
   });
 
@@ -182,8 +182,8 @@ describe("nuka run: progress output", () => {
         "summary   .nukadoko/records/runs/<run>/summary.md",
         "run       .nukadoko/records/runs/<run>/run.json",
         "1 scenario: 0 passed, 1 failed  (<duration>)",
-        "failed  features/failing.feature:3  an operation fails partway through",
-        "  rerun  nuka run features/failing.feature:3",
+        "failed\tscenario-failed\tfeatures/failing.feature:3\tan operation fails partway through: operation failed on purpose",
+        "  do: nuka run features/failing.feature:3",
         "",
       ].join("\n"),
     );
@@ -204,7 +204,7 @@ describe("nuka run: progress output", () => {
     expect(stepLines(stderr.text())).toHaveLength(1);
   });
 
-  it("the rerun line carries --env, so the scenario reruns where it failed", async () => {
+  it("the do line carries --env, so the scenario reruns where it failed", async () => {
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
       'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({ environments: { staging: {} } });\n',
@@ -219,8 +219,8 @@ describe("nuka run: progress output", () => {
 
     expect(exitCode).toBe(1);
     const lines = nonEmptyLines(stderr.text());
-    const failedIndex = lines.findIndex((line) => line.startsWith("failed  "));
-    expect(lines[failedIndex + 1]).toBe("  rerun  nuka run features/failing.feature:3 --env staging");
+    const failedIndex = lines.findIndex((line) => line.startsWith("failed\tscenario-failed\t"));
+    expect(lines[failedIndex + 1]).toBe("  do: nuka run features/failing.feature:3 --env staging");
   });
 
   it("writes no failed scenario line when every scenario passes", async () => {

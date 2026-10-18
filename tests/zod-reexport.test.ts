@@ -109,9 +109,9 @@ describe("import { z } from \"nukadoko\": resolution without a hoisted zod", () 
     );
 
     const { stdout } = await execFileAsync(nukaBin, ["steps", "--json"], { cwd: projectDir });
-    const { steps, import_failures: importFailures } = JSON.parse(stdout);
+    const { steps, findings } = JSON.parse(stdout);
 
-    expect(importFailures).toEqual([]);
+    expect(findings.filter((finding: { severity: string }) => finding.severity === "error")).toEqual([]);
     expect(steps).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "probe" })]),
     );

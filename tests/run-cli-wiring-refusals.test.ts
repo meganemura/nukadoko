@@ -21,9 +21,9 @@ describe("nuka harvest, removed", () => {
 
       expect(exitCode).toBe(2);
       expect(stderr.text()).toBe(
-        "`nuka harvest` was removed; write the scenario from the steps you ran, then run `nuka check` " +
-          "(see docs/upgrading.md in the nukadoko package)\n" +
-          "do: nuka check\n",
+        "refused\tremoved-command\t-\t`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)\n" +
+          "  fix: Write the scenario from the steps you ran in a feature file.\n" +
+          "  do: nuka check\n",
       );
       expect(stdout.text()).toBe("");
     }
@@ -58,8 +58,9 @@ describe("nuka describe: config load failure", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
-    const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
-    expect(refusal.error).toContain("typo");
-    expect(refusal.do).toBe("Correct the fields the message names in nukadoko.config.ts.");
+    const refusal = (JSON.parse(stdout.text()) as { findings: { code: string; message: string; fix: string }[] }).findings.at(-1)!;
+    expect(refusal.code).toBe("config-invalid");
+    expect(refusal.message).toContain("typo");
+    expect(refusal.fix).toBe("Correct the fields the message names in nukadoko.config.ts.");
   });
 });

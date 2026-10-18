@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 describe("nuka tend", () => {
   it("reports zero errors and zero notes for a project whose vocabulary and bindings are clean", async () => {
@@ -13,7 +14,7 @@ describe("nuka tend", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     // Checked field by field, not via a single `toEqual(report)` (m8a's
     // original assertion here): `report` now always carries a `summary`
     // too (asserted on its own below), and a
@@ -31,7 +32,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     // "typed 12, compat 0" is itself useful — migration is done — so the
     // migration line is present even though this fixture has no compat step
@@ -69,7 +70,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     // tests/fixtures/tend-findings-project has 6 typed step files and
     // features/steps/compat-glue.ts's 2 Given() registrations.
@@ -87,7 +88,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     // Of the 13 args/returns fields across all 6 typed steps, only
     // undescribed-field-step.ts's `args.label` has no .describe() — the
@@ -118,7 +119,7 @@ describe("nuka tend", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.errors).toEqual([]);
     expect(exitCode).toBe(0);
 
@@ -140,7 +141,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     const fromUnused = report.notes.filter((issue: { code: string }) => issue.code === "from-unused");
     expect(fromUnused).toHaveLength(1);
@@ -163,7 +164,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     const unbound = report.notes.filter((issue: { code: string }) => issue.code === "pattern-unbound");
     expect(unbound).toHaveLength(1);
@@ -181,7 +182,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     const undescribed = report.notes.filter(
       (issue: { code: string }) => issue.code === "schema-field-undescribed",
@@ -202,7 +203,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     const unused = report.notes.filter((issue: { code: string }) => issue.code === "parameter-type-unused");
     expect(unused).toHaveLength(1);
@@ -217,7 +218,7 @@ describe("nuka tend", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     for (const issue of [...report.errors, ...report.notes]) {
       expect(issue.code).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
@@ -226,7 +227,7 @@ describe("nuka tend", () => {
     }
   });
 
-  it("prints one human-readable line per note, each followed by its do line, grouped by kind, when --json is omitted", async () => {
+  it("prints one human-readable line per note, each followed by its fix or do line, grouped by kind, when --json is omitted", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend"], {
       rootDir: fixture("tend-findings-project"),
@@ -252,7 +253,7 @@ describe("nuka tend", () => {
     }
     expect(doLines).toHaveLength(4);
     for (const line of doLines) {
-      expect(line).toMatch(/^  do: \S/);
+      expect(line).toMatch(/^  (fix|do): \S/);
     }
     // Grouped by kind: same code's lines (there is at most one per code in
     // this fixture) sit together, which — for a single-occurrence-per-code
@@ -282,7 +283,7 @@ describe("nuka tend", () => {
     ]);
   });
 
-  it("refuses a config error under --json as { error, do } on stdout, exit 2", async () => {
+  it("refuses a config error under --json as one refused finding on stdout, exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--json"], {
@@ -293,8 +294,11 @@ describe("nuka tend", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
-    const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
-    expect(refusal.error).toContain("typo");
-    expect(refusal.do).toBe("Correct the fields the message names in nukadoko.config.ts.");
+    const report = bySeverity(stdout.text());
+    expect(report.verdict).toBe("refused");
+    expect(report.refused.map((finding: { code: string; fix: string }) => [finding.code, finding.fix])).toEqual([
+      ["config-invalid", "Correct the fields the message names in nukadoko.config.ts."],
+    ]);
+    expect(report.refused[0].message).toContain("typo");
   });
 });

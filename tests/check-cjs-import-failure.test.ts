@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check` names the CJS/.ts mismatch when it is the
 // actual cause of a step-file-import-failed finding, instead of leaving
@@ -21,7 +22,7 @@ describe("nuka check: CommonJS/.ts step-file-import-failed", () => {
     });
 
     expect(exitCode).toBe(1);
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string; file?: string }>;
     };
     const failure = report.errors.find((issue) => issue.code === "step-file-import-failed");
@@ -42,7 +43,7 @@ describe("nuka check: CommonJS/.ts step-file-import-failed", () => {
     });
 
     expect(exitCode).toBe(1);
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string; file?: string }>;
     };
     const failure = report.errors.find((issue) => issue.code === "step-file-import-failed");

@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check` reports capture-type-mismatch for exactly the
 // captures whose JS type cannot satisfy the args schema, and `nuka run`
@@ -30,7 +31,7 @@ describe("nuka check: capture type against args schema", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text()) as { errors: CheckIssue[]; warnings: CheckIssue[] };
+    const report = bySeverity(stdout.text()) as { errors: CheckIssue[]; warnings: CheckIssue[] };
 
     expect(exitCode).toBe(1);
     // Each scenario is one Given line, and its steps declare mutates: true, so a
@@ -59,7 +60,7 @@ describe("nuka check: capture type against args schema", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text()) as { errors: { step: string; message: string }[] };
+    const report = bySeverity(stdout.text()) as { errors: { step: string; message: string }[] };
     const messages = Object.fromEntries(report.errors.map((issue) => [issue.step, issue.message]));
 
     expect(messages["bad-int-boolean"]).toBe(

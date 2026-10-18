@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s three `parts` findings (docs/spec.md
 // "Parts": "Two things `nuka check` can be certain of, so it says them",
@@ -20,7 +21,7 @@ interface PartIssue {
 async function checkReport(rootDir: string) {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-  return { exitCode, report: JSON.parse(stdout.text()) as { errors: PartIssue[]; warnings: PartIssue[] } };
+  return { exitCode, report: bySeverity(stdout.text()) as { errors: PartIssue[]; warnings: PartIssue[] } };
 }
 
 describe("nuka check: parts findings", () => {

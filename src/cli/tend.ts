@@ -1,14 +1,14 @@
-import { versioned } from "../record/schema-version.js";
 import { analyzeTend } from "../tend/analyze.js";
 import {
   listTendCodes,
   REMOVED_TEND_CODES,
   TEND_CODES,
   type TendFinding,
-  type TendIssue,
   type TendSummary,
 } from "../tend/types.js";
-import { helpFor, refuse } from "./refusal.js";
+import { formatFinding, type Finding } from "../finding/finding.js";
+import { codeFinding } from "./check.js";
+import { formatEnvelope, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka tend`'s actual work, kept out of run-cli.ts the same
@@ -18,12 +18,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // "Tending": a project is allowed to carry them), so `--fail-on` is the one
 // way a run of `nuka tend` turns red.
 //
-// `formatLocation`/`formatIssueLine` are a small, deliberate duplicate of
-// cli/check.ts's own private (unexported) helpers of the same name, not an
-// import from that file: the two commands' human-readable formats only
-// coincide by convention, matching `nuka check`'s text output so the two
-// look consistent — sharing the implementation would wire the two
-// commands' output format together for no reason either command needs.
+// Findings print in the grammar src/finding/finding.ts owns, the one
+// every command shares, so a reader parses check and tend alike.
 //
 // `formatSummaryLines` prints ahead of every finding, in plain
 // "label: value" prose rather than the tab-separated `error`/`note` line
@@ -50,6 +46,9 @@ export interface RunTendOptions {
   /** `--codes`: print the code catalog instead of tending a project. It
    * answers before the project loads, so it works while config is broken. */
   codes?: boolean;
+  /** Findings the invocation raised before the command ran, such as a
+   * missing config file, which `--json` carries in the envelope. */
+  notices?: readonly Finding[];
   stdout: WritableSink;
   stderr: WritableSink;
   /** `--fail-on`: codes whose presence turns this invocation's exit code
@@ -57,27 +56,14 @@ export interface RunTendOptions {
   failOn: readonly string[];
 }
 
-function formatLocation(issue: TendIssue): string {
-  if (issue.file !== undefined) {
-    return issue.line !== undefined ? `${issue.file}:${issue.line}` : issue.file;
-  }
-  if (issue.step !== undefined) {
-    return issue.step;
-  }
-  if (issue.fixture !== undefined) {
-    return issue.fixture;
-  }
-  return "-";
+/** A tend finding in the shared grammar. A finding about a config.fixtures
+ * entry names the fixture where a step finding names the step. */
+function tendFinding(severity: "error" | "note", issue: TendFinding): Finding {
+  return { severity, ...issue, ...(issue.step === undefined && issue.fixture !== undefined ? { step: issue.fixture } : {}) };
 }
 
-// Same newline-collapsing as cli/check.ts's own `formatIssueLine` — a
-// message can carry embedded newlines (e.g. a from-unused message quoting
-// another tool's own multi-line output), and text output's "one line per
-// issue", plus its do line, only holds if those are flattened; `--json` never does this, JSON
-// string encoding already carries a raw newline faithfully.
-function formatIssueLine(severity: "error" | "note", issue: TendFinding): string {
-  const singleLineMessage = issue.message.replace(/\s*\n\s*/g, " ");
-  return `${severity}\t${issue.code}\t${formatLocation(issue)}\t${singleLineMessage}\n  do: ${issue.do}`;
+function asJsonFinding(severity: "error" | "note", issue: TendFinding): Finding {
+  return { severity, ...issue };
 }
 
 // Two lines, matching docs/spec.md's own CLI summary phrasing for `nuka
@@ -113,14 +99,15 @@ export function tendCommandWithout(
 export async function runTend(options: RunTendOptions): Promise<number> {
   const { rootDir, json, failOn, stdout, stderr } = options;
 
+  const notices = options.notices ?? [];
   if (options.codes) {
-    const entries = listTendCodes();
+    const entries = listTendCodes().map((entry) =>
+      codeFinding({ code: entry.code, severity: "note", description: entry.description, fix: entry.fix }),
+    );
     if (json) {
-      stdout.write(`${JSON.stringify(versioned("tend_codes", { codes: entries }), null, 2)}\n`);
+      stdout.write(formatEnvelope("tend", 0, notices, { codes: entries }));
     } else {
-      for (const entry of entries) {
-        stdout.write(`${entry.code}\t${entry.description}\t${entry.do}\n`);
-      }
+      for (const entry of entries) stdout.write(formatFinding(entry));
     }
     return 0;
   }
@@ -130,19 +117,20 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   // would read that silence as "nothing to fail on".
   // A removed code is refused too, but by name and with what replaced it,
   // so a CI job written against an earlier release learns where to go.
-  const sinks = { json, stdout, stderr };
+  const sinks = { json, stdout, stderr, command: "tend" };
   const removed = failOn.filter((code) => REMOVED_TEND_CODES.has(code));
   if (removed.length > 0) {
     const lines = removed.map((code) => `--fail-on: "${code}" ${REMOVED_TEND_CODES.get(code)}.`);
-    return refuse(sinks, lines.join("\n"), tendCommandWithout(new Set(removed), { json, failOn }));
+    return refuse(sinks, lines.join(" "), "fail-on-unknown-code", { do: tendCommandWithout(new Set(removed), { json, failOn }) }, notices);
   }
   const unknown = failOn.filter((code) => !TEND_CODES.has(code));
   if (unknown.length > 0) {
     return refuse(
       sinks,
-      `--fail-on: ${unknown.map((code) => `"${code}"`).join(", ")} ${unknown.length === 1 ? "is not a code" : "are not codes"} ` +
-        `nuka tend reports. \`nuka tend --codes\` lists every code.`,
-      "nuka tend --codes",
+      `--fail-on: ${unknown.map((code) => `"${code}"`).join(", ")} ${unknown.length === 1 ? "is not a code" : "are not codes"} nuka tend reports`,
+      "fail-on-unknown-code",
+      { do: "nuka tend --codes" },
+      notices,
     );
   }
 
@@ -150,42 +138,41 @@ export async function runTend(options: RunTendOptions): Promise<number> {
   try {
     report = await analyzeTend(rootDir);
   } catch (error) {
-    return refuse(sinks, error, helpFor("tend"));
-  }
-
-  if (json) {
-    stdout.write(`${JSON.stringify(versioned("tend_report", report), null, 2)}\n`);
-  } else {
-    // Summary first, ahead of the findings, then the findings grouped by
-    // kind: errors first (always empty today, src/tend/analyze.ts's
-    // header), then notes — and `analyzeTend` already builds `notes` as consecutive
-    // per-finding blocks, so printing it in order is grouping, with no sort
-    // needed here.
-    for (const line of formatSummaryLines(report.summary)) {
-      stdout.write(`${line}\n`);
-    }
-    for (const issue of report.errors) {
-      stdout.write(`${formatIssueLine("error", issue)}\n`);
-    }
-    for (const issue of report.notes) {
-      stdout.write(`${formatIssueLine("note", issue)}\n`);
-    }
-    if (report.errors.length === 0 && report.notes.length === 0) {
-      stdout.write("ok: nothing to tend\n");
-    }
+    return refuse(sinks, error, "unexpected-error", undefined, notices);
   }
 
   // `--fail-on` turns a chosen note into a red exit for this invocation
-  // only; the finding itself stays a note in the output, since what
-  // changed is the team's policy, not the finding's nature. Said on
-  // stderr, once per code, so the exit code never changes silently.
-  let failed = false;
-  for (const code of failOn) {
+  // only; the finding itself stays a note, since what changed is the
+  // team's policy, not the finding's nature. Said once per code, so the
+  // exit code never changes silently.
+  const failOnHits = failOn.flatMap((code) => {
     const count = [...report.errors, ...report.notes].filter((issue) => issue.code === code).length;
-    if (count > 0) {
-      failed = true;
-      stderr.write(`fail-on: ${code} reported ${count} ${count === 1 ? "finding" : "findings"}\n`);
-    }
+    return count > 0 ? [{ code, count }] : [];
+  });
+  const exitCode = report.errors.length > 0 || failOnHits.length > 0 ? 1 : 0;
+
+  if (json) {
+    const findings = [
+      ...notices,
+      ...report.errors.map((issue) => asJsonFinding("error", issue)),
+      ...report.notes.map((issue) => asJsonFinding("note", issue)),
+    ];
+    stdout.write(formatEnvelope("tend", exitCode, findings, { summary: report.summary, fail_on_hits: failOnHits }));
+    return exitCode;
   }
-  return report.errors.length > 0 || failed ? 1 : 0;
+  // Summary first, ahead of the findings, then errors (always empty today,
+  // src/tend/analyze.ts's header), then notes, which `analyzeTend` already
+  // builds as consecutive per-finding blocks.
+  for (const line of formatSummaryLines(report.summary)) {
+    stdout.write(`${line}\n`);
+  }
+  for (const issue of report.errors) stdout.write(formatFinding(tendFinding("error", issue)));
+  for (const issue of report.notes) stdout.write(formatFinding(tendFinding("note", issue)));
+  if (report.errors.length === 0 && report.notes.length === 0) {
+    stdout.write("ok: nothing to tend\n");
+  }
+  for (const hit of failOnHits) {
+    stderr.write(`fail-on: ${hit.code} reported ${hit.count} ${hit.count === 1 ? "finding" : "findings"}\n`);
+  }
+  return exitCode;
 }

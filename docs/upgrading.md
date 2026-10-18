@@ -45,6 +45,49 @@ This part does not change release to release.
 
 ## 0.17.0 to the next release
 
+- **Every command's `--json` is one envelope, and every finding has one
+  grammar.** A script that reads `--json` reads
+  `{ schema_version: 2, nukadoko, command, verdict, findings, ... }`:
+  - `errors`, `warnings`, and `notes` are gone. Filter `findings` by
+    `severity` (`error`, `warning`, `note`, `refused`, `failed`).
+  - A refusal is no longer `{ error, do }`. It is a finding with severity
+    `refused` and a code, and the exit is still 2. Switch on `code`, not on
+    the message.
+  - `nuka steps --json` keeps `steps` beside `findings`; its
+    `import_failures` are `step-file-import-failed` or
+    `playwright-missing` findings. `nuka describe` keeps its contract
+    fields beside `findings`. `nuka tend --json` keeps `summary` and
+    `fail_on_hits`. `nuka run --json` keeps the `run.json` fields.
+    `nuka check --codes --json` and `nuka tend --codes --json` keep
+    `codes`, and each entry is a finding: its meaning is `message`, not
+    `description`, and its general edit is `fix`, not `do`.
+  - `nuka experimental explore --json` has no `verdict` of its own; read
+    the envelope's.
+  - `verdict` is `passed`, `failed`, or `refused`, for exit 0, 1, and 2.
+- **A finding's text is `<severity>\t<code>\t<where>\t<message>`, then
+  `  fix:` and `  do:` lines.** A parser of `nuka check` text reads the
+  severity in the first column. `  do:` is now only a command a shell runs
+  as written; a hint in words, such as "Escape the bare ( ) ...", is on a
+  `  fix:` line. A script that ran every `do:` line as prose stops reading
+  it as prose; a script that runs it can run it as it is.
+- **A failed scenario is a `scenario-failed` finding.** The `failed` and
+  `rerun` lines on stderr are gone. A script that grepped `rerun` reads
+  the `  do: nuka run <feature>:<line>` line under each
+  `failed\tscenario-failed\t` line, or each scenario's `rerun` in
+  `run.json`.
+- **Warnings are findings with codes.** The no-config line is
+  `warning\tconfig-missing\t-\t...` on stderr, and under `--json` it is
+  in `findings`, with stderr empty. The same holds for a failed fixture
+  teardown (`fixture-teardown-failed`), an emitter failure
+  (`emitter-failed`), a version probe that did not answer
+  (`version-probe-failed`), and the other run warnings `nuka check
+  --codes` lists. A script that matched `Warning:` on stderr matches the
+  `warning` column and the code.
+- **An `undefined-step` message no longer names the scaffold command.**
+  The command is on the `  do:` line. Each line with an undefined step
+  has its own finding now, also a second line with the same text, so a
+  count of `undefined-step` findings is a count of lines.
+
 - **`nuka run` writes scenario records to stdout only under `--records`.**
   A pipe, a file, a CI log, and an agent's shell no longer get one JSON
   record per line by default; stdout stays empty. A script that parsed
@@ -64,11 +107,10 @@ This part does not change release to release.
 - **`nuka tend` reports every code, and `--all` is removed.** A plain
   `nuka tend` now reports `schema-field-undescribed` too, in text and in
   `--json`. `nuka tend --all` exits 2 and says so; drop the flag. A job
-  that reads plain `--json` and acts on some codes only filters `notes` by
-  `code`, or passes `--fail-on` for each code it acts on. A script that
-  reads `nuka tend --codes` text reads three columns now (code, meaning,
-  do), and one that reads `nuka tend --codes --json` gets
-  `schema_version` 2, with no `reportedByDefault` on an entry.
+  that reads plain `--json` and acts on some codes only filters
+  `findings` by `code`, or passes `--fail-on` for each code it acts on.
+  `nuka tend --codes` prints each code as a finding (see the next item),
+  with no `reportedByDefault` on an entry.
 - **A step record's `observed` channels are `null` when the step never
   reached them.** `http_reads` and `http_writes` are both `null` for a step
   that called none of `ctx.request()`, `ctx.page()`, and `pageAs()` and

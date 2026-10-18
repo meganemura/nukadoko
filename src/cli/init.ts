@@ -8,7 +8,8 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildCategories } from "../report/allure/categories.js";
 import { llmsTxtPath } from "./skill.js";
 import { ensureTsconfig } from "./tsconfig-edit.js";
-import { RefusalError, helpFor, refusalOf, refuse } from "./refusal.js";
+import { formatFinding } from "../finding/finding.js";
+import { refusalOf, refuse } from "./refusal.js";
 import { formatVocabularyError } from "./vocabulary.js";
 import { listenAddress } from "../context/run-server.js";
 import { isPlaywrightInstalled, PlaywrightMissingError } from "../context/load-playwright.js";
@@ -95,12 +96,12 @@ export function commandWords(command: string): string[] {
 }
 
 /** `--server` and `--server-url`, read, or why they cannot be. */
-export function readServerFlags(server: string | null, serverUrl: string | null): ServerSpec | null | { refusal: string; do: string } {
+export function readServerFlags(server: string | null, serverUrl: string | null): ServerSpec | null | { refusal: string; fix: string } {
   if (server === null && serverUrl === null) return null;
   if (server === null) {
     return {
       refusal: "--server-url names the URL the --server command listens at, and no --server was given",
-      do: `nuka init --server "<command that starts the server>" --server-url ${serverUrl}`,
+      fix: `Pass --server with the command that starts the program under test, beside --server-url ${serverUrl}.`,
     };
   }
   const words = commandWords(server);
@@ -110,11 +111,16 @@ export function readServerFlags(server: string | null, serverUrl: string | null)
         words.length === 0
           ? "--server is empty; name the command that starts the program under test"
           : "--server needs --server-url, the URL the program listens at: nukadoko waits for it and sends every request there, and the program alone knows it",
-      do: `nuka init --server ${JSON.stringify(words.length === 0 ? "<command>" : server)} --server-url http://127.0.0.1:<port>`,
+      fix:
+        words.length === 0
+          ? "Pass --server with the command that starts the program under test, and --server-url with the URL it listens at."
+          : "Pass --server-url with the URL the program listens at, such as http://127.0.0.1:3000.",
     };
   }
   const address = listenAddress(serverUrl);
-  if ("refusal" in address) return { refusal: address.refusal.replace("runServer", "--server-url"), do: "nuka init --help" };
+  if ("refusal" in address) {
+    return { refusal: address.refusal.replace("runServer", "--server-url"), fix: "Pass --server-url as an http URL with a host and a port." };
+  }
   return { argv: words as [string, ...string[]], url: serverUrl };
 }
 
@@ -390,6 +396,7 @@ async function ensureScenariosScript(rootDir: string, stderr: WritableSink): Pro
 
 export async function runInit(options: RunInitOptions): Promise<number> {
   const { rootDir, allure, stdout, stderr } = options;
+  const sinks = { json: false, stdout, stderr, command: "init" };
 
   const existingConfigPaths = CONFIG_FILE_NAMES.map((fileName) => path.join(rootDir, fileName)).filter(
     (candidate) => existsSync(candidate),
@@ -397,15 +404,16 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   if (existingConfigPaths.length > 0) {
     const already = existingConfigPaths.length === 1 ? "already exists" : "already exist";
     return refuse(
-      { json: false, stdout, stderr },
-      new RefusalError(`Refusing to init: ${existingConfigPaths.join(" and ")} ${already}; nothing was written`, "nuka check"),
-      helpFor("init"),
+      sinks,
+      `Refusing to init: ${existingConfigPaths.join(" and ")} ${already}; nothing was written`,
+      "config-exists",
+      { do: "nuka check" },
     );
   }
 
   const server = readServerFlags(options.server ?? null, options.serverUrl ?? null);
   if (server !== null && "refusal" in server) {
-    return refuse({ json: false, stdout, stderr }, new RefusalError(`Refusing to init: ${server.refusal}; nothing was written`, server.do), helpFor("init"));
+    return refuse(sinks, `Refusing to init: ${server.refusal}; nothing was written`, "invalid-arguments", { fix: server.fix });
   }
 
   const isCjs = isCommonJsProject(rootDir);
@@ -497,7 +505,8 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     const config = await loadConfig(rootDir);
     await discoverSteps(rootDir, config.featuresDir);
   } catch (error) {
-    stderr.write(`Self-check failed: ${formatVocabularyError(error)}\ndo: ${refusalOf(error, "nuka check").do}\n`);
+    const own = refusalOf(error, "unexpected-error", "init", { do: "nuka check" });
+    stderr.write(formatFinding({ ...own, severity: "error", message: `Self-check failed: ${formatVocabularyError(error)}` }));
     return 1;
   }
 

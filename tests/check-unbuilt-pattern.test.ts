@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: a pattern that cannot be built is reported once, and the
 // lines it would have matched are not also reported as undefined steps that
@@ -22,7 +23,7 @@ describe("nuka check: a pattern that cannot be built", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text()) as { errors: readonly Issue[]; warnings: readonly Issue[] };
+    const report = bySeverity(stdout.text()) as { errors: readonly Issue[]; warnings: readonly Issue[] };
 
     expect(exitCode).toBe(1);
     expect(report.errors.map((issue) => issue.code)).toEqual(["unknown-parameter-type"]);
@@ -32,7 +33,7 @@ describe("nuka check: a pattern that cannot be built", () => {
         message: `"${(line - 1) / 3} items are added" would match step "add-items" once its pattern builds. Fix the pattern error reported for that step`,
         file: "features/items.feature",
         line,
-        do: "Fix the step-file-import-failed or playwright-missing finding, or the pattern error, that held it back, then run nuka check again.",
+        fix: "Fix the step-file-import-failed or playwright-missing finding, or the pattern error, that held it back, then run nuka check again.",
       })),
     );
   });

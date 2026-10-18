@@ -5,13 +5,14 @@ import { runCli } from "../src/cli/run-cli.js";
 import { BUILTIN_FIXTURE_NAMES } from "../src/step/context.js";
 import { findFixturesReplacingBuiltins } from "../src/tend/fixture-replaces-builtin.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 type Note = { code: string; file?: string; fixture?: string; step?: string; message: string; do: string };
 
 async function tendNotes(rootDir: string, code: string): Promise<{ exitCode: number; notes: Note[] }> {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["tend", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-  const report = JSON.parse(stdout.text()) as { notes: Note[] };
+  const report = bySeverity(stdout.text()) as { notes: Note[] };
   return { exitCode, notes: report.notes.filter((note) => note.code === code) };
 }
 
@@ -26,7 +27,7 @@ describe("nuka tend: fixture-replaces-builtin", () => {
         file: "nukadoko.config.ts",
         message:
           'Fixture "scratch" in config.fixtures replaces nukadoko\'s builtin scratch fixture, which gives scratch.dir(prefix) and scratch.copy(source), each a new temporary directory that is removed when the scenario ends and listed in the step record\'s evidence.scratch.',
-        do: "Delete the scratch fixture from config.fixtures, and its StepFixtures declaration, if the builtin covers what it does; keep both if the project needs its own shape.",
+        fix: "Delete the scratch fixture from config.fixtures, and its StepFixtures declaration, if the builtin covers what it does; keep both if the project needs its own shape.",
       },
     ]);
     expect(exitCode).toBe(0);

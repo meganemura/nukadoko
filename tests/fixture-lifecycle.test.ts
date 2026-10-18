@@ -155,7 +155,7 @@ describe("startFixture: timeout", () => {
       });
       await expect
         .poll(() => chunks.join(""))
-        .toContain('Warning: fixture "late-tenant" teardown failed: late cleanup failed');
+        .toContain('warning\tfixture-teardown-failed\t-\tfixture "late-tenant" teardown failed: late cleanup failed');
     } finally {
       process.stderr.write = original;
     }
@@ -180,7 +180,7 @@ describe("startFixture: timeout", () => {
         phase: "setup",
       });
       await expect.poll(() => chunks.join("")).toContain(
-        'Warning: fixture "late-tenant" teardown failed: Fixture "late-tenant" timed out during teardown after 20ms',
+        'warning\tfixture-teardown-failed\t-\tfixture "late-tenant" teardown failed: Fixture "late-tenant" timed out during teardown after 20ms',
       );
     } finally {
       process.stderr.write = original;

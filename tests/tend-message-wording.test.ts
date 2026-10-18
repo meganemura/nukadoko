@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: pins the exact wording of two `nuka tend` messages whose
 // claims must match what the code does: only a capture fills a `from` key,
@@ -9,7 +10,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 async function tendNotes(project: string): Promise<Array<{ code: string; step?: string; message: string }>> {
   const stdout = createCaptureSink();
   await runCli(["tend", "--json"], { rootDir: fixture(project), stdout, stderr: createCaptureSink() });
-  return JSON.parse(stdout.text()).notes;
+  return bySeverity(stdout.text()).notes;
 }
 
 describe("nuka tend message wording", () => {

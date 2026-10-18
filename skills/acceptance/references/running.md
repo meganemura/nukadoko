@@ -105,14 +105,17 @@ nothing.
    prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary
    line. A failed step adds its error's first line and its step record
-   path, and each failed scenario gets a `rerun` line after the summary;
+   path, and each failed scenario gets a `scenario-failed` finding after
+   the summary, whose `do:` line reruns it;
    `--quiet` drops the other progress lines when the terminal gets noisy.
    stdout is empty unless you ask: `--records` writes NDJSON there, one
    scenario record per line, and the records are on disk either way. To
-   act on the result, pass `--json` instead: stdout is then one document, the run's `run.json` (run id,
-   verdict, counts, and per scenario its status, record path, and `rerun`
-   command), which the run also writes beside its summary, and stderr
-   drops every progress, path, and count line, keeping only warnings. Text a step, a hook, or a fixture writes through `console.log` or
+   act on the result, pass `--json` instead: stdout is then one envelope,
+   `{ schema_version, nukadoko, command, verdict, findings, ... }`, with the
+   run's `run.json` fields beside `findings` (run id, counts, and per
+   scenario its status, record path, and `rerun` command); the run also
+   writes `run.json` beside its summary. stderr is then empty: every
+   warning and failed scenario is a finding in the envelope. Text a step, a hook, or a fixture writes through `console.log` or
    `process.stdout.write` is delivered on stderr, so it does not break
    that stream. A child process spawned with `stdio: "inherit"` still
    writes to stdout directly. The run also

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { describeImportFailure, FRAMED_ELSEWHERE_SENTENCE, headLocation, missingPackageOf, STRIP_ONLY_SENTENCE } from "../src/config/import-failure.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 describe("headLocation", () => {
   it("reads back the file and line Node writes at the head of a syntax error", () =>
@@ -113,14 +114,14 @@ describe("nuka check: a step file with an enum", () => {
       );
       const stdout = createCaptureSink();
       const exitCode = await runCli(["check", "--json"], { rootDir: dir, stdout, stderr: createCaptureSink() });
-      const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number; message: string }> };
+      const report = bySeverity(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number; message: string }> };
       expect(report.errors.filter((issue) => issue.code === "step-file-import-failed")).toEqual([
         {
           code: "step-file-import-failed",
           file: "features/steps/paint.ts",
           line: 3,
           message: `TypeScript enum is not supported in strip-only mode (features/steps/paint.ts:3)${STRIP_ONLY_SENTENCE}`,
-          do: "Correct the import or the error that the message names in the file, then run nuka check again.",
+          fix: "Correct the import or the error that the message names in the file, then run nuka check again.",
         },
       ]);
       expect(exitCode).toBe(1);

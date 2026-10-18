@@ -2,7 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { playwrightImportMissing } from "../src/check/playwright-check.js";
-import { importSuppressionDo } from "../src/check/suppressed-do.js";
+import { importSuppressionFix } from "../src/check/suppressed-fix.js";
 import type { CheckIssue } from "../src/check/types.js";
 import { PLAYWRIGHT_VERSION } from "../src/context/load-playwright.js";
 
@@ -18,24 +18,24 @@ const importFailed: CheckIssue = {
   file: "features/steps/b.ts",
 };
 
-describe("importSuppressionDo", () => {
+describe("importSuppressionFix", () => {
   it("gives the install line when every unreadable file lacks Playwright", () => {
-    expect(importSuppressionDo([playwrightFinding("playwright"), playwrightFinding("playwright")])).toBe(
+    expect(importSuppressionFix([playwrightFinding("playwright"), playwrightFinding("playwright")])).toBe(
       `Run npm install -D -E playwright@${PLAYWRIGHT_VERSION} (see playwright-missing), then run nuka check again.`,
     );
   });
 
   it("names step-file-import-failed when that is the only cause", () => {
-    expect(importSuppressionDo([importFailed])).toBe(
+    expect(importSuppressionFix([importFailed])).toBe(
       "Correct the step-file-import-failed error, then run nuka check again.",
     );
-    expect(importSuppressionDo([importFailed, importFailed])).toBe(
+    expect(importSuppressionFix([importFailed, importFailed])).toBe(
       "Correct the step-file-import-failed errors, then run nuka check again.",
     );
   });
 
   it("names both when both were reported", () => {
-    expect(importSuppressionDo([importFailed, playwrightFinding("@playwright/test")])).toBe(
+    expect(importSuppressionFix([importFailed, playwrightFinding("@playwright/test")])).toBe(
       `Run npm install -D -E @playwright/test@${PLAYWRIGHT_VERSION} (see playwright-missing) and correct the step-file-import-failed error, then run nuka check again.`,
     );
   });
@@ -47,7 +47,7 @@ describe("importSuppressionDo", () => {
           gs.arrays(gs.sampledFrom(["failed", ...PACKAGES] as const), { minSize: 1, maxSize: 6 }),
         );
         const findings = kinds.map((kind) => (kind === "failed" ? importFailed : playwrightFinding(kind)));
-        const text = importSuppressionDo(findings);
+        const text = importSuppressionFix(findings);
 
         expect(text.endsWith(", then run nuka check again.")).toBe(true);
         expect(text.includes("step-file-import-failed")).toBe(kinds.includes("failed"));

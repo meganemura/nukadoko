@@ -9,6 +9,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { relativeJsImports, whitespaceSplit } from "../src/cli/scaffold.js";
+import { oneLine } from "../src/finding/finding.js";
 import {
   createCaptureSink,
   createEmptyTempDir,
@@ -42,6 +43,9 @@ async function cli(rootDir: string, argv: string[]): Promise<{ exitCode: number;
   const exitCode = await runCli(argv, { rootDir, stdout, stderr });
   return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
 }
+
+const ARGUMENTS_TAIL = "  fix: Correct the command line; the command's --help lists its flags.\n  do: nuka scaffold --help\n";
+const VALUE_TAIL = "  fix: Correct the flag's value as the message says.\n  do: nuka scaffold --help\n";
 
 function stepPath(rootDir: string, name: string): string {
   return path.join(rootDir, "features", "steps", `${name}.ts`);
@@ -134,32 +138,32 @@ describe("nuka scaffold --command", () => {
   it.each([
     [
       ["--command", "--then"],
-      "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false\n",
+      "invalid-arguments\t-\tRefusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false\n" + ARGUMENTS_TAIL,
     ],
     [
       ["--command", "--pattern", "run {cli:string}"],
-      'Refusing to scaffold: args key "cli" would hide a name the written step body reads (cli, runCommand, process, scratch, String, Error); name the capture or the key something else\n',
+      'invalid-value\t-\tRefusing to scaffold: args key "cli" would hide a name the written step body reads (cli, runCommand, process, scratch, String, Error); name the capture or the key something else\n' + VALUE_TAIL,
     ],
     [
       ["--command", "--pattern", "run {Error:string}"],
-      'Refusing to scaffold: args key "Error" would hide a name the written step body reads (cli, runCommand, process, scratch, String, Error); name the capture or the key something else\n',
+      'invalid-value\t-\tRefusing to scaffold: args key "Error" would hide a name the written step body reads (cli, runCommand, process, scratch, String, Error); name the capture or the key something else\n' + VALUE_TAIL,
     ],
     [
       ["--command", "src/a.ts", "--command", "src/b.ts"],
-      "--command was given more than once.\n",
+      "invalid-arguments\t-\t--command was given more than once.\n" + ARGUMENTS_TAIL,
     ],
     [
       ["--then", "--pattern", "it is {actual:int}"],
-      'Refusing to scaffold: args key "actual" would hide a name the written step body reads (Error, JSON, String, assert, actual); name the capture or the key something else\n',
+      'invalid-value\t-\tRefusing to scaffold: args key "actual" would hide a name the written step body reads (Error, JSON, String, assert, actual); name the capture or the key something else\n' + VALUE_TAIL,
     ],
     [
       ["--pattern", "parse {JSON:string}"],
-      'Refusing to scaffold: args key "JSON" would hide a name the written step body reads (Error, JSON, String); name the capture or the key something else\n',
+      'invalid-value\t-\tRefusing to scaffold: args key "JSON" would hide a name the written step body reads (Error, JSON, String); name the capture or the key something else\n' + VALUE_TAIL,
     ],
   ])("refuses %j and writes nothing", async (flags, message) => {
     const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
 
-    expect(result.stderr).toBe(`${message}do: nuka scaffold --help\n`);
+    expect(result.stderr).toBe(`refused\t${message}`);
     expect(result.exitCode).toBe(2);
     expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
   });
@@ -228,7 +232,7 @@ describe("nuka scaffold --command", () => {
     const result = await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", entry]);
 
     expect(result.stderr).toBe(
-      `Refusing to scaffold: entry point "${entry}" is not a file (looked at ${path.resolve(rootDir, entry)}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO\ndo: nuka scaffold --help\n`,
+      `refused\tinvalid-value\t-\tRefusing to scaffold: entry point "${entry}" is not a file (looked at ${path.resolve(rootDir, entry)}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO\n${VALUE_TAIL}`,
     );
     expect(result.stdout).toBe("");
     expect(result.exitCode).toBe(2);
@@ -248,7 +252,7 @@ describe("nuka scaffold --command", () => {
     const result = await cli(rootDir, ["scaffold", "--command", "run-y", "--pattern", "I run y", "other"]);
 
     expect(result.stderr).toBe(
-      `Refusing to scaffold: entry point "run-y" is not a file (looked at ${path.join(rootDir, "run-y")}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO; --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\ndo: nuka scaffold --help\n`,
+      `refused\tinvalid-value\t-\tRefusing to scaffold: entry point "run-y" is not a file (looked at ${path.join(rootDir, "run-y")}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO; --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\n${VALUE_TAIL}`,
     );
     expect(result.exitCode).toBe(2);
     expect(existsSync(stepPath(rootDir, "other"))).toBe(false);
@@ -258,12 +262,8 @@ describe("nuka scaffold --command", () => {
     const result = await cli(rootDir, ["scaffold", "--command", "run-y", "--pattern", "I run y"]);
 
     expect(result.stderr).toBe(
-      [
-        "Missing required argument: name (or --feature <path>)",
-        '--command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value',
-        "do: nuka scaffold --help",
-        "",
-      ].join("\n"),
+      'refused\tinvalid-arguments\t-\tMissing required argument: name (or --feature <path>); --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\n' +
+        ARGUMENTS_TAIL,
     );
     expect(result.exitCode).toBe(2);
     expect(existsSync(stepPath(rootDir, "run-y"))).toBe(false);
@@ -654,31 +654,31 @@ describe("nuka scaffold --command --argv", () => {
   it.each([
     [
       ["--pattern", "I run args with {words:string}", "--argv", "words"],
-      "Refusing to scaffold: --argv names the capture a --command step splits into argv, and only a --command step runs a program\ndo: nuka scaffold --help\n",
+      "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv names the capture a --command step splits into argv, and only a --command step runs a program\n" + ARGUMENTS_TAIL,
     ],
     [
       ["--pattern", "I run args with {words:string} in {dir:string}", "--command", "--argv", "argv"],
-      "Refusing to scaffold: --argv argv names no capture of the pattern; its string captures are words, dir\n" +
-        "do: nuka scaffold broken --pattern 'I run args with {words:string} in {dir:string}' --command --argv words\n",
+      "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv argv names no capture of the pattern; its string captures are words, dir\n" +
+        "  do: nuka scaffold broken --pattern 'I run args with {words:string} in {dir:string}' --command --argv words\n",
     ],
     [
       ["--pattern", "I run args with {words:string}", "--command", "--argv=argv"],
-      "Refusing to scaffold: --argv argv names no capture of the pattern; its string captures are words\n" +
-        "do: nuka scaffold broken --pattern 'I run args with {words:string}' --command --argv=words\n",
+      "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv argv names no capture of the pattern; its string captures are words\n" +
+        "  do: nuka scaffold broken --pattern 'I run args with {words:string}' --command --argv=words\n",
     ],
     [
       ["--pattern", "I run args {n:int} times", "--command", "--argv", "n"],
-      "Refusing to scaffold: --argv n names a {n:int} capture, which does not hand the step a string, and the pattern captures no string\n" +
-        "do: put a {args:string} capture where the arguments go in --pattern, and pass --argv args\n",
+      "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv n names a {n:int} capture, which does not hand the step a string, and the pattern captures no string\n" +
+        "  fix: Put an {args:string} capture where the arguments go in --pattern, and pass --argv args.\n",
     ],
     [
       ["--command", "--argv", "words"],
-      "Refusing to scaffold: --argv words names no capture of the pattern, and the pattern captures no string\n" +
-        "do: put a {args:string} capture where the arguments go in --pattern, and pass --argv args\n",
+      "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv words names no capture of the pattern, and the pattern captures no string\n" +
+        "  fix: Put an {args:string} capture where the arguments go in --pattern, and pass --argv args.\n",
     ],
     [
       ["--pattern", "I run args in {dir:string}", "--command", "--cwd", "dir", "--argv", "dir"],
-      "Refusing to scaffold: --argv dir and --cwd dir name one key, and --cwd takes its key out of argv\ndo: nuka scaffold --help\n",
+      "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv dir and --cwd dir name one key, and --cwd takes its key out of argv\n" + ARGUMENTS_TAIL,
     ],
   ])("refuses %j and writes nothing", async (flags, stderr) => {
     const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
@@ -760,7 +760,7 @@ describe("nuka scaffold --command <entry point>: any path", () => {
         try {
           const result = await cli(rootDir, ["scaffold", name, "--command", entry]);
           if (!exists) {
-            expect(result.stderr).toContain(`Refusing to scaffold: entry point ${JSON.stringify(entry)} is not a file`);
+            expect(result.stderr).toContain(oneLine(`Refusing to scaffold: entry point ${JSON.stringify(entry)} is not a file`));
             expect(result.exitCode).toBe(2);
             expect(existsSync(stepPath(rootDir, name))).toBe(false);
             return;
@@ -846,7 +846,7 @@ describe("nuka scaffold --command: any pattern", () => {
           const check = await cli(rootDir, ["check"]);
           // The feature is the one When line, so its only finding is the missing Then.
           expect(check.stdout + check.stderr).toBe(
-            `warning\tscenario-without-then\tfeatures/${name}.feature:2\tScenario "s" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\n`,
+            `warning\tscenario-without-then\tfeatures/${name}.feature:2\tScenario "s" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\n`,
           );
           for (const key of ["stdout", "exitCode", "stderr"]) {
             const consumer = `${name}-${key.toLowerCase()}`;
@@ -1047,7 +1047,7 @@ describe("nuka scaffold --command <entry point>: the entry point's own imports",
     );
 
     expect(result.stderr).toBe(
-      'Refusing to scaffold: entry point "src/cli.ts" imports "./greet.js", which does not exist (src/greet.ts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "./greet.ts" with "rewriteRelativeImportExtensions": true in tsconfig.json\ndo: nuka scaffold --help\n',
+      'refused\tinvalid-value\t-\tRefusing to scaffold: entry point "src/cli.ts" imports "./greet.js", which does not exist (src/greet.ts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "./greet.ts" with "rewriteRelativeImportExtensions": true in tsconfig.json\n' + VALUE_TAIL,
     );
     expect(result.stdout).toBe("");
     expect(result.exitCode).toBe(2);
@@ -1101,7 +1101,7 @@ describe("nuka scaffold --command <entry point>: the entry point's own imports",
     );
 
     expect(result.stderr).toBe(
-      'Refusing to scaffold: entry point "src/bin/cli.mts" imports "../lib/run.mjs", which does not exist (src/lib/run.mts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "../lib/run.mts" with "rewriteRelativeImportExtensions": true in tsconfig.json\ndo: nuka scaffold --help\n',
+      'refused\tinvalid-value\t-\tRefusing to scaffold: entry point "src/bin/cli.mts" imports "../lib/run.mjs", which does not exist (src/lib/run.mts does); node runs a .ts file without rewriting that specifier, so the step would exit 1 with ERR_MODULE_NOT_FOUND. Point --command at the built program (for example dist/cli.js, after npm run build), or import "../lib/run.mts" with "rewriteRelativeImportExtensions": true in tsconfig.json\n' + VALUE_TAIL,
     );
     expect(result.exitCode).toBe(2);
     expect(written).toBe(false);
@@ -1152,7 +1152,7 @@ describe("nuka scaffold --command <entry point>: the entry point's own imports",
 
         expect(result.exitCode).toBe(refuses ? 2 : 0);
         expect(written).toBe(!refuses);
-        if (refuses) expect(result.stderr).toMatch(/^Refusing to scaffold: entry point "src\/bin\/cli\.ts" imports "/);
+        if (refuses) expect(result.stderr).toMatch(/^refused\tinvalid-value\t-\tRefusing to scaffold: entry point "src\/bin\/cli\.ts" imports "/);
         else expect(result.stderr).toBe("");
       },
       { testCases: 30, suppressHealthCheck: [hegel.HealthCheck.TooSlow] },

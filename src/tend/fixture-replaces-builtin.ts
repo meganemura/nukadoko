@@ -26,7 +26,7 @@ export function findFixturesReplacingBuiltins(fixtureNames: Iterable<string>): T
       code: "fixture-replaces-builtin",
       message: `Fixture "${name}" in config.fixtures replaces nukadoko's builtin ${name} fixture, which gives ${shape}.`,
       fixture: name,
-      do: `Delete the ${name} fixture from config.fixtures, and its StepFixtures declaration, if the builtin covers what it does; keep both if the project needs its own shape.`,
+      fix: `Delete the ${name} fixture from config.fixtures, and its StepFixtures declaration, if the builtin covers what it does; keep both if the project needs its own shape.`,
     });
   }
   return issues;

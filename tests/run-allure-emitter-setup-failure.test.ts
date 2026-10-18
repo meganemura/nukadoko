@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
 
-// Responsibility: `nuka run`'s own "Warning: allure emitter setup failed"
+// Responsibility: `nuka run`'s own "allure emitter setup failed" warning
 // branch (cli/run.ts): createAllureEmitter (src/report/allure/emitter.ts)
 // calls mkdirSync(resultsDir, { recursive: true }) unguarded, which throws
 // ENOTDIR when a path segment above resultsDir already exists as a plain
@@ -35,7 +35,7 @@ describe("nuka run: the allure emitter's own setup fails", () => {
       const record = JSON.parse(stdout.text().split("\n").filter((line) => line.length > 0)[0]!);
       expect(record.status).toBe("passed");
 
-      expect(stderr.text()).toContain("Warning: allure emitter setup failed");
+      expect(stderr.text()).toContain("warning\temitter-failed\t-\tallure emitter setup failed");
       expect(stderr.text()).toContain("ENOTDIR");
     } finally {
       await removeTempDir(rootDir);

@@ -162,7 +162,7 @@ replaces the one before it:
 3. **A finding code.** A rule that `nuka check` or `nuka tend` can decide
    from the feature file and the step contracts alone, with no guess about
    intent, becomes a code. The rule then names that code on its
-   `Checked by:` line, and the code's own `do:` carries the fix.
+   `Checked by:` line, and the code's own `fix:` carries the edit.
 
 This file stays at 200 lines or fewer and `SKILL.md` at 120, both enforced
 by a test. When a rule does not fit, remove one: a rule that no example

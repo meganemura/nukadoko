@@ -1,6 +1,6 @@
-// Responsibility: rewrite the two finding-code tables in llms.txt from what
-// the built CLI prints for `nuka check --codes --json` and
-// `nuka tend --codes --json`. Boundary: only the lines between each table's
+// Responsibility: rewrite the two code tables in llms.txt from what the
+// built CLI prints for `nuka check --codes --json` (check, run, and refusal
+// codes) and `nuka tend --codes --json`. Boundary: only the lines between each table's
 // begin marker and the next end marker change; everything else in the file
 // is hand-written. tests/llms-codes.test.ts fails while a table differs from
 // its registry, so run `npm run build && node scripts/llms-codes.ts` after
@@ -80,32 +80,29 @@ export function spliceGenerated(text: string, marker: string, body: string): str
   return [...lines.slice(0, begin + 1), body, ...lines.slice(end)].join("\n");
 }
 
-interface CheckCodeEntry {
+// One entry of `--codes --json`'s `codes`: a finding with no location,
+// whose message is the code's description and whose fix is its general
+// edit.
+interface CodeEntry {
   readonly code: string;
-  readonly severity?: string;
-  readonly description: string;
-  readonly do: string;
+  readonly severity: string;
+  readonly message: string;
+  readonly fix: string;
 }
 
-interface TendCodeEntry {
-  readonly code: string;
-  readonly description: string;
-  readonly do: string;
-}
-
-export function checkTable(entries: readonly CheckCodeEntry[]): CodeTable {
+export function checkTable(entries: readonly CodeEntry[]): CodeTable {
   return {
     marker: "<!-- generated: nuka check --codes --json -->",
-    header: ["Code", "Severity", "Meaning", "Do"],
-    rows: entries.map((entry) => [`\`${entry.code}\``, entry.severity ?? "-", entry.description, entry.do]),
+    header: ["Code", "Severity", "Meaning", "Fix"],
+    rows: entries.map((entry) => [`\`${entry.code}\``, entry.severity, entry.message, entry.fix]),
   };
 }
 
-export function tendTable(entries: readonly TendCodeEntry[]): CodeTable {
+export function tendTable(entries: readonly CodeEntry[]): CodeTable {
   return {
     marker: "<!-- generated: nuka tend --codes --json -->",
-    header: ["Code", "Meaning", "Do"],
-    rows: entries.map((entry) => [`\`${entry.code}\``, entry.description, entry.do]),
+    header: ["Code", "Meaning", "Fix"],
+    rows: entries.map((entry) => [`\`${entry.code}\``, entry.message, entry.fix]),
   };
 }
 

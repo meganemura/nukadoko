@@ -16,7 +16,7 @@ const linePath = gs.fromRegex("features/[a-z]{1,12}\\.feature:[1-9][0-9]{0,3}");
 const anyPath = gs.oneOf(plainPath, linePath);
 const otherCode = gs.sampledFrom(["EACCES", "EPERM", "ENOTDIR", "EISDIR", "ELOOP", "ENAMETOOLONG", "EIO"]);
 
-const LINE_SENTENCE = "check analyzes the whole file, not one scenario.";
+const LINE_SENTENCE = "check analyzes the whole file, not one scenario";
 
 describe("describeFeatureArgRead", () => {
   it("keeps check's :line sentence", () => {
@@ -29,7 +29,7 @@ describe("describeFeatureArgRead", () => {
         lineBaseExists: true,
       }).message,
     ).toBe(
-      "nuka check: features/probe.feature:3: :line is not supported; check analyzes the whole file, not one scenario. Run: nuka check features/probe.feature",
+      "nuka check: features/probe.feature:3: :line is not supported; check analyzes the whole file, not one scenario",
     );
   });
 
@@ -79,7 +79,7 @@ describe("describeFeatureArgRead", () => {
         expect(described.basePath).toBe(lineMatch[1]);
         expect(described.line).toBe(lineMatch[2]);
         expect(described.message).toBe(
-          `${command}: ${lineMatch[1]}:${lineMatch[2]}: :line is not supported; ${LINE_SENTENCE} Run: ${command} ${lineMatch[1]}`,
+          `${command}: ${lineMatch[1]}:${lineMatch[2]}: :line is not supported; ${LINE_SENTENCE}`,
         );
         expect(described.message).not.toContain("feature file not found");
       } else {

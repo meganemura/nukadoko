@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `from`'s multiple-candidate form end to end (docs/spec.md
 // "Chaining steps"' "A key may name
@@ -84,7 +85,7 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
   async function checkReport(rootDir: string) {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-    return { exitCode, report: JSON.parse(stdout.text()) as { errors: FromOrderIssue[]; warnings: unknown[] } };
+    return { exitCode, report: bySeverity(stdout.text()) as { errors: FromOrderIssue[]; warnings: unknown[] } };
   }
 
   interface FromOrderIssue {
@@ -93,6 +94,7 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
     readonly file?: string;
     readonly line?: number;
     readonly step?: string;
+    readonly fix?: string;
     readonly do?: string;
   }
 
@@ -103,7 +105,7 @@ describe("nuka check: two or more candidates bound earlier is always an error", 
     expect(issues[0]!.message).toContain("archive-project");
     expect(issues[0]!.message).toContain("create-project");
     expect(issues[0]!.message).toContain("import-project");
-    expect(issues[0]!.do).toBe(
+    expect(issues[0]!.fix).toBe(
       'Remove or move lines so that exactly one of steps "create-project", "import-project" runs before this line.',
     );
   });
@@ -285,7 +287,7 @@ describe("nuka steps --json: more than one candidate is exposed as an array", ()
     const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
 
     expect(exitCode).toBe(0);
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       steps: Array<{ name: string; from?: Record<string, unknown> }>;
     };
     const archive = report.steps.find((s) => s.name === "archive-project");
@@ -325,7 +327,7 @@ describe("nuka check: a broken candidate is reported without silencing a sound o
     });
 
     expect(exitCode).toBe(1);
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; step?: string; message: string }>;
     };
     const issues = report.errors.filter(

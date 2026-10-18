@@ -1,4 +1,3 @@
-import { versioned } from "../record/schema-version.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -39,7 +38,9 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 import { isModel, type RelationSource, type RelationStep } from "../step/define-explore.js";
 import type { Step } from "../step/define-step.js";
 import { toStoredForm } from "../stored-form/stored-form.js";
-import { helpFor, refuse } from "./refusal.js";
+import { formatFinding, withoutWarningPrefix, type Finding } from "../finding/finding.js";
+import type { RefusalCode } from "./refusal-codes.js";
+import { formatEnvelope, refuse, withHint } from "./refusal.js";
 import { assertFeaturesDirExists } from "./vocabulary.js";
 
 // Responsibility: `nuka experimental explore`'s wiring. Setup refuses before any step
@@ -63,6 +64,9 @@ export interface RunExploreOptions {
   readonly env: string | null;
   /** One JSON object on stdout, for a pass too, in place of the scenario. */
   readonly json: boolean;
+  /** Findings the invocation raised before the command ran, such as a
+   * missing config file, which `--json` carries in the envelope. */
+  readonly notices?: readonly Finding[];
   readonly stdout: WritableSink;
   readonly stderr: WritableSink;
 }
@@ -71,8 +75,13 @@ function positiveIntegerRefusal(flag: string, value: number): string | null {
   return Number.isInteger(value) && value >= 1 ? null : `${flag} must be a whole number of 1 or more (got ${value}).`;
 }
 
-function refuseExplore(options: RunExploreOptions, error: unknown): number {
-  return refuse(options, error, helpFor("experimental explore"));
+function refuseExplore(
+  options: RunExploreOptions,
+  error: unknown,
+  code: RefusalCode = "unexpected-error",
+  before: readonly Finding[] = [],
+): number {
+  return refuse({ ...options, command: "experimental explore" }, error, code, undefined, [...(options.notices ?? []), ...before]);
 }
 
 /** A relation with a declared source has no seed. */
@@ -94,9 +103,9 @@ export async function runExplore(options: RunExploreOptions): Promise<number> {
   const { rootDir } = options;
   const flagRefusal =
     positiveIntegerRefusal("--runs", options.runs) ?? positiveIntegerRefusal("--length", options.length);
-  if (flagRefusal !== null) return refuseExplore(options, flagRefusal);
+  if (flagRefusal !== null) return refuseExplore(options, flagRefusal, "invalid-value");
   if (options.seed !== null && !(Number.isInteger(options.seed) && options.seed >= 0 && options.seed < 2 ** 32)) {
-    return refuseExplore(options, `--seed must be a whole number from 0 to 4294967295 (got ${options.seed}).`);
+    return refuseExplore(options, `--seed must be a whole number from 0 to 4294967295 (got ${options.seed}).`, "invalid-value");
   }
   const seed = options.seed ?? Math.floor(Math.random() * 2 ** 32);
 
@@ -128,6 +137,13 @@ async function exploreDiscovered(
 ): Promise<number> {
   const { rootDir, stdout, stderr } = options;
   const { vocabulary, models, relations, compatParameterTypes } = discovery;
+  // Under `--json` every finding goes in the one document, so a warning
+  // waits for it; in text it goes to stderr when it happens.
+  const findings: Finding[] = [...(options.notices ?? [])];
+  const warn = (finding: Finding): void => {
+    if (options.json) findings.push(finding);
+    else stderr.write(formatFinding(withHint(finding)));
+  };
   const target = path.resolve(rootDir, options.file);
   const model = models.find((entry) => entry.filePath === target);
   const relation = relations.find((entry) => entry.filePath === target);
@@ -137,23 +153,30 @@ async function exploreDiscovered(
       options,
       `${options.file} is not a model or a relation that discovery found under ${config.featuresDir}. ` +
         (known.length > 0 ? `Found: ${known.join(", ")}` : "Discovery found none."),
+      "explore-target-unknown",
     );
   }
 
   const fixtureGraph = buildFixtureGraph(config);
   const needsBrowser = (step: Step): boolean => stepNeeds(step, fixtureGraph).needsBrowser;
-  const findings = checkExploreDeclarations({
+  const declarationFindings = checkExploreDeclarations({
     vocabulary,
     models: model === undefined ? [] : [model],
     relations: relation === undefined ? [] : [relation],
     needsBrowser,
   });
-  if (findings.length > 0) {
-    return refuseExplore(options, findings.map((finding) => `${finding.code}: ${finding.message}`).join("\n"));
+  if (declarationFindings.length > 0) {
+    const count = declarationFindings.length;
+    return refuseExplore(
+      options,
+      `nuka experimental explore did not start: ${count} ${count === 1 ? "finding" : "findings"} in its declarations`,
+      "check-errors",
+      declarationFindings.map((finding) => ({ severity: "error", ...finding })),
+    );
   }
   const definitionIssues = validateFixtureDefinitions(config);
   if (definitionIssues.length > 0) {
-    return refuseExplore(options, formatFixtureDefinitionIssues(definitionIssues));
+    return refuseExplore(options, formatFixtureDefinitionIssues(definitionIssues), "step-inputs-invalid");
   }
   const declaredSteps =
     model !== undefined
@@ -165,7 +188,7 @@ async function exploreDiscovered(
     return entry?.kind === "typed" ? validateStepFixtures(name, entry.step, knownFixtures) : [];
   });
   if (fixtureIssues.length > 0) {
-    return refuseExplore(options, formatFixtureIssues(fixtureIssues));
+    return refuseExplore(options, formatFixtureIssues(fixtureIssues), "step-inputs-invalid");
   }
   if (resolvedEnv.policy === "read-only") {
     const mutating = [...new Set(declaredSteps)].filter((name) => {
@@ -175,7 +198,8 @@ async function exploreDiscovered(
     if (mutating.length > 0) {
       return refuseExplore(
         options,
-        mutating.map((name) => new ReadOnlyEnvironmentError(name, resolvedEnv.name).message).join("\n"),
+        mutating.map((name) => new ReadOnlyEnvironmentError(name, resolvedEnv.name).message).join("; "),
+        "read-only-environment",
       );
     }
   }
@@ -211,7 +235,7 @@ async function exploreDiscovered(
     needsBrowser,
     scratchDir,
     rootDir,
-    warn: (line) => stderr.write(`${line}\n`),
+    warn: (line) => warn({ severity: "warning", code: "fixture-teardown-failed", message: withoutWarningPrefix(line) }),
     signal,
   });
   const { open } = world;
@@ -219,32 +243,42 @@ async function exploreDiscovered(
     const render = (title: string, steps: readonly PlannedStep[], notes: ReadonlyMap<number, string>) =>
       renderScenario({ title, steps, notes, vocabulary, bindings });
     const failedNote = (index: number, message: string) => new Map([[index, `step ${index + 1} failed: ${message}`]]);
-    // The verdict line repeats what `--json` already holds, so it is text only.
-    const verdictLine = (line: string) => {
+    const file = path.relative(rootDir, target);
+    // A pass prints one summary line in text; `--json` already holds it.
+    const passedLine = (line: string) => {
       if (!options.json) stderr.write(`${line}\n`);
     };
-    const emit = (json: Record<string, unknown>, text: readonly string[]) => {
-      if (options.json) stdout.write(`${JSON.stringify(versioned("explore_result", json), null, 2)}\n`);
+    // A failure is a finding whose `do` reruns the same exploration, the
+    // way a failed scenario's finding reruns that scenario.
+    const failed = (code: "explore-failed" | "explore-error", message: string, rerun: string) =>
+      warn({ severity: "failed", code, file, message, do: rerun });
+    const emit = (exitCode: number, json: Record<string, unknown>, text: readonly string[]) => {
+      if (options.json) stdout.write(formatEnvelope("experimental explore", exitCode, findings, json));
       else if (text.length > 0) stdout.write(`${text.join("\n")}\n`);
     };
-    const file = path.relative(rootDir, target);
 
     if (model !== undefined) {
       const result = await exploreModel({ model: model.model, seed, runs: options.runs, length: options.length, open });
       const rerun = rerunCommand(options, seed);
-      const head = { kind: "model", file, verdict: result.status === "model-error" ? "error" : result.status, seed, runs: options.runs, length: options.length };
+      const head = { kind: "model", file, seed, runs: options.runs, length: options.length };
       if (result.status === "passed") {
-        emit({ ...head, steps: result.steps, rerun }, []);
-        verdictLine(`Passed: ${plural(result.runs, "run")}, ${plural(result.steps, "step")}, seed ${seed}. Rerun: ${rerun}`);
+        emit(0, { ...head, steps: result.steps, rerun }, []);
+        passedLine(`Passed: ${plural(result.runs, "run")}, ${plural(result.steps, "step")}, seed ${seed}. Rerun: ${rerun}`);
         return 0;
       }
       if (result.status === "model-error") {
-        emit({ ...head, rerun, run: result.run, message: result.message }, []);
-        verdictLine(`The model failed on run ${result.run}, seed ${seed}: ${result.message}`);
+        failed("explore-error", `The model failed on run ${result.run}, seed ${seed}: ${result.message}`, rerun);
+        emit(1, { ...head, rerun, run: result.run, message: result.message }, []);
         return 1;
       }
       const scenario = await render("(name me)", result.shrunk, failedNote(result.failure.index, result.failure.message));
+      failed(
+        "explore-failed",
+        `Run ${result.run}, seed ${seed}, shrunk to ${plural(result.shrunk.length, "step")}; the scenario is on stdout`,
+        rerun,
+      );
       emit(
+        1,
         {
           ...head,
           rerun,
@@ -262,10 +296,6 @@ async function exploreDiscovered(
             `Shrunk to ${plural(result.shrunk.length, "step")} in ${plural(result.shrinkAttempts, "attempt")}.`,
           ...scenario,
         ],
-      );
-      verdictLine(
-        `Failed: run ${result.run}, seed ${seed}, shrunk to ${plural(result.shrunk.length, "step")}. ` +
-          "The scenario is on stdout.",
       );
       return 1;
     }
@@ -293,19 +323,18 @@ async function exploreDiscovered(
       kind: "relation",
       file,
       name: declared.name,
-      verdict: result.status === "relation-error" ? "error" : result.status,
       ...(generated ? { seed, runs: options.runs, length: options.length } : {}),
     };
     if (result.status === "passed") {
-      emit({ ...head, rerun }, []);
+      emit(0, { ...head, rerun }, []);
       const counts = generated ? `, ${plural(options.runs, "run")}, seed ${seed}` : "";
-      verdictLine(`Passed: relation "${declared.name}"${counts}. Rerun: ${rerun}`);
+      passedLine(`Passed: relation "${declared.name}"${counts}. Rerun: ${rerun}`);
       return 0;
     }
     if (result.status === "relation-error") {
-      emit({ ...head, rerun, ...(result.generated === undefined ? {} : { run: result.generated.run }), message: result.message }, []);
       const where = result.generated === undefined ? "" : ` on run ${result.generated.run}, seed ${seed}`;
-      verdictLine(`The relation "${declared.name}" failed before it ran${where}: ${result.message}`);
+      failed("explore-error", `The relation "${declared.name}" failed before it ran${where}: ${result.message}`, rerun);
+      emit(1, { ...head, rerun, ...(result.generated === undefined ? {} : { run: result.generated.run }), message: result.message }, []);
       return 1;
     }
     const found = result.generated;
@@ -314,7 +343,9 @@ async function exploreDiscovered(
       failure.sequence === sequence ? failedNote(failure.index, failure.message) : new Map();
     const sourceScenario = await render(`(name me) source of "${declared.name}"`, result.source, note("source"));
     const followScenario = await render(`(name me) follow of "${declared.name}"`, result.follow, note("follow"));
+    failed("explore-failed", `Relation "${declared.name}" failed; both scenarios are on stdout`, rerun);
     emit(
+      1,
       {
         ...head,
         rerun,
@@ -344,7 +375,6 @@ async function exploreDiscovered(
         ...followScenario,
       ],
     );
-    verdictLine(`Failed: relation "${declared.name}". Both scenarios are on stdout.`);
     return 1;
   } finally {
     await world.close();

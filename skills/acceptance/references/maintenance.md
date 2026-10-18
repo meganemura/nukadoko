@@ -42,13 +42,14 @@ block on one of them passes `--fail-on <code>` (for instance
 invocation's exit code turns red. The code to pass is the one printed
 beside each finding, or one from `nuka tend --codes`, which lists every
 code with a one-line meaning before any of them has fired. Each note also
-names a `file` and a `do:` line: what to open, and the change to make if
+names a file and a `fix:` line: what to open, and the change to make if
 the note calls for one.
 
 Every run reports every code, `schema-field-undescribed` (a field with no
 `.describe()`) included. The `declared:` line counts the same gaps
 (`describe 7/9`). A gate that acts on some codes and not others filters
-the notes by `code`, or passes `--fail-on` for each code it acts on.
+the `--json` envelope's `findings` by `code`, or passes `--fail-on` for
+each code it acts on.
 
 `step-description-todo` names a typed step whose description is still
 the `TODO: describe <name>` that `nuka scaffold` wrote without

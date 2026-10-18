@@ -37,6 +37,7 @@ import type { ParsedFeature } from "./load-features.js";
 // read from Markdown.
 
 export class OathParseError extends Error {
+  readonly code = "feature-parse-error";
   readonly line: number | undefined;
 
   constructor(message: string, line?: number) {

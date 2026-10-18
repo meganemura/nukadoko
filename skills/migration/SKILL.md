@@ -109,7 +109,7 @@ the same rule.
   remove the old one, never the other order.
 - **Don't guess at a fix `nuka check` or `nuka run` didn't ask for.** Their
   output is the evidence for what's wrong, and each `nuka check` finding
-  names the `file` to open and a `do:` line with the next step; changing
+  names the file to open and a `fix:` or `do:` line with the next step; changing
   something they didn't flag is a change made on a hunch.
 - **Don't declare `page` or `request` through `defineWorld`.** They are
   harness getters, reached with `await this.openPage()` and

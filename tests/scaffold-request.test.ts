@@ -98,7 +98,7 @@ describe("nuka scaffold --request", () => {
       exitCode: 0,
       stdout:
         'warning\tscenario-without-then\tfeatures/items.feature:2\tScenario "one" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n' +
-        "  do: Add a Then line that checks the outcome the scenario is for.\n",
+        "  fix: Add a Then line that checks the outcome the scenario is for.\n",
       stderr: "",
     });
   });
@@ -110,13 +110,16 @@ describe("nuka scaffold --request", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        "Refusing to scaffold: --request's path names {key}, which no capture or --from fills (its keys are id); a {key} in the path is put in by that args key's value\ndo: nuka scaffold --help\n",
+        "refused\tinvalid-value\t-\tRefusing to scaffold: --request's path names {key}, which no capture or --from fills (its keys are id); a {key} in the path is put in by that args key's value\n" +
+        "  fix: Correct the flag's value as the message says.\n  do: nuka scaffold --help\n",
     });
     expect((await cli(rootDir, ["scaffold", "get-item", ...pattern, "--request", "/items/{id}"])).stderr).toBe(
-      'Refusing to scaffold: --request takes "<METHOD> <path>", an upper-case method and a path with no space, each {key} in it an args key, such as "GET /items/{id}", and got "/items/{id}"\ndo: nuka scaffold --help\n',
+      'refused\tinvalid-value\t-\tRefusing to scaffold: --request takes "<METHOD> <path>", an upper-case method and a path with no space, each {key} in it an args key, such as "GET /items/{id}", and got "/items/{id}"\n' +
+        "  fix: Correct the flag's value as the message says.\n  do: nuka scaffold --help\n",
     );
     expect((await cli(rootDir, ["scaffold", "get-item", ...pattern, "--body", "id"])).stderr).toBe(
-      "Refusing to scaffold: --body names the args key a --request step sends, and only a --request step sends one\ndo: nuka scaffold --help\n",
+      "refused\tinvalid-arguments\t-\tRefusing to scaffold: --body names the args key a --request step sends, and only a --request step sends one\n" +
+        "  fix: Correct the command line; the command's --help lists its flags.\n  do: nuka scaffold --help\n",
     );
     expect((await cli(rootDir, ["scaffold", "get-item", ...pattern, "--request", "GET /x", "--then"])).stderr).toContain(
       "--request and --then together",
@@ -125,7 +128,8 @@ describe("nuka scaffold --request", () => {
       "--request and --command together",
     );
     expect((await cli(rootDir, ["scaffold", "get-item", ...pattern, "--request", "GET /x", "--body", "docstring"])).stderr).toBe(
-      "Refusing to scaffold: --body docstring names no args key of this step (its keys are id); no feature line this pattern matches carries a docstring (write the line first)\ndo: nuka scaffold --help\n",
+      "refused\tinvalid-value\t-\tRefusing to scaffold: --body docstring names no args key of this step (its keys are id); no feature line this pattern matches carries a docstring (write the line first)\n" +
+        "  fix: Correct the flag's value as the message says.\n  do: nuka scaffold --help\n",
     );
   });
 });

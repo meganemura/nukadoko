@@ -24,7 +24,7 @@ describe("nuka run: an environment's own version probe", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(stderr.text()).not.toContain("Warning: version probe");
+      expect(stderr.text()).not.toContain("version-probe-failed");
       const record = JSON.parse(stdout.text().split("\n").filter((line) => line.length > 0)[0]!);
       expect(record.status).toBe("passed");
       expect(record.target_version).toBe("9.9.9");
@@ -49,7 +49,7 @@ describe("nuka run: an environment's own version probe", () => {
       expect(record.target_version).toBeUndefined();
 
       expect(stderr.text()).toContain(
-        'Warning: version probe for environment "probe-throws" failed: probe boom',
+        'warning\tversion-probe-failed\t-\tversion probe for environment "probe-throws" failed: probe boom',
       );
     } finally {
       await removeTempDir(rootDir);

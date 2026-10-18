@@ -172,9 +172,9 @@ describe("nuka scaffold", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
-      "Refusing to scaffold: features/steps/send-invite.ts already exists\n" +
-        "do: rm features/steps/send-invite.ts if it holds no step to keep (or choose another step name), " +
-        "then run nuka scaffold send-invite --pattern 'I invite {email:string} to Bob'\\''s team'\n",
+      "refused\tfile-exists\t-\tRefusing to scaffold: features/steps/send-invite.ts already exists\n" +
+        "  fix: Delete features/steps/send-invite.ts if it holds no step to keep, or choose another step name.\n" +
+        "  do: nuka scaffold send-invite --pattern 'I invite {email:string} to Bob'\\''s team'\n",
     );
     expect(await readFile(filePath, "utf8")).toBe(original);
   });
@@ -353,15 +353,19 @@ describe("nuka scaffold --description", () => {
   });
 
   it.each([
-    [["--description", "a", "--description", "b"], "--description was given more than once.\n"],
+    [
+      ["--description", "a", "--description", "b"],
+      "invalid-arguments\t-\t--description was given more than once.\n  fix: Correct the command line; the command's --help lists its flags.\n",
+    ],
     [
       ["--description", ""],
-      "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports\n",
+      "invalid-value\t-\tRefusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports\n" +
+        "  fix: Correct the flag's value as the message says.\n",
     ],
   ])("refuses %j and writes nothing", async (flags, message) => {
     const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
 
-    expect(result.stderr).toBe(`${message}do: nuka scaffold --help\n`);
+    expect(result.stderr).toBe(`refused\t${message}  do: nuka scaffold --help\n`);
     expect(result.exitCode).toBe(2);
     expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
   });

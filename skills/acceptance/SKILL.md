@@ -86,9 +86,9 @@ If none is true, ask what this is supposed to do before writing anything.
    `references/examples/` (`cli.md`, `http-api.md`, `workflow.md`).
 3. **`nuka check <feature>`.** Fix every error and read every warning: a
    warning is a question about intent, not noise. Each finding names its
-   `file` and a `do:` line; run or apply it (`references/running.md`).
+   file, a `fix:` (an edit) or `do:` (a command) line; apply or run it.
 4. **`nuka run <feature>`** until green. A failure names the step, the
-   first line of its error, its step record, and a `rerun` line; read the
+   first line of its error, its step record, and a `do:` that reruns it; read the
    record before running again (`references/diagnosing.md`). A red Then is
    fixed in the implementation, or by asking the person; it is never
    fixed by weakening the Then until it matches the output.

@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: a line the env-file parser does not load used to
 // disappear. `nuka check` is the place that can say so before a run.
@@ -47,7 +48,7 @@ describe("nuka check: env-file-skipped-line", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
 
     expect(exitCode).toBe(0);
     expect(report.errors).toEqual([]);
@@ -57,14 +58,14 @@ describe("nuka check: env-file-skipped-line", () => {
         message: 'envFile ".env" line 4 was skipped, so nothing on it was loaded',
         file: ".env",
         line: 4,
-        do: "Rewrite the line as KEY=value, or start it with # to make it a comment.",
+        fix: "Rewrite the line as KEY=value, or start it with # to make it a comment.",
       },
       {
         code: "env-file-skipped-line",
         message: 'envFile ".env.staging" line 4 was skipped, so nothing on it was loaded',
         file: ".env.staging",
         line: 4,
-        do: "Rewrite the line as KEY=value, or start it with # to make it a comment.",
+        fix: "Rewrite the line as KEY=value, or start it with # to make it a comment.",
       },
     ]);
   });

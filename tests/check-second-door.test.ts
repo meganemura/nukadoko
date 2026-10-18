@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: pin down the two failure modes docs/spec.md "The second
 // door: a Playwright Test suite" promises are both caught rather than
@@ -32,7 +33,7 @@ describe("nuka check: the Playwright Test door's two failure modes", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; file?: string; message: string }>;
     };
     const importFailure = report.errors.find((issue) => issue.code === "step-file-import-failed");
@@ -54,7 +55,7 @@ describe("nuka check: the Playwright Test door's two failure modes", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; file?: string; message: string }>;
     };
     const ambiguous = report.errors.find((issue) => issue.code === "ambiguous-step");

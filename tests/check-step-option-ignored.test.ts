@@ -7,6 +7,7 @@ import { z } from "zod";
 import { runCli } from "../src/cli/run-cli.js";
 import { defineStep, ignoredStepOptions } from "../src/step/define-step.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // A step file in a project that never runs tsc over features/ gets no
 // excess-property error, so `nuka check` is the one place a leftover
@@ -64,7 +65,7 @@ describe("nuka check: step-option-ignored", () => {
   it("names the step file of a leftover rationale and of an unknown key, and exits 0", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-    const report = JSON.parse(stdout.text()) as { errors: unknown[]; warnings: unknown[] };
+    const report = bySeverity(stdout.text()) as { errors: unknown[]; warnings: unknown[] };
 
     expect(exitCode).toBe(0);
     expect(report.errors).toEqual([]);
@@ -74,14 +75,14 @@ describe("nuka check: step-option-ignored", () => {
         message: 'Step "misspelled" passes timeOut, which is not a defineStep option, so it has no effect',
         file: "features/steps/misspelled.ts",
         step: "misspelled",
-        do: "Delete timeOut from the defineStep call in features/steps/misspelled.ts, or rename it to an option defineStep reads: pattern, patterns, description, args, returns, mutates, from, timeout, parts, run.",
+        fix: "Delete timeOut from the defineStep call in features/steps/misspelled.ts, or rename it to an option defineStep reads: pattern, patterns, description, args, returns, mutates, from, timeout, parts, run.",
       },
       {
         code: "step-option-ignored",
         message: 'Step "old" passes rationale, which defineStep no longer reads, so its text is shown nowhere',
         file: "features/steps/old.ts",
         step: "old",
-        do: "Move the rationale text into a comment above defineStep in features/steps/old.ts, then delete the rationale: line.",
+        fix: "Move the rationale text into a comment above defineStep in features/steps/old.ts, then delete the rationale: line.",
       },
     ]);
   });
@@ -92,7 +93,7 @@ describe("nuka check: step-option-ignored", () => {
 
     expect(stdout.text()).toContain(
       'warning\tstep-option-ignored\tfeatures/steps/old.ts\tStep "old" passes rationale, which defineStep no longer reads, so its text is shown nowhere\n' +
-        "  do: Move the rationale text into a comment above defineStep in features/steps/old.ts, then delete the rationale: line.\n",
+        "  fix: Move the rationale text into a comment above defineStep in features/steps/old.ts, then delete the rationale: line.\n",
     );
   });
 });

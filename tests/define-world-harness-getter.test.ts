@@ -11,6 +11,7 @@ import {
   drainWorldSchemaRegistrations,
 } from "../src/compat/define-world.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `page` and `request` are harness getters. Reading either
 // before openPage()/openRequest() throws WorldNotOpenedError, and
@@ -62,7 +63,7 @@ describe("defineWorld: page and request", () => {
           stdout: checkStdout,
           stderr: checkStderr,
         });
-        const report = JSON.parse(checkStdout.text()) as {
+        const report = bySeverity(checkStdout.text()) as {
           errors: Array<{ code: string; message: string }>;
         };
         const importFailure = report.errors.find((issue) => issue.code === "step-file-import-failed");

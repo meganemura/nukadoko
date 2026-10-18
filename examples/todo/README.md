@@ -155,9 +155,9 @@ nuka check
 ```
 
 ```text
-error	undefined-step	features/todo.feature:9	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold --feature features/todo.feature` to add one
+error	undefined-step	features/todo.feature:9	No step definition matches "the todo titled "Walk the dog" is completed"
   do: nuka scaffold --feature features/todo.feature
-error	undefined-step	features/todo.md:14	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold --feature features/todo.md` to add one
+error	undefined-step	features/todo.md:14	No step definition matches "the todo titled "Walk the dog" is completed"
   do: nuka scaffold --feature features/todo.md
 ```
 

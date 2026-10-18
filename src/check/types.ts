@@ -20,17 +20,17 @@ export interface CheckIssue {
   readonly line?: number;
   readonly step?: string;
   /** Set where the finding is raised only when that place knows a more
-   * exact next step than the code's registry entry, such as the command
-   * with the file already filled in. */
+   * exact edit than the code's registry entry, such as the file to change. */
+  readonly fix?: string;
+  /** Set only where one command, as written, gets past the finding. A
+   * hint that would need a value nukadoko cannot fill is a `fix`. */
   readonly do?: string;
 }
 
-/** A finding as the report carries it. `do` is always present: the
- * raised one, or the code's general text. `file` is filled from the step's
- * own file for a finding raised with only `step`. */
-export interface CheckFinding extends CheckIssue {
-  readonly do: string;
-}
+/** A finding as the report carries it: the raised `fix` and `do`, or the
+ * code's general `fix` when the raiser named neither. `file` is filled from
+ * the step's own file for a finding raised with only `step`. */
+export type CheckFinding = CheckIssue;
 
 export interface CheckReport {
   readonly errors: readonly CheckFinding[];

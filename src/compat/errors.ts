@@ -44,6 +44,7 @@ export class WorldNotOpenedError extends Error {
  * parentheses) — nukadoko just doesn't implement it yet, and a silent
  * partial match would be worse than refusing outright. */
 export class UnsupportedTagExpressionError extends Error {
+  readonly code = "unsupported-hook-tag-expression";
   readonly expression: string;
 
   constructor(expression: string) {

@@ -9,6 +9,44 @@ just until 0.1.
 
 ### Breaking
 
+- **One grammar for every finding, refusal, and failed scenario, and one
+  `--json` envelope for every command.** A finding is one line,
+  `<severity>\t<code>\t<where>\t<message>`, then at most one `  fix:`
+  line and at most one `  do:` line. `do:` is always a command a shell
+  runs as written; an edit, or a next step with a value nukadoko cannot
+  fill, is a `fix:`. The severity is `error` or `warning` (check), `note`
+  (tend), `refused` (a command that stopped before it had anything to
+  report), or `failed` (a failed scenario, an explore failure, a BeforeAll
+  or AfterAll hook). Every refusal now has a code (`invalid-arguments`,
+  `target-not-found`, `config-invalid`, `check-errors`, and so on, or the
+  check code of the same cause, such as `feature-parse-error`), and `nuka
+  check --codes` lists the check, run, and refusal codes in the same
+  grammar, each with its severity and its general `fix`; `nuka tend
+  --codes` lists the tend codes. Every command's `--json` prints one
+  document, `{ schema_version: 2, nukadoko, command, verdict, findings,
+  ... }`, with `verdict` `passed`, `failed`, or `refused` for exit 0, 1,
+  and 2, and the command's own fields beside `findings` (`steps`, the
+  `describe` contract, `run.json`'s fields, `summary` and `fail_on_hits`
+  for tend, the clean plan, `sessions`, `codes`). It replaces `{ errors,
+  warnings }`, `{ errors, notes, summary }`, `{ steps, import_failures }`,
+  and the refusal's `{ error, do }`. A failed scenario is a
+  `scenario-failed` finding with `do: nuka run <feature>:<line>`, and the
+  separate `failed` and `rerun` lines are gone. Warnings (a run.json or a
+  summary that was not written, a failed fixture teardown, an emitter
+  failure, the no-config notice as `config-missing`, and the others) are
+  findings with codes too; under `--json` they are in `findings`, and
+  stderr is empty. The codes registries' `do` became `fix`, and a
+  `--codes` entry's `description` is its `message`. The message
+  no longer repeats the command (`undefined-step`, `playwright-missing`,
+  the `:line` refusal). Each undefined line keeps its own finding, also a
+  second line with the same text, and `no-step-files-found` is left out
+  while every checked line is already an `undefined-step` finding.
+  `nuka experimental explore --json` drops its own `verdict` field (the
+  envelope's says it), and its failure line is an `explore-failed` or
+  `explore-error` finding. `nuka do` still prints its step record, which
+  is a record and not a report. Breaking for a reader of any `--json`
+  output, a parser of the text lines, and a script that read `do:` as
+  prose: see docs/upgrading.md.
 - **`nuka run` writes scenario records to stdout only under `--records`.**
   A stdout that was not a terminal got one JSON line of about 1 KB per
   scenario by default. An agent's shell is no terminal and reads stdout

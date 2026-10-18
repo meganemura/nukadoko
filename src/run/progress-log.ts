@@ -1,4 +1,5 @@
 import path from "node:path";
+import type { Finding } from "../finding/finding.js";
 import type { UsedEntryWithResult } from "../record/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
@@ -303,6 +304,28 @@ export interface FailedScenario {
   readonly feature: string;
   readonly line: number;
   readonly scenario: string;
+  /** The first line of the first error the record holds, a step's or a
+   * hook's, when it holds one. */
+  readonly error?: string;
+}
+
+/** What a failed scenario's finding carries, read from its record: the
+ * first failed step's error, else the first failed hook's. */
+export function failedScenarioOf(record: {
+  readonly feature: string;
+  readonly line: number;
+  readonly scenario: string;
+  readonly steps: readonly { readonly error?: { readonly message: string } }[];
+  readonly hooks: readonly { readonly error?: { readonly message: string } }[];
+}): FailedScenario {
+  const message = [...record.steps, ...record.hooks].find((entry) => entry.error !== undefined)?.error?.message;
+  const first = message?.split(/\r?\n/).find((line) => line.trim() !== "")?.trim();
+  return {
+    feature: record.feature,
+    line: record.line,
+    scenario: record.scenario,
+    ...(first !== undefined ? { error: first } : {}),
+  };
 }
 
 /** `1h 2m 3s`, the unit a whole run reads in. */
@@ -382,18 +405,19 @@ export function writeRepeatTallies(stderr: WritableSink, tallies: readonly Repea
   }
 }
 
-/** Names only the scenario records counted as failures by the summary.
- * The caller retains these three display values instead of retaining every
- * record from the run. */
-export function writeFailedScenarios(
-  stderr: WritableSink,
-  failures: readonly FailedScenario[],
-  rerunFlags: readonly string[],
-): void {
-  for (const failure of failures) {
-    stderr.write(`failed  ${failure.feature}:${failure.line}  ${failure.scenario}\n`);
-    stderr.write(`  rerun  ${formatRerunCommand(failure, rerunFlags)}\n`);
-  }
+/** One `scenario-failed` finding per scenario record counted as a failure
+ * by the summary, each with the command that reruns that scenario. The
+ * caller retains these display values instead of retaining every record
+ * from the run. */
+export function failedScenarioFindings(failures: readonly FailedScenario[], rerunFlags: readonly string[]): Finding[] {
+  return failures.map((failure) => ({
+    severity: "failed",
+    code: "scenario-failed",
+    file: failure.feature,
+    line: failure.line,
+    message: failure.error === undefined ? failure.scenario : `${failure.scenario}: ${failure.error}`,
+    do: formatRerunCommand(failure, rerunFlags),
+  }));
 }
 
 /** The command that runs one failed scenario again, in the same environment.

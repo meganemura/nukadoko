@@ -21,7 +21,8 @@ import type { WritableSink } from "../sink/writable-sink.js";
 import { readCheckTargets } from "./check.js";
 import { attachmentInFeatures, readPattern, refusedBelowParentConfig, stepTemplate, type StepTemplate } from "./scaffold.js";
 import { shellWord } from "../shell/shell-word.js";
-import { RefusalError, helpFor, refuse } from "./refusal.js";
+import type { RefusalCode } from "./refusal-codes.js";
+import { RefusalError, refuse, restated, type Hint } from "./refusal.js";
 import { formatVocabularyError } from "./vocabulary.js";
 
 // Responsibility: `nuka scaffold --feature <path>`, one stub per line that
@@ -209,9 +210,10 @@ interface ProjectLine {
 
 export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Promise<number> {
   const { rootDir, feature, stdout, stderr } = options;
-  const refused = (error: unknown): number =>
-    refuse({ json: false, stdout, stderr }, error, helpFor("scaffold"));
-  const belowParent = refusedBelowParentConfig(rootDir, { json: false, stdout, stderr });
+  const sinks = { json: false, stdout, stderr, command: "scaffold" };
+  const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint): number =>
+    refuse(sinks, error, code, hint);
+  const belowParent = refusedBelowParentConfig(rootDir, sinks);
   if (belowParent !== null) return belowParent;
   let config;
   let selected;
@@ -219,15 +221,14 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
     config = await loadConfig(rootDir);
     selected = await readCheckTargets(rootDir, [feature], "nuka scaffold --feature");
   } catch (error) {
-    return refused(error instanceof RefusalError ? error : formatVocabularyError(error));
+    return refused(error instanceof RefusalError ? error : restated(error, formatVocabularyError(error), "unexpected-error", "scaffold"));
   }
   const unparsed = selected.parseErrors[0];
   if (unparsed !== undefined) {
     return refused(
-      new RefusalError(
-        `Refusing to scaffold: ${unparsed.relativePath} does not parse: ${unparsed.message}`,
-        `nuka check ${unparsed.relativePath}`,
-      ),
+      `Refusing to scaffold: ${unparsed.relativePath} does not parse: ${unparsed.message}`,
+      "feature-parse-error",
+      { do: `nuka check ${shellWord(unparsed.relativePath)}` },
     );
   }
 
@@ -235,15 +236,14 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
   try {
     analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features);
   } catch (error) {
-    return refused(formatVocabularyError(error));
+    return refused(restated(error, formatVocabularyError(error), "unexpected-error", "scaffold"));
   }
   const { discovery, undefinedSteps } = analysis;
   if (discovery.importFailures.length > 0) {
     return refused(
-      new RefusalError(
-        `Refusing to scaffold: ${discovery.importFailures.length} step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them); \`nuka check\` names them`,
-        "nuka check",
-      ),
+      `Refusing to scaffold: ${discovery.importFailures.length} step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them)`,
+      "step-file-import-failed",
+      { do: "nuka check" },
     );
   }
   let registry: ParameterTypeRegistry;
@@ -251,7 +251,7 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
     registry = createParameterTypeRegistry([...config.parameterTypes, ...discovery.compatParameterTypes]);
   } catch (error) {
     if (!(error instanceof ParameterTypeCollisionError)) throw error;
-    return refused(`Refusing to scaffold: ${error.message}`);
+    return refused(`Refusing to scaffold: ${error.message}`, "parameter-type-collision");
   }
   if (undefinedSteps.length === 0) {
     stderr.write(`nothing to scaffold: every line in ${feature} matches a step\n`);

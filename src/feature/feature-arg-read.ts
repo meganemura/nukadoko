@@ -70,8 +70,7 @@ export function describeFeatureArgRead(input: FeatureArgReadInput): FeatureArgRe
 
 function lineNotSupportedMessage(command: FeatureArgCommand, basePath: string, line: string): string {
   return (
-    `${command}: ${basePath}:${line}: :line is not supported; check analyzes the whole file, not one scenario. ` +
-    `Run: ${command} ${basePath}`
+    `${command}: ${basePath}:${line}: :line is not supported; check analyzes the whole file, not one scenario`
   );
 }
 

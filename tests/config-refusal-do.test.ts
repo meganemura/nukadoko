@@ -23,7 +23,7 @@ async function project(files: Record<string, string>): Promise<string> {
   return rootDir;
 }
 
-async function refusalDo(argv: string[], dir: string): Promise<{ exitCode: number; doLine: string }> {
+async function refusalHint(argv: string[], dir: string): Promise<{ exitCode: number; doLine: string }> {
   const stdout = createCaptureSink();
   const stderr = createCaptureSink();
   const exitCode = await runCli(argv, { rootDir: dir, stdout, stderr });
@@ -34,33 +34,33 @@ async function refusalDo(argv: string[], dir: string): Promise<{ exitCode: numbe
 describe("a config that does not load names its own fix", () => {
   it("a config with no default export", async () => {
     const dir = await project({ "package.json": ESM_PACKAGE, "nukadoko.config.ts": "export const x = 1;\n" });
-    expect(await refusalDo(["run"], dir)).toEqual({
+    expect(await refusalHint(["run"], dir)).toEqual({
       exitCode: 2,
-      doLine: "do: Export the config as the default export of nukadoko.config.ts: export default defineConfig({ ... }).",
+      doLine: "  fix: Export the config as the default export of nukadoko.config.ts: export default defineConfig({ ... }).",
     });
   });
 
   it("a config whose default export is a Promise", async () => {
     const dir = await project({ "package.json": ESM_PACKAGE, "nukadoko.config.ts": "export default Promise.resolve({});\n" });
-    expect(await refusalDo(["tend"], dir)).toEqual({
+    expect(await refusalHint(["tend"], dir)).toEqual({
       exitCode: 2,
-      doLine: "do: Export the config object itself as the default export of nukadoko.config.ts, not a Promise of it.",
+      doLine: "  fix: Export the config object itself as the default export of nukadoko.config.ts, not a Promise of it.",
     });
   });
 
   it("a config the schema refuses", async () => {
     const dir = await project({ "package.json": ESM_PACKAGE, "nukadoko.config.mts": "export default { featuresDir: 3 };\n" });
-    expect(await refusalDo(["steps"], dir)).toEqual({
+    expect(await refusalHint(["steps"], dir)).toEqual({
       exitCode: 2,
-      doLine: "do: Correct the fields the message names in nukadoko.config.mts.",
+      doLine: "  fix: Correct the fields the message names in nukadoko.config.mts.",
     });
   });
 
   it("a config that does not parse", async () => {
     const dir = await project({ "package.json": ESM_PACKAGE, "nukadoko.config.ts": "export default {;\n" });
-    expect(await refusalDo(["check"], dir)).toEqual({
+    expect(await refusalHint(["check"], dir)).toEqual({
       exitCode: 2,
-      doLine: "do: Correct the error the message names in nukadoko.config.ts, then run nuka check.",
+      doLine: "  fix: Correct the error the message names in nukadoko.config.ts.",
     });
   });
 
@@ -69,9 +69,9 @@ describe("a config that does not load names its own fix", () => {
       "package.json": ESM_PACKAGE,
       "nukadoko.config.ts": 'import x from "not-installed-pkg";\nexport default { x };\n',
     });
-    expect(await refusalDo(["check"], dir)).toEqual({
+    expect(await refusalHint(["check"], dir)).toEqual({
       exitCode: 2,
-      doLine: "do: Install not-installed-pkg in the project, or correct the import of it in nukadoko.config.ts.",
+      doLine: "  fix: Install not-installed-pkg in the project, or correct the import of it in nukadoko.config.ts.",
     });
   });
 
@@ -81,9 +81,9 @@ describe("a config that does not load names its own fix", () => {
       "nukadoko.config.ts": "export default {};\n",
       "nukadoko.config.mts": "export default {};\n",
     });
-    expect(await refusalDo(["steps"], dir)).toEqual({
+    expect(await refusalHint(["steps"], dir)).toEqual({
       exitCode: 2,
-      doLine: "do: Delete nukadoko.config.ts or nukadoko.config.mts, and keep the one that holds the project's config.",
+      doLine: "  fix: Delete nukadoko.config.ts or nukadoko.config.mts, and keep the one that holds the project's config.",
     });
   });
 
@@ -91,7 +91,7 @@ describe("a config that does not load names its own fix", () => {
     bareDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-no-package-"));
     await writeFile(path.join(bareDir, "package.json"), ESM_PACKAGE);
 
-    expect(await refusalDo(["init"], bareDir)).toEqual({ exitCode: 1, doLine: "do: npm install -D -E nukadoko" });
-    expect(await refusalDo(["check"], bareDir)).toEqual({ exitCode: 2, doLine: "do: npm install -D -E nukadoko" });
+    expect(await refusalHint(["init"], bareDir)).toEqual({ exitCode: 1, doLine: "  do: npm install -D -E nukadoko" });
+    expect(await refusalHint(["check"], bareDir)).toEqual({ exitCode: 2, doLine: "  do: npm install -D -E nukadoko" });
   });
 });

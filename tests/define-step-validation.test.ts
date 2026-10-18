@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: a .js step file is not type-checked, so defineStep is the
 // only place a malformed definition can be refused. These tests pin the two
@@ -108,7 +109,7 @@ describe("defineStep validation reaches nuka check and nuka do", () => {
     const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr });
     let errors: Array<{ code: string; message: string; file?: string }> = [];
     try {
-      errors = (JSON.parse(stdout.text()) as { errors: typeof errors }).errors;
+      errors = (bySeverity(stdout.text()) as { errors: typeof errors }).errors;
     } catch {
       throw new Error(`nuka check did not return a report.\nstdout:\n${stdout.text()}\nstderr:\n${stderr.text()}`);
     }

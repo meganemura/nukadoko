@@ -1,11 +1,11 @@
-import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { readOwnVersion } from "../src/version.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 describe("nuka check", () => {
   it("exits 0 with zero errors and zero warnings for a clean project", async () => {
@@ -18,8 +18,13 @@ describe("nuka check", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text());
-    expect(report).toEqual({ schema_version: 1, errors: [], warnings: [] });
+    expect(JSON.parse(stdout.text())).toEqual({
+      schema_version: 2,
+      nukadoko: readOwnVersion(),
+      command: "check",
+      verdict: "passed",
+      findings: [],
+    });
     expect(exitCode).toBe(0);
   });
 
@@ -43,17 +48,17 @@ describe("nuka check", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.errors).toEqual([]);
     expect(report.warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: "env-file-missing",
-          do: 'Create .env.missing, or remove ".env.missing" from envFiles in nukadoko.config.ts.',
+          fix: 'Create .env.missing, or remove ".env.missing" from envFiles in nukadoko.config.ts.',
         }),
         expect.objectContaining({
           code: "environment-env-file-missing",
-          do: 'Create .env.staging-missing, or remove ".env.staging-missing" from environments.staging.envFiles in nukadoko.config.ts.',
+          fix: 'Create .env.staging-missing, or remove ".env.staging-missing" from environments.staging.envFiles in nukadoko.config.ts.',
         }),
         expect.objectContaining({ code: "then-mutates" }),
       ]),
@@ -77,7 +82,7 @@ describe("nuka check", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const thenMutates = report.warnings.find(
       (issue: { code: string }) => issue.code === "then-mutates",
     );
@@ -95,12 +100,12 @@ describe("nuka check", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.errors).toEqual([expect.objectContaining({ code: "features-dir-missing" })]);
     expect(exitCode).toBe(1);
   });
 
-  it("quotes a featuresDir or additionalFeatureDirs path with a space in the mkdir -p of its do line", async () => {
+  it("names a featuresDir or additionalFeatureDirs path with a space in its fix", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "nukadoko-check-spaced-dirs-"));
     try {
       await writeFile(
@@ -110,22 +115,14 @@ describe("nuka check", () => {
       const stdout = createCaptureSink();
       await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
 
-      const report = JSON.parse(stdout.text());
-      const doLines = report.errors
-        .filter((issue: { code: string }) => issue.code.endsWith("-missing"))
-        .map((issue: { code: string; do: string }) => [issue.code, issue.do]);
-      expect(doLines).toEqual([
-        ["features-dir-missing", "mkdir -p 'my features/steps', or correct featuresDir in nukadoko.config.ts"],
-        [
-          "additional-feature-dir-missing",
-          `mkdir -p 'extra dir', or remove "extra dir" from additionalFeatureDirs in nukadoko.config.ts.`,
-        ],
-      ]);
-
-      for (const [, line] of doLines) execSync(line.split(", or ")[0], { cwd: rootDir });
-      expect([existsSync(path.join(rootDir, "my features", "steps")), existsSync(path.join(rootDir, "extra dir"))]).toEqual([
-        true,
-        true,
+      const report = bySeverity(stdout.text());
+      expect(
+        report.errors
+          .filter((issue: { code: string }) => issue.code.endsWith("-missing"))
+          .map((issue: { code: string; fix: string; do?: string }) => [issue.code, issue.fix, issue.do]),
+      ).toEqual([
+        ["features-dir-missing", "Create my features/steps for the step files, or correct featuresDir in nukadoko.config.ts.", undefined],
+        ["additional-feature-dir-missing", 'Create extra dir, or remove "extra dir" from additionalFeatureDirs in nukadoko.config.ts.', undefined],
       ]);
     } finally {
       await rm(rootDir, { recursive: true, force: true });
@@ -142,7 +139,7 @@ describe("nuka check", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const codes = report.errors.map((issue: { code: string }) => issue.code).sort();
 
     for (const expectedCode of [
@@ -172,7 +169,7 @@ describe("nuka check", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     for (const issue of [...report.errors, ...report.warnings]) {
       expect(issue.code).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
       expect(typeof issue.message).toBe("string");
@@ -180,7 +177,7 @@ describe("nuka check", () => {
     }
   });
 
-  it("prints one human-readable line per issue, each followed by its do line, when --json is omitted", async () => {
+  it("prints one finding line per issue, each followed by its fix or do line, when --json is omitted", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check"], {
       rootDir: fixture("check-errors-project"),
@@ -192,7 +189,7 @@ describe("nuka check", () => {
     const lines = stdout.text().trimEnd().split("\n");
     expect(lines.length).toBeGreaterThan(0);
     for (const [index, line] of lines.entries()) {
-      expect(line).toMatch(index % 2 === 0 ? /^error\t/ : /^  do: \S/);
+      expect(line).toMatch(index % 2 === 0 ? /^error\t/ : /^  (fix|do): \S/);
     }
   });
 
@@ -204,63 +201,52 @@ describe("nuka check", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const undefinedIssues = report.errors.filter(
       (issue: { code: string }) => issue.code === "undefined-step",
     );
     expect(undefinedIssues).toHaveLength(7);
-
-    const hinted = undefinedIssues.find((issue: { message: string }) =>
-      issue.message.includes('the amount (USD) is "100"'),
-    );
-    expect(hinted).toBeDefined();
-    expect(hinted.message).toContain("hint:");
-    expect(hinted.message).toContain('pattern "the amount (USD) is {amount:string}"');
-    expect(hinted.message).toContain("escaped");
-
-    const unrelated = undefinedIssues.find((issue: { message: string }) =>
-      issue.message.includes("matches nothing at all"),
-    );
-    expect(unrelated).toBeDefined();
-    expect(unrelated.message).not.toContain("hint:");
-
-    const unquoted = undefinedIssues.find((issue: { message: string }) =>
-      issue.message.includes('the probe is green"'),
-    );
-    expect(unquoted).toBeDefined();
-    expect(unquoted.message).toContain('step "amount-step" exists at this position with pattern "the probe is {amount:string}"');
-    expect(unquoted.message).toContain("{amount:string}");
-    expect(unquoted.message).toContain("quoted value");
-    expect(unquoted.message).toContain('Given the probe is "green"');
-
-    const spaces = undefinedIssues.find((issue: { message: string }) =>
-      issue.message.includes('the probe state is not"'),
-    );
-    expect(spaces).toBeDefined();
-    expect(spaces.message).toContain('Given the probe state "is not"');
-
-    const ambiguous = undefinedIssues.find((issue: { message: string }) =>
-      issue.message.includes('the ambiguous probe is green"'),
-    );
-    expect(ambiguous).toBeDefined();
-    expect(ambiguous.message).not.toContain("hint:");
-
-    const extraText = undefinedIssues.find((issue: { message: string }) =>
-      issue.message.includes('unrelated the probe is green"'),
-    );
-    expect(extraText).toBeDefined();
-    expect(extraText.message).not.toContain("hint:");
-
-    const escapedLiteral = undefinedIssues.find((issue: { message: string }) =>
-      issue.message.includes('literal {string} green"'),
-    );
-    expect(escapedLiteral).toBeDefined();
-    expect(escapedLiteral.message).toContain('Given literal {string} "green"');
+    expect(
+      undefinedIssues.map((issue: { line: number; message: string; fix?: string; do?: string }) => [
+        issue.line,
+        issue.message.slice(0, issue.message.indexOf("; patterned steps")),
+        issue.fix,
+        issue.do,
+      ]),
+    ).toEqual([
+      [
+        4,
+        'No step definition matches "the amount (USD) is "100""; it would match step "amount-step" pattern "the amount (USD) is {amount:string}" if its bare ( ) / were escaped (cucumber-expressions reads bare ( ) as optional text and / as alternation)',
+        'Escape the bare ( ) and / in the pattern of step "amount-step" as \\( \\) and \\/.',
+        undefined,
+      ],
+      [7, 'No step definition matches "this text matches nothing at all and has no relation to any pattern"', undefined, "nuka scaffold --feature features/escape.feature"],
+      [
+        10,
+        'No step definition matches "the probe is green"; step "amount-step" with pattern "the probe is {amount:string}" takes a quoted value at this position, as a {...:string} parameter',
+        'Rewrite line 10 of features/escape.feature as: Given the probe is "green"',
+        undefined,
+      ],
+      [
+        13,
+        'No step definition matches "the probe state is not"; step "amount-step" with pattern "the probe state {amount:string}" takes a quoted value at this position, as a {...:string} parameter',
+        'Rewrite line 13 of features/escape.feature as: Given the probe state "is not"',
+        undefined,
+      ],
+      [16, 'No step definition matches "the ambiguous probe is green"', undefined, "nuka scaffold --feature features/escape.feature"],
+      [19, 'No step definition matches "unrelated the probe is green"', undefined, "nuka scaffold --feature features/escape.feature"],
+      [
+        22,
+        'No step definition matches "literal {string} green"; step "amount-step" with pattern "literal \\{string\\} {amount:string}" takes a quoted value at this position, as a {...:string} parameter',
+        'Rewrite line 22 of features/escape.feature as: Given literal {string} "green"',
+        undefined,
+      ],
+    ]);
 
     expect(exitCode).toBe(1);
   });
 
-  it("refuses a ConfigError under --json as one { error, do } object on stdout, exit 2", async () => {
+  it("refuses a ConfigError under --json as one refused finding on stdout, exit 2", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
@@ -271,9 +257,12 @@ describe("nuka check", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
-    const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
-    expect(refusal.error).toContain("typo");
-    expect(refusal.do).toBe("Correct the fields the message names in nukadoko.config.ts.");
+    const report = JSON.parse(stdout.text()) as { verdict: string; findings: { severity: string; code: string; message: string; fix: string }[] };
+    expect(report.verdict).toBe("refused");
+    expect(report.findings).toHaveLength(1);
+    expect([report.findings[0]!.severity, report.findings[0]!.code]).toEqual(["refused", "config-invalid"]);
+    expect(report.findings[0]!.message).toContain("typo");
+    expect(report.findings[0]!.fix).toBe("Correct the fields the message names in nukadoko.config.ts.");
   });
 });
 
@@ -286,7 +275,7 @@ describe("nuka check [feature..]", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const undefinedIssues = report.errors.filter((issue: { code: string }) => issue.code === "undefined-step");
     expect(undefinedIssues).toHaveLength(1);
     expect(undefinedIssues[0].message).toContain("this step is undefined outside featuresDir");
@@ -302,7 +291,7 @@ describe("nuka check [feature..]", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const undefinedIssues = report.errors.filter((issue: { code: string }) => issue.code === "undefined-step");
     expect(undefinedIssues).toHaveLength(1);
     expect(undefinedIssues[0].message).toContain("this step is undefined outside featuresDir");
@@ -317,7 +306,7 @@ describe("nuka check [feature..]", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const messages = [...report.errors, ...report.warnings].map((issue: { message: string }) => issue.message);
     expect(messages.join("\n")).not.toContain("this step is undefined inside featuresDir");
     expect(report.errors.every((issue: { file?: string }) => issue.file !== "features/inside.feature")).toBe(true);
@@ -331,7 +320,7 @@ describe("nuka check [feature..]", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const codes = report.errors.map((issue: { code: string }) => issue.code);
     expect(codes).toContain("unknown-parameter-type");
   });
@@ -344,7 +333,7 @@ describe("nuka check [feature..]", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const messages = [...report.errors].map((issue: { message: string }) => issue.message);
     expect(messages.join("\n")).toContain("this step is undefined inside featuresDir");
     expect(messages.join("\n")).not.toContain("this step is undefined outside featuresDir");

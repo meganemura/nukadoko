@@ -43,7 +43,9 @@ describe("repeated singular flags", () => {
     const exitCode = await runCli([...argv], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(2);
-    expect(stderr.text()).toBe(`${flag} was given more than once.\ndo: ${help}\n`);
+    expect(stderr.text()).toBe(
+      `refused\tinvalid-arguments\t-\t${flag} was given more than once.\n  fix: Correct the command line; the command's --help lists its flags.\n  do: ${help}\n`,
+    );
     expect(stdout.text()).toBe("");
     expect(readdirSync(rootDir)).toEqual([]);
   });
@@ -61,7 +63,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(withoutNoConfigLine(stderr.text())).toBe("Unknown step: step\ndo: nuka steps\n");
+    expect(withoutNoConfigLine(stderr.text())).toBe("refused\tunknown-step\t-\tUnknown step: step\n  do: nuka steps\n");
   });
 
   it("keeps every --fail-on value", async () => {
@@ -76,7 +78,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(withoutNoConfigLine(stderr.text()).startsWith('--fail-on: "a", "b" are not codes nuka tend reports.')).toBe(true);
+    expect(withoutNoConfigLine(stderr.text())).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "a", "b" are not codes nuka tend reports\n  do: nuka tend --codes\n');
   });
 
   it("treats a repeated boolean as that boolean", async () => {
@@ -87,9 +89,11 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(2);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
-    expect(JSON.parse(stdout.text())).toEqual({
-      schema_version: 1,
-      error: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+    expect(JSON.parse(stdout.text()).findings[1]).toEqual({
+      severity: "refused",
+      code: "features-dir-missing",
+      message: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+      fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
       do: "nuka steps --help",
     });
   });

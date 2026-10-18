@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: this finding's own defensive parsing.
 // tests/post-navigation-read.test.ts's own hand-crafted-record suite
@@ -27,7 +28,7 @@ async function runTendJson(rootDir: string): Promise<Report> {
   const exitCode = await runCli(["tend", "--json"], { rootDir, stdout, stderr });
   expect(stderr.text()).toBe("");
   expect(exitCode).toBe(0);
-  return JSON.parse(stdout.text()) as Report;
+  return bySeverity(stdout.text()) as Report;
 }
 
 /** Writes one step record directly under `<rootDir>/.nukadoko/records/

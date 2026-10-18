@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s new static check — a required args key
 // that no named capture, table/docstring, or
@@ -17,7 +18,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 async function checkReport(rootDir: string) {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-  return { exitCode, report: JSON.parse(stdout.text()) as { errors: unknown[]; warnings: unknown[] } };
+  return { exitCode, report: bySeverity(stdout.text()) as { errors: unknown[]; warnings: unknown[] } };
 }
 
 interface UnfillableKeyIssue {

@@ -2,18 +2,22 @@
 
 ## A command that refused
 
-A command that stopped before it ran anything exits 2, not 1, and ends
-its stderr with a `do:` line, and under `--json` it prints `{ "schema_version", "error", "do" }` on stdout.
-Run that `do` command before you guess at a fix: it is the step list for
-an unknown step name, the install line for a missing package, or the
-command's own `--help` for a flag it does not accept.
+A command that stopped before it ran anything exits 2, not 1, and prints
+one `refused` finding with a code, such as
+`refused\ttarget-not-found\t-\t<message>`; under `--json` it is in the
+envelope's `findings`, and `verdict` is `refused`. Make the edit its
+`fix:` line names, or run its `do:` line, before you guess at a fix: the
+`do:` is the step list for an unknown step name, the install line for a
+missing package, or the command's own `--help` for a flag it does not
+accept.
 
 ## Work through the failed step first
 
 `nuka run`'s stderr already names where to start: under the failed step's
 `failed` line, the first line of its error and the path of its step record
-(`record  <stateDir>/records/steps/<id>`), and after the summary, a `rerun`
-line per failed scenario with the command that runs that scenario alone.
+(`record  <stateDir>/records/steps/<id>`), and after the summary, a
+`failed\tscenario-failed\t<file>:<line>\t<name>: <error>` finding per
+failed scenario, whose `  do:` line runs that scenario alone.
 The same list is in the run's `run.json` (`nuka run --json` prints it):
 each entry of `scenarios` with `status: "failed"` names its record and
 its `rerun` command.
@@ -44,7 +48,7 @@ need more than a glance.
 4. `nuka do <step> --use <upstream-step-record-id>` when the record
    sharpens a hypothesis rather than confirming it ("Testing a hypothesis
    without a full re-run").
-5. Re-run the scenario last, with the `rerun` line `nuka run` printed,
+5. Re-run the scenario last, with the `do:` line `nuka run` printed,
    once the step itself passes under `do`, not as the first thing tried
    after a failure.
 

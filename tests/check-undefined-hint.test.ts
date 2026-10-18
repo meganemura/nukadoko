@@ -15,6 +15,7 @@ import { defineStep } from "../src/step/define-step.js";
 import { findUnboundPatternedSteps } from "../src/tend/pattern-unbound.js";
 import { resolveStepOccurrences } from "../src/tend/step-bindings.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // `undefined-step` names the patterned steps no analyzed line binds, so a
 // renamed sentence or pattern points at the step that lost its line instead
@@ -64,7 +65,7 @@ async function project(steps: Record<string, string>, features: Record<string, s
 async function json(rootDir: string, args: string[]): Promise<{ errors: Issue[]; notes: Issue[] }> {
   const stdout = createCaptureSink();
   await runCli(args, { rootDir, stdout, stderr: createCaptureSink() });
-  return JSON.parse(stdout.text());
+  return bySeverity(stdout.text());
 }
 
 const created: string[] = [];
@@ -94,7 +95,7 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
       {
         code: "undefined-step",
         message:
-          'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold --feature features/greet.feature` to add one; patterned steps no scanned feature line binds: output-says ("the output says {text:string}", features/steps/output-says.ts)',
+          'No step definition matches "the output is "Hello, Ada!""; patterned steps no scanned feature line binds: output-says ("the output says {text:string}", features/steps/output-says.ts)',
         file: "features/greet.feature",
         line: 5,
         do: "nuka scaffold --feature features/greet.feature",
@@ -106,7 +107,7 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
     const dir = await tracked({ "run-greet": "I run greet" }, { "greet.feature": greetFeature });
     const report = await json(dir, ["check", "--json"]);
     expect(report.errors.map((issue) => issue.message)).toEqual([
-      'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold --feature features/greet.feature` to add one',
+      'No step definition matches "the output is "Hello, Ada!""',
     ]);
   });
 
@@ -131,7 +132,7 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
       },
     );
     const expected = [
-      'No step definition matches "the output is "Hello, Ada!""; run `nuka scaffold --feature features/greet.feature` to add one; patterned steps no scanned feature line binds: orphan-step ("nobody says this", features/steps/orphan-step.ts)',
+      'No step definition matches "the output is "Hello, Ada!""; patterned steps no scanned feature line binds: orphan-step ("nobody says this", features/steps/orphan-step.ts)',
     ];
     const whole = await json(dir, ["check", "--json"]);
     expect(whole.errors.map((issue) => issue.message)).toEqual(expected);
@@ -155,7 +156,7 @@ describe("nuka tend: pattern-unbound carries the step file", () => {
           'Step "output-says" declares a pattern, but no feature line under the scanned directories binds it. It has no place in any scenario right now.',
         file: "features/steps/output-says.ts",
         step: "output-says",
-        do: "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
+        fix: "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
       },
     ]);
 

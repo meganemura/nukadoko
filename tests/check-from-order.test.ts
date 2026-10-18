@@ -4,8 +4,9 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { fromOrderDo, fromOrderHold, type FromOrderIssue as CheckedIssue } from "../src/check/from-order.js";
+import { fromOrderFix, fromOrderHold, type FromOrderIssue as CheckedIssue } from "../src/check/from-order.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s scenario-order check (docs/spec.md
 // "Chaining steps"' "Declaring `from` buys a
@@ -23,7 +24,7 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 async function checkReport(rootDir: string) {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-  return { exitCode, report: JSON.parse(stdout.text()) as { errors: unknown[]; warnings: unknown[] } };
+  return { exitCode, report: bySeverity(stdout.text()) as { errors: unknown[]; warnings: unknown[] } };
 }
 
 interface FromOrderIssue {
@@ -32,7 +33,7 @@ interface FromOrderIssue {
   readonly file?: string;
   readonly line?: number;
   readonly step?: string;
-  readonly do?: string;
+  readonly fix?: string;
 }
 
 describe("nuka check: from's scenario-order check", () => {
@@ -99,15 +100,15 @@ describe("nuka check: from's scenario-order check", () => {
   });
 
   it("errors on a step whose from names itself at each line no earlier line binds it", async () => {
-    const FROM_ORDER_DO = 'Put a line that runs step "next-page-read" earlier in the scenario.';
+    const FROM_ORDER_FIX = 'Put a line that runs step "next-page-read" earlier in the scenario.';
     const { exitCode, report } = await checkReport(fixture("from-self-project"));
     expect(exitCode).toBe(1);
     expect(report.warnings).toEqual([]);
     const message =
       'Step "next-page-read"\'s from.cursor needs step "next-page-read" to have already run earlier in this scenario, but "next-page-read" is bound in this scenario, but only at or after this line, never before it. This line would fail args validation with certainty';
     expect(report.errors).toEqual([
-      { code: "from-order-violation", message, file: "features/pages.feature", line: 4, step: "next-page-read", do: FROM_ORDER_DO },
-      { code: "from-order-violation", message, file: "features/pages.feature", line: 7, step: "next-page-read", do: FROM_ORDER_DO },
+      { code: "from-order-violation", message, file: "features/pages.feature", line: 4, step: "next-page-read", fix: FROM_ORDER_FIX },
+      { code: "from-order-violation", message, file: "features/pages.feature", line: 7, step: "next-page-read", fix: FROM_ORDER_FIX },
     ]);
   });
 });
@@ -156,10 +157,10 @@ describe("nuka check: from-order-violation's do line, and the findings an undefi
           'Held back 2 from-order-violation findings while line 4 "a project id comes from an import" matches no step, because such a line may be meant to run the producer they need: line 5 step "archive-project" needs step "create-project" for projectId; line 6 step "close-project" needs step "create-project" for projectId',
         file: "features/producer.feature",
         line: 4,
-        do: 'If line 4 "a project id comes from an import" is meant to run step "create-project", reword that line to match that step\'s pattern. Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.',
+        fix: 'If line 4 "a project id comes from an import" is meant to run step "create-project", reword that line to match that step\'s pattern. Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.',
       },
     ]);
-    expect(errors.map((issue) => [issue.line, issue.do])).toEqual([
+    expect(errors.map((issue) => [issue.line, issue.fix])).toEqual([
       [
         10,
         'Put a line that runs step "create-project" earlier in the scenario. Or, if a step that an earlier line runs returns projectId, list that step as another [step, "projectId"] candidate in from.projectId of step "archive-project".',
@@ -185,7 +186,7 @@ describe("nuka check: from-order-violation's do line, and the findings an undefi
       expect(records[0]!.steps.map((step) => [step.status, step.error?.message])).toEqual([
         [
           "undefined",
-          'No step definition matches "a project id comes from an import"; run `nuka scaffold --feature features/producer.feature` to add one',
+          'No step definition matches "a project id comes from an import"',
         ],
         ["skipped", undefined],
         ["skipped", undefined],
@@ -208,7 +209,7 @@ describe("nuka check: from-order-violation's do line, and the findings an undefi
     const { report } = await checkReport(fixture("from-project"));
     const dos = (report.errors as FromOrderIssue[])
       .filter((issue) => issue.code === "from-order-violation")
-      .map((issue) => issue.do);
+      .map((issue) => issue.fix);
     expect(dos).toEqual([
       'Put a line that runs step "create-project" earlier in the scenario.',
       'Put a line that runs step "create-project" earlier in the scenario.',
@@ -255,6 +256,6 @@ describe("fromOrderHold", () => {
         expect(hold!.message).toContain(`line ${steps[issue.stepIndex]!.line} step "${issue.stepName}" needs step "produce" for `);
         expect(hold!.message).toMatch(new RegExp(`for [^;]*\\b${issue.key}\\b`));
       }
-      expect(hold!.do).toContain('is meant to run step "produce", reword that line');
+      expect(hold!.fix).toContain('is meant to run step "produce", reword that line');
     }));
 });

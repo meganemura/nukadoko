@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import { parseFindings, warningSink, type Finding } from "../finding/finding.js";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -11,6 +12,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 import { createMessagesEmitter, type MessagesEmitter } from "../report/messages/emitter.js";
 import type { SecretSet } from "../secrets/types.js";
 import {
+  failedScenarioOf,
   type FailedScenario,
   writeScenarioBoundary,
   writeScenarioStarted,
@@ -128,8 +130,13 @@ export interface RunConcurrentOptions {
    * passes a sink that drops it, the same rule as at 1. */
   readonly stdout: WritableSink;
   /** Scenario boundaries and a failed step's lines; src/cli/run.ts passes
-   * a sink that drops them under `--json`. Warnings go to `stderr`. */
+   * a sink that drops them under `--json`. */
   readonly progress: WritableSink;
+  /** Every warning and failure this function finds, as a finding; the
+   * caller writes it to stderr or keeps it for the `--json` document. */
+  readonly warn: (finding: Finding) => void;
+  /** A worker's own stderr, relayed raw: it is a crash or project code's
+   * output, not nukadoko's, so it has no finding to be. */
   readonly stderr: WritableSink;
 }
 
@@ -178,8 +185,10 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     onRecord,
     stdout,
     progress,
+    warn,
     stderr,
   } = options;
+  const warnings = (code: string): WritableSink => warningSink(code, warn);
 
   const hasPickles = flatPickles.length > 0;
 
@@ -199,12 +208,12 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         environment,
         targetVersion,
         secrets,
-        stderr,
+        stderr: warnings("emitter-failed"),
       });
       allureEmitter.begin();
     } catch (error) {
       allureEmitter = null;
-      stderr.write(`Warning: allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      warnings("emitter-failed").write(`allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
     }
   }
 
@@ -215,7 +224,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       messagesEmitter = createMessagesEmitter({
         output,
         rootDir,
-        stderr,
+        stderr: warnings("emitter-failed"),
         runId,
         exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
       });
@@ -228,7 +237,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       });
     } catch (error) {
       messagesEmitter = null;
-      stderr.write(`Warning: messages emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      warnings("emitter-failed").write(`messages emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
     }
   }
 
@@ -244,9 +253,28 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   // whole run's total", parallel phase and serial phase alike.
   let completedCount = 0;
 
+  // A worker writes each note as one finding in its text grammar. A note
+  // that does not parse is still reported, so nothing a worker says is lost.
+  function relayNote(text: string): void {
+    const parsed = parseFindings(text);
+    if (parsed.length === 0) {
+      warn({ severity: "warning", code: "worker-output-unreadable", message: text });
+      return;
+    }
+    for (const finding of parsed) {
+      warn({
+        severity: finding.severity,
+        code: finding.code,
+        message: finding.message,
+        ...(finding.fix !== undefined ? { fix: finding.fix } : {}),
+        ...(finding.do !== undefined ? { do: finding.do } : {}),
+      });
+    }
+  }
+
   function handleEnvelope(envelope: WorkerEnvelope, filesWithRecords: Set<string>, worker: number): void {
     if (envelope.kind === "note") {
-      stderr.write(`${envelope.text}\n`);
+      relayNote(envelope.text);
       return;
     }
 
@@ -272,7 +300,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       scenariosPassed += 1;
     } else {
       allPassed = false;
-      failedScenarios.push({ feature: record.feature, line: record.line, scenario: record.scenario });
+      failedScenarios.push(failedScenarioOf(record));
     }
     if (repeat > 1) repeatTally.note(record);
     stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
@@ -292,9 +320,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const line of stepLines) {
       progress.write(`${line}\n`);
     }
-    for (const note of notes) {
-      stderr.write(`${note}\n`);
-    }
+    for (const note of notes) relayNote(note);
 
     const match = pickleByKey.get(pickleKey(record.feature, record.line));
     if (match === undefined) {
@@ -305,10 +331,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       // and already on disk; what would be lost without this line is the
       // messages stream's own entry for it, which would leave that stream
       // one scenario short with nothing saying so.
-      stderr.write(
-        `Warning: no selected scenario matches the record a worker reported for ` +
-          `${record.feature}:${record.line}; the messages stream omits it.\n`,
-      );
+      warn({
+        severity: "warning",
+        code: "record-unmatched",
+        file: record.feature,
+        line: record.line,
+        message: "No selected scenario matches the record a worker reported here; the messages stream omits it",
+      });
       return;
     }
     messagesEmitter?.emitScenario({ record, pickle: match.pickle });
@@ -344,7 +373,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         }
         const envelope = parseWorkerEnvelope(line);
         if (envelope === undefined) {
-          stderr.write(`Warning: a worker produced an unreadable line on its own stdout: ${line}\n`);
+          warn({ severity: "warning", code: "worker-output-unreadable", message: `A worker produced an unreadable line on its own stdout: ${line}` });
           return;
         }
         handleEnvelope(envelope, filesWithRecords, worker);
@@ -441,17 +470,23 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   }
 
   if (interruptedBy !== null) {
-    stderr.write(
-      scenariosWritten === flatPickles.length * repeat
-        ? `${interruptedBy} arrived after every scenario had a record, so AfterAll hooks may not have run.\n`
-        : `${interruptedBy} stopped this run before every scenario had a record, so it is incomplete.\n`,
-    );
+    warn({
+      severity: "failed",
+      code: "run-incomplete",
+      message:
+        scenariosWritten === flatPickles.length * repeat
+          ? `${interruptedBy} arrived after every scenario had a record, so AfterAll hooks may not have run`
+          : `${interruptedBy} stopped this run before every scenario had a record, so it is incomplete`,
+    });
     allPassed = false;
   } else if (failedFiles.size > 0) {
-    stderr.write(
-      `A worker exited without writing any record for: ${[...failedFiles].sort().join(", ")}. ` +
-        "This run is incomplete and cannot be treated as a pass.\n",
-    );
+    warn({
+      severity: "failed",
+      code: "run-incomplete",
+      message:
+        `A worker exited without writing any record for: ${[...failedFiles].sort().join(", ")}. ` +
+        "This run is incomplete and cannot be treated as a pass",
+    });
     allPassed = false;
   } else if (scenariosWritten !== flatPickles.length * repeat) {
     // The total check `failedFiles` cannot make. That set catches a worker
@@ -461,11 +496,14 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     // reporting fewer records than it selected pickles, with every other
     // signal green. Counting closes that gap for every cause at once,
     // including causes nobody has thought of yet.
-    stderr.write(
-      `This run selected ${flatPickles.length} scenarios${repeat > 1 ? ` to run ${repeat} times each` : ""} ` +
+    warn({
+      severity: "failed",
+      code: "run-incomplete",
+      message:
+        `This run selected ${flatPickles.length} scenarios${repeat > 1 ? ` to run ${repeat} times each` : ""} ` +
         `and wrote ${scenariosWritten} records. ` +
-        "The missing ones cannot be accounted for, so this run is incomplete.\n",
-    );
+        "The missing ones cannot be accounted for, so this run is incomplete",
+    });
     allPassed = false;
   }
 

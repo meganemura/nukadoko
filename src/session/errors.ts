@@ -5,6 +5,7 @@
 // dependencies — same convention as config/errors.ts and discover/errors.ts.
 
 export class InvalidSessionNameError extends Error {
+  readonly code = "invalid-session-name";
   readonly sessionName: string;
 
   constructor(sessionName: string) {
@@ -15,6 +16,7 @@ export class InvalidSessionNameError extends Error {
 }
 
 export class SessionLockConflictError extends Error {
+  readonly code = "session-locked";
   readonly sessionName: string;
   readonly pid: number;
 
@@ -27,6 +29,7 @@ export class SessionLockConflictError extends Error {
 }
 
 export class MalformedSessionFileError extends Error {
+  readonly code = "session-file-malformed";
   readonly sessionName: string;
 
   constructor(sessionName: string, cause: unknown) {
@@ -41,6 +44,7 @@ export class MalformedSessionFileError extends Error {
 }
 
 export class SessionNotFoundError extends Error {
+  readonly code = "session-not-found";
   readonly sessionName: string;
   /** `nuka session list` has no `--env`: it lists every environment and
    * names the environment of each session, which is what tells this name

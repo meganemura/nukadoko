@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `step-description-todo`, the default `nuka tend` note for
 // a step whose description is still the TODO `nuka scaffold` wrote. A step
@@ -40,7 +41,7 @@ describe("nuka tend: step-description-todo", () => {
     expect(tend.exitCode).toBe(0);
 
     const json = await cli(rootDir, ["tend", "--json"]);
-    expect(JSON.parse(json.stdout).notes).toEqual([
+    expect(bySeverity(json.stdout).notes).toEqual([
       expect.objectContaining({ code: "step-description-todo", file: "features/steps/send-invite.ts", step: "send-invite" }),
     ]);
   });
@@ -53,7 +54,7 @@ describe("nuka tend: step-description-todo", () => {
 
     const tend = await cli(rootDir, ["tend", "--json"]);
 
-    expect(JSON.parse(tend.stdout).notes.map((note: { code: string }) => note.code)).not.toContain("step-description-todo");
+    expect(bySeverity(tend.stdout).notes.map((note: { code: string }) => note.code)).not.toContain("step-description-todo");
     expect(tend.exitCode).toBe(0);
   });
 

@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { bySeverity } from "./helpers/envelope.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 // Responsibility: `--session`'s request-path round trip, the setup-phase
@@ -275,7 +276,13 @@ describe("nuka session list/clear", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, sessions: [] });
+    const report = bySeverity(stdout.text());
+    expect([report.command, report.verdict, report.sessions, report.findings.map((finding: { code: string }) => finding.code)]).toEqual([
+      "session list",
+      "passed",
+      [],
+      ["config-missing"],
+    ]);
   });
 
   it("prints one line per session in human-readable mode", async () => {
@@ -330,7 +337,7 @@ describe("nuka session list/clear", () => {
     });
     expect({ exitCode, stderr: withoutNoConfigLine(stderr.text()) }).toEqual({
       exitCode: 1,
-      stderr: 'Session "no-such-session" not found\ndo: nuka session list\n',
+      stderr: 'error\tsession-not-found\t-\tSession "no-such-session" not found\n  do: nuka session list\n',
     });
   });
 

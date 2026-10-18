@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s structural `from` check
 // (src/step/validate-from.ts's `validateStepFrom`, wired into
@@ -21,7 +22,7 @@ interface FromStructuralIssue {
 async function checkReport(rootDir: string) {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-  return { exitCode, report: JSON.parse(stdout.text()) as { errors: FromStructuralIssue[]; warnings: unknown[] } };
+  return { exitCode, report: bySeverity(stdout.text()) as { errors: FromStructuralIssue[]; warnings: unknown[] } };
 }
 
 describe("nuka check: from's structural check", () => {

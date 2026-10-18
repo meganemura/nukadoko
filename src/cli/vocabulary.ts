@@ -12,6 +12,9 @@ import {
 } from "../discover/discover-steps.js";
 import { formatVocabularyError } from "../discover/format-vocabulary-error.js";
 import { rootRelativeStepFile } from "../check/unbound-patterned.js";
+import { checkCodeFix } from "../check/codes.js";
+import { playwrightImportMissing } from "../check/playwright-check.js";
+import type { Finding } from "../finding/finding.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
@@ -38,6 +41,7 @@ export { formatVocabularyError };
 export interface RawImportFailure {
   readonly filePath: string;
   readonly message: string;
+  readonly missingPackage?: { readonly name: string; readonly importedBy?: string };
 }
 
 /** Default `false`, same convention as `discoverSteps`' own
@@ -86,6 +90,7 @@ export async function loadVocabulary(
  * carries, matches that check's own wording so the same mistake reads
  * the same way from either command. */
 class FeaturesDirMissingError extends Error {
+  readonly code = "features-dir-missing";
   readonly featuresDir: string;
   readonly resolvedPath: string;
 
@@ -119,39 +124,42 @@ export function assertFeaturesDirExists(rootDir: string, config: NukadokoConfig)
 export interface ImportFailureSummary {
   readonly file: string;
   readonly message: string;
+  readonly missingPackage?: { readonly name: string; readonly importedBy?: string };
 }
 
 export function toImportFailureSummaries(
   failures: readonly RawImportFailure[],
 ): ImportFailureSummary[] {
-  return failures.map((failure) => ({ file: failure.filePath, message: failure.message }));
+  return failures.map((failure) => ({
+    file: failure.filePath,
+    message: failure.message,
+    ...(failure.missingPackage !== undefined ? { missingPackage: failure.missingPackage } : {}),
+  }));
 }
 
-/** stderr's own tail listing: unreadable files are listed there, at the
- * tail, so stdout's own shape, json or text, never has to carry it.
- * Returns `""` (nothing to write) when
- * `failures` is empty, so a caller can call this unconditionally. Same
- * newline-collapsing as src/cli/check.ts's own `formatIssueLine` — an
- * import error's message can itself carry embedded newlines.
- *
- * Takes `rootDir` so it can append the same CJS/.ts mismatch sentence
- * `nuka check`'s `step-file-import-failed` already does
- * (`cjsTsMismatchExplanation`, src/config/module-kind.ts). A project's
- * first command is not always `check`, and Node's own "Cannot find module"
- * is the same misleading message here as it is there. */
-export function formatImportFailuresStderr(
-  rootDir: string,
-  failures: readonly ImportFailureSummary[],
-): string {
-  if (failures.length === 0) {
-    return "";
-  }
+/** Each step file that did not import, as a `step-file-import-failed`
+ * finding: `steps` and `describe` print what they could read and say which
+ * files they could not, in the same grammar `nuka check` uses. Takes
+ * `rootDir` so it can append the same CJS/.ts mismatch sentence `nuka
+ * check` does (`cjsTsMismatchExplanation`, src/config/module-kind.ts): a
+ * project's first command is not always `check`, and Node's own "Cannot
+ * find module" is the same misleading message here as it is there. */
+export function importFailureFindings(rootDir: string, failures: readonly ImportFailureSummary[]): Finding[] {
+  if (failures.length === 0) return [];
   const cjsProject = refusesEsmTs(rootDir);
-  const lines = failures.map((failure) => {
-    const explanation = cjsTsMismatchExplanation(cjsProject, failure.file);
-    return `  ${failure.file}: ${failure.message.replace(/\s*\n\s*/g, " ")}${explanation}`;
+  return failures.map((failure): Finding => {
+    // A file that imports an uninstalled Playwright package gets the same
+    // finding and install command `nuka check` gives it.
+    const playwright = playwrightImportMissing({ filePath: failure.file, missingPackage: failure.missingPackage });
+    if (playwright !== undefined) return { ...playwright, severity: "error" };
+    return {
+      severity: "error",
+      code: "step-file-import-failed",
+      file: failure.file,
+      message: `${failure.message}${cjsTsMismatchExplanation(cjsProject, failure.file)}`,
+      fix: checkCodeFix("step-file-import-failed"),
+    };
   });
-  return `${failures.length} step file${failures.length === 1 ? "" : "s"} could not be imported:\n${lines.join("\n")}\n`;
 }
 
 // `StepNames`: a step's own `from` field (src/step/define-step.ts's

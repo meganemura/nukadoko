@@ -46,6 +46,7 @@
  * without calling `run`; a positional parameter has no name it could read
  * that way. */
 export class FixtureNotDestructuredError extends Error {
+  readonly code = "invalid-step-definition";
   readonly firstArgumentText: string;
 
   constructor(firstArgumentText: string) {
@@ -65,6 +66,7 @@ export class FixtureNotDestructuredError extends Error {
  * a broken or partial name list and misdiagnosing "fixture not found" for
  * something else entirely. */
 export class FixtureDefaultValueError extends Error {
+  readonly code = "invalid-step-definition";
   readonly prop: string;
 
   constructor(prop: string) {
@@ -83,6 +85,7 @@ export class FixtureDefaultValueError extends Error {
  * without running the destructuring, which nukadoko must not do just to
  * read what a step needs. */
 export class FixtureRestParameterError extends Error {
+  readonly code = "invalid-step-definition";
   readonly prop: string;
 
   constructor(prop: string) {

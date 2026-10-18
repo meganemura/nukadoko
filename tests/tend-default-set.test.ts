@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: a plain `nuka tend` reports every code, the declaration
 // code (a field with no `.describe()`) included, and `--all` is refused by
@@ -52,7 +53,7 @@ describe("nuka tend on a freshly scaffolded project", () => {
   it("reports the declaration note in --json", async () => {
     const json = createCaptureSink();
     expect(await runCli(["tend", "--json"], { rootDir, stdout: json, stderr: createCaptureSink() })).toBe(0);
-    const report = JSON.parse(json.text()) as { notes: Array<{ code: string; step: string }> };
+    const report = bySeverity(json.text()) as { notes: Array<{ code: string; step: string }> };
     expect(report.notes.map((note) => [note.code, note.step])).toEqual([["schema-field-undescribed", "greet"]]);
   });
 

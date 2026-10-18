@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s report for a broken `config.fixtures`
 // entry names that fixture, speaks about a fixture, and does not quote
@@ -20,7 +21,7 @@ async function checkReport(rootDir: string) {
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
   return {
     exitCode,
-    report: JSON.parse(stdout.text()) as { errors: CheckIssue[]; warnings: unknown[] },
+    report: bySeverity(stdout.text()) as { errors: CheckIssue[]; warnings: unknown[] },
   };
 }
 

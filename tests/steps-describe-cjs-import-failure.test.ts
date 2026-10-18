@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { bySeverity } from "./helpers/envelope.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 
 // Responsibility: the same CJS/.ts explanation
@@ -40,18 +41,19 @@ describe("nuka steps: CommonJS/.ts step-file-import-failed on stderr", () => {
   });
 });
 
-describe("nuka describe: CommonJS/.ts step-file-import-failed on stderr", () => {
+describe("nuka describe: CommonJS/.ts step-file-import-failed in its findings", () => {
   it("appends the CJS/.ts explanation on an unknown-step lookup, the same as a listed one", async () => {
-    const stderr = createCaptureSink();
+    const stdout = createCaptureSink();
     const exitCode = await runCli(["describe", "no-such-step"], {
       rootDir: fixture("check-import-failure-cjs-project"),
-      stdout: createCaptureSink(),
-      stderr,
+      stdout,
+      stderr: createCaptureSink(),
     });
 
     expect(exitCode).toBe(2);
-    expect(stderr.text()).toContain("Cannot use import statement outside a module");
-    expect(stderr.text()).toContain('"type": "commonjs"');
-    expect(stderr.text()).toContain("rename this file to .mts");
+    const failure = bySeverity(stdout.text()).errors.find((finding: { code: string }) => finding.code === "step-file-import-failed");
+    expect(failure.message).toContain("Cannot use import statement outside a module");
+    expect(failure.message).toContain('"type": "commonjs"');
+    expect(failure.message).toContain("rename this file to .mts");
   });
 });

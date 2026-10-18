@@ -30,11 +30,10 @@ describe("nuka steps", () => {
 
     expect(exitCode).toBe(0);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
-    // Top-level `{ steps, import_failures }`, not a bare array —
-    // `import_failures` is
-    // always present, `[]` here since this fixture has nothing broken.
+    // The envelope, with `steps` beside `findings`. This fixture has no
+    // config file and nothing broken, so its one finding is that warning.
     const report = JSON.parse(stdout.text());
-    expect(report.import_failures).toEqual([]);
+    expect(report.findings.map((finding: { code: string }) => finding.code)).toEqual(["config-missing"]);
     expect(report.steps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -80,7 +79,9 @@ describe("nuka steps", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
-    expect((JSON.parse(stdout.text()) as { error: string }).error).toContain("typo");
+    const refusal = (JSON.parse(stdout.text()) as { findings: { severity: string; code: string; message: string }[] }).findings[0]!;
+    expect([refusal.severity, refusal.code]).toEqual(["refused", "config-invalid"]);
+    expect(refusal.message).toContain("typo");
   });
 });
 
@@ -160,7 +161,12 @@ describe("nuka describe", () => {
 
     expect(exitCode).toBe(2);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
-    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, error: "Unknown step: no-such-step", do: "nuka steps" });
+    expect(JSON.parse(stdout.text()).findings[1]).toEqual({
+      severity: "refused",
+      code: "unknown-step",
+      message: "Unknown step: no-such-step",
+      do: "nuka steps",
+    });
   });
 });
 
@@ -496,9 +502,9 @@ describe("nuka (process)", () => {
       expect(Buffer.byteLength(stdout)).toBeGreaterThan(64 * 1024);
       const report = JSON.parse(stdout) as {
         steps: { name: string; description: string }[];
-        import_failures: unknown[];
+        findings: { code: string }[];
       };
-      expect(report.import_failures).toEqual([]);
+      expect(report.findings.map((finding) => finding.code)).toEqual(["config-missing"]);
       expect(report.steps).toEqual([
         expect.objectContaining({
           name: "wide-output",
@@ -530,7 +536,7 @@ describe("nuka (process)", () => {
     expect(exitCode).toBe(0);
   });
 
-  it("prints one stderr line and exits 1 when a command handler throws", async () => {
+  it("prints one error finding and exits 1 when a command handler throws", async () => {
     // Node prints the uncaught-exception dump after cli.ts's top-level
     // await rejects. A runCli() call in this process can catch that
     // rejection, so the dump never appears. The child is the real entry.
@@ -550,7 +556,11 @@ describe("nuka (process)", () => {
       expect(child.status).toBe(1);
       expect(child.stdout).toBe("");
       const lines = withoutNoConfigLine(child.stderr ?? "").split("\n").filter((line) => line.length > 0);
-      expect(lines).toEqual([expect.stringMatching(/^EEXIST: file already exists, mkdir /)]);
+      expect(lines).toEqual([
+        expect.stringMatching(/^error\tunexpected-error\t-\tEEXIST: file already exists, mkdir /),
+        "  fix: Read the message; it is the error the command stopped on.",
+        "  do: nuka scaffold --help",
+      ]);
     } finally {
       await removeTempDir(rootDir);
     }

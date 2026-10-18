@@ -32,7 +32,8 @@ import { runConcurrentPickles } from "../run/run-concurrent.js";
 import {
   createStepProgressLogger,
   type FailedScenario,
-  writeFailedScenarios,
+  failedScenarioFindings,
+  failedScenarioOf,
   writeOutputLocations,
   writeRunSummary,
   writeScenarioBoundary,
@@ -76,8 +77,11 @@ import {
 } from "../fixture/validate-fixtures.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
-import { writeCheckIssueLines } from "./check.js";
-import { RefusalError, helpFor, refuse } from "./refusal.js";
+import { asFinding, writeCheckIssueLines } from "./check.js";
+import { formatFinding, warningSink, type Finding } from "../finding/finding.js";
+import { checkCodeFix } from "../check/codes.js";
+import type { RefusalCode } from "./refusal-codes.js";
+import { RefusalError, formatEnvelope, refuse, withHint, type Hint } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s work, kept out of run-cli.ts so it is
@@ -257,6 +261,9 @@ const UNBUILDABLE_PATTERN_CODES: ReadonlySet<string> = new Set([
 ]);
 
 export interface RunRunOptions {
+  /** Findings the invocation raised before the command ran, such as a
+   * missing config file, which `--json` carries in the envelope. */
+  notices?: readonly Finding[];
   rootDir: string;
   /** `<feature[:line]>` or directory targets. None means `featuresDir`,
    * the same default `nuka check` walks (without `additionalFeatureDirs`,
@@ -321,7 +328,9 @@ function exportLocations(
 
 export async function runRun(options: RunRunOptions): Promise<number> {
   const { rootDir, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
-  const refused = (error: unknown): number => refuse({ json: options.json, stdout: options.stdout, stderr }, error, helpFor("run"));
+  const notices = options.notices ?? [];
+  const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint, before: readonly Finding[] = []): number =>
+    refuse({ json: options.json, stdout: options.stdout, stderr, command: "run" }, error, code, hint, [...notices, ...before]);
   // The records are on disk, and the `scenarios` line names them. An
   // agent's shell is no terminal and reads stdout together with stderr, so
   // a stream that was on by default would put a line of JSON per scenario
@@ -333,6 +342,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // streams as one, so these lines would sit around the document. A warning
   // about something that went wrong still goes to `stderr`.
   const progress: WritableSink = options.json ? { write: () => true } : stderr;
+  // Every warning and failure is a finding. Text writes it to stderr when
+  // it happens; `--json` keeps it for the one document, so stderr stays
+  // empty and the document says everything the run found.
+  const runFindings: Finding[] = [...notices];
+  const warn = (finding: Finding): void => {
+    if (options.json) runFindings.push(finding);
+    else stderr.write(formatFinding(withHint(finding)));
+  };
+  const warnings = (code: string): WritableSink => warningSink(code, warn);
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a
@@ -341,10 +359,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // "any failure here writes nothing" phase every other setup check below
   // already belongs to.
   if (!Number.isInteger(repeat) || repeat < 1) {
-    return refused(`--repeat must be a whole number of 1 or more (got ${options.repeat}).`);
+    return refused(`--repeat must be a whole number of 1 or more (got ${options.repeat}).`, "invalid-value");
   }
   if (!Number.isInteger(concurrency) || concurrency < 1) {
-    return refused(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).`);
+    return refused(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).`, "invalid-value");
   }
 
   // This whole invocation's own start — read
@@ -385,7 +403,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       } catch (error) {
         if (error instanceof DirectoryTargetLineError) {
           const command = ["nuka", "run", ...error.targetsWithoutLine, ...rerunFlags].map(shellWord).join(" ");
-          return { refused: new RefusalError(error.message, command) };
+          return { refused: new RefusalError("line-on-directory", error.message, { do: command }) };
         }
         return { refused: error };
       }
@@ -411,14 +429,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
       const { report } = analysis;
       if (report.errors.length > 0) {
-        writeCheckIssueLines(report.errors, [], stderr);
+        // The errors print in check's grammar ahead of the refusal; in
+        // text the import-failure fold applies, as `nuka check` prints it.
+        if (!options.json) writeCheckIssueLines(report.errors, [], stderr);
         const count = report.errors.length;
         return refused(
-          new RefusalError(
-            `nuka run did not start: nuka check reports ${count} ${count === 1 ? "error" : "errors"} ` +
-              "for these scenarios. Fix them, or pass --no-check to run anyway.",
-            ["nuka check", ...options.featureArgs].join(" "),
-          ),
+          `nuka run did not start: nuka check reports ${count} ${count === 1 ? "error" : "errors"} for these scenarios`,
+          "check-errors",
+          { fix: "Correct each error the findings name, or pass --no-check to run anyway.", do: ["nuka check", ...options.featureArgs.map(shellWord)].join(" ") },
+          options.json ? report.errors.map((issue) => asFinding("error", issue)) : [],
         );
       }
       discovery = analysis.discovery;
@@ -523,10 +542,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // them reports as ambiguous and names both steps on its own.
     for (const issue of bindingIssues) {
       if (!UNBUILDABLE_PATTERN_CODES.has(issue.code)) continue;
-      stderr.write(
-        `Warning: ${issue.message} Every line meant for this step reports as undefined; ` +
-          `nuka check names this as ${issue.code}.\n`,
-      );
+      warn({
+        severity: "warning",
+        code: issue.code,
+        message: `${issue.message.replace(/[.\s]*$/, "")}; every line meant for this step reports as undefined`,
+        ...(issue.file !== undefined ? { file: issue.file } : {}),
+        ...(issue.step !== undefined ? { step: issue.step } : {}),
+        fix: checkCodeFix(issue.code),
+      });
     }
 
     // Which typed step names this run's own selected pickles actually
@@ -603,9 +626,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       if (probeResult.ok) {
         targetVersion = probeResult.version;
       } else {
-        stderr.write(
-          versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n",
-        );
+        warnings("version-probe-failed").write(versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n");
       }
     }
 
@@ -650,7 +671,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         summaryPath: summaryPath ?? undefined,
         stepSummaryPath,
       });
-      for (const warning of result.warnings) stderr.write(`${warning}\n`);
+      for (const warning of result.warnings) warnings("summary-not-written").write(`${warning}\n`);
       return result.runSummaryPath;
     };
     const summaryLocation = (relativePath: string | null) => [
@@ -678,7 +699,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         scenarios: runScenarios,
         summary: runSummaryPath,
       });
-      if (options.json) options.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       // run.json is the run's last write before retention: it says the run
       // ended and how (src/record/run-result.ts). A run with no pickle wrote
       // no records and gets none. A failed write is a warning, as a failed
@@ -687,7 +707,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         try {
           writeRunResult(rootDir, config.stateDir, result);
         } catch (error) {
-          stderr.write(`Warning: run.json was not written: ${error instanceof Error ? error.message : String(error)}\n`);
+          warn({ severity: "warning", code: "run-result-not-written", message: `run.json was not written: ${error instanceof Error ? error.message : String(error)}` });
         }
       }
       try {
@@ -702,7 +722,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         const line = formatRetention(outcome, config.retention);
         if (line !== null) progress.write(`${line}\n`);
       } catch (error) {
-        stderr.write(`Warning: retention failed: ${error instanceof Error ? error.message : String(error)}\n`);
+        warn({ severity: "warning", code: "retention-failed", message: `retention failed: ${error instanceof Error ? error.message : String(error)}` });
+      }
+      // Last, so the document holds every finding the run raised, the
+      // retention warning included, and the run.json fields beside them.
+      if (options.json) {
+        const { schema_version: _version, nukadoko: _nukadoko, verdict: _verdict, ...fields } = result;
+        options.stdout.write(formatEnvelope("run", verdict === "passed" ? 0 : 1, runFindings, fields));
       }
     };
     // One instance for this whole `nuka run` invocation — passed unchanged
@@ -710,7 +736,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // (across one scenario or several) each hit an unreadable trace
     // version still only ever writes the stderr warning once, not once per
     // occurrence.
-    const onUnknownTraceVersion = createTraceVersionWarner(stderr);
+    const onUnknownTraceVersion = createTraceVersionWarner(warnings("trace-version-unknown"));
 
     // Same "one instance, threaded unchanged into every `runScenario` call"
     // shape as `onUnknownTraceVersion` just above. Built under `--quiet` too:
@@ -754,7 +780,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
         return true;
       } catch (error) {
-        stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        warn({ severity: "failed", code: "hook-failed", message: error instanceof Error ? error.message : String(error) });
         return false;
       }
     };
@@ -805,6 +831,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           onRecord: noteRecord,
           stdout,
           progress,
+          warn,
           stderr,
         });
 
@@ -837,7 +864,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      writeFailedScenarios(progress, failedScenarios, rerunFlags);
+      for (const finding of failedScenarioFindings(failedScenarios, rerunFlags)) warn(finding);
       writeRepeatTallies(progress, repeatTallies);
       // An interrupted run prunes nothing, as at `--concurrency 1`, where
       // the signal handler exits before the prune.
@@ -889,9 +916,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         for (const teardownError of processFixtureTeardownErrors) {
           // The line is the fixture's own text, with no scenario record to
           // redact it first.
-          stderr.write(
-            fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
-          );
+          warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n");
         }
       });
       processSignal.setProcessCleanup(tearDownProcessFixtures);
@@ -926,7 +951,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             environment: resolvedEnv.name,
             targetVersion,
             secrets,
-            stderr,
+            stderr: warnings("emitter-failed"),
             // The exact same cap run-scenario.ts's own heartbeat enforces
             // per step (src/report/allure/emitter.ts's own
             // `AllureEmitterOptions.heartbeatCap` doc comment), threaded
@@ -937,9 +962,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           allureEmitter.begin();
         } catch (error) {
           allureEmitter = null;
-          stderr.write(
-            `Warning: allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`,
-          );
+          warnings("emitter-failed").write(`allure emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
         }
       }
 
@@ -952,7 +975,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           messagesEmitter = createMessagesEmitter({
             output,
             rootDir,
-            stderr,
+            stderr: warnings("emitter-failed"),
             runId,
             exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
           });
@@ -969,9 +992,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           });
         } catch (error) {
           messagesEmitter = null;
-          stderr.write(
-            `Warning: messages emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`,
-          );
+          warnings("emitter-failed").write(`messages emitter setup failed: ${error instanceof Error ? error.message : String(error)}\n`);
         }
       }
 
@@ -1096,7 +1117,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             secrets,
             instantiateCompatWorld,
             onWorldSetupFailure: (message) => {
-              stderr.write(`${message}\n`);
+              warnings("world-setup-failed").write(`${message}\n`);
             },
             compatHooks,
             defaultTimeoutMs,
@@ -1128,9 +1149,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // write as well: the record's copy is already redacted, and this
           // stderr line has to stay that way on its own.
           for (const teardownError of record.teardown_errors ?? []) {
-            stderr.write(
-              fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
-            );
+            warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n");
           }
           // After the stdout line, always — see this file's own header.
           // `allureEmitter` is `null` when this run selected zero pickles or
@@ -1150,7 +1169,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           messagesEmitter?.emitScenario({ record, pickle });
           if (record.status !== "passed") {
             allPassed = false;
-            failedScenarios.push({ feature: record.feature, line: record.line, scenario: record.scenario });
+            failedScenarios.push(failedScenarioOf(record));
           }
         }
         }
@@ -1235,7 +1254,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      writeFailedScenarios(progress, failedScenarios, rerunFlags);
+      for (const finding of failedScenarioFindings(failedScenarios, rerunFlags)) warn(finding);
       writeRepeatTallies(progress, repeatTally.list());
       await finishRun(allPassed ? "passed" : "failed", runSummaryPath);
 

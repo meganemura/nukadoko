@@ -28,7 +28,7 @@ describe("nuka run: a process-scope fixture whose own teardown fails", () => {
       const record = JSON.parse(stdout.text().split("\n").filter((line) => line.length > 0)[0]!);
       expect(record.status).toBe("passed");
 
-      expect(stderr.text()).toContain('Warning: fixture "brokenProcessTeardown" teardown failed');
+      expect(stderr.text()).toContain('warning\tfixture-teardown-failed\t-\tfixture "brokenProcessTeardown" teardown failed');
       expect(stderr.text()).toContain("brokenProcessTeardown's own teardown exploded on purpose");
     } finally {
       await removeTempDir(rootDir);

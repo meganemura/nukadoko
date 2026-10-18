@@ -209,8 +209,10 @@ describe("nuka run --concurrency", () => {
     const lines = nonEmptyLines(stderr.text());
     const summaryIndex = lines.findIndex((line) => line.startsWith("2 scenarios: 1 passed, 1 failed"));
     expect(summaryIndex).toBeGreaterThanOrEqual(0);
-    expect(lines[summaryIndex + 1]).toBe("failed  features/failure/a.feature:3  named concurrent failure");
-    expect(lines[summaryIndex + 2]).toBe("  rerun  nuka run features/failure/a.feature:3");
+    expect(lines[summaryIndex + 1]).toBe(
+      'failed\tscenario-failed\tfeatures/failure/a.feature:3\tnamed concurrent failure: No step definition matches "a missing concurrent step"',
+    );
+    expect(lines[summaryIndex + 2]).toBe("  do: nuka run features/failure/a.feature:3");
     // A worker's failed step reaches the parent's stderr under --quiet too.
     const failIndex = lines.findIndex((line) => /^ {2}step 1\/1 {2}failed /.test(line));
     expect(lines[failIndex]).toBe("  step 1/1  failed  0.0s  a missing concurrent step");

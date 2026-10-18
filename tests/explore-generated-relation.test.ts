@@ -39,7 +39,8 @@ describe("nuka experimental explore: a relation with a generated source", () => 
         "    * 1 is added",
         "",
       ].join("\n"),
-      stderr: 'Failed: relation "adding in reverse order reaches the same total". Both scenarios are on stdout.\n',
+      stderr:
+        'failed\texplore-failed\tfeatures/reverse.ts\tRelation "adding in reverse order reaches the same total" failed; both scenarios are on stdout\n  do: nuka experimental explore features/reverse.ts --seed 1 --runs 20 --length 6\n',
     });
     expect(await explore(["--seed", "1", "--runs", "20", "--length", "6"])).toEqual(first);
   });

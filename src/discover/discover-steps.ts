@@ -379,10 +379,10 @@ export async function discoverSteps(
         const relativePath = path.relative(rootDir, filePath) + (line === undefined ? "" : `:${line}`);
         const playwright = playwrightPackageMissing(missingPackage);
         if (playwright !== undefined) {
-          throw new StepFileImportError(`${relativePath}: ${playwright.message}`, playwright.do, error);
+          throw new StepFileImportError(`${relativePath}: ${playwright.message}`, "playwright-missing", { do: playwright.do }, error);
         }
         const explanation = cjsTsMismatchExplanation(refusesEsmTs(rootDir), filePath);
-        throw new Error(`${relativePath}: ${message}${explanation}`, { cause: error });
+        throw new StepFileImportError(`${relativePath}: ${message}${explanation}`, "step-file-import-failed", { do: "nuka check" }, error);
       }
       // A file that dies partway through its own evaluation (CommonJS
       // `require()` inside an ESM file throws mid-evaluation, not at ESM's

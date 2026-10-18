@@ -151,7 +151,7 @@ scanned: features
 bed: typed 6, compat 0, read-only 4
 declared: describe 19/19
 note	repeated-scenario-prefix	features/signup.feature	2 scenarios begin with the same 2 steps, which took 0 seconds across them, 11% of this run's summed scenario time. The shared steps: "a registration for "ada@example.com" with password "correct horse" is submitted", "the confirmation link is opened". "a registration for "ada@example.com" with password "correct horse" is submitted" does not declare mutates: false, so a later scenario may read what this opening writes: a "process"-scope fixture would share that state between scenarios. A Background keeps the shared steps in one place and still runs them for each scenario.
-  do: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
+  fix: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
 ```
 
 Four scenarios also share the registration line alone. The note names

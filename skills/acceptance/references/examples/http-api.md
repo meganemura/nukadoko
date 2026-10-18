@@ -179,13 +179,9 @@ the path in the sentence is refused until it is escaped:
 
 ```
 $ npx nuka scaffold create-item --pattern 'I POST this body to /items'
-Refusing to scaffold: This Cucumber Expression has a problem at column 21:
-
-I POST this body to /items
-                    ^
-Alternative may not be empty.
-If you did not mean to use an alternative you can use '\/' to escape the '/'
-do: nuka scaffold --help
+refused	invalid-value	-	Refusing to scaffold: This Cucumber Expression has a problem at column 21: I POST this body to /items ^ Alternative may not be empty. If you did not mean to use an alternative you can use '\/' to escape the '/'
+  fix: Correct the flag's value as the message says.
+  do: nuka scaffold --help
 ```
 
 `--pattern 'I POST this body to \/items'` wrote the pattern
@@ -197,7 +193,7 @@ With the Outline named `a bad request body` and no column in the name,
 
 ```
 warning	outline-rows-share-name	probe/outline.feature:37	Scenario outline "a bad request body" has 3 Examples rows, and its name uses none of the columns (<body>, <status>, <error>), so every row is reported under the same name.
-  do: Add a column to the name, such as: a bad request body <body>
+  fix: Add a column to the name, such as: a bad request body <body>
 ```
 
 With the `server` fixture changed to `{ scope: "process" }`, two
@@ -240,7 +236,7 @@ scanned: features
 bed: typed 7, compat 0, read-only 5
 declared: describe 18/18
 note	repeated-scenario-prefix	features/items.feature	2 scenarios begin with the same 1 step, which took 0 seconds across them, 6.5% of this run's summed scenario time. The shared steps: "an item named "lamp" exists". "an item named "lamp" exists" does not declare mutates: false, so a later scenario may read what this opening writes: a "process"-scope fixture would share that state between scenarios. A Background keeps the shared steps in one place and still runs them for each scenario.
-  do: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
+  fix: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
 ```
 
 The shared step writes the item that each scenario then reads by id, so a

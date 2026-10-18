@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check` reports explore-unknown-step and
 // explore-browser-step with the file and the step name, says nothing about
@@ -21,7 +22,7 @@ async function checkReport(rootDir: string) {
   return {
     exitCode,
     stderr: stderr.text(),
-    report: JSON.parse(stdout.text()) as { errors: ExploreIssue[]; warnings: ExploreIssue[] },
+    report: bySeverity(stdout.text()) as { errors: ExploreIssue[]; warnings: ExploreIssue[] },
   };
 }
 
@@ -68,7 +69,7 @@ describe("nuka check: explore declarations", () => {
         code: "explore-empty-model",
         message: "the model has no commands, so every sequence it builds is empty and passes",
         file: "features/explore/empty-model.ts",
-        do: "Add at least one command to the model.",
+        fix: "Add at least one command to the model.",
       },
       {
         code: "explore-unseeded-random",
@@ -76,7 +77,7 @@ describe("nuka check: explore declarations", () => {
           'command "add-todo" args calls Math.random(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
         file: "features/explore/random-model.ts",
         step: "add-todo",
-        do: "Draw the value with draw.int or draw.pick, so that the seed drives it.",
+        fix: "Draw the value with draw.int or draw.pick, so that the seed drives it.",
       },
       {
         code: "explore-unseeded-random",
@@ -84,7 +85,7 @@ describe("nuka check: explore declarations", () => {
           'command "add-todo" next calls Math.random(), which the seed does not drive, so a run cannot be replayed or shrunk. Use draw.int or draw.pick',
         file: "features/explore/random-model.ts",
         step: "add-todo",
-        do: "Draw the value with draw.int or draw.pick, so that the seed drives it.",
+        fix: "Draw the value with draw.int or draw.pick, so that the seed drives it.",
       },
     ]);
   });

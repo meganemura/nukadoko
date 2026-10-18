@@ -43,7 +43,8 @@ import {
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { reviveStoredForm } from "../stored-form/revive.js";
-import { RefusalError, helpFor, refuse } from "./refusal.js";
+import { formatFinding, warningSink } from "../finding/finding.js";
+import { refuse, withHint } from "./refusal.js";
 import { describeArgsCommand } from "./option-defaults.js";
 import { assertFeaturesDirExists } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -142,15 +143,16 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   const { rootDir, name, argsJson, session, env, use, stdout, stderr } = options;
   // `do` prints a step record on stdout, never a report of its own, so a
   // refusal stays text on stderr.
-  const sinks = { json: false, stdout, stderr };
-  const help = helpFor("do");
+  const sinks = { json: false, stdout, stderr, command: "do" };
+  const warnings = (code: string): WritableSink =>
+    warningSink(code, (finding) => stderr.write(formatFinding(withHint(finding))));
 
   // --- Setup phase: any failure here writes nothing. ---
   let config;
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    return refuse(sinks, error, help);
+    return refuse(sinks, error, "unexpected-error");
   }
 
   // Environment resolution comes before anything session-related: session
@@ -163,7 +165,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   try {
     resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
   } catch (error) {
-    return refuse(sinks, error, help);
+    return refuse(sinks, error, "unexpected-error");
   }
 
   // Name validation and lock acquisition happen together, still in setup:
@@ -180,14 +182,14 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     try {
       validateSessionName(session);
     } catch (error) {
-      return refuse(sinks, error, help);
+      return refuse(sinks, error, "unexpected-error");
     }
     lockPath = sessionLockPath(rootDir, config.stateDir, resolvedEnv.name, session);
 
     try {
       await acquireLock(lockPath, session);
     } catch (error) {
-      return refuse(sinks, error, help);
+      return refuse(sinks, error, "unexpected-error");
     }
   }
 
@@ -204,7 +206,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
           session,
         );
       } catch (error) {
-        return refuse(sinks, error, help);
+        return refuse(sinks, error, "unexpected-error");
       }
     }
 
@@ -220,12 +222,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // is not there. Same refusal `nuka steps` and `nuka describe` make.
       assertFeaturesDirExists(rootDir, config);
     } catch (error) {
-      return refuse(sinks, error, help);
+      return refuse(sinks, error, "unexpected-error");
     }
 
     const entry = vocabulary.get(name);
     if (!entry) {
-      return refuse(sinks, new RefusalError(`Unknown step: ${name}`, "nuka steps"), help);
+      return refuse(sinks, `Unknown step: ${name}`, "unknown-step", { do: "nuka steps" });
     }
 
     // `nuka do` cannot name a compat
@@ -234,7 +236,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // validate or run in isolation (docs/spec.md "Compat steps (the migration door)").
     // This is a setup failure, not an execution one: no step record is written.
     if (entry.kind === "compat") {
-      return refuse(sinks, `Step "${name}" is a compat step and has no typed contract, so it cannot be run individually; promote it to defineStep to run it via \`nuka do\` (docs/spec.md "Compat steps (the migration door)")`, help);
+      return refuse(sinks, `Step "${name}" is a compat step and has no typed contract, so nuka do cannot run it alone`, "compat-step-not-runnable");
     }
 
     // After the lookup, so the do line's `nuka describe <name>` names a
@@ -243,7 +245,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return refuse(
         sinks,
         "--args is required unless --use supplies this step's arguments",
-        describeArgsCommand(name, help),
+        "step-args-invalid",
+        { do: describeArgsCommand(name, "nuka do --help") },
       );
     }
     let parsedArgs: unknown;
@@ -255,7 +258,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       return refuse(
         sinks,
         `Invalid JSON for --args: ${error instanceof Error ? error.message : String(error)}`,
-        describeArgsCommand(name, help),
+        "step-args-invalid",
+        { do: describeArgsCommand(name, "nuka do --help") },
       );
     }
 
@@ -282,7 +286,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // never began, so no step record is written for it.
     const fromIssues = validateStepFrom(name, entry.step, isRegisteredStep);
     if (fromIssues.length > 0) {
-      return refuse(sinks, formatFromIssues(fromIssues), help);
+      return refuse(sinks, formatFromIssues(fromIssues), "step-inputs-invalid");
     }
 
     // The fixture-bag counterpart to the `from` structural check just above:
@@ -296,7 +300,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const fixtureGraph = buildFixtureGraph(config);
     const fixtureIssues = validateStepFixtures(name, entry.step, knownFixtureNames(config));
     if (fixtureIssues.length > 0) {
-      return refuse(sinks, formatFixtureIssues(fixtureIssues), help);
+      return refuse(sinks, formatFixtureIssues(fixtureIssues), "step-inputs-invalid");
     }
 
     // The `config.fixtures` *definitions* themselves — the findings `nuka
@@ -306,7 +310,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `fixtureIssues` above already is.
     const fixtureDefinitionIssues = validateFixtureDefinitions(config);
     if (fixtureDefinitionIssues.length > 0) {
-      return refuse(sinks, formatFixtureDefinitionIssues(fixtureDefinitionIssues), help);
+      return refuse(sinks, formatFixtureDefinitionIssues(fixtureDefinitionIssues), "step-inputs-invalid");
     }
 
     // `--use <record-id>` (docs/spec.md "Single steps
@@ -330,7 +334,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         retentionNote(config.retention),
       );
       if (!resolved.ok) {
-        return refuse(sinks, resolved.message, help);
+        return refuse(sinks, resolved.message, "step-inputs-invalid");
       }
       resolvedUses.push(resolved);
     }
@@ -360,7 +364,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         if (existingProducer !== undefined && existingProducer !== resolved.used.step) {
           return refuse(sinks, `--use: key "${key}" is filled by both step "${existingProducer}" and step ` +
               `"${resolved.used.step}". These are different candidate producers for the same ` +
-              `\`from\` key, and \`nuka do\` cannot tell which one should win`, help);
+              `\`from\` key, and \`nuka do\` cannot tell which one should win`, "step-inputs-invalid");
         }
         producerByKey.set(key, resolved.used.step);
       }
@@ -372,7 +376,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // never happened be cited later as if it had. Read-only steps
     // (`mutates: false`) are unaffected regardless of policy.
     if (resolvedEnv.policy === "read-only" && entry.step.mutates) {
-      return refuse(sinks, new ReadOnlyEnvironmentError(name, resolvedEnv.name).message, help);
+      return refuse(sinks, new ReadOnlyEnvironmentError(name, resolvedEnv.name), "read-only-environment");
     }
 
     // --- Execution phase: a step record is always written from here on. ---
@@ -415,9 +419,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       if (probeResult.ok) {
         targetVersion = probeResult.version;
       } else {
-        stderr.write(
-          versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n",
-        );
+        warnings("version-probe-failed").write(versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n");
       }
     }
 
@@ -487,9 +489,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       for (const teardownError of fixtureTeardownErrors) {
         // The message is the fixture's own text, so a value `ctx.env` handed
         // it is in there, and this line is not a step record.
-        stderr.write(
-          fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
-        );
+        warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n");
       }
       try {
         // No status argument: create-context.ts's own `dispose` doc comment
@@ -634,7 +634,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // out of it here.
     const traceEvidence = await collectTraceEvidence(
       evidenceDir,
-      createTraceVersionWarner(stderr),
+      createTraceVersionWarner(warnings("trace-version-unknown")),
       "trace.zip",
       contextHandle.namedContexts(),
     );

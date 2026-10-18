@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { runCli } from "../src/cli/run-cli.js";
 import { stepTemplate } from "../src/cli/scaffold.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka scaffold <name> --pattern <text> [--then]`. The
 // file it writes has to pass `nuka check` against a feature line as
@@ -153,7 +154,9 @@ describe("nuka scaffold --pattern", () => {
   it.each([["--pattern"], ["--description"]])("refuses %s given no value, and names only that", async (flag) => {
     const result = await cli(rootDir, ["scaffold", "dash", flag]);
 
-    expect(result.stderr).toBe(`Not enough arguments following: ${flag.slice(2)}\ndo: nuka scaffold --help\n`);
+    expect(result.stderr).toBe(
+      `refused\tinvalid-arguments\t-\tNot enough arguments following: ${flag.slice(2)}\n  fix: Correct the command line; the command's --help lists its flags.\n  do: nuka scaffold --help\n`,
+    );
     expect(result.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "dash.ts"))).toBe(false);
   });
@@ -162,7 +165,7 @@ describe("nuka scaffold --pattern", () => {
     const result = await cli(rootDir, ["scaffold", "run-sum", "--pattern", "I add {a:number} and {b:number}"]);
 
     expect(result.stderr).toBe(
-      `Refusing to scaffold: the pattern names type "number", and this project registers none by that name; registered types: ${BUILTIN_TYPES}; did you mean {a:int} or {a:float}?\ndo: nuka scaffold --help\n`,
+      `refused\tinvalid-value\t-\tRefusing to scaffold: the pattern names type "number", and this project registers none by that name; registered types: ${BUILTIN_TYPES}; did you mean {a:int} or {a:float}?\n  fix: Correct the flag's value as the message says.\n  do: nuka scaffold --help\n`,
     );
     expect(result.stdout).toBe("");
     expect(result.exitCode).toBe(2);
@@ -172,7 +175,7 @@ describe("nuka scaffold --pattern", () => {
   it("refuses a type the project does not register, and writes it as z.unknown() once the config registers it", async () => {
     const refused = await cli(rootDir, ["scaffold", "wait-for", "--pattern", "I wait {d:duration}"]);
     expect(refused.stderr).toBe(
-      `Refusing to scaffold: the pattern names type "duration", and this project registers none by that name; registered types: ${BUILTIN_TYPES}\ndo: nuka scaffold --help\n`,
+      `refused\tinvalid-value\t-\tRefusing to scaffold: the pattern names type "duration", and this project registers none by that name; registered types: ${BUILTIN_TYPES}\n  fix: Correct the flag's value as the message says.\n  do: nuka scaffold --help\n`,
     );
     expect(refused.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "wait-for.ts"))).toBe(false);
@@ -186,7 +189,8 @@ describe("nuka scaffold --pattern", () => {
     // A second unknown type is still refused, with the project's type in the list.
     const second = await cli(rootDir, ["scaffold", "paint", "--pattern", "paint it {c:colour}"]);
     expect(second.stderr).toBe(
-      'Refusing to scaffold: the pattern names type "colour", and this project registers none by that name; registered types: bigdecimal, biginteger, byte, double, duration, float, int, long, short, string, word\ndo: nuka scaffold --help\n',
+      'refused\tinvalid-value\t-\tRefusing to scaffold: the pattern names type "colour", and this project registers none by that name; registered types: bigdecimal, biginteger, byte, double, duration, float, int, long, short, string, word\n' +
+        "  fix: Correct the flag's value as the message says.\n  do: nuka scaffold --help\n",
     );
   });
 
@@ -294,7 +298,7 @@ describe("nuka scaffold --pattern: any capture type", () => {
         try {
           const scaffold = await cli(rootDir, ["scaffold", name, "--pattern", pattern]);
           if (!expected) {
-            expect(scaffold.stderr).toMatch(/^Refusing to scaffold: the pattern names type "[a-z]+", and this project registers none by that name; registered types: /);
+            expect(scaffold.stderr).toMatch(/^refused\tinvalid-value\t-\tRefusing to scaffold: the pattern names type "[a-z]+", and this project registers none by that name; registered types: /);
             expect(scaffold.exitCode).toBe(2);
             expect(existsSync(filePath)).toBe(false);
             return;
@@ -302,7 +306,7 @@ describe("nuka scaffold --pattern: any capture type", () => {
           expect(scaffold.stderr).toBe("");
           expect(scaffold.exitCode).toBe(0);
           const check = await cli(rootDir, ["check", "--json"]);
-          const codes = [...JSON.parse(check.stdout).errors, ...JSON.parse(check.stdout).warnings].map(
+          const codes = [...bySeverity(check.stdout).errors, ...bySeverity(check.stdout).warnings].map(
             (issue: { code: string }) => issue.code,
           );
           expect(codes).not.toContain("unknown-parameter-type");

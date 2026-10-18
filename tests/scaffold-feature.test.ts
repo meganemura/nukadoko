@@ -213,7 +213,7 @@ describe("nuka scaffold --feature", () => {
     // The scenarios have no Then line, so the one warning left is that one.
     expect(await cli(rootDir, ["check", feature])).toEqual({
       exitCode: 0,
-      stdout: "warning\tscenario-without-then\tfeatures/add.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\nwarning\tscenario-without-then\tfeatures/add.feature:4\tScenario \"two\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\n",
+      stdout: "warning\tscenario-without-then\tfeatures/add.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\nwarning\tscenario-without-then\tfeatures/add.feature:4\tScenario \"two\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\n",
       stderr: "",
     });
   });
@@ -238,7 +238,7 @@ describe("nuka scaffold --feature", () => {
     expect(await stepFile(rootDir, "3-items-in-the-cart")).toContain('  pattern: "3 items in \\\\(the) cart",\n  // Give');
     expect(await cli(rootDir, ["check", feature])).toEqual({
       exitCode: 0,
-      stdout: "warning\tscenario-without-then\tfeatures/cart.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  do: Add a Then line that checks the outcome the scenario is for.\n",
+      stdout: "warning\tscenario-without-then\tfeatures/cart.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\n",
       stderr: "",
     });
   });
@@ -324,8 +324,8 @@ describe("nuka scaffold --feature", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        "Refusing to scaffold: 1 step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them); `nuka check` names them\n" +
-        "do: nuka check\n",
+        "refused\tstep-file-import-failed\t-\tRefusing to scaffold: 1 step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them)\n" +
+        "  do: nuka check\n",
     });
     expect(existsSync(path.join(rootDir, "features", "steps", "the-output-is.ts"))).toBe(false);
   });
@@ -336,7 +336,10 @@ describe("nuka scaffold --feature", () => {
     expect(result).toEqual({
       exitCode: 2,
       stdout: "",
-      stderr: "nuka scaffold --feature: feature file not found: features/nope.feature\ndo: nuka scaffold --help\n",
+      stderr:
+        "refused\ttarget-not-found\t-\tnuka scaffold --feature: feature file not found: features/nope.feature\n" +
+        "  fix: Name a file or a directory that exists.\n" +
+        "  do: nuka scaffold --help\n",
     });
   });
 
@@ -345,8 +348,9 @@ describe("nuka scaffold --feature", () => {
 
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toBe(
-      "--feature names each stub and reads its pattern and outcome from its own line; leave out a step name, --then, or scaffold that step on its own with nuka scaffold <name>\n" +
-        "do: nuka scaffold --help\n",
+      "refused\tinvalid-arguments\t-\t--feature names each stub and reads its pattern and outcome from its own line; leave out a step name, --then, or scaffold that step on its own with nuka scaffold <name>\n" +
+        "  fix: Correct the command line; the command's --help lists its flags.\n" +
+        "  do: nuka scaffold --help\n",
     );
   });
 
@@ -356,17 +360,20 @@ describe("nuka scaffold --feature", () => {
     expect(result).toEqual({
       exitCode: 2,
       stdout: "",
-      stderr: "Missing required argument: name (or --feature <path>)\ndo: nuka scaffold --help\n",
+      stderr:
+        "refused\tinvalid-arguments\t-\tMissing required argument: name (or --feature <path>)\n" +
+        "  fix: Correct the command line; the command's --help lists its flags.\n" +
+        "  do: nuka scaffold --help\n",
     });
   });
 
-  it("puts the command in undefined-step's message", async () => {
+  it("names the scaffold command as undefined-step's do", async () => {
     const feature = await writeFeature(rootDir, "greet.feature", ["Feature: greet", "  Scenario: one", "    When nothing defines this"]);
 
     const result = await cli(rootDir, ["check", feature]);
 
     expect(result.stdout).toContain(
-      'error\tundefined-step\tfeatures/greet.feature:3\tNo step definition matches "nothing defines this"; run `nuka scaffold --feature features/greet.feature` to add one\n' +
+      'error\tundefined-step\tfeatures/greet.feature:3\tNo step definition matches "nothing defines this"\n' +
         "  do: nuka scaffold --feature features/greet.feature\n",
     );
   });

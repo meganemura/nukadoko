@@ -5,7 +5,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTodoApp } from "../examples/todo/app/server.js";
 import { runCli } from "../src/cli/run-cli.js";
+import { readOwnVersion } from "../src/version.js";
 import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+
+const version = readOwnVersion();
 
 // Responsibility: `nuka experimental explore` against the todo example and its real
 // app. The v1 app passes the model and the relation. The v2 app renames
@@ -110,7 +113,9 @@ describe("nuka experimental explore", () => {
         '    * a todo titled "milk" is added',
         "",
       ].join("\n"),
-      stderr: "Failed: run 1, seed 1, shrunk to 1 step. The scenario is on stdout.\n",
+      stderr:
+        "failed\texplore-failed\tfeatures/explore/add-model.ts\tRun 1, seed 1, shrunk to 1 step; the scenario is on stdout\n" +
+        "  do: nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6\n",
     });
   });
 
@@ -127,7 +132,9 @@ describe("nuka experimental explore", () => {
         '    * the todo titled "bread" is completed',
         "",
       ].join("\n"),
-      stderr: "Failed: run 1, seed 1, shrunk to 2 steps. The scenario is on stdout.\n",
+      stderr:
+        "failed\texplore-failed\tfeatures/explore/wrong-model.ts\tRun 1, seed 1, shrunk to 2 steps; the scenario is on stdout\n" +
+        "  do: nuka experimental explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8\n",
     });
   });
 
@@ -146,7 +153,9 @@ describe("nuka experimental explore", () => {
         '    * the todo list includes "milk"',
         "",
       ].join("\n"),
-      stderr: 'Failed: relation "add then listed". Both scenarios are on stdout.\n',
+      stderr:
+        'failed\texplore-failed\tfeatures/explore/add-relation.ts\tRelation "add then listed" failed; both scenarios are on stdout\n' +
+        "  do: nuka experimental explore features/explore/add-relation.ts\n",
     });
   });
 
@@ -165,9 +174,10 @@ describe("nuka experimental explore", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        'Step "add-todo" mutates state but environment "staging" has policy "read-only"\n' +
+        'refused\tread-only-environment\t-\tStep "add-todo" mutates state but environment "staging" has policy "read-only"; ' +
         'Step "complete-todo" mutates state but environment "staging" has policy "read-only"\n' +
-        "do: nuka experimental explore --help\n",
+        "  fix: Run the step against an environment that allows writes, or declare mutates: false if it only reads.\n" +
+        "  do: nuka experimental explore --help\n",
     });
     expect(requests).toBe(0);
   });
@@ -191,7 +201,9 @@ describe("nuka experimental explore", () => {
     expect({ ...result, stdout: JSON.parse(result.stdout) }).toEqual({
       exitCode: 0,
       stdout: {
-        schema_version: 1,
+        schema_version: 2,
+        nukadoko: version,
+        command: "experimental explore",
         kind: "model",
         file: "features/explore/add-model.ts",
         verdict: "passed",
@@ -200,6 +212,7 @@ describe("nuka experimental explore", () => {
         length: 6,
         steps: 30,
         rerun: "nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6",
+        findings: [],
       },
       stderr: "",
     });
@@ -215,7 +228,9 @@ describe("nuka experimental explore", () => {
     expect({ ...result, stdout: json }).toEqual({
       exitCode: 1,
       stdout: {
-        schema_version: 1,
+        schema_version: 2,
+        nukadoko: version,
+        command: "experimental explore",
         kind: "model",
         file: "features/explore/wrong-model.ts",
         verdict: "failed",
@@ -227,6 +242,15 @@ describe("nuka experimental explore", () => {
         found_steps: 7,
         shrunk_steps: 2,
         shrink_attempts: 13,
+        findings: [
+          {
+            severity: "failed",
+            code: "explore-failed",
+            file: "features/explore/wrong-model.ts",
+            message: "Run 1, seed 1, shrunk to 2 steps; the scenario is on stdout",
+            do: "nuka experimental explore features/explore/wrong-model.ts --seed 1 --runs 5 --length 8",
+          },
+        ],
         failure: {
           index: 1,
           kind: "post-false",
@@ -254,12 +278,23 @@ describe("nuka experimental explore", () => {
     expect({ ...result, stdout: JSON.parse(result.stdout) }).toEqual({
       exitCode: 1,
       stdout: {
-        schema_version: 1,
+        schema_version: 2,
+        nukadoko: version,
+        command: "experimental explore",
         kind: "relation",
         file: "features/explore/add-relation.ts",
         name: "add then listed",
         verdict: "failed",
         rerun: "nuka experimental explore features/explore/add-relation.ts",
+        findings: [
+          {
+            severity: "failed",
+            code: "explore-failed",
+            file: "features/explore/add-relation.ts",
+            message: 'Relation "add then listed" failed; both scenarios are on stdout',
+            do: "nuka experimental explore features/explore/add-relation.ts",
+          },
+        ],
         failure: {
           sequence: "source",
           index: 0,
@@ -413,9 +448,10 @@ describe("nuka experimental explore", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        "features/steps/add-todo.ts is not a model or a relation that discovery found under features. " +
+        "refused\texplore-target-unknown\t-\tfeatures/steps/add-todo.ts is not a model or a relation that discovery found under features. " +
         "Found: features/explore/add-model.ts, features/explore/add-relation.ts\n" +
-        "do: nuka experimental explore --help\n",
+        "  fix: Name a file under featuresDir whose default export is an experimental_defineModel or experimental_defineRelation declaration.\n" +
+        "  do: nuka experimental explore --help\n",
     });
   });
 });
@@ -429,8 +465,8 @@ describe("nuka explore", () => {
       exitCode: 2,
       stdout: "",
       stderr:
-        "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments\n" +
-        "do: nuka experimental explore features/explore/add-model.ts --seed 1\n",
+        "refused\tremoved-command\t-\t`nuka explore` moved to `nuka experimental explore`\n" +
+        "  do: nuka experimental explore features/explore/add-model.ts --seed 1\n",
     });
   });
 
@@ -438,6 +474,6 @@ describe("nuka explore", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     await runCli(["explore", "models/a b.ts", "--json"], { stdout, stderr });
-    expect((JSON.parse(stdout.text()) as { do: string }).do).toBe("nuka experimental explore 'models/a b.ts' --json");
+    expect((JSON.parse(stdout.text()) as { findings: { do: string }[] }).findings[0]!.do).toBe("nuka experimental explore 'models/a b.ts' --json");
   });
 });

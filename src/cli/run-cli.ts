@@ -1,4 +1,3 @@
-import { versioned } from "../record/schema-version.js";
 import yargs from "yargs";
 // TODO(types): @types/yargs is pinned to the 17.x line (no 18.x types on
 // DefinitelyTyped yet); CommandModule/Argv here
@@ -16,7 +15,19 @@ import {
 } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
-import { RefusalError, commandPathOf, helpFor, refuse } from "./refusal.js";
+import { formatFinding, type Finding } from "../finding/finding.js";
+import {
+  REFUSED_EXIT_CODE,
+  RefusalError,
+  commandPathOf,
+  configMissingFinding,
+  failInShape,
+  formatEnvelope,
+  refusalOf,
+  refuse,
+  withHint,
+  writeStopped,
+} from "./refusal.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
 // `session list`/`clear`, `init`, `scaffold`, `check`,
@@ -237,7 +248,7 @@ function refuseRemovedFlags(y: Argv, removed: Readonly<Record<string, string>>):
   return withOptions.check((args) => {
     const record = args as unknown as Record<string, unknown>;
     for (const [flag, message] of Object.entries(removed)) {
-      if (record[flag] !== undefined) throw new Error(message);
+      if (record[flag] !== undefined) throw new RefusalError("removed-command", message);
     }
     return true;
   });
@@ -294,11 +305,15 @@ export async function runCli(
   // immediately, before doing anything else, so a failed parse has zero
   // side effects.
   let argsFailed = false;
-  const usageFailures: string[] = [];
-  // The `do` a `.check()` names for its own refusal, kept only when that
-  // refusal is the parse's one failure: with two, neither one's fix is the
-  // whole fix, and the command's help covers both.
-  const usageFailureDos: (string | undefined)[] = [];
+  // One refused finding per failure of the parse, each with its own code.
+  const usageFailures: Finding[] = [];
+  // Read after the parser is built, since the command names come from it.
+  const usageCommand = (): string => commandPathOf(argv, commandNames);
+  const jsonRequested = argv.includes("--json");
+  // Findings raised before a command runs, such as a missing config file.
+  // Text writes them to stderr at once; `--json` hands them to the command,
+  // which puts them in its one document.
+  let notices: Finding[] = [];
 
   // Wraps a command that reads the config, so a directory without one is
   // named on stderr. In the handler rather than a yargs middleware: global
@@ -311,7 +326,14 @@ export async function runCli(
       if (!argsFailed) {
         const { locateConfig, noConfigLine } = await import("../config/config-presence.js");
         const line = noConfigLine(rootDir, locateConfig(rootDir));
-        if (line !== null) stderr.write(`${line}\n`);
+        if (line !== null) {
+          const finding = configMissingFinding(line);
+          // `describe` and `do` print a document of their own whatever the
+          // flags say, so a notice cannot wait for a `--json` that is not there.
+          const held = (args as { json?: unknown }).json === true || command.command === "describe <name>";
+          if (held) notices = [finding];
+          else stderr.write(formatFinding(withHint(finding)));
+        }
       }
       await command.handler(args);
     },
@@ -333,7 +355,7 @@ export async function runCli(
         {
           assertFeaturesDirExists,
           buildStepNames,
-          formatImportFailuresStderr,
+          importFailureFindings,
           formatVocabulary,
           loadVocabulary,
           summarize,
@@ -370,15 +392,13 @@ export async function runCli(
           // silently dropping `import_failures` off a bare array, is
           // exactly the "machine reader treats an incomplete list as
           // complete" failure this field exists to prevent.
-          stdout.write(
-            `${JSON.stringify(versioned("steps", { steps: summaries, import_failures: importFailureSummaries }), null, 2)}\n`,
-          );
+          const incomplete = importFailures.length > 0 || summaries.some((s) => s.needs_error !== undefined || s.from_errors !== undefined);
+          stdout.write(formatEnvelope("steps", incomplete ? 1 : 0, [...notices, ...importFailureFindings(rootDir, importFailureSummaries)], { steps: summaries }));
         } else {
           // A fixed width, not the terminal's: the same project prints the
           // same text in a terminal, a pipe, and an agent's shell.
           stdout.write(formatVocabulary(summaries, 80));
-          // `--json` already carries these as `import_failures`.
-          stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
+          for (const finding of importFailureFindings(rootDir, importFailureSummaries)) stderr.write(formatFinding(finding));
         }
         // Exit 1 whenever the output is incomplete in a way this command
         // still went ahead and printed anyway — the check below has to name
@@ -395,7 +415,7 @@ export async function runCli(
           exitCode = 1;
         }
       } catch (error) {
-        exitCode = refuse({ json: args.json ?? false, stdout, stderr }, error, helpFor("steps"));
+        exitCode = refuse({ json: args.json ?? false, stdout, stderr, command: "steps" }, error, "unexpected-error", undefined, notices);
       }
     },
   };
@@ -417,7 +437,7 @@ export async function runCli(
           assertFeaturesDirExists,
           buildStepNames,
           describeContract,
-          formatImportFailuresStderr,
+          importFailureFindings,
           loadVocabulary,
           toImportFailureSummaries,
         },
@@ -427,8 +447,7 @@ export async function runCli(
       ]);
       // `describe` has no text form: its stdout is always one JSON object,
       // so a refusal is one too.
-      const sinks = { json: true, stdout, stderr };
-      const help = helpFor("describe");
+      const sinks = { json: true, stdout, stderr, command: "describe" };
       try {
         // Same tolerant mode as `steps` above, same reasoning — also the
         // one case where it matters most: the step this call is asking
@@ -446,10 +465,12 @@ export async function runCli(
         const importFailureSummaries = toImportFailureSummaries(importFailures);
         const entry = vocabulary.get(args.name);
         if (!entry) {
-          exitCode = refuse(sinks, new RefusalError(`Unknown step: ${args.name}`, "nuka steps"), help);
-          // A refusal has no field for these yet, and the step asked about
-          // may be the one whose file did not import.
-          stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
+          // The step asked about may be the one whose file did not import,
+          // so the import failures go in the same document.
+          exitCode = refuse(sinks, `Unknown step: ${args.name}`, "unknown-step", { do: "nuka steps" }, [
+            ...notices,
+            ...importFailureFindings(rootDir, importFailureSummaries),
+          ]);
           return;
         }
         // Same `buildFixtureGraph(config)` call `steps` above already makes
@@ -461,8 +482,17 @@ export async function runCli(
         const contract = describeContract(entry, buildStepNames(vocabulary), rootDir, graph);
         // The document's `import_failures` is the one copy: stdout is always
         // JSON here, so a stderr listing would only say it twice.
+        const incomplete =
+          importFailures.length > 0 ||
+          (contract.kind === "typed" &&
+            (contract.from_errors !== undefined ||
+              contract.needs_error !== undefined ||
+              contract.args_error !== undefined ||
+              contract.returns_error !== undefined));
         stdout.write(
-          `${JSON.stringify(versioned("describe", { ...contract, import_failures: importFailureSummaries }), null, 2)}\n`,
+          formatEnvelope("describe", incomplete ? 1 : 0, [...notices, ...importFailureFindings(rootDir, importFailureSummaries)], {
+            ...contract,
+          }),
         );
         // Same rule as `steps` above, scoped to this one contract: an
         // import failure elsewhere in the project, this step's own
@@ -471,18 +501,9 @@ export async function runCli(
         // JSON Schema cannot represent (`args_error` / `returns_error`).
         // Same reasoning in every case: the output went ahead and printed,
         // but it is not complete.
-        if (
-          importFailures.length > 0 ||
-          (contract.kind === "typed" &&
-            (contract.from_errors !== undefined ||
-              contract.needs_error !== undefined ||
-              contract.args_error !== undefined ||
-              contract.returns_error !== undefined))
-        ) {
-          exitCode = 1;
-        }
+        if (incomplete) exitCode = 1;
       } catch (error) {
-        exitCode = refuse(sinks, error, help);
+        exitCode = refuse(sinks, error, "unexpected-error", undefined, notices);
       }
     },
   };
@@ -611,6 +632,7 @@ export async function runCli(
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
       exitCode = await runRun({
+        notices,
         rootDir,
         featureArgs: args.feature ?? [],
         check: args.check ?? true,
@@ -652,6 +674,7 @@ export async function runCli(
       if (argsFailed) return;
       const { runExplore } = await import("./explore.js");
       exitCode = await runExplore({
+        notices,
         rootDir,
         file: args.file,
         seed: args.seed ?? null,
@@ -678,6 +701,7 @@ export async function runCli(
       if (argsFailed) return;
       const { runSessionList } = await import("./session.js");
       exitCode = await runSessionList({
+        notices,
         rootDir,
         json: args.json ?? false,
         stdout,
@@ -723,11 +747,12 @@ export async function runCli(
     handler: () => {
       if (argsFailed) return;
       exitCode = refuse(
-        { json: argv.includes("--json"), stdout, stderr },
+        { json: jsonRequested, stdout, stderr, command: `session ${verb}` },
         `\`nuka session ${verb}\` was removed with live sessions; \`nuka do <step> --session <name>\` still carries ` +
           "login state across calls, and a page whose state cannot be repeated is explored through a Playwright " +
           "MCP server (see docs/upgrading.md in the nukadoko package)",
-        "nuka do --help",
+        "removed-command",
+        { do: "nuka do --help" },
       );
     },
   }));
@@ -922,6 +947,7 @@ export async function runCli(
       if (argsFailed) return;
       const { runCheck } = await import("./check.js");
       exitCode = await runCheck({
+        notices,
         rootDir,
         json: args.json ?? false,
         codes: args.codes ?? false,
@@ -956,6 +982,7 @@ export async function runCli(
       if (argsFailed) return;
       const { runClean } = await import("./clean.js");
       exitCode = await runClean({
+        notices,
         rootDir,
         dryRun: args.dryRun ?? false,
         json: args.json ?? false,
@@ -995,6 +1022,7 @@ export async function runCli(
       if (argsFailed) return;
       const { runTend } = await import("./tend.js");
       exitCode = await runTend({
+        notices,
         rootDir,
         json: args.json ?? false,
         codes: args.codes ?? false,
@@ -1035,10 +1063,10 @@ export async function runCli(
     handler: () => {
       if (argsFailed) return;
       exitCode = refuse(
-        { json: argv.includes("--json"), stdout, stderr },
-        "`nuka harvest` was removed; write the scenario from the steps you ran, then run `nuka check` " +
-          "(see docs/upgrading.md in the nukadoko package)",
-        "nuka check",
+        { json: jsonRequested, stdout, stderr, command: "harvest" },
+        "`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)",
+        "removed-command",
+        { fix: "Write the scenario from the steps you ran in a feature file.", do: "nuka check" },
       );
     },
   };
@@ -1053,9 +1081,10 @@ export async function runCli(
     handler: async () => {
       if (argsFailed) return;
       exitCode = refuse(
-        { json: argv.includes("--json"), stdout, stderr },
-        "`nuka explore` moved to `nuka experimental explore`; run that instead, with the same arguments",
-        movedExploreCommandLine(argv),
+        { json: jsonRequested, stdout, stderr, command: "explore" },
+        "`nuka explore` moved to `nuka experimental explore`",
+        "removed-command",
+        { do: movedExploreCommandLine(argv) },
       );
     },
   };
@@ -1139,17 +1168,17 @@ export async function runCli(
       argsFailed = true;
       // yargs passes `msg: null` with the error only when a handler threw.
       if (msg === null && err !== undefined) {
-        exitCode = 1;
-        stderr.write(`${err.message}\n`);
+        exitCode = failInShape({ json: jsonRequested, stdout, stderr, command: usageCommand() }, err, "unexpected-error");
         return;
       }
       // Anything else is the invocation itself: an unknown flag or command,
       // a missing argument, or a `.check()` that refused. One parse can fail
       // more than once (a missing name, then why it is missing), and all of
-      // them become one refusal after the parse, so `--json` still gets
-      // exactly one object.
-      usageFailures.push(err?.message ?? msg ?? "unknown error");
-      usageFailureDos.push(err instanceof RefusalError ? err.do : undefined);
+      // them become findings of one envelope after the parse. yargs joins
+      // those reasons with a newline, and a finding's message is one line.
+      const reason = msg === null ? undefined : msg.split("\n").filter((part) => part !== "").join("; ");
+      const cause = err instanceof RefusalError ? err : (reason ?? err ?? "unknown error");
+      usageFailures.push(refusalOf(cause, "invalid-arguments", usageCommand()));
     })
     .usage(
       `nuka <command>\n\n${renderCommandGroups(
@@ -1181,16 +1210,11 @@ export async function runCli(
     await parser.parseAsync();
   } catch (error) {
     if (!argsFailed) {
-      exitCode = 1;
-      stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+      exitCode = failInShape({ json: jsonRequested, stdout, stderr, command: usageCommand() }, error, "unexpected-error");
     }
   }
   if (usageFailures.length > 0) {
-    exitCode = refuse(
-      { json: argv.includes("--json"), stdout, stderr },
-      usageFailures.join("\n"),
-      (usageFailures.length === 1 ? usageFailureDos[0] : undefined) ?? helpFor(commandPathOf(argv, commandNames)),
-    );
+    exitCode = writeStopped({ json: jsonRequested, stdout, stderr, command: usageCommand() }, usageFailures, REFUSED_EXIT_CODE);
   }
   return exitCode;
 }

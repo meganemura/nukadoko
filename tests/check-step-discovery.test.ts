@@ -1,11 +1,9 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import * as hegel from "@hegeldev/hegel";
-import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import { noStepFilesDo } from "../src/check/no-step-files-do.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s
 // two new findings, both decidable from the walk alone (an extension check,
@@ -22,7 +20,7 @@ describe("nuka check: step-file-unsupported-extension", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string; file?: string }>;
     };
 
@@ -46,7 +44,7 @@ describe("nuka check: step-file-unsupported-extension", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string; file?: string }>;
     };
     const issues = report.errors.filter((entry) => entry.code === "step-file-unsupported-extension");
@@ -67,7 +65,7 @@ describe("nuka check: step-file-unsupported-extension", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string }> };
+    const report = bySeverity(stdout.text()) as { errors: Array<{ code: string }> };
     expect(report.errors.some((entry) => entry.code === "step-file-unsupported-extension")).toBe(
       false,
     );
@@ -86,36 +84,37 @@ describe("nuka check: no-step-files-found", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as {
-      errors: Array<{ code: string; message: string; file?: string; do?: string }>;
+    const report = bySeverity(stdout.text()) as {
+      errors: Array<{ code: string; message: string; file?: string; fix?: string; do?: string }>;
     };
 
     const issue = report.errors.find((entry) => entry.code === "no-step-files-found");
     expect(issue).toBeDefined();
     expect(issue?.file).toBe("features");
     expect(issue?.message).toContain("features");
-    expect(issue?.do).toBe("Add a step file under featuresDir. nuka scaffold writes one.");
+    expect(issue?.fix).toBe("Add a step file under featuresDir. nuka scaffold writes one.");
 
     expect(exitCode).toBe(1);
   });
 
-  it("names the scaffold command for the checked feature files whose lines are all undefined", async () => {
+  it("leaves the scaffold command to each undefined-step finding when every line is undefined", async () => {
     const rootDir = await copyFixtureToTempDir("check-no-step-files-project");
     try {
       await writeFile(path.join(rootDir, "features", "a.feature"), "Feature: a\n\n  Scenario: s\n    Given an empty directory\n");
       await writeFile(path.join(rootDir, "features", "b.feature"), "Feature: b\n\n  Scenario: t\n    Then it exits with 0\n");
-      const doFor = async (args: string[]) => {
+      const hintsFor = async (args: string[]) => {
         const stdout = createCaptureSink();
         await runCli(["check", "--json", ...args], { rootDir, stdout, stderr: createCaptureSink() });
-        const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string; do?: string }> };
-        return report.errors.find((entry) => entry.code === "no-step-files-found")?.do;
+        const report = bySeverity(stdout.text()) as { errors: Array<{ code: string; file?: string; do?: string }> };
+        return report.errors.map((entry) => [entry.code, entry.file, entry.do]);
       };
-      expect(await doFor([])).toBe(
-        'Run nuka scaffold --feature for each of features/a.feature, features/b.feature. Step files outside "features" are never read: move any there instead.',
-      );
-      expect(await doFor(["features/b.feature"])).toBe(
-        'Run nuka scaffold --feature features/b.feature. Step files outside "features" are never read: move any there instead.',
-      );
+      expect(await hintsFor([])).toEqual([
+        ["undefined-step", "features/a.feature", "nuka scaffold --feature features/a.feature"],
+        ["undefined-step", "features/b.feature", "nuka scaffold --feature features/b.feature"],
+      ]);
+      expect(await hintsFor(["features/b.feature"])).toEqual([
+        ["undefined-step", "features/b.feature", "nuka scaffold --feature features/b.feature"],
+      ]);
     } finally {
       await removeTempDir(rootDir);
     }
@@ -129,7 +128,7 @@ describe("nuka check: no-step-files-found", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string }> };
+    const report = bySeverity(stdout.text()) as { errors: Array<{ code: string }> };
     expect(report.errors.some((entry) => entry.code === "no-step-files-found")).toBe(false);
     expect(exitCode).toBe(0);
   });
@@ -142,7 +141,7 @@ describe("nuka check: no-step-files-found", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string }> };
+    const report = bySeverity(stdout.text()) as { errors: Array<{ code: string }> };
     // check.test.ts's own "features-dir-missing" test already pins this
     // fixture's error list to exactly one entry; this test only adds that
     // the second entry is not no-step-files-found reporting the same root
@@ -150,20 +149,4 @@ describe("nuka check: no-step-files-found", () => {
     expect(report.errors).toEqual([expect.objectContaining({ code: "features-dir-missing" })]);
     expect(exitCode).toBe(1);
   });
-});
-
-describe("noStepFilesDo", () => {
-  it("names each distinct file once, and says nothing new when no line is undefined", () =>
-    hegel.test((tc) => {
-      const files = tc.draw(gs.arrays(gs.sampledFrom(["features/a.feature", "features/b.feature", "docs/c.md"]), { maxSize: 6 }));
-      const text = noStepFilesDo(files, "features");
-      const distinct = [...new Set(files)];
-      if (distinct.length === 0) {
-        expect(text).toBeUndefined();
-        return;
-      }
-      for (const file of distinct) expect(text!.split(file).length).toBe(2);
-      expect(text!.endsWith('Step files outside "features" are never read: move any there instead.')).toBe(true);
-      expect(text!.startsWith(distinct.length === 1 ? `Run nuka scaffold --feature ${distinct[0]}.` : "Run nuka scaffold --feature for each of ")).toBe(true);
-    }));
 });

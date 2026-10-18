@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { bySeverity } from "./helpers/envelope.js";
 import {
   createCaptureSink,
   createEmptyTempDir,
@@ -47,13 +48,16 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
     const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(2);
-    // `{"steps": [], "import_failures": []}` here would read as success.
+    // An envelope with `steps: []` and no refusal here would read as success.
     // The refusal has no `steps` key at all, so no reader can mistake it.
-    expect(JSON.parse(stdout.text())).toEqual({
-      schema_version: 1,
-      error: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
-      do: "nuka steps --help",
-    });
+    expect(bySeverity(stdout.text()).refused).toEqual([
+      {
+        code: "features-dir-missing",
+        message: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+        fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
+        do: "nuka steps --help",
+      },
+    ]);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
   });
 
@@ -66,7 +70,8 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
     const exitCode = await runCli(["steps", "--json"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(0);
-    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, steps: [], import_failures: [] });
+    const report = bySeverity(stdout.text());
+    expect([report.verdict, report.steps, report.errors]).toEqual(["passed", [], []]);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
   });
 });
@@ -86,11 +91,14 @@ describe("nuka describe and nuka do: featuresDir missing", () => {
     const exitCode = await runCli(["describe", "missing-step"], { rootDir, stdout, stderr });
 
     expect(exitCode).toBe(2);
-    expect(JSON.parse(stdout.text())).toEqual({
-      schema_version: 1,
-      error: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
-      do: "nuka describe --help",
-    });
+    expect(bySeverity(stdout.text()).refused).toEqual([
+      {
+        code: "features-dir-missing",
+        message: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+        fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
+        do: "nuka describe --help",
+      },
+    ]);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
   });
 

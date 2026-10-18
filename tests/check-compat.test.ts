@@ -2,6 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture, withoutNoConfigLine } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: check-integration tests
 // — compat participates in undefined-step/duplicate/ambiguous
@@ -25,7 +26,7 @@ describe("nuka check: compat integration", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string }>;
       warnings: Array<{ code: string; message: string }>;
     };
@@ -64,7 +65,7 @@ describe("nuka check: compat integration", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const thenCompat = report.warnings.find(
       (issue: { code: string }) => issue.code === "then-compat-step",
     );
@@ -83,7 +84,7 @@ describe("nuka check: compat integration", () => {
     });
 
     expect(withoutNoConfigLine(stderr.text())).toBe("");
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.errors).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "parameter-type-invalid" })]),
     );
@@ -99,14 +100,14 @@ describe("nuka check: compat integration", () => {
     });
 
     expect(withoutNoConfigLine(stderr.text())).toBe("");
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.errors.filter((issue: { code: string }) => issue.code === "parameter-type-invalid")).toEqual([
       {
         code: "parameter-type-invalid",
         message:
           'Custom parameter type "codeB" sets preferForRegexpMatch on /[A-Z]+/, which {codeA} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
         file: path.join("features", "steps", "code-glue.ts"),
-        do: "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch.",
+        fix: "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch.",
       },
     ]);
     expect(exitCode).toBe(1);
@@ -122,14 +123,14 @@ describe("nuka check: compat integration", () => {
     });
 
     expect(withoutNoConfigLine(stderr.text())).toBe("");
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.errors.filter((issue: { code: string }) => issue.code === "parameter-type-invalid")).toEqual([
       {
         code: "parameter-type-invalid",
         message:
           'Custom parameter type "count" sets preferForRegexpMatch on /-?\\d+/, which {int} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them',
         file: path.join("features", "steps", "count-glue.ts"),
-        do: "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch.",
+        fix: "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch.",
       },
     ]);
     expect(exitCode).toBe(1);

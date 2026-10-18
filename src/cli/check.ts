@@ -1,4 +1,3 @@
-import { versioned } from "../record/schema-version.js";
 import { statSync } from "node:fs";
 import path from "node:path";
 import { analyzeProject, analyzeRunSelection } from "../check/analyze.js";
@@ -8,7 +7,19 @@ import { loadConfig } from "../config/load-config.js";
 import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
 import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { readFeaturesForCheck, resolveFeatureTargets } from "../run/select-pickles.js";
-import { RefusalError, helpFor, refusalOf, refuse } from "./refusal.js";
+import { listRunCodes } from "../finding/run-codes.js";
+import { shellWord } from "../shell/shell-word.js";
+import {
+  type Finding,
+  type FindingText,
+  type Severity,
+  formatFinding,
+  formatFindingText,
+  toText,
+  whereOf,
+} from "../finding/finding.js";
+import { listRefusalCodes } from "./refusal-codes.js";
+import { RefusalError, formatEnvelope, refuse, restated } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka check`'s actual work, kept out of run-cli.ts so
@@ -48,47 +59,11 @@ export interface RunCheckOptions {
   codes?: boolean;
   /** Feature files, oaths, or directories; empty checks the whole project. */
   targets?: readonly string[];
+  /** Findings the invocation raised before the command ran, such as a
+   * missing config file, which `--json` carries in the envelope. */
+  notices?: readonly Finding[];
   stdout: WritableSink;
   stderr: WritableSink;
-}
-
-// Shared by formatLocation below and formatImportFailureGroup further
-// down: one place decides how a file and an optional line combine into
-// the third tab-separated column, so a `step-file-import-failed` finding
-// with a `line` prints identically whether or not it went through the
-// grouping fold below.
-function formatFileAndLine(file: string | undefined, line: number | undefined): string {
-  if (file === undefined) {
-    return "-";
-  }
-  return line !== undefined ? `${file}:${line}` : file;
-}
-
-function formatLocation(issue: CheckIssue): string {
-  if (issue.file !== undefined) {
-    return formatFileAndLine(issue.file, issue.line);
-  }
-  if (issue.step !== undefined) {
-    return issue.step;
-  }
-  return "-";
-}
-
-// A message can itself contain newlines (e.g. cucumber-expressions' own
-// error messages include a multi-line "^----^" pointer at the offending
-// column) — collapsed to single spaces here so the human-readable format's
-// one line per issue, plus its do line, holds even then. `--json` never does this: JSON
-// string encoding already handles embedded newlines faithfully, so the raw
-// message survives there.
-function formatIssueLine(severity: "error" | "warning", issue: CheckFinding): string {
-  const singleLineMessage = issue.message.replace(/\s*\n\s*/g, " ");
-  return `${severity}\t${issue.code}\t${formatLocation(issue)}\t${singleLineMessage}\n${formatDoLine(issue.do)}`;
-}
-
-// Indented like the file list of an import-failure group, so a reader
-// that splits on the tab-separated finding lines can skip it by prefix.
-function formatDoLine(text: string): string {
-  return `  do: ${text.replace(/\s*\n\s*/g, " ")}`;
 }
 
 // The codes whose identical messages fold into one group: a step file that
@@ -100,19 +75,13 @@ function foldKey(issue: { readonly code: string; readonly message: string }): st
   return `${issue.code}\u0000${issue.message}`;
 }
 
-// Groups `step-file-import-failed` findings by exact message match, for
-// the human-readable rendering only: `CheckIssue`/`analyzeProject`'s own
-// `importFailures` are untouched (still one verbatim-message entry per
-// file); this is a display-only fold over that same data, never a
-// data-structure change, so `--json` below keeps printing `report` exactly
-// as `analyzeProject` returned it. Node's own ESM loader caches a module
-// that fails to import and rethrows the identical error to every importer,
-// so an identical message across files is the one thing this can say for
-// certain about them; which file failed *first* is not something the error
-// text can answer, so this never singles one out as "the" cause, and only
-// ever prints "N files share this message" instead.
-// File lists are sorted (dictionary order), not left in report order, so
-// the same broken suite renders identically run to run.
+// Groups the import-failure findings by exact message, for the text form
+// only: `--json` keeps one finding per file. Node's ESM loader caches a
+// module that fails to import and rethrows the identical error to every
+// importer, so an identical message across files is the one thing this can
+// say for certain about them; which file failed first is not, so the group
+// names no file as the cause. File lists are sorted so the same broken
+// suite prints the same text on every run.
 function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMap<string, string[]> {
   const byMessage = new Map<string, string[]>();
   for (const issue of errors) {
@@ -131,56 +100,59 @@ function groupImportFailuresByMessage(errors: readonly CheckIssue[]): ReadonlyMa
   return byMessage;
 }
 
-// One line for the common case (a single broken file), byte-identical to
-// what `formatIssueLine("error", issue)` already printed for it — a
-// migrating suite hitting only one broken glue file at a time sees no
-// rendering change at all, `line` included (this used to reconstruct the
-// file column by hand instead of going through `formatFileAndLine`, which
-// silently dropped `line` until it was routed through that function
-// instead). A shared-cause group (more than one file
-// behind the identical message) instead prints the message once, then the
-// sorted file list, one per line, and deliberately never a line number even
-// when `line` is passed in: the file whose own path the message's location
-// names can itself be one of the group's members (a file that fails to
-// transform on its own, imported by a sibling that gets the identical
-// rethrown error — tests/check-import-failure-line.test.ts's own
-// "shared-project" fixture is exactly that pair), so that member's own
-// `CheckIssue.line` is set. But which of the N files that is isn't
-// something a reader of the *group* line can tell apart from the others,
-// so showing it here would misattribute a within-file position to the
-// whole group the same way naming one of them as "the" root cause already
-// isn't done above (groupImportFailuresByMessage's own comment) — `line` is
-// read only in the `files.length <= 1` branch below, on purpose.
-function formatImportFailureGroup(issue: CheckFinding, files: readonly string[]): string {
-  const singleLineMessage = issue.message.replace(/\s*\n\s*/g, " ");
-  if (files.length <= 1) {
-    return `error\t${issue.code}\t${formatFileAndLine(files[0], issue.line)}\t${singleLineMessage}\n${formatDoLine(issue.do)}`;
-  }
-  const fileLines = files.map((file) => `  ${file}`).join("\n");
-  return `error\t${issue.code}\t(${files.length} files)\t${singleLineMessage}\n${fileLines}\n${formatDoLine(issue.do)}`;
+// One file prints the finding as it is, `line` included. A group of files
+// prints the message once, `(N files)` in the location column, and the
+// sorted list under it, and never a line: the line belongs to one member,
+// and a reader of the group line cannot tell which.
+function importFailureGroupText(issue: CheckFinding, files: readonly string[]): FindingText {
+  const one = toText(asFinding("error", issue));
+  if (files.length <= 1) return { ...one, where: whereOf({ ...issue, ...(files[0] !== undefined ? { file: files[0] } : {}) }) };
+  return { ...one, where: `(${files.length} files)`, paths: files };
 }
 
-// One line per code, tab-separated (same column style `formatIssueLine`
-// already uses for a report line): code, severity, description, then the
-// code's general do. Severity is printed as `-` for a code this registry does not fix to one
-// side, rather than left out, so every line has the same column count to
-// parse against.
-function formatCodeLine(entry: ReturnType<typeof listCheckCodes>[number]): string {
-  return `${entry.code}\t${entry.severity ?? "-"}\t${entry.description}\t${entry.do}`;
+/** A check finding as the envelope and the text lines carry it. */
+export function asFinding(severity: "error" | "warning", issue: CheckFinding): Finding {
+  return { severity, ...issue };
+}
+
+/** The findings of a report, errors first, in report order. */
+export function reportFindings(report: CheckReport): Finding[] {
+  return [
+    ...report.errors.map((issue) => asFinding("error", issue)),
+    ...report.warnings.map((issue) => asFinding("warning", issue)),
+  ];
+}
+
+/** One finding per code, in the finding grammar: the code's severity, the
+ * code, `-` for the location, its description, and its general fix. One
+ * parser reads `--codes` and a report alike. */
+export function codeFinding(entry: { code: string; severity: Severity; description: string; fix: string }): Finding {
+  return { severity: entry.severity, code: entry.code, message: entry.description, fix: entry.fix };
+}
+
+/** Every code `nuka check` and `nuka run` can print: check findings, run
+ * findings, and refusals, each with its severity. */
+export function listAllCheckCodes(): Finding[] {
+  const entries = [
+    ...listCheckCodes(),
+    ...listRunCodes(),
+    ...listRefusalCodes().map((entry) => ({ ...entry, severity: entry.severity ?? ("refused" as const) })),
+  ];
+  return entries.sort((a, b) => a.code.localeCompare(b.code)).map(codeFinding);
 }
 
 export async function runCheck(options: RunCheckOptions): Promise<number> {
   const { rootDir, json, codes, stdout, stderr } = options;
   const targets = options.targets ?? [];
+  const notices = options.notices ?? [];
+  const sinks = { json, stdout, stderr, command: "check" };
 
   if (codes) {
-    const entries = listCheckCodes();
+    const entries = listAllCheckCodes();
     if (json) {
-      stdout.write(`${JSON.stringify(versioned("check_codes", { codes: entries }), null, 2)}\n`);
+      stdout.write(formatEnvelope("check", 0, notices, { codes: entries }));
     } else {
-      for (const entry of entries) {
-        stdout.write(`${formatCodeLine(entry)}\n`);
-      }
+      for (const entry of entries) stdout.write(formatFinding(entry));
     }
     return 0;
   }
@@ -189,19 +161,19 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   try {
     report = targets.length === 0 ? await analyzeProject(rootDir) : await analyzeTargets(rootDir, targets);
   } catch (error) {
-    return refuse({ json, stdout, stderr }, error, helpFor("check"));
+    return refuse(sinks, error, "unexpected-error", undefined, notices);
   }
 
+  const exitCode = report.errors.length > 0 ? 1 : 0;
   if (json) {
-    stdout.write(`${JSON.stringify(versioned("check_report", report), null, 2)}\n`);
+    stdout.write(formatEnvelope("check", exitCode, [...notices, ...reportFindings(report)]));
   } else {
     writeCheckIssueLines(report.errors, report.warnings, stdout);
     if (report.errors.length === 0 && report.warnings.length === 0) {
       stdout.write("ok: no issues found\n");
     }
   }
-
-  return report.errors.length > 0 ? 1 : 0;
+  return exitCode;
 }
 
 async function analyzeTargets(rootDir: string, targets: readonly string[]): Promise<CheckReport> {
@@ -226,9 +198,11 @@ export async function readCheckTargets(
       statSync(path.join(rootDir, relativePath));
     } catch (error) {
       const read = describeFailedFeatureRead(command, rootDir, relativePath, error);
-      throw read.basePath === undefined
-        ? new Error(read.message)
-        : new RefusalError(read.message, `${command} ${read.basePath}`);
+      throw new RefusalError(
+        read.kind === "line" ? "line-not-supported" : read.kind === "not-found" ? "target-not-found" : "target-unreadable",
+        read.message,
+        read.basePath === undefined ? {} : { do: `${command} ${shellWord(read.basePath)}` },
+      );
     }
   }
   let selected;
@@ -238,8 +212,7 @@ export async function readCheckTargets(
     selected = readFeaturesForCheck(rootDir, files.map(([relativePath]) => relativePath));
   } catch (error) {
     const message = `${command}: ${error instanceof Error ? error.message : String(error)}`;
-    const own = refusalOf(error, "").do;
-    throw own === "" ? new Error(message) : new RefusalError(message, own);
+    throw restated(error, message, "unexpected-error", command.replace(/^nuka /, ""));
   }
   return selected;
 }
@@ -267,12 +240,12 @@ export function writeCheckIssueLines(
       }
       printedImportFailureMessages.add(foldKey(issue));
       const files = importFailureGroups.get(foldKey(issue)) ?? [];
-      sink.write(`${formatImportFailureGroup(issue, files)}\n`);
+      sink.write(formatFindingText(importFailureGroupText(issue, files)));
       continue;
     }
-    sink.write(`${formatIssueLine("error", issue)}\n`);
+    sink.write(formatFinding(asFinding("error", issue)));
   }
   for (const issue of warnings) {
-    sink.write(`${formatIssueLine("warning", issue)}\n`);
+    sink.write(formatFinding(asFinding("warning", issue)));
   }
 }

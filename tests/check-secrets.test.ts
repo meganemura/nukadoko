@@ -9,6 +9,7 @@ import {
   initGitRepo,
   removeTempDir,
 } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s two secrets-redact-and-warning
 // additions.
@@ -35,7 +36,7 @@ describe("nuka check: secrets.redact config-coherence warnings", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.errors).toEqual([]);
     expect(report.warnings).toEqual([
       expect.objectContaining({
@@ -84,7 +85,7 @@ describe("nuka check: tracked-secret-looking-key", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -110,7 +111,7 @@ describe("nuka check: tracked-secret-looking-key", () => {
     const stdout = createCaptureSink();
     await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(
       report.warnings.some((issue: { code: string }) => issue.code === "tracked-secret-looking-key"),
     ).toBe(false);
@@ -129,7 +130,7 @@ describe("nuka check: tracked-secret-looking-key", () => {
     const stdout = createCaptureSink();
     await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(
       report.warnings.some((issue: { code: string }) => issue.code === "tracked-secret-looking-key"),
     ).toBe(false);
@@ -151,7 +152,7 @@ describe("nuka check: tracked-secret-looking-key", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(
       report.warnings.some((issue: { code: string }) => issue.code === "tracked-secret-looking-key"),
     ).toBe(false);

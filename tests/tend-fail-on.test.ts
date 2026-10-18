@@ -7,6 +7,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { tendCommandWithout } from "../src/cli/tend.js";
 import { REMOVED_TEND_CODES, TEND_CODES } from "../src/tend/types.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka tend --fail-on <code>`: a chosen note turns the exit
 // code red for that invocation, the finding itself stays a note, a code
@@ -66,19 +67,19 @@ describe("nuka tend --fail-on", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--fail-on", "pattern-unbond"], { rootDir, stdout: createCaptureSink(), stderr });
     expect(exitCode).toBe(2);
-    expect(stderr.text()).toBe('--fail-on: "pattern-unbond" is not a code nuka tend reports. `nuka tend --codes` lists every code.\ndo: nuka tend --codes\n');
+    expect(stderr.text()).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "pattern-unbond" is not a code nuka tend reports\n  do: nuka tend --codes\n');
   });
 
   it("refuses the codes removed with rationale and with the check duplicates, naming what to do instead", async () => {
     const expected: Record<string, string> = {
       "step-rationale-missing":
-        '--fail-on: "step-rationale-missing" was removed with defineStep\'s `rationale` option. ' +
+        'refused\tfail-on-unknown-code\t-\t--fail-on: "step-rationale-missing" was removed with defineStep\'s `rationale` option. ' +
         "Delete the `rationale:` lines from your step files; `nuka check` names each one as step-option-ignored (docs/upgrading.md).\n",
       "additional-feature-dir-missing":
-        '--fail-on: "additional-feature-dir-missing" is reported only by `nuka check` now, as an error, ' +
+        'refused\tfail-on-unknown-code\t-\t--fail-on: "additional-feature-dir-missing" is reported only by `nuka check` now, as an error, ' +
         "so a failing `nuka check` is the gate (docs/upgrading.md).\n",
       "import-failures-unseen":
-        '--fail-on: "import-failures-unseen" is reported only by `nuka check` now, as `step-file-import-failed`, ' +
+        'refused\tfail-on-unknown-code\t-\t--fail-on: "import-failures-unseen" is reported only by `nuka check` now, as `step-file-import-failed`, ' +
         "so a failing `nuka check` is the gate (docs/upgrading.md).\n",
     };
     for (const [code, message] of Object.entries(expected)) {
@@ -86,7 +87,7 @@ describe("nuka tend --fail-on", () => {
       const stderr = createCaptureSink();
       expect(await runCli(["tend", "--fail-on", code], { rootDir, stdout, stderr })).toBe(2);
       expect(stdout.text()).toBe("");
-      expect(stderr.text()).toBe(`${message}do: nuka tend\n`);
+      expect(stderr.text()).toBe(`${message}  do: nuka tend\n`);
     }
   });
 
@@ -98,9 +99,9 @@ describe("nuka tend --fail-on", () => {
       expect(exitCode).toBe(2);
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toBe(
-        `--fail-on: "${code}" was removed with \`nuka accept\`. A person now reads the run summary \`nuka run\` writes, ` +
+        `refused\tfail-on-unknown-code\t-\t--fail-on: "${code}" was removed with \`nuka accept\`. A person now reads the run summary \`nuka run\` writes, ` +
           "on the pull request, and approving the pull request is the sign-off (docs/upgrading.md).\n" +
-          "do: nuka tend\n",
+          "  do: nuka tend\n",
       );
     }
   });
@@ -127,7 +128,7 @@ describe("nuka tend --fail-on", () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["tend", "--json", "--fail-on", "schema-field-undescribed"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(1);
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     expect(report.notes.map((issue: { code: string; step: string }) => [issue.code, issue.step])).toEqual([
       ["schema-field-undescribed", "visitor-arrives"],
       ["schema-field-undescribed", "visitor-greeted"],
@@ -144,7 +145,7 @@ describe("the do line of a removed --fail-on code", () => {
       { rootDir: repoRoot, stdout, stderr },
     );
     expect(exitCode).toBe(2);
-    expect((JSON.parse(stdout.text()) as { do: string }).do).toBe(
+    expect((JSON.parse(stdout.text()) as { findings: { severity: string; do: string }[] }).findings.find((f) => f.severity === "refused")!.do).toBe(
       "nuka tend --json --fail-on pattern-unbound,fixture-unused",
     );
   });

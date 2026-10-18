@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import type { StepSummary } from "../src/cli/vocabulary.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: end-to-end coverage for a `from` entry whose runtime
 // value is neither a `[Step, string]` tuple nor a list of them (an `as any`
@@ -50,7 +51,7 @@ async function checkReport(
 ): Promise<{ exitCode: number; report: { errors: CheckIssue[]; warnings: unknown[] } }> {
   const stdout = createCaptureSink();
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
-  return { exitCode, report: JSON.parse(stdout.text()) as { errors: CheckIssue[]; warnings: unknown[] } };
+  return { exitCode, report: bySeverity(stdout.text()) as { errors: CheckIssue[]; warnings: unknown[] } };
 }
 
 const PROJECT = fixture("from-malformed-entry-project");

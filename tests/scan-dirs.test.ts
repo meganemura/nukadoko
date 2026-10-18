@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `additionalFeatureDirs` end to end — the config field
 // that widens what `nuka check` (no argument) and
@@ -29,7 +30,7 @@ async function runTend(rootDir: string): Promise<{ report: TendReport; exitCode:
   const stderr = createCaptureSink();
   const exitCode = await runCli(["tend", "--json"], { rootDir, stdout, stderr });
   expect(stderr.text()).toBe("");
-  return { report: JSON.parse(stdout.text()) as TendReport, exitCode };
+  return { report: bySeverity(stdout.text()) as TendReport, exitCode };
 }
 
 async function runCheck(rootDir: string): Promise<{ report: CheckReport; exitCode: number }> {
@@ -37,7 +38,7 @@ async function runCheck(rootDir: string): Promise<{ report: CheckReport; exitCod
   const stderr = createCaptureSink();
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr });
   expect(stderr.text()).toBe("");
-  return { report: JSON.parse(stdout.text()) as CheckReport, exitCode };
+  return { report: bySeverity(stdout.text()) as CheckReport, exitCode };
 }
 
 describe("additionalFeatureDirs", () => {
@@ -106,7 +107,7 @@ describe("additionalFeatureDirs", () => {
       expect(missing[0]!.file).toBe("ghost-dir");
       expect(missing[0]!.message).toContain("ghost-dir");
       expect(missing[0]).toMatchObject({
-        do: 'mkdir -p ghost-dir, or remove "ghost-dir" from additionalFeatureDirs in nukadoko.config.ts.',
+        fix: 'Create ghost-dir, or remove "ghost-dir" from additionalFeatureDirs in nukadoko.config.ts.',
       });
     });
   });

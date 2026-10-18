@@ -19,7 +19,7 @@ function nonEmptyLines(text: string): string[] {
 
 /** One entry per finding: its line joined to the do line under it. */
 function findingLines(text: string): string[] {
-  return nonEmptyLines(text.replace(/\n  do: /g, "\tdo: "));
+  return nonEmptyLines(text.replace(/\n  (fix|do): /g, "\t$1: "));
 }
 
 function errorLines(text: string): string[] {
@@ -58,11 +58,11 @@ describe("nuka run checks before it executes", () => {
     expect(result.stdout).toBe("");
     expect(result.stderr).toBe(
       "error\tundefined-step\tfeatures/mixed.feature:9\t" +
-        'No step definition matches "this line matches no step"; run `nuka scaffold --feature features/mixed.feature` to add one\n' +
+        'No step definition matches "this line matches no step"\n' +
         "  do: nuka scaffold --feature features/mixed.feature\n" +
-        "nuka run did not start: nuka check reports 1 error for these scenarios. " +
-        "Fix them, or pass --no-check to run anyway.\n" +
-        "do: nuka check features/mixed.feature\n",
+        "refused\tcheck-errors\t-\tnuka run did not start: nuka check reports 1 error for these scenarios\n" +
+        "  fix: Correct each error the findings name, or pass --no-check to run anyway.\n" +
+        "  do: nuka check features/mixed.feature\n",
     );
     expect(existsSync(path.join(rootDir, ".nukadoko", "records"))).toBe(false);
   });

@@ -38,6 +38,41 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.17.0 から次のリリースへ
 
+- **すべてのコマンドの `--json` は 1 つのenvelopeになり、すべての finding は 1 つの文法になりました。**
+  `--json` を読むスクリプトは `{ schema_version: 2, nukadoko, command, verdict, findings, ... }` を読みます。
+  - `errors`、`warnings`、`notes` はなくなりました。
+    `findings` を `severity`(`error`、`warning`、`note`、`refused`、`failed`)で絞り込みます。
+  - 拒否はもう `{ error, do }` ではありません。
+    severity が `refused` で code を持つ finding になり、終了コードは引き続き 2 です。
+    メッセージではなく `code` で分岐します。
+  - `nuka steps --json` は `findings` の隣に `steps` を持ち続けます。
+    その `import_failures` は `step-file-import-failed` または `playwright-missing` の finding になりました。
+    `nuka describe` は契約のフィールドを `findings` の隣に持ち続けます。
+    `nuka tend --json` は `summary` と `fail_on_hits` を持ち続けます。
+    `nuka run --json` は `run.json` のフィールドを持ち続けます。
+    `nuka check --codes --json` と `nuka tend --codes --json` は `codes` を持ち続け、各エントリは finding です。
+    意味は `description` ではなく `message` に、全般的な編集は `do` ではなく `fix` に入ります。
+  - `nuka experimental explore --json` は自身の `verdict` を持たなくなりました。
+    envelopeの `verdict` を読みます。
+  - `verdict` は終了コード 0、1、2 に対して `passed`、`failed`、`refused` です。
+- **finding のテキストは `<severity>\t<code>\t<where>\t<message>` で、その後に `  fix:` と `  do:` の行が続きます。**
+  `nuka check` のテキストを解析するスクリプトは、最初の列で severity を読みます。
+  `  do:` はいまはシェルがそのまま実行できるコマンドだけです。
+  「Escape the bare ( ) ...」のような言葉によるヒントは `  fix:` の行にあります。
+  すべての `do:` の行を文章として読んでいたスクリプトは、文章として読むのをやめます。
+  それを実行するスクリプトは、そのまま実行できます。
+- **失敗した scenario は `scenario-failed` の finding です。**
+  stderr の `failed` と `rerun` の行はなくなりました。
+  `rerun` を grep していたスクリプトは、各 `failed\tscenario-failed\t` の行の下にある `  do: nuka run <feature>:<line>` の行か、`run.json` の各 scenario の `rerun` を読みます。
+- **警告は code を持つ finding です。**
+  config が無いことを伝える行は stderr の `warning\tconfig-missing\t-\t...` になり、`--json` では `findings` に入って stderr は空です。
+  fixture の teardown の失敗(`fixture-teardown-failed`)、emitter の失敗(`emitter-failed`)、応答しなかった version probe(`version-probe-failed`)、そして `nuka check --codes` が挙げるそのほかの run の警告も同じです。
+  stderr の `Warning:` に一致させていたスクリプトは、`warning` の列と code に一致させます。
+- **`undefined-step` のメッセージは scaffold コマンドを名指ししなくなりました。**
+  コマンドは `  do:` の行にあります。
+  未定義の step を持つ行は、同じテキストの 2 行目も含め、それぞれ自身の finding を持つようになりました。
+  そのため `undefined-step` の finding の数は行の数です。
+
 - **`nuka run` は、`--records` のときだけ scenario record を stdout に出力します。**
   パイプ、ファイル、CI のログ、エージェントのシェルには、既定では 1 行 1 件の JSON の record が出力されなくなり、stdout は空のままです。
   その列を解析していたスクリプトは、次の 3 つから 1 つを選びます。
@@ -53,9 +88,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **`nuka tend` はすべての code を報告し、`--all` は削除されました。**
   素の `nuka tend` は、テキストでも `--json` でも `schema-field-undescribed` を報告するようになりました。
   `nuka tend --all` はそう告げて終了コード 2 で終わるので、このフラグを外します。
-  素の `--json` を読んで一部の code にだけ対応するジョブは、`notes` を `code` で絞り込むか、対応する code ごとに `--fail-on` を渡します。
-  `nuka tend --codes` のテキストを読むスクリプトが読む列は 3 つ(code、意味、do)になりました。
-  `nuka tend --codes --json` を読むスクリプトは `schema_version` 2 を受け取り、エントリに `reportedByDefault` はありません。
+  素の `--json` を読んで一部の code にだけ対応するジョブは、`findings` を `code` で絞り込むか、対応する code ごとに `--fail-on` を渡します。
+  `nuka tend --codes` は各 code を finding として出力し(次の項目を参照)、エントリに `reportedByDefault` はありません。
 - **step record の `observed` のチャネルは、step が一度も届かなかったとき `null` です。**
   `ctx.request()`、`ctx.page()`、`pageAs()` のどれも呼ばず、request も記録されなかった step では、`http_reads` と `http_writes` はどちらも `null` です。
   一度も `runCommand` を呼ばなかった step では、`observed.processes` は欠けるのではなく `null` になります。

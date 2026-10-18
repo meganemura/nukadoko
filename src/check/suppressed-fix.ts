@@ -1,14 +1,14 @@
 import type { CheckIssue } from "./types.js";
 
 /**
- * The `do:` line of the `undefined-step-check-suppressed` warning that step
+ * The `fix:` line of the `undefined-step-check-suppressed` warning that step
  * files failing to import cause, built from the findings those failures
  * were reported as. The registry's own line names `step-file-import-failed`,
  * which a missing Playwright package is not reported as, so a project whose
  * only unreadable files lack Playwright would be told to fix a finding that
  * is not in its report.
  */
-export function importSuppressionDo(importFindings: readonly Pick<CheckIssue, "code" | "do">[]): string {
+export function importSuppressionFix(importFindings: readonly Pick<CheckIssue, "code" | "do">[]): string {
   const installs = [
     ...new Set(
       importFindings.flatMap((issue) => (issue.code === "playwright-missing" && issue.do !== undefined ? [issue.do] : [])),

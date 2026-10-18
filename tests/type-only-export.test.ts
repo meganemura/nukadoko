@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { TYPE_ONLY_EXPORTS, typeOnlyImportSentence } from "../src/config/type-only-export.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -84,7 +85,7 @@ describe("nuka check: a compat type imported without type", () => {
       );
       const stdout = createCaptureSink();
       const exitCode = await runCli(["check", "--json"], { rootDir: dir, stdout, stderr: createCaptureSink() });
-      const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; message: string }> };
+      const report = bySeverity(stdout.text()) as { errors: Array<{ code: string; file?: string; message: string }> };
       const failures = report.errors.filter((issue) => issue.code === "step-file-import-failed");
       expect(failures.map((issue) => issue.file)).toEqual(["features/steps/world.ts"]);
       expect(failures[0]!.message).toContain(

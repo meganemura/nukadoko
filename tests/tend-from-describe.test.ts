@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 describe("nuka tend: schema-field-undescribed on args that from fills", () => {
   it("reads a from-filled arg's description from its producer's returns field", async () => {
@@ -10,7 +11,7 @@ describe("nuka tend: schema-field-undescribed on args that from fills", () => {
       stdout,
       stderr: createCaptureSink(),
     });
-    const report = JSON.parse(stdout.text());
+    const report = bySeverity(stdout.text());
     const messages = report.notes
       .filter((issue: { code: string }) => issue.code === "schema-field-undescribed")
       .map((issue: { message: string }) => issue.message.split(". ")[0])

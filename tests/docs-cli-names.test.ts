@@ -4,6 +4,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { listCheckCodes } from "../src/check/codes.js";
+import { listAllCheckCodes } from "../src/cli/check.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { REMOVED_TEND_CODES, TEND_CODES } from "../src/tend/types.js";
 import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
@@ -162,8 +163,12 @@ function invocationProblem(tree: CommandNode, invocation: string): string | unde
   return undefined;
 }
 
-const checkCodes = new Set(listCheckCodes().map((entry) => entry.code as string));
-const allCodes = new Set([...checkCodes, ...TEND_CODES]);
+// Every code `nuka check --codes` prints: check, run, and refusal codes.
+const allCodes = new Set([...listAllCheckCodes().map((entry) => entry.code), ...TEND_CODES]);
+// The families come from the check and tend findings only: a run code such
+// as `run-incomplete` would make every step named `run-...` read as a
+// misspelled code.
+const findingCodes = new Set([...listCheckCodes().map((entry) => entry.code as string), ...TEND_CODES]);
 // A removed tend code is still a name the CLI answers to: `--fail-on` refuses
 // it by name and says what replaced it, so an upgrade note may cite it.
 const citableCodes = new Set([...allCodes, ...REMOVED_TEND_CODES.keys()]);
@@ -171,7 +176,7 @@ const familyOf = (code: string): string => code.split("-")[0]!;
 // A first word counts as a family only when two or more codes share it, so
 // `no-browser` is not read as a misspelled `no-step-files-found`.
 const codeFamilies = new Set(
-  [...allCodes].map(familyOf).filter((family, _, all) => all.filter((other) => other === family).length > 1),
+  [...findingCodes].map(familyOf).filter((family, _, all) => all.filter((other) => other === family).length > 1),
 );
 
 function codeProblems(file: DocFile): string[] {

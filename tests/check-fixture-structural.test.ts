@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check`'s fixture-bag structural check
 // (src/fixture/validate-fixtures.ts's `validateStepFixtures`, wired into
@@ -21,7 +22,7 @@ async function checkReport(rootDir: string) {
   const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
   return {
     exitCode,
-    report: JSON.parse(stdout.text()) as { errors: FixtureStructuralIssue[]; warnings: unknown[] },
+    report: bySeverity(stdout.text()) as { errors: FixtureStructuralIssue[]; warnings: unknown[] },
   };
 }
 

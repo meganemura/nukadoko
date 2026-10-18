@@ -653,7 +653,8 @@ args だけを受け取る引数 1 つの `run` はありません。
 そのため agent は scenario を選ぶとき、実行前にブラウザを開かない step を識別できますが、ブラウザを使う scenario には API だけの scenario にはない分単位の時間と実物のターゲットが必要です。
 同じ静的な読み取りが解析できない `run()`、つまりデフォルト値、rest プロパティ、または分割代入パターンの位置に裸の識別子がある場合、`needs` は `[]` ではなく `null` になり、そのエントリの `needs_error` が理由を示し、導けないブラウザ要否を主張しないため `needs_browser` もありません。
 その step 自身の name、patterns、description は引き続き報告されるため、一つの読めない `run()` が残りの一覧を失わせることはありません。
-呼び出しのトップレベルは step のベタな配列ではなく `{ schema_version, steps, import_failures }` であり、`import_failures`(`{ file, message }`)は import に失敗したすべての step ファイルを名指しし、常に存在し、失敗がなければ `[]` です(下の「報告は寛容に、実行は速く失敗する」を参照)。
+呼び出しのトップレベルは step のベタな配列ではなく、すべての `--json` が出力する envelope で、`steps` は `findings` の隣にあります。
+`step-file-import-failed` の所見(`file` と `message` を持ちます)は import に失敗したすべての step ファイルを名指しし、失敗がなければ `findings` は `[]` です(下の「報告は寛容に、実行は速く失敗する」を参照)。
 
 このうち移行前の形である `run(ctx, args)` の裸の分割代入されていない第一引数については、同じ呼び出しが `needs_inferred` も報告します: これは step の fixture 要求についての字句上の推測であり、`run` 自身のソーステキストをその引数のメンバアクセス(`ctx.page`)について走査し、既知の fixture 名だけに絞ります。
 これは独立したフィールドであり、`needs` には混ぜません: `needs` は分割代入パターンから読み取った、executor が step の実行前に実際に構築する対象ですが、`needs_inferred` はまだ実行できない step についての推測なので、両者をまとめると、この読み取りが裏付けられないものまで確実だと述べることになります。
@@ -689,6 +690,7 @@ step ファイルに定義されていても、check する行のどれも束縛
 インストール済みのパッケージが自分の依存を見つけられないのはインストールが壊れているためで、このインストール行で直るとは限らないからです。
 check を実行せずに step ファイルを import するコマンド(`nuka run --no-check`、`nuka do`、`nuka steps`、`nuka describe`)も、そのファイルを同じメッセージで報告します。
 `nuka run --no-check` と `nuka do` は、インストール行を `do:` 行に出します。
+これはシェルがそのまま実行できるコマンドです。
 型宣言も同じ規則に従います。
 この 3 つの型は、`playwright` がインストールされていれば Playwright 自身の型で、無ければ `any` です。
 そのため、プロジェクト自身の `tsc` は、`skipLibCheck: false` でもそれ無しで通ります。
@@ -1894,14 +1896,16 @@ matcher の名前だけでは、ページが間違っているのか期待が間
 exit code は結果であって、失敗ではないからです。
 文字列は step record から取るので、そこに含まれる secret はすでに redact されています。
 `--quiet` は、失敗した step の行とこれらの行を残し、それ以外の step の行を落とします。
-サマリ行の後では、失敗した各 scenario を feature のパス、行、名前とともに stderr に表示します。
-その各行に `rerun` 行が続きます。
-`rerun` 行は `nuka run <feature>:<line>` で、run に `--env <name>` が与えられていればそれも付きます。
+サマリ行の後では、失敗した各 scenario を所見 `failed\tscenario-failed\t<feature>:<line>\t<name>: <エラーの 1 行目>` として stderr に表示します。
+その各所見に `  do:` 行が続きます。
+`do:` 行は `nuka run <feature>:<line>` で、run に `--env <name>` が与えられていればそれも付きます。
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
 この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
-`--json` のとき、stderr にはこの段落とその前の 2 つの段落が挙げる行がどれも出ず、部分実行の通知も retention の行も出ません。
+`--json` のとき、stderr は空です。
+この段落とその前の 2 つの段落が挙げる行がどれも出ず、部分実行の通知も retention の行も出ません。
 stdout の文書が結果を持っていて、エージェントのシェルは 2 つのストリームを 1 つとして読むからです。
-何かがうまくいかなかったことを知らせる警告(書けなかったファイル、失敗した hook や fixture の teardown、拒否の前の `nuka check` のエラー)は、引き続き stderr に出ます。
+何かがうまくいかなかったことを知らせる警告(書けなかったファイル、失敗した hook や fixture の teardown、拒否の前の `nuka check` のエラー)は、code を持つ所見です。
+テキストでは stderr に出て、`--json` では envelope の `findings` に入ります。
 
 機械向けの run の結果は `records/runs/<run_id>/run.json` です。
 run が終わったとき、最後の record と run サマリの後に、直列実行でも並行実行でも書かれます。
@@ -1932,7 +1936,9 @@ run が終わったとき、最後の record と run サマリの後に、直列
 ```
 
 `scenarios` には、run が書いた scenario record ごとに 1 件のエントリが、書いた順に入ります(例は 2 件のうち 1 件を示しています)。
-`rerun` は、stderr の `rerun` 行が出すのと同じコマンドです。
+`rerun` は、`scenario-failed` の所見の `do:` 行が出すのと同じコマンドです。
+`nuka run --json` のとき、stdout はこれらのフィールドを `findings` の隣に持つ envelope です。
+`schema_version` と `verdict` は envelope のものです。
 `verdict` は終了コードの断定です。
 どの scenario record も持たない BeforeAll や AfterAll の失敗も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
 `summary` は、run サマリを書けなかったときは `null` です。
@@ -3565,9 +3571,10 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               can't read), and where each chained args key
                               comes from (from, or from_errors naming the
                               key and why for the one it can't read);
-                              --json's top level is { schema_version, steps,
-                              import_failures }, the last always present,
-                              exiting 1 if import_failures is non-empty or
+                              --json prints the envelope with steps beside
+                              findings; a step file that failed to import
+                              is a step-file-import-failed finding, exiting
+                              1 if there is one or
                               any step's needs_error or from_errors is
                               present, output printed either way. Text
                               wraps at 80 columns, in a terminal or not
@@ -3575,13 +3582,13 @@ nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
                               one, plus
-                              import_failures beside it (same shape as nuka
-                              steps' own). When args or returns cannot be
+                              the envelope's findings beside it (the same
+                              findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null
                               and args_error or returns_error names the step
                               and why; the rest of the contract is still
-                              printed. Exits 1 when import_failures is
-                              non-empty, or when the described step is typed
+                              printed. Exits 1 when a step file did not
+                              import, or when the described step is typed
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
@@ -3891,8 +3898,8 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
                               generated. On a failure stdout gets the scenario to
                               paste (two for a relation) and the command that
                               reruns it; stdout is empty on a pass. --json
-                              prints one object instead, on a pass too: the
-                              verdict, the seed and counts, and on a failure
+                              prints the envelope instead, on a pass too:
+                              the seed and counts, and on a failure
                               each step's result, the failure, and the
                               scenario. Exits 1 on a failure, 2 on a refusal
 ```
@@ -3903,50 +3910,95 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
 テキスト出力(`--json` なし)は、それを読む人間向けに整形されます。
 `--json` が機械可読な契約です。
 stdout は、報告でも run の結果でも拒否でも、2 つの空白で整形したちょうど 1 つの JSON 文書を出します。
-stderr は、進捗、場所、件数、rerun の行も、その文書が持つものの写しも出しません。
+stderr は空です。
+進捗、場所、件数、警告の行も、その文書が持つものの写しも出しません。
 stdout でも stderr でも、ストリームが端末かどうかで変わる出力はありません。
 `nuka steps` はどこでも 80 桁で折り返し、nukadoko は色を書きません。
 
 nukadoko が書く、または出力する JSON の文書はすべて `schema_version` で始まります。
 これはその種類の文書に固有の整数です。
-対象は step record、scenario record、`run.json`(`run --json` が出力します)と、`check --json`、`check --codes --json`(`{ schema_version, codes }`)、`steps --json`、`describe`、`tend --json`、`tend --codes --json`(`{ schema_version, codes }`)、`clean --json`、`explore --json`、`session list --json`(`{ schema_version, sessions }`)の出力と、`--json` のときの拒否(`{ schema_version, error, do }`、「拒否」を参照)です。
+対象は step record、scenario record、`run.json`、envelope です。
 この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
 フィールドが追加されただけでは上がりません。
 読み手は、形を信頼する前にこの番号を確かめます。
-どの番号も現在は 1 です。
-例外は `tend --codes --json` で、各エントリから `reportedByDefault` が消えたため 2 です。
-step record も 2 です。
+scenario record と `run.json` は 1 です。
+step record は 2 です。
 実行が届かなかった `observed` のチャネルは `null` になり、`observed.processes` は常に存在するからです。
+envelope は 2 です。
 `schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
 `experimental` のコマンドは、nukadoko が持たない形であるサーバー自身の tool 一覧を出力するので、番号を持ちません。
 
-`nuka check` と `nuka tend` のすべての所見は `file` と `do` を持ちます。
+### envelope
+
+すべてのコマンドの `--json` は 1 つの envelope を出力します。
+テキスト形式を持たない `nuka describe` は、常にそうします。
+
+```json
+{
+  "schema_version": 2,
+  "nukadoko": "0.17.0",
+  "command": "check",
+  "verdict": "failed",
+  "findings": [
+    {
+      "severity": "error",
+      "code": "undefined-step",
+      "file": "features/greet.feature",
+      "line": 4,
+      "message": "No step definition matches \"I run greet with \"Ada\"\"",
+      "do": "nuka scaffold --feature features/greet.feature"
+    }
+  ]
+}
+```
+
+`command` はコマンドのパス(`check`、`session list`、`experimental explore`)で、argv がどのコマンドも名指さないときは `""` です。
+`verdict` は終了コードの断定で、0 なら `passed`、2 なら `refused`、それ以外は `failed` です。
+コマンド自身のフィールドは `findings` の後に置かれ、5 つのフィールドを置き換えることはありません。
+それは `steps`(`nuka steps`)、契約(`nuka describe`)、`summary` と `fail_on_hits`(`nuka tend`)、`run.json` のフィールド(`nuka run`)、計画(`nuka clean`)、`sessions`(`nuka session list`)、seed と件数と scenario(`nuka experimental explore`)、`codes`(`--codes`、各エントリは場所を持たない所見)です。
+`nuka do` は step record を出力します。
+これは報告ではなく record なので、envelope も `--json` も持ちません。
+その拒否と警告は stderr の所見です。
+
+### 所見
+
+所見、拒否、失敗した scenario は 1 つの形です。
+フィールドは `severity`、`code`、`message` で、わかっているときは `file`、`line`、`step` が続き(fixture についての tend の note では `fixture`)、その後に `fix` と `do` が続きます。
+severity は `error` か `warning`(`nuka check` と、あらゆるコマンドの警告)、`note`(`nuka tend`)、`refused`(「拒否」を参照)、`failed`(失敗した scenario、BeforeAll または AfterAll の hook、explore の run)です。
 `file` はプロジェクトのルートからの相対パスです。
 1 つの step についての所見では、その step を定義する step ファイルです。
 複数の step を挙げる `duplicate-pattern` では、最後に挙げた step のファイルです。
 config のエントリについての所見では、config ファイルです。
-所見が行を知っているときは `line` も付きます。
-`do` は次の一手です。
-所見が値を知っているときは、その値を埋めたコマンドです(`nuka scaffold --feature features/greet.feature`)。
-それ以外のときは、`--codes` が一覧にするコードの一般的な文です。
-テキスト出力では、各所見の行の次に `  do: <text>` の行が続きます。
 compat の hook についての所見は `file` を持ちません。
 discovery は、どのファイルが hook を登録したかを記録しないからです。
+
+`do` は常に、シェルがそのまま実行できるコマンドです。
+値は埋められ、POSIX シェル向けにクォートされます(`nuka scaffold --feature features/greet.feature`、`nuka run features/greet.feature:4`)。
+`fix` は言葉で書いた編集で、変えるファイルと書く内容を示します。
+編集どうしの選択である次の一手や、nukadoko が埋められない値を持つコマンドは `fix` であり、推測した `do` には決してなりません。
+どちらも名指さない所見は、`--codes` が一覧にするコードの一般的な `fix` を受け取ります。
+そのため、どの所見も、それを越える方法を示します。
+
+テキストでは、所見は 1 行の `<severity>\t<code>\t<where>\t<message>` です。
+`<where>` は `<file>:<line>`、`<file>`、step 名、または `-` です。
+値の中の改行やタブは空白になります。
+その後に字下げした行が続くことがあります。
+まとめた所見が覆うファイル、次に `  fix: <text>`、次に `  do: <command>` です。
+`nuka check --codes` と `nuka tend --codes` は、各コードを同じ文法で出力します。
 
 ### 拒否
 
 報告するものが何もないうちにコマンドが止まるとき、コマンドは拒否します。
 対象は、yargs またはコマンドが受け付けないフラグ、読み込めない config、存在しない対象、知らない step 名、邪魔をしている session、そして `nuka run` では、選んだ scenario について `nuka check` が報告するエラーです。
-拒否には 2 つの部分があります。
-メッセージと、次に実行する 1 つのコマンドである `do` です。
-`--json` のとき、stdout は JSON オブジェクト `{ "schema_version": 1, "error": "<message>", "do": "<command>" }` を 1 つ、ほかの報告と同じように整形して出し、stderr は何も出しません。
-`nuka describe` にはテキスト形式がないので、同じ方法で拒否します。
-`--json` がないとき、stderr はメッセージを出し、続けて `do: <command>` の 1 行を出します。
-次のコマンドがわかっているとき、`do` はそれを名指しします。
-知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、削除された live session のサブコマンドには `nuka do --help`、`check` が受け付けない `:line` には `nuka check <file>` です。
-プロジェクトのファイルが `nuka scaffold` を妨げるとき(step ファイルがすでにある、または `--from` が名指す step の `returns` がそのキーを持たない)、`do` はそのファイルへの変更を名指しし、続けて同じ `nuka scaffold` のコマンドラインを POSIX シェル向けにクォートして示します。
-それ以外では、そのコマンド自身の `--help` です。
-finding、失敗した scenario、失敗した step は報告であって拒否ではなく、それぞれの出力を保ちます。
+終了コードは 2 で、拒否は severity が `refused` で code を持つ所見です。
+code は `invalid-arguments`、`target-not-found`、`config-invalid`、`check-errors` など `nuka check --codes` が一覧にするもの、または同じ原因の check の code です(parse できない feature ファイルは、どのコマンドが見つけても `feature-parse-error` です)。
+`--json` のときは envelope の `findings` に入り、`verdict` は `refused` で、stderr は何も出しません。
+それ以外のときは、その行が stderr に出ます。
+`nuka run` は、`check-errors` の拒否の前に、止まる原因になった `nuka check` の所見を出力します。
+次のコマンドがわかっているとき、拒否の `do` はそれを名指しします。
+知らない step には `nuka steps`、入っていない peer dependency にはインストールの行、`check` が受け付けない `:line` には `nuka check <file>` です。
+プロジェクトのファイルが `nuka scaffold` を妨げるとき(step ファイルがすでにある、または `--from` が名指す step の `returns` がそのキーを持たない)、`fix` がそのファイルへの変更を名指しし、`do` は同じ `nuka scaffold` のコマンドラインです。
+それ以外では、`fix` はそのコードの一般的な編集で、`do` はそのコマンド自身の `--help` です。
 
 ### ストリームと終了コード
 
@@ -3957,21 +4009,21 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run`、保持されていない session に対する `nuka session clear` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` の `import_failures`、`nuka tend` が報告した `--fail-on` の code、失敗した `nuka experimental explore` の run、削除できなかった session ファイル |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka tend` が報告した `--fail-on` の code、失敗した `nuka experimental explore` の run、削除できなかった session ファイル |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
 | コマンド | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | `--records` なら 1 行に 1 つの scenario record、`--json` なら `run.json`、それ以外は何も出さない | 進捗、失敗、書き込んだ場所、summary の行。`--json` なら警告だけ |
-| `nuka do` | step record(失敗した step でも) | session の通知、警告 |
-| `nuka check`、`nuka tend` | 報告、`--json` なら 1 つの JSON オブジェクト | 何も出さない(`--json` なしの拒否と、`nuka tend` の `fail-on` の行を除く) |
-| `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に JSON) | import に失敗した step ファイル(JSON の文書が `import_failures` としてすでに挙げているときを除く) |
-| `nuka experimental explore` | 縮めた scenario、`--json` なら 1 つの JSON オブジェクト | 判定の行と、その rerun コマンド(`--json` のときを除く) |
-| `nuka clean`、`nuka session list` | パスまたは session ごとに 1 行、`--json` なら 1 つの JSON 値 | 何も出さない(`--json` なしの拒否を除く) |
+| `nuka run` | `--records` なら 1 行に 1 つの scenario record、`--json` なら envelope、それ以外は何も出さない | 進捗、書き込んだ場所、summary の行、`scenario-failed` の所見、警告。`--json` なら何も出さない |
+| `nuka do` | step record(失敗した step でも) | session の通知、警告の所見 |
+| `nuka check`、`nuka tend` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`nuka tend` の `fail-on` の行を除く) |
+| `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |
+| `nuka experimental explore` | 縮めた scenario、`--json` なら envelope | `explore-failed` または `explore-error` の所見と、その rerun コマンド(`--json` のときを除く) |
+| `nuka clean`、`nuka session list` | パスまたは session ごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
 
-`--json` のときの拒否は、stdout の列の唯一の例外です。
-その `{ "schema_version", "error", "do" }` オブジェクトが報告の代わりになります。
+`--json` のときの拒否は報告の代わりになります。
+envelope は拒否の所見を持ち、コマンド自身のフィールドは持ちません。
 step record の `error.kind` は「Records」に一覧があります。
 
 ### 報告は寛容に、実行は速く失敗する
@@ -3984,7 +4036,7 @@ step record の `error.kind` は「Records」に一覧があります。
 そのため、import に失敗した 1 ファイルが、プロジェクトの残り全体がまだ見せられるはずのものまで空にしてしまうことはありません。
 `nuka check` はその失敗を `step-file-import-failed` として名指しします。
 原因が相対パスの `.js`、`.mjs`、`.cjs` の import で、それが指す `.ts`、`.mts`、`.cts` ファイルが存在しない場合は、Node 自身の文の後ろに、そのファイルと import を直すべきファイルを、どちらもプロジェクトのルートからの相対パスで付け足します。
-`nuka steps`/`nuka describe` は同じ事実を(前述の)`import_failures` として運びます。
+`nuka steps`/`nuka describe` は同じ所見を(前述のとおり)運びます。
 `nuka tend` は import できたものだけを数え、`nuka check` の所見を繰り返さないので、読み手は `nuka check` を並べて実行します(「Tending(手入れ)」を参照)。
 `nuka run`、`nuka do`、`nuka init` はこれから step を実行しよう、あるいはこれから実行するプロジェクトを立ち上げようとしている道具なので、fail-fast のままです。
 同じ壊れたファイルは呼び出し全体をそのまま拒否します。

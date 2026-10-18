@@ -61,8 +61,10 @@ describe("nuka run: World constructor throw", () => {
     ]);
 
     const err = stderr.text();
-    expect(err.match(/World setup failed: world constructor boom/g)).toEqual([
-      "World setup failed: world constructor boom",
+    // One warning, and the failed scenario's own finding names the same error.
+    expect(err.match(/^\w+\t[a-z-]+\t.*World setup failed: world constructor boom$/gm)).toEqual([
+      "warning\tworld-setup-failed\t-\tWorld setup failed: world constructor boom",
+      "failed\tscenario-failed\tfeatures/world-throw.feature:3\tfirst: World setup failed: world constructor boom",
     ]);
     expect(err).toContain("scenario 2/2");
     expect(err).toMatch(/2 scenarios: 1 passed, 1 failed/);

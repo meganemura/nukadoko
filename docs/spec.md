@@ -809,10 +809,11 @@ and `needs_browser` is absent alongside it, since a browser-need verdict
 this file cannot derive is not one it states. That step's own
 name/patterns/description still come through: one unreadable `run()` does
 not take the rest of the listing down with it. The call's own top level is
-`{ schema_version, steps, import_failures }`, not a bare array of steps; `import_failures`
-(`{ file, message }`) names every step file whose own import failed, always
-present, `[]` when nothing did (see "Tolerant reporting, fail-fast
-execution" below).
+the envelope every `--json` prints, with `steps` beside `findings`, not a
+bare array of steps; a `step-file-import-failed` finding (with `file` and
+`message`) names every step file whose own import failed, and `findings`
+is `[]` when nothing did (see "Tolerant reporting, fail-fast execution"
+below).
 
 For the one un-migrated shape among those, `run(ctx, args)`'s own bare,
 un-destructured first argument, the same call also reports `needs_inferred`: a
@@ -891,7 +892,7 @@ install that this install line is not known to fix.
 The commands that import step files without running the check
 (`nuka run --no-check`, `nuka do`, `nuka steps`, and `nuka describe`)
 report such a file with the same message, and `nuka run --no-check` and
-`nuka do` name the install line as their `do:` line.
+`nuka do` name the install line as their `do:` line, a command a shell runs as written.
 The type declarations follow the same rule: the three are typed as
 Playwright's own types when `playwright` is installed and as `any` when it
 is not, so a project's own `tsc` passes without it, `skipLibCheck: false`
@@ -2239,16 +2240,18 @@ that ran it still passed, because an exit code is a result, not a failure.
 The text comes from the step record, so a secret in it is already
 redacted. `--quiet` keeps a failed step's line and these lines, and drops
 every other step line. After the
-summary line, stderr names each failed scenario with its feature path, line,
-and name, and follows each with a `rerun` line: `nuka run <feature>:<line>`,
-plus `--env <name>` when the run was given one, quoted for a POSIX shell
-where a word needs it. These lines appear for serial and concurrent runs,
-and `--quiet` keeps them. Under `--json`, stderr carries none of the lines
-this paragraph and the two above it name, nor the partial-run notice or the
-retention line: the document on stdout holds the result, and an agent's
-shell reads both streams as one. A warning that something went wrong (a
-file that was not written, a hook or a fixture teardown that failed, the
-`nuka check` errors before a refusal) still goes to stderr.
+summary line, stderr prints each failed scenario as a finding,
+`failed\tscenario-failed\t<feature>:<line>\t<name>: <first error line>`,
+followed by a `  do:` line: `nuka run <feature>:<line>`, plus `--env <name>`
+when the run was given one, quoted for a POSIX shell where a word needs
+it. These lines appear for serial and concurrent runs, and `--quiet` keeps
+them. Under `--json`, stderr is empty: it carries none of the lines this
+paragraph and the two above it name, nor the partial-run notice or the
+retention line, and the document on stdout holds the result, since an
+agent's shell reads both streams as one. A warning that something went
+wrong (a file that was not written, a hook or a fixture teardown that
+failed, the `nuka check` errors before a refusal) is a finding with its
+code: on stderr in text, and in the envelope's `findings` under `--json`.
 
 The run's result for a machine is `records/runs/<run_id>/run.json`, written
 when the run ends, after its last record and its run summary, for serial
@@ -2281,7 +2284,9 @@ and concurrent runs alike:
 
 `scenarios` has one entry per scenario record the run wrote, in the order
 written (the example shows one of two), and `rerun` is the same command the
-stderr `rerun` line prints. `verdict` is the exit code's: it also counts a
+`scenario-failed` finding's `do:` line prints. Under `nuka run --json`
+stdout is the envelope with these fields beside `findings`: the
+`schema_version` is the envelope's, and `verdict` is the envelope's. `verdict` is the exit code's: it also counts a
 BeforeAll or AfterAll failure that no scenario record carries, so it can be
 `failed` while `counts.failed` is 0. `summary` is `null` when the run
 summary could not be written. Every path is relative to the project root.
@@ -4165,9 +4170,10 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               can't read), and where each chained args key
                               comes from (from, or from_errors naming the
                               key and why for the one it can't read);
-                              --json's top level is { schema_version, steps,
-                              import_failures }, the last always present,
-                              exiting 1 if import_failures is non-empty or
+                              --json prints the envelope with steps beside
+                              findings; a step file that failed to import
+                              is a step-file-import-failed finding, exiting
+                              1 if there is one or
                               any step's needs_error or from_errors is
                               present, output printed either way. Text
                               wraps at 80 columns, in a terminal or not
@@ -4175,13 +4181,13 @@ nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
                               one, plus
-                              import_failures beside it (same shape as nuka
-                              steps' own). When args or returns cannot be
+                              the envelope's findings beside it (the same
+                              findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null
                               and args_error or returns_error names the step
                               and why; the rest of the contract is still
-                              printed. Exits 1 when import_failures is
-                              non-empty, or when the described step is typed
+                              printed. Exits 1 when a step file did not
+                              import, or when the described step is typed
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
@@ -4491,8 +4497,8 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
                               generated. On a failure stdout gets the scenario to
                               paste (two for a relation) and the command that
                               reruns it; stdout is empty on a pass. --json
-                              prints one object instead, on a pass too: the
-                              verdict, the seed and counts, and on a failure
+                              prints the envelope instead, on a pass too:
+                              the seed and counts, and on a failure
                               each step's result, the failure, and the
                               scenario. Exits 1 on a failure, 2 on a refusal
 ```
@@ -4502,40 +4508,89 @@ A flag that takes one string or one number is refused when it is given more than
 Text output (no `--json`) is formatted for a human reading it.
 `--json` is the machine-readable contract: stdout carries exactly one JSON
 document, pretty-printed with two spaces, whether it is a report, a run
-result, or a refusal, and stderr carries no progress, location, count, or
-rerun line and no copy of what the document holds. No output, on stdout or
-stderr, depends on whether a stream is a terminal: `nuka steps` wraps at 80
-columns everywhere, and nukadoko writes no color.
+result, or a refusal, and stderr is empty: no progress, location, count, or
+warning line, and no copy of what the document holds. No output, on stdout
+or stderr, depends on whether a stream is a terminal: `nuka steps` wraps at
+80 columns everywhere, and nukadoko writes no color.
 
 Every JSON document nukadoko writes or prints starts with
 `schema_version`, an integer that belongs to that kind of document: the
-step record, the scenario record, `run.json` (which `run --json` prints),
-and the output of `check --json`,
-`check --codes --json` (`{ schema_version, codes }`), `steps --json`,
-`describe`, `tend --json`, `tend --codes --json` (`{ schema_version,
-codes }`), `clean --json`, `explore --json`, and `session list --json`
-(`{ schema_version, sessions }`), and a refusal under `--json`
-(`{ schema_version, error, do }`, see "Refusals"). The number moves
-when a field the document already has changes its meaning, its type, or
-its name, or is removed. An added field does not move it. A reader checks
-the number before it trusts the shape. Each number is 1 today, except
-`tend --codes --json`, which is 2 (each entry lost `reportedByDefault`),
-and the step record, which is 2 (an `observed` channel the execution
-never reached is `null`, and `observed.processes` is always present), and a
-record without `schema_version` was written by nukadoko 0.16.1 or
-earlier. The `experimental` commands print the server's own tool list, a
-shape nukadoko does not own, so they carry no number.
+step record, the scenario record, `run.json`, and the envelope. The
+number moves when a field the document already has changes its meaning,
+its type, or its name, or is removed. An added field does not move it. A
+reader checks the number before it trusts the shape. The scenario record
+and `run.json` are 1. The step record is 2 (an `observed` channel the
+execution never reached is `null`, and `observed.processes` is always
+present). The envelope is 2. A record without `schema_version` was written
+by nukadoko 0.16.1 or earlier. The `experimental` commands print the
+server's own tool list, a shape nukadoko does not own, so they carry no
+number.
 
-Every finding of `nuka check` and `nuka tend` carries `file` and `do`.
-`file` is relative to the project root: for a finding about one step, it is
-the step file that defines the step; for `duplicate-pattern`, which names
-several steps, it is the file of the last one named; for a finding about a
-config entry, it is the config file. `line` is set where the finding knows it. `do` is the
-next step: a command with its values filled in where the finding knows them
-(`nuka scaffold --feature features/greet.feature`), and otherwise the
-code's general text, which `--codes` lists. In text output, a line
-`  do: <text>` follows each finding line. A finding about a compat hook has
-no `file`, because discovery does not record which file registered a hook.
+### The envelope
+
+Every command's `--json` prints one envelope, and `nuka describe`, which
+has no text form, always does:
+
+```json
+{
+  "schema_version": 2,
+  "nukadoko": "0.17.0",
+  "command": "check",
+  "verdict": "failed",
+  "findings": [
+    {
+      "severity": "error",
+      "code": "undefined-step",
+      "file": "features/greet.feature",
+      "line": 4,
+      "message": "No step definition matches \"I run greet with \"Ada\"\"",
+      "do": "nuka scaffold --feature features/greet.feature"
+    }
+  ]
+}
+```
+
+`command` is the command path (`check`, `session list`, `experimental
+explore`), or `""` when argv names no command. `verdict` is the exit
+code's: `passed` for 0, `refused` for 2, and `failed` otherwise. The
+command's own fields sit after `findings` and never replace the five:
+`steps` (`nuka steps`), the contract (`nuka describe`), `summary` and
+`fail_on_hits` (`nuka tend`), the `run.json` fields (`nuka run`), the plan
+(`nuka clean`), `sessions` (`nuka session list`), the seed, counts, and
+scenarios (`nuka experimental explore`), and `codes` (`--codes`, each entry
+a finding with no location). `nuka do` prints its step record, which is a
+record and not a report, so it has no envelope and no `--json`; its
+refusals and warnings are findings on stderr.
+
+### Findings
+
+A finding, a refusal, and a failed scenario are one shape. Its fields are
+`severity`, `code`, `message`, then `file`, `line`, and `step` when they
+are known (`fixture` on a tend note about a fixture), then `fix` and `do`.
+The severity is `error` or `warning` (`nuka check`, and a warning of any
+command), `note` (`nuka tend`), `refused` (see "Refusals"), or `failed` (a
+failed scenario, a BeforeAll or AfterAll hook, an explore run). `file` is
+relative to the project root: for a finding about one step, it is the step
+file that defines the step; for `duplicate-pattern`, which names several
+steps, it is the file of the last one named; for a finding about a config
+entry, it is the config file. A finding about a compat hook has no `file`,
+because discovery does not record which file registered a hook.
+
+`do` is always a command a shell runs as written, with its values filled
+in and quoted for a POSIX shell (`nuka scaffold --feature
+features/greet.feature`, `nuka run features/greet.feature:4`). `fix` is an
+edit, in words: the file to change and what to write. A next step that is
+a choice between edits, or a command with a value nukadoko cannot fill, is
+a `fix`, never a guessed `do`. A finding that names neither gets the
+code's general `fix`, which `--codes` lists, so every finding says what
+gets past it.
+
+In text, a finding is one line, `<severity>\t<code>\t<where>\t<message>`,
+where `<where>` is `<file>:<line>`, `<file>`, the step name, or `-`; a
+newline or a tab inside a value becomes a space. Indented lines may follow:
+the files a grouped finding covers, then `  fix: <text>`, then `  do:
+<command>`. `nuka check --codes` and `nuka tend --codes` print each code in
+the same grammar.
 
 ### Refusals
 
@@ -4543,20 +4598,22 @@ A command refuses when it stops before it has anything to report: a flag
 yargs or the command does not accept, a config it cannot load, a target
 that does not exist, a step name it does not know, a session in the way,
 or, for `nuka run`, an error `nuka check` reports for the selected
-scenarios. Every refusal has two parts: the message, and `do`, the one
-command to run next. Under `--json`, stdout carries one JSON object,
-`{ "schema_version": 1, "error": "<message>", "do": "<command>" }`,
-pretty-printed like every report, and stderr carries nothing. `nuka describe` has no text form, so it refuses the same
-way. Without `--json`, stderr carries the message and then one line,
-`do: <command>`. `do` names the next command when one is known: `nuka
-steps` for an unknown step, the install line for a missing peer
-dependency, `nuka do --help` for a removed live-session subcommand,
-`nuka check <file>` for a `:line` that `check` does not take. When a
-project file stands in the way of `nuka scaffold` (the step file already
-exists, or a `--from` producer's `returns` does not hold the key), `do`
-names the change to that file, then the same `nuka scaffold` command line,
-quoted for a POSIX shell. Otherwise it is the command's own `--help`. A finding, a failed scenario, or a failed
-step is a report, not a refusal, and keeps its own output.
+scenarios. It exits 2, and the refusal is a finding with severity
+`refused` and a code: `invalid-arguments`, `target-not-found`,
+`config-invalid`, `check-errors`, and the others `nuka check --codes`
+lists, or the check code of the same cause (a feature file that does not
+parse is `feature-parse-error` whichever command found it). Under
+`--json` it is in the envelope's `findings`, with `verdict` `refused`, and
+stderr carries nothing; otherwise its lines are on stderr. `nuka run`
+prints the `nuka check` findings it stopped on before its
+`check-errors` refusal. The refusal's `do` is the next command when one is
+known: `nuka steps` for an unknown step, the install line for a missing
+peer dependency, `nuka check <file>` for a `:line` that `check` does not
+take. When a project file stands in the way of `nuka scaffold` (the step
+file already exists, or a `--from` producer's `returns` does not hold the
+key), the `fix` names the change to that file and the `do` is the same
+`nuka scaffold` command line. Otherwise the `fix` is the code's general
+edit and the `do` is the command's own `--help`.
 
 ### Streams and exit codes
 
@@ -4568,21 +4625,21 @@ reading either stream.
 | Exit | Meaning | Examples |
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run`, `nuka session clear` of a session that is not held |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, `import_failures` on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported, a failed `nuka experimental explore` run, a session file that could not be removed |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported, a failed `nuka experimental explore` run, a session file that could not be removed |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
 | Command | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | one scenario record per line under `--records`, `run.json` under `--json`, nothing otherwise | progress, failures, the locations written, the summary line; under `--json`, warnings only |
-| `nuka do` | the step record, also for a failed step | session notices, warnings |
-| `nuka check`, `nuka tend` | the report, or with `--json` one JSON object | nothing, except a refusal without `--json` and `nuka tend`'s `fail-on` lines |
-| `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always JSON) | the step files that failed to import, except where the JSON document already lists them as `import_failures` |
-| `nuka experimental explore` | the shrunk scenario, or with `--json` one JSON object | the verdict line and its rerun command, except under `--json` |
-| `nuka clean`, `nuka session list` | one line per path or session, or with `--json` one JSON value | nothing, except a refusal without `--json` |
+| `nuka run` | one scenario record per line under `--records`, the envelope under `--json`, nothing otherwise | progress, the locations written, the summary line, the `scenario-failed` findings, warnings; nothing under `--json` |
+| `nuka do` | the step record, also for a failed step | session notices, warning findings |
+| `nuka check`, `nuka tend` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and `nuka tend`'s `fail-on` lines |
+| `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |
+| `nuka experimental explore` | the shrunk scenario, or with `--json` the envelope | the `explore-failed` or `explore-error` finding and its rerun command, except under `--json` |
+| `nuka clean`, `nuka session list` | one line per path or session, or with `--json` the envelope | nothing, except a refusal without `--json` |
 
-A refusal under `--json` is the one exception to the stdout column: its
-`{ "schema_version", "error", "do" }` object replaces the report. A step record's
+A refusal under `--json` replaces the report: the envelope holds the
+refusal finding and none of the command's own fields. A step record's
 `error.kind` is listed under "Records".
 
 ### Tolerant reporting, fail-fast execution
@@ -4596,8 +4653,7 @@ project could still show. `nuka check` names the failure as
 `step-file-import-failed`. When the cause is a relative `.js`, `.mjs`, or
 `.cjs` import whose `.ts`, `.mts`, or `.cts` file does not exist, it
 appends that file and the file whose import to edit, both relative to the
-project root, after Node's own text. `nuka steps`/`nuka describe` carry the same fact
-as `import_failures` (above). `nuka tend` counts only what imported and
+project root, after Node's own text. `nuka steps`/`nuka describe` carry the same finding (above). `nuka tend` counts only what imported and
 does not repeat `nuka check`'s finding, so a reader runs `nuka check` beside
 it (see "Tending"). `nuka run`, `nuka do`, and `nuka init`
 are about to execute a step, or set up a project that is about to, so they

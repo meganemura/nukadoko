@@ -1,11 +1,11 @@
-import { versioned } from "../record/schema-version.js";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { isMessagesRunOutputFileName } from "../record/messages-output.js";
 import { sessionsDir, sessionsRootDir } from "../session/paths.js";
-import { helpFor, refuse } from "./refusal.js";
+import type { Finding } from "../finding/finding.js";
+import { formatEnvelope, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka clean`'s actual work — delete the disposable half
@@ -66,6 +66,9 @@ export interface RunCleanOptions {
   /** List what would be removed without removing it. */
   dryRun: boolean;
   json: boolean;
+  /** Findings the invocation raised before the command ran, such as a
+   * missing config file, which `--json` carries in the envelope. */
+  notices?: readonly Finding[];
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -271,9 +274,15 @@ async function buildExportPlan(
   };
 }
 
-function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: WritableSink): void {
+function writePlan(
+  plan: CleanPlan,
+  json: boolean,
+  dryRun: boolean,
+  stdout: WritableSink,
+  notices: readonly Finding[],
+): void {
   if (json) {
-    stdout.write(`${JSON.stringify(versioned("clean_plan", { ...plan, dry_run: dryRun }), null, 2)}\n`);
+    stdout.write(formatEnvelope("clean", 0, notices, { ...plan, dry_run: dryRun }));
     return;
   }
   for (const relativePath of [...plan.records, ...plan.cache, ...plan.export]) {
@@ -287,18 +296,19 @@ function writePlan(plan: CleanPlan, json: boolean, dryRun: boolean, stdout: Writ
 export async function runClean(options: RunCleanOptions): Promise<number> {
   const { rootDir, dryRun, json, stdout, stderr } = options;
 
-  const sinks = { json, stdout, stderr };
+  const sinks = { json, stdout, stderr, command: "clean" };
+  const notices = options.notices ?? [];
   let config;
   try {
     config = await loadConfig(rootDir);
   } catch (error) {
-    return refuse(sinks, error, helpFor("clean"));
+    return refuse(sinks, error, "unexpected-error", undefined, notices);
   }
 
   const built = await buildExportPlan(rootDir, config.stateDir, config.allure?.resultsDir, config.messages?.output);
   // Before writePlan and before any rm.
   if (built.refusal !== null) {
-    return refuse(sinks, built.refusal, helpFor("clean"));
+    return refuse(sinks, built.refusal, "export-path-outside-project", undefined, notices);
   }
   const exportPlan = built.plan;
   const plan: CleanPlan = {
@@ -310,7 +320,7 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   // The plan printed here is exactly what the execution phase below acts
   // on — one code path decides what gets deleted, this function only
   // decides whether it also deletes it.
-  writePlan(plan, json, dryRun, stdout);
+  writePlan(plan, json, dryRun, stdout, notices);
 
   if (dryRun) {
     return 0;

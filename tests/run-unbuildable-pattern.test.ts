@@ -54,11 +54,11 @@ describe("nuka run with a pattern that cannot be built", () => {
     expect(exitCode).toBe(1);
 
     const text = stderr.text();
-    expect(text).toMatch(/^Warning: Step "viewer-state" pattern "the viewer is in \{state\}": /m);
-    expect(text).toContain("Every line meant for this step reports as undefined; nuka check names this as unnamed-capture.");
+    expect(text).toMatch(/^warning\tunnamed-capture\tviewer-state\tStep "viewer-state" pattern "the viewer is in \{state\}": /m);
+    expect(text).toContain("; every line meant for this step reports as undefined\n  fix: Name the capture after the args key that it fills, as {key:type}.\n");
     // Said once, before the scenario's own lines.
-    expect(text.indexOf("Warning: Step")).toBeLessThan(text.indexOf("viewer.feature"));
-    expect(text.split("Warning: Step").length - 1).toBe(1);
+    expect(text.indexOf("warning\tunnamed-capture")).toBeLessThan(text.indexOf("viewer.feature"));
+    expect(text.split("warning\tunnamed-capture").length - 1).toBe(1);
 
     const [record] = stdout
       .text()

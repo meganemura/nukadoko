@@ -314,28 +314,28 @@ describe("nuka scaffold --from", () => {
     [
       "run-greet.stdot",
       'run-greet does not return "stdot"; its keys are exitCode, stdout',
-      'add "stdot" to returns in features/steps/run-greet.ts and return stdot from its run()',
+      'Add "stdot" to returns in features/steps/run-greet.ts and return stdot from its run().',
     ],
     [
       "make-dir.stdout",
       'make-dir does not return "stdout"; its keys are cwd',
-      'add "stdout" to returns in features/steps/make-dir.ts and return stdout from its run()',
+      'Add "stdout" to returns in features/steps/make-dir.ts and return stdout from its run().',
     ],
     [
       "list-names.length",
       "list-names's returns is not a z.object, so it has no key to chain",
-      'make returns in features/steps/list-names.ts a z.object with a "length" key and return length from its run()',
+      'Make returns in features/steps/list-names.ts a z.object with a "length" key and return length from its run().',
     ],
     [
       "touch-file.path",
       'touch-file declares no returns, so it has no key to chain; declare returns with "path" in features/steps/touch-file.ts',
-      "add returns: z.object({ path: <its schema> }) to features/steps/touch-file.ts and return path from its run()",
+      "Add returns: z.object({ path: <its schema> }) to features/steps/touch-file.ts and return path from its run().",
     ],
-  ])("refuses --from %s with the producer change, then this command, as its do line", async (from, message, fix) => {
+  ])("refuses --from %s with the producer change as its fix, then this command as its do", async (from, message, fix) => {
     const result = await cli(rootDir, ["scaffold", "broken", "--pattern", "the output is {text:string}", "--then", "--from", from]);
 
     expect(result.stderr).toBe(
-      `Refusing to scaffold: ${message}\ndo: ${fix}, then run nuka scaffold broken --pattern 'the output is {text:string}' --then --from ${from}\n`,
+      `refused\tstep-inputs-invalid\t-\tRefusing to scaffold: ${message}\n  fix: ${fix}\n  do: nuka scaffold broken --pattern 'the output is {text:string}' --then --from ${from}\n`,
     );
     expect(result.exitCode).toBe(2);
     expect(existsSync(path.join(rootDir, "features", "steps", "broken.ts"))).toBe(false);

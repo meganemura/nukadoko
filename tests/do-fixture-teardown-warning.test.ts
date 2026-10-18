@@ -28,8 +28,11 @@ describe("nuka do: a fixture whose own teardown fails", () => {
       const record = JSON.parse(stdout.text());
       expect(record.status).toBe("passed");
 
-      expect(stderr.text()).toContain('Warning: fixture "brokenTeardown" teardown failed');
-      expect(stderr.text()).toContain("brokenTeardown's own teardown exploded on purpose");
+      expect(stderr.text()).toContain(
+        'warning\tfixture-teardown-failed\t-\tfixture "brokenTeardown" teardown failed: ' +
+          "brokenTeardown's own teardown exploded on purpose\n" +
+          "  fix: Correct the teardown code of the fixture the message names.\n",
+      );
     } finally {
       await removeTempDir(rootDir);
     }

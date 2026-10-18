@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: done-callback compat glue is decidable before a run.
 // A hook is over the executor's limit when Before/After/AfterStep declare
@@ -28,7 +29,7 @@ describe("nuka check: done-callback arity", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: CheckIssue[];
       warnings: CheckIssue[];
     };
@@ -89,9 +90,9 @@ describe("nuka check: done-callback arity", () => {
     });
 
     expect(stderr.text()).toBe("");
-    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; description: string; severity?: string }>;
+    const codes = JSON.parse(stdout.text()).codes as Array<{ code: string; message: string; severity?: string }>;
     const entry = codes.find((item) => item.code === "done-callback-arity");
-    expect(entry?.description.length).toBeGreaterThan(0);
+    expect(entry?.message.length).toBeGreaterThan(0);
     expect(entry?.severity).toBe("error");
     expect(exitCode).toBe(0);
   });

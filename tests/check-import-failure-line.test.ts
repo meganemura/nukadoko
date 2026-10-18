@@ -12,6 +12,7 @@ import {
   fixture,
   removeTempDir,
 } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `step-file-import-
 // failed` findings get `CheckIssue.line` filled in when (and only when) the
@@ -48,7 +49,7 @@ describe("nuka check: step-file-import-failed carries a line when the message ha
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; file?: string; line?: number; message: string }>;
     };
     const brokenIssue = report.errors.find((issue) => issue.code === "step-file-import-failed");
@@ -80,7 +81,7 @@ describe("nuka check: step-file-import-failed carries a line when the message ha
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; file?: string; line?: number; message: string }>;
     };
     const importIssue = report.errors.find((issue) => issue.code === "step-file-import-failed");
@@ -98,7 +99,7 @@ describe("nuka check: step-file-import-failed carries a line when the message ha
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; file?: string; line?: number; message: string }>;
     };
     const importFailures = report.errors.filter((issue) => issue.code === "step-file-import-failed");
@@ -202,7 +203,7 @@ describe("nuka check: step-file-import-failed names the .ts file a missing .js i
   async function importFailures(dir: string): Promise<Array<{ file?: string; message: string }>> {
     const stdout = createCaptureSink();
     await runCli(["check", "--json"], { rootDir: dir, stdout, stderr: createCaptureSink() });
-    const report = JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; message: string }> };
+    const report = bySeverity(stdout.text()) as { errors: Array<{ code: string; file?: string; message: string }> };
     return report.errors
       .filter((issue) => issue.code === "step-file-import-failed")
       .map(({ file, message }) => ({ file, message }));

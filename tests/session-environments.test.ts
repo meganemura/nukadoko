@@ -189,7 +189,7 @@ describe("nuka session list/clear across environments", () => {
     const exitCode = await runCli(["session", "clear", "alpha"], { rootDir, stdout: createCaptureSink(), stderr });
     expect({ exitCode, stderr: withoutNoConfigLine(stderr.text()) }).toEqual({
       exitCode: 1,
-      stderr: 'Session "alpha" not found\ndo: nuka session list\n',
+      stderr: 'error\tsession-not-found\t-\tSession "alpha" not found\n  do: nuka session list\n',
     });
 
     const listed = createCaptureSink();

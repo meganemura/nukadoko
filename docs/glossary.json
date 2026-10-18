@@ -317,6 +317,10 @@
   ],
   "keep_english": [
     {
+      "term": "envelope",
+      "why": "すべてのコマンドの `--json` が出す `{ schema_version, nukadoko, command, verdict, findings }` の文書と、worker や cucumber-messages の 1 行ずつの envelope の両方を指す。docs/spec.ja.md がすでに英語で書いており、訳すとフィールド群との対応が切れる"
+    },
+    {
       "term": "step",
       "why": "Gherkin の行、defineStep で定義される単位そのものを指すドメイン語。訳すと概念との結び付きが失われる"
     },

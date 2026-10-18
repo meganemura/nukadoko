@@ -9,6 +9,8 @@ import { runCli } from "../src/cli/run-cli.js";
 import { runTend } from "../src/cli/tend.js";
 import { analyzeTend } from "../src/tend/analyze.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
+import { parseFindings } from "../src/finding/finding.js";
 
 const CONFIG = 'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n';
 
@@ -79,7 +81,8 @@ describe("every finding carries file and do", () => {
         const tend = await analyzeTend(rootDir);
         const findings = [...check.errors, ...check.warnings, ...tend.notes];
         for (const finding of findings) {
-          expect(finding.do.length, `${finding.code} has a do`).toBeGreaterThan(0);
+          const hint = (finding as { fix?: string }).fix ?? (finding as { do?: string }).do ?? "";
+          expect(hint.length, `${finding.code} has a fix or a do`).toBeGreaterThan(0);
           expect(finding.file, `${finding.code} has a file`).toMatch(/^(features\/|nukadoko\.config\.ts$)/);
           if (finding.step !== undefined && names.includes(finding.step)) {
             expect(
@@ -120,8 +123,8 @@ describe("the do line in text output", () => {
     expect(stdout.text()).toBe(
       [
         'error\tunnamed-capture\tfeatures/steps/broken.ts\tStep "broken" pattern "an unnamed {int} thing": Parameter "{int}" has no name; every parameter in a pattern must be written {key:type} (docs/spec.md "Typed steps")',
-        "  do: Name the capture after the args key that it fills, as {key:type}.",
-        'error\tundefined-step\tfeatures/greet.feature:3\tNo step definition matches "nothing defines this"; run `nuka scaffold --feature features/greet.feature` to add one; patterned steps no scanned feature line binds: broken ("an unnamed {int} thing", features/steps/broken.ts)',
+        "  fix: Name the capture after the args key that it fills, as {key:type}.",
+        'error\tundefined-step\tfeatures/greet.feature:3\tNo step definition matches "nothing defines this"; patterned steps no scanned feature line binds: broken ("an unnamed {int} thing", features/steps/broken.ts)',
         "  do: nuka scaffold --feature features/greet.feature",
         "",
       ].join("\n"),
@@ -132,13 +135,13 @@ describe("the do line in text output", () => {
     const stdout = createCaptureSink();
     await runCheck({ rootDir, json: true, stdout, stderr: createCaptureSink() });
 
-    expect(JSON.parse(stdout.text()).errors[0]).toEqual({
+    expect(bySeverity(stdout.text()).errors[0]).toEqual({
       code: "unnamed-capture",
       message:
         'Step "broken" pattern "an unnamed {int} thing": Parameter "{int}" has no name; every parameter in a pattern must be written {key:type} (docs/spec.md "Typed steps")',
       step: "broken",
       file: "features/steps/broken.ts",
-      do: "Name the capture after the args key that it fills, as {key:type}.",
+      fix: "Name the capture after the args key that it fills, as {key:type}.",
     });
   });
 
@@ -148,7 +151,7 @@ describe("the do line in text output", () => {
 
     expect(stdout.text().split("\n").slice(3)).toEqual([
       'note\tpattern-unbound\tfeatures/steps/broken.ts\tStep "broken" declares a pattern, but no feature line under the scanned directories binds it. It has no place in any scenario right now.',
-      "  do: Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
+      "  fix: Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
       "",
     ]);
   });
@@ -163,7 +166,7 @@ describe("the do line in text output", () => {
     expect(JSON.parse(describe.text()).file).toBe("features/steps/broken.ts");
   });
 
-  it("lists each code's general do in nuka check --codes and nuka tend --codes", async () => {
+  it("lists each code's general fix in nuka check --codes and nuka tend --codes", async () => {
     const check = createCaptureSink();
     await runCheck({ rootDir, json: true, codes: true, stdout: check, stderr: createCaptureSink() });
     const tend = createCaptureSink();
@@ -171,13 +174,18 @@ describe("the do line in text output", () => {
 
     expect(JSON.parse(check.text()).codes.find((entry: { code: string }) => entry.code === "serial-tag-on-scenario")).toEqual({
       code: "serial-tag-on-scenario",
-      description:
+      message:
         "A @nukadoko:serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there.",
       severity: "error",
-      do: "Move @nukadoko:serial to the Feature line.",
+      fix: "Move @nukadoko:serial to the Feature line.",
     });
-    expect(tend.text().split("\n").find((line) => line.startsWith("from-unused\t"))).toBe(
-      "from-unused\tA step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture.\tRemove the from entry for the key, or keep it for nuka do --use.",
-    );
+    expect(parseFindings(tend.text()).find((finding) => finding.code === "from-unused")).toEqual({
+      severity: "note",
+      code: "from-unused",
+      where: "-",
+      message:
+        "A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture.",
+      fix: "Remove the from entry for the key, or keep it for nuka do --use.",
+    });
   });
 });

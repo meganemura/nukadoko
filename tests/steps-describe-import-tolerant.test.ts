@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture, withoutNoConfigLine } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: end-to-end tests —
 // `nuka steps`/`nuka describe` are per-file tolerant of a broken glue file
@@ -26,7 +27,7 @@ describe("nuka steps: tolerant of a broken glue file", () => {
     expect(exitCode).toBe(1);
   });
 
-  it("--json: reports import_failures as { file, message } alongside every step that did import, and only there", async () => {
+  it("--json: reports each import failure as an error finding beside every step that did import, and only there", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["steps", "--json"], {
@@ -37,18 +38,17 @@ describe("nuka steps: tolerant of a broken glue file", () => {
 
     expect(withoutNoConfigLine(stderr.text())).toBe("");
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       steps: Array<{ name: string }>;
-      import_failures: Array<{ file: string; message: string }>;
+      errors: Array<{ code: string; file: string; message: string }>;
     };
     expect(report.steps.map((s) => s.name)).toEqual(["healthy"]);
-    expect(report.import_failures).toHaveLength(1);
-    expect(report.import_failures[0]?.file).toBe("features/steps/broken.ts");
-    expect(report.import_failures[0]?.message).toContain("require is not defined");
+    expect(report.errors.map((issue) => [issue.code, issue.file])).toEqual([["step-file-import-failed", "features/steps/broken.ts"]]);
+    expect(report.errors[0]?.message).toContain("require is not defined");
     expect(exitCode).toBe(1);
   });
 
-  it("--json: import_failures is an empty array, not omitted, when nothing failed; exits 0", async () => {
+  it("--json: has no error finding when nothing failed; exits 0", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["steps", "--json"], {
       rootDir: fixture("basic-project"),
@@ -56,8 +56,7 @@ describe("nuka steps: tolerant of a broken glue file", () => {
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as { import_failures: unknown[] };
-    expect(report.import_failures).toEqual([]);
+    expect(bySeverity(stdout.text()).errors).toEqual([]);
     expect(exitCode).toBe(0);
   });
 });
@@ -93,7 +92,7 @@ describe("nuka steps: a step whose run() can't be read for fixture needs", () =>
 });
 
 describe("nuka describe: tolerant of a broken glue file", () => {
-  it("still describes the healthy step, names the broken file in import_failures and not on stderr, and exits 1", async () => {
+  it("still describes the healthy step, names the broken file in its findings and not on stderr, and exits 1", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "healthy"], {
@@ -102,18 +101,17 @@ describe("nuka describe: tolerant of a broken glue file", () => {
       stderr,
     });
 
-    const contract = JSON.parse(stdout.text()) as {
+    const contract = bySeverity(stdout.text()) as {
       name: string;
-      import_failures: Array<{ file: string; message: string }>;
+      errors: Array<{ code: string; file: string }>;
     };
     expect(contract.name).toBe("healthy");
-    expect(contract.import_failures).toHaveLength(1);
-    expect(contract.import_failures[0]?.file).toBe("features/steps/broken.ts");
+    expect(contract.errors.map((issue) => [issue.code, issue.file])).toEqual([["step-file-import-failed", "features/steps/broken.ts"]]);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
     expect(exitCode).toBe(1);
   });
 
-  it("an unknown step name still names the broken file on stderr (it may be exactly why the step is unknown)", async () => {
+  it("an unknown step name still names the broken file (it may be exactly why the step is unknown)", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "no-such-step"], {
@@ -122,8 +120,13 @@ describe("nuka describe: tolerant of a broken glue file", () => {
       stderr,
     });
 
-    expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, error: "Unknown step: no-such-step", do: "nuka steps" });
-    expect(stderr.text()).toContain("features/steps/broken.ts");
+    const report = bySeverity(stdout.text());
+    expect(report.verdict).toBe("refused");
+    expect(report.errors.map((issue: { code: string; file: string }) => [issue.code, issue.file])).toEqual([
+      ["step-file-import-failed", "features/steps/broken.ts"],
+    ]);
+    expect(report.refused).toEqual([{ code: "unknown-step", message: "Unknown step: no-such-step", do: "nuka steps" }]);
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     expect(exitCode).toBe(2);
   });
 });

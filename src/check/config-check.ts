@@ -6,7 +6,6 @@ import { resolveConfigFileName } from "../config/load-config.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
-import { shellWord } from "../shell/shell-word.js";
 import type { CheckIssue } from "./types.js";
 
 // Responsibility: config coherence —
@@ -110,7 +109,7 @@ export async function checkConfig(
       code: "features-dir-missing",
       message: `featuresDir "${config.featuresDir}" does not exist at ${featuresRoot}`,
       file: configFile,
-      do: `mkdir -p ${shellWord(path.posix.join(config.featuresDir, "steps"))}, or correct featuresDir in ${configFile}`,
+      fix: `Create ${path.posix.join(config.featuresDir, "steps")} for the step files, or correct featuresDir in ${configFile}.`,
     });
   }
 
@@ -128,7 +127,7 @@ export async function checkConfig(
         code: "additional-feature-dir-missing",
         message: `additionalFeatureDirs names "${relativePath}", which does not exist at ${absolutePath}`,
         file: relativePath,
-        do: `mkdir -p ${shellWord(relativePath)}, or remove ${JSON.stringify(relativePath)} from additionalFeatureDirs in ${configFile}.`,
+        fix: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from additionalFeatureDirs in ${configFile}.`,
       });
     }
   }
@@ -139,7 +138,7 @@ export async function checkConfig(
         code: "env-file-missing",
         message: `envFile "${relativePath}" does not exist`,
         file: relativePath,
-        do: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from envFiles in ${configFile}.`,
+        fix: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from envFiles in ${configFile}.`,
       });
     }
   }
@@ -151,7 +150,7 @@ export async function checkConfig(
           code: "environment-env-file-missing",
           message: `environments.${environmentName}.envFiles names "${relativePath}", which does not exist`,
           file: relativePath,
-          do: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from environments.${environmentName}.envFiles in ${configFile}.`,
+          fix: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from environments.${environmentName}.envFiles in ${configFile}.`,
         });
       }
     }

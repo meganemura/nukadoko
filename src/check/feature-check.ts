@@ -10,7 +10,8 @@ import type { FeatureFile } from "../feature/load-features.js";
 import { attachmentTypeMismatch } from "./attachment-type.js";
 import type { CheckedPattern } from "./binding-check.js";
 import { declaresDoneCallback, doneCallbackMessage, passedArgCountForStep } from "./done-callback.js";
-import { checkFromOrder, fromOrderDo, fromOrderHold, isHeldBackByUndefinedLine } from "./from-order.js";
+import { shellWord } from "../shell/shell-word.js";
+import { checkFromOrder, fromOrderFix, fromOrderHold, isHeldBackByUndefinedLine } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
 
@@ -237,7 +238,9 @@ export function checkFeatures(
   const undefinedSteps: UndefinedStepLine[] = [];
 
   for (const feature of features) {
-    const reportedUndefinedText = new Set<string>();
+    // The scaffold list holds one stub per text, since one step covers every
+    // line that reads the same; each such line keeps its own finding.
+    const scaffoldedText = new Set<string>();
 
     for (const pickle of feature.pickles) {
       for (const step of pickle.steps) {
@@ -250,10 +253,6 @@ export function checkFeatures(
         const { stepNames, matched } = match(step.text);
 
         if (stepNames.length === 0) {
-          if (reportedUndefinedText.has(step.text)) {
-            continue;
-          }
-          reportedUndefinedText.add(step.text);
           // The step exists and its pattern error is already reported; a
           // scaffold hint here would tell the author to write it again.
           const blocked = matchPickleStepText(step.text, standIns).stepNames;
@@ -268,22 +267,26 @@ export function checkFeatures(
           }
           const escapeHint = findEscapeHint(step.text, patterns, customTypes);
           const quoteHint = findQuoteHint(step.text, patterns);
+          // A near miss names the step that exists, so the hint is an edit;
+          // only a line with no near miss gets the scaffold command.
           const hintSuffix = escapeHint
-            ? `; hint: would match step "${escapeHint.stepName}" pattern "${escapeHint.pattern}" if its bare ( ) / were escaped; cucumber-expressions reads bare ( ) as optional text and / as alternation`
+            ? `; it would match step "${escapeHint.stepName}" pattern "${escapeHint.pattern}" if its bare ( ) / were escaped (cucumber-expressions reads bare ( ) as optional text and / as alternation)`
             : quoteHint
-              ? `; hint: step "${quoteHint.stepName}" exists at this position with pattern "${quoteHint.pattern}"; a {...:string} parameter takes a quoted value; rewrite as: ${gherkinKeyword(step.type)} ${quoteHint.rewrittenText}`
+              ? `; step "${quoteHint.stepName}" with pattern "${quoteHint.pattern}" takes a quoted value at this position, as a {...:string} parameter`
             : "";
           errors.push({
             code: "undefined-step",
-            message: `No step definition matches "${step.text}"; run \`nuka scaffold --feature ${feature.relativePath}\` to add one${hintSuffix}`,
+            message: `No step definition matches "${step.text}"${hintSuffix}`,
             file: feature.relativePath,
             line,
-            do: escapeHint
-              ? `Escape the bare ( ) and / in the pattern of step "${escapeHint.stepName}" as \\( \\) and \\/.`
+            ...(escapeHint
+              ? { fix: `Escape the bare ( ) and / in the pattern of step "${escapeHint.stepName}" as \\( \\) and \\/.` }
               : quoteHint
-                ? `Rewrite the line as: ${gherkinKeyword(step.type)} ${quoteHint.rewrittenText}`
-                : `nuka scaffold --feature ${feature.relativePath}`,
+                ? { fix: `Rewrite line ${line} of ${feature.relativePath} as: ${gherkinKeyword(step.type)} ${quoteHint.rewrittenText}` }
+                : { do: `nuka scaffold --feature ${shellWord(feature.relativePath)}` }),
           });
+          if (scaffoldedText.has(step.text)) continue;
+          scaffoldedText.add(step.text);
           undefinedSteps.push({
             file: feature.relativePath,
             line,
@@ -425,7 +428,7 @@ export function checkFeatures(
           file: feature.relativePath,
           line: pickle.steps[issue.stepIndex]?.line,
           step: issue.stepName,
-          do: fromOrderDo(issue),
+          fix: fromOrderFix(issue),
         });
       }
       // The undefined line that held these back is reported above as an
@@ -438,7 +441,7 @@ export function checkFeatures(
           message: hold.message,
           file: feature.relativePath,
           line: pickle.steps[hold.stepIndex]?.line,
-          do: hold.do,
+          fix: hold.fix,
         });
       }
 

@@ -1,3 +1,5 @@
+import { formatFinding } from "../finding/finding.js";
+import { runCodeInfo } from "../finding/run-codes.js";
 import type { FixtureDeps, FixtureFn, FixtureOutcome, UseFn } from "../step/fixture-types.js";
 
 // Responsibility: runs *one* fixture function's own setup/teardown
@@ -121,7 +123,14 @@ function watchLateTeardown(name: string, runPromise: Promise<void>, timeoutMs: n
     () => undefined,
     (error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`Warning: fixture "${name}" teardown failed: ${message}\n`);
+      process.stderr.write(
+        formatFinding({
+          severity: "warning",
+          code: "fixture-teardown-failed",
+          message: `fixture "${name}" teardown failed: ${message}`,
+          fix: runCodeInfo("fixture-teardown-failed").fix,
+        }),
+      );
     },
   );
 }

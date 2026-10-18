@@ -63,7 +63,7 @@ async function readLog(rootDir: string): Promise<LogEntry[]> {
 const workerPids: number[] = [];
 
 const WORKER_DISCONNECTED_LINE =
-  "Code in this worker closed its IPC channel to the parent while the parent was still running " +
+  "failed\trun-incomplete\t-\tCode in this worker closed its IPC channel to the parent while the parent was still running " +
   "(process.disconnect()). nukadoko reads a closed channel as the parent ending, so this worker " +
   "tears its fixtures down and stops.";
 
@@ -368,7 +368,10 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
     expect(stoppedBy("SIGTERM", closed.code, closed.signal), stderr()).toBe(true);
     await waitForGone(pids);
     expect(stdout().trim().split("\n")).toHaveLength(2);
-    expect(stderr()).toContain("SIGTERM arrived after every scenario had a record, so AfterAll hooks may not have run.\n");
+    expect(stderr()).toContain(
+      "failed\trun-incomplete\t-\tSIGTERM arrived after every scenario had a record, so AfterAll hooks may not have run\n" +
+        "  fix: Run the scenarios again; the message names what stopped the run.\n",
+    );
     expect(stderr()).toMatch(/^2 scenarios: 2 passed, 0 failed/m);
   }, SPAWNED_TEST_TIMEOUT_MS);
 
@@ -420,7 +423,10 @@ describe("fixture teardown when nuka run or nuka do is signaled", () => {
         "tenant:failed",
       ]);
       expect(stdout()).toBe("");
-      expect(stderr()).toContain(`${signal} stopped this run before every scenario had a record, so it is incomplete.\n`);
+      expect(stderr()).toContain(
+        `failed\trun-incomplete\t-\t${signal} stopped this run before every scenario had a record, so it is incomplete\n` +
+          "  fix: Run the scenarios again; the message names what stopped the run.\n",
+      );
       expect(stderr()).toMatch(/^0 scenarios: 0 passed, 0 failed/m);
     }, SPAWNED_TEST_TIMEOUT_MS);
 

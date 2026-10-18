@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka
 // check`'s human-readable (non `--json`) rendering groups
@@ -25,7 +26,7 @@ describe("nuka check: human formatter groups step-file-import-failed by message"
       stderr: createCaptureSink(),
     });
 
-    const report = JSON.parse(stdout.text()) as {
+    const report = bySeverity(stdout.text()) as {
       errors: Array<{ code: string; message: string; file?: string }>;
     };
     const importFailures = report.errors.filter((issue) => issue.code === "step-file-import-failed");

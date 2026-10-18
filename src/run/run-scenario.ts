@@ -1,4 +1,6 @@
 import { SCHEMA_VERSIONS } from "../record/schema-version.js";
+import { formatFinding, withoutWarningPrefix } from "../finding/finding.js";
+import { runCodeInfo } from "../finding/run-codes.js";
 import { readOwnVersion } from "../version.js";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -439,8 +441,10 @@ export interface RunScenarioOptions {
   readonly processSignal?: ProcessSignal;
 }
 
-function undefinedStepMessage(text: string, relativeFeaturePath: string): string {
-  return `No step definition matches "${text}"; run \`nuka scaffold --feature ${relativeFeaturePath}\` to add one`;
+/** The same message `nuka check`'s undefined-step finding carries, whose
+ * `do` names the scaffold command for the file. */
+function undefinedStepMessage(text: string): string {
+  return `No step definition matches "${text}"`;
 }
 
 function ambiguousStepMessage(text: string, stepNames: readonly string[]): string {
@@ -1122,7 +1126,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     if (processSignal?.interrupted === true) {
       for (const teardownError of fixtureTeardownErrors) {
         process.stderr.write(
-          fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n",
+          formatFinding({
+            severity: "warning",
+            code: "fixture-teardown-failed",
+            message: withoutWarningPrefix(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets)),
+            fix: runCodeInfo("fixture-teardown-failed").fix,
+          }),
         );
       }
     }
@@ -1942,7 +1951,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
       if (outcome.kind === "undefined") {
         scenarioFailed = true;
-        const message = undefinedStepMessage(pickleStep.text, relativeFeaturePath);
+        const message = undefinedStepMessage(pickleStep.text);
         noteFailure(message, 0, undefined);
         pushStepRecord(
           {

@@ -88,7 +88,7 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
           'Scenario "no outcome" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.',
         file: "features/shapes.feature",
         line: 3,
-        do: "Add a Then line that checks the outcome the scenario is for.",
+        fix: "Add a Then line that checks the outcome the scenario is for.",
       },
       {
         code: "outline-rows-share-name",
@@ -96,7 +96,7 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
           'Scenario outline "words" has 2 Examples rows, and its name uses none of the columns (<word>), so every row is reported under the same name.',
         file: "features/shapes.feature",
         line: 15,
-        do: "Add a column to the name, such as: words <word>",
+        fix: "Add a column to the name, such as: words <word>",
       },
     ]);
   });

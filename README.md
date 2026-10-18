@@ -222,8 +222,8 @@ steps     .nukadoko/records/steps/      2
 scenarios .nukadoko/records/scenarios/  1
 summary   .nukadoko/records/runs/run-20261016-123950-zrhr/summary.md
 1 scenario: 0 passed, 1 failed  (1s)
-failed  features/greet.feature:4  greets by name
-  rerun  nuka run features/greet.feature:4
+failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
+  do: nuka run features/greet.feature:4
 ```
 
 The same facts go into the Markdown run summary. On GitHub Actions it
@@ -448,9 +448,11 @@ exploration loop starts with the same call. This repository's
 }
 ```
 
-The entry appears under `steps`, one field of `{ schema_version, steps, import_failures }`.
-The `import_failures` field names each step file that the call could not
-import. This field is always present and is empty when all imports succeed.
+The entry appears under `steps`, beside `findings` in the envelope every
+`--json` prints, `{ schema_version, nukadoko, command, verdict, findings,
+steps }`. Each step file that the call could not import is a
+`step-file-import-failed` finding (`playwright-missing` when the missing
+package is Playwright), and `findings` is empty when all imports succeed.
 
 Before anything runs, `nuka check` reads every feature file and step file,
 then reports each problem. An undefined step is the simplest case. No step
@@ -461,7 +463,7 @@ the files `nuka run` would select for them; with no target it checks the
 whole project.
 
 ```
-error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"; run `nuka scaffold --feature features/todo.feature` to add one
+error	undefined-step	features/todo.feature:7	No step definition matches "the todo titled "Walk the dog" is completed"
   do: nuka scaffold --feature features/todo.feature
 ```
 
@@ -513,7 +515,7 @@ catches it before either step executes:
 
 ```
 error	from-order-violation	features/chain.feature:11	Step "archive-project"'s from.projectId needs step "create-project" to have already run earlier in this scenario, but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty
-  do: Put a line that runs step "create-project" earlier in the scenario.
+  fix: Put a line that runs step "create-project" earlier in the scenario.
 ```
 
 These two cases are only examples. `nuka check --codes` answers "what can
@@ -1170,11 +1172,11 @@ target leaves out.
 `nuka run` also prints its own progress and where it wrote to stderr as it
 goes (`--quiet` quiets the progress only). stdout stays empty unless you
 ask: `nuka run --records` writes one JSON scenario record per line there,
-and `nuka run --json` prints one document instead, the run's `run.json`:
-its verdict, its counts, and each scenario's status, record path, and
-rerun command. Under `--json` stderr stays free of progress, paths, and
-counts, so the document is the only thing an agent's shell shows besides a
-warning that something went wrong. The records are on disk under
+and `nuka run --json` prints one document instead, the envelope every
+`--json` prints with the run's `run.json` fields beside `findings`: its
+counts, and each scenario's status, record path, and rerun command. Under
+`--json` stderr is empty, and a warning is a finding in the document, so
+the document is the only thing an agent's shell shows. The records are on disk under
 `.nukadoko/records/` either way. No output depends on whether stdout or
 stderr is a terminal.
 A failed step prints the first line of its error and the path of its step
@@ -1182,16 +1184,16 @@ record under its progress line, so a CI log says why it failed. When the
 failed step read from a step whose program exited nonzero, a `used` line
 between the two names that step, its exit code, and the first line of its
 stderr: a Then step that got an empty stdout usually failed there. After the
-summary, each failed scenario gets a `rerun` line with the command that runs
-it again. `--quiet` keeps all of these.
+summary, each failed scenario is a `scenario-failed` finding whose `do:`
+line runs it again. `--quiet` keeps all of these.
 
 ```text
   step 2/2  failed  0.0s  the sum is 5
       expected 5, got 4
       record  .nukadoko/records/steps/<id>
 ...
-failed  features/sum.feature:3  two and two
-  rerun  nuka run features/sum.feature:3
+failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
+  do: nuka run features/sum.feature:3
 ```
 
 The same facts go into a Markdown run summary, written for a person rather

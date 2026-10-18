@@ -37,9 +37,8 @@ import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing, playwrightImportMissing } from "./playwright-check.js";
-import { checkCodeDo } from "./codes.js";
-import { noStepFilesDo } from "./no-step-files-do.js";
-import { importSuppressionDo } from "./suppressed-do.js";
+import { checkCodeFix } from "./codes.js";
+import { importSuppressionFix } from "./suppressed-fix.js";
 import type { CheckFinding, CheckIssue, CheckReport } from "./types.js";
 import {
   boundStepNames,
@@ -76,7 +75,7 @@ function scenarioShapeWarning(finding: ScenarioShapeFinding): CheckIssue {
     file: finding.relativePath,
     line: finding.line,
     ...(finding.columns[0] !== undefined
-      ? { do: `Add a column to the name, such as: ${finding.name} <${finding.columns[0]}>` }
+      ? { fix: `Add a column to the name, such as: ${finding.name} <${finding.columns[0]}>` }
       : {}),
   };
 }
@@ -88,7 +87,7 @@ function ignoredOptionWarning(stepName: string, key: string, file: string): Chec
       message: `Step "${stepName}" passes rationale, which defineStep no longer reads, so its text is shown nowhere`,
       file,
       step: stepName,
-      do: `Move the rationale text into a comment above defineStep in ${file}, then delete the rationale: line.`,
+      fix: `Move the rationale text into a comment above defineStep in ${file}, then delete the rationale: line.`,
     };
   }
   return {
@@ -96,7 +95,7 @@ function ignoredOptionWarning(stepName: string, key: string, file: string): Chec
     message: `Step "${stepName}" passes ${key}, which is not a defineStep option, so it has no effect`,
     file,
     step: stepName,
-    do: `Delete ${key} from the defineStep call in ${file}, or rename it to an option defineStep reads: ${STEP_OPTION_NAMES.join(", ")}.`,
+    fix: `Delete ${key} from the defineStep call in ${file}, or rename it to an option defineStep reads: ${STEP_OPTION_NAMES.join(", ")}.`,
   };
 }
 
@@ -604,12 +603,11 @@ async function reportFor(
     bindingResult.standIns,
   );
   warnings.push(...featureResult.warnings);
-  if (noStepFiles !== undefined) {
-    const scaffoldDo = noStepFilesDo(
-      featureResult.undefinedSteps.map((line) => line.file),
-      config.featuresDir,
-    );
-    if (scaffoldDo !== undefined) errors[noStepFiles] = { ...errors[noStepFiles]!, do: scaffoldDo };
+  // One finding per cause: while every checked line is an undefined-step
+  // finding, each of those already names the scaffold command for its
+  // file, and no-step-files-found would say the same thing a second time.
+  if (noStepFiles !== undefined && featureResult.undefinedSteps.length > 0 && featureResult.boundSteps.length === 0) {
+    errors.splice(noStepFiles, 1);
   }
   // A renamed sentence or pattern leaves a line undefined and a step unbound
   // in the same analysis; naming the unbound step beside the line keeps the
@@ -651,7 +649,7 @@ async function reportFor(
         code: "undefined-step-check-suppressed",
         message: `Suppressed ${suppressedCount} undefined-step ${suppressedCount === 1 ? "issue" : "issues"} because ${importFailures.length} step ${importFailures.length === 1 ? "file" : "files"} could not be read. undefined-step judgment is on hold until the unreadable glue is fixed`,
         file: importFailures[0]!.filePath,
-        do: importSuppressionDo(importFindings),
+        fix: importSuppressionFix(importFindings),
       });
     }
   } else {
@@ -665,7 +663,9 @@ async function reportFor(
     return {
       ...issue,
       ...(entry !== undefined ? { file: rootRelativeStepFile(rootDir, entry) } : {}),
-      do: issue.do ?? checkCodeDo(issue.code),
+      // A raised hint replaces the registry's general one, so a finding
+      // never carries two edits that say the same thing in other words.
+      ...(issue.fix === undefined && issue.do === undefined ? { fix: checkCodeFix(issue.code) } : {}),
     };
   };
 

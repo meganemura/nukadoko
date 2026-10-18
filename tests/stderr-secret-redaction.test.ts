@@ -12,8 +12,8 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 const API_TOKEN = "SECRETTOKEN123456";
 
 function expectSecretRedacted(stderr: string): void {
-  expect(stderr).toContain('Warning: fixture "leakyTeardown" teardown failed');
-  expect(stderr).toContain('Warning: version probe for environment "default" failed');
+  expect(stderr).toContain('warning\tfixture-teardown-failed\t-\tfixture "leakyTeardown" teardown failed');
+  expect(stderr).toContain('warning\tversion-probe-failed\t-\tversion probe for environment "default" failed');
   expect(stderr).not.toContain(API_TOKEN);
   expect(stderr).toContain("{{secret.API_TOKEN}}");
 }

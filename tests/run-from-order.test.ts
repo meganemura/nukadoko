@@ -55,7 +55,11 @@ describe("nuka run: from's scenario-order guard", () => {
     expect(record.steps[0].error.message).toContain("never bound anywhere in this scenario");
     const lines = nonEmptyLines(stderr.text());
     const summaryIndex = lines.findIndex((line) => line.startsWith("1 scenario: 0 passed, 1 failed"));
-    expect(lines[summaryIndex + 1]).toBe("failed  features/chain.feature:11  the upstream hasn't run yet");
+    expect(lines[summaryIndex + 1]).toBe(
+      "failed\tscenario-failed\tfeatures/chain.feature:11\tthe upstream hasn't run yet: " +
+        'Step "archive-project"\'s from.projectId needs step "create-project" to have already run earlier in this scenario, ' +
+        'but "create-project" is never bound anywhere in this scenario. This line would fail args validation with certainty',
+    );
   });
 
   it("fails the scenario before any step runs when the upstream is bound only after this line", async () => {

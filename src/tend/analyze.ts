@@ -21,7 +21,7 @@ import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { buildTendSummary } from "./summary.js";
 import { findUnusedParameterTypes } from "./unused-parameter-type.js";
-import { tendCodeDo, type TendCode, type TendFinding, type TendIssue, type TendReport } from "./types.js";
+import { tendCodeFix, type TendCode, type TendFinding, type TendIssue, type TendReport } from "./types.js";
 
 // Findings about a config entry, which name the config file.
 const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
@@ -162,7 +162,7 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
   };
   const finish = (issue: TendIssue): TendFinding => {
     const file = fileFor(issue);
-    return { ...issue, ...(file !== undefined ? { file } : {}), do: issue.do ?? tendCodeDo(issue.code) };
+    return { ...issue, ...(file !== undefined ? { file } : {}), fix: issue.fix ?? tendCodeFix(issue.code) };
   };
 
   return { errors: errors.map(finish), notes: notes.map(finish), summary };

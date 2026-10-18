@@ -131,7 +131,7 @@ describe("markdown oaths", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
-      `no Markdown file was found while scanning "oaths-empty" (resolved to ${path.join(rootDir, "oaths-empty")}); nothing can run\ndo: Add a Markdown file under oaths-empty.\n`,
+      `refused\tno-feature-files\t-\tno Markdown file was found while scanning "oaths-empty" (resolved to ${path.join(rootDir, "oaths-empty")}); nothing can run\n  fix: Add a Markdown file under oaths-empty.\n`,
     );
   });
 

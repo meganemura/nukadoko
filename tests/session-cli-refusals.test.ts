@@ -79,7 +79,7 @@ describe("nuka session clear: setup failures", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
-      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: Leave out --env (the config defines no environments), or add environments.stagign to the config file.\n',
+      'refused\tunknown-environment\t-\tUnknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\n  fix: Leave out --env (the config defines no environments), or add environments.stagign to the config file.\n',
     );
     expect(stdout.text()).toBe("");
   });
@@ -95,7 +95,7 @@ describe("nuka session clear: setup failures", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
-      'Unknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\ndo: Leave out --env (the config defines no environments), or add environments.stagign to the config file.\n',
+      'refused\tunknown-environment\t-\tUnknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\n  fix: Leave out --env (the config defines no environments), or add environments.stagign to the config file.\n',
     );
     expect(stdout.text()).toBe("");
   });
@@ -115,7 +115,7 @@ describe("nuka session clear: setup failures", () => {
 
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe(
-      'Environment "retired" is not defined in nukadoko.config.ts\'s "environments"; clearing the sessions left under it\n',
+      'warning\tunknown-environment\t-\tEnvironment "retired" is not defined in nukadoko.config.ts\'s "environments"; clearing the sessions left under it\n',
     );
     expect(stdout.text()).toBe("");
     expect(existsSync(path.join(dir, "left.json"))).toBe(false);
@@ -145,10 +145,10 @@ describe("nuka session start and stop, removed", () => {
 
       expect(exitCode).toBe(2);
       expect(stderr.text()).toBe(
-        `\`nuka session ${argv[1]}\` was removed with live sessions; \`nuka do <step> --session <name>\` still carries ` +
+        `refused\tremoved-command\t-\t\`nuka session ${argv[1]}\` was removed with live sessions; \`nuka do <step> --session <name>\` still carries ` +
           "login state across calls, and a page whose state cannot be repeated is explored through a Playwright " +
           "MCP server (see docs/upgrading.md in the nukadoko package)\n" +
-          "do: nuka do --help\n",
+          "  do: nuka do --help\n",
       );
       expect(stdout.text()).toBe("");
     }
@@ -161,8 +161,9 @@ describe("nuka session start and stop, removed", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
-    const refusal = JSON.parse(stdout.text()) as { error: string; do: string };
-    expect(refusal.do).toBe("nuka do --help");
-    expect(refusal.error.startsWith("`nuka session start` was removed with live sessions;")).toBe(true);
+    const report = JSON.parse(stdout.text()) as { command: string; findings: { code: string; message: string; do: string }[] };
+    expect(report.command).toBe("session start");
+    expect(report.findings.map((finding) => [finding.code, finding.do])).toEqual([["removed-command", "nuka do --help"]]);
+    expect(report.findings[0]!.message.startsWith("`nuka session start` was removed with live sessions;")).toBe(true);
   });
 });

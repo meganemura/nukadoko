@@ -160,7 +160,7 @@ describe("nuka run: the run summary", () => {
       stderr,
     });
     expect(exitCode).toBe(0);
-    expect(stderr.text()).toMatch(/^Warning: the run summary was not written to blocker\/summary\.md: /m);
+    expect(stderr.text()).toMatch(/^warning\tsummary-not-written\t-\tthe run summary was not written to blocker\/summary\.md: /m);
   });
 });
 

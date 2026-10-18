@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
+import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: a monorepo links shared steps and shared features into
 // featuresDir. Discovery and the feature walk read what a link points to,
@@ -80,7 +81,7 @@ describe("symbolic links under featuresDir", () => {
     const stderr = createCaptureSink();
     await runCli(["check", "--json"], { rootDir, stdout, stderr });
     expect(stderr.text()).toBe("");
-    return (JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number }> }).errors;
+    return (bySeverity(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number }> }).errors;
   }
 
   it("binds steps from a linked file and a linked directory, and checks a linked feature", async () => {
@@ -144,7 +145,7 @@ describe("a feature linked into featuresDir and also under additionalFeatureDirs
     await runCli(["check", "--json"], { rootDir, stdout, stderr });
 
     expect(stderr.text()).toBe("");
-    const { errors } = JSON.parse(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number }> };
+    const { errors } = bySeverity(stdout.text()) as { errors: Array<{ code: string; file?: string; line?: number }> };
     expect(errors.map((entry) => [entry.code, entry.file, entry.line])).toEqual([
       ["undefined-step", "features/linked.feature", 4],
     ]);

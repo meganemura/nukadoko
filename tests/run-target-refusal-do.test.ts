@@ -45,22 +45,22 @@ describe("nuka run names the next step when a target selects nothing", () => {
     expect(await run(["features:3", "features/a.feature:2", "no features:1", "--env", "staging"])).toEqual({
       exitCode: 2,
       stderr:
-        '":line" has no meaning for a directory: features:3 names a directory, not a feature file\n' +
-        "do: nuka run features features/a.feature:2 'no features' --env staging\n",
+        'refused\tline-on-directory\t-\t":line" has no meaning for a directory: features:3 names a directory, not a feature file\n' +
+        "  do: nuka run features features/a.feature:2 'no features' --env staging\n",
     });
   });
 
   it("lists the lines a scenario or an Examples row starts on", async () => {
     expect(await run(["features/a.feature:99"])).toEqual({
       exitCode: 2,
-      stderr: "No scenario found at features/a.feature:99\ndo: Name a line a scenario or an Examples row starts on: 2, 10, 11.\n",
+      stderr: "refused\tno-scenario-at-line\t-\tNo scenario found at features/a.feature:99\n  fix: Name a line a scenario or an Examples row starts on: 2, 10, 11.\n",
     });
   });
 
   it("says to add a scenario when nothing in the file can run", async () => {
     expect(await run(["features/empty.feature:1"])).toEqual({
       exitCode: 2,
-      stderr: "No scenario found at features/empty.feature:1\ndo: Add a scenario to features/empty.feature; nothing in it can run yet.\n",
+      stderr: "refused\tno-scenario-at-line\t-\tNo scenario found at features/empty.feature:1\n  fix: Add a scenario to features/empty.feature; nothing in it can run yet.\n",
     });
   });
 
@@ -68,8 +68,8 @@ describe("nuka run names the next step when a target selects nothing", () => {
     expect(await run(["no features", "acceptance"])).toEqual({
       exitCode: 2,
       stderr:
-        `no .feature file was found while scanning "no features" and "acceptance" (resolved to ${path.join(rootDir, "no features")}, ${path.join(rootDir, "acceptance")}); nothing can run\n` +
-        "do: Add a .feature file under no features or acceptance.\n",
+        `refused\tno-feature-files\t-\tno .feature file was found while scanning "no features" and "acceptance" (resolved to ${path.join(rootDir, "no features")}, ${path.join(rootDir, "acceptance")}); nothing can run\n` +
+        "  fix: Add a .feature file under no features or acceptance.\n",
     });
   });
 
@@ -80,8 +80,8 @@ describe("nuka run names the next step when a target selects nothing", () => {
     expect({ exitCode, stderr: stderr.text() }).toEqual({
       exitCode: 2,
       stderr:
-        `nuka check: no .feature file was found while scanning "acceptance" (resolved to ${path.join(rootDir, "acceptance")}); nothing can run\n` +
-        "do: Add a .feature file under acceptance.\n",
+        `refused\tno-feature-files\t-\tnuka check: no .feature file was found while scanning "acceptance" (resolved to ${path.join(rootDir, "acceptance")}); nothing can run\n` +
+        "  fix: Add a .feature file under acceptance.\n",
     });
   });
 });

@@ -96,14 +96,14 @@ function quotedNames(names: readonly string[]): string {
   return names.map((name) => `"${name}"`).join(", ");
 }
 
-/** The do line for one issue `nuka check` reports. Each sentence either
+/** The fix line for one issue `nuka check` reports. Each sentence either
  * names a change that resolves the issue as stated, or is conditional on a
  * fact only the author knows (which earlier line is meant to produce the
  * key). Removing the from entry is not offered: the key stays required, and
  * another scenario may depend on the producer it names. An issue with a
  * line before it that no step matches never reaches here: it is held back
  * (`isHeldBackByUndefinedLine`). */
-export function fromOrderDo(issue: FromOrderIssue): string {
+export function fromOrderFix(issue: FromOrderIssue): string {
   const { key, stepName, candidates } = issue;
   if (issue.kind === "ambiguous") {
     return `Remove or move lines so that exactly one of steps ${quotedNames(candidates)} runs before this line.`;
@@ -134,7 +134,7 @@ export interface FromOrderHold {
    * it. */
   readonly stepIndex: number;
   readonly message: string;
-  readonly do: string;
+  readonly fix: string;
 }
 
 function describeLine(steps: readonly FromOrderLine[], index: number): string {
@@ -179,7 +179,7 @@ export function fromOrderHold(held: readonly FromOrderIssue[], steps: readonly F
     message:
       `Held back ${count} while ${lines.join(", ")} ${lines.length === 1 ? "matches" : "match"} no step, ` +
       `because such a line may be meant to run the producer they need: ${needs.join("; ")}`,
-    do:
+    fix:
       `If ${which} is meant to run ${stepsPhrase(producers)}, reword that line to match that step's pattern. ` +
       "Otherwise fix the undefined-step finding first, then run nuka check again: a held-back finding that still applies is reported then.",
   };
