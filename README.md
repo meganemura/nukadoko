@@ -432,8 +432,9 @@ program and the Thens that read its result, scaffold one step at a time
 with `--command` and `--then --from`, as
 [Beside your unit tests](#beside-your-unit-tests) does. Each of those
 names a file the stub already holds, so add `--replace`: it overwrites a
-stub that is still, byte for byte, what `--feature` wrote, and refuses a
-file anyone edited. Without it the refusal's `do:` line is that same
+file that is still, byte for byte, what scaffold writes under some set of
+options (a `--feature` stub, or a `--command` or `--from` step with one
+option wrong), and refuses a file anyone edited. Without it the refusal's `do:` line is that same
 command with `--replace`.
 
 A from-order violation is the case plain glue cannot even represent,

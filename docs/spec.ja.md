@@ -3651,13 +3651,17 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               step-description-todo. A file already at
                               the step's path is refused. --replace
                               overwrites it only while it is, byte for
-                              byte, the stub --feature (or scaffold with
-                              no option beyond --pattern and --then)
-                              writes today for that name, path, and the
-                              pattern the file declares; any other file
-                              is refused with rm in its do: line. Without
-                              --replace, such a stub's refusal names
-                              this same command with --replace
+                              byte, what scaffold writes today for that
+                              name and path under some set of options:
+                              the options are read back from the file
+                              (pattern, description, entry point, cwd,
+                              --argv key, imports, from entries), and
+                              the variant, the attachment, and each
+                              chained value's class are tried every way.
+                              Any other file is refused with rm in its
+                              do: line. Without --replace, such a file's
+                              refusal names this same command with
+                              --replace
 nuka scaffold --feature <path>
                               one stub for each line nuka check <path>
                               reports as undefined-step, so a sentence is

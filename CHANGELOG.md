@@ -52,6 +52,19 @@ just until 0.1.
   such a stub now says it still holds the stub, and its `do:` line is the
   same command with `--replace`. `--feature` refuses `--replace`, and what
   it writes is unchanged.
+- **`nuka scaffold --replace` also redoes a `--command`, `--from`, or `--description` step nobody edited.**
+  A step scaffolded with one option wrong (a missing `--argv`, a wrong
+  `--from` key, a wrong entry point) was refused with the `rm` line,
+  because `--replace` recognized only the file `--feature` writes. A file
+  now counts as unedited when the template reproduces it byte for byte
+  under some set of options: the pattern, the description, the entry
+  point, the `cwd`, the `--argv` key, the imports, and the `from` entries
+  are read back from the file, and the variant, the attachment, and the
+  class of each chained value are tried every way. Equality is still the
+  only test, so a misread can refuse a file scaffold wrote but cannot pass
+  one someone edited. The refusal without the flag offers `--replace` for
+  these files too, and its wording now says the file "still holds what
+  scaffold wrote".
 - **`pageAs(name, options?)`: a browser context of its own for each person in a scenario.**
   A scenario with a host and a guest needs two cookie jars, and the one
   context a scenario had gave a second tab the first tab's cookies.

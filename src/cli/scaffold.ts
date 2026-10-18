@@ -39,11 +39,12 @@ import { shellWord } from "../shell/shell-word.js";
 // anything else so an invalid name never reaches the filesystem. An
 // existing file at the target path is refused rather than overwritten: a
 // step that already has a real implementation must never be silently
-// replaced by this template. `--replace` overwrites one file only: the
-// stub `--feature` writes, byte for byte as this template would write it
-// today, which holds nothing anyone wrote. That is the stub a newcomer
-// redoes as a `--command` or `--from` step, and without the flag each one
-// cost an `rm` first.
+// replaced by this template. `--replace` overwrites one kind of file only:
+// one this template writes today, byte for byte, under some set of
+// options, which holds nothing a scaffold run could not write again. That
+// covers the stub `--feature` writes, which a newcomer redoes as a
+// `--command` or `--from` step, and a step scaffolded with one option
+// wrong; without the flag each one cost an `rm` first.
 //
 // `--description` is written as the step's description, a JSON string
 // literal like the pattern. Without it the description is
@@ -624,47 +625,132 @@ export function stepTemplate({
 }
 
 const PATTERN_LINE = /^ {2}pattern: (".*"),$/m;
+const DESCRIPTION_LINE = /^ {2}description: (".*"),$/m;
+const CLI_LINE = /^const cli = resolve\((".*")\);$/m;
+const CWD_OPTION = /\{ cwd: ([A-Za-z_$][A-Za-z0-9_$]*) \}\);$/m;
+const ARGV_SPREAD = /\.\.\.([A-Za-z_$][A-Za-z0-9_$]*)\.split\(/;
+const RELATIVE_IMPORT = /^import ([A-Za-z_$][A-Za-z0-9_$]*) from ("\.[^"\n]*");$/gm;
+const FROM_ENTRY = /^ {4}([A-Za-z_$][A-Za-z0-9_$]*): \[.*\],$/;
+const FROM_CANDIDATE = /\[([A-Za-z_$][A-Za-z0-9_$]*), "([A-Za-z_$][A-Za-z0-9_$]*)"\]/g;
 
-const STUB_VARIANTS: readonly Variant[] = ["when", "then"];
-const STUB_ATTACHMENTS: readonly (Attachment | null)[] = [null, "docstring", "table"];
+const TEMPLATE_VARIANTS: readonly Variant[] = ["when", "then", "command"];
+const TEMPLATE_ATTACHMENTS: readonly (Attachment | null)[] = [null, "docstring", "table"];
+const CHAINED_CLASSES: readonly PrimitiveClass[] = ["string", "number", "other"];
 
-/** Whether `source` is, byte for byte, a stub this template writes with no
- * option beyond `--pattern` and `--then`, for this name and path and the
- * pattern the file itself declares: the file `--feature` writes for a line,
- * before anyone edits it. Only that file holds nothing an author wrote, so
- * only that file `--replace` may overwrite. A guess (a TODO marker that
- * survives beside a real body) would let it destroy work. */
+// Each chained key multiplies the renders by three; a file with more keys
+// than this is refused rather than rendered thousands of times.
+const MAX_CHAINED_KEYS = 6;
+
+function jsonString(literal: string | undefined): string | null {
+  if (literal === undefined) return null;
+  try {
+    const parsed: unknown = JSON.parse(literal);
+    return typeof parsed === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The `from` entries a file declares, each with its producers' import
+ * identifiers and specifiers, or `null` when an entry names an identifier
+ * the file does not import, or does not read as one this template writes. */
+function chainedFromFile(source: string): { key: string; producers: Producer[] }[] | null {
+  const specifiers = new Map<string, string>();
+  for (const match of source.matchAll(RELATIVE_IMPORT)) {
+    const specifier = jsonString(match[2]);
+    if (specifier === null) return null;
+    specifiers.set(match[1]!, specifier);
+  }
+  const lines = source.split("\n");
+  const open = lines.indexOf("  from: {");
+  if (open === -1) return [];
+  const fields: { key: string; producers: Producer[] }[] = [];
+  for (const line of lines.slice(open + 1)) {
+    if (line === "  },") return fields;
+    const entry = FROM_ENTRY.exec(line);
+    if (entry === null) return null;
+    const producers: Producer[] = [];
+    for (const candidate of line.matchAll(FROM_CANDIDATE)) {
+      const specifier = specifiers.get(candidate[1]!);
+      if (specifier === undefined || candidate[2] !== entry[1]) return null;
+      producers.push({ step: candidate[1]!, identifier: candidate[1]!, specifier });
+    }
+    if (producers.length === 0) return null;
+    fields.push({ key: entry[1]!, producers });
+  }
+  return null;
+}
+
+/** Every assignment of a value class to each of `count` chained keys. */
+function classAssignments(count: number): PrimitiveClass[][] {
+  let assignments: PrimitiveClass[][] = [[]];
+  for (let index = 0; index < count; index += 1) {
+    assignments = assignments.flatMap((assignment) => CHAINED_CLASSES.map((valueClass) => [...assignment, valueClass]));
+  }
+  return assignments;
+}
+
+/** Whether `source` is, byte for byte, a file this template writes for
+ * this name and path under some set of scaffold options: what `--feature`
+ * writes, or what `--then`, `--command`, `--from`, `--cwd`, `--argv`, and
+ * `--description` write, before anyone edits it. Only such a file holds
+ * nothing a scaffold run could not write again, so only such a file
+ * `--replace` may overwrite. The options are read back from the file
+ * itself (its pattern, description, entry point, `cwd`, `--argv` key,
+ * imports, and `from` entries), and what the file cannot say (the variant,
+ * the attachment, and the class of each chained value) is tried every way.
+ * Equality decides: a reading that is wrong only fails to match, so it can
+ * refuse a file scaffold wrote but never pass one someone edited. A guess
+ * (a TODO marker that survives beside a real body) would let it destroy
+ * work. */
 export function isUneditedStub(source: string, name: string, relativeFilePath: string): boolean {
   const declared = PATTERN_LINE.exec(source);
   let pattern: string | null = null;
   let captures: readonly Capture[] = [];
   if (declared !== null) {
+    pattern = jsonString(declared[1]);
+    if (pattern === null) return false;
     try {
-      const parsed: unknown = JSON.parse(declared[1]!);
-      if (typeof parsed !== "string") return false;
-      pattern = parsed;
       captures = stripCaptureNames(pattern).captures;
     } catch {
       return false;
     }
   }
-  return STUB_VARIANTS.some((variant) =>
-    STUB_ATTACHMENTS.some(
-      (attachment) =>
-        stepTemplate({
-          name,
-          pattern,
-          captures,
-          chained: [],
-          variant,
-          entryPoint: null,
-          cwd: null,
-          description: null,
-          relativeFilePath,
-          attachment,
-        }) === source,
-    ),
-  );
+  const description = jsonString(DESCRIPTION_LINE.exec(source)?.[1]);
+  if (description === null) return false;
+  const cliLine = CLI_LINE.exec(source);
+  const cliText = cliLine === null ? null : jsonString(cliLine[1]);
+  if (cliLine !== null && cliText === null) return false;
+  const entryPoint = cliText === ENTRY_POINT_PLACEHOLDER ? null : cliText;
+  const cwd = CWD_OPTION.exec(source)?.[1] ?? null;
+  const argvKey = ARGV_SPREAD.exec(source)?.[1] ?? null;
+  const chainedKeys = chainedFromFile(source);
+  if (chainedKeys === null || chainedKeys.length > MAX_CHAINED_KEYS) return false;
+  return classAssignments(chainedKeys.length).some((classes) => {
+    const chained = chainedKeys.map(({ key, producers }, index): ChainedField => ({
+      key,
+      producers: producers as [Producer, ...Producer[]],
+      valueClass: classes[index]!,
+    }));
+    return TEMPLATE_VARIANTS.some((variant) =>
+      TEMPLATE_ATTACHMENTS.some(
+        (attachment) =>
+          stepTemplate({
+            name,
+            pattern,
+            captures,
+            chained,
+            variant,
+            entryPoint,
+            cwd,
+            argvKey,
+            description,
+            relativeFilePath,
+            attachment,
+          }) === source,
+      ),
+    );
+  });
 }
 
 /** What the pattern captures, read against the built-in types alone, or
@@ -1055,7 +1141,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       return unedited
         ? refuse(
             sinks,
-            `Refusing to scaffold: ${relativeFilePath} already exists, and it still holds the stub scaffold wrote`,
+            `Refusing to scaffold: ${relativeFilePath} already exists, and it still holds what scaffold wrote`,
             ["nuka", ...options.argv, "--replace"].map(shellWord).join(" "),
           )
         : refuse(sinks, `Refusing to scaffold: ${relativeFilePath} already exists`, removeIt);
@@ -1063,7 +1149,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     if (!unedited) {
       return refuse(
         sinks,
-        `Refusing to scaffold: ${relativeFilePath} is not the stub scaffold wrote (it has been edited, or another option wrote it), so --replace leaves it`,
+        `Refusing to scaffold: ${relativeFilePath} is not what scaffold writes (someone edited it, or scaffold did not write it), so --replace leaves it`,
         removeIt,
       );
     }

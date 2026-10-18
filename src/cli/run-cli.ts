@@ -808,7 +808,7 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe:
-            "overwrite the step file while it still holds the stub --feature wrote, byte for byte; any other file is refused",
+            "overwrite the step file while it is still, byte for byte, what scaffold writes under some set of options (a --feature stub, a --command or --from step nobody edited); any other file is refused",
         })
         // A pattern or a description is free text a feature line may start
         // with a dash, so each takes the next word whatever it starts with,
