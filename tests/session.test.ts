@@ -287,8 +287,12 @@ describe("nuka session list/clear", () => {
       stderr: createCaptureSink(),
     });
     expect(exitCode).toBe(0);
-    expect(stdout.text().trim().split("\n")).toHaveLength(1);
-    expect(stdout.text()).toContain("alpha");
+    expect(stdout.text().split("\t").map((field, index) => (index === 1 ? "<updated_at>" : field))).toEqual([
+      "alpha",
+      "<updated_at>",
+      "stopped",
+      "default\n",
+    ]);
   });
 
   it("clears a named session", async () => {
@@ -326,7 +330,7 @@ describe("nuka session list/clear", () => {
     });
     expect({ exitCode, stderr: withoutNoConfigLine(stderr.text()) }).toEqual({
       exitCode: 1,
-      stderr: 'Session "no-such-session" not found\ndo: nuka session list --json\n',
+      stderr: 'Session "no-such-session" not found\ndo: nuka session list\n',
     });
   });
 

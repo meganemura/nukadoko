@@ -36,8 +36,11 @@ export async function runSessionList(options: RunSessionListOptions): Promise<nu
   if (json) {
     stdout.write(`${JSON.stringify(versioned("sessions", { sessions }), null, 2)}\n`);
   } else {
+    // The environment is always the last column, so the first three keep
+    // their place, and a session left under an environment the config no
+    // longer defines is still named by it.
     for (const session of sessions) {
-      stdout.write(`${session.name}\t${session.updated_at}\t${session.alive ? "alive" : "stopped"}\n`);
+      stdout.write(`${session.name}\t${session.updated_at}\t${session.alive ? "alive" : "stopped"}\t${session.environment}\n`);
     }
   }
   // Empty is a valid, if unhelpful, answer, so exit 0 even with zero

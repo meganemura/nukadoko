@@ -3745,9 +3745,10 @@ nuka tend --codes [--json]    list every finding code nuka tend can report,
                               whether a plain run reports it or only --all
                               does, a one-line description, and the code's
                               general do, instead of tending a project
-nuka session list [--json]    list every session, across all environments;
+nuka session list [--json]    list every session, across all environments,
+                              one line each: name, updated_at, alive or
+                              stopped, and environment, tab-separated;
                               --json prints { schema_version, sessions }
-                              and names each one's environment
 nuka session clear [name] [--env <name>]
                               delete a session, or every session for the
                               environment when no name is given

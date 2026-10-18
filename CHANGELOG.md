@@ -55,12 +55,18 @@ just until 0.1.
   (`envFiles`, `environments.<name>.envFiles`, or `additionalFeatureDirs`),
   and the config file, the way `features-dir-missing` already did. The
   registry text `nuka check --codes` prints keeps the general form.
-- **`nuka session clear <name>` for a session that does not exist names `nuka session list --json` as its `do:` line.**
+- **`nuka session clear <name>` for a session that does not exist names `nuka session list` as its `do:` line.**
   It ended with `do: nuka session clear --help`. What the caller lacks is
   which sessions exist, and under which environment: `nuka session list`
-  has no `--env` and lists every environment, and its `--json` output
-  names the environment of each session, so a name under another
-  environment reads as that. The message and exit 1 are unchanged.
+  has no `--env`, lists every environment, and names the environment of
+  each session, so a name under another environment reads as that. The
+  message and exit 1 are unchanged.
+- **`nuka session list` names the environment of each session in its plain output.**
+  Each line was the name, `updated_at`, and `alive` or `stopped`, so two
+  sessions with one name under two environments printed the same line,
+  and only `--json` told them apart. The environment is now a fourth
+  tab-separated column, on every line, `default` included, so the first
+  three columns keep their place.
 - **`features-dir-missing` and `additional-feature-dir-missing` quote the path in the `mkdir -p` of their `do:` line.**
   `features-dir-missing` printed `mkdir -p my features/steps` for a
   `featuresDir` of `my features`, which makes two directories. The path is

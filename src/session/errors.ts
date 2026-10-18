@@ -42,10 +42,10 @@ export class MalformedSessionFileError extends Error {
 
 export class SessionNotFoundError extends Error {
   readonly sessionName: string;
-  /** `nuka session list` has no `--env`: it lists every environment, and
-   * only its JSON names the environment of each session, which is what
-   * tells this name apart from the same name under another environment. */
-  readonly do = "nuka session list --json";
+  /** `nuka session list` has no `--env`: it lists every environment and
+   * names the environment of each session, which is what tells this name
+   * apart from the same name under another environment. */
+  readonly do = "nuka session list";
 
   constructor(sessionName: string) {
     super(`Session "${sessionName}" not found`);

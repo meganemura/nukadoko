@@ -182,20 +182,20 @@ describe("nuka session list/clear across environments", () => {
     expect(existsSync(path.join(sessionsDir(rootDir, "default"), "gamma.json"))).toBe(true);
   });
 
-  it("names nuka session list --json when the name exists only under another environment", async () => {
+  it("names nuka session list when the name exists only under another environment, which lists it there", async () => {
     await writeFakeSession("staging", "alpha");
 
     const stderr = createCaptureSink();
     const exitCode = await runCli(["session", "clear", "alpha"], { rootDir, stdout: createCaptureSink(), stderr });
     expect({ exitCode, stderr: withoutNoConfigLine(stderr.text()) }).toEqual({
       exitCode: 1,
-      stderr: 'Session "alpha" not found\ndo: nuka session list --json\n',
+      stderr: 'Session "alpha" not found\ndo: nuka session list\n',
     });
 
     const listed = createCaptureSink();
-    await runCli(["session", "list", "--json"], { rootDir, stdout: listed, stderr: createCaptureSink() });
-    const sessions: { name: string; environment: string }[] = JSON.parse(listed.text()).sessions;
-    expect(sessions.map(({ name, environment }) => ({ name, environment }))).toEqual([
+    await runCli(["session", "list"], { rootDir, stdout: listed, stderr: createCaptureSink() });
+    const rows = listed.text().split("\n").slice(0, -1).map((row) => row.split("\t"));
+    expect(rows.map(([name, , , environment]) => ({ name, environment }))).toEqual([
       { name: "alpha", environment: "staging" },
     ]);
   });

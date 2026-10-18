@@ -122,9 +122,8 @@ scenario: write the steps it needs, write the scenario from what you did
 ## Saved sessions
 
 `nuka session list` finds every saved session across every environment,
-each with its own name and whether a `nuka do --session` call still holds
-it; `--json` also names which environment each one belongs to, which the
-plain listing leaves out. `nuka session clear [name]` deletes one by
+each with its own name, whether a `nuka do --session` call still holds
+it, and the environment it belongs to. `nuka session clear [name]` deletes one by
 name, or, with no name, every session in `--env`'s environment
 (`default` when omitted); one a running call still holds refuses to
 clear. An `--env` the config does not define is refused when nothing is
