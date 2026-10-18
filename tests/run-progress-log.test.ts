@@ -260,6 +260,6 @@ describe("nuka run: progress output", () => {
     // execution that never began" only covers undefined/ambiguous/never-began
     // steps, not a matched step that fails to bind).
     expect(stepsLine).toMatch(/\b2\s*$/);
-    expect(latestRunJson(rootDir).counts).toEqual({ scenarios: 2, passed: 1, failed: 1 });
+    expect(latestRunJson(rootDir).counts).toEqual({ scenarios: 2, passed: 1, failed: 1, not_run: 0 });
   });
 });

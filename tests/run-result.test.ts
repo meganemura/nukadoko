@@ -65,7 +65,7 @@ describe("nuka run: run.json", () => {
       commit: { sha: expect.stringMatching(/^[0-9a-f]{40}$/), dirty: expect.any(Boolean) },
       environments: [{ name: "default", target_version: null }],
       selection: "full",
-      counts: { scenarios: 2, passed: 1, failed: 1 },
+      counts: { scenarios: 2, passed: 1, failed: 1, not_run: 0 },
       scenarios: [
         {
           scenario_record_id: expect.stringMatching(/^scn-/),
@@ -177,7 +177,7 @@ describe("nuka run: run.json", () => {
       const printed = JSON.parse(stdout.text());
       // The envelope carries run.json's fields beside its own five.
       expect(printed).toEqual({ ...readRunJson(rootDir, onlyRunId(rootDir)), schema_version: 2, command: "run", findings: [] });
-      expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0 }]);
+      expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0, not_run: 0 }]);
       expect(printed.scenarios.map((s: { feature: string }) => s.feature).sort()).toEqual([
         "features/basic/a.feature",
         "features/basic/b.feature",
@@ -195,21 +195,28 @@ describe("nuka run: run.json", () => {
       expect(stderr.text()).toBe("");
       expect(exitCode).toBe(1);
       const printed = JSON.parse(stdout.text());
-      expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1 }]);
+      expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1, not_run: 0 }]);
       expect(printed.scenarios.find((s: { status: string }) => s.status === "failed").do).toBe(
         "nuka run features/failure/a.feature:3",
       );
     }
   });
 
-  it("counts what its scenarios say, for any mix of outcomes", () =>
+  it("counts what its scenarios say, and the cells that never ran, for any mix of outcomes", () =>
     hegel.test((tc) => {
       const statuses = tc.draw(gs.arrays(gs.sampledFrom(["passed", "failed"] as const), { maxSize: 12 }));
+      const cells = tc.draw(gs.arrays(gs.sampledFrom(["passed", "failed", "not-run"] as const), { maxSize: 12 }));
       const failed = statuses.filter((status) => status === "failed").length;
-      expect(countScenarios(statuses.map((status) => ({ status })))).toEqual({
+      expect(
+        countScenarios(
+          statuses.map((status) => ({ status })),
+          cells.map((verdict) => ({ verdict })),
+        ),
+      ).toEqual({
         scenarios: statuses.length,
         passed: statuses.length - failed,
         failed,
+        not_run: cells.filter((verdict) => verdict === "not-run").length,
       });
     }));
 });

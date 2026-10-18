@@ -116,8 +116,10 @@ export interface RunVerdict {
   readonly line: number;
   readonly scenario: string;
   readonly environment: string;
-  readonly verdict: "passed" | "failed";
-  /** More than 1 under `--repeat`. */
+  /** `not-run` for a selected scenario that never ran in that
+   * environment, such as after its BeforeAll failed. */
+  readonly verdict: "passed" | "failed" | "not-run";
+  /** More than 1 under `--repeat`; 0 for `not-run`. */
   readonly executions: number;
   readonly passed: number;
 }
@@ -144,7 +146,9 @@ export type RunFields = {
   /** `partial` when a `:line` target left out some scenarios of its file,
    * so the run covers less than the files it names. */
   readonly selection: "full" | "partial";
-  readonly counts: { readonly scenarios: number; readonly passed: number; readonly failed: number };
+  /** `scenarios`, `passed`, and `failed` count executions; `not_run`
+   * counts the `verdicts` cells that never ran. */
+  readonly counts: { readonly scenarios: number; readonly passed: number; readonly failed: number; readonly not_run: number };
   /** One entry per scenario execution, in the order they finished. */
   readonly scenarios: readonly RunScenario[];
   /** One entry per (scenario, environment), red when any execution of it
@@ -162,9 +166,9 @@ export interface RunDocument extends RunFields {
   readonly findings: readonly Finding[];
 }
 
-export function countScenarios(scenarios: readonly Pick<RunScenario, "status">[]): RunFields["counts"] {
+export function countScenarios(scenarios: readonly Pick<RunScenario, "status">[], verdicts: readonly Pick<RunVerdict, "verdict">[] = []): RunFields["counts"] {
   const passed = scenarios.filter((scenario) => scenario.status === "passed").length;
-  return { scenarios: scenarios.length, passed, failed: scenarios.length - passed };
+  return { scenarios: scenarios.length, passed, failed: scenarios.length - passed, not_run: verdicts.filter((cell) => cell.verdict === "not-run").length };
 }
 
 export function runResultPath(rootDir: string, stateDir: string, runId: string): string {

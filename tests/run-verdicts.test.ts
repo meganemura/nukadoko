@@ -71,4 +71,19 @@ describe("foldVerdicts", () => {
       { feature: "features/b.feature", line: 2, scenario: "b", environment: "flag-on", verdict: "passed", executions: 1, passed: 1 },
     ]);
   });
+  it("gives every selected scenario a cell in every environment, not-run exactly when nothing ran there", () =>
+    hegel.test((tc) => {
+      const scenarios = tc.draw(executions);
+      const selected = tc
+        .draw(gs.arrays(gs.tuples(gs.sampledFrom(["features/a.feature", "features/b.feature"]), gs.integers({ minValue: 1, maxValue: 4 })), { maxSize: 8 }))
+        .map(([feature, line]) => ({ feature, line, scenario: `s${line}` }));
+      const cells = foldVerdicts(scenarios, [...ENVIRONMENTS], selected);
+      const expected = new Set([...scenarios.map(keyOf), ...selected.flatMap((entry) => ENVIRONMENTS.map((environment) => keyOf({ ...entry, environment })))]);
+      expect(cells.map(keyOf).sort()).toEqual([...expected].sort());
+      for (const cell of cells) {
+        const ran = scenarios.some((entry) => keyOf(entry) === keyOf(cell));
+        expect(cell.verdict === "not-run").toBe(!ran);
+        if (!ran) expect([cell.executions, cell.passed]).toEqual([0, 0]);
+      }
+    }));
 });

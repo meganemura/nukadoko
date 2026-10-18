@@ -80,7 +80,8 @@ function runFindings(document: RunDocument): readonly Finding[] {
 // environments one scenario is as many verdicts as environments.
 function renderTitle(document: RunDocument): string[] {
   const failed = document.verdicts.filter((cell) => cell.verdict === "failed").length;
-  const passed = document.verdicts.length - failed;
+  const notRun = document.verdicts.filter((cell) => cell.verdict === "not-run").length;
+  const passed = document.verdicts.length - failed - notRun;
   const rows = new Set(document.verdicts.map((cell) => `${cell.feature}\u0000${cell.line}`)).size;
   const scope =
     document.environments.length > 1
@@ -88,6 +89,7 @@ function renderTitle(document: RunDocument): string[] {
       : plural(rows, "scenario");
   const counts = [scope, `${passed} passed`];
   if (failed > 0) counts.push(`${failed} failed`);
+  if (notRun > 0) counts.push(`${notRun} not run`);
   const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
   if (document.verdict === "failed" && failed === 0) {
     lines.push(
@@ -180,7 +182,7 @@ function durationOf(scenario: RunScenario): number {
 // What one cell of a scenario's row says: its verdict, or how many of its
 // executions passed under `--repeat`.
 function verdictCell(cell: RunVerdict | undefined): string {
-  if (cell === undefined) return "not run";
+  if (cell === undefined || cell.verdict === "not-run") return "not run";
   if (cell.executions === 1) return cell.verdict;
   return `${cell.passed} of ${cell.executions} passed`;
 }

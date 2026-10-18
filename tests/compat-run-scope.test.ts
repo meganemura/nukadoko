@@ -1,3 +1,5 @@
+import { copyFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { discoverSteps } from "../src/discover/discover-steps.js";
@@ -303,4 +305,42 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
     const log = (globalThis as Record<string, unknown>).__nukadokoRunAllHooksTimeoutLog as string[];
     expect(log).toEqual(["beforeAll-first", "afterAll"]);
   });
+
+  for (const concurrency of ["1", "2"]) {
+    it(`gives each scenario BeforeAll kept from running a not-run cell, and names the environment, at --concurrency ${concurrency}`, async () => {
+      await copyFile(join(rootDir, "features", "one-scenario.feature"), join(rootDir, "features", "two-scenario.feature"));
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["run", "--json", "--no-check", "--concurrency", concurrency, "features"], {
+        rootDir,
+        stdout,
+        stderr: createCaptureSink(),
+      });
+      expect(exitCode).toBe(1);
+      const document = JSON.parse(stdout.text()) as {
+        counts: unknown;
+        verdicts: unknown[];
+        findings: { severity: string; code: string; message: string; do?: string }[];
+      };
+      const cell = (feature: string) => ({
+        feature,
+        line: 3,
+        scenario: "never executes because BeforeAll fails first",
+        environment: "default",
+        verdict: "not-run",
+        executions: 0,
+        passed: 0,
+      });
+      expect(document.counts).toEqual({ scenarios: 0, passed: 0, failed: 0, not_run: 2 });
+      expect(document.verdicts).toEqual([cell("features/one-scenario.feature"), cell("features/two-scenario.feature")]);
+      const hookFailed = {
+        severity: "failed",
+        code: "hook-failed",
+        message: 'BeforeAll failed in environment "default": Hook "BeforeAll" timed out after 20ms (its own registered timeout)',
+        do: "nuka run features",
+      };
+      // At 2, each worker runs its own BeforeAll, and the parent reports
+      // the files no worker wrote a record for.
+      expect(document.findings.filter((finding) => finding.code === "hook-failed")).toEqual(concurrency === "1" ? [hookFailed] : [hookFailed, hookFailed]);
+    });
+  }
 });

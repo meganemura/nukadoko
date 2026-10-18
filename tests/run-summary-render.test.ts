@@ -26,7 +26,7 @@ const base: RunDocument = {
   commit: { sha: "0123456789abcdef0123456789abcdef01234567", dirty: false },
   environments: [{ name: "default", target_version: null }],
   selection: "full",
-  counts: { scenarios: 0, passed: 0, failed: 0 },
+  counts: { scenarios: 0, passed: 0, failed: 0, not_run: 0 },
   scenarios: [],
   verdicts: [],
 };
@@ -287,6 +287,19 @@ describe("renderRunSummary", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  it("counts and draws a scenario its BeforeAll kept from running as not run", () => {
+    const markdown = renderRunSummary({
+      ...base,
+      verdict: "failed",
+      commit: null,
+      findings: [{ severity: "failed", code: "hook-failed", message: 'BeforeAll failed in environment "default": boom', do: "nuka run" }],
+      counts: { scenarios: 0, passed: 0, failed: 0, not_run: 1 },
+      verdicts: foldVerdicts([], ["default"], [{ feature: "features/a.feature", line: 2, scenario: "s" }]),
+    });
+    expect(markdown.split("\n").slice(1, 2)).toEqual(["# nukadoko run failed: 1 scenario, 0 passed, 1 not run"]);
+    expect(markdown).toContain("| s | 2 | not run | 0.0s |  |\n");
   });
 
   it("lists a step that declared mutates: false and was measured writing", () => {

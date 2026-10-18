@@ -44,6 +44,8 @@ after the top-level list, and set `policy: "read-only"`. `nuka run --env
 a --env b` runs every selected scenario in `a`, then in `b`, as one run:
 `verdicts` and the summary hold one cell per scenario and environment, a
 failure's `do:` names its environment, and any red cell makes the run red.
+A cell that reads `not run` never ran: the `hook-failed` finding beside
+it names the environment whose BeforeAll stopped it.
 
 Trial and error, `nuka do` while building a step and `nuka run` while
 getting a feature green, belongs on a verification environment; never

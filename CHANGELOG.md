@@ -259,11 +259,15 @@ just until 0.1.
   (`[{ "name": "default", "target_version": null }]` without `--env`); each
   scenario entry gains `environment`; and the new `verdicts` holds one cell
   per scenario and environment, `{ feature, line, scenario, environment,
-  verdict, executions, passed }`, red when any execution in it is red. The
-  exit code is red when any cell is red. The run summary's table has one
+  verdict, executions, passed }`, red when any execution in it is red. A
+  selected scenario that never ran in an environment, such as after its
+  BeforeAll failed, is a `not-run` cell with 0 executions, and `counts`
+  gains `not_run`, the number of such cells. A BeforeAll or AfterAll
+  failure names its environment, and its `do` runs the same targets
+  there. The exit code is red when any cell is red. The run summary's table has one
   column per environment, named after it, in place of `status`, and one
-  row per scenario: a cell reads `passed`, `failed`, or `<passed> of <n>
-  passed` under `--repeat`, which used to give each execution its own row;
+  row per scenario: a cell reads `passed`, `failed`, `not run`, or
+  `<passed> of <n> passed` under `--repeat`, which used to give each execution its own row;
   the duration sums the row; the title counts cells. A failure's `do:`
   names the environment it failed in, and with more than one environment a
   finding, a `repeat` line, and a probe note name it after the scenario,

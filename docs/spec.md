@@ -2304,11 +2304,17 @@ to act on the run without opening another file:
   probe note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
   in text.
-- `verdicts` has one cell per scenario and environment, features by path,
-  scenarios by line, and environments in the order given: `verdict` is
-  `failed` when any execution in the cell failed, `executions` counts them
-  (more than 1 under `--repeat`), and `passed` counts the ones that passed.
-  It is the table the run summary draws.
+- `verdicts` has one cell per selected scenario and environment, features
+  by path, scenarios by line, and environments in the order given:
+  `verdict` is `failed` when any execution in the cell failed, `executions`
+  counts them (more than 1 under `--repeat`), and `passed` counts the ones
+  that passed. A selected scenario that never ran in an environment, such
+  as after that environment's BeforeAll failed, has a cell with `verdict`
+  `not-run` and 0 executions. It is the table the run summary draws.
+- `counts` holds `scenarios`, `passed`, and `failed`, which count
+  executions, and `not_run`, which counts the `not-run` cells.
+- A BeforeAll or AfterAll failure is a `hook-failed` finding that names
+  its environment, with a `do` that runs the same targets in it.
 - `verdict` is the exit code's: it also counts a BeforeAll or AfterAll
   failure that no scenario carries, so it can be `failed` while
   `counts.failed` is 0.

@@ -686,6 +686,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       } catch (error) {
         warn({ severity: "warning", code: "retention-failed", message: `retention failed: ${error instanceof Error ? error.message : String(error)}` });
       }
+      const verdicts = foldVerdicts(
+        runScenarios,
+        resolvedEnvs.map((resolvedEnv) => resolvedEnv.name),
+        flatPickles.map(({ feature, pickle }) => ({ feature: feature.relativePath, line: pickle.location?.line ?? 0, scenario: pickle.name })),
+      );
       const fields: RunFields = {
         run_id: runId,
         started_at: invocationStartedAt.toISOString(),
@@ -698,9 +703,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           target_version: condition.targetVersion === undefined ? null : redactString(condition.targetVersion, condition.secrets),
         })),
         selection,
-        counts: countScenarios(runScenarios),
+        counts: countScenarios(runScenarios, verdicts),
         scenarios: runScenarios,
-        verdicts: foldVerdicts(runScenarios, resolvedEnvs.map((resolvedEnv) => resolvedEnv.name)),
+        verdicts,
       };
       let exitCode = verdict === "passed" ? 0 : 1;
       let summaryPath: string | null = null;
@@ -783,9 +788,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // below need it — and reported back as a boolean rather than thrown, so
     // each loop decides for itself whether a failure stops the rest
     // (BeforeAll: yes: AfterAll: no — see this file's own header).
+    // A run-scope hook belongs to one environment's pass, so its finding
+    // names that environment, and its `do` reruns the same targets there.
+    const runHookDo = (environment: string): string =>
+      ["nuka", "run", ...options.featureArgs, ...conditionsOf.rerunFlags(environment)].map(shellWord).join(" ");
     const runOneRunHook = async (
       hook: (typeof compatRunHooks)[number],
       label: "BeforeAll" | "AfterAll",
+      environment: string,
     ): Promise<boolean> => {
       const title = hookDisplayTitle(label, hook.name);
       try {
@@ -807,7 +817,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
         return true;
       } catch (error) {
-        warn({ severity: "failed", code: "hook-failed", message: error instanceof Error ? error.message : String(error) });
+        warn({
+          severity: "failed",
+          code: "hook-failed",
+          message: `${title} failed in environment "${environment}": ${error instanceof Error ? error.message : String(error)}`,
+          do: runHookDo(environment),
+        });
         return false;
       }
     };
@@ -837,6 +852,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           runId,
           repeat,
           probe: options.probe,
+          runHookDo,
           conditions: conditions.map((condition) => ({
             envArg: condition.envArg,
             environment: condition.resolvedEnv.name,
@@ -937,7 +953,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         let beforeAllFailed = false;
         if (hasPickles) {
           for (const hook of beforeAllHooks) {
-            const ok = await runOneRunHook(hook, "BeforeAll");
+            const ok = await runOneRunHook(hook, "BeforeAll", condition.resolvedEnv.name);
             if (!ok) {
               beforeAllFailed = true;
               passPassed = false;
@@ -1031,7 +1047,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // src/run/run-scenario.ts's own After-hook loop.
         if (hasPickles) {
           for (const hook of afterAllHooks) {
-            const ok = await runOneRunHook(hook, "AfterAll");
+            const ok = await runOneRunHook(hook, "AfterAll", condition.resolvedEnv.name);
             if (!ok) {
               passPassed = false;
             }

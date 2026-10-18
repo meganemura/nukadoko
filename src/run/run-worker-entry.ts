@@ -206,7 +206,13 @@ async function main(): Promise<void> {
       }
       return true;
     } catch (error) {
-      note({ severity: "failed", code: "hook-failed", message: error instanceof Error ? error.message : String(error) });
+      // The parent adds the `do`: only it knows the targets the run was
+      // given (src/run/run-concurrent.ts).
+      note({
+        severity: "failed",
+        code: "hook-failed",
+        message: `${title} failed in environment "${resolvedEnv.name}": ${error instanceof Error ? error.message : String(error)}`,
+      });
       return false;
     }
   };

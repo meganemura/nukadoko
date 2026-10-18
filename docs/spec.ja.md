@@ -1951,7 +1951,10 @@ run が終わったとき、最後の step record と run サマリの後に、�
   失敗した各 scenario と、各 probe の note と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
 - `verdicts` は scenario と environment の組ごとに 1 つのセルを持ち、feature はパス順、scenario は行順、environment は与えた順に並びます。
   セルの中の実行が 1 つでも失敗していれば `verdict` は `failed` で、`executions` はその数(`--repeat` のとき 2 以上)、`passed` は通った数です。
+  選んだ scenario がある environment で一度も走らなかったとき(その environment の BeforeAll が失敗したときなど)は、`verdict` が `not-run` で実行が 0 のセルになります。
   run サマリが描く表はこれです。
+- `counts` は、実行を数える `scenarios`、`passed`、`failed` と、`not-run` のセルを数える `not_run` を持ちます。
+- BeforeAll や AfterAll の失敗は、その environment を名指す `hook-failed` の所見になり、その `do` は同じ対象をその environment で走らせます。
 - `verdict` は終了コードの断定です。
   どの scenario も持たない BeforeAll や AfterAll の失敗も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
 

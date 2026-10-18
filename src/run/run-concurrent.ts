@@ -132,6 +132,9 @@ export interface RunConcurrentOptions {
   /** Every warning and failure this function finds, as a finding; the
    * caller writes it to stderr or keeps it for the `--json` document. */
   readonly warn: (finding: Finding) => void;
+  /** The `do` of a BeforeAll or AfterAll failure in `environment`: a
+   * worker does not know the targets the run was given. */
+  readonly runHookDo: (environment: string) => string;
   /** A worker's own stderr, relayed raw: it is a crash or project code's
    * output, not nukadoko's, so it has no finding to be. */
   readonly stderr: WritableSink;
@@ -201,6 +204,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
 
   // A worker writes each note as one finding in its text grammar. A note
   // that does not parse is still reported, so nothing a worker says is lost.
+  let currentEnvironment = "";
   function relayNote(text: string): void {
     const parsed = parseFindings(text);
     if (parsed.length === 0) {
@@ -213,7 +217,11 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         code: finding.code,
         message: finding.message,
         ...(finding.fix !== undefined ? { fix: finding.fix } : {}),
-        ...(finding.do !== undefined ? { do: finding.do } : {}),
+        ...(finding.do !== undefined
+          ? { do: finding.do }
+          : finding.code === "hook-failed"
+            ? { do: options.runHookDo(currentEnvironment) }
+            : {}),
       });
     }
   }
@@ -375,6 +383,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       // A signal stops the run before the next environment starts.
       if (interruptedBy !== null) break;
       if (conditions.length > 1) progress.write(`environment ${condition.environment}\n`);
+      currentEnvironment = condition.environment;
       await runCondition(condition.envArg);
     }
   } finally {
