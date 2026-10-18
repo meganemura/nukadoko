@@ -49,6 +49,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A duplicate step name, compat pattern, or `defineWorld` call names both files as the refusal's `do:` line.**
+  Every command that loads step files ended this refusal with
+  `do: nuka <command> --help`. The `do:` line now names the two files,
+  relative to the project root: rename one of two typed step files that
+  share a name, remove one of two registrations of the same compat
+  pattern, or keep one `defineWorld` call.
 - **A config that does not load names its own fix as the refusal's `do:` line.**
   Every command printed `do: nuka <command> --help` for a config error,
   and no flag fixes a config. The `do:` line now names the edit or the

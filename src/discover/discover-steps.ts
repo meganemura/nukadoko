@@ -418,7 +418,7 @@ export async function discoverSteps(
       const name = path.basename(filePath, path.extname(filePath));
       const existing = vocabulary.get(name);
       if (existing) {
-        throw new DuplicateStepError(name, existing.filePath, filePath);
+        throw new DuplicateStepError(name, existing.filePath, filePath, rootDir);
       }
       vocabulary.set(name, { kind: "typed", name, filePath, step: candidate });
     } else if (isModel(candidate)) {
@@ -439,7 +439,7 @@ export async function discoverSteps(
       const compatName = `compat: ${patternSource}`;
       const existingCompat = vocabulary.get(compatName);
       if (existingCompat) {
-        throw new DuplicateCompatStepError(patternSource, existingCompat.filePath, filePath);
+        throw new DuplicateCompatStepError(patternSource, existingCompat.filePath, filePath, rootDir);
       }
       vocabulary.set(compatName, {
         kind: "compat",
@@ -468,7 +468,7 @@ export async function discoverSteps(
     // can add anything else.
     for (const registration of defineWorldModule.drainWorldSchemaRegistrations()) {
       if (declaredWorldSchemasFilePath !== undefined) {
-        throw new DuplicateWorldDefinitionError(declaredWorldSchemasFilePath, filePath);
+        throw new DuplicateWorldDefinitionError(declaredWorldSchemasFilePath, filePath, rootDir);
       }
       declaredWorldSchemas = registration.schemas;
       declaredWorldSchemasFilePath = filePath;

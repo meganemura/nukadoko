@@ -1,12 +1,24 @@
 // Responsibility: the errors discovery raises on its own (as opposed to
 // errors from importing a broken step file, which propagate as-is).
+// Each one carries `do`, the edit a CLI refusal names (src/cli/refusal.ts
+// reads `do` off any error): a command's --help lists no flag that removes
+// a duplicate. Which of the two files to change is the author's choice, so
+// the do names both and no command.
+
+import path from "node:path";
+
+function shown(rootDir: string, filePath: string): string {
+  const relative = path.relative(rootDir, filePath);
+  return relative.startsWith("..") || path.isAbsolute(relative) ? filePath : relative.split(path.sep).join("/");
+}
 
 export class DuplicateStepError extends Error {
   readonly stepName: string;
   readonly firstFilePath: string;
   readonly duplicateFilePath: string;
+  readonly do: string;
 
-  constructor(stepName: string, firstFilePath: string, duplicateFilePath: string) {
+  constructor(stepName: string, firstFilePath: string, duplicateFilePath: string, rootDir: string) {
     super(
       `Duplicate step name "${stepName}": already defined at ${firstFilePath}, also found at ${duplicateFilePath}`,
     );
@@ -14,6 +26,9 @@ export class DuplicateStepError extends Error {
     this.stepName = stepName;
     this.firstFilePath = firstFilePath;
     this.duplicateFilePath = duplicateFilePath;
+    this.do =
+      `Rename ${shown(rootDir, duplicateFilePath)} or ${shown(rootDir, firstFilePath)}: ` +
+      "a typed step's name is its file name, so the two files register the same step.";
   }
 }
 
@@ -27,8 +42,9 @@ export class DuplicateCompatStepError extends Error {
   readonly patternSource: string;
   readonly firstFilePath: string;
   readonly duplicateFilePath: string;
+  readonly do: string;
 
-  constructor(patternSource: string, firstFilePath: string, duplicateFilePath: string) {
+  constructor(patternSource: string, firstFilePath: string, duplicateFilePath: string, rootDir: string) {
     super(
       `Duplicate compat step pattern "${patternSource}": already registered at ${firstFilePath}, also found at ${duplicateFilePath}`,
     );
@@ -36,6 +52,10 @@ export class DuplicateCompatStepError extends Error {
     this.patternSource = patternSource;
     this.firstFilePath = firstFilePath;
     this.duplicateFilePath = duplicateFilePath;
+    this.do =
+      firstFilePath === duplicateFilePath
+        ? `Remove one of the two registrations of "${patternSource}" in ${shown(rootDir, firstFilePath)}.`
+        : `Remove one of the two registrations of "${patternSource}", in ${shown(rootDir, firstFilePath)} or ${shown(rootDir, duplicateFilePath)}.`;
   }
 }
 
@@ -50,14 +70,19 @@ export class DuplicateCompatStepError extends Error {
 export class DuplicateWorldDefinitionError extends Error {
   readonly firstFilePath: string;
   readonly duplicateFilePath: string;
+  readonly do: string;
 
-  constructor(firstFilePath: string, duplicateFilePath: string) {
+  constructor(firstFilePath: string, duplicateFilePath: string, rootDir: string) {
     super(
       `Duplicate defineWorld() registration: already defined at ${firstFilePath}, also found at ${duplicateFilePath}`,
     );
     this.name = "DuplicateWorldDefinitionError";
     this.firstFilePath = firstFilePath;
     this.duplicateFilePath = duplicateFilePath;
+    this.do =
+      firstFilePath === duplicateFilePath
+        ? `Keep one of the defineWorld calls in ${shown(rootDir, firstFilePath)}, and remove the others.`
+        : `Keep one defineWorld call: remove the one in ${shown(rootDir, duplicateFilePath)} or the one in ${shown(rootDir, firstFilePath)}.`;
   }
 }
 
