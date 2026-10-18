@@ -220,7 +220,7 @@ const CHECK_CODES = {
   },
   "playwright-missing": {
     description:
-      "A feature line binds a step whose fixtures build page, context, pageAs, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs; or a step file imports playwright, playwright-core, or @playwright/test, which the project has not installed, so the file does not import. A step is reported once, at the first line that binds it.",
+      "A feature line binds a step whose fixtures build page, context, pageAs, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs; or a step file imports playwright, playwright-core, or @playwright/test, itself or through another project file that the message names, which the project has not installed, so the file does not import. A step is reported once, at the first line that binds it.",
     severity: "error",
     do: "Install the package that the message names in the project, at the version that the message names.",
   },

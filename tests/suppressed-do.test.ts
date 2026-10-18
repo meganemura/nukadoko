@@ -9,7 +9,7 @@ import { PLAYWRIGHT_VERSION } from "../src/context/load-playwright.js";
 const PACKAGES = ["playwright", "playwright-core", "@playwright/test"] as const;
 
 function playwrightFinding(missingPackage: string): CheckIssue {
-  return playwrightImportMissing({ filePath: "features/steps/a.ts", missingPackage })!;
+  return playwrightImportMissing({ filePath: "features/steps/a.ts", missingPackage: { name: missingPackage } })!;
 }
 
 const importFailed: CheckIssue = {

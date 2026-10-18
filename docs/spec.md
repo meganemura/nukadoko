@@ -882,6 +882,12 @@ missing. `nuka check` reports that file as `playwright-missing` too, in
 place of `step-file-import-failed`, with the install line for the package
 it imports and one message for every such file, so the text output prints
 them as one group with one install line.
+A step file that reaches the package through another project file (a
+helper, or another step file) is reported the same way, with the same
+install line; its message names the file that imports the package. An
+import from inside `node_modules` keeps Node's own message, because an
+installed package that cannot find its own dependency is a broken
+install that this install line is not known to fix.
 The commands that import step files without running the check
 (`nuka run --no-check`, `nuka do`, `nuka steps`, and `nuka describe`)
 report such a file with the same message, and `nuka run --no-check` and

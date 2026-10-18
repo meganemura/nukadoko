@@ -683,6 +683,10 @@ step ファイルに定義されていても、check する行のどれも束縛
 `playwright`、`playwright-core`、`@playwright/test` を自分で import する step ファイルは、そのパッケージが無いと import そのものに失敗します。
 `nuka check` はそのファイルも `step-file-import-failed` ではなく `playwright-missing` として報告します。
 インストール行はそのファイルが import するパッケージのもので、メッセージはどのファイルでも同じなので、テキスト出力ではそれらを 1 つのグループと 1 つのインストール行にまとめて出します。
+プロジェクトの別のファイル(ヘルパーや別の step ファイル)を通してそのパッケージに届く step ファイルも、同じインストール行で同じように報告します。
+そのメッセージは、パッケージを import しているファイルを名指します。
+`node_modules` の中からの import は Node 自身のメッセージのままです。
+インストール済みのパッケージが自分の依存を見つけられないのはインストールが壊れているためで、このインストール行で直るとは限らないからです。
 check を実行せずに step ファイルを import するコマンド(`nuka run --no-check`、`nuka do`、`nuka steps`、`nuka describe`)も、そのファイルを同じメッセージで報告します。
 `nuka run --no-check` と `nuka do` は、インストール行を `do:` 行に出します。
 型宣言も同じ規則に従います。

@@ -293,6 +293,62 @@ describe("a project without playwright installed", () => {
     }
   }, 60_000);
 
+  it("check names a step file that reaches playwright through another file with the same install line", async () => {
+    const steps = path.join(projectDir, "features", "steps");
+    const support = path.join(projectDir, "support");
+    const stepImporting = (name: string, specifier: string) =>
+      [
+        'import { defineStep, z } from "nukadoko";',
+        `import ${JSON.stringify(specifier)};`,
+        "",
+        "export default defineStep({",
+        `  description: "Check ${name}",`,
+        `  pattern: "${name} is checked",`,
+        "  args: z.object({}),",
+        "  mutates: false,",
+        "  run() {},",
+        "});",
+        "",
+      ].join("\n");
+    await writeFile(path.join(steps, "expect-a.ts"), stepImporting("a", "playwright/test"));
+    await writeFile(path.join(steps, "open-page.ts"), stepImporting("open", "./expect-a.ts"));
+    await mkdir(support, { recursive: true });
+    await writeFile(path.join(support, "pw.ts"), 'export { expect } from "playwright/test";\n');
+    await writeFile(path.join(steps, "via-support.ts"), stepImporting("support", "../../support/pw.ts"));
+    try {
+      const install = `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`;
+      const tail = `, and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`;
+      const json = await nuka(["check", "--json", "features/cli.feature"]);
+      expect(json.code).toBe(1);
+      expect((JSON.parse(json.stdout) as { errors: unknown[] }).errors).toEqual([
+        { code: "playwright-missing", message: `the step file imports "playwright"${tail}`, file: "features/steps/expect-a.ts", do: install },
+        {
+          code: "playwright-missing",
+          message: `the step file imports "playwright" through features/steps/expect-a.ts${tail}`,
+          file: "features/steps/open-page.ts",
+          do: install,
+        },
+        {
+          code: "playwright-missing",
+          message: `the step file imports "playwright" through support/pw.ts${tail}`,
+          file: "features/steps/via-support.ts",
+          do: install,
+        },
+      ]);
+      const check = await nuka(["check", "features/cli.feature"]);
+      expect(check.stdout).toContain(
+        `error\tplaywright-missing\tfeatures/steps/open-page.ts\tthe step file imports "playwright" through features/steps/expect-a.ts${tail}\n  do: ${install}\n`,
+      );
+      expect(check.stdout).not.toContain("step-file-import-failed");
+      expect(check.stdout).not.toContain("Did you mean");
+    } finally {
+      await rm(path.join(steps, "expect-a.ts"), { force: true });
+      await rm(path.join(steps, "open-page.ts"), { force: true });
+      await rm(path.join(steps, "via-support.ts"), { force: true });
+      await rm(support, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   it("check holds back the undefined lines a playwright-importing step file defines and gives the install line", async () => {
     const steps = path.join(projectDir, "features", "steps");
     await writeFile(

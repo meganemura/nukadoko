@@ -81,21 +81,39 @@ export interface ImportFailureDetail {
   readonly message: string;
   /** The line in `filePath` itself, when the error names one there. */
   readonly line?: number;
-  /** The package `filePath` itself imports and Node could not find, when
-   * that is the error. A package missing deeper in the graph is not
-   * named: installing it is not known to be the fix there. */
-  readonly missingPackage?: string;
+  /** The package Node could not find, when that is the error, and the
+   * project file that imports it when that file is not `filePath`. */
+  readonly missingPackage?: MissingPackage;
+}
+
+export interface MissingPackage {
+  readonly name: string;
+  /** The importer, relative to the project root with "/" separators, when
+   * `filePath` reaches the package through another of the project's files. */
+  readonly importedBy?: string;
 }
 
 const MISSING_PACKAGE = /^Cannot find package '((?:@[^/']+\/)?[^/']+)' imported from ([^\r\n]+)/;
 
-/** The package `filePath` itself imports, when `message` is Node's
- * `ERR_MODULE_NOT_FOUND` text for a package it could not find. */
-export function missingPackageOf(code: unknown, message: string, filePath: string): string | undefined {
+/** The package Node could not find, when `message` is its
+ * `ERR_MODULE_NOT_FOUND` text for one, and the importer when that is not
+ * `filePath`. An importer under `node_modules` names nothing: an installed
+ * package that cannot find its own dependency is a broken install, and
+ * installing the named package is not known to be the fix. */
+export function missingPackageOf(
+  code: unknown,
+  message: string,
+  filePath: string,
+  rootDir: string,
+): MissingPackage | undefined {
   if (code !== "ERR_MODULE_NOT_FOUND") return undefined;
   const match = MISSING_PACKAGE.exec(message);
   if (match === null) return undefined;
-  return path.resolve(match[2]!) === path.resolve(filePath) ? match[1] : undefined;
+  const name = match[1]!;
+  const importer = path.resolve(match[2]!);
+  if (importer === path.resolve(filePath)) return { name };
+  if (importer.split(path.sep).includes("node_modules")) return undefined;
+  return { name, importedBy: path.relative(rootDir, importer).split(path.sep).join("/") };
 }
 
 export function describeImportFailure(
@@ -122,7 +140,7 @@ export function describeImportFailure(
     (code === UNSUPPORTED_TYPESCRIPT_SYNTAX || (framed !== null && STRIP_ONLY_REFUSAL.test(message)) ? STRIP_ONLY_SENTENCE : "") +
     (framedLocation === null ? FRAMED_ELSEWHERE_SENTENCE : "") +
     typeOnlyImportSentence(message);
-  const missingPackage = missingPackageOf(code, message, filePath);
+  const missingPackage = missingPackageOf(code, message, filePath, rootDir);
   if (missingPackage !== undefined) return { message: message + sentence, missingPackage };
   if (location === undefined) return { message: message + sentence };
   // In the message even when it is this file: two step files that import

@@ -23,7 +23,7 @@ import {
   DuplicateWorldDefinitionError,
   StepFileImportError,
 } from "./errors.js";
-import { describeImportFailure } from "../config/import-failure.js";
+import { describeImportFailure, type MissingPackage } from "../config/import-failure.js";
 import { playwrightPackageMissing } from "../context/load-playwright.js";
 
 // Responsibility: walk `featuresDir`, import every `.ts`/`.mts`/`.js`/`.mjs`
@@ -169,7 +169,7 @@ export interface DiscoveryResult {
    * already produces (src/feature/load-features.ts's `relativePath`,
    * src/check/feature-check.ts's `file`). `message` and `line` come from
    * src/discover/import-failure.ts. */
-  readonly importFailures: readonly { filePath: string; message: string; line?: number; missingPackage?: string }[];
+  readonly importFailures: readonly { filePath: string; message: string; line?: number; missingPackage?: MissingPackage }[];
   /** rootDir-relative paths of every `.cjs` or `.cts` file this run's walk found
    * under `featuresDir` (skipping `node_modules` and any dot-directory, the
    * same walk every other file here goes through) and never attempted to
@@ -345,7 +345,7 @@ export async function discoverSteps(
   // DuplicateCompatStepError already applies to a colliding compat step.
   let declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>> = {};
   let declaredWorldSchemasFilePath: string | undefined;
-  const importFailures: { filePath: string; message: string; line?: number; missingPackage?: string }[] = [];
+  const importFailures: { filePath: string; message: string; line?: number; missingPackage?: MissingPackage }[] = [];
 
   for (const filePath of files) {
     // Node's type stripping removes only `import type` and inline `type`

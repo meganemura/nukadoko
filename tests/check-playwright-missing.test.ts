@@ -222,7 +222,7 @@ describe("findPlaywrightMissing", () => {
 
 describe("playwrightImportMissing", () => {
   it("reports a step file whose own Playwright import is missing, with one message for every file", () => {
-    expect(playwrightImportMissing({ filePath: "e2e/steps/a.ts", missingPackage: "playwright" })).toEqual({
+    expect(playwrightImportMissing({ filePath: "e2e/steps/a.ts", missingPackage: { name: "playwright" } })).toEqual({
       code: "playwright-missing",
       message:
         'the step file imports "playwright", and this project has not installed it, so the file does not import. ' +
@@ -230,15 +230,28 @@ describe("playwrightImportMissing", () => {
       file: "e2e/steps/a.ts",
       do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
     });
-    expect(playwrightImportMissing({ filePath: "e2e/steps/b.ts", line: 2, missingPackage: "@playwright/test" })).toMatchObject({
+    expect(playwrightImportMissing({ filePath: "e2e/steps/b.ts", line: 2, missingPackage: { name: "@playwright/test" } })).toMatchObject({
       file: "e2e/steps/b.ts",
       line: 2,
       do: `npm install -D -E @playwright/test@${PLAYWRIGHT_VERSION}`,
     });
   });
 
+  it("reports a step file that reaches Playwright through another file, naming that file", () => {
+    expect(
+      playwrightImportMissing({ filePath: "e2e/steps/open.ts", missingPackage: { name: "playwright", importedBy: "e2e/steps/run.ts" } }),
+    ).toEqual({
+      code: "playwright-missing",
+      message:
+        'the step file imports "playwright" through e2e/steps/run.ts, and this project has not installed it, so the file does not import. ' +
+        `Install the version nukadoko is tested against: npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+      file: "e2e/steps/open.ts",
+      do: `npm install -D -E playwright@${PLAYWRIGHT_VERSION}`,
+    });
+  });
+
   it("leaves any other import failure alone", () => {
     expect(playwrightImportMissing({ filePath: "a.ts" })).toBeUndefined();
-    expect(playwrightImportMissing({ filePath: "a.ts", missingPackage: "playwright-extra" })).toBeUndefined();
+    expect(playwrightImportMissing({ filePath: "a.ts", missingPackage: { name: "playwright-extra" } })).toBeUndefined();
   });
 });

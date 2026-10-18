@@ -46,18 +46,24 @@ const PLAYWRIGHT_PACKAGES: ReadonlySet<string> = new Set([SPECIFIER, "playwright
 
 /**
  * The text and the next command for a step file that did not import because
- * it imports `missingPackage` itself and the project has not installed it,
- * or `undefined` when that package is not a Playwright one. Every command
- * that imports step files reports this case through here: Node's own
- * message ends in a "Did you mean" hint that points at the wrong fix.
+ * Node could not find `missing`, a Playwright package the project has not
+ * installed, or `undefined` when it is not a Playwright one. The step file
+ * may import it itself or through `missing.importedBy`, another of the
+ * project's files; either way installing it is the fix. Every command that
+ * imports step files reports this case through here: Node's own message
+ * ends in a "Did you mean" hint that points at the wrong fix.
  */
 export function playwrightPackageMissing(
-  missingPackage: string | undefined,
+  missing: { readonly name: string; readonly importedBy?: string } | undefined,
 ): { readonly message: string; readonly do: string } | undefined {
-  if (missingPackage === undefined || !PLAYWRIGHT_PACKAGES.has(missingPackage)) return undefined;
-  const install = `npm install -D -E ${missingPackage}@${PLAYWRIGHT_VERSION}`;
+  if (missing === undefined || !PLAYWRIGHT_PACKAGES.has(missing.name)) return undefined;
+  const install = `npm install -D -E ${missing.name}@${PLAYWRIGHT_VERSION}`;
+  const reaches =
+    missing.importedBy === undefined
+      ? `the step file imports "${missing.name}"`
+      : `the step file imports "${missing.name}" through ${missing.importedBy}`;
   return {
-    message: `the step file imports "${missingPackage}", and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`,
+    message: `${reaches}, and this project has not installed it, so the file does not import. Install the version nukadoko is tested against: ${install}`,
     do: install,
   };
 }

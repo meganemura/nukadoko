@@ -49,6 +49,17 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka check` reports `playwright-missing` for a step file that reaches a missing Playwright through another file.**
+  A step file that imported a helper, or another step file, which
+  imported `playwright/test` got `step-file-import-failed` with Node's
+  raw text, a "Did you mean" hint that pointed at the wrong fix, and the
+  generic `do:`. It now gets `playwright-missing` and the install line,
+  and the message names the file that imports the package. The finding
+  is decided from the package name in Node's own `ERR_MODULE_NOT_FOUND`
+  message, so it is reported only when Node names a Playwright package
+  as the one it could not find. An importer under `node_modules` keeps
+  Node's own message. `nuka run --no-check`, `nuka do`, `nuka steps`, and
+  `nuka describe` print the same message.
 - **docs/upgrading.md says how to port an `execFileSync` or `execSync` call to `runCommand`.**
   The note named only a `spawnSync` wrapper. `execFileSync` and
   `execSync` throw on a nonzero exit and `runCommand` resolves, so a step

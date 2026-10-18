@@ -131,21 +131,36 @@ describe("nuka check: a step file with an enum", () => {
 });
 
 describe("missingPackageOf", () => {
-  it("names the package a file imports itself, scoped or not, and nothing for another importer or code", () =>
+  it("names the package, and the project file that imports it when that is not the file itself", () =>
     hegel.test((tc) => {
       const scope = tc.draw(gs.oneOf(gs.just(""), gs.fromRegex("@[a-z0-9-]{1,6}/")));
       const name = `${scope}${tc.draw(gs.fromRegex("[a-z0-9][a-z0-9._-]{0,10}"))}`;
-      const file = `/${tc.draw(gs.arrays(gs.fromRegex("[a-z0-9 _-]{1,8}"), { minSize: 1, maxSize: 4 })).join("/")}.ts`;
+      const segments = tc.draw(gs.arrays(gs.fromRegex("[a-z0-9 _-]{1,8}"), { minSize: 1, maxSize: 4 }));
+      const file = `/p/${segments.join("/")}.ts`;
       const hint = tc.draw(gs.oneOf(gs.just(""), gs.just(`\nDid you mean to import "${name}/test.js"?`)));
       const message = `Cannot find package '${name}' imported from ${file}${hint}`;
-      expect(missingPackageOf("ERR_MODULE_NOT_FOUND", message, file)).toBe(name);
-      expect(missingPackageOf("ERR_MODULE_NOT_FOUND", message, `${file}x`)).toBeUndefined();
-      expect(missingPackageOf("ERR_PACKAGE_PATH_NOT_EXPORTED", message, file)).toBeUndefined();
+      expect(missingPackageOf("ERR_MODULE_NOT_FOUND", message, file, "/p")).toEqual({ name });
+      expect(missingPackageOf("ERR_MODULE_NOT_FOUND", message, `${file}x`, "/p")).toEqual({
+        name,
+        importedBy: `${segments.join("/")}.ts`,
+      });
+      expect(missingPackageOf("ERR_PACKAGE_PATH_NOT_EXPORTED", message, file, "/p")).toBeUndefined();
     }));
+
+  it("names nothing when the importer is an installed package", () => {
+    expect(
+      missingPackageOf(
+        "ERR_MODULE_NOT_FOUND",
+        "Cannot find package 'playwright-core' imported from /p/node_modules/playwright/index.mjs",
+        "/p/features/steps/a.ts",
+        "/p",
+      ),
+    ).toBeUndefined();
+  });
 
   it("names nothing for a relative file Node could not find", () => {
     expect(
-      missingPackageOf("ERR_MODULE_NOT_FOUND", "Cannot find module '/p/features/steps/b.ts' imported from /p/features/steps/a.ts", "/p/features/steps/a.ts"),
+      missingPackageOf("ERR_MODULE_NOT_FOUND", "Cannot find module '/p/features/steps/b.ts' imported from /p/features/steps/a.ts", "/p/features/steps/a.ts", "/p"),
     ).toBeUndefined();
   });
 });

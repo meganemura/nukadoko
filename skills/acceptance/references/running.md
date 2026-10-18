@@ -58,7 +58,8 @@ the install line, so the run stops before it starts. A step file that
 imports `playwright/test` (or `playwright-core`, `@playwright/test`)
 without the package installed is `playwright-missing` too, named at the
 step file instead of `step-file-import-failed`; the one install line fixes
-every file in the group. A line in a configured env file that is not a blank, a comment, or
+every file in the group. A step file that reaches the package through
+another project file is the same finding, and the message names that file. A line in a configured env file that is not a blank, a comment, or
 a binding is `env-file-skipped-line`. Compat glue that
 declares a done() callback is `done-callback-arity`. The finding covers a
 hook whose parameter count is past what the executor passes, and a matched

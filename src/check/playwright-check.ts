@@ -19,10 +19,11 @@ import type { CheckIssue } from "./types.js";
 // never destructures `request` replaces the builtin, so no Playwright
 // request context is built, and no finding is reported for it.
 //
-// A step file that imports Playwright itself (`import { expect } from
-// "playwright/test"`) fails to import when the package is missing, before
-// any of the above can be read. That failure is the same finding, named at
-// the step file, with one message for every file, so `nuka check` prints
+// A step file that imports Playwright (`import { expect } from
+// "playwright/test"`), itself or through another project file, fails to
+// import when the package is missing, before any of the above can be read.
+// That failure is the same finding, named at the step file, with one
+// message for every file that imports it itself, so `nuka check` prints
 // one group with one install line instead of one Node error per file whose
 // "Did you mean" hint points at the wrong fix.
 //
@@ -128,7 +129,7 @@ export function findPlaywrightMissing(
 export function playwrightImportMissing(failure: {
   readonly filePath: string;
   readonly line?: number;
-  readonly missingPackage?: string;
+  readonly missingPackage?: { readonly name: string; readonly importedBy?: string };
 }): CheckIssue | undefined {
   const missing = playwrightPackageMissing(failure.missingPackage);
   if (missing === undefined) return undefined;
