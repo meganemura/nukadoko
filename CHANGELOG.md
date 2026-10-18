@@ -87,8 +87,9 @@ just until 0.1.
     with the new `run-sources-missing` refusal code; a directory with no
     `run.json`, or no run at all, with the new `run-not-found`. A copied
     run directory is untrusted input: a `run.json` of another schema
-    version, or one without a field a report reads, is refused with the
-    new `run-invalid`, naming the field, and a `sources.json` that does not
+    version, or one with a field any of the three formats reads missing,
+    null, or of another type, is refused with the new `run-invalid`,
+    naming the field, and a `sources.json` that does not
     parse or has another version with the new `run-sources-invalid`.
   - The `allure` and `messages` config keys are refused with
     `config-key-removed`, and `nuka run --summary <path>` is refused with
