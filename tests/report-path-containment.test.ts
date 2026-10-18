@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -121,6 +121,33 @@ describe("nuka report on an edited run directory", () => {
     expect(messages.exitCode).toBe(1);
     expect(messages.stderr).toMatch(/^failed\treport-incomplete\t-\tmessages: could not read attachment \.\/\.env: \.\/\.env resolves outside the run directory, so it is not read$/m);
     expect(messages.stdout).not.toContain(Buffer.from(`TOKEN=${SECRET}\n`).toString("base64"));
+  });
+
+  it("refuses a record.json that is a symlink out of the run directory, and names it", async () => {
+    const copy = await copiedRun((dir) => dir, []);
+    const [stepId] = readdirSync(path.join(copy, "steps")).sort();
+    const recordPath = path.join(copy, "steps", stepId!, "record.json");
+    renameSync(recordPath, path.join(outside, "record.json"));
+    symlinkSync(path.join(outside, "record.json"), recordPath);
+    const allure = await cli(["report", copy, "--format", "allure", "--out", path.join(outside, "allure")]);
+    expect(allure.exitCode).toBe(1);
+    expect(allure.stderr).toMatch(
+      new RegExp(`^failed\\treport-incomplete\\t-\\tscn-[a-z0-9-]+: steps/${stepId}/record\\.json resolves outside the run directory, so it is not read$`, "m"),
+    );
+  });
+
+  it("leaves a file outside the run untouched when this project's exports manifest is a symlink to it", async () => {
+    expect((await cli(["run", "--no-check", "features/passing.feature"])).exitCode).toBe(0);
+    const runId = latestRunJson(rootDir).run_id as string;
+    const victim = path.join(outside, "victim.txt");
+    writeFileSync(victim, "keep\n");
+    symlinkSync(victim, path.join(rootDir, ".nukadoko", "runs", runId, "exports"));
+    const allure = await cli(["report", "--format", "allure"]);
+    expect(allure.exitCode).toBe(1);
+    expect(allure.stderr).toMatch(
+      new RegExp(`^failed\\treport-incomplete\\t-\\texports of run ${runId} resolves outside the run directory, so this render is not noted in it$`, "m"),
+    );
+    expect(readFileSync(victim, "utf8")).toBe("keep\n");
   });
 
   for (const { name, evidence, attachments, link } of cases) {

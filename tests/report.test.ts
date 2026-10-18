@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -249,6 +249,26 @@ describe("nuka report", () => {
         "run-sources-invalid",
         (copy) => writeFileSync(path.join(copy, "sources.json"), JSON.stringify({ schema_version: 7, project: null, features: [] })),
         "holds a sources.json with schema_version 7, and this release reads 1, so the scenarios of run <run> cannot be parsed",
+        "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+      ],
+      [
+        "a run.json that is a symlink out of the run directory",
+        "run-invalid",
+        (copy) => {
+          renameSync(path.join(copy, "run.json"), path.join(elsewhere, "run.json"));
+          symlinkSync(path.join(elsewhere, "run.json"), path.join(copy, "run.json"));
+        },
+        "run.json resolves outside the run directory, so it is not read",
+        "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
+      ],
+      [
+        "a sources.json that is a symlink out of the run directory",
+        "run-sources-invalid",
+        (copy) => {
+          renameSync(path.join(copy, "sources.json"), path.join(elsewhere, "sources.json"));
+          symlinkSync(path.join(elsewhere, "sources.json"), path.join(copy, "sources.json"));
+        },
+        "holds a sources.json that resolves outside the run directory, so the scenarios of run <run> cannot be parsed",
         "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
       ],
     ];

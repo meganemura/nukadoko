@@ -3,11 +3,11 @@ import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
 import { rankRunsNewestFirst } from "../record/newest-run.js";
-import { createExportsManifest, forgetExports, readExportsManifest, runExportsManifestPath } from "../record/run-exports.js";
+import { createExportsManifest, forgetExports, readExportsManifest, RUN_EXPORTS_FILE_NAME, runExportsManifestPath } from "../record/run-exports.js";
 import { readEndedRuns } from "../record/run-result.js";
 import { allureResultsRelativeDir, runRelativeDir } from "../record/state-layout.js";
 import { writeAllureResults } from "../report/allure/write-results.js";
-import { isOwnRun, loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
+import { containedFile, isOwnRun, loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
 import { writeMessagesStream } from "../report/messages/write-stream.js";
 import { renderRunSummary } from "../run/run-summary.js";
 import { writeOutputLocations } from "../run/progress-log.js";
@@ -90,6 +90,7 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   }
 
   const findings: Finding[] = [...notices];
+  let manifestRefused = false;
   const outPath = options.out === undefined ? undefined : path.resolve(rootDir, options.out);
 
   const output = produce();
@@ -176,7 +177,7 @@ export async function runReport(options: RunReportOptions): Promise<number> {
     }
     noteOwnFiles(output, written);
     noteProblems(output.problems);
-    const exitCode = output.problems.length > 0 ? FAILED_EXIT_CODE : 0;
+    const exitCode = findings.some((finding) => finding.code === "report-incomplete") ? FAILED_EXIT_CODE : 0;
     const relative = path.relative(rootDir, target) || ".";
     if (json) {
       stdout.write(formatEnvelope("report", exitCode, findings, { run_id: output.runId, format, written: [relative] }));
@@ -201,8 +202,8 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   // writes, is the previous render of the same run, so it goes before the
   // new one is written instead of piling up beside it.
   function replaceOwnFiles(output: ReportOutput, target: string, kind: "file" | "dir"): void {
-    if (!output.ownRun || stateDir === null) return;
-    const manifestPath = runExportsManifestPath(rootDir, stateDir, output.runId);
+    const manifestPath = ownManifest(output);
+    if (manifestPath === null) return;
     const replaced = new Set<string>();
     for (const relativePath of readExportsManifest(manifestPath)) {
       const absolutePath = path.resolve(rootDir, relativePath);
@@ -214,10 +215,26 @@ export async function runReport(options: RunReportOptions): Promise<number> {
     if (replaced.size > 0) forgetExports(manifestPath, replaced);
   }
 
+  // The exports manifest of this project's own run, or `null` for a run
+  // that is not, or for a manifest that is a symlink out of the run
+  // directory: following it would read or append to a file elsewhere.
+  function ownManifest(output: ReportOutput): string | null {
+    if (!output.ownRun || stateDir === null) return null;
+    const manifestPath = runExportsManifestPath(rootDir, stateDir, output.runId);
+    try {
+      return containedFile(runDir, manifestPath, RUN_EXPORTS_FILE_NAME);
+    } catch {
+      if (!manifestRefused) noteProblems([`${RUN_EXPORTS_FILE_NAME} of run ${output.runId} resolves outside the run directory, so this render is not noted in it`]);
+      manifestRefused = true;
+      return null;
+    }
+  }
+
   function noteOwnFiles(output: ReportOutput, files: readonly string[]): void {
-    if (!output.ownRun || stateDir === null) return;
+    const manifestPath = ownManifest(output);
+    if (manifestPath === null || stateDir === null) return;
     const stateRoot = path.resolve(rootDir, stateDir);
-    const manifest = createExportsManifest(runExportsManifestPath(rootDir, stateDir, output.runId), rootDir);
+    const manifest = createExportsManifest(manifestPath, rootDir);
     for (const file of files) if (isInside(stateRoot, file)) manifest.note(file);
   }
 }

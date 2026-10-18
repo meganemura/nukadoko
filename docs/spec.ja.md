@@ -2807,6 +2807,7 @@ run.json、step record、そして run が parse した feature の本文であ�
 そうしたディレクトリは信頼できない入力なので、record が名指すパスはどれも、symlink も含めて解決し、run ディレクトリの中にとどまるときだけ読みます。
 このプロジェクト自身の run でも、読める範囲は広がりません。
 state ディレクトリへコピーしたディレクトリも自身の run として扱われるからで、`nuka run` が記録するファイルはどれも run ディレクトリの中にあります。
+report が自分で開くファイル（run.json、`sources.json`、各 step の `record.json`、run の exports manifest）も、実パスで同じ規則に従うので、その中の symlink をたどって外へ出ることはありません。
 外へ出るパスは読まず、`report-incomplete` の finding になり、そのファイルが result にも messages ストリームにも入ることはありません。
 result は Allure 2 のファイル形式を使い、Allure 2 と Allure 3 の両方が読めます。
 nukadoko は HTML をレンダリングしません。

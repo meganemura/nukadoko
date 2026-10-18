@@ -5,7 +5,7 @@ import { parseFeatureSource } from "../feature/load-features.js";
 import { readStepRecord } from "../record/read-step-record.js";
 import { RUN_RESULT_FILE_NAME, type RunDocument, type RunScenario } from "../record/run-result.js";
 import { parseRunDocument } from "./run-document-schema.js";
-import { readRunSources } from "../record/run-sources.js";
+import { readRunSources, runSourcesPath } from "../record/run-sources.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { RUN_FILE_DIRS, resolveRecordedPath, runRelativeDir } from "../record/state-layout.js";
 import type { StepRecord } from "../record/types.js";
@@ -34,7 +34,9 @@ import type { StepRecord } from "../record/types.js";
 // counts as own, so an exception for the project root would let an edited
 // record name `.env`. Every file nuka run records is written inside its
 // run directory, so the rule costs no real run anything. A refused path is
-// a problem the report names, never a file it reads.
+// a problem the report names, never a file it reads. The files the load
+// opens itself (run.json, sources.json, and each record.json) are held to
+// the same rule by their real path, since any of them can be a symlink.
 //
 // A pickle is found by the scenario's feature path and line, the same key
 // the run used. The pickles are parsed again from sources.json, so their
@@ -136,6 +138,15 @@ export function containedResolver(runId: string, runDir: string, rootDir: string
   };
 }
 
+/** `file`, a file inside the run directory, once its real path is known
+ * to stay there: a symlinked run.json, sources.json, or record.json would
+ * otherwise be followed out of the run. Throws for one that leaves.
+ * `name` is how the message names it. */
+export function containedFile(runDir: string, file: string, name: string): string {
+  if (isWithin(realTarget(runDir), realTarget(file))) return file;
+  throw new Error(`${name} resolves outside the run directory, so it is not read`);
+}
+
 function pickleKey(feature: string, line: number): string {
   return `${feature}\u0000${line}`;
 }
@@ -145,9 +156,15 @@ function pickleKey(feature: string, line: number): string {
 export function loadRunDocument(
   runDir: string,
 ): { readonly document: RunDocument } | { readonly refusal: { readonly code: "run-not-found" | "run-invalid"; readonly message: string } } {
+  const runJson = path.join(runDir, RUN_RESULT_FILE_NAME);
+  try {
+    containedFile(runDir, runJson, runJson);
+  } catch (error) {
+    return { refusal: { code: "run-invalid", message: (error as Error).message } };
+  }
   let text: string;
   try {
-    text = readFileSync(path.join(runDir, RUN_RESULT_FILE_NAME), "utf8");
+    text = readFileSync(runJson, "utf8");
   } catch {
     return { refusal: { code: "run-not-found", message: `${runDir} holds no run.json that nuka run wrote` } };
   }
@@ -173,6 +190,14 @@ export function loadRun(runDir: string, rootDir: string, stateDir: string | null
   const runJson = loadRunDocument(runDir);
   if ("refusal" in runJson) return runJson;
   const document = runJson.document;
+  if (!isWithin(realTarget(runDir), realTarget(runSourcesPath(runDir)))) {
+    return {
+      refusal: {
+        code: "run-sources-invalid",
+        message: `${runDir} holds a sources.json that resolves outside the run directory, so the scenarios of run ${document.run_id} cannot be parsed`,
+      },
+    };
+  }
   const read = readRunSources(runDir);
   if ("problem" in read) {
     return {
@@ -214,7 +239,9 @@ export function loadRun(runDir: string, rootDir: string, stateDir: string | null
       if (step.step_record_id === null || step.record === null || stepRecords.has(step.step_record_id)) continue;
       let stepRecord: StepRecord | null = null;
       try {
-        stepRecord = readStepRecord(containedResolver(document.run_id, runDir, runDir)(step.record));
+        const recordDir = containedResolver(document.run_id, runDir, runDir)(step.record);
+        containedFile(runDir, path.join(recordDir, "record.json"), `${step.record}/record.json`);
+        stepRecord = readStepRecord(recordDir);
         if (stepRecord === null) problems.push(`${step.record}/record.json of ${scenario.scenario_record_id} could not be read`);
       } catch (error) {
         problems.push(`${scenario.scenario_record_id}: ${error instanceof Error ? error.message : String(error)}`);
