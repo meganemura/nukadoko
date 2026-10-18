@@ -544,10 +544,11 @@ From the release after 0.16.1 on, `nuka tend` reports the first one as
   scenario ends, pass or fail, and is listed in the step record's
   `evidence.scratch`. While the project's own entry exists, it replaces
   the builtin.
-- **`runCommand` replaces a `spawnSync` wrapper.** `import { runCommand }
-  from "nukadoko"`, then `await runCommand(command, args, { cwd, env,
-  input, timeout })`. Each call inside a step adds an entry to the step
-  record's `observed.processes`. Two differences from `spawnSync` cost a
+- **`runCommand` replaces a `spawnSync` wrapper, and an `execFileSync` or
+  `execSync` call.** `import { runCommand } from "nukadoko"`, then
+  `await runCommand(command, args, { cwd, env, input, timeout })`. Each
+  call inside a step adds an entry to the step record's
+  `observed.processes`. Two differences from `spawnSync` cost a
   run if they are missed. It returns a Promise, so each caller gains
   `await` and becomes `async`: a caller without `await` passes
   `nuka check` and fails at run time with `returns validation failed`
@@ -557,6 +558,14 @@ From the release after 0.16.1 on, `nuka tend` reports the first one as
   `z.number().nullable()`. A failed run prints the `used <step> exit
   <code> <first stderr line>` line only when the step that ran the
   program returns both `exitCode` and `stderr`.
+  A third difference applies to `execFileSync` and `execSync`, and
+  missing it fails nothing: they throw on a nonzero exit, and `runCommand`
+  resolves. A step that relied on that throw as its assertion passes when
+  the program failed, and `nuka check` stays green. Where the step needs
+  the program to succeed, check `exitCode` yourself:
+  `if (exitCode !== 0) throw new Error(stderr)`. `runCommand` returns
+  `{ exitCode, signal, stdout, stderr }`, not the stdout text, and it runs
+  no shell, so an `execSync` string becomes a command and its arguments.
 - **An empty `returns` can go.** A step whose `returns` is
   `z.object({})` may drop that line and its final `return {}`. An early
   `return {}` inside an `if` becomes `return;`: deleting it makes the step

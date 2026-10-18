@@ -34,11 +34,12 @@ After a failure, what should be knowable about it?
   payload or picks a fixture file belongs here. Making it a part would
   buy a schema to maintain and nothing else.
   A helper that runs the CLI under test calls `runCommand` from
-  `nukadoko` instead of `spawnSync`: it returns `{ exitCode, signal,
-  stdout, stderr }` without throwing on a nonzero exit, and each process
-  it starts is listed in the calling step's `observed.processes`, so a
-  failure record shows the command, its working directory, and its exit
-  code.
+  `nukadoko` instead of `spawnSync` or `execFileSync`: it returns
+  `{ exitCode, signal, stdout, stderr }` without throwing on a nonzero
+  exit, so a step that needs the command to succeed checks `exitCode`
+  itself, and each process it starts is listed in the calling step's
+  `observed.processes`, so a failure record shows the command, its working
+  directory, and its exit code.
 
 A part is a step, not a new kind of thing. That is what makes the split
 below cost the feature file nothing.

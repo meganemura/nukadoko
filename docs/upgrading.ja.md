@@ -471,7 +471,7 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
   どちらも新しい一時ディレクトリを返します。
   そのディレクトリは scenario が終わると成否にかかわらず消え、step record の `evidence.scratch` に載ります。
   プロジェクト自身のエントリがある間は、それが builtin を置き換えます。
-- **`runCommand` が `spawnSync` のラッパーを置き換えます。**
+- **`runCommand` が `spawnSync` のラッパーと、`execFileSync` や `execSync` の呼び出しを置き換えます。**
   `import { runCommand } from "nukadoko"` として、`await runCommand(command, args, { cwd, env, input, timeout })` と呼びます。
   step の中の呼び出しは、それぞれ step record の `observed.processes` にエントリを足します。
   `spawnSync` との違いが 2 つあり、見落とすと run が失敗します。
@@ -480,6 +480,12 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
   2 つ目に、`exitCode` は `number | null` で、signal がプロセスを終わらせたときは `null` です。
   そのため `returns` に `exitCode: z.number()` を宣言する step は、`exitCode ?? 1` を返すか、`z.number().nullable()` と宣言します。
   失敗した run が `used <step> exit <code> <first stderr line>` の行を出すのは、プログラムを動かした step が `exitCode` と `stderr` の両方を返すときだけです。
+  3 つ目の違いは `execFileSync` と `execSync` に当てはまり、見落としても何も失敗しません。
+  それらは 0 以外の終了で throw しますが、`runCommand` は resolve します。
+  その throw を assertion として頼っていた step は、プログラムが失敗しても pass し、`nuka check` も green のままです。
+  プログラムの成功が必要な step では、`if (exitCode !== 0) throw new Error(stderr)` のように終了コードを自分で確かめます。
+  `runCommand` が返すのは stdout の文字列ではなく `{ exitCode, signal, stdout, stderr }` です。
+  また `runCommand` はシェルを通さないので、`execSync` の文字列はコマンドと引数に分けます。
 - **空の `returns` は消せます。**
   `returns` が `z.object({})` の step は、その行と最後の `return {}` を消して構いません。
   `if` の中の早期の `return {}` は `return;` にします。

@@ -49,6 +49,14 @@ just until 0.1.
 
 ### Fixed
 
+- **docs/upgrading.md says how to port an `execFileSync` or `execSync` call to `runCommand`.**
+  The note named only a `spawnSync` wrapper. `execFileSync` and
+  `execSync` throw on a nonzero exit and `runCommand` resolves, so a step
+  that relied on the throw passes when the program failed, with
+  `nuka check` still green. The note now names that difference and the
+  `exitCode` check that restores the failure, and says that `runCommand`
+  runs no shell. docs/upgrading.ja.md and the acceptance skill's parts
+  reference match.
 - **`nuka scaffold` names the way past a refusal that a project file causes.**
   When the step file already existed, or a `--from` producer declared no
   `returns`, a `returns` that is not a `z.object`, or no such key, the
