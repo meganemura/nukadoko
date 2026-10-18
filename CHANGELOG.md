@@ -187,9 +187,10 @@ just until 0.1.
   it can be rendered again from a `run.json` copied off a CI machine; it
   gains a `- selection:` condition line and a "Findings" section for the
   warnings a run raised. A `run.json` that cannot be written fails the
-  run with a `run-result-not-written` finding, which the `--json` document
-  carries, and the `run` location line names only a file that was
-  written. Retention and `nuka tend` read runs from `run.json` alone. Step records, the Allure results, and the messages
+  run with a `run-result-not-written` finding, which the summary and the
+  `--json` document carry (run.json is written before the summary is
+  rendered, so such a run never reads as passed in `$GITHUB_STEP_SUMMARY`),
+  and the `run` location line names only a file that was written. Retention and `nuka tend` read runs from `run.json` alone. Step records, the Allure results, and the messages
   stream do not change. See docs/upgrading.md.
 - **One grammar for every finding, refusal, and failed scenario, and one
   `--json` envelope for every command.** A finding is one line,

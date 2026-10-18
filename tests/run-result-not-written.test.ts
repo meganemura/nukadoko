@@ -59,6 +59,24 @@ describe("nuka run when run.json cannot be written", () => {
     expect(document.findings.map((finding) => [finding.severity, finding.code])).toEqual([["failed", "run-result-not-written"]]);
   });
 
+  it("says failed in the summary and in $GITHUB_STEP_SUMMARY, with the finding that failed it", async () => {
+    const stepSummary = path.join(rootDir, "step-summary.md");
+    const before = process.env.GITHUB_STEP_SUMMARY;
+    process.env.GITHUB_STEP_SUMMARY = stepSummary;
+    try {
+      expect(await runCli(["run", "features/blocked.feature"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() })).toBe(1);
+    } finally {
+      if (before === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+      else process.env.GITHUB_STEP_SUMMARY = before;
+    }
+    const runsDir = path.join(rootDir, ".nukadoko", "runs");
+    const [runId] = readdirSync(runsDir);
+    const summary = readFileSync(path.join(runsDir, runId!, "summary.md"), "utf8");
+    expect(summary.split("\n").slice(0, 2)).toEqual(["<!-- nukadoko:run -->", "# nukadoko run failed: 1 scenario, 1 passed"]);
+    expect(summary).toContain("run-result-not-written");
+    expect(readFileSync(stepSummary, "utf8")).toContain(summary);
+  });
+
   it("names no run location in text, and leaves no temporary file", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "features/blocked.feature"], { rootDir, stdout: createCaptureSink(), stderr });

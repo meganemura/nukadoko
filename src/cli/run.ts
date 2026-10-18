@@ -180,8 +180,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // written, by this file at concurrency 1 and through `onRecord` above it,
 // and the summary is written once, after AfterAll and process fixture
 // teardown, so its verdict is the exit code's. It is written before the
-// output locations so that list can name it, and before run.json,
-// which stays the run's last write.
+// output locations so that list can name it, and after run.json, so a
+// run.json that could not be written is in the summary as the failure it
+// is.
 //
 // `--concurrency` above 1 diverts to src/run/run-concurrent.ts, in one
 // branch after every setup-phase check (bindings, from, fixtures, tag
@@ -660,14 +661,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // The end of a run, in the order each part needs the one before it.
     // Retention runs first, so run.json holds the findings it raises; the
     // run being finished counts as a run but is never removed. The document
-    // is built next, the summary is rendered from it, and run.json is the
-    // last write: it says the run ended (src/record/run-result.ts). A run
-    // with no pickle wrote nothing and gets neither file. A summary that was
-    // not written is a warning. A run.json that was not written fails the
-    // run: it is the record every later command reads, so a green exit
-    // without it would claim evidence that does not exist. Its finding is
-    // added to the document before the document is printed, so `--json`
-    // carries it too. Returns the root-relative path of the summary in the
+    // is built next and run.json is written, then the summary is rendered
+    // from that document, so a run.json that could not be written is a
+    // failed run in the summary and in $GITHUB_STEP_SUMMARY too, never a
+    // green one beside a red exit. A run with no pickle wrote nothing and
+    // gets neither file. A summary that was not written is a warning. A
+    // run.json that was not written fails the run: it is the record every
+    // later command reads, so a green exit without it would claim evidence
+    // that does not exist. Its finding is added to the document before the
+    // summary is rendered and before the document is printed, so the
+    // summary and `--json` carry it too. Returns the root-relative path of the summary in the
     // run directory, or `null`, and the exit code.
     const finishRun = async (
       verdict: "passed" | "failed",
@@ -732,18 +735,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           exitCode = 1;
         }
       }
-      let summaryPath: string | null = null;
-      if (flatPickles.length > 0) {
-        const markdown = renderRunSummary(JSON.parse(formatEnvelope("run", exitCode, runFindings, fields)));
-        const written = writeRunSummaryFiles(markdown, {
-          rootDir,
-          stateDir: config.stateDir,
-          runId,
-          stepSummaryPath,
-        });
-        for (const warning of written.warnings) warnings("summary-not-written").write(`${warning}\n`);
-        summaryPath = written.runSummaryPath;
-      }
       let document = formatEnvelope("run", exitCode, runFindings, fields);
       let runResultWritten = false;
       if (flatPickles.length > 0) {
@@ -755,6 +746,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           exitCode = 1;
           document = formatEnvelope("run", exitCode, runFindings, fields);
         }
+      }
+      let summaryPath: string | null = null;
+      if (flatPickles.length > 0) {
+        const markdown = renderRunSummary(JSON.parse(document));
+        const written = writeRunSummaryFiles(markdown, {
+          rootDir,
+          stateDir: config.stateDir,
+          runId,
+          stepSummaryPath,
+        });
+        for (const warning of written.warnings) warnings("summary-not-written").write(`${warning}\n`);
+        summaryPath = written.runSummaryPath;
       }
       if (options.json) options.stdout.write(document);
       return { summaryPath, retention, runResultWritten, exitCode };

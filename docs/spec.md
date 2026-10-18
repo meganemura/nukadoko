@@ -3007,7 +3007,9 @@ step posts as a pull request comment. Error text in it is `run.json`'s, so secre
 already redacted. A summary that cannot be written is a warning
 on stderr; it never changes the exit code. A `run.json` that cannot be
 written fails the run with a `run-result-not-written` finding, which the
-`--json` document carries too: every later command reads a run from
+summary and the `--json` document carry too (run.json is written before
+the summary is rendered, so a run whose run.json was not written never
+reads as passed): every later command reads a run from
 `run.json`, so a green exit without it would claim a record that does not
 exist. A `sources.json` that cannot be written fails the run the same
 way, with `run-sources-not-written`: without it `nuka report` cannot
