@@ -138,6 +138,13 @@ import { shellWord } from "../shell/shell-word.js";
 // program never saw it. The key leaves argv, and its value has to be a
 // bare string, the one type `runCommand`'s `cwd` takes.
 //
+// `--argv <key>` spreads one string capture into argv, split on whitespace
+// alone, so one feature line carries every flag. A quoting rule would need
+// a shell-words parser, which is a dependency. A `--command` step writes
+// `mutates: true`, the default it would get anyway, because whether the
+// program writes outside scratch is the author's declaration, and a line
+// left out is a decision nobody sees.
+//
 // A stub's thrown message names its args, so a project that compiles with
 // `noUnusedParameters` accepts the file as written, and the first failed
 // run shows what the feature line bound. An args key that would shadow a
@@ -166,6 +173,9 @@ export interface RunScaffoldOptions {
   /** `--cwd`: the args key whose value is `--command`'s working
    * directory, or `null` for a new `scratch.dir()`. */
   cwd: string | null;
+  /** `--argv`: the string capture `--command` splits on whitespace into
+   * argv elements, or `null` to pass each capture as one element. */
+  argvKey: string | null;
   /** `--replace`: overwrite the target file while it still holds the
    * unedited stub `--feature` (or scaffold without options) wrote. */
   replace: boolean;
@@ -250,6 +260,8 @@ export interface StepTemplate {
   readonly variant: Variant;
   readonly entryPoint: string | null;
   readonly cwd: string | null;
+  /** The capture `--command` splits on whitespace into argv, if any. */
+  readonly argvKey?: string | null;
   readonly description: string | null;
   /** The written file, relative to the project root, as the guard names it. */
   readonly relativeFilePath: string;
@@ -487,10 +499,23 @@ function unplacedGuard(relativeFilePath: string, unplaced: readonly Field[]): st
   ];
 }
 
+/** The expression that splits a string on whitespace into argv elements.
+ * No quoting rule: a shell-words parser would be a dependency, and a
+ * feature line that needs a space inside one argument keeps a capture per
+ * argument instead. */
+export function whitespaceSplit(key: string): string {
+  return `${key}.split(/\\s+/).filter((part) => part !== "")`;
+}
+
 /** One argv element per field, in order: a string as it is, anything else
- * as its text. */
-function commandArgv(fields: readonly Field[]): string {
-  return ["cli", ...fields.map((field) => (field.valueClass === "string" ? field.key : `String(${field.key})`))].join(", ");
+ * as its text, and the `--argv` capture spread as its words. */
+function commandArgv(fields: readonly Field[], argvKey: string | null): string {
+  return [
+    "cli",
+    ...fields.map((field) =>
+      field.key === argvKey ? `...${whitespaceSplit(field.key)}` : field.valueClass === "string" ? field.key : `String(${field.key})`,
+    ),
+  ].join(", ");
 }
 
 export function stepTemplate({
@@ -501,6 +526,7 @@ export function stepTemplate({
   variant,
   entryPoint,
   cwd,
+  argvKey = null,
   description,
   relativeFilePath,
   attachment = null,
@@ -541,9 +567,9 @@ export function stepTemplate({
   const describedAs =
     description ??
     (command
-      ? cwd === null
-        ? "Run the command under test in an empty scratch directory"
-        : `Run the command under test in the directory ${cwd} names`
+      ? `${
+          cwd === null ? "Run the command under test in an empty scratch directory" : `Run the command under test in the directory ${cwd} names`
+        }${argvKey === null ? "" : `, with ${argvKey} split on whitespace into its arguments`}`
       : `${DESCRIPTION_TODO_PREFIX} ${name}`);
   const outcomeLines =
     variant === "then"
@@ -555,6 +581,8 @@ export function stepTemplate({
             "    stdout: z.string(),",
             "    stderr: z.string(),",
             "  }),",
+            "  // Set this to false when the program changes nothing outside a scratch directory.",
+            "  mutates: true,",
           ]
         : [
             "  // Return what later steps cite and the values this step's correctness rests on;",
@@ -571,7 +599,7 @@ export function stepTemplate({
         `  async run(${cwd === null ? "{ scratch }" : "{}"}${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
         ...placeholderGuard,
         ...(unplaced.length === 0 ? [] : unplacedGuard(relativeFilePath, unplaced)),
-        `    return await runCommand(process.execPath, [${commandArgv(argvFields)}], { cwd: ${cwd === null ? "scratch.dir()" : cwd} });`,
+        `    return await runCommand(process.execPath, [${commandArgv(argvFields, argvKey)}], { cwd: ${cwd === null ? "scratch.dir()" : cwd} });`,
       ]
     : [
         `  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`,
@@ -889,6 +917,37 @@ async function unloadableImportRefusal(rootDir: string, entryPoint: string): Pro
   return null;
 }
 
+/** Why `--argv <key>` cannot split that key, and the command that would,
+ * or `null` when the key is a string capture that stays in argv. */
+function argvKeyRefusal(
+  key: string,
+  command: boolean,
+  cwd: string | null,
+  captures: readonly Capture[],
+  typed: readonly string[],
+): { refusal: string; do?: string } | null {
+  if (!command) return { refusal: "--argv names the capture a --command step splits into argv, and only a --command step runs a program" };
+  if (key === cwd) return { refusal: `--argv ${key} and --cwd ${key} name one key, and --cwd takes its key out of argv` };
+  const captured = captures.find((capture) => capture.key === key);
+  if (captured !== undefined && CAPTURED_CLASS.get(captured.type) === "string") return null;
+  const strings = captures.filter((capture) => CAPTURED_CLASS.get(capture.type) === "string").map((capture) => capture.key);
+  const why =
+    captured === undefined
+      ? `--argv ${key} names no capture of the pattern`
+      : `--argv ${key} names a {${key}:${captured.type}} capture, which does not hand the step a string`;
+  const first = strings[0];
+  if (first === undefined) {
+    return { refusal: `${why}, and the pattern captures no string`, do: `put a {args:string} capture where the arguments go in --pattern, and pass --argv args` };
+  }
+  const rerun = typed.flatMap((word, index) =>
+    word.startsWith("--argv=") ? [`--argv=${first}`] : typed[index - 1] === "--argv" ? [first] : [word],
+  );
+  return {
+    refusal: `${why}; its string captures are ${strings.join(", ")}`,
+    do: ["nuka", ...rerun].map(shellWord).join(" "),
+  };
+}
+
 /** Writes the refusal, or the missing-config line, for both scaffold
  * forms. The exit code when scaffold must stop, and null otherwise: a step
  * file written below the directory that holds the config is not one that
@@ -961,6 +1020,11 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   if (cwd !== null && !argsKeys.includes(cwd)) {
     const keys = argsKeys.length === 0 ? "it has none" : `its keys are ${argsKeys.join(", ")}`;
     return refuse(sinks, `Refusing to scaffold: --cwd ${cwd} names no args key of this step (${keys}); pass the key a --from or a capture fills`, help);
+  }
+
+  if (options.argvKey !== null) {
+    const refusal = argvKeyRefusal(options.argvKey, command, cwd, read.captures, options.argv);
+    if (refusal !== null) return refuse(sinks, `Refusing to scaffold: ${refusal.refusal}`, refusal.do ?? help);
   }
 
   const belowParent = refusedBelowParentConfig(rootDir, sinks);
@@ -1067,6 +1131,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       variant,
       entryPoint,
       cwd,
+      argvKey: options.argvKey,
       description,
       relativeFilePath: relativeFilePath.split(path.sep).join("/"),
       // A command's docstring has no place in argv, so it stays the author's call.

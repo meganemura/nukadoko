@@ -18,6 +18,26 @@ just until 0.1.
 
 ### Added
 
+- **`nuka scaffold --command --argv <key>` splits one capture into the program's arguments.**
+  A `--command` step passes each capture as one argv element, so `When I
+  run greet with "Ada --shout"` ran `greet 'Ada --shout'`, and a CLI with
+  flags needed one When per flag shape or a hand edit to split the value.
+  `--argv <key>` writes `...<key>.split(/\s+/).filter((part) => part !==
+  "")` in its place, and the description says the key is split on
+  whitespace. The split has no quoting rule, so an argument that holds a
+  space keeps a capture of its own. A key that is no string capture of the
+  pattern is refused, and the `do:` line is the same command with a string
+  capture the pattern has (or, with none, says to add `{args:string}`).
+  `--argv` without `--command`, on the key `--cwd` names, or beside
+  `--feature` is refused. The CLI worked example now scaffolds the split
+  instead of editing it in.
+- **Every `--command` step writes its `mutates` line.**
+  The step kept the default by leaving the key out, so whether it
+  mutates was a decision nothing showed. It now writes `mutates: true`,
+  the same default, under a comment that says to set it to false when the
+  program changes nothing outside a scratch directory. Behaviour is
+  unchanged; the `<file>:<line>` that the unplaced-value guard names is two
+  lines further down.
 - **`nuka scaffold <name> --replace` redoes a stub in place.**
   A newcomer follows the `undefined-step` finding to `nuka scaffold
   --feature`, and then redoes the When as a `--command` step and each Then

@@ -152,6 +152,7 @@ interface ScaffoldArgs {
   description?: string;
   from?: string[];
   cwd?: string;
+  argv?: string;
   replace?: boolean;
 }
 
@@ -188,6 +189,7 @@ function featureScaffoldConflict(args: ScaffoldArgs): string | null {
     args.description !== undefined ? "--description" : null,
     (args.from ?? []).length > 0 ? "--from" : null,
     args.cwd !== undefined ? "--cwd" : null,
+    args.argv !== undefined ? "--argv" : null,
     args.replace === true ? "--replace" : null,
   ].filter((option): option is string => option !== null);
   if (given.length === 0) return null;
@@ -796,6 +798,12 @@ export async function runCli(
           nargs: 1,
           describe: "<key> with --command: run the program in the directory this args key holds (a --from key or a capture) instead of an empty scratch.dir()",
         })
+        .option("argv", {
+          type: "string",
+          nargs: 1,
+          describe:
+            "<key> with --command: split this string capture into argv elements on whitespace only (no quoting), so one feature line can carry every argument and flag",
+        })
         .option("replace", {
           type: "boolean",
           default: false,
@@ -806,7 +814,7 @@ export async function runCli(
         // with a dash, so each takes the next word whatever it starts with,
         // as getopt_long does for a required value, and keeps its quotes.
         .parserConfiguration({ "nargs-eats-options": true })
-        .check(rejectRepeatedFlags(["pattern", "command", "description", "feature", "cwd"]))
+        .check(rejectRepeatedFlags(["pattern", "command", "description", "feature", "cwd", "argv"]))
         .check((args) => {
           if (args.feature !== undefined) return featureScaffoldConflict(args as unknown as ScaffoldArgs) ?? true;
           if (args.name !== undefined) return true;
@@ -843,6 +851,7 @@ export async function runCli(
         description: args.description ?? null,
         from: args.from ?? [],
         cwd: args.cwd ?? null,
+        argvKey: args.argv ?? null,
         replace: args.replace ?? false,
         argv,
         stdout,

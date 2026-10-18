@@ -78,7 +78,7 @@ If none is true, ask what this is supposed to do before writing anything.
    When that runs a program and the Thens that read it one at a time, with
    `--replace` (it refuses a stub anyone edited): `nuka scaffold <name>
    --pattern "<line>" --description "<what it does>"`, plus `--then` for a
-   Then, `--command <entry point>` for the When (`--cwd`), and
+   Then, `--command <entry point>` for the When (`--cwd`, `--argv`), and
    `--from <step>.<key>` per value an earlier step returns, whose producer
    has to return that key already. Run each alone with `nuka do <step>
    --args '<json>'` (`references/writing-steps.md`, which names the

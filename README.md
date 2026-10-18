@@ -120,6 +120,8 @@ export default defineStep({
     stdout: z.string(),
     stderr: z.string(),
   }),
+  // Set this to false when the program changes nothing outside a scratch directory.
+  mutates: true,
   async run({ scratch }, { name }) {
     return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });
   },

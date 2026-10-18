@@ -3557,7 +3557,7 @@ nuka describe <step>          full contract, the step file as file,
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>]] [--from <step>.<key>]... [--description <text>] [--replace]
+nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>] [--argv <key>]] [--from <step>.<key>]... [--description <text>] [--replace]
                               typed step template that fails until
                               implemented; the thrown message names the
                               args it was given, so the file compiles
@@ -3632,6 +3632,17 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               scratch.dir(), and leaves the key out of
                               argv; the key must be a capture or a --from
                               key whose schema is a bare z.string().
+                              --argv <key> (with --command) splits that
+                              string capture into argv elements on
+                              whitespace only, with no quoting rule:
+                              ...<key>.split(/\s+/) without empty
+                              elements, and the description says so. A
+                              key that is no string capture is refused,
+                              and the do: line names one that is. The
+                              step writes mutates: true, the default,
+                              under a comment that says to set it to
+                              false when the program changes nothing
+                              outside a scratch directory.
                               --description writes the step's
                               description; without it the description
                               is "TODO: describe <name>" (with
@@ -3676,7 +3687,7 @@ nuka scaffold --feature <path>
                               each written path on stdout. Refuses while
                               a step file does not import, and takes no
                               name, --pattern, --then, --command, --from,
-                              --cwd, --description, or --replace
+                              --cwd, --argv, --description, or --replace
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

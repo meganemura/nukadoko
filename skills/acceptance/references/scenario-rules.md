@@ -130,9 +130,11 @@ Checked by: review.
   directory as `cwd`, read through `from` (`nuka scaffold --command
   --from <given>.dir --cwd dir`). Each `scratch.dir()` call is a new
   directory, so a step that makes its own never sees a file a Given wrote.
-- **Arguments.** One `{argv:string}` capture split on spaces keeps one
-  When step for every flag; one capture per argument keeps the sentence
-  closer to prose. Pick one per project and keep it.
+- **Arguments.** One `{argv:string}` capture split on whitespace
+  (`nuka scaffold --command --argv argv`, no quoting) keeps one When step
+  for every flag; one capture per argument keeps the sentence closer to
+  prose, and is the shape for an argument that holds a space. Pick one
+  per project and keep it.
 - **An HTTP API.** One request step per sentence the reviewer reads (`I
   request that item`, `I request the item list`), each returning `status`
   and `body`; a Then lists every request step in `from`. A slash in a

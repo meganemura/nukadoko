@@ -8,7 +8,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { relativeJsImports } from "../src/cli/scaffold.js";
+import { relativeJsImports, whitespaceSplit } from "../src/cli/scaffold.js";
 import {
   createCaptureSink,
   createEmptyTempDir,
@@ -83,6 +83,8 @@ describe("nuka scaffold --command", () => {
         "    stdout: z.string(),",
         "    stderr: z.string(),",
         "  }),",
+        "  // Set this to false when the program changes nothing outside a scratch directory.",
+        "  mutates: true,",
         "  async run({ scratch }, { name }) {",
         '    if (cli.includes("<TODO: the entry point>")) throw new Error("fill in the entry point: features/steps/run-greet.ts:4");',
         "    return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });",
@@ -117,6 +119,8 @@ describe("nuka scaffold --command", () => {
         "    stdout: z.string(),",
         "    stderr: z.string(),",
         "  }),",
+        "  // Set this to false when the program changes nothing outside a scratch directory.",
+        "  mutates: true,",
         "  async run({ scratch }) {",
         '    if (cli.includes("<TODO: the entry point>")) throw new Error("fill in the entry point: features/steps/run-help.ts:4");',
         "    return await runCommand(process.execPath, [cli], { cwd: scratch.dir() });",
@@ -187,6 +191,8 @@ describe("nuka scaffold --command", () => {
         "    stdout: z.string(),",
         "    stderr: z.string(),",
         "  }),",
+        "  // Set this to false when the program changes nothing outside a scratch directory.",
+        "  mutates: true,",
         "  async run({ scratch }, { name }) {",
         "    return await runCommand(process.execPath, [cli, name], { cwd: scratch.dir() });",
         "  },",
@@ -517,6 +523,8 @@ describe("nuka scaffold --command --cwd", () => {
         "    stdout: z.string(),",
         "    stderr: z.string(),",
         "  }),",
+        "  // Set this to false when the program changes nothing outside a scratch directory.",
+        "  mutates: true,",
         "  async run({}, { file, dir }) {",
         "    return await runCommand(process.execPath, [cli, file], { cwd: dir });",
         "  },",
@@ -558,11 +566,11 @@ describe("nuka scaffold --command --cwd", () => {
         "  async run({ scratch }, { file, dir }) {",
         "    // TODO: pass each chained value where the program reads it: an environment",
         "    // variable (runCommand's env, with ...process.env), a flag, or --cwd. Then delete the throw.",
-        "    throw new Error(`pass dir where the program reads them: features/steps/run-show.ts:26; args ${JSON.stringify({ dir })}`);",
+        "    throw new Error(`pass dir where the program reads them: features/steps/run-show.ts:28; args ${JSON.stringify({ dir })}`);",
         "    return await runCommand(process.execPath, [cli, file], { cwd: scratch.dir() });",
       ].join("\n"),
     );
-    expect(text.split("\n")[25]).toContain("throw new Error(`pass dir where");
+    expect(text.split("\n")[27]).toContain("throw new Error(`pass dir where");
     await writeFile(
       path.join(rootDir, "features", "show.feature"),
       ["Feature: show", "  Scenario: a file a Given wrote", '    Given a file "a.txt" holding "hi"', '    When I show "a.txt"', ""].join("\n"),
@@ -572,7 +580,7 @@ describe("nuka scaffold --command --cwd", () => {
     expect(check.stdout + check.stderr).toContain("warning\tscenario-without-then");
     const run = await cli(rootDir, ["run", "features/show.feature"]);
     expect(run.exitCode).toBe(1);
-    expect(run.stdout).toContain("pass dir where the program reads them: features/steps/run-show.ts:26; args {");
+    expect(run.stdout).toContain("pass dir where the program reads them: features/steps/run-show.ts:28; args {");
   });
 
   it.each([
@@ -591,6 +599,116 @@ describe("nuka scaffold --command --cwd", () => {
     expect(result.exitCode).toBe(2);
     expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
   });
+});
+
+describe("nuka scaffold --command --argv", () => {
+  let rootDir: string;
+  let entry: string;
+
+  beforeEach(async () => {
+    rootDir = await initProject();
+    await mkdir(path.join(rootDir, "src"));
+    // Absolute, because `resolve` reads a relative path from the directory
+    // nuka runs in, and this test runs nuka in-process from elsewhere.
+    entry = path.join(rootDir, "src", "args.mjs");
+    await writeFile(entry, 'process.stdout.write(process.argv.slice(2).join("|"));\n');
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("splits the capture on whitespace into argv, with no hand edit to any scaffolded step", async () => {
+    const scaffolds = [
+      ["scaffold", "run-args", "--pattern", "I run args with {words:string}", "--command", entry, "--argv", "words"],
+      ["scaffold", "output-is", "--pattern", "the output is {text:string}", "--then", "--from", "run-args.stdout"],
+    ];
+    for (const argv of scaffolds) {
+      expect(await cli(rootDir, argv)).toEqual({ exitCode: 0, stdout: `features/steps/${argv[1]}.ts\n`, stderr: "" });
+    }
+    const written = await readFile(stepPath(rootDir, "run-args"), "utf8");
+    expect(written).toContain('  description: "Run the command under test in an empty scratch directory, with words split on whitespace into its arguments",\n');
+    expect(written).toContain(
+      '    return await runCommand(process.execPath, [cli, ...words.split(/\\s+/).filter((part) => part !== "")], { cwd: scratch.dir() });\n',
+    );
+    await writeFile(
+      path.join(rootDir, "features", "args.feature"),
+      [
+        "Feature: args",
+        "  Scenario: a flag beside a name",
+        '    When I run args with "  Ada   --shout "',
+        '    Then the output is "Ada|--shout"',
+        "  Scenario: no arguments",
+        '    When I run args with ""',
+        '    Then the output is ""',
+        "",
+      ].join("\n"),
+    );
+
+    const run = await cli(rootDir, ["run", "features/args.feature"]);
+
+    expect(run.stderr).toContain("2 scenarios: 2 passed, 0 failed");
+    expect(run.exitCode).toBe(0);
+  });
+
+  it.each([
+    [
+      ["--pattern", "I run args with {words:string}", "--argv", "words"],
+      "Refusing to scaffold: --argv names the capture a --command step splits into argv, and only a --command step runs a program\ndo: nuka scaffold --help\n",
+    ],
+    [
+      ["--pattern", "I run args with {words:string} in {dir:string}", "--command", "--argv", "argv"],
+      "Refusing to scaffold: --argv argv names no capture of the pattern; its string captures are words, dir\n" +
+        "do: nuka scaffold broken --pattern 'I run args with {words:string} in {dir:string}' --command --argv words\n",
+    ],
+    [
+      ["--pattern", "I run args with {words:string}", "--command", "--argv=argv"],
+      "Refusing to scaffold: --argv argv names no capture of the pattern; its string captures are words\n" +
+        "do: nuka scaffold broken --pattern 'I run args with {words:string}' --command --argv=words\n",
+    ],
+    [
+      ["--pattern", "I run args {n:int} times", "--command", "--argv", "n"],
+      "Refusing to scaffold: --argv n names a {n:int} capture, which does not hand the step a string, and the pattern captures no string\n" +
+        "do: put a {args:string} capture where the arguments go in --pattern, and pass --argv args\n",
+    ],
+    [
+      ["--command", "--argv", "words"],
+      "Refusing to scaffold: --argv words names no capture of the pattern, and the pattern captures no string\n" +
+        "do: put a {args:string} capture where the arguments go in --pattern, and pass --argv args\n",
+    ],
+    [
+      ["--pattern", "I run args in {dir:string}", "--command", "--cwd", "dir", "--argv", "dir"],
+      "Refusing to scaffold: --argv dir and --cwd dir name one key, and --cwd takes its key out of argv\ndo: nuka scaffold --help\n",
+    ],
+  ])("refuses %j and writes nothing", async (flags, stderr) => {
+    const result = await cli(rootDir, ["scaffold", "broken", ...flags]);
+
+    expect(result).toEqual({ exitCode: 2, stdout: "", stderr });
+    expect(existsSync(stepPath(rootDir, "broken"))).toBe(false);
+  });
+
+  it("is refused beside --feature", async () => {
+    const result = await cli(rootDir, ["scaffold", "--feature", "features", "--argv", "words"]);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain("leave out --argv");
+  });
+});
+
+describe("whitespaceSplit", () => {
+  const split = (text: string): unknown => runInNewContext(whitespaceSplit("text"), { text });
+  const word = gs.text({ minSize: 1, maxSize: 6 }).filter((text) => !/\s/.test(text));
+  const gap = gs.arrays(gs.sampledFrom([" ", "\t", "\n", "\r", "\u00a0", "\u3000"]), { minSize: 1, maxSize: 3 }).map((parts) => parts.join(""));
+
+  it("gives back the words, whatever whitespace separates, leads, or trails them", () =>
+    hegel.test((tc) => {
+      const words = tc.draw(gs.arrays(word, { maxSize: 5 }));
+      const gaps = tc.draw(gs.arrays(gap, { minSize: words.length + 1, maxSize: words.length + 1 }));
+      const lead = tc.draw(gs.booleans()) ? gaps[0]! : "";
+      const trail = tc.draw(gs.booleans()) ? gaps[words.length]! : "";
+      const text = lead + words.map((each, index) => (index === 0 ? each : `${gaps[index]!}${each}`)).join("") + trail;
+      expect(split(text)).toEqual(words);
+    }));
 });
 
 // Property: scaffold writes a file for an entry point exactly when a
@@ -846,6 +964,7 @@ describe("every scaffolded variant", () => {
       ["scaffold", "run-named", "--pattern", "run named {s:string}", "--command", "src/cli.ts"],
       ["scaffold", "run-in-capture", "--pattern", "run {s:string} in {where:string}", "--command", "src/cli.ts", "--cwd", "where"],
       ["scaffold", "run-in-chained", "--command", "--from", "run-args.stdout", "--from", "run-named.stdout", "--cwd", "stdout"],
+      ["scaffold", "run-split", "--pattern", "run split {words:string} {n:int}", "--command", "src/cli.ts", "--argv", "words"],
     ];
     await mkdir(path.join(rootDir, "src"));
     await writeFile(path.join(rootDir, "src", "cli.ts"), "");
@@ -860,11 +979,11 @@ describe("every scaffolded variant", () => {
       [
         "    // TODO: pass each chained value where the program reads it: an environment",
         "    // variable (runCommand's env, with ...process.env), a flag, or --cwd. Then delete the throw.",
-        "    throw new Error(`pass stdout, exitCode where the program reads them: features/steps/chained-command.ts:28; args ${JSON.stringify({ stdout, exitCode }, (_key, value) => (typeof value === \"bigint\" ? String(value) : value))}`);",
+        "    throw new Error(`pass stdout, exitCode where the program reads them: features/steps/chained-command.ts:30; args ${JSON.stringify({ stdout, exitCode }, (_key, value) => (typeof value === \"bigint\" ? String(value) : value))}`);",
         "    return await runCommand(process.execPath, [cli], { cwd: scratch.dir() });",
       ].join("\n"),
     );
-    expect(files["chained-command.ts"]!.split("\n")[27]).toContain("throw new Error(`pass stdout, exitCode");
+    expect(files["chained-command.ts"]!.split("\n")[29]).toContain("throw new Error(`pass stdout, exitCode");
     expect(files["chained-optional.ts"]).toContain(
       "args ${JSON.stringify({ name }, (_key, value) => (typeof value === \"bigint\" ? String(value) : value))}`);\n    return await runCommand(process.execPath, [cli], { cwd: scratch.dir() });",
     );

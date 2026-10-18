@@ -85,18 +85,18 @@ refuses a stub anyone edited (then `rm` it, or pick another name).
    `returns` of `exitCode`, `stdout`, and `stderr`, so a Then step can be
    scaffolded `--from` it at once. A file a Given wrote is in the
    directory that Given returned: `--from <given>.dir --cwd dir` runs the
-   program there instead (`examples/cli.md`). Only captures are argv; any
-   other `--from` value throws by name until you pass it (`env`, a flag).
+   program there instead (`examples/cli.md`). Only captures are argv, and
+   `--argv <key>` splits one on whitespace only (`"input.csv --json"`);
+   any other `--from` value throws by name until you pass it (`env`).
    The step runs the entry point with `node` itself, so when the project's
    `.ts` files import each other as `./x.js`, name the built program
    (`dist/cli.js`, with `"pretest:scenarios": "npm run build"`); scaffold
    refuses a `.ts` entry point whose `./x.js` import is absent beside an
    `x.ts`. Without a value the `cli` line holds a TODO, and the step
    throws `fill in the entry point: <file>:<line>` until it is filled in.
-   `--command` leaves `mutates` at its default, `true`, because scaffold
-   cannot know what the program writes. Declare `mutates: false`, with a
-   comment that says why, when the program writes nothing outside the
-   scratch directory.
+   `--command` writes `mutates: true`, because scaffold cannot know what
+   the program writes; set it to `false`, with a comment that says why,
+   when the program writes nothing outside the scratch directory.
    Add `--description "<text>"` for what the step does; without it the
    description is `TODO: describe <name>`, which `nuka tend` reports as
    `step-description-todo`. Leave `--pattern` out for a step reached by

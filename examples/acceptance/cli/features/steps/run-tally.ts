@@ -23,7 +23,6 @@ export default defineStep({
   // Runs the program under test in a scratch directory a Given step made.
   mutates: false,
   async run({}, { argv, dir }) {
-    const args = argv.trim() === "" ? [] : argv.split(/\s+/);
-    return await runCommand(process.execPath, [cli, ...args], { cwd: dir });
+    return await runCommand(process.execPath, [cli, ...argv.split(/\s+/).filter((part) => part !== "")], { cwd: dir });
   },
 });
