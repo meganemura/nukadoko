@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { createCaptureSink, fixture, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 // Responsibility: end-to-end tests —
 // `nuka steps`/`nuka describe` are per-file tolerant of a broken glue file
@@ -26,13 +26,16 @@ describe("nuka steps: tolerant of a broken glue file", () => {
     expect(exitCode).toBe(1);
   });
 
-  it("--json: reports import_failures as { file, message } alongside every step that did import", async () => {
+  it("--json: reports import_failures as { file, message } alongside every step that did import, and only there", async () => {
     const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
     const exitCode = await runCli(["steps", "--json"], {
       rootDir: fixture("discover-import-failure-project"),
       stdout,
-      stderr: createCaptureSink(),
+      stderr,
     });
+
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
 
     const report = JSON.parse(stdout.text()) as {
       steps: Array<{ name: string }>;
@@ -90,7 +93,7 @@ describe("nuka steps: a step whose run() can't be read for fixture needs", () =>
 });
 
 describe("nuka describe: tolerant of a broken glue file", () => {
-  it("still describes the healthy step, names the broken file on stderr, and exits 1", async () => {
+  it("still describes the healthy step, names the broken file in import_failures and not on stderr, and exits 1", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["describe", "healthy"], {
@@ -106,7 +109,7 @@ describe("nuka describe: tolerant of a broken glue file", () => {
     expect(contract.name).toBe("healthy");
     expect(contract.import_failures).toHaveLength(1);
     expect(contract.import_failures[0]?.file).toBe("features/steps/broken.ts");
-    expect(stderr.text()).toContain("features/steps/broken.ts");
+    expect(withoutNoConfigLine(stderr.text())).toBe("");
     expect(exitCode).toBe(1);
   });
 

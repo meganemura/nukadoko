@@ -174,3 +174,20 @@ describe("formatVocabulary", () => {
     expect(formatVocabulary(summaries, 80)).toBe("api-only  typed  mutates\n  p\n");
   });
 });
+
+describe("nuka steps text", () => {
+  it("wraps at 80 columns whatever width the terminal reports", async () => {
+    const { runCli } = await import("../src/cli/run-cli.js");
+    const { createCaptureSink, fixture } = await import("./helpers/fixtures.js");
+    const columns = Object.getOwnPropertyDescriptor(process.stdout, "columns");
+    Object.defineProperty(process.stdout, "columns", { value: 20, configurable: true });
+    try {
+      const stdout = createCaptureSink();
+      await runCli(["steps"], { rootDir: fixture("basic-project"), stdout, stderr: createCaptureSink() });
+      expect(stdout.text()).toContain("  the project {string} can be looked up by id\n");
+    } finally {
+      if (columns === undefined) delete (process.stdout as { columns?: number }).columns;
+      else Object.defineProperty(process.stdout, "columns", columns);
+    }
+  });
+});

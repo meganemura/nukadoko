@@ -43,14 +43,14 @@ export function refusalOf(error: unknown, fallbackDo: string): Refusal {
   return { error: message, do: typeof own === "string" && own.length > 0 ? own : fallbackDo };
 }
 
-/** What each stream receives. `--json` writes one JSON object on one line to
- * stdout and nothing to stderr, with `schema_version` first like every other
- * document, so a reader that checks the number before the shape reads a
- * refusal the same way; text keeps the message a person has always seen,
- * followed by a `do:` line. */
+/** What each stream receives. `--json` writes one JSON object to stdout,
+ * pretty-printed like every report so a reader parses one document shape
+ * whatever the outcome, and nothing to stderr, with `schema_version` first
+ * like every other document; text keeps the message a person has always
+ * seen, followed by a `do:` line. */
 export function formatRefusal(refusal: Refusal, json: boolean): { stdout: string; stderr: string } {
   if (json) {
-    return { stdout: `${JSON.stringify(versioned("refusal", { error: refusal.error, do: refusal.do }))}\n`, stderr: "" };
+    return { stdout: `${JSON.stringify(versioned("refusal", { error: refusal.error, do: refusal.do }), null, 2)}\n`, stderr: "" };
   }
   return { stdout: "", stderr: `${refusal.error}\ndo: ${refusal.do}\n` };
 }

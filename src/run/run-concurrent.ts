@@ -127,6 +127,9 @@ export interface RunConcurrentOptions {
   /** Where each forwarded record goes. Without `--records`, src/cli/run.ts
    * passes a sink that drops it, the same rule as at 1. */
   readonly stdout: WritableSink;
+  /** Scenario boundaries and a failed step's lines; src/cli/run.ts passes
+   * a sink that drops them under `--json`. Warnings go to `stderr`. */
+  readonly progress: WritableSink;
   readonly stderr: WritableSink;
 }
 
@@ -174,6 +177,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     messagesOutputRel,
     onRecord,
     stdout,
+    progress,
     stderr,
   } = options;
 
@@ -248,7 +252,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
 
     if (envelope.kind === "scenario-started") {
       if (!quiet) {
-        writeScenarioStarted(stderr, {
+        writeScenarioStarted(progress, {
           worker,
           relativeFeaturePath: envelope.feature,
           line: envelope.line,
@@ -275,7 +279,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     onRecord(record);
 
     if (!quiet) {
-      writeScenarioBoundary(stderr, {
+      writeScenarioBoundary(progress, {
         index: completedCount,
         total: flatPickles.length * repeat,
         relativeFeaturePath: record.feature,
@@ -286,7 +290,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     // The worker's own logger already dropped every line `--quiet` hides,
     // so what is left here is a failed step's lines, which always print.
     for (const line of stepLines) {
-      stderr.write(`${line}\n`);
+      progress.write(`${line}\n`);
     }
     for (const note of notes) {
       stderr.write(`${note}\n`);

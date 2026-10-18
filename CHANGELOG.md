@@ -51,6 +51,22 @@ just until 0.1.
   adds one line counting the steps that declared `mutates: false` and
   reached no HTTP channel, so they were not compared, and the Allure step
   parameters show `not observed` for those counts. See docs/upgrading.md.
+- **`--json` prints one document, and stderr stops narrating around it.**
+  An agent's shell reads stdout and stderr as one stream, so a run.json
+  wrapped in progress lines was not separated from them. Under `--json`,
+  `nuka run` writes no step or scenario progress, no location lines, no
+  count line, no `failed` or `rerun` lines, no `Partial run` paragraph,
+  and no retention line, at any concurrency. `nuka steps --json` no longer
+  repeats `import_failures` on stderr, `nuka describe` (always JSON) no
+  longer repeats them either except beside an "Unknown step" refusal, and
+  `nuka experimental explore --json` no longer prints its verdict line. A
+  warning that something went wrong (a file not written, a hook or a
+  fixture teardown that failed, no config here, the `nuka check` errors
+  before a run refusal) still goes to stderr. A refusal under `--json` is
+  pretty-printed with two spaces, like every report, instead of one line.
+  `nuka steps` text wraps at 80 columns instead of the terminal's width,
+  so no output depends on whether a stream is a terminal. `--quiet` keeps
+  working, and `--json` implies it. See docs/upgrading.md.
 
 ### Added
 

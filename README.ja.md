@@ -1075,7 +1075,9 @@ stdout には、求めたときだけ出力されます。
 `nuka run --records` は、1 行 1 件の JSON の scenario record を stdout に出力します。
 `nuka run --json` は、代わりに 1 つの文書として run の `run.json` を出力します。
 そこには断定、件数、各 scenario の status、record のパス、再実行のコマンドが入ります。
+`--json` のときは stderr に進捗もパスも件数も出ないので、エージェントのシェルに見えるのはその文書と、何かがうまくいかなかったことを知らせる警告だけです。
 record は、フラグにかかわらず `.nukadoko/records/` の下に書かれます。
+stdout や stderr が端末かどうかで変わる出力はありません。
 失敗した step は、進捗行の下にエラーの 1 行目と step record のパスを出力します。
 そのため、CI のログだけで失敗の理由が分かります。
 失敗した step が、プログラムが 0 以外で終わった step から値を読んでいたときは、その 2 行の間に `used` 行が入ります。

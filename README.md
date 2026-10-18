@@ -1172,8 +1172,11 @@ goes (`--quiet` quiets the progress only). stdout stays empty unless you
 ask: `nuka run --records` writes one JSON scenario record per line there,
 and `nuka run --json` prints one document instead, the run's `run.json`:
 its verdict, its counts, and each scenario's status, record path, and
-rerun command. The records are on disk under `.nukadoko/records/` either
-way.
+rerun command. Under `--json` stderr stays free of progress, paths, and
+counts, so the document is the only thing an agent's shell shows besides a
+warning that something went wrong. The records are on disk under
+`.nukadoko/records/` either way. No output depends on whether stdout or
+stderr is a terminal.
 A failed step prints the first line of its error and the path of its step
 record under its progress line, so a CI log says why it failed. When the
 failed step read from a step whose program exited nonzero, a `used` line

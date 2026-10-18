@@ -79,6 +79,13 @@ This part does not change release to release.
   `processes` key tests for `null`. A step whose zero count should mean
   something calls the server through the `request` fixture instead of
   `fetch`.
+- **`--json` prints one document and nothing around it.** A script that
+  scraped `nuka run --json`'s stderr for the `run` path, the count line, or
+  a `rerun` line reads them from the document instead: `counts`, each
+  scenario's `rerun`, and `summary`. A script that split a `--json`
+  refusal by lines parses stdout as one JSON value; it is pretty-printed
+  now. A test that compared `nuka steps` text at a terminal width other
+  than 80 compares at 80.
 
 ## 0.16.1 to 0.17.0
 

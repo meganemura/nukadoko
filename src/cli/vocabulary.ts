@@ -28,10 +28,8 @@ export { formatVocabularyError };
 // irrelevant to `steps`/`describe`, which only ever list/describe the step
 // vocabulary itself, so this module drops that half of the result.
 // `formatVocabulary` below is `nuka steps`' non-JSON rendering, also kept
-// here as a pure function — `run-cli.ts`'s handler passes a `WritableSink`,
-// which can't answer "how wide is the terminal", so the width this
-// function wraps to is resolved by the caller and passed in as a plain
-// number.
+// here as a pure function. Its caller passes a fixed width rather than the
+// terminal's, so a pipe and a terminal print the same text.
 //
 /** One `discoverSteps`-style import failure, before this module renames its
  * `filePath` field to `file` for `--json` (`toImportFailureSummaries`
@@ -516,7 +514,7 @@ export function summarize(
  * vocabularies run 120-145 characters a line — unreadable once an 80-column
  * terminal soft-wraps it with no indentation to say where a row starts.
  * `--json` is the machine-readable path (docs/spec.md "CLI summary"); this
- * function only has to read well in a terminal, so it wraps to `width`
+ * function only has to read well at 80 columns, so it wraps to `width`
  * instead.
  */
 export function formatVocabulary(summaries: readonly StepSummary[], width: number): string {

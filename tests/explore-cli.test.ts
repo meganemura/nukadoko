@@ -201,8 +201,7 @@ describe("nuka experimental explore", () => {
         steps: 30,
         rerun: "nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6",
       },
-      stderr:
-        "Passed: 5 runs, 30 steps, seed 1. Rerun: nuka experimental explore features/explore/add-model.ts --seed 1 --runs 5 --length 6\n",
+      stderr: "",
     });
   });
 
@@ -246,7 +245,7 @@ describe("nuka experimental explore", () => {
           "",
         ].join("\n"),
       },
-      stderr: "Failed: run 1, seed 1, shrunk to 2 steps. The scenario is on stdout.\n",
+      stderr: "",
     });
   });
 
@@ -287,7 +286,7 @@ describe("nuka experimental explore", () => {
           scenario: ['  Scenario: (name me) follow of "add then listed"', '    * the todo list includes "milk"', ""].join("\n"),
         },
       },
-      stderr: 'Failed: relation "add then listed". Both scenarios are on stdout.\n',
+      stderr: "",
     });
   });
 

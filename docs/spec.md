@@ -2243,7 +2243,12 @@ summary line, stderr names each failed scenario with its feature path, line,
 and name, and follows each with a `rerun` line: `nuka run <feature>:<line>`,
 plus `--env <name>` when the run was given one, quoted for a POSIX shell
 where a word needs it. These lines appear for serial and concurrent runs,
-and `--quiet` keeps them.
+and `--quiet` keeps them. Under `--json`, stderr carries none of the lines
+this paragraph and the two above it name, nor the partial-run notice or the
+retention line: the document on stdout holds the result, and an agent's
+shell reads both streams as one. A warning that something went wrong (a
+file that was not written, a hook or a fixture teardown that failed, the
+`nuka check` errors before a refusal) still goes to stderr.
 
 The run's result for a machine is `records/runs/<run_id>/run.json`, written
 when the run ends, after its last record and its run summary, for serial
@@ -4113,6 +4118,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
+                              --json drops every one of these lines and
+                              keeps only warnings on stderr.
                               stdout is empty unless asked: --records
                               prints NDJSON, one record per scenario, on a
                               terminal or not. --json prints run.json
@@ -4162,7 +4169,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               import_failures }, the last always present,
                               exiting 1 if import_failures is non-empty or
                               any step's needs_error or from_errors is
-                              present, output printed either way
+                              present, output printed either way. Text
+                              wraps at 80 columns, in a terminal or not
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
@@ -4491,8 +4499,13 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
 
 A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do` and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
 
-Text output (no `--json`) is formatted for a human reading a terminal.
-`--json` is the machine-readable contract.
+Text output (no `--json`) is formatted for a human reading it.
+`--json` is the machine-readable contract: stdout carries exactly one JSON
+document, pretty-printed with two spaces, whether it is a report, a run
+result, or a refusal, and stderr carries no progress, location, count, or
+rerun line and no copy of what the document holds. No output, on stdout or
+stderr, depends on whether a stream is a terminal: `nuka steps` wraps at 80
+columns everywhere, and nukadoko writes no color.
 
 Every JSON document nukadoko writes or prints starts with
 `schema_version`, an integer that belongs to that kind of document: the
@@ -4531,9 +4544,9 @@ yargs or the command does not accept, a config it cannot load, a target
 that does not exist, a step name it does not know, a session in the way,
 or, for `nuka run`, an error `nuka check` reports for the selected
 scenarios. Every refusal has two parts: the message, and `do`, the one
-command to run next. Under `--json`, stdout carries one JSON object on
-one line, `{ "schema_version": 1, "error": "<message>", "do":
-"<command>" }`, and stderr carries nothing. `nuka describe` has no text form, so it refuses the same
+command to run next. Under `--json`, stdout carries one JSON object,
+`{ "schema_version": 1, "error": "<message>", "do": "<command>" }`,
+pretty-printed like every report, and stderr carries nothing. `nuka describe` has no text form, so it refuses the same
 way. Without `--json`, stderr carries the message and then one line,
 `do: <command>`. `do` names the next command when one is known: `nuka
 steps` for an unknown step, the install line for a missing peer
@@ -4561,11 +4574,11 @@ reading either stream.
 
 | Command | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | one scenario record per line under `--records`, `run.json` under `--json`, nothing otherwise | progress, failures, the locations written, the summary line |
+| `nuka run` | one scenario record per line under `--records`, `run.json` under `--json`, nothing otherwise | progress, failures, the locations written, the summary line; under `--json`, warnings only |
 | `nuka do` | the step record, also for a failed step | session notices, warnings |
 | `nuka check`, `nuka tend` | the report, or with `--json` one JSON object | nothing, except a refusal without `--json` and `nuka tend`'s `fail-on` lines |
-| `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always JSON) | the step files that failed to import |
-| `nuka experimental explore` | the shrunk scenario, or with `--json` one JSON object | the verdict line and its rerun command |
+| `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always JSON) | the step files that failed to import, except where the JSON document already lists them as `import_failures` |
+| `nuka experimental explore` | the shrunk scenario, or with `--json` one JSON object | the verdict line and its rerun command, except under `--json` |
 | `nuka clean`, `nuka session list` | one line per path or session, or with `--json` one JSON value | nothing, except a refusal without `--json` |
 
 A refusal under `--json` is the one exception to the stdout column: its

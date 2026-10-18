@@ -114,7 +114,8 @@ when it runs.
    generated source, `--runs` and `--length` set how much it tries. The seed is
    printed either way.
 3. A pass prints one line on stderr and nothing on stdout. Add `--json`
-   to get one object on stdout instead, on a pass too: the verdict, the
+   to get one object on stdout instead, on a pass too, and no line on
+   stderr: the verdict, the
    seed and counts, and on a failure each step's `args` and `result`,
    the failure's `kind` and `message`, and the scenario text. Read
    `steps[].result` when the comment alone does not say why a `post`

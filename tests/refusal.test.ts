@@ -6,7 +6,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { createCaptureSink, fixture, withoutNoConfigLine } from "./helpers/fixtures.js";
 
 describe("refuse", () => {
-  it("writes one JSON object with error and do on stdout under --json, and the message plus a do: line otherwise", () =>
+  it("writes one pretty-printed JSON object with error and do on stdout under --json, and the message plus a do: line otherwise", () =>
     hegel.test((tc) => {
       const message = tc.draw(gs.text({ maxSize: 60 }));
       const ownDo = tc.draw(gs.oneOf(gs.just(undefined), gs.just(""), gs.text({ minSize: 1, maxSize: 30 })));
@@ -21,10 +21,9 @@ describe("refuse", () => {
       expect(exitCode).toBe(2);
       if (json) {
         expect(stderr.text()).toBe("");
-        expect(stdout.text().endsWith("\n")).toBe(true);
-        expect(stdout.text().slice(0, -1).includes("\n")).toBe(false);
-        expect(stdout.text().startsWith('{"schema_version":1,')).toBe(true);
-        expect(JSON.parse(stdout.text())).toEqual({ schema_version: 1, error: message, do: expectedDo });
+        expect(stdout.text()).toBe(
+          `{\n  "schema_version": 1,\n  "error": ${JSON.stringify(message)},\n  "do": ${JSON.stringify(expectedDo)}\n}\n`,
+        );
       } else {
         expect(stdout.text()).toBe("");
         expect(stderr.text()).toBe(`${message}\ndo: ${expectedDo}\n`);

@@ -103,6 +103,23 @@ describe("nuka run: run.json", () => {
     }
   });
 
+  it("writes nothing on stderr under --json, for a failed run too, at either concurrency", async () => {
+    for (const extra of [[], ["--concurrency", "2"]]) {
+      await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(["run", "--no-check", "--json", ...extra, "features/failure/"], { rootDir, stdout, stderr });
+
+      expect(stderr.text()).toBe("");
+      expect(exitCode).toBe(1);
+      const printed = JSON.parse(stdout.text());
+      expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1 }]);
+      expect(printed.scenarios.find((s: { status: string }) => s.status === "failed").rerun).toBe(
+        "nuka run features/failure/a.feature:3",
+      );
+    }
+  });
+
   it("counts what its scenarios say, for any mix of outcomes", () =>
     hegel.test((tc) => {
       const statuses = tc.draw(gs.arrays(gs.sampledFrom(["passed", "failed"] as const), { maxSize: 12 }));

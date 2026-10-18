@@ -219,6 +219,10 @@ async function exploreDiscovered(
     const render = (title: string, steps: readonly PlannedStep[], notes: ReadonlyMap<number, string>) =>
       renderScenario({ title, steps, notes, vocabulary, bindings });
     const failedNote = (index: number, message: string) => new Map([[index, `step ${index + 1} failed: ${message}`]]);
+    // The verdict line repeats what `--json` already holds, so it is text only.
+    const verdictLine = (line: string) => {
+      if (!options.json) stderr.write(`${line}\n`);
+    };
     const emit = (json: Record<string, unknown>, text: readonly string[]) => {
       if (options.json) stdout.write(`${JSON.stringify(versioned("explore_result", json), null, 2)}\n`);
       else if (text.length > 0) stdout.write(`${text.join("\n")}\n`);
@@ -231,12 +235,12 @@ async function exploreDiscovered(
       const head = { kind: "model", file, verdict: result.status === "model-error" ? "error" : result.status, seed, runs: options.runs, length: options.length };
       if (result.status === "passed") {
         emit({ ...head, steps: result.steps, rerun }, []);
-        stderr.write(`Passed: ${plural(result.runs, "run")}, ${plural(result.steps, "step")}, seed ${seed}. Rerun: ${rerun}\n`);
+        verdictLine(`Passed: ${plural(result.runs, "run")}, ${plural(result.steps, "step")}, seed ${seed}. Rerun: ${rerun}`);
         return 0;
       }
       if (result.status === "model-error") {
         emit({ ...head, rerun, run: result.run, message: result.message }, []);
-        stderr.write(`The model failed on run ${result.run}, seed ${seed}: ${result.message}\n`);
+        verdictLine(`The model failed on run ${result.run}, seed ${seed}: ${result.message}`);
         return 1;
       }
       const scenario = await render("(name me)", result.shrunk, failedNote(result.failure.index, result.failure.message));
@@ -259,9 +263,9 @@ async function exploreDiscovered(
           ...scenario,
         ],
       );
-      stderr.write(
+      verdictLine(
         `Failed: run ${result.run}, seed ${seed}, shrunk to ${plural(result.shrunk.length, "step")}. ` +
-          "The scenario is on stdout.\n",
+          "The scenario is on stdout.",
       );
       return 1;
     }
@@ -295,13 +299,13 @@ async function exploreDiscovered(
     if (result.status === "passed") {
       emit({ ...head, rerun }, []);
       const counts = generated ? `, ${plural(options.runs, "run")}, seed ${seed}` : "";
-      stderr.write(`Passed: relation "${declared.name}"${counts}. Rerun: ${rerun}\n`);
+      verdictLine(`Passed: relation "${declared.name}"${counts}. Rerun: ${rerun}`);
       return 0;
     }
     if (result.status === "relation-error") {
       emit({ ...head, rerun, ...(result.generated === undefined ? {} : { run: result.generated.run }), message: result.message }, []);
       const where = result.generated === undefined ? "" : ` on run ${result.generated.run}, seed ${seed}`;
-      stderr.write(`The relation "${declared.name}" failed before it ran${where}: ${result.message}\n`);
+      verdictLine(`The relation "${declared.name}" failed before it ran${where}: ${result.message}`);
       return 1;
     }
     const found = result.generated;
@@ -340,7 +344,7 @@ async function exploreDiscovered(
         ...followScenario,
       ],
     );
-    stderr.write(`Failed: relation "${declared.name}". Both scenarios are on stdout.\n`);
+    verdictLine(`Failed: relation "${declared.name}". Both scenarios are on stdout.`);
     return 1;
   } finally {
     await world.close();

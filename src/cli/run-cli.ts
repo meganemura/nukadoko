@@ -374,14 +374,12 @@ export async function runCli(
             `${JSON.stringify(versioned("steps", { steps: summaries, import_failures: importFailureSummaries }), null, 2)}\n`,
           );
         } else {
-          // `stdout` here is the injected `WritableSink` (real process
-          // stdout by default, a capture sink in tests), which has no
-          // notion of terminal width; `process.stdout.columns` is read
-          // directly instead, falling back to 80 for a non-TTY or a test
-          // run.
-          stdout.write(formatVocabulary(summaries, process.stdout.columns ?? 80));
+          // A fixed width, not the terminal's: the same project prints the
+          // same text in a terminal, a pipe, and an agent's shell.
+          stdout.write(formatVocabulary(summaries, 80));
+          // `--json` already carries these as `import_failures`.
+          stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
         }
-        stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
         // Exit 1 whenever the output is incomplete in a way this command
         // still went ahead and printed anyway — the check below has to name
         // every such case, not just today's, so a new one has to be added
@@ -449,6 +447,8 @@ export async function runCli(
         const entry = vocabulary.get(args.name);
         if (!entry) {
           exitCode = refuse(sinks, new RefusalError(`Unknown step: ${args.name}`, "nuka steps"), help);
+          // A refusal has no field for these yet, and the step asked about
+          // may be the one whose file did not import.
           stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
           return;
         }
@@ -459,10 +459,11 @@ export async function runCli(
         // builtins-only guess instead of this project's real fixture graph.
         const graph = buildFixtureGraph(config);
         const contract = describeContract(entry, buildStepNames(vocabulary), rootDir, graph);
+        // The document's `import_failures` is the one copy: stdout is always
+        // JSON here, so a stderr listing would only say it twice.
         stdout.write(
           `${JSON.stringify(versioned("describe", { ...contract, import_failures: importFailureSummaries }), null, 2)}\n`,
         );
-        stderr.write(formatImportFailuresStderr(rootDir, importFailureSummaries));
         // Same rule as `steps` above, scoped to this one contract: an
         // import failure elsewhere in the project, this step's own
         // unreadable `from` entry (`from_errors`), this step's own
@@ -567,7 +568,8 @@ export async function runCli(
         .option("quiet", {
           type: "boolean",
           default: false,
-          describe: "suppress the per-step/per-scenario progress lines (output locations and the summary still print)",
+          describe:
+            "suppress the per-step/per-scenario progress lines (output locations and the summary still print; --json prints none of them)",
         })
         .option("records", {
           type: "boolean",
@@ -581,7 +583,7 @@ export async function runCli(
           default: false,
           describe:
             "print the run's result (run.json: run id, verdict, counts, each scenario's record and rerun command) " +
-            "on stdout as one JSON document, instead of one scenario record per line",
+            "on stdout as one JSON document, and no progress, location, or count lines on stderr",
         })
         .option("concurrency", {
           type: "number",

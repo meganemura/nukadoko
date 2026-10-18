@@ -219,9 +219,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // step and scenario boundary lines. `writeOutputLocations` and
 // `writeRunSummary` near the return are unconditional: each is written
 // once, and naming where output landed is not what that flag is for. The
-// progress has no TTY check. A CI log wants the same progress, and stderr
-// staying busy is invisible to stdout's NDJSON readers. The records on
-// stdout are written only under `--records` (see `runRun`).
+// progress has no TTY check. A CI log wants the same progress. The records
+// on stdout are written only under `--records`, and under `--json` none of
+// these lines is written at all (see `runRun`).
 //
 // The Markdown run summary (src/run/run-summary.ts) is the reader-facing
 // counterpart of those stderr lines. Every written record is noted as it is
@@ -327,6 +327,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // a stream that was on by default would put a line of JSON per scenario
   // between its progress lines. A reader that wants the stream asks for it.
   const stdout: WritableSink = !options.json && options.records ? options.stdout : { write: () => true };
+  // What a person watches the run by: progress, where it wrote, the count,
+  // the failed and rerun lines, and notices about the selection. Under
+  // `--json` the document holds the result, and an agent's shell reads both
+  // streams as one, so these lines would sit around the document. A warning
+  // about something that went wrong still goes to `stderr`.
+  const progress: WritableSink = options.json ? { write: () => true } : stderr;
 
   // yargs' own `type: "number"` (cli/run-cli.ts) turns an unparseable
   // `--concurrency` value into `NaN` rather than refusing it, and accepts a
@@ -472,7 +478,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           ? `${lineTargets[0]} selects ${flatPickles.length} of ${selected.totalPickles} scenarios.`
           : `this run includes line targets ${lineTargets.join(", ")} and selects ${flatPickles.length} of ` +
             `${selected.totalPickles} scenarios across all targets.`;
-      stderr.write(
+      progress.write(
         `Partial run: ${selectionDescription} ` +
           "Its run summary covers only those scenarios; run the whole feature for the summary a pull request carries.\n",
       );
@@ -694,7 +700,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           currentRunId: runId,
         });
         const line = formatRetention(outcome, config.retention);
-        if (line !== null) stderr.write(`${line}\n`);
+        if (line !== null) progress.write(`${line}\n`);
       } catch (error) {
         stderr.write(`Warning: retention failed: ${error instanceof Error ? error.message : String(error)}\n`);
       }
@@ -709,7 +715,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // Same "one instance, threaded unchanged into every `runScenario` call"
     // shape as `onUnknownTraceVersion` just above. Built under `--quiet` too:
     // the logger itself drops every line but a failed step's.
-    const onStepEnd = createStepProgressLogger(stderr, { stateDir: config.stateDir, quiet });
+    const onStepEnd = createStepProgressLogger(progress, { stateDir: config.stateDir, quiet });
 
     // Only `baseURL` is overridden from the resolved environment, same as
     // cli/do.ts: every other config field has no per-environment counterpart.
@@ -768,7 +774,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     let effectiveConcurrency = concurrency;
     if (effectiveConcurrency > 1 && selected.features.length <= 1) {
       effectiveConcurrency = 1;
-      stderr.write("--concurrency has nothing to distribute: this run selects one feature file.\n");
+      progress.write("--concurrency has nothing to distribute: this run selects one feature file.\n");
     }
 
     if (effectiveConcurrency > 1) {
@@ -798,13 +804,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           messagesOutputRel,
           onRecord: noteRecord,
           stdout,
+          progress,
           stderr,
         });
 
       messagesEmitter?.end(allPassed);
       const runSummaryPath = emitRunSummary(allPassed ? "passed" : "failed");
 
-      writeOutputLocations(stderr, [
+      writeOutputLocations(progress, [
         ...(scenariosWritten > 0
           ? [
               {
@@ -824,14 +831,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(flatPickles.length > 0 ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
         ...summaryLocation(runSummaryPath),
       ]);
-      writeRunSummary(stderr, {
+      writeRunSummary(progress, {
         total: scenariosWritten,
         passed: scenariosPassed,
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      writeFailedScenarios(stderr, failedScenarios, rerunFlags);
-      writeRepeatTallies(stderr, repeatTallies);
+      writeFailedScenarios(progress, failedScenarios, rerunFlags);
+      writeRepeatTallies(progress, repeatTallies);
       // An interrupted run prunes nothing, as at `--concurrency 1`, where
       // the signal handler exits before the prune.
       if (interruptedBy !== null) return exitCodeForSignal(interruptedBy);
@@ -1004,7 +1011,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // This pickle's own boundary line, right before its execution
           // actually begins.
           if (!quiet) {
-            writeScenarioBoundary(stderr, {
+            writeScenarioBoundary(progress, {
               index: executionIndex + 1,
               total: flatPickles.length * repeat,
               relativeFeaturePath: feature.relativePath,
@@ -1202,7 +1209,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // can replace before a reader gets to it (see `messagesOutputRel`'s
       // own comment above), so only the suffixed file is guaranteed to
       // still hold this run's own stream when read.
-      writeOutputLocations(stderr, [
+      writeOutputLocations(progress, [
         ...(scenariosWritten > 0
           ? [
               {
@@ -1222,14 +1229,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(hasPickles ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
         ...summaryLocation(runSummaryPath),
       ]);
-      writeRunSummary(stderr, {
+      writeRunSummary(progress, {
         total: scenariosWritten,
         passed: scenariosPassed,
         failed: scenariosWritten - scenariosPassed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      writeFailedScenarios(stderr, failedScenarios, rerunFlags);
-      writeRepeatTallies(stderr, repeatTally.list());
+      writeFailedScenarios(progress, failedScenarios, rerunFlags);
+      writeRepeatTallies(progress, repeatTally.list());
       await finishRun(allPassed ? "passed" : "failed", runSummaryPath);
 
       return allPassed ? 0 : 1;

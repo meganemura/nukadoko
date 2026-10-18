@@ -111,7 +111,8 @@ nothing.
    scenario record per line, and the records are on disk either way. To
    act on the result, pass `--json` instead: stdout is then one document, the run's `run.json` (run id,
    verdict, counts, and per scenario its status, record path, and `rerun`
-   command), which the run also writes beside its summary. Text a step, a hook, or a fixture writes through `console.log` or
+   command), which the run also writes beside its summary, and stderr
+   drops every progress, path, and count line, keeping only warnings. Text a step, a hook, or a fixture writes through `console.log` or
    `process.stdout.write` is delivered on stderr, so it does not break
    that stream. A child process spawned with `stdio: "inherit"` still
    writes to stdout directly. The run also

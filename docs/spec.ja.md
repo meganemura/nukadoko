@@ -1899,6 +1899,9 @@ exit code は結果であって、失敗ではないからです。
 `rerun` 行は `nuka run <feature>:<line>` で、run に `--env <name>` が与えられていればそれも付きます。
 単語が必要とする場合は、POSIX シェル向けに引用符で囲みます。
 この行は直列実行と並行実行の両方で表示され、`--quiet` でも残ります。
+`--json` のとき、stderr にはこの段落とその前の 2 つの段落が挙げる行がどれも出ず、部分実行の通知も retention の行も出ません。
+stdout の文書が結果を持っていて、エージェントのシェルは 2 つのストリームを 1 つとして読むからです。
+何かがうまくいかなかったことを知らせる警告(書けなかったファイル、失敗した hook や fixture の teardown、拒否の前の `nuka check` のエラー)は、引き続き stderr に出ます。
 
 機械向けの run の結果は `records/runs/<run_id>/run.json` です。
 run が終わったとき、最後の record と run サマリの後に、直列実行でも並行実行でも書かれます。
@@ -3515,6 +3518,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               retention.runs was removed (see "Artifacts");
                               --quiet keeps it. --quiet drops the
                               progress lines only, except a failed step's.
+                              --json drops every one of these lines and
+                              keeps only warnings on stderr.
                               stdout is empty unless asked: --records
                               prints NDJSON, one record per scenario, on a
                               terminal or not. --json prints run.json
@@ -3564,7 +3569,8 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               import_failures }, the last always present,
                               exiting 1 if import_failures is non-empty or
                               any step's needs_error or from_errors is
-                              present, output printed either way
+                              present, output printed either way. Text
+                              wraps at 80 columns, in a terminal or not
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
@@ -3894,8 +3900,12 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
 文字列または数値を 1 つ取るフラグを 2 回以上与えると、nuka はそのフラグを拒否し、そのコマンドは何も書き込みません。
 `nuka do` の `--use` と `nuka tend` の `--fail-on` は繰り返し可能で、与えた値をすべて与えた順に残します。
 
-テキスト出力(`--json` なし)は、端末で読む人間向けに整形されます。
+テキスト出力(`--json` なし)は、それを読む人間向けに整形されます。
 `--json` が機械可読な契約です。
+stdout は、報告でも run の結果でも拒否でも、2 つの空白で整形したちょうど 1 つの JSON 文書を出します。
+stderr は、進捗、場所、件数、rerun の行も、その文書が持つものの写しも出しません。
+stdout でも stderr でも、ストリームが端末かどうかで変わる出力はありません。
+`nuka steps` はどこでも 80 桁で折り返し、nukadoko は色を書きません。
 
 nukadoko が書く、または出力する JSON の文書はすべて `schema_version` で始まります。
 これはその種類の文書に固有の整数です。
@@ -3929,7 +3939,7 @@ discovery は、どのファイルが hook を登録したかを記録しない�
 対象は、yargs またはコマンドが受け付けないフラグ、読み込めない config、存在しない対象、知らない step 名、邪魔をしている session、そして `nuka run` では、選んだ scenario について `nuka check` が報告するエラーです。
 拒否には 2 つの部分があります。
 メッセージと、次に実行する 1 つのコマンドである `do` です。
-`--json` のとき、stdout は 1 行の JSON オブジェクト `{ "schema_version": 1, "error": "<message>", "do": "<command>" }` を 1 つ出し、stderr は何も出しません。
+`--json` のとき、stdout は JSON オブジェクト `{ "schema_version": 1, "error": "<message>", "do": "<command>" }` を 1 つ、ほかの報告と同じように整形して出し、stderr は何も出しません。
 `nuka describe` にはテキスト形式がないので、同じ方法で拒否します。
 `--json` がないとき、stderr はメッセージを出し、続けて `do: <command>` の 1 行を出します。
 次のコマンドがわかっているとき、`do` はそれを名指しします。
@@ -3953,11 +3963,11 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 
 | コマンド | stdout | stderr |
 | --- | --- | --- |
-| `nuka run` | `--records` なら 1 行に 1 つの scenario record、`--json` なら `run.json`、それ以外は何も出さない | 進捗、失敗、書き込んだ場所、summary の行 |
+| `nuka run` | `--records` なら 1 行に 1 つの scenario record、`--json` なら `run.json`、それ以外は何も出さない | 進捗、失敗、書き込んだ場所、summary の行。`--json` なら警告だけ |
 | `nuka do` | step record(失敗した step でも) | session の通知、警告 |
 | `nuka check`、`nuka tend` | 報告、`--json` なら 1 つの JSON オブジェクト | 何も出さない(`--json` なしの拒否と、`nuka tend` の `fail-on` の行を除く) |
-| `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に JSON) | import に失敗した step ファイル |
-| `nuka experimental explore` | 縮めた scenario、`--json` なら 1 つの JSON オブジェクト | 判定の行と、その rerun コマンド |
+| `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に JSON) | import に失敗した step ファイル(JSON の文書が `import_failures` としてすでに挙げているときを除く) |
+| `nuka experimental explore` | 縮めた scenario、`--json` なら 1 つの JSON オブジェクト | 判定の行と、その rerun コマンド(`--json` のときを除く) |
 | `nuka clean`、`nuka session list` | パスまたは session ごとに 1 行、`--json` なら 1 つの JSON 値 | 何も出さない(`--json` なしの拒否を除く) |
 
 `--json` のときの拒否は、stdout の列の唯一の例外です。
