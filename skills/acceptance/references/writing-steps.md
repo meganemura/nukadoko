@@ -54,7 +54,8 @@ values mean, in the pattern and in `args` together. A `note:` line on
 stderr names each line whose reading was not the only one, or would also
 match another line: that stub's pattern is the line as written, with no
 capture, so put the captures in by hand. Steps that need `--command` or
-`--from` are still scaffolded one at a time, as below.
+`--from` are redone one at a time, as below, with `--replace`, which
+refuses a stub anyone edited (then `rm` it, or pick another name).
 
 1. `nuka scaffold <name> --pattern "<feature line>"`, kebab-case, one
    file per step. Each `{key:type}` capture becomes an args field, so the

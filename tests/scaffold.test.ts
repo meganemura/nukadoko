@@ -160,7 +160,8 @@ describe("nuka scaffold", () => {
       stderr: createCaptureSink(),
     });
     const filePath = path.join(rootDir, "features", "steps", "send-invite.ts");
-    const original = await readFile(filePath, "utf8");
+    const original = (await readFile(filePath, "utf8")).replace('"TODO: describe send-invite"', '"Send an invite"');
+    await writeFile(filePath, original);
 
     const stderr = createCaptureSink();
     const exitCode = await runCli(["scaffold", "send-invite", "--pattern", "I invite {email:string} to Bob's team"], {

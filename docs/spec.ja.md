@@ -3557,7 +3557,7 @@ nuka describe <step>          full contract, the step file as file,
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>]] [--from <step>.<key>]... [--description <text>]
+nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>]] [--from <step>.<key>]... [--description <text>] [--replace]
                               typed step template that fails until
                               implemented; the thrown message names the
                               args it was given, so the file compiles
@@ -3637,7 +3637,16 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               is "TODO: describe <name>" (with
                               --command, a sentence about running the
                               program), which tend reports as
-                              step-description-todo
+                              step-description-todo. A file already at
+                              the step's path is refused. --replace
+                              overwrites it only while it is, byte for
+                              byte, the stub --feature (or scaffold with
+                              no option beyond --pattern and --then)
+                              writes today for that name, path, and the
+                              pattern the file declares; any other file
+                              is refused with rm in its do: line. Without
+                              --replace, such a stub's refusal names
+                              this same command with --replace
 nuka scaffold --feature <path>
                               one stub for each line nuka check <path>
                               reports as undefined-step, so a sentence is
@@ -3667,7 +3676,7 @@ nuka scaffold --feature <path>
                               each written path on stdout. Refuses while
                               a step file does not import, and takes no
                               name, --pattern, --then, --command, --from,
-                              --cwd, or --description
+                              --cwd, --description, or --replace
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

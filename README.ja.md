@@ -414,6 +414,9 @@ pattern は、cucumber-expressions がその行を読んだとおりのもので
 行が 2 通り以上に読めるとき(登録した型と組み込みの型の両方が当てはまるとき)や、その読み方がプロジェクトの別の行にも一致するときは、stub は行そのものを キャプチャなしの pattern にし、stderr の `note:` 行がそのことを伝えます。
 stub は `returns` も `from` も宣言しません。
 プログラムを実行する When と、その結果を読む Then には、[Beside your unit tests](#beside-your-unit-tests) と同じように、`--command` と `--then --from` で step を 1 つずつ scaffold してください。
+そのファイルには stub がすでにあるので、`--replace` を付けます。
+`--replace` は、`--feature` が書いたままの stub(1 バイトも変わっていないもの)だけを上書きし、誰かが編集したファイルは拒否します。
+`--replace` を付けないときは、拒否の `do:` 行が `--replace` を付けた同じコマンドを示します。
 
 `from` の束縛順序違反は、ふつうの glue には表現すらできない種類のケースです。
 型付きの契約がなければ、この概念がつなぎ留まる先自体がないからです。

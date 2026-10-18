@@ -152,6 +152,7 @@ interface ScaffoldArgs {
   description?: string;
   from?: string[];
   cwd?: string;
+  replace?: boolean;
 }
 
 interface CheckArgs {
@@ -187,6 +188,7 @@ function featureScaffoldConflict(args: ScaffoldArgs): string | null {
     args.description !== undefined ? "--description" : null,
     (args.from ?? []).length > 0 ? "--from" : null,
     args.cwd !== undefined ? "--cwd" : null,
+    args.replace === true ? "--replace" : null,
   ].filter((option): option is string => option !== null);
   if (given.length === 0) return null;
   return `--feature names each stub and reads its pattern and outcome from its own line; leave out ${given.join(", ")}, or scaffold that step on its own with nuka scaffold <name>`;
@@ -794,6 +796,12 @@ export async function runCli(
           nargs: 1,
           describe: "<key> with --command: run the program in the directory this args key holds (a --from key or a capture) instead of an empty scratch.dir()",
         })
+        .option("replace", {
+          type: "boolean",
+          default: false,
+          describe:
+            "overwrite the step file while it still holds the stub --feature wrote, byte for byte; any other file is refused",
+        })
         // A pattern or a description is free text a feature line may start
         // with a dash, so each takes the next word whatever it starts with,
         // as getopt_long does for a required value, and keeps its quotes.
@@ -835,6 +843,7 @@ export async function runCli(
         description: args.description ?? null,
         from: args.from ?? [],
         cwd: args.cwd ?? null,
+        replace: args.replace ?? false,
         argv,
         stdout,
         stderr,

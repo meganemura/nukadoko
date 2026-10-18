@@ -39,7 +39,11 @@ import { shellWord } from "../shell/shell-word.js";
 // anything else so an invalid name never reaches the filesystem. An
 // existing file at the target path is refused rather than overwritten: a
 // step that already has a real implementation must never be silently
-// replaced by this template.
+// replaced by this template. `--replace` overwrites one file only: the
+// stub `--feature` writes, byte for byte as this template would write it
+// today, which holds nothing anyone wrote. That is the stub a newcomer
+// redoes as a `--command` or `--from` step, and without the flag each one
+// cost an `rm` first.
 //
 // `--description` is written as the step's description, a JSON string
 // literal like the pattern. Without it the description is
@@ -162,6 +166,9 @@ export interface RunScaffoldOptions {
   /** `--cwd`: the args key whose value is `--command`'s working
    * directory, or `null` for a new `scratch.dir()`. */
   cwd: string | null;
+  /** `--replace`: overwrite the target file while it still holds the
+   * unedited stub `--feature` (or scaffold without options) wrote. */
+  replace: boolean;
   /** The words typed after `nuka`, so a refusal the project has to be
    * changed for can name this same command as the one to run after. */
   argv: readonly string[];
@@ -588,6 +595,50 @@ export function stepTemplate({
   return lines.map((line, index) => line.replace(LINE_MARKER, String(index + 1))).join("\n");
 }
 
+const PATTERN_LINE = /^ {2}pattern: (".*"),$/m;
+
+const STUB_VARIANTS: readonly Variant[] = ["when", "then"];
+const STUB_ATTACHMENTS: readonly (Attachment | null)[] = [null, "docstring", "table"];
+
+/** Whether `source` is, byte for byte, a stub this template writes with no
+ * option beyond `--pattern` and `--then`, for this name and path and the
+ * pattern the file itself declares: the file `--feature` writes for a line,
+ * before anyone edits it. Only that file holds nothing an author wrote, so
+ * only that file `--replace` may overwrite. A guess (a TODO marker that
+ * survives beside a real body) would let it destroy work. */
+export function isUneditedStub(source: string, name: string, relativeFilePath: string): boolean {
+  const declared = PATTERN_LINE.exec(source);
+  let pattern: string | null = null;
+  let captures: readonly Capture[] = [];
+  if (declared !== null) {
+    try {
+      const parsed: unknown = JSON.parse(declared[1]!);
+      if (typeof parsed !== "string") return false;
+      pattern = parsed;
+      captures = stripCaptureNames(pattern).captures;
+    } catch {
+      return false;
+    }
+  }
+  return STUB_VARIANTS.some((variant) =>
+    STUB_ATTACHMENTS.some(
+      (attachment) =>
+        stepTemplate({
+          name,
+          pattern,
+          captures,
+          chained: [],
+          variant,
+          entryPoint: null,
+          cwd: null,
+          description: null,
+          relativeFilePath,
+          attachment,
+        }) === source,
+    ),
+  );
+}
+
 /** What the pattern captures, read against the built-in types alone, or
  * the reason `nuka check` would refuse it in any project. `projectTypes`
  * holds each type name the built-ins lack, which only the project's own
@@ -933,11 +984,25 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const filePath = path.join(rootDir, relativeFilePath);
 
   if (existsSync(filePath)) {
-    return refuse(
-      sinks,
-      `Refusing to scaffold: ${relativeFilePath} already exists`,
-      thenRerun(`rm ${shellWord(relativeFilePath)} if it holds no step to keep (or choose another step name)`),
-    );
+    const posixPath = relativeFilePath.split(path.sep).join("/");
+    const unedited = isUneditedStub(await readFile(filePath, "utf8"), name, posixPath);
+    const removeIt = thenRerun(`rm ${shellWord(relativeFilePath)} if it holds no step to keep (or choose another step name)`);
+    if (!options.replace) {
+      return unedited
+        ? refuse(
+            sinks,
+            `Refusing to scaffold: ${relativeFilePath} already exists, and it still holds the stub scaffold wrote`,
+            ["nuka", ...options.argv, "--replace"].map(shellWord).join(" "),
+          )
+        : refuse(sinks, `Refusing to scaffold: ${relativeFilePath} already exists`, removeIt);
+    }
+    if (!unedited) {
+      return refuse(
+        sinks,
+        `Refusing to scaffold: ${relativeFilePath} is not the stub scaffold wrote (it has been edited, or another option wrote it), so --replace leaves it`,
+        removeIt,
+      );
+    }
   }
 
   // A project whose tsc refuses `./x.ts` gets the `.js` name instead, so the

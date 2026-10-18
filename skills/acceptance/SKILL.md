@@ -72,16 +72,16 @@ If none is true, ask what this is supposed to do before writing anything.
    `Feature:` (`references/writing-the-feature.md`). Every expected value
    is one the criteria state; a value they do not state is a question for
    a person, not a guess and not a value read off the program.
-2. **Steps.** `nuka steps` lists the vocabulary and `nuka describe <step>`
+2. **Steps.** `nuka steps` lists the vocabulary, `nuka describe <step>`
    one contract; reuse before scaffolding. `nuka scaffold --feature <file>`
-   stubs each undefined line, with no `returns` and no `from`; a When that
-   runs a program and the Thens that read it go one at a time: `nuka
-   scaffold <name> --pattern "<line>" --description "<what it does>"`,
-   with `--then` for a Then, `--command <entry point>` for the When
-   (`--cwd <key>` runs it in a directory a Given returned), and `--from
-   <step>.<key>` for each value read from an earlier step, whose producer
-   has to return that key already. Run each step alone with `nuka do
-   <step> --args '<json>'` (`references/writing-steps.md`, which names the
+   stubs each undefined line, with no `returns` and no `from`. Redo the
+   When that runs a program and the Thens that read it one at a time, with
+   `--replace` (it refuses a stub anyone edited): `nuka scaffold <name>
+   --pattern "<line>" --description "<what it does>"`, plus `--then` for a
+   Then, `--command <entry point>` for the When (`--cwd`), and
+   `--from <step>.<key>` per value an earlier step returns, whose producer
+   has to return that key already. Run each alone with `nuka do <step>
+   --args '<json>'` (`references/writing-steps.md`, which names the
    references for the file, assertions, parts, and fixtures). Finished
    projects: `references/examples/` (`cli.md`, `http-api.md`, `workflow.md`).
 3. **`nuka check <feature>`.** Fix every error and read every warning: a

@@ -18,6 +18,20 @@ just until 0.1.
 
 ### Added
 
+- **`nuka scaffold <name> --replace` redoes a stub in place.**
+  A newcomer follows the `undefined-step` finding to `nuka scaffold
+  --feature`, and then redoes the When as a `--command` step and each Then
+  as a `--then --from` step under the same name. Each of those was refused
+  with `already exists`, so every stub cost an `rm` first: 12 commands from
+  an empty CLI project to green, where 9 now do. `--replace` overwrites the
+  file only while it is, byte for byte, the stub `--feature` (or scaffold
+  with no option beyond `--pattern` and `--then`) writes today for that
+  name, path, and the pattern the file declares. Any other file is refused,
+  with the `rm` line as before, because a TODO marker that survives beside
+  a real body would let it destroy work. Without the flag, the refusal for
+  such a stub now says it still holds the stub, and its `do:` line is the
+  same command with `--replace`. `--feature` refuses `--replace`, and what
+  it writes is unchanged.
 - **`pageAs(name, options?)`: a browser context of its own for each person in a scenario.**
   A scenario with a host and a guest needs two cookie jars, and the one
   context a scenario had gave a second tab the first tab's cookies.
