@@ -121,4 +121,31 @@ describe("nuka report --format messages through the real @cucumber/junit-xml-for
     expect(xml).toMatch(/<testsuite\b[^>]*\btests="4"/);
     expect(xml).toMatch(/<testsuite\b[^>]*\bfailures="2"/);
   });
+
+  // The formatter names a test case from the Gherkin scenario, not the
+  // pickle, and prints no pickle tag or property, so the environment shows
+  // only where it appends the pickle's own name: an Examples row. docs/spec.md
+  // ("The messages stream") says what a JUnit reader sees and why.
+  it("a run over two environments: an Examples row names its environment, and a plain Scenario is one test case per environment in --env order", async () => {
+    const twoEnvironments = await copyFixtureToTempDir("allure-identity-project");
+    try {
+      const run = await runCli(["run", "--no-check", "--env", "staging", "--env", "production"], {
+        rootDir: twoEnvironments,
+        stdout: createCaptureSink(),
+        stderr: createCaptureSink(),
+      });
+      expect(run).toBe(0);
+      const xml = buildJUnitXml(await readMessagesFile(twoEnvironments));
+      expect([...xml.matchAll(/<testcase classname="([^"]*)" name="([^"]*)"/g)].map((match) => [match[1], match[2]])).toEqual([
+        ["Checkout", "an empty cart"],
+        ["Checkout", "an empty cart"],
+        ["Checkout", "a cart with items - #1.1: a cart with items (staging)"],
+        ["Checkout", "a cart with items - #1.1: a cart with items (production)"],
+        ["Checkout", "a cart with items - #1.2: a cart with items (staging)"],
+        ["Checkout", "a cart with items - #1.2: a cart with items (production)"],
+      ]);
+    } finally {
+      await removeTempDir(twoEnvironments);
+    }
+  });
 });

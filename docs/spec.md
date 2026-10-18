@@ -3594,7 +3594,16 @@ manifest, so retention and `nuka clean` remove it with the run.
   therefore gives each pickle one copy per environment, with fresh ids and
   the environment in parentheses after the name (`checkout (staging)`), the
   same way an Examples row gets a pickle of its own. A run over one
-  environment keeps the pickles as parsed. Each `--repeat` execution of one
+  environment keeps the pickles as parsed. A JUnit report built from the
+  stream with `@cucumber/junit-xml-formatter` shows that name only for an
+  Examples row (`a cart with items - #1.1: a cart with items (staging)`):
+  the formatter names a test case from the Gherkin scenario rather than
+  the pickle, and prints no pickle tag or property, so the format leaves
+  no field it prints for the environment of a plain Scenario. Such a
+  Scenario run in two environments is two test cases of one name, in the
+  order `--env` named the environments. A CI job that reads JUnit and
+  needs to tell them apart runs one environment per job, or reads the run
+  summary or the Allure results, which name the environment. Each `--repeat` execution of one
   pickle in one environment is a test case of its own, with `attempt` 0
   and `willBeRetried` false, since every execution counts toward the cell.
   The retry shape, one test case with `willBeRetried` on all but its last

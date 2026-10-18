@@ -855,7 +855,9 @@ mapping to remember.
 `nuka report --format messages` writes a cucumber-messages (NDJSON) stream
 of the same run, so a migrating team's existing formatters and JUnit-based
 CI keep working: confirmed by running our own stream through
-`@cucumber/junit-xml-formatter`, not just asserted. See
+`@cucumber/junit-xml-formatter`, not just asserted. That formatter names
+a test case from the scenario, so a plain Scenario run in two
+environments is two test cases of one name there. See
 [Allure results](docs/spec.md#allure-results) and
 [Messages stream](docs/spec.md#messages-stream).
 

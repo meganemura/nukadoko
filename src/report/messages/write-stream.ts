@@ -157,6 +157,14 @@ export function writeMessagesStream(
   // in parentheses after the name, the same way an Examples row already
   // gives each row its own pickle. A run over one environment keeps the
   // pickles as parsed.
+  //
+  // `@cucumber/junit-xml-formatter` names a test case from the Gherkin
+  // scenario, not the pickle, and prints no pickle tag, so a JUnit report
+  // shows the environment only for an Examples row. No field the format
+  // has reaches what it prints for a plain Scenario; a pickle tag was
+  // refused because the formatter does not print it either, and a tag
+  // with no Gherkin tag behind it would claim the feature file says
+  // something it does not.
   const environments = new Set(scenarios.map((scenario) => scenario.record.environment));
   const perEnvironment = new Map<Pickle, Map<string, Pickle>>();
   if (environments.size > 1) {

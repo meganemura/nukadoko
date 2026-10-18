@@ -3034,6 +3034,10 @@ Allure の result と同じく、ストリームは run の後に run ディレ�
   複製は新しい id を持ち、名前の後ろの丸括弧に environment が入ります(`checkout (staging)`)。
   Examples の行がそれぞれ自分の pickle を持つのと同じやり方です。
   1 つの environment だけの run は、parse したままの pickle を使います。
+  このストリームから `@cucumber/junit-xml-formatter` で作った JUnit レポートがその名前を示すのは、Examples の行だけです(`a cart with items - #1.1: a cart with items (staging)`)。
+  formatter は test case の名前を pickle ではなく Gherkin の scenario から付け、pickle の tag も property も出力しないので、素の Scenario の environment を書ける、formatter が出力するフィールドはこの形式にありません。
+  そうした Scenario を 2 つの environment で走らせると、同じ名前の 2 つの test case になり、`--env` が environment を名指した順に並びます。
+  JUnit を読み、それらを見分ける必要がある CI のジョブは、1 つのジョブで 1 つの environment を走らせるか、environment を名指す run サマリか Allure の result を読みます。
   1 つの environment で 1 つの pickle を `--repeat` で実行するたびに、それぞれが自分の test case になり、`attempt` は 0、`willBeRetried` は false です。
   どの実行も cell に数えられるからです。
   最後の attempt 以外に `willBeRetried` を付けた 1 つの test case という再試行の形は採りません。
