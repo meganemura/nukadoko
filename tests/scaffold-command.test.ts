@@ -385,13 +385,13 @@ describe("nuka scaffold --command", () => {
           "step 2/2  failed  \\d+\\.\\ds  the output says \"Hello, Ada!\"",
           '      text: expected "Hello, Ada!", got ""',
           "      used    run-greet  exit 1  Error \\[ERR_MODULE_NOT_FOUND\\]: Cannot find module greet\\.js, token \\{\\{secret\\.TOKEN\\}\\}",
-          "      record  \\.nukadoko/records/steps/step-",
+          "      record  \\.nukadoko/runs/run-[a-z0-9-]+/steps/step-",
         ].join("\n"),
       ),
     );
     expect(run.stderr).not.toContain("tok-0123456789");
 
-    const runsDir = path.join(rootDir, ".nukadoko", "records", "runs");
+    const runsDir = path.join(rootDir, ".nukadoko", "runs");
     const [runId] = await readdir(runsDir);
     const summary = await readFile(path.join(runsDir, runId!, "summary.md"), "utf8");
     expect(summary).toContain(

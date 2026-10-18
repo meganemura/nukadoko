@@ -56,10 +56,10 @@ function writeAtomic(filePath: string, data: Buffer | string): void {
 }
 
 // An attachment that already exists as a file (a step's own trace.zip or
-// screenshot under `records/steps/<id>/`) is hard-linked into `resultsDir`
+// screenshot under a run's `steps/<id>/`) is hard-linked into `resultsDir`
 // rather than copied. The two directories otherwise hold every byte of
 // every trace twice: measured on a project that ran 202 times in four days,
-// 9.0 GB of trace zips under `records/` and the same 9.0 GB again under
+// 9.0 GB of trace zips among the records and the same 9.0 GB again under
 // `allure-results/`. A hard link costs one directory entry, reads
 // identically to a copy from Allure's side (it opens the file by name and
 // never writes to it), and outlives `nuka clean` removing the

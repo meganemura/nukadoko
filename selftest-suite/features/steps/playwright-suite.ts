@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readFile, rm } from "node:fs/promises";
+import { access, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -138,6 +138,22 @@ function requireRunResult(state: PlaywrightSuiteState): ProcResult {
   return state.runResult;
 }
 
+/** A `nuka run` step record's record.json: inside the steps/ directory of
+ * whichever run directory wrote it. */
+async function runStepRecordFile(projectDir: string, stepRecordId: string): Promise<string> {
+  const runsDir = path.join(projectDir, ".nukadoko", "runs");
+  for (const runId of (await readdir(runsDir)).sort()) {
+    const candidate = path.join(runsDir, runId, "steps", stepRecordId, "record.json");
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // Not this run's step record.
+    }
+  }
+  throw new Error(`no run directory under ${runsDir} holds step record ${stepRecordId}`);
+}
+
 Then("the add-item step record carries the count the shared helper returned", async function () {
   const state = requireCurrent();
   const result = requireRunResult(state);
@@ -151,7 +167,7 @@ Then("the add-item step record carries the count the shared helper returned", as
     throw new Error(`expected a step record for "an item is added", found: ${JSON.stringify(scenario.steps)}`);
   }
 
-  const recordPath = path.join(fixtureDir, ".nukadoko", "records", "steps", addItemStep.step_record_id, "record.json");
+  const recordPath = await runStepRecordFile(fixtureDir, addItemStep.step_record_id);
   const record = JSON.parse(await readFile(recordPath, "utf8")) as StepRecordLike;
   const helperResult = record.result as { count?: unknown } | null;
   if (helperResult === null || helperResult.count !== 1) {

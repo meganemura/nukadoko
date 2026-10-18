@@ -31,7 +31,7 @@ interface ScenarioInput {
 }
 
 function runJsonPath(rootDir: string, runId: string): string {
-  return path.join(rootDir, ".nukadoko", "records", "runs", runId, "run.json");
+  return path.join(rootDir, ".nukadoko", "runs", runId, "run.json");
 }
 
 /** Appends one scenario to its run's run.json, writing the step records it
@@ -40,9 +40,9 @@ function writeScenario(rootDir: string, input: ScenarioInput): void {
   const steps = [];
   for (const [index, step] of input.steps.entries()) {
     const stepId = step.record === false ? null : `step-${input.id}-${index}`;
-    steps.push({ text: step.text, status: "passed", step_record_id: stepId, record: stepId === null ? null : `.nukadoko/records/steps/${stepId}` });
+    steps.push({ text: step.text, status: "passed", step_record_id: stepId, record: stepId === null ? null : `steps/${stepId}` });
     if (stepId !== null) {
-      const stepDir = path.join(rootDir, ".nukadoko", "records", "steps", stepId);
+      const stepDir = path.join(rootDir, ".nukadoko", "runs", input.runId, "steps", stepId);
       mkdirSync(stepDir, { recursive: true });
       const startedAt = Date.parse(input.startedAt) + index * 1_000;
       writeFileSync(

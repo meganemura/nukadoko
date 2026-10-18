@@ -7,7 +7,7 @@ import { readStepRecord } from "../src/record/read-step-record.js";
 import { defineStep } from "../src/step/define-step.js";
 import { strictArgsSchema } from "../src/step/strict-args.js";
 import { z } from "zod";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka describe` publishes a step's `args` as JSON Schema
 // via `z.toJSONSchema`, which renders a plain `z.object(...)` as
@@ -239,12 +239,12 @@ describe("nuka run: strict args validation", () => {
       expect(rejectedSummary.error.message).toContain("tag");
 
       const okStepRecord = readStepRecord(
-        path.join(rootDir, ".nukadoko", "records", "steps", okSummary.step_record_id),
+        path.join(stepRecordDir(rootDir, okSummary.step_record_id)),
       );
       expect(okStepRecord?.args).toEqual({ name: "ada" });
 
       const rejectedStepRecord = readStepRecord(
-        path.join(rootDir, ".nukadoko", "records", "steps", rejectedSummary.step_record_id),
+        path.join(stepRecordDir(rootDir, rejectedSummary.step_record_id)),
       );
       expect((rejectedStepRecord as { error: { kind: string } } | null)?.error.kind).toBe("args_invalid");
     } finally {
@@ -270,7 +270,7 @@ describe("nuka run: strict args validation", () => {
       expect(stepSummary.status).toBe("passed");
 
       const stepRecord = readStepRecord(
-        path.join(rootDir, ".nukadoko", "records", "steps", stepSummary.step_record_id),
+        path.join(stepRecordDir(rootDir, stepSummary.step_record_id)),
       );
       // The pattern never captures `tag`: this is the schema's own default,
       // present only if the record holds the validated value.

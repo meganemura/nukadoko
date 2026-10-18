@@ -170,7 +170,8 @@ export function hookDisplayTitle(fallback: string, name: string | undefined): st
 
 export interface ScenarioEvidence {
   /** Scenario directory, relative to the project root (e.g.
-   * ".nukadoko/records/scenarios/scn-..."). */
+   * ".nukadoko/runs/run-.../scenarios/scn-..."). run.json names it
+   * relative to the run directory instead. */
   readonly dir: string;
   /** Screenshots actually written; empty when no browser was used. Same
    * shape as `EvidenceMeta.screenshots` (src/record/types.ts) — at most

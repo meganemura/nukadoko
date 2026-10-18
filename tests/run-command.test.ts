@@ -7,7 +7,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import { createObservedCollector } from "../src/context/observed.js";
 import { runCommand } from "../src/index.js";
 import { withProcessRecording } from "../src/context/run-command.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: `runCommand`'s own result (exit code, output, stdin,
 // environment, the two cases it rejects) and the `observed.processes` it
@@ -118,7 +118,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, any>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 

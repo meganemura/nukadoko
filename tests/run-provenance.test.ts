@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
+  latestRunDir,
   createCaptureSink,
   initGitRepo,
   latestRunJson,
@@ -48,7 +49,7 @@ describe("nuka run: run_id", () => {
       .flatMap((step) => (step.record === null ? [] : [step.record]));
     expect(records.length).toBeGreaterThan(0);
     for (const record of records) {
-      const stepRecord = JSON.parse(readFileSync(path.join(rootDir, record, "record.json"), "utf8")) as { run_id: string };
+      const stepRecord = JSON.parse(readFileSync(path.join(latestRunDir(rootDir), record, "record.json"), "utf8")) as { run_id: string };
       expect(stepRecord.run_id).toBe(document.run_id);
     }
   });

@@ -6,7 +6,7 @@ import path from "node:path";
 import { chromium, type Browser } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stripRunProgressLines } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, latestRunDir, createCaptureSink, removeTempDir, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
 
 // Responsibility: `pageAs(name)` through a real `nuka run` and a real
 // browser. Two people sign in to an app that remembers a person by a cookie.
@@ -60,7 +60,7 @@ interface StepRecord {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<StepRecord> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8")) as StepRecord;
 }
 
@@ -170,7 +170,7 @@ describe("nuka run: pageAs gives each person a browser context of their own", ()
       ["final.ben.png", "ben"],
     ]);
     for (const shot of scenario.evidence.screenshots as { file: string }[]) {
-      expect(existsSync(path.join(rootDir, scenario.evidence.dir, shot.file))).toBe(true);
+      expect(existsSync(path.join(latestRunDir(rootDir), scenario.evidence.dir, shot.file))).toBe(true);
     }
   });
 });

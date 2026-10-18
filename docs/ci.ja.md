@@ -197,7 +197,7 @@ jobs:
   だから明示の起動 step が無いと、`page` や `request` に触れる最初の step が、何が欠けていたかを名指すことも無いまま `ECONNREFUSED` で失敗します。
 - **run が残すものには上限があり、それ以外にはありません。**
   `nuka run` は最新 `retention.runs` 回分の run を保ち、それより古い run を毎回の run の終わりに自分で消します(docs/spec.ja.md の「成果物」を参照)。
-  だから永続するランナーでも、`.nukadoko/records/` と export の出力はその回数ぶんの大きさに留まります。
+  だから永続するランナーでも、`.nukadoko/runs/` と export の出力はその回数ぶんの大きさに留まります。
   決して消さないのは `.nukadoko/cache/`(`nuka do`/session の利用が残す session ファイル)と、nukadoko が run ごとのファイル一覧を残すようになる前に書かれた `allure-results/` です。
   GitHub がホストするランナーはジョブごとに新しい仮想マシンなので、そこではどちらも問題になりません。
   セルフホストや、それ以外の理由で永続するランナーでは、その 2 つに対して手当てが 2 つあります。
@@ -210,7 +210,7 @@ jobs:
 
 ## チームがその上に足すもの
 
-上の workflow がチームに委ねているものが 4 つあります。
+上の workflow がチームに委ねているものが 5 つあります。
 どれも小さいものです。
 
 - **pull request のコメントとしての run サマリ。**
@@ -240,9 +240,36 @@ jobs:
   suite を走らせるジョブが pull request に書き込めるようになります。
   fork からの pull request は読み取り専用のトークンを受け取るので、そこではこの step は失敗します。
   fork からの pull request を受け付けるチームは、この step を別のジョブに移します。
+- **build artifact としての run ディレクトリ。**
+  1 回の `nuka run` が計測したものは、すべて 1 つのディレクトリ `.nukadoko/runs/<run_id>/` にあります。
+  `run.json`、`summary.md`、そして trace、screenshot、`http.jsonl` を持つ各 step record です(docs/spec.ja.md の「State directory」を参照)。
+  `run.json` の中のパスはそのディレクトリからの相対パスなので、ダウンロードした写しもランナーの上のものと同じように読めます。
+  `run` ジョブにもう 1 つ step を足すと、それをアップロードできます。
+
+  ```yaml
+  - name: Upload the run directory
+    if: always()
+    uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+    with:
+      name: nukadoko-runs
+      path: .nukadoko/runs/
+      # `.nukadoko` starts with a dot, and upload-artifact skips every
+      # file inside such a directory unless this is set.
+      include-hidden-files: true
+      if-no-files-found: ignore
+      retention-days: 14
+  ```
+
+  `if: always()` があるのは、コメントの step と同じ理由です。
+  誰かがダウンロードするのは赤い run です。
+  GitHub がホストするランナーでは、このディレクトリはこのジョブの run だけを持ちます。
+  永続するランナーでは、retention が保ったすべての run を持ちます。
+  `nuka do` の record は、その外の `.nukadoko/do/` にあります。
+  CI のジョブは `nuka do` を走らせないからです。
+  trace はブラウザの cookie を持ち、screenshot は画面に出ていたものを持つので、最初のアップロードの前に誰が artifact を開いてよいかを決めてください(下の「このページが主張しないこと」を参照)。
 - **run の結果に基づいて動くスクリプト。**
   失敗した scenario ごとに issue を作る step や、それらを再実行する step は、stderr ではなく `run.json` を読みます。
-  `nuka run features/ --json > run.json` がそれを出力し、run はどちらの場合も同じファイルを `.nukadoko/records/runs/<run_id>/run.json` に書きます。
+  `nuka run features/ --json > run.json` がそれを出力し、run はどちらの場合も同じファイルを `.nukadoko/runs/<run_id>/run.json` に書きます。
   その `scenarios` のエントリは、各 scenario の status と、行、status、step record、エラーを持つ step を持ち、失敗した scenario はそれを再実行する `do` コマンドを持ちます(docs/spec.ja.md の「Scenario(スクリプト化された経路)」を参照)。
 - **`tend` のジョブへの通知 step。**
   `tend` の finding はどれも note です。
@@ -266,10 +293,14 @@ jobs:
 `--with-deps` は Linux ランナーの外では何もしないため(このリポジトリには Linux ランナーがありません)、ダウンロード自体はここでは試していません。
 上の `uses:` 行にある 2 つのコミット SHA は、GitHub 自身の API に照らして確かめました。
 `repos/actions/checkout/git/ref/tags/v7.0.1` と `setup-node` の同等のエンドポイントをそれぞれ 1 回ずつ呼び、それぞれがコメントの主張どおりのコミットを名指ししていて、他の何も指していないことを確かめました。
+「チームがその上に足すもの」にある `upload-artifact` の SHA は、`git ls-remote https://github.com/actions/upload-artifact` で確かめました。
+タグ `v7.0.2` はそのコミットを名指ししており、これを書いた時点で最新のリリースタグです。
+そこにある `action.yml` は、この step が使う入力をすべて宣言しています。
+アップロードの step そのものは実行していません。
 この workflow は、実際のランナー上で green になるのを見届けたファイルとしてではなく、手を加えるための出発点として読んでください。
 
 ジョブの後で Allure の出力がどこへ行くかについても、このページは何も言いません。
 trace と screenshot は伏せられません(docs/spec.ja.md の「Session、environment、secret」を参照)。
 隣の `http.jsonl` は秘密を置き換えてありますが、trace はブラウザ自身の状態を cookie ごと持ち、screenshot は画面に出ていたものをそのまま持ちます。
-artifact としてアップロードした `allure-results/` や、チャットに貼った生成済みレポートは、そのすべてを運びます。
+artifact としてアップロードした run ディレクトリや `allure-results/`、チャットに貼った生成済みレポートは、そのすべてを運びます。
 ランナーの中に留めるか、最初のアップロードの前に誰が開いてよいかを決めてください。

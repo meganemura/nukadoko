@@ -46,7 +46,7 @@ describe("schema_version", () => {
     await cli(runProject, ["clean"]);
     envelopes.set("run", parse(await cli(runProject, ["run", "--no-check", "--json", "features/basic/b.feature"])));
     const runId = envelopes.get("run")!.run_id as string;
-    const runDir = path.join(runProject, ".nukadoko", "records", "runs");
+    const runDir = path.join(runProject, ".nukadoko", "runs");
     envelopes.set("run.json", parse(readFileSync(path.join(runDir, runId, "run.json"), "utf8")));
     envelopes.set("clean", parse(await cli(runProject, ["clean", "--dry-run", "--json"])));
     envelopes.set(

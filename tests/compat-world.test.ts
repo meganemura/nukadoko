@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: World + Before/After hook
 // coverage — `setWorldConstructor` with a custom field, the unopened-getter
@@ -112,12 +112,7 @@ describe("nuka run: World + Before/After hooks", () => {
     expect(unopened.steps[0].error.message).toContain("openPage()");
     expect(unopened.steps[0].error.message).toContain("await this.openPage()");
 
-    const stepRecordPath = path.join(
-      rootDir,
-      ".nukadoko",
-      "records",
-      "steps",
-      unopened.steps[0].step_record_id,
+    const stepRecordPath = path.join(stepRecordDir(rootDir, unopened.steps[0].step_record_id),
       "record.json",
     );
     const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8"));

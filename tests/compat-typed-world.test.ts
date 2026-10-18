@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { discoverSteps } from "../src/discover/discover-steps.js";
 import { DuplicateWorldDefinitionError } from "../src/discover/errors.js";
-import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: coverage for the compat
 // World's "measurement is always on, declaration is opt-in" mechanism
@@ -35,7 +35,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 

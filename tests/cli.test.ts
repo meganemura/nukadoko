@@ -13,6 +13,7 @@ import {
   removeTempDir,
   repoRoot,
   sourceNodeArgs,
+  stepRecordDir,
   withoutNoConfigLine,
 } from "./helpers/fixtures.js";
 
@@ -193,7 +194,7 @@ describe("nuka do", () => {
       expect(stepRecord.environment).toBe("default");
       expect(stepRecord.session).toBeNull();
       expect(stepRecord.scenario_record_id).toBeNull();
-      expect(stepRecord.evidence.dir).toBe(path.join(".nukadoko", "records", "steps", stepRecord.step_record_id));
+      expect(stepRecord.evidence.dir).toBe(path.join(".nukadoko", "do", stepRecord.step_record_id));
       expect(stepRecord.evidence.screenshots).toEqual([]);
       expect(stepRecord.evidence.trace).toBeUndefined();
       expect(stepRecord.evidence.http).toBeUndefined();
@@ -369,12 +370,7 @@ describe("nuka do", () => {
       expect(stepRecord.status).toBe("passed");
       expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
 
-      const recordPath = path.join(
-        rootDir,
-        ".nukadoko",
-        "records",
-        "steps",
-        stepRecord.step_record_id,
+      const recordPath = path.join(stepRecordDir(rootDir, stepRecord.step_record_id),
         "record.json",
       );
       expect(existsSync(recordPath)).toBe(true);
@@ -417,12 +413,7 @@ describe("nuka (process)", () => {
       expect(stepRecord.status).toBe("passed");
       expect(stepRecord.result).toEqual({ id: "p_0001", name: "x" });
 
-      const recordPath = path.join(
-        rootDir,
-        ".nukadoko",
-        "records",
-        "steps",
-        stepRecord.step_record_id,
+      const recordPath = path.join(stepRecordDir(rootDir, stepRecord.step_record_id),
         "record.json",
       );
       expect(existsSync(recordPath)).toBe(true);

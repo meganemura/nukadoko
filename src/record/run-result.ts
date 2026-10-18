@@ -2,19 +2,24 @@ import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 
 import path from "node:path";
 import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
+import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
 import type { ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
 import type { ErrorKind, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
-// `records/runs/<run_id>/`, and what `nuka run --json` prints. It holds what
+// own directory, `<stateDir>/runs/<run_id>/`, and what `nuka run --json`
+// prints. It holds what
 // an agent or an auditor needs without opening another file: the commit and
 // condition the run ran under, every scenario with its steps, each failed
 // step's message and the values it read, the command that reruns a failed
 // scenario, and every finding the run raised. The run summary is rendered
 // from this document alone (src/run/run-summary.ts), so the two cannot
 // disagree, and a summary can be rendered again from a run.json copied off
-// a CI machine. Step records stay beside it for the detail: traces,
-// screenshots, `http.jsonl`, and the full args and result of each step.
+// a CI machine. Step records sit beside it, under the same directory's
+// `steps/`, for the detail: traces, screenshots, `http.jsonl`, and the full
+// args and result of each step. Every path the document names is relative
+// to the run directory, so a run directory reads the same after it is
+// uploaded, downloaded, or moved.
 //
 // It is also the run's completion marker. Only the invocation that ran
 // everything knows the run is over and how it ended (a run-scope hook can
@@ -27,7 +32,7 @@ export const RUN_RESULT_FILE_NAME = "run.json";
 
 export interface RunUsed {
   readonly step: string;
-  /** The producer's step record, relative to the project root. */
+  /** The producer's step record directory, relative to the run directory. */
   readonly record: string;
   readonly result: unknown;
 }
@@ -44,8 +49,8 @@ export interface RunStep {
   /** The step record's id, the value `nuka do --use` takes; `null` when
    * none was written (the step never began). */
   readonly step_record_id: string | null;
-  /** The step record's directory, relative to the project root; `null`
-   * when none was written. */
+  /** The step record's directory, relative to the run directory
+   * (`steps/<step_record_id>`); `null` when none was written. */
   readonly record: string | null;
   /** The step's `mutates` declaration, present when it has a step record. */
   readonly mutates?: boolean | null;
@@ -73,8 +78,9 @@ export interface RunScenario {
   readonly steps: readonly RunStep[];
   readonly hooks: readonly ScenarioHookRecord[];
   /** The scenario's own evidence directory (hook traces and attachments,
-   * the final screenshot), relative to the project root. Absent when the
-   * scenario left none of them, since the directory is then removed. */
+   * the final screenshot), relative to the run directory
+   * (`scenarios/<scenario_record_id>`). Absent when the scenario left none
+   * of them, since the directory is then removed. */
   readonly evidence?: ScenarioEvidence;
   readonly teardown_errors?: readonly { readonly fixture: string; readonly message: string }[];
   /** For a failed scenario: the command that runs it alone, in the same
@@ -121,7 +127,7 @@ export function runResultPath(rootDir: string, stateDir: string, runId: string):
 
 /** The run.json path relative to the project root, as stderr names it. */
 export function runResultRelativePath(stateDir: string, runId: string): string {
-  return path.join(stateDir, "records", "runs", runId, RUN_RESULT_FILE_NAME);
+  return path.join(runRelativeDir(stateDir, runId), RUN_RESULT_FILE_NAME);
 }
 
 /** Writes the document text as it is, so the file and `--json` stdout are
@@ -154,7 +160,7 @@ export function readRunResult(filePath: string): RunDocument | null {
 
 /** Every run that ended, read from its run.json, in no particular order. */
 export function readEndedRuns(rootDir: string, stateDir: string): RunDocument[] {
-  const runsDir = path.join(rootDir, stateDir, "records", "runs");
+  const runsDir = path.join(rootDir, runsRelativeDir(stateDir));
   let ids: string[];
   try {
     ids = readdirSync(runsDir).sort();

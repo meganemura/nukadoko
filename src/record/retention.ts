@@ -4,33 +4,35 @@ import { messagesRunOutputPath } from "./messages-output.js";
 import { compareNewestFirst, rankRunsNewestFirst, type RunStart } from "./newest-run.js";
 import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
 import { readEndedRuns } from "./run-result.js";
+import { doRelativeDir, runsRelativeDir } from "./state-layout.js";
 
 // Responsibility: what leaves the state directory on its own, and when.
-// Two rules, applied at the end of every `nuka run` (src/cli/run.ts):
+// Applied at the end of every `nuka run` (src/cli/run.ts). The unit is a
+// whole run directory, `<stateDir>/runs/<run_id>/` (src/record/
+// state-layout.ts): a run is removed with everything it measured, its
+// run.json, summary, step records, and scenario evidence, and nothing
+// inside a kept run is ever removed on its own. The alternative refused
+// was removing files by the ids a run.json cites, which is what kept
+// retention reading every record before it could remove one.
 //
-// 1. The run rule. A run is a run.json (src/record/run-result.ts), dated by
-//    its `started_at` (src/record/newest-run.ts, the rule `nuka tend` uses
-//    too). The newest `retention.runs` runs keep everything: the step
-//    records and scenario evidence directories their run.json names, the
-//    export files their manifest lists (src/record/run-exports.ts), and
-//    their messages stream. Every older run loses all of it. The run that
-//    is applying retention counts as one of the runs, though its run.json
-//    is written after this, and it is never removed.
+// 1. The run rule. A run that ended is a run directory with a run.json
+//    (src/record/run-result.ts), dated by its `started_at`
+//    (src/record/newest-run.ts, the rule `nuka tend` uses too). The newest
+//    `retention.runs` runs are kept; every older run directory is removed,
+//    with the export files its manifest lists (src/record/run-exports.ts)
+//    and its messages stream. The run that is applying retention counts as
+//    one of the runs, though its run.json is written after this, and it is
+//    never removed.
 //
-// 2. The age rule, for what no retained run owns: a `nuka do` step record
-//    (`run_id: null`), a step record or scenario directory whose run has
-//    since been removed or never wrote its run.json, and a run directory
-//    with no run.json. Each is dated by its own record's `finished_at`
-//    (`started_at` failing that) and, when there is no record to read, by
-//    the directory's mtime, and is removed once older than
-//    `retention.adHocDays`. `nuka do --use` reads these across days by
-//    design, which is why they get days rather than a run count.
-//
-// A run owns exactly the step records its run.json names. That set is
-// complete: a part invoked through the `call` fixture runs inside its
-// caller and lands as a `calls[]` entry on the caller's own record, never as
-// a `records/steps/<id>/` of its own, and a hook's evidence lives inside the
-// scenario's own directory.
+// 2. The age rule, for what no run rule can date: a run directory with no
+//    run.json (a run still in flight in another process, or one that was
+//    killed), dated by its mtime, and a `nuka do` step record under
+//    `<stateDir>/do/`, dated by its own `finished_at` (`started_at`
+//    failing that, the directory's mtime failing both). Each is removed
+//    once older than `retention.adHocDays`. A run still writing has no
+//    run.json yet, so it is never ranked against the runs that ended
+//    first, and `nuka do --use` reads `do/` records across days by design,
+//    which is why they get days rather than a run count.
 //
 // Export files are removed only through a manifest. A results directory
 // can be shared with another tool's Allure output, so a file nothing here
@@ -39,11 +41,6 @@ import { readEndedRuns } from "./run-result.js";
 // the project root is skipped as well: `allure.resultsDir` can point above
 // the project, and a removal that leaves the project is not one this tool
 // makes on its own.
-//
-// A second `nuka run` in flight at the same time is safe because the run
-// rule only ranks a run that wrote its run.json, the run's last act. A run
-// still writing, a run killed mid-way, and a run from before run.json held
-// its scenarios all have none, and what they wrote falls to the age rule.
 
 export interface RetentionPolicy {
   readonly runs: number;
@@ -143,12 +140,14 @@ export interface ApplyRetentionOptions {
 export interface RetentionOutcome {
   readonly runsKept: number;
   readonly runsRemoved: number;
-  /** Step records, scenario directories, and run directories the age rule
-   * removed, counted together: none of them belonged to a retained run. */
+  /** Run directories with no run.json and `nuka do` step records the age
+   * rule removed, counted together: no run rule dated any of them. */
   readonly unownedRemoved: number;
 }
 
-async function removeRunExports(
+/** Removes one run directory whole, after the export files its manifest
+ * lists and its messages stream. */
+async function removeRunDir(
   rootDir: string,
   stateDir: string,
   runId: string,
@@ -169,72 +168,24 @@ async function removeRunExports(
   await rm(dir, { recursive: true, force: true });
 }
 
-interface EndedRun extends RunStart {
-  readonly steps: readonly string[];
-  readonly scenarios: readonly string[];
-}
-
 export async function applyRetention(options: ApplyRetentionOptions): Promise<RetentionOutcome> {
   const { rootDir, stateDir, policy, now, messagesOutputRel, currentRun } = options;
-
-  const recordsDir = path.join(rootDir, stateDir, "records");
-  const stepsDir = path.join(recordsDir, "steps");
-  const scenariosDir = path.join(recordsDir, "scenarios");
-  const runsDir = path.join(recordsDir, "runs");
+  const runsDir = path.join(rootDir, runsRelativeDir(stateDir));
+  const doDir = path.join(rootDir, doRelativeDir(stateDir));
 
   // --- The run rule ---
-  const ended: EndedRun[] = rankRunsNewestFirst(readEndedRuns(rootDir, stateDir)).map(({ runId, startedAt, run }) => ({
+  const ended: RunStart[] = rankRunsNewestFirst(readEndedRuns(rootDir, stateDir)).map(({ runId, startedAt }) => ({
     runId,
     startedAt,
-    steps: run.scenarios.flatMap((scenario) =>
-      (scenario.steps ?? []).flatMap((step) => (typeof step.step_record_id === "string" ? [step.step_record_id] : [])),
-    ),
-    scenarios: run.scenarios.flatMap((scenario) =>
-      typeof scenario.evidence?.dir === "string" ? [path.basename(scenario.evidence.dir)] : [],
-    ),
   }));
   const ranked: RunStart[] = ended.some((run) => run.runId === currentRun.runId) ? ended : [currentRun, ...ended];
   const plan = planRunRetention(ranked, policy.runs);
-  const dropped = new Set(plan.dropped.filter((runId) => runId !== currentRun.runId));
-  const retained = ended.filter((run) => !dropped.has(run.runId));
-
-  const ownedSteps = new Set(retained.flatMap((run) => run.steps));
-  const ownedScenarios = new Set(retained.flatMap((run) => run.scenarios));
-
-  for (const run of ended.filter((entry) => dropped.has(entry.runId))) {
-    for (const id of run.steps) {
-      if (!ownedSteps.has(id)) await rm(path.join(stepsDir, id), { recursive: true, force: true });
-    }
-    for (const id of run.scenarios) {
-      if (!ownedScenarios.has(id)) await rm(path.join(scenariosDir, id), { recursive: true, force: true });
-    }
-    await removeRunExports(rootDir, stateDir, run.runId, messagesOutputRel);
-  }
+  const dropped = plan.dropped.filter((runId) => runId !== currentRun.runId);
+  for (const runId of dropped) await removeRunDir(rootDir, stateDir, runId, messagesOutputRel);
 
   // --- The age rule ---
   let unownedRemoved = 0;
   const cutoff = now.getTime() - policy.adHocDays * 24 * 60 * 60 * 1000;
-
-  const stepEntries: DatedEntry[] = [];
-  for (const id of await listDirectories(stepsDir)) {
-    if (ownedSteps.has(id)) continue;
-    const dir = path.join(stepsDir, id);
-    stepEntries.push({ id, at: recordDate(await readRecordJson(dir)) ?? (await mtimeOf(dir)) });
-  }
-  for (const id of planAgeRetention(stepEntries, cutoff)) {
-    await rm(path.join(stepsDir, id), { recursive: true, force: true });
-    unownedRemoved += 1;
-  }
-
-  const scenarioEntries: DatedEntry[] = [];
-  for (const id of await listDirectories(scenariosDir)) {
-    if (ownedScenarios.has(id)) continue;
-    scenarioEntries.push({ id, at: await mtimeOf(path.join(scenariosDir, id)) });
-  }
-  for (const id of planAgeRetention(scenarioEntries, cutoff)) {
-    await rm(path.join(scenariosDir, id), { recursive: true, force: true });
-    unownedRemoved += 1;
-  }
 
   const rankedIds = new Set(ranked.map((run) => run.runId));
   const runEntries: DatedEntry[] = [];
@@ -243,13 +194,23 @@ export async function applyRetention(options: ApplyRetentionOptions): Promise<Re
     runEntries.push({ id: runId, at: await mtimeOf(path.join(runsDir, runId)) });
   }
   for (const runId of planAgeRetention(runEntries, cutoff)) {
-    await removeRunExports(rootDir, stateDir, runId, messagesOutputRel);
+    await removeRunDir(rootDir, stateDir, runId, messagesOutputRel);
+    unownedRemoved += 1;
+  }
+
+  const doEntries: DatedEntry[] = [];
+  for (const id of await listDirectories(doDir)) {
+    const dir = path.join(doDir, id);
+    doEntries.push({ id, at: recordDate(await readRecordJson(dir)) ?? (await mtimeOf(dir)) });
+  }
+  for (const id of planAgeRetention(doEntries, cutoff)) {
+    await rm(path.join(doDir, id), { recursive: true, force: true });
     unownedRemoved += 1;
   }
 
   return {
-    runsKept: ranked.length - dropped.size,
-    runsRemoved: dropped.size,
+    runsKept: ranked.length - dropped.length,
+    runsRemoved: dropped.length,
     unownedRemoved,
   };
 }
@@ -267,7 +228,7 @@ export function formatRetention(outcome: RetentionOutcome, policy: RetentionPoli
   }
   if (outcome.unownedRemoved > 0) {
     parts.push(
-      `${plural(outcome.unownedRemoved, "record", "records")} no retained run owns, older than ${plural(policy.adHocDays, "day", "days")} (retention.adHocDays)`,
+      `${plural(outcome.unownedRemoved, "unfinished run or nuka do record", "unfinished runs and nuka do records")} older than ${plural(policy.adHocDays, "day", "days")} (retention.adHocDays)`,
     );
   }
   if (parts.length === 0) return null;
@@ -280,8 +241,8 @@ export function formatRetention(outcome: RetentionOutcome, policy: RetentionPoli
  * force, since the numbers are the whole answer. */
 export function retentionNote(policy: RetentionPolicy): string {
   return (
-    `A step record is removed once its run is older than the newest ${plural(policy.runs, "run", "runs")}, ` +
-    `and a record no run owns once it is older than ${plural(policy.adHocDays, "day", "days")} ` +
+    `A step record is removed with its run once the run is older than the newest ${plural(policy.runs, "run", "runs")}, ` +
+    `and a nuka do record once it is older than ${plural(policy.adHocDays, "day", "days")} ` +
     "(retention in nukadoko.config.ts)"
   );
 }

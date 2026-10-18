@@ -47,6 +47,7 @@ import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessS
 import { generateRunId } from "../run/run-id.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
+import { RUN_FILE_DIRS, relativeToRun, runRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
 import { runExportsManifestPath } from "../record/run-exports.js";
@@ -86,7 +87,6 @@ import { formatFinding, warningSink, type Finding } from "../finding/finding.js"
 import { checkCodeFix } from "../check/codes.js";
 import type { RefusalCode } from "./refusal-codes.js";
 import { RefusalError, formatEnvelope, refuse, withHint, type Hint } from "./refusal.js";
-import { stepRecordPath } from "../run/progress-log.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka run`'s work, kept out of run-cli.ts so it is
@@ -337,13 +337,14 @@ function exportLocations(
  * them. */
 function stepsLocation(
   stateDir: string,
+  runId: string,
   scenariosWritten: number,
   stepRecordsWritten: number,
   exports: ReturnType<typeof exportLocations>,
 ): Array<{ label: string; relativePath: string; kind: "dir" | "file"; count?: number }> {
   return [
     ...(scenariosWritten > 0
-      ? [{ label: "steps", relativePath: path.join(stateDir, "records", "steps"), kind: "dir" as const, count: stepRecordsWritten }]
+      ? [{ label: "steps", relativePath: path.join(runRelativeDir(stateDir, runId), RUN_FILE_DIRS.steps), kind: "dir" as const, count: stepRecordsWritten }]
       : []),
     ...exports,
   ];
@@ -670,7 +671,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           const { stepNames } = matchPickleStepText(text, patterns);
           return stepNames.length === 1 ? stepNames[0]! : null;
         },
-        recordPath: (stepRecordId) => stepRecordPath(config.stateDir, stepRecordId),
+        recordPath: (stepRecordId) => path.join(RUN_FILE_DIRS.steps, stepRecordId),
+        evidenceDir: relativeToRun(config.stateDir, runId, record.evidence.dir),
         rerun: formatRerunCommand(record, rerunFlags),
       });
       runScenarios.push(entry);
@@ -694,7 +696,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // root-relative path of the summary in the run directory, or `null`.
     const finishRun = async (verdict: "passed" | "failed", failedScenarios: readonly FailedScenario[]): Promise<{ summaryPath: string | null; retention: string | null }> => {
       runFindings.push(...failedScenarioFindings(failedScenarios, rerunFlags));
-      for (const dir of emptyEvidenceDirs) {
+      // The run's `scenarios/` goes too once no scenario left evidence in it.
+      for (const dir of [...emptyEvidenceDirs, path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios)]) {
         try {
           rmdirSync(dir);
         } catch {
@@ -782,7 +785,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // Same "one instance, threaded unchanged into every `runScenario` call"
     // shape as `onUnknownTraceVersion` just above. Built under `--quiet` too:
     // the logger itself drops every line but a failed step's.
-    const onStepEnd = createStepProgressLogger(progress, { stateDir: config.stateDir, quiet });
+    const onStepEnd = createStepProgressLogger(progress, { stateDir: config.stateDir, runId, quiet });
 
     // Only `baseURL` is overridden from the resolved environment, same as
     // cli/do.ts: every other config field has no per-environment counterpart.
@@ -879,12 +882,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // An interrupted run prunes nothing and writes no run.json, as at
       // `--concurrency 1`, where the signal handler exits first.
       if (interruptedBy !== null) {
-        writeRunEnd(stepsLocation(config.stateDir, scenariosWritten, stepRecordsWritten, exportLocations(allureResultsDirRel, messagesOutputRel, runId)), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null });
+        writeRunEnd(stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten, exportLocations(allureResultsDirRel, messagesOutputRel, runId)), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null });
         return exitCodeForSignal(interruptedBy);
       }
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
-        stepsLocation(config.stateDir, scenariosWritten, stepRecordsWritten, flatPickles.length > 0 ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
+        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten, flatPickles.length > 0 ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
         { total: scenariosWritten, passed: scenariosPassed },
         failedScenarios,
         repeatTallies,
@@ -1231,7 +1234,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       messagesEmitter?.end(allPassed);
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
-        stepsLocation(config.stateDir, scenariosWritten, stepRecordsWritten, hasPickles ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
+        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten, hasPickles ? exportLocations(allureResultsDirRel, messagesOutputRel, runId) : []),
         { total: scenariosWritten, passed: scenariosPassed },
         failedScenarios,
         repeatTally.list(),

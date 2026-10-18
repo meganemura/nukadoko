@@ -70,7 +70,7 @@ function baseRecord(overrides: Partial<ScenarioRecord> = {}): ScenarioRecord {
     finished_at: "2026-08-01T00:00:03.000Z",
     steps: [],
     hooks: [],
-    evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+    evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
     ...overrides,
   };
 }
@@ -88,7 +88,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     scenario_record_id: "scn-1",
     started_at: "2026-08-01T00:00:00.500Z",
     finished_at: "2026-08-01T00:00:01.000Z",
-    evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [] },
+    evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [] },
     observed: { http_reads: 0, http_writes: 0, processes: null },
     mutates: true,
     ...overrides,
@@ -418,7 +418,7 @@ describe("mapGwtStep: declared attachments/logs; links/labels bubble up separate
       kind: "path",
       name: "declared: screenshot.png",
       contentType: "image/png",
-      path: ".nukadoko/records/steps/step-1/screenshot.png",
+      path: ".nukadoko/runs/run-1/steps/step-1/screenshot.png",
     });
   });
 
@@ -554,7 +554,7 @@ describe("mapHooks: declared attachments/logs land on the hook's own fixture; li
       status: "passed",
       declared: { attachments: ["hook-file.txt"], links: [{ url: "https://x/1" }], logs: ["hook log"] },
     };
-    const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] } });
+    const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] } });
 
     const mapped = callMapHooks(record);
 
@@ -562,7 +562,7 @@ describe("mapHooks: declared attachments/logs land on the hook's own fixture; li
       kind: "path",
       name: "declared: hook-file.txt",
       contentType: "text/plain",
-      path: ".nukadoko/records/scenarios/scn-1/hook-file.txt",
+      path: ".nukadoko/runs/run-1/scenarios/scn-1/hook-file.txt",
     });
     const hookTimestampMs = Date.parse(record.started_at);
     expect(mapped[0]!.hook.childSteps).toEqual([
@@ -650,7 +650,7 @@ describe("mapScenario: scenario-wide browser evidence attaches directly to the r
   it("adds nothing when there are no screenshots", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
-    const record = baseRecord({ evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] } });
+    const record = baseRecord({ evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] } });
 
     const mapped = callMapScenario({ record, gherkinDocument, pickle });
 
@@ -662,7 +662,7 @@ describe("mapScenario: scenario-wide browser evidence attaches directly to the r
     const pickle = pickles[0]!;
     const record = baseRecord({
       evidence: {
-        dir: ".nukadoko/records/scenarios/scn-1",
+        dir: ".nukadoko/runs/run-1/scenarios/scn-1",
         screenshots: [{ file: "final.png", at: "2026-08-01T00:00:04.900Z" }],
       },
     });
@@ -674,7 +674,7 @@ describe("mapScenario: scenario-wide browser evidence attaches directly to the r
         kind: "path",
         name: "final.png",
         contentType: "image/png",
-        path: ".nukadoko/records/scenarios/scn-1/final.png",
+        path: ".nukadoko/runs/run-1/scenarios/scn-1/final.png",
       },
     ]);
   });
@@ -1440,7 +1440,7 @@ describe("mapGwtStep: actions merged into the sections/polls timeline", () => {
 describe("mapHooks: hook trace/actions", () => {
   it("attaches a hook's own trace with the playwright-trace contentType, relative to the scenario's evidence dir", () => {
     const hook: ScenarioHookRecord = { type: "before", status: "passed", trace: "hook-before-0.zip" };
-    const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] } });
+    const record = baseRecord({ hooks: [hook], evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] } });
 
     const mapped = callMapHooks(record);
 
@@ -1448,7 +1448,7 @@ describe("mapHooks: hook trace/actions", () => {
       kind: "path",
       name: "trace",
       contentType: "application/vnd.allure.playwright-trace",
-      path: ".nukadoko/records/scenarios/scn-1/hook-before-0.zip",
+      path: ".nukadoko/runs/run-1/scenarios/scn-1/hook-before-0.zip",
     });
   });
 
@@ -1548,7 +1548,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
       status: "passed",
       result: null,
       evidence: {
-        dir: ".nukadoko/records/steps/step-1",
+        dir: ".nukadoko/runs/run-1/steps/step-1",
         screenshots: [],
         attachments: [{ name: "orders.json", file: "orders.json", at: "2026-08-01T00:00:00.100Z" }],
       },
@@ -1561,7 +1561,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
       kind: "path",
       name: "orders.json",
       contentType: "application/json",
-      path: ".nukadoko/records/steps/step-1/orders.json",
+      path: ".nukadoko/runs/run-1/steps/step-1/orders.json",
     });
   });
 
@@ -1572,7 +1572,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
       status: "passed",
       result: null,
       evidence: {
-        dir: ".nukadoko/records/steps/step-1",
+        dir: ".nukadoko/runs/run-1/steps/step-1",
         screenshots: [],
         attachments: [{ name: "dump.bin", file: "dump.bin", at: "2026-08-01T00:00:00.100Z" }],
       },
@@ -1585,7 +1585,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
       kind: "path",
       name: "dump.bin",
       contentType: "application/octet-stream",
-      path: ".nukadoko/records/steps/step-1/dump.bin",
+      path: ".nukadoko/runs/run-1/steps/step-1/dump.bin",
     });
   });
 
@@ -1596,7 +1596,7 @@ describe("mapGwtStep: step record evidence.attachments", () => {
       status: "passed",
       result: null,
       evidence: {
-        dir: ".nukadoko/records/steps/step-1",
+        dir: ".nukadoko/runs/run-1/steps/step-1",
         screenshots: [],
         attachments: [
           { name: "dup.txt", file: "dup.txt", at: "2026-08-01T00:00:00.100Z" },
@@ -1612,13 +1612,13 @@ describe("mapGwtStep: step record evidence.attachments", () => {
       kind: "path",
       name: "dup.txt",
       contentType: "text/plain",
-      path: ".nukadoko/records/steps/step-1/dup.txt",
+      path: ".nukadoko/runs/run-1/steps/step-1/dup.txt",
     });
     expect(mapped.attachments).toContainEqual({
       kind: "path",
       name: "dup.txt",
       contentType: "text/plain",
-      path: ".nukadoko/records/steps/step-1/dup-2.txt",
+      path: ".nukadoko/runs/run-1/steps/step-1/dup-2.txt",
     });
   });
 

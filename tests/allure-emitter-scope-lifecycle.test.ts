@@ -73,7 +73,7 @@ function baseScenarioRecord(overrides: Partial<ScenarioRecord> & Pick<ScenarioRe
     started_at: "2026-08-01T00:00:00.000Z",
     finished_at: "2026-08-01T00:00:00.500Z",
     hooks: [],
-    evidence: { dir: `.nukadoko/records/scenarios/${overrides.scenario_record_id}`, screenshots: [] },
+    evidence: { dir: `.nukadoko/runs/run-1/scenarios/${overrides.scenario_record_id}`, screenshots: [] },
     ...overrides,
   };
 }
@@ -180,7 +180,7 @@ describe("createAllureEmitter: scope lifecycle", () => {
       // of its own, so the failure surfaces where writeAttachment's
       // underlying copy actually runs, inside endScenario's own try block.
       evidence: {
-        dir: ".nukadoko/records/scenarios/scn-evidence-broken",
+        dir: ".nukadoko/runs/run-1/scenarios/scn-evidence-broken",
         screenshots: [{ file: "missing.png", at: "2026-08-01T00:00:00.400Z" }],
       },
     });

@@ -9,6 +9,36 @@ just until 0.1.
 
 ### Breaking
 
+- **One directory per run: `.nukadoko/runs/<run_id>/` holds everything a
+  `nuka run` measured.** A run's files were spread over
+  `records/steps/`, `records/scenarios/`, and `records/runs/<run_id>/`,
+  joined only by the ids inside them, so a CI job could not upload one
+  run, a downloaded `run.json` named paths that did not exist beside it,
+  and retention had to read every record to learn which run owned it.
+  Each `nuka run` now writes `run.json`, `summary.md`, `exports`,
+  `steps/<step_record_id>/` for each step record, and
+  `scenarios/<scenario_record_id>/` for a scenario that wrote evidence of
+  its own, all inside `.nukadoko/runs/<run_id>/`. A `nuka do` step record
+  goes to `.nukadoko/do/<step_record_id>/`, outside every run. The
+  `records/` directory is no longer written. Every path inside `run.json`
+  (a step's `record`, a `used` entry's `record`, a scenario's
+  `evidence.dir`) is relative to the run directory, so it reads `steps/<id>`
+  rather than `.nukadoko/records/steps/<id>`, and the summary's `record`
+  cell follows it. A step record's own `evidence.dir` stays relative to
+  the project root. The stderr location rows name the new paths: the
+  failed step's `record` line and the `steps` row point into the run
+  directory. Retention removes whole run directories with one rule: the
+  newest `retention.runs` runs that ended are kept and every older run
+  directory is removed with its export files and messages stream; a run
+  directory with no `run.json` (in flight or killed) and a `do/` record
+  leave once older than `retention.adHocDays`. Its stderr line now reads
+  `N unfinished runs and nuka do records older than D days
+  (retention.adHocDays)`. `nuka clean` lists and removes `runs/<run_id>`
+  and `do/<id>` entries. `nuka do --use <id>` looks in `do/` first and then
+  in each run's `steps/`. `nuka tend` reads step records from both places.
+  Sessions, the cache, and the export output do not move. docs/ci.md gains
+  a step that uploads `.nukadoko/runs/` with `actions/upload-artifact`
+  pinned to a commit. See docs/upgrading.md.
 - **`run.json` holds the whole run, and the run summary is rendered from
   it.** An agent or an auditor that read `run.json` still had to open each
   scenario record, then each step record, to learn which step failed, on

@@ -6,6 +6,7 @@ import {
   copyFixtureToTempDir,
   createCaptureSink,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -24,7 +25,7 @@ import {
 const PAGE_TOKEN = "sekrit-page-token-456";
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 

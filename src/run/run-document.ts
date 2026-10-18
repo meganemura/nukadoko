@@ -23,8 +23,12 @@ export interface RunScenarioInput {
   readonly stepLine: (index: number) => number | null;
   /** The one step name a line's text matches, or `null`. */
   readonly stepName: (text: string) => string | null;
-  /** A step record's path, as run.json names it. */
+  /** A step record's path, as run.json names it: relative to the run
+   * directory. */
   readonly recordPath: (stepRecordId: string) => string;
+  /** The scenario's evidence directory, as run.json names it: relative to
+   * the run directory. */
+  readonly evidenceDir: string;
   /** The command that reruns this scenario, used when it failed. */
   readonly rerun: string;
 }
@@ -78,7 +82,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     ...(record.browser === undefined ? {} : { browser: record.browser }),
     steps,
     hooks: record.hooks,
-    ...(wroteScenarioEvidence(record) ? { evidence: record.evidence } : {}),
+    ...(wroteScenarioEvidence(record) ? { evidence: { ...record.evidence, dir: input.evidenceDir } } : {}),
     ...(record.teardown_errors === undefined ? {} : { teardown_errors: record.teardown_errors }),
     ...(record.status === "failed" ? { do: input.rerun } : {}),
   };

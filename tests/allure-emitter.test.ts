@@ -43,7 +43,7 @@ const FEATURE_SOURCE = `Feature: Checkout
 `;
 
 function writeStepRecordFile(rootDir: string, stepRecord: StepRecord): void {
-  const dir = path.join(rootDir, ".nukadoko", "records", "steps", stepRecord.step_record_id);
+  const dir = path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", stepRecord.step_record_id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}\n`);
 }
@@ -131,7 +131,7 @@ describe("createAllureEmitter", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
 
-      const recordDir = path.join(rootDir, ".nukadoko", "records", "steps", "step-1");
+      const recordDir = path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", "step-1");
       mkdirSync(recordDir, { recursive: true });
       writeFileSync(path.join(recordDir, "note.txt"), "declared note");
       writeFileSync(path.join(recordDir, "http.jsonl"), '{"method":"GET","url":"https://x","status":200,"duration_ms":5}\n');
@@ -152,7 +152,7 @@ describe("createAllureEmitter", () => {
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
-        evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [], http: "http.jsonl", trace: "step-trace.zip" },
+        evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [], http: "http.jsonl", trace: "step-trace.zip" },
         observed: { http_reads: 1, http_writes: 0, processes: null },
         mutates: true,
         declared: {
@@ -162,7 +162,7 @@ describe("createAllureEmitter", () => {
         },
       };
       writeStepRecordFile(rootDir, stepRecord1);
-      writeFileSync(path.join(rootDir, ".nukadoko", "records", "steps", "step-1", "step-trace.zip"), "step trace bytes");
+      writeFileSync(path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", "step-1", "step-trace.zip"), "step trace bytes");
 
       const stepRecord2: StepRecord = {
         schema_version: 2,
@@ -179,13 +179,13 @@ describe("createAllureEmitter", () => {
         run_id: "run-1",
         started_at: "2026-08-01T00:00:01.000Z",
         finished_at: "2026-08-01T00:00:01.200Z",
-        evidence: { dir: ".nukadoko/records/steps/step-2", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/steps/step-2", screenshots: [] },
         observed: { http_reads: 0, http_writes: 0, processes: null },
         mutates: false,
       };
       writeStepRecordFile(rootDir, stepRecord2);
 
-      const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-1");
+      const scenarioDir = path.join(rootDir, ".nukadoko", "runs", "run-1", "scenarios", "scn-1");
       mkdirSync(scenarioDir, { recursive: true });
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
       writeFileSync(path.join(scenarioDir, "hook-note.txt"), "hook declared note");
@@ -239,7 +239,7 @@ describe("createAllureEmitter", () => {
         steps: [step1, step2],
         hooks: [beforeHook, afterHook],
         evidence: {
-          dir: ".nukadoko/records/scenarios/scn-1",
+          dir: ".nukadoko/runs/run-1/scenarios/scn-1",
           screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.150Z" }],
         },
       };
@@ -388,7 +388,7 @@ describe("createAllureEmitter", () => {
     const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
     const pickle = pickles[0]!;
 
-    const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-hook-trace-1");
+    const scenarioDir = path.join(rootDir, ".nukadoko", "runs", "run-1", "scenarios", "scn-hook-trace-1");
     mkdirSync(scenarioDir, { recursive: true });
     writeFileSync(path.join(scenarioDir, "hook-before-0.zip"), "hook trace bytes");
 
@@ -421,7 +421,7 @@ describe("createAllureEmitter", () => {
       finished_at: "2026-08-01T00:00:00.500Z",
       steps: [step],
       hooks: [beforeHook],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-hook-trace-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-hook-trace-1", screenshots: [] },
     };
 
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
@@ -475,7 +475,7 @@ describe("createAllureEmitter", () => {
           (step: { text: string }) => ({ text: step.text, status: "passed", step_record_id: null }) as ScenarioStepEntry,
         ),
         hooks: [],
-        evidence: { dir: `.nukadoko/records/scenarios/${scenarioId}`, screenshots: [] },
+        evidence: { dir: `.nukadoko/runs/run-1/scenarios/${scenarioId}`, screenshots: [] },
       };
       emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
     }
@@ -542,7 +542,7 @@ describe("createAllureEmitter", () => {
       finished_at: "2026-08-01T00:00:00.000Z",
       steps: [{ text: "the cart has items", status: "skipped", step_record_id: null }],
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-first", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-first", screenshots: [] },
     };
     emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
     emitter.emitStep(baseStepInput({ record: record.steps[0]!, stepRecord: null, gherkinDocument, pickle, scenarioId: "scn-first" }));
@@ -608,7 +608,7 @@ describe("createAllureEmitter", () => {
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
-        evidence: { dir: ".nukadoko/records/steps/step-fail-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/steps/step-fail-1", screenshots: [] },
         observed: { http_reads: 0, http_writes: 0, processes: null },
         mutates: true,
         error: { message: "it broke on purpose", kind: "step_error" },
@@ -629,7 +629,7 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-fail-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-fail-1", screenshots: [] },
       };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
@@ -664,7 +664,7 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-pass-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-pass-1", screenshots: [] },
       };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
@@ -699,7 +699,7 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
         hooks: [beforeHook],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-hook-fail-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-hook-fail-1", screenshots: [] },
       };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
@@ -748,7 +748,7 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-missing-record", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-missing-record", screenshots: [] },
       };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
@@ -792,7 +792,7 @@ describe("createAllureEmitter", () => {
           finished_at: "2026-08-01T00:00:00.500Z",
           steps: [healthyStep],
           hooks: [],
-          evidence: { dir: ".nukadoko/records/scenarios/scn-healthy", screenshots: [] },
+          evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-healthy", screenshots: [] },
         },
         gherkinDocument,
         pickle,
@@ -820,12 +820,12 @@ describe("createAllureEmitter", () => {
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
-        evidence: { dir: ".nukadoko/records/steps/step-broken", screenshots: [], http: "http.jsonl" },
+        evidence: { dir: ".nukadoko/runs/run-1/steps/step-broken", screenshots: [], http: "http.jsonl" },
         observed: { http_reads: 0, http_writes: 0, processes: null },
         mutates: true,
       };
       writeStepRecordFile(rootDir, stepRecord);
-      // Deliberately not writing .nukadoko/records/steps/step-broken/http.jsonl.
+      // Deliberately not writing .nukadoko/runs/run-1/steps/step-broken/http.jsonl.
 
       const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-broken" };
       const record: ScenarioRecord = {
@@ -842,7 +842,7 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [step],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-broken", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-broken", screenshots: [] },
       };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));
@@ -881,7 +881,7 @@ describe("createAllureEmitter", () => {
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:01.000Z",
-        evidence: { dir: ".nukadoko/records/steps/step-parts", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/steps/step-parts", screenshots: [] },
         observed: { http_reads: 0, http_writes: 1, processes: null },
         mutates: true,
         calls: [
@@ -919,7 +919,7 @@ describe("createAllureEmitter", () => {
         finished_at: "2026-08-01T00:00:01.000Z",
         steps: [step],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-parts", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-parts", screenshots: [] },
       };
 
       emitter.beginScenario(baseBeginScenarioInput({ pickle, gherkinDocument }));

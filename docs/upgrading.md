@@ -45,6 +45,35 @@ This part does not change release to release.
 
 ## 0.17.0 to the next release
 
+- **Each run is one directory, `.nukadoko/runs/<run_id>/`, and
+  `records/` is no longer written.** A script, a CI step, or a tool that
+  reads the state directory changes these paths:
+  - `.nukadoko/records/runs/<run_id>/run.json`, `summary.md`, and
+    `exports` are `.nukadoko/runs/<run_id>/run.json`, `summary.md`, and
+    `exports`.
+  - `.nukadoko/records/steps/<id>/` is
+    `.nukadoko/runs/<run_id>/steps/<id>/` for a step `nuka run` ran, and
+    `.nukadoko/do/<id>/` for a `nuka do` call.
+  - `.nukadoko/records/scenarios/<id>/` is
+    `.nukadoko/runs/<run_id>/scenarios/<id>/`.
+  - Every path inside `run.json` (a step's `record`, a `used` entry's
+    `record`, a scenario's `evidence.dir`) is relative to the run
+    directory: `steps/<id>`, not `.nukadoko/records/steps/<id>`. Join it
+    with the directory that holds `run.json`. The run summary's `record`
+    cell is the same path. A step record's own `evidence.dir` is still
+    relative to the project root.
+  - A CI step that uploaded `.nukadoko/records/` uploads
+    `.nukadoko/runs/` (docs/ci.md has a pinned `actions/upload-artifact`
+    step; `.nukadoko` is a hidden directory, so it sets
+    `include-hidden-files: true`).
+  - A script that matched the retention line's age clause matches
+    `unfinished runs and nuka do records older than`.
+  A `.nukadoko/records/` directory an earlier release left is not read,
+  and neither retention nor `nuka clean` removes it: delete it by hand
+  (`rm -rf .nukadoko/records`). `nuka do --use` with an id from
+  that directory is refused as not found; run the producing step again.
+  Sessions, the cache, and the export output do not move.
+
 - **`run.json` holds the whole run, and scenario record files are gone.**
   A script that read `run.json` or `nuka run --json` changes these reads:
   - `schema_version` is 2, the envelope's, and the document starts with
@@ -63,7 +92,8 @@ This part does not change release to release.
   - A script that read `.nukadoko/records/scenarios/<id>/record.json`
     reads that scenario's entry in `run.json`; the file is no longer
     written, and a scenario that wrote no screenshot, hook trace, or
-    attachment leaves no `records/scenarios/<id>/` directory.
+    attachment leaves no scenario evidence directory (see the run
+    directory item above for where one now lives).
   - A script that matched the "Partial run" paragraph on stderr reads
     `selection` in `run.json`, `partial` or `full`, or the
     `- selection:` line of the run summary.
@@ -122,7 +152,7 @@ This part does not change release to release.
   that stream picks one of three: add `--records` to the `nuka run` it
   reads (each line is now a scenario's `run.json` entry, see the
   `run.json` item below), switch to `--json`, or read
-  `.nukadoko/records/runs/<run_id>/run.json`, which the run writes either
+  `.nukadoko/runs/<run_id>/run.json`, which the run writes either
   way. A CI step that only shows the log needs nothing. The run summary, the
   stderr lines, and `nuka do`'s stdout do not change.
 - **`evidence.attach` and `evidence.path` refuse `trace.<name>.zip` and

@@ -1,10 +1,10 @@
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir, stepRecordIds } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka tend`'s `post-navigation-read` note end to end. One
@@ -16,7 +16,7 @@ import { bySeverity } from "./helpers/envelope.js";
 // actual measured step record at least once, rather than guessed - and a
 // second confirms the note disappears once that live step record is
 // removed. The rest hand-craft one step record's own
-// `record.json` directly under `.nukadoko/records/steps/` (this finding's
+// `record.json` directly under `.nukadoko/do/` (this finding's
 // own input; a hand-crafted file in the shape of a sign-off record from a
 // release that still had `nuka accept` proves such a file is never read): these exist only to pin down
 // this finding's own boundary math (a gap far enough apart, a negative gap,
@@ -64,17 +64,17 @@ async function runTendJson(rootDir: string): Promise<{ report: Report; exitCode:
   return { report: bySeverity(stdout.text()) as Report, exitCode };
 }
 
-/** Writes one step record directly under `<rootDir>/.nukadoko/records/
- * steps/<id>/record.json`, the on-disk shape `nuka do`/`nuka run` produce
+/** Writes one step record directly under `<rootDir>/.nukadoko/do/<id>/
+ * record.json`, the on-disk shape `nuka do`/`nuka run` produce
  * and src/tend/post-navigation-read.ts reads. `stepRecord` is passed straight
  * through to `JSON.stringify`, so its own `actions`/`polls` (or lack of
  * either) is exactly what that finding sees. Returns the file's own path,
  * rootDir-relative - the same shape `TendIssue.file` reports. */
 async function writeStepRecordFile(rootDir: string, id: string, stepRecord: Record<string, unknown>): Promise<string> {
-  const dir = path.join(rootDir, ".nukadoko", "records", "steps", id);
+  const dir = path.join(stepRecordDir(rootDir, id));
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, "record.json"), JSON.stringify(stepRecord, null, 2));
-  return path.join(".nukadoko", "records", "steps", id, "record.json");
+  return path.relative(rootDir, path.join(dir, "record.json"));
 }
 
 const COMMIT = "0".repeat(40);
@@ -85,7 +85,7 @@ const COMMIT = "0".repeat(40);
  * step record whose `actions` would trigger this finding if it were
  * read. Used only to prove the negative: a project upgrading from a
  * release with `nuka accept` keeps such files, and this finding's input is
- * `.nukadoko/records/steps/`, so no markdown file anywhere in the project
+ * the step record directories, so no markdown file anywhere in the project
  * is opened by it, however record-shaped that file's own text is. */
 function buildLegacyAcceptedRecordText(options: { featurePath: string; stepText: string; stepRecord: Record<string, unknown> }): string {
   const { featurePath, stepText, stepRecord } = options;
@@ -161,9 +161,9 @@ describe("nuka tend: post-navigation-read", () => {
 
       // This note's own input is the live step record `nuka run` just
       // wrote.
-      const stepIds = await readdir(path.join(rootDir, ".nukadoko", "records", "steps"));
+      const stepIds = stepRecordIds(rootDir);
       expect(stepIds).toHaveLength(1);
-      const recordPath = path.join(".nukadoko", "records", "steps", stepIds[0]!, "record.json");
+      const recordPath = path.relative(rootDir, path.join(stepRecordDir(rootDir, stepIds[0]!), "record.json"));
 
       const { report, exitCode } = await runTendJson(rootDir);
       // A note never sets tend's own exit code.
@@ -200,7 +200,7 @@ describe("nuka tend: post-navigation-read", () => {
 
       // Remove every live step record: this test only needs there to be
       // no live step record left for the finding to read.
-      await rm(path.join(rootDir, ".nukadoko", "records", "steps"), { recursive: true, force: true });
+      await rm(path.join(rootDir, ".nukadoko", "runs"), { recursive: true, force: true });
 
       const { report } = await runTendJson(rootDir);
       expect(report.notes.filter((n) => n.code === "post-navigation-read")).toEqual([]);

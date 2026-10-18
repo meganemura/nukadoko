@@ -1,8 +1,10 @@
 import { PickleStepType, type PickleStepArgument } from "@cucumber/messages";
 import type { FeatureFile, FeaturePickleStep } from "../feature/load-features.js";
 import { rankRunsNewestFirst } from "../record/newest-run.js";
-import { readStepRecordById } from "../record/read-step-record.js";
+import path from "node:path";
+import { readStepRecord } from "../record/read-step-record.js";
 import { readEndedRuns } from "../record/run-result.js";
+import { runRelativeDir } from "../record/state-layout.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: find repeated scenario openings in the latest run's live
@@ -53,10 +55,14 @@ interface ScenarioRecord {
   readonly line: number;
   readonly started_at: string;
   readonly finished_at: string;
-  readonly steps: readonly { readonly text: string; readonly step_record_id: string | null }[];
+  /** Each step's text, and its step record's directory as an absolute
+   * path, `null` when it has none. */
+  readonly steps: readonly { readonly text: string; readonly recordDir: string | null }[];
 }
 
-function asScenario(value: unknown): ScenarioRecord | null {
+/** One run.json scenario entry, with each step's `record` (relative to the
+ * run directory) resolved against `runDir`. */
+function asScenario(value: unknown, runDir: string): ScenarioRecord | null {
   if (value === null || typeof value !== "object") return null;
   const entry = value as Record<string, unknown>;
   if (
@@ -66,12 +72,12 @@ function asScenario(value: unknown): ScenarioRecord | null {
     typeof entry.finished_at !== "string" ||
     !Array.isArray(entry.steps)
   ) return null;
-  const steps: { text: string; step_record_id: string | null }[] = [];
+  const steps: { text: string; recordDir: string | null }[] = [];
   for (const value of entry.steps) {
     if (value === null || typeof value !== "object") return null;
     const step = value as Record<string, unknown>;
-    if (typeof step.text !== "string" || (step.step_record_id !== null && typeof step.step_record_id !== "string")) return null;
-    steps.push({ text: step.text, step_record_id: step.step_record_id });
+    if (typeof step.text !== "string" || (step.record !== null && typeof step.record !== "string")) return null;
+    steps.push({ text: step.text, recordDir: step.record === null ? null : path.join(runDir, step.record) });
   }
   return { feature: entry.feature, line: entry.line, started_at: entry.started_at, finished_at: entry.finished_at, steps };
 }
@@ -80,10 +86,11 @@ function asScenario(value: unknown): ScenarioRecord | null {
  * cannot support measured timing, but it must not hide healthy entries from
  * the same run. */
 function readLatestRunScenarios(rootDir: string, stateDir: string): ScenarioRecord[] {
-  const latest = rankRunsNewestFirst(readEndedRuns(rootDir, stateDir))[0]?.run;
+  const latest = rankRunsNewestFirst(readEndedRuns(rootDir, stateDir))[0];
   if (latest === undefined) return [];
-  return latest.scenarios.flatMap((entry) => {
-    const scenario = asScenario(entry);
+  const runDir = path.join(rootDir, runRelativeDir(stateDir, latest.runId));
+  return latest.run.scenarios.flatMap((entry) => {
+    const scenario = asScenario(entry, runDir);
     return scenario === null ? [] : [scenario];
   });
 }
@@ -150,7 +157,7 @@ function buildTrie(
     for (const [index, step] of record.steps.entries()) {
       const pickleStep = pickleSteps?.[index];
       if (pickleStep?.type === PickleStepType.ACTION || pickleStep?.type === PickleStepType.OUTCOME) break;
-      const stepRecord = step.step_record_id === null ? null : readStepRecordById(rootDir, stateDir, step.step_record_id);
+      const stepRecord = step.recordDir === null ? null : readStepRecord(step.recordDir);
       if (stepRecord !== null) prefixMs += elapsedMs(stepRecord.started_at, stepRecord.finished_at);
 
       const key = pickleStep === undefined ? stepPrefixKey(step) : stepPrefixKey(pickleStep);

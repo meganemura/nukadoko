@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { doRelativeDir, runsRelativeDir, stepRecordRelativeDir } from "./state-layout.js";
 import type { StepRecord } from "./types.js";
 
 // Responsibility: the read-side counterpart to write-step-record.ts, built
@@ -17,8 +18,8 @@ import type { StepRecord } from "./types.js";
 //
 // Takes the step record's own directory directly (mirrors `writeStepRecord
 // (evidenceDir, record)`'s own parameter shape) rather than a step record id
-// — the id-to-directory convention (`<stateDir>/records/steps/<id>`) belongs
-// to src/run/run-scenario.ts, and the caller here (emitter.ts) already has to
+// — the id-to-directory convention (src/record/state-layout.ts) belongs
+// to the writers, and the caller here (emitter.ts) already has to
 // derive that path itself from the scenario record it is reading; growing
 // this module's own contract to duplicate that convention isn't worth it for
 // a one-line `path.join`. `readStepRecordById` below is the one exception:
@@ -56,20 +57,58 @@ export function readStepRecord(recordDir: string): StepRecord | null {
 // input. A real id is only ever `[a-z0-9-]+` (record-id.ts's own
 // `generateId`); rejecting anything else up front, before it is ever joined
 // into a path, is what keeps `--use ../../etc/passwd` from resolving outside
-// `<stateDir>/records/steps/` at all — same reasoning as session/name.ts's
+// the state directory at all — same reasoning as session/name.ts's
 // own `VALID_SESSION_NAME`. A rejected id collapses into the same `null` a
 // merely-absent one already produces: `--use`'s own caller reports both as
 // "no such step record", so a malformed id gets no signal about which
 // failure mode it hit.
 const VALID_RECORD_ID = /^[a-z0-9-]+$/;
 
-/** `readStepRecord` plus the id -> directory convention every writer here
- * already shares (`<stateDir>/records/steps/<id>`, e.g. src/cli/do.ts's own
- * `relativeDir`) — a second `readStepRecord(path.join(...))` call site would
- * otherwise have to know that convention itself. */
+/** `readStepRecord` for an id typed on the command line, which names no
+ * run: a `nuka do` record under `<stateDir>/do/<id>`, else the run whose
+ * `steps/<id>` holds it. Record ids carry their second and a random
+ * suffix, so one id names one directory; the runs are tried in name
+ * order, which is the order their ids were drawn. */
 export function readStepRecordById(rootDir: string, stateDir: string, recordId: string): StepRecord | null {
   if (!VALID_RECORD_ID.test(recordId)) {
     return null;
   }
-  return readStepRecord(path.join(rootDir, stateDir, "records", "steps", recordId));
+  const fromDo = readStepRecord(path.join(rootDir, doRelativeDir(stateDir), recordId));
+  if (fromDo !== null) return fromDo;
+  let runIds: string[];
+  try {
+    runIds = readdirSync(path.join(rootDir, runsRelativeDir(stateDir))).sort();
+  } catch {
+    return null;
+  }
+  for (const runId of runIds) {
+    if (!VALID_RECORD_ID.test(runId)) continue;
+    const record = readStepRecord(path.join(rootDir, stepRecordRelativeDir(stateDir, runId, recordId)));
+    if (record !== null) return record;
+  }
+  return null;
+}
+
+/** Every step record directory in the state directory, as absolute paths:
+ * each `nuka do` record under `do/`, then each run's `steps/` in run-name
+ * order. For a reader that looks across every execution, such as a `nuka
+ * tend` note. A missing directory reads as none. */
+export function listStepRecordDirs(rootDir: string, stateDir: string): string[] {
+  const subdirectories = (dir: string): string[] => {
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort()
+        .map((name) => path.join(dir, name));
+    } catch {
+      return [];
+    }
+  };
+  return [
+    ...subdirectories(path.join(rootDir, doRelativeDir(stateDir))),
+    ...subdirectories(path.join(rootDir, runsRelativeDir(stateDir))).flatMap((runDir) =>
+      subdirectories(path.join(runDir, "steps")),
+    ),
+  ];
 }

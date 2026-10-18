@@ -167,7 +167,7 @@ describe("createAllureEmitter: progress snapshots", () => {
       finished_at: "2026-08-01T00:00:02.000Z",
       steps,
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
@@ -209,7 +209,7 @@ describe("createAllureEmitter: progress snapshots", () => {
       finished_at: "2026-08-01T00:00:01.000Z",
       steps: [step],
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-outline-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-outline-1", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
@@ -278,7 +278,7 @@ describe("createAllureEmitter: progress snapshots", () => {
       finished_at: "2026-08-01T09:00:02.000Z",
       steps,
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
@@ -328,7 +328,7 @@ describe("createAllureEmitter: progress snapshots", () => {
       finished_at: "2026-08-01T09:00:00.500Z",
       steps: [],
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-empty", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-empty", screenshots: [] },
     };
     expect(() =>
       emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/empty.feature" }),
@@ -435,7 +435,7 @@ describe("createAllureEmitter: progress snapshots", () => {
       finished_at: "2026-08-01T00:00:01.000Z",
       steps: [step],
       hooks: [{ type: "before", status: "passed" }],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
@@ -485,7 +485,7 @@ describe("createAllureEmitter: progress snapshots", () => {
       finished_at: "2026-08-01T00:00:02.000Z",
       steps,
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
@@ -523,7 +523,7 @@ describe("createAllureEmitter: progress snapshots", () => {
         finished_at: "2026-08-01T00:00:01.000Z",
         steps: [step],
         hooks: [],
-        evidence: { dir: `.nukadoko/records/scenarios/${scenarioId}`, screenshots: [] },
+        evidence: { dir: `.nukadoko/runs/run-1/scenarios/${scenarioId}`, screenshots: [] },
       };
       emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
       return uuid;
@@ -703,7 +703,7 @@ describe("createAllureEmitter: progress snapshots", () => {
         finished_at: "2026-08-01T09:00:02.000Z",
         steps: [step0, step1],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
       };
       emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 

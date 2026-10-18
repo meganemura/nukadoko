@@ -24,7 +24,7 @@ function newestRunId(rootDir: string): string {
 }
 
 async function readRunSummary(rootDir: string, runId: string): Promise<string> {
-  return readFile(path.join(rootDir, ".nukadoko", "records", "runs", runId, "summary.md"), "utf8");
+  return readFile(path.join(rootDir, ".nukadoko", "runs", runId, "summary.md"), "utf8");
 }
 
 function normalize(markdown: string, runId: string): string {
@@ -33,7 +33,7 @@ function normalize(markdown: string, runId: string): string {
     .replace(`- nukadoko: ${readOwnVersion()}`, "- nukadoko: <version>")
     .replace(/started \S+, finished \S+ \([^)]*\)/, "started <t>, finished <t> (<duration>)")
     .replace(/\| \d+\.\ds \|/g, "| <d>s |")
-    .replace(/records\/steps\/[a-z0-9-]+/g, "records/steps/<id>");
+    .replace(/steps\/step-[a-z0-9-]+/g, "steps/<id>");
 }
 
 describe("nuka run: the run summary", () => {
@@ -110,7 +110,7 @@ describe("nuka run: the run summary", () => {
         "",
         "| scenario | line | status | duration | failure |",
         "| --- | --- | --- | --- | --- |",
-        '| an operation fails partway through | 3 | failed | <d>s | step "the operation fails": `operation failed on purpose`<br>record `.nukadoko/records/steps/<id>` |',
+        '| an operation fails partway through | 3 | failed | <d>s | step "the operation fails": `operation failed on purpose`<br>record `steps/<id>` |',
         "",
         "## Declared vs observed",
         "",
@@ -147,7 +147,7 @@ describe("nuka run: the run summary", () => {
     const runId = newestRunId(rootDir);
     const runCopy = await readRunSummary(rootDir, runId);
     expect(await readFile(path.join(rootDir, "out", "pr-comment.md"), "utf8")).toBe(runCopy);
-    expect(nonEmptyLines(stderr.text())).toContain(`summary   ${path.join(".nukadoko", "records", "runs", runId, "summary.md")}`);
+    expect(nonEmptyLines(stderr.text())).toContain(`summary   ${path.join(".nukadoko", "runs", runId, "summary.md")}`);
   });
 
   it("names a summary it could not write on stderr and keeps the run's exit code", async () => {

@@ -21,6 +21,7 @@ import {
 } from "../environment/resolve-environment.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
+import { doRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { retentionNote } from "../record/retention.js";
 import type { ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
@@ -380,11 +381,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     }
 
     // --- Execution phase: a step record is always written from here on. ---
+    // A `nuka do` call belongs to no run, so its record sits under `do/`,
+    // apart from every run's directory (src/record/state-layout.ts).
     const { id: recordId, dir: evidenceDir } = await createRecordDir(
-      path.join(rootDir, config.stateDir, "records", "steps"),
+      path.join(rootDir, doRelativeDir(config.stateDir)),
       generateStepRecordId,
     );
-    const relativeDir = path.join(config.stateDir, "records", "steps", recordId);
+    const relativeDir = stepRecordRelativeDir(config.stateDir, null, recordId);
 
     // env is loaded once here (ctx.env's full, merged value) and classified
     // once here (which of those same envFiles are secret sources, per git);

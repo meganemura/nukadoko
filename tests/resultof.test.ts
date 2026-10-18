@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: `ctx.resultOf` end to end against tests/fixtures/
 // resultof-project — a pure-step project (no browser, no HTTP server, same
@@ -32,7 +32,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 

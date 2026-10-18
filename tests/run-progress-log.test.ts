@@ -156,9 +156,9 @@ describe("nuka run: progress output", () => {
       .replace(/\d+\.\d+s/g, "<d>s")
       .replace(/\(\d+(h|m|s)[^)]*\)/g, "(<duration>)")
       .replaceAll(path.sep, "/")
-      .replace(/records\/steps\/[a-z0-9-]+/g, "records/steps/<id>")
-      .replace(/messages\.run-[a-z0-9-]+\.ndjson/g, "messages.<run>.ndjson")
-      .replace(/records\/runs\/run-[a-z0-9-]+/g, "records/runs/<run>");
+      .replace(/runs\/run-[a-z0-9-]+/g, "runs/<run>")
+      .replace(/steps\/step-[a-z0-9-]+/g, "steps/<id>")
+      .replace(/messages\.run-[a-z0-9-]+\.ndjson/g, "messages.<run>.ndjson");
   }
 
   it("names a failed step's error and step record, and how to rerun the scenario", async () => {
@@ -173,13 +173,13 @@ describe("nuka run: progress output", () => {
         "  step 1/3  passed  <d>s  a thing \"widget\" exists",
         "  step 2/3  failed  <d>s  the operation fails",
         "      operation failed on purpose",
-        "      record  .nukadoko/records/steps/<id>",
+        "      record  .nukadoko/runs/<run>/steps/<id>",
         "  step 3/3  skipped  <d>s  this step never runs",
-        "steps     .nukadoko/records/steps/      2",
+        "steps     .nukadoko/runs/<run>/steps/  2",
         "allure    .nukadoko/export/allure-results/",
         "messages  .nukadoko/export/messages.<run>.ndjson",
-        "summary   .nukadoko/records/runs/<run>/summary.md",
-        "run       .nukadoko/records/runs/<run>/run.json",
+        "summary   .nukadoko/runs/<run>/summary.md",
+        "run       .nukadoko/runs/<run>/run.json",
         "1 scenario: 0 passed, 1 failed  (<duration>)",
         "failed\tscenario-failed\tfeatures/failing.feature:3\tan operation fails partway through: operation failed on purpose",
         "  do: nuka run features/failing.feature:3",
@@ -198,7 +198,7 @@ describe("nuka run: progress output", () => {
     expect(lines.slice(0, 3)).toEqual([
       "  step 2/3  failed  <d>s  the operation fails",
       "      operation failed on purpose",
-      "      record  .nukadoko/records/steps/<id>",
+      "      record  .nukadoko/runs/<run>/steps/<id>",
     ]);
     expect(stepLines(stderr.text())).toHaveLength(1);
   });

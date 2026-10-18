@@ -266,7 +266,7 @@ export function withoutNoConfigLine(text: string): string {
 /** The run.json of the newest run in `rootDir`'s state directory, as text.
  * A test that ran one `nuka run` reads its run's document here. */
 export function latestRunJsonText(rootDir: string, stateDir = ".nukadoko"): string {
-  const runsDir = path.join(rootDir, stateDir, "records", "runs");
+  const runsDir = path.join(rootDir, stateDir, "runs");
   // Two runs in one second share the id's time and differ in a random
   // suffix, so the newest is the one that started last, not the last id.
   const texts = readdirSync(runsDir)
@@ -280,4 +280,46 @@ export function latestRunJsonText(rootDir: string, stateDir = ".nukadoko"): stri
 /** The newest run's run.json, parsed. */
 export function latestRunJson(rootDir: string, stateDir = ".nukadoko"): Record<string, any> {
   return JSON.parse(latestRunJsonText(rootDir, stateDir)) as Record<string, any>;
+}
+
+function subdirectories(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+/** The directory of the step record `id`: under `do/` for a `nuka do`
+ * record, else inside the run whose `steps/` holds it. An id no directory
+ * holds resolves to where a `nuka do` record of that id would be, so a
+ * test that expects the record to be gone still gets a path to check. */
+export function stepRecordDir(rootDir: string, id: string, stateDir = ".nukadoko"): string {
+  const doDir = path.join(rootDir, stateDir, "do", id);
+  if (existsSync(doDir)) return doDir;
+  const runsDir = path.join(rootDir, stateDir, "runs");
+  for (const runId of subdirectories(runsDir)) {
+    const dir = path.join(runsDir, runId, "steps", id);
+    if (existsSync(dir)) return dir;
+  }
+  return doDir;
+}
+
+/** Every step record id in the state directory, `do/` and every run's
+ * `steps/` together, sorted. */
+export function stepRecordIds(rootDir: string, stateDir = ".nukadoko"): string[] {
+  const runsDir = path.join(rootDir, stateDir, "runs");
+  return [
+    ...subdirectories(path.join(rootDir, stateDir, "do")),
+    ...subdirectories(runsDir).flatMap((runId) => subdirectories(path.join(runsDir, runId, "steps"))),
+  ].sort();
+}
+
+/** The newest run's own directory, absolute: where the paths in its
+ * run.json resolve from. */
+export function latestRunDir(rootDir: string, stateDir = ".nukadoko"): string {
+  return path.join(rootDir, stateDir, "runs", latestRunJson(rootDir, stateDir).run_id as string);
 }

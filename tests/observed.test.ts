@@ -8,6 +8,7 @@ import {
   copyFixtureToTempDir,
   createCaptureSink,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -92,7 +93,7 @@ describe("measured mutates: request-side observed counts", () => {
     const record = JSON.parse(stdout.text().trim().split("\n")[0]!);
     const observed = await Promise.all(
       record.steps.map(async (step: { step_record_id: string }) => {
-        const file = path.join(rootDir, ".nukadoko", "records", "steps", step.step_record_id, "record.json");
+        const file = path.join(stepRecordDir(rootDir, step.step_record_id), "record.json");
         const stepRecord = JSON.parse(await readFile(file, "utf8"));
         return [stepRecord.schema_version, stepRecord.step, stepRecord.observed];
       }),
@@ -151,7 +152,7 @@ describe("measured mutates: request-side observed counts", () => {
     // fails the step changed.
     const stepRecord = JSON.parse(
       await readFile(
-        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[1].step_record_id, "record.json"),
+        path.join(stepRecordDir(rootDir, record.steps[1].step_record_id), "record.json"),
         "utf8",
       ),
     );
@@ -228,7 +229,7 @@ describe("measured mutates: request-side observed counts", () => {
 
     const stepRecord = JSON.parse(
       await readFile(
-        path.join(rootDir, ".nukadoko", "records", "steps", record.steps[0].step_record_id, "record.json"),
+        path.join(stepRecordDir(rootDir, record.steps[0].step_record_id), "record.json"),
         "utf8",
       ),
     );

@@ -138,8 +138,8 @@ describe("firstErrorLine: a Node uncaught-error header", () => {
 describe("formatStepFailure", () => {
   it("names the error line, then the step record when there is one", () => {
     expect(
-      formatStepFailure({ errorMessage: "expected 5, got 4\n    at sum.ts:3", recordPath: ".nukadoko/records/steps/s-1" }),
-    ).toEqual(["expected 5, got 4", "record  .nukadoko/records/steps/s-1"]);
+      formatStepFailure({ errorMessage: "expected 5, got 4\n    at sum.ts:3", recordPath: ".nukadoko/runs/run-1/steps/s-1" }),
+    ).toEqual(["expected 5, got 4", "record  .nukadoko/runs/run-1/steps/s-1"]);
     expect(formatStepFailure({ errorMessage: "No step definition matches", recordPath: null })).toEqual([
       "No step definition matches",
     ]);
@@ -147,7 +147,7 @@ describe("formatStepFailure", () => {
 });
 
 describe("formatStepFailure: a used producer that exited nonzero", () => {
-  const record = ".nukadoko/records/steps/s-2";
+  const record = ".nukadoko/runs/run-1/steps/s-2";
   const failed = (used: { step: string; result?: unknown }[]) =>
     formatStepFailure({ errorMessage: 'expected "Hello, Ada!", got ""', recordPath: record, used });
 

@@ -1,5 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -437,6 +437,22 @@ async function metadataParameterValue(page: Page, label: string): Promise<string
   return (await item.getByTestId("metadata-item-value").innerText()).trim();
 }
 
+/** A `nuka run` step record's record.json: inside the steps/ directory of
+ * whichever run directory wrote it. */
+async function runStepRecordFile(projectDir: string, stepRecordId: string): Promise<string> {
+  const runsDir = path.join(projectDir, ".nukadoko", "runs");
+  for (const runId of (await readdir(runsDir)).sort()) {
+    const candidate = path.join(runsDir, runId, "steps", stepRecordId, "record.json");
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // Not this run's step record.
+    }
+  }
+  throw new Error(`no run directory under ${runsDir} holds step record ${stepRecordId}`);
+}
+
 Then("the page_events counts in the report match the step's own record", async function (this: SelftestWorld) {
   const step = theExecutedStep(this.nukaStdout);
   if (step.step_record_id === null) {
@@ -446,7 +462,7 @@ Then("the page_events counts in the report match the step's own record", async f
   // The expected counts come from the step's own record.json on disk, not
   // a number hardcoded here -- visits-noisy-data-url.ts's own header
   // explains why console_errors in particular is not a fixed number.
-  const recordPath = path.join(fixtureProjectDir, ".nukadoko", "records", "steps", step.step_record_id, "record.json");
+  const recordPath = await runStepRecordFile(fixtureProjectDir, step.step_record_id);
   const record = JSON.parse(await readFile(recordPath, "utf8")) as {
     page_events?: Record<string, readonly unknown[]>;
   };

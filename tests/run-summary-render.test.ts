@@ -117,13 +117,13 @@ describe("renderRunSummary", () => {
         scenario("features/login.feature", 9, "a wrong password | is refused", "failed", 400, {
           steps: [
             step("the seed ran", {
-              record: ".nukadoko/records/steps/stp-0",
+              record: "steps/stp-0",
               mutates: true,
               observed: { http_reads: null, http_writes: null, processes: null },
             }),
             step("the error <b>Locked</b> is shown", {
               status: "failed",
-              record: ".nukadoko/records/steps/stp-1",
+              record: "steps/stp-1",
               mutates: false,
               observed: {
                 http_reads: null,
@@ -135,7 +135,7 @@ describe("renderRunSummary", () => {
               },
               error: { kind: "step_error", message: "expected `Locked` | got `Open`\nmore detail" },
               used: [
-                { step: "the-seed-ran", record: ".nukadoko/records/steps/stp-0", result: { exitCode: 2, stdout: "", stderr: "\nseed: no database\n" } },
+                { step: "the-seed-ran", record: "steps/stp-0", result: { exitCode: 2, stdout: "", stderr: "\nseed: no database\n" } },
               ],
             }),
             step("the page is shown", { status: "skipped" }),
@@ -144,7 +144,7 @@ describe("renderRunSummary", () => {
         }),
         scenario("features/login.feature", 15, "a session expires", "failed", 0, {
           hooks: [{ type: "before", status: "failed", error: { kind: "step_error", message: "" } }],
-          evidence: { dir: ".nukadoko/records/scenarios/scn-2", screenshots: [] },
+          evidence: { dir: "scenarios/scn-2", screenshots: [] },
           do: "nuka run features/login.feature:15 --env staging",
         }),
       ],
@@ -167,8 +167,8 @@ describe("renderRunSummary", () => {
         "| scenario | line | status | duration | failure |",
         "| --- | --- | --- | --- | --- |",
         "| a member signs in | 3 | passed | 1.0s |  |",
-        '| a wrong password \\| is refused | 9 | failed | 0.4s | step "the error &lt;b>Locked&lt;/b> is shown": `` expected `Locked` \\| got `Open` ``<br>used the-seed-ran exit 2: `seed: no database`<br>ran `npm run seed`<br>record `.nukadoko/records/steps/stp-1` |',
-        "| a session expires | 15 | failed | 0.0s | Before hook: `(no message)`<br>record `.nukadoko/records/scenarios/scn-2` |",
+        '| a wrong password \\| is refused | 9 | failed | 0.4s | step "the error &lt;b>Locked&lt;/b> is shown": `` expected `Locked` \\| got `Open` ``<br>used the-seed-ran exit 2: `seed: no database`<br>ran `npm run seed`<br>record `steps/stp-1` |',
+        "| a session expires | 15 | failed | 0.0s | Before hook: `(no message)`<br>record `scenarios/scn-2` |",
         "",
         "## Declared vs observed",
         "",

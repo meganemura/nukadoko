@@ -25,8 +25,8 @@ function deadPid(): number {
   return child.pid;
 }
 
-// Responsibility: `nuka clean` — what it deletes (records/steps,
-// records/scenarios, cache/sessions/<env>/*, export/allure-results,
+// Responsibility: `nuka clean` — what it deletes (runs/<run_id>, do/<id>,
+// cache/sessions/<env>/*, export/allure-results,
 // export/messages.ndjson), what it refuses to touch (`export/allure-
 // history.jsonl`), and
 // `--dry-run`/`--json`/category selection. Seeds `.nukadoko/` by hand
@@ -59,12 +59,12 @@ async function writeExportConfig(
 }
 
 async function seedRecords(rootDir: string): Promise<void> {
-  await mkdir(path.join(stateDir(rootDir), "records", "steps", "step-aaa"), { recursive: true });
-  await writeFile(path.join(stateDir(rootDir), "records", "steps", "step-aaa", "record.json"), "{}");
-  await mkdir(path.join(stateDir(rootDir), "records", "scenarios", "scenario-bbb"), { recursive: true });
-  await writeFile(path.join(stateDir(rootDir), "records", "scenarios", "scenario-bbb", "record.json"), "{}");
-  await mkdir(path.join(stateDir(rootDir), "records", "runs", "run-ccc"), { recursive: true });
-  await writeFile(path.join(stateDir(rootDir), "records", "runs", "run-ccc", "exports"), "");
+  await mkdir(path.join(stateDir(rootDir), "do", "step-aaa"), { recursive: true });
+  await writeFile(path.join(stateDir(rootDir), "do", "step-aaa", "record.json"), "{}");
+  await mkdir(path.join(stateDir(rootDir), "runs", "run-ccc", "scenarios", "scenario-bbb"), { recursive: true });
+  await writeFile(path.join(stateDir(rootDir), "runs", "run-ccc", "scenarios", "scenario-bbb", "record.json"), "{}");
+  await mkdir(path.join(stateDir(rootDir), "runs", "run-ccc"), { recursive: true });
+  await writeFile(path.join(stateDir(rootDir), "runs", "run-ccc", "exports"), "");
 }
 
 async function seedCache(rootDir: string, environment = "default"): Promise<void> {
@@ -138,16 +138,17 @@ describe("nuka clean", () => {
     expect(exitCode).toBe(0);
 
     const text = stdout.text();
-    expect(text).toContain(path.join(".nukadoko", "records", "steps", "step-aaa"));
-    expect(text).toContain(path.join(".nukadoko", "records", "scenarios", "scenario-bbb"));
-    expect(text).toContain(path.join(".nukadoko", "records", "runs", "run-ccc"));
+    // One line per run directory, then one per `nuka do` record: a run's
+    // scenario evidence leaves with its run, and is not listed apart.
+    expect(text).toContain(`${path.join(".nukadoko", "runs", "run-ccc")}\n${path.join(".nukadoko", "do", "step-aaa")}\n`);
+    expect(text).not.toContain("scenario-bbb");
     expect(text).toContain(path.join(".nukadoko", "cache", "sessions", "default", "alpha.json"));
     expect(text).toContain(path.join(".nukadoko", "export", "allure-results"));
     expect(text).toContain(path.join(".nukadoko", "export", "messages.ndjson"));
     expect(text).toContain(path.join(".nukadoko", "export", "messages.run-seed-0001.ndjson"));
 
     // Nothing actually removed.
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "messages.run-seed-0001.ndjson"))).toBe(true);
@@ -164,23 +165,18 @@ describe("nuka clean", () => {
     });
     expect(exitCode).toBe(0);
     const report = JSON.parse(stdout.text());
-    expect(report.records).toEqual(
-      expect.arrayContaining([
-        path.join(".nukadoko", "records", "steps", "step-aaa"),
-        path.join(".nukadoko", "records", "scenarios", "scenario-bbb"),
-      ]),
-    );
+    expect(report.records).toEqual([path.join(".nukadoko", "runs", "run-ccc"), path.join(".nukadoko", "do", "step-aaa")]);
     expect(report.dry_run).toBe(true);
   });
 
-  it("deletes accumulated records/steps, records/scenarios, and records/runs", async () => {
+  it("deletes every run directory, with the scenario evidence inside it, and every nuka do record", async () => {
     await seedRecords(rootDir);
 
     const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(false);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "scenarios", "scenario-bbb"))).toBe(false);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "runs", "run-ccc"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "runs", "run-ccc", "scenarios", "scenario-bbb"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "runs", "run-ccc"))).toBe(false);
   });
 
   it("deletes a non-live session's cache files", async () => {
@@ -240,7 +236,7 @@ describe("nuka clean", () => {
       `refused\tremoved-command\t-\tnuka clean ${flag} is removed: nuka clean always removes records, cache, and export together; ` +
         "nuka clean --dry-run lists what it would remove.\n  fix: Use what the message names in its place.\n  do: nuka clean --help\n",
     );
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "default", "alpha.json"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
   });
@@ -281,7 +277,7 @@ describe("nuka clean", () => {
 
     const exitCode = await runCli(["clean"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(false);
+    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(false);
     expect(existsSync(path.join(dir, "stale.lock"))).toBe(false);
   });
 
@@ -316,7 +312,7 @@ describe("nuka clean", () => {
     expect(stderr.text()).toContain("project root");
     expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
   });
 
   it("refuses a dry-run whose resultsDir is the project root, and deletes nothing", async () => {
@@ -350,7 +346,7 @@ describe("nuka clean", () => {
     expect(stderr.text()).toContain("refusing");
     expect(stderr.text()).toContain("project root");
     expect(existsSync(path.join(rootDir, "keep-me.txt"))).toBe(true);
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
   });
 
   it("refuses a resultsDir that resolves outside the project and leaves that path in place", async () => {
@@ -455,7 +451,7 @@ describe("nuka clean", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("unknown-flag");
-    expect(existsSync(path.join(stateDir(rootDir), "records", "steps", "step-aaa"))).toBe(true);
+    expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
   });
 });
 

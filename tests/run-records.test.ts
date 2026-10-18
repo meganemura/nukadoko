@@ -38,7 +38,7 @@ describe("nuka run: scenario records on stdout", () => {
 
     expect(exitCode, stderr.text()).toBe(0);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toMatch(/^run {7}\.nukadoko\/records\/runs\/run-[a-z0-9-]+\/run\.json$/m);
+    expect(stderr.text()).toMatch(/^run {7}\.nukadoko\/runs\/run-[a-z0-9-]+\/run\.json$/m);
     expect(latestRunJson(rootDir).scenarios).toHaveLength(2);
   });
 

@@ -24,7 +24,7 @@ function stepRecord(id: string, status: "passed" | "failed", used: boolean): Ste
     run_id: "run-1",
     started_at: "2026-10-18T00:00:00.000Z",
     finished_at: "2026-10-18T00:00:01.000Z",
-    evidence: { dir: `.nukadoko/records/steps/${id}`, screenshots: [] },
+    evidence: { dir: `.nukadoko/runs/run-1/steps/${id}`, screenshots: [] },
     observed: { http_reads: 1, http_writes: 0, processes: null },
     mutates: false,
   };
@@ -54,14 +54,14 @@ function record(steps: ScenarioStepEntry[], status: "passed" | "failed", screens
     steps,
     hooks: [],
     evidence: {
-      dir: ".nukadoko/records/scenarios/scn-1",
+      dir: ".nukadoko/runs/run-1/scenarios/scn-1",
       screenshots: screenshot ? [{ file: "final.png", at: "2026-10-18T00:00:02.000Z" }] : [],
     },
   };
 }
 
 describe("buildRunScenario", () => {
-  it("builds one entry per step, with a record path exactly when a step record exists, and a `do` exactly when the scenario failed, and evidence exactly when the scenario wrote some", () =>
+  it("builds one entry per step, with a run-relative record path exactly when a step record exists, and a `do` exactly when the scenario failed, and evidence exactly when the scenario wrote some", () =>
     hegel.test((tc) => {
       const drawn = tc.draw(
         gs.arrays(
@@ -90,20 +90,23 @@ describe("buildRunScenario", () => {
         stepRecords,
         stepLine: (index) => index + 10,
         stepName: (text) => `name of ${text}`,
-        recordPath: (id) => `.nukadoko/records/steps/${id}`,
+        recordPath: (id) => `steps/${id}`,
+        evidenceDir: "scenarios/scn-1",
         rerun: "nuka run features/a.feature:3",
       });
 
       expect(entry.steps).toHaveLength(steps.length);
       expect(entry.do).toBe(status === "failed" ? "nuka run features/a.feature:3" : undefined);
-      expect(entry.evidence?.screenshots).toEqual(screenshot ? [{ file: "final.png", at: "2026-10-18T00:00:02.000Z" }] : undefined);
+      expect(entry.evidence).toEqual(
+        screenshot ? { dir: "scenarios/scn-1", screenshots: [{ file: "final.png", at: "2026-10-18T00:00:02.000Z" }] } : undefined,
+      );
       entry.steps.forEach((built, index) => {
         const [stepStatus, hasRecord, used] = drawn[index]!;
         expect(built.line).toBe(index + 10);
         expect(built.step).toBe(`name of step ${index}`);
         expect(built.status).toBe(stepStatus);
         expect(built.step_record_id).toBe(hasRecord ? `step-${index + 1}` : null);
-        expect(built.record).toBe(hasRecord ? `.nukadoko/records/steps/step-${index + 1}` : null);
+        expect(built.record).toBe(hasRecord ? `steps/step-${index + 1}` : null);
         expect(built.mutates).toBe(hasRecord ? false : undefined);
         const failedWithRecord = hasRecord && stepStatus === "failed";
         expect(built.error).toEqual(
@@ -113,7 +116,7 @@ describe("buildRunScenario", () => {
         );
         expect(built.used).toEqual(
           failedWithRecord && used
-            ? [{ step: "producer", record: ".nukadoko/records/steps/step-0", result: { exitCode: 0 } }]
+            ? [{ step: "producer", record: "steps/step-0", result: { exitCode: 0 } }]
             : undefined,
         );
       });

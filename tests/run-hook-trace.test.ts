@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
+  latestRunDir,
   createCaptureSink,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -38,7 +40,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<StoredStepRecord> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8")) as StoredStepRecord;
 }
 
@@ -69,7 +71,7 @@ describe("nuka run (hook trace chunks)", () => {
     expect(record.status).toBe("passed");
     expect(record.steps).toHaveLength(2);
 
-    const scenarioDir = path.join(rootDir, record.evidence.dir as string);
+    const scenarioDir = path.join(latestRunDir(rootDir), record.evidence.dir as string);
     const hooks: HookRecord[] = record.hooks;
 
     // --- test item 1: Before hook's own trace, contents isolated ---

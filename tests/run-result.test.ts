@@ -13,13 +13,13 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // writes it and as `nuka run --json` prints it.
 
 function onlyRunId(rootDir: string): string {
-  const runs = readdirSync(path.join(rootDir, ".nukadoko", "records", "runs"));
+  const runs = readdirSync(path.join(rootDir, ".nukadoko", "runs"));
   expect(runs).toHaveLength(1);
   return runs[0]!;
 }
 
 function readRunJson(rootDir: string, runId: string): Record<string, any> {
-  return JSON.parse(readFileSync(path.join(rootDir, ".nukadoko", "records", "runs", runId, "run.json"), "utf8"));
+  return JSON.parse(readFileSync(path.join(rootDir, ".nukadoko", "runs", runId, "run.json"), "utf8"));
 }
 
 describe("nuka run: run.json", () => {
@@ -105,7 +105,7 @@ describe("nuka run: run.json", () => {
               step: "thing-exists",
               status: "passed",
               step_record_id: passedStep.step_record_id,
-              record: path.join(".nukadoko", "records", "steps", passedStep.step_record_id),
+              record: path.join("steps", passedStep.step_record_id),
               mutates: true,
               observed: { http_reads: null, http_writes: null, processes: null },
             },
@@ -114,7 +114,8 @@ describe("nuka run: run.json", () => {
         },
       ],
     });
-    expect(existsSync(path.join(rootDir, passedStep.record, "record.json"))).toBe(true);
+    // Paths in run.json are relative to the run directory.
+    expect(existsSync(path.join(rootDir, ".nukadoko", "runs", runId, passedStep.record, "record.json"))).toBe(true);
     // The --records stream is the same scenario entries, one per line.
     expect(
       stdout
@@ -123,10 +124,11 @@ describe("nuka run: run.json", () => {
         .split("\n")
         .map((line) => JSON.parse(line)),
     ).toEqual(result.scenarios);
-    // No scenario record file is written: run.json holds the scenario.
-    expect(readdirSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toEqual([]);
+    // No scenario record file is written: run.json holds the scenario, and
+    // a scenarios directory no scenario wrote evidence into is removed.
+    expect(existsSync(path.join(rootDir, ".nukadoko", "runs", runId, "scenarios"))).toBe(false);
     expect(stderr.text()).toContain("  do: nuka run features/failure/a.feature:3\n");
-    expect(stderr.text()).toContain(`run       ${path.join(".nukadoko", "records", "runs", runId, "run.json")}\n`);
+    expect(stderr.text()).toContain(`run       ${path.join(".nukadoko", "runs", runId, "run.json")}\n`);
   });
 
   it("is the one source of summary.md: the summary renders again, byte for byte, from run.json read off disk", async () => {
@@ -137,7 +139,7 @@ describe("nuka run: run.json", () => {
     });
 
     expect(exitCode).toBe(1);
-    const runDir = path.join(rootDir, ".nukadoko", "records", "runs", onlyRunId(rootDir));
+    const runDir = path.join(rootDir, ".nukadoko", "runs", onlyRunId(rootDir));
     const document = readRunResult(path.join(runDir, "run.json"));
     expect(document).not.toBe(null);
     expect(renderRunSummary(document!)).toBe(readFileSync(path.join(runDir, "summary.md"), "utf8"));

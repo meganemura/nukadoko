@@ -228,7 +228,7 @@ of the above; these four are what changes.
   keeps the newest `retention.runs` runs and removes older ones itself at
   the end of every run (see "Artifacts" in
   [docs/spec.md](spec.md#artifacts)), so on a persistent runner
-  `.nukadoko/records/` and the export output stay the size of that many
+  `.nukadoko/runs/` and the export output stay the size of that many
   runs. What it never removes is `.nukadoko/cache/` (session files a
   `nuka do`/session use can leave) and an `allure-results/` directory
   written before nukadoko kept a per-run manifest of its files. A
@@ -246,7 +246,7 @@ of the above; these four are what changes.
 
 ## What a team adds on top
 
-Four things the workflow above leaves to the team, each small.
+Five things the workflow above leaves to the team, each small.
 
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
@@ -279,10 +279,40 @@ Four things the workflow above leaves to the team, each small.
   suite can then write to the pull request. A pull request from a fork gets
   a read-only token, so the step fails there; a team that takes fork pull
   requests moves it to a separate job.
+- **The run directory as a build artifact.** Everything one `nuka run`
+  measured is in one directory, `.nukadoko/runs/<run_id>/`: `run.json`,
+  `summary.md`, and each step record with its traces, screenshots, and
+  `http.jsonl` (see "The state directory" in [docs/spec.md](spec.md)).
+  The paths inside `run.json` are relative to that directory, so a
+  downloaded copy reads the same as the one on the runner. One more step
+  in the `run` job uploads it:
+
+  ```yaml
+  - name: Upload the run directory
+    if: always()
+    uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+    with:
+      name: nukadoko-runs
+      path: .nukadoko/runs/
+      # `.nukadoko` starts with a dot, and upload-artifact skips every
+      # file inside such a directory unless this is set.
+      include-hidden-files: true
+      if-no-files-found: ignore
+      retention-days: 14
+  ```
+
+  `if: always()` is there for the same reason as in the comment step: a
+  red run is the one somebody downloads. On a GitHub-hosted runner the
+  directory holds only this job's run; on a persistent runner it holds
+  every run retention kept. `nuka do` records sit in `.nukadoko/do/`,
+  outside it, since no CI job runs `nuka do`. A trace holds the browser's
+  cookies and a screenshot holds what the page showed, so decide who may
+  open the artifact before the first upload (see "What this page does not
+  claim" below).
 - **A script that acts on the run's result.** A step that files an issue
   for each failed scenario, or reruns them, reads `run.json` instead of
   stderr: `nuka run features/ --json > run.json` prints it, and the run
-  writes the same file to `.nukadoko/records/runs/<run_id>/run.json`
+  writes the same file to `.nukadoko/runs/<run_id>/run.json`
   either way. Its `scenarios` entries carry each scenario's status, its
   steps with their line, status, step record, and error, and for a failed
   one the `do` command that reruns it (see "Scenarios (the scripted
@@ -317,7 +347,11 @@ was not exercised here. The two commit SHAs in the `uses:` lines above
 were checked against GitHub's own API, one call each against
 `repos/actions/checkout/git/ref/tags/v7.0.1` and the `setup-node`
 equivalent, confirming each names the commit its comment claims and
-nothing else. Read the workflow as a starting shape to adapt, not as a
+nothing else. The `upload-artifact` SHA under "What a team adds on top"
+was checked with `git ls-remote https://github.com/actions/upload-artifact`:
+the tag `v7.0.2` names that commit, the newest release tag as of this
+writing, and its `action.yml` there declares each input the step uses.
+The upload step itself was not run. Read the workflow as a starting shape to adapt, not as a
 file this project has watched go green on a real runner.
 
 It also says nothing about where the Allure output goes after the job,
@@ -327,6 +361,6 @@ Traces and screenshots are not redacted (see "Sessions, environments,
 secrets" in [docs/spec.md](spec.md#sessions-environments-secrets)): the
 `http.jsonl` beside them has secrets replaced, but a trace holds the
 browser's own state, cookies included, and a screenshot holds whatever the
-page showed. An `allure-results/` directory uploaded as an artifact, or a
-generated report posted to a chat, carries all of that. Keep it inside the
+page showed. A run directory or an `allure-results/` directory uploaded as
+an artifact, or a generated report posted to a chat, carries all of that. Keep it inside the
 runner, or decide who may open it before the first upload.

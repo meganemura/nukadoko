@@ -6,9 +6,11 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
-  removeTempDir,
-  stripRunProgressLines,
+  latestRunDir,
   latestRunJsonText,
+  removeTempDir,
+  stepRecordDir,
+  stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
 // Responsibility: coverage for the allure-js
@@ -36,7 +38,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
@@ -134,7 +136,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
     const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.declared).toBeUndefined();
 
-    const scenarioDir = path.join(rootDir, record.evidence.dir);
+    const scenarioDir = path.join(latestRunDir(rootDir), record.evidence.dir);
     expect(existsSync(path.join(scenarioDir, "hook-evidence.txt"))).toBe(true);
   });
 
@@ -192,12 +194,7 @@ describe("nuka run: allure-js runtime shim and the declared bucket", () => {
       labels: [{ name: "token", value: "{{secret.SHIM_SECRET}}" }],
     });
 
-    const stepRecordPath = path.join(
-      rootDir,
-      ".nukadoko",
-      "records",
-      "steps",
-      record.steps[0].step_record_id,
+    const stepRecordPath = path.join(stepRecordDir(rootDir, record.steps[0].step_record_id),
       "record.json",
     );
     const stepRecordText = await readFile(stepRecordPath, "utf8");

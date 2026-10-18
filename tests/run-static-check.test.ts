@@ -64,7 +64,7 @@ describe("nuka run checks before it executes", () => {
         "  fix: Correct each error the findings name, or pass --no-check to run anyway.\n" +
         "  do: nuka check features/mixed.feature\n",
     );
-    expect(existsSync(path.join(rootDir, ".nukadoko", "records"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "runs"))).toBe(false);
   });
 
   it("reaches the runtime failure under --no-check", async () => {

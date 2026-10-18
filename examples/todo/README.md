@@ -281,7 +281,7 @@ exit `1`. The first scenario's first step, as its stdout line and
   "step": "add-todo",
   "status": "failed",
   "step_record_id": "step-...",
-  "record": ".nukadoko/records/steps/step-...",
+  "record": "steps/step-...",
   "error": {
     "kind": "result_invalid",
     "message": "returns validation failed: title: Invalid input: expected string, received undefined"
@@ -367,7 +367,7 @@ nuka run features/todo.feature   # every scenario green
 ```
 
 The `summary` line `nuka run` prints on stderr names the file, under
-`.nukadoko/records/runs/<run_id>/summary.md`. It holds the
+`.nukadoko/runs/<run_id>/summary.md`. It holds the
 run's verdict and scenario counts; the condition (the commit, whether the
 tree had uncommitted changes, the environment, the browsers, and the
 times); one table per feature, with a row per scenario; and a closing

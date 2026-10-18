@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import type { StepSummary } from "../src/cli/vocabulary.js";
-import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: `evidence.attach`/`evidence.path` end to end against
 // tests/fixtures/evidence-project — content actually written
@@ -24,7 +24,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 async function readStepRecordFile(rootDir: string, recordId: string): Promise<string> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return readFile(recordPath, "utf8");
 }
 
@@ -147,7 +147,7 @@ describe("evidence.attach / evidence.path: nuka do", () => {
     expect(stepRecord.status).toBe("failed");
     expect(stepRecord.error.message).toContain("not allowed");
     // No file escaped the evidence directory's own parent.
-    const escaped = await readFile(path.join(rootDir, ".nukadoko", "records", "steps", "escape.txt"), "utf8").catch(
+    const escaped = await readFile(path.join(stepRecordDir(rootDir, "escape.txt")), "utf8").catch(
       () => null,
     );
     expect(escaped).toBeNull();

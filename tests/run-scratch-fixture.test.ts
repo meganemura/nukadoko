@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: the builtin `scratch` fixture through the real executors.
 // `nuka run` removes the directories at the end of each scenario, whether it
@@ -46,7 +46,7 @@ describe("nuka run: the builtin scratch fixture", () => {
     expect(scenarios.map((scenario) => scenario.status)).toEqual(["passed", "failed"]);
 
     for (const scenario of scenarios) {
-      const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", scenario.steps[0]!.step_record_id, "record.json");
+      const recordPath = path.join(stepRecordDir(rootDir, scenario.steps[0]!.step_record_id), "record.json");
       const record = JSON.parse(await readFile(recordPath, "utf8")) as CopyStepRecord;
       expect(record.status).toBe("passed");
       expect(record.result.copied).toBe(true);

@@ -250,7 +250,7 @@ describe("nuka run: report emitters off by default", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toBe(true);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "runs"))).toBe(true);
     expect(existsSync(path.join(rootDir, ".nukadoko", "export"))).toBe(false);
     expect(stderr.text()).not.toMatch(/allure|messages/);
   });
@@ -265,7 +265,7 @@ describe("nuka run: report emitters off by default", () => {
       stderr,
     });
 
-    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "scenarios"))).toBe(true);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "runs"))).toBe(true);
     expect(existsSync(path.join(rootDir, ".nukadoko", "export"))).toBe(false);
     expect(stderr.text()).not.toMatch(/allure|messages/);
   }, 60_000);

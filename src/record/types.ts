@@ -610,7 +610,8 @@ export interface EvidenceAttachmentEntry {
 
 export interface EvidenceMeta {
   /** Step record directory, relative to the project root (e.g.
-   * ".nukadoko/records/steps/step-..."). */
+   * ".nukadoko/runs/run-.../steps/step-..." for a run, ".nukadoko/do/step-..."
+   * for `nuka do`). */
   dir: string;
   /** Present only when the default context (the one `page` belongs to)
    * recorded a chunk. */

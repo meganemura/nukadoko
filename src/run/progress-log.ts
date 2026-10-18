@@ -1,5 +1,5 @@
-import path from "node:path";
 import type { Finding } from "../finding/finding.js";
+import { stepRecordRelativeDir } from "../record/state-layout.js";
 import type { UsedEntryWithResult } from "../record/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
@@ -40,6 +40,8 @@ export interface StepProgressOptions {
   /** Root-relative, as the config holds it: the record line names the step
    * record by the path a reader can open from the project root. */
   readonly stateDir: string;
+  /** The run the step records belong to; they sit in its directory. */
+  readonly runId: string;
   /** Under `--quiet` only a failed step writes, and it writes the same lines
    * it would without the flag. The flag asks for a quieter terminal, and a
    * CI log that says FAIL but not why is the reason this output exists. */
@@ -174,10 +176,10 @@ export function formatExitedProducer(producer: ExitedProducer): string {
   return `used    ${producer.step}  exit ${producer.exitCode}  ${producer.stderrLine}`;
 }
 
-/** `<stateDir>/records/steps/<id>`, the directory every step record is
- * written to (src/record/read-step-record.ts). */
-export function stepRecordPath(stateDir: string, stepRecordId: string): string {
-  return path.join(stateDir, "records", "steps", stepRecordId);
+/** `<stateDir>/runs/<run_id>/steps/<id>`, the directory a run's step
+ * record is written to (src/record/state-layout.ts). */
+export function stepRecordPath(stateDir: string, runId: string, stepRecordId: string): string {
+  return stepRecordRelativeDir(stateDir, runId, stepRecordId);
 }
 
 /** Seconds with one decimal, the unit a step or a scenario reads in. */
@@ -207,7 +209,7 @@ export function createStepProgressLogger(
     if (info.status === "failed") {
       const failure = formatStepFailure({
         errorMessage: info.errorMessage,
-        recordPath: info.stepRecordId === null ? null : stepRecordPath(options.stateDir, info.stepRecordId),
+        recordPath: info.stepRecordId === null ? null : stepRecordPath(options.stateDir, options.runId, info.stepRecordId),
         ...(info.used === undefined ? {} : { used: info.used }),
       });
       text += failure.map((line) => `      ${line}\n`).join("");
@@ -284,7 +286,8 @@ function formatOutputLocation(location: OutputLocation): string {
   if (location.count === undefined) {
     return `${label}${displayPath}\n`;
   }
-  return `${label}${displayPath.padEnd(PATH_WIDTH)}${location.count}\n`;
+  // A path as long as the column still gets two spaces before its count.
+  return `${label}${displayPath.padEnd(Math.max(PATH_WIDTH, displayPath.length + 2))}${location.count}\n`;
 }
 
 export function writeOutputLocations(stderr: WritableSink, locations: readonly OutputLocation[]): void {

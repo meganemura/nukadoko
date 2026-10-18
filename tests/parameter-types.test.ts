@@ -11,6 +11,7 @@ import {
   fixture,
   removeTempDir,
   stripRunProgressLines,
+  latestRunDir,
   latestRunJson,
 } from "./helpers/fixtures.js";
 
@@ -81,7 +82,7 @@ describe("config.parameterTypes: negation reaches a step's args as a real boolea
 });
 
 // `nuka check`/`nuka run` both write real state (`nuka run` writes
-// step records/scenario records under `.nukadoko/`), so — same convention as
+// step records under `.nukadoko/`), so — same convention as
 // tests/run.test.ts — this runs against a fresh temp copy, never the
 // committed fixture directly.
 describe("config.parameterTypes: from-dir folds the with/without location-clause variants into one step", () => {
@@ -191,7 +192,6 @@ describe("config.parameterTypes: a transformer that throws must not crash the wh
     // before this step's execution phase began, the same "never began"
     // boundary undefined/
     // ambiguous/read-only-declared-refusal already draw.
-    const stepsDir = path.join(rootDir, ".nukadoko", "records", "steps");
-    expect(existsSync(stepsDir)).toBe(false);
+    expect(existsSync(path.join(latestRunDir(rootDir), "steps"))).toBe(false);
   });
 });

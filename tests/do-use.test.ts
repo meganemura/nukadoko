@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka do --use <record-id>` end to end against
 // tests/fixtures/do-use-project — filling a step's own `from`
@@ -15,7 +15,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // same `used` collector recording what was actually drawn on.
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
@@ -38,7 +38,7 @@ describe("nuka do --use", () => {
       stderr: createCaptureSink(),
     });
     const { step_record_id: recordId } = JSON.parse(createStdout.text());
-    const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+    const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
     const stored = JSON.parse(await readFile(recordPath, "utf8"));
     await writeFile(recordPath, `${JSON.stringify({ ...stored, status: "ok" }, null, 2)}\n`);
 

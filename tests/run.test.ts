@@ -6,8 +6,10 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  latestRunDir,
   latestRunJson,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -23,7 +25,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
@@ -62,14 +64,14 @@ describe("nuka run", () => {
     for (const step of record.steps) {
       expect(step.status).toBe("passed");
       expect(typeof step.step_record_id).toBe("string");
-      expect(step.record).toBe(path.join(".nukadoko", "records", "steps", step.step_record_id));
+      expect(step.record).toBe(path.join("steps", step.step_record_id));
       expect(step.error).toBeUndefined();
     }
     expect(record.steps.map((step: { line: number }) => step.line)).toEqual([4, 5]);
     // A scenario that wrote no screenshot, trace, or attachment names no
     // evidence, and leaves no directory behind.
     expect(record.evidence).toBeUndefined();
-    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "scenarios", record.scenario_record_id))).toBe(false);
+    expect(existsSync(path.join(latestRunDir(rootDir), "scenarios"))).toBe(false);
 
     // The stdout line is run.json's own entry for the scenario.
     const document = latestRunJson(rootDir);
@@ -131,7 +133,7 @@ describe("nuka run", () => {
     expect(third.error).toBeUndefined();
 
     // Only the two steps that actually began execution wrote a step record.
-    const stepsDir = path.join(rootDir, ".nukadoko", "records", "steps");
+    const stepsDir = path.join(latestRunDir(rootDir), "steps");
     expect(await readdir(stepsDir)).toHaveLength(2);
   });
 

@@ -1,3 +1,4 @@
+import { RUN_FILE_DIRS, runRelativeDir, scenarioRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { SCHEMA_VERSIONS } from "../record/schema-version.js";
 import { formatFinding, withoutWarningPrefix } from "../finding/finding.js";
 import { runCodeInfo } from "../finding/run-codes.js";
@@ -936,10 +937,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const fixtureScenarioCache = createFixtureCache();
 
   const { id: scenarioId, dir: scenarioDir } = await createRecordDir(
-    path.join(rootDir, config.stateDir, "records", "scenarios"),
+    path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios),
     generateScenarioId,
   );
-  const relativeScenarioDir = path.join(config.stateDir, "records", "scenarios", scenarioId);
+  const relativeScenarioDir = scenarioRelativeDir(config.stateDir, runId, scenarioId);
   // This pickle's own step keywords, for each step's own trace chunk title
   // (this file's own header, just above) — built once per pickle, the same
   // "cheap, rebuilt per call" convention `stepNameOf` below already follows.
@@ -2017,10 +2018,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // written from here, whatever happens (mirrors cli/do.ts's own
         // execution phase). ---
         const { id: recordId, dir: recordDir } = await createRecordDir(
-          path.join(rootDir, config.stateDir, "records", "steps"),
+          path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.steps),
           generateStepRecordId,
         );
-        const relativeRecordDir = path.join(config.stateDir, "records", "steps", recordId);
+        const relativeRecordDir = stepRecordRelativeDir(config.stateDir, runId, recordId);
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — the trace chunk `ctx.page()` opens lazily
         // during this step, if it does, self-identifies the same way.
@@ -2201,10 +2202,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // no args/returns schema exists to validate against, so there is no
         // binding-failure branch here the way there is for a typed step.
         const { id: recordId, dir: recordDir } = await createRecordDir(
-          path.join(rootDir, config.stateDir, "records", "steps"),
+          path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.steps),
           generateStepRecordId,
         );
-        const relativeRecordDir = path.join(config.stateDir, "records", "steps", recordId);
+        const relativeRecordDir = stepRecordRelativeDir(config.stateDir, runId, recordId);
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — same as the typed branch above.
         await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep));

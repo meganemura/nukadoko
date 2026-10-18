@@ -962,7 +962,7 @@ export async function runCli(
   const cleanCommand: CommandModule<Record<string, never>, CleanArgs> = {
     command: "clean",
     describe:
-      "delete accumulated records/cache/export under the state directory; refuses an allure.resultsDir or messages.output that is the project root, outside the project, or a parent of the state directory",
+      "delete accumulated runs, do records, cache, and export under the state directory; refuses an allure.resultsDir or messages.output that is the project root, outside the project, or a parent of the state directory",
     builder: (y: Argv) =>
       refuseRemovedFlags(y, {
         records: `nuka clean --records is removed: ${CLEAN_REMOVES_EVERY_CATEGORY}`,

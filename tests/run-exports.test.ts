@@ -11,7 +11,7 @@ import {
 } from "../src/record/run-exports.js";
 
 // Responsibility: the exports manifest one `nuka run` leaves under
-// `records/runs/<run_id>/` — that it is created with its directory, that
+// `runs/<run_id>/` — that it is created with its directory, that
 // what it lists is root-relative, and that reading it back gives a set in
 // first-seen order however many times a path was appended.
 
@@ -26,9 +26,9 @@ describe("exports manifest", () => {
     rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it("lives under <stateDir>/records/runs/<run_id>/exports", () => {
+  it("lives under <stateDir>/runs/<run_id>/exports", () => {
     expect(runExportsManifestPath(rootDir, ".nukadoko", "run-1")).toBe(
-      path.join(rootDir, ".nukadoko", "records", "runs", "run-1", "exports"),
+      path.join(rootDir, ".nukadoko", "runs", "run-1", "exports"),
     );
   });
 

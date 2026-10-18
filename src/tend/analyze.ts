@@ -88,7 +88,8 @@ const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
 //
 // `findPostNavigationReads` is a note: nothing here is wrong right now, only
 // a fact worth a human's attention (that module's own header explains why
-// it is never a verdict). It walks `<stateDir>/records/steps/` directly, so
+// it is never a verdict). It walks every step record directly, `do/` and
+// each run's `steps/` alike, so
 // `config.stateDir` is passed through to it rather than a
 // `featuresDir`-shaped path. Every step record counts.
 //

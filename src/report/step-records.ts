@@ -13,10 +13,10 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 //
 // `AllureEmitterOptions`/`MessagesEmitterOptions` each carry no `stateDir`
 // of their own — a step's own record directory is instead derived from
-// `record.evidence.dir` (`"<stateDir>/records/scenarios/<scenarioId>"`,
-// src/run/run-scenario.ts): two levels up is `<stateDir>/records`, the same
-// directory every step record in this run was written under
-// (`<stateDir>/records/steps/<recordId>`, run-scenario.ts). Deriving it
+// `record.evidence.dir` (`"<stateDir>/runs/<run_id>/scenarios/<scenarioId>"`,
+// src/record/state-layout.ts): two levels up is the run's own directory,
+// the one every step record of this run was written under
+// (`<stateDir>/runs/<run_id>/steps/<recordId>`). Deriving it
 // from a value the record already carries — rather than growing either
 // emitter's own pinned options shape — keeps both interfaces untouched.
 //

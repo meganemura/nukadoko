@@ -1,8 +1,10 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { runRelativeDir } from "./state-layout.js";
 
 // Responsibility: which export files one `nuka run` invocation wrote, kept
-// as an append-only manifest under `<stateDir>/records/runs/<run_id>/`.
+// as an append-only manifest in the run's own directory,
+// `<stateDir>/runs/<run_id>/` (src/record/state-layout.ts).
 // Retention (src/record/retention.ts) reads it to remove a run's own
 // Allure output and messages stream together with its records; nothing else
 // does.
@@ -27,13 +29,12 @@ import path from "node:path";
 // actually is.
 //
 // Not a run record. The manifest carries no status, no timing, and no
-// scenario ids; those already live on every scenario record's own
-// `run_id`/`started_at`/`steps[]`, which is what retention groups by.
+// scenario ids; those live in the run's run.json.
 
 export const RUN_EXPORTS_FILE_NAME = "exports";
 
 export function runDir(rootDir: string, stateDir: string, runId: string): string {
-  return path.join(rootDir, stateDir, "records", "runs", runId);
+  return path.join(rootDir, runRelativeDir(stateDir, runId));
 }
 
 export function runExportsManifestPath(rootDir: string, stateDir: string, runId: string): string {
@@ -49,7 +50,7 @@ export interface ExportsManifest {
 
 /** Creates the manifest's directory up front, so the first `note` call
  * has nowhere to fail, and so a run that wrote no export file at all still
- * leaves its own `records/runs/<run_id>/` behind for retention to date. */
+ * leaves its own `runs/<run_id>/` behind. */
 export function createExportsManifest(filePath: string, rootDir: string): ExportsManifest {
   mkdirSync(path.dirname(filePath), { recursive: true });
   return {

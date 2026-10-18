@@ -111,7 +111,7 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
       finished_at: "2026-08-01T00:00:02.000Z",
       steps,
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
@@ -147,7 +147,7 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
       finished_at: "2026-08-01T00:00:02.000Z",
       steps,
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-2", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-2", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 
@@ -182,7 +182,7 @@ describe("Allure structure: one pickle, one result, GWT steps nested inside it",
       finished_at: "2026-08-01T00:00:01.000Z",
       steps: [step],
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-3", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-3", screenshots: [] },
     };
     emitter.endScenario({ record, gherkinDocument, pickle, relativeFeaturePath: "features/checkout.feature" });
 

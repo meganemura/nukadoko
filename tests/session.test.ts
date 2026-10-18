@@ -186,7 +186,7 @@ describe("nuka do --session (request path)", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("s2");
-    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "do"))).toBe(false);
   });
 
   it("runs (and releases the lock) when the session's lock belongs to a dead pid", async () => {
@@ -222,7 +222,7 @@ describe("nuka do --session (request path)", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr.text()).toContain("s4");
-    expect(existsSync(path.join(rootDir, ".nukadoko", "records", "steps"))).toBe(false);
+    expect(existsSync(path.join(rootDir, ".nukadoko", "do"))).toBe(false);
   });
 });
 

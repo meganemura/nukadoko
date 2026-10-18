@@ -324,7 +324,7 @@ async function main(): Promise<void> {
               return true;
             },
           },
-          { stateDir: config.stateDir, quiet },
+          { stateDir: config.stateDir, runId, quiet },
         );
 
         allureEmitter?.beginScenario({

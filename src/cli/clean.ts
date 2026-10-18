@@ -3,6 +3,7 @@ import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { isMessagesRunOutputFileName } from "../record/messages-output.js";
+import { doRelativeDir, runsRelativeDir } from "../record/state-layout.js";
 import { sessionsDir, sessionsRootDir } from "../session/paths.js";
 import type { Finding } from "../finding/finding.js";
 import { formatEnvelope, refuse } from "./refusal.js";
@@ -18,15 +19,9 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // touches: everything at once, a results directory that predates the
 // per-run manifests retention needs, and the cache.
 //
-// Path resolution is inlined here rather than shared with cli/do.ts,
-// cli/run.ts, or src/session/manage.ts's own `clearAllSessions`: those are
-// the state directory's own fixed segments (docs/spec.md "The state
-// directory" names all of them: `records/steps`, `records/scenarios`,
-// `records/runs`, `cache/sessions/<env>/`), not this module's own invention, but a helper
-// only this one caller uses is a second source of truth, not a
-// reduction in duplication. It earns its existence once cli/do.ts and
-// cli/run.ts resolve those segments through it too. Until then the paths
-// stay inlined here.
+// The measurement directories, `runs/<run_id>/` and `do/<id>/`, come from
+// src/record/state-layout.ts, the same place every writer gets them, and
+// the session directories from src/session/paths.ts.
 // `export`'s targets are resolved exactly the way cli/run.ts resolves
 // them, config override included (`config.allure?.resultsDir`,
 // `config.messages?.output`). `config.messages?.output` names only the
@@ -79,20 +74,17 @@ interface CleanPlan {
   export: string[];
 }
 
-/** Every step record directory under `records/steps/`, every scenario
- * evidence directory under `records/scenarios/`, and every run's own
- * directory under `records/runs/` (run.json, summary.md, and its exports
- * manifest, src/record/run-exports.ts),
- * rootDir-relative — one entry per accumulated run's
- * own leftovers, which is the granularity a preview of "what five `nuka
- * run`s left behind" needs (a single "records/" line would say nothing
- * about how much piled up). Missing directories (nothing ever recorded)
+/** Every run directory under `runs/` (run.json, summary.md, its step
+ * records and scenario evidence, and its exports manifest), then every
+ * `nuka do` step record under `do/`, rootDir-relative: one entry per run,
+ * which is the granularity a preview of "what five `nuka run`s left
+ * behind" needs, and the unit retention removes too. Missing directories (nothing ever recorded)
  * are silently zero entries, not an error: the same "empty is a valid
  * answer" rule `session list` already follows. */
 async function buildRecordsPlan(rootDir: string, stateDir: string): Promise<string[]> {
   const paths: string[] = [];
-  for (const kind of ["steps", "scenarios", "runs"] as const) {
-    const dir = path.join(rootDir, stateDir, "records", kind);
+  for (const relativeDir of [runsRelativeDir(stateDir), doRelativeDir(stateDir)]) {
+    const dir = path.join(rootDir, relativeDir);
     let entries;
     try {
       entries = await readdir(dir, { withFileTypes: true });
@@ -104,7 +96,7 @@ async function buildRecordsPlan(rootDir: string, stateDir: string): Promise<stri
       .map((entry) => entry.name)
       .sort((a, b) => a.localeCompare(b));
     for (const name of names) {
-      paths.push(path.join(stateDir, "records", kind, name));
+      paths.push(path.join(relativeDir, name));
     }
   }
   return paths;

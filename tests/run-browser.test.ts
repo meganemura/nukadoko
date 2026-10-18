@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
+  latestRunDir,
   createCaptureSink,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -61,7 +63,7 @@ interface StoredStepRecord {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<StoredStepRecord> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8")) as StoredStepRecord;
 }
 
@@ -116,7 +118,8 @@ describe("nuka run (Background + browser)", () => {
     expect(record.evidence.screenshots).toHaveLength(1);
     expect(record.evidence.screenshots[0].file).toBe("final.png");
     expect(Number.isNaN(Date.parse(record.evidence.screenshots[0].at))).toBe(false);
-    const scenarioDir = path.join(rootDir, record.evidence.dir);
+    // A scenario's evidence dir in run.json is relative to its run directory.
+    const scenarioDir = path.join(latestRunDir(rootDir), record.evidence.dir);
     expect(existsSync(path.join(scenarioDir, "trace.zip"))).toBe(false);
     expect(existsSync(path.join(scenarioDir, "final.png"))).toBe(true);
 

@@ -2,7 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { readStepRecord } from "../src/record/read-step-record.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: a step body that does `await import("./lib/x.js")` of a
 // TypeScript file must resolve it, because discovery's TypeScript loader
@@ -23,7 +23,7 @@ describe("a dynamic import of a TypeScript file inside a step body", () => {
       const scenarioRecord = JSON.parse(stdout.text().split("\n")[0]!);
       expect(scenarioRecord.status).toBe("passed");
       const stepRecord = readStepRecord(
-        path.join(rootDir, ".nukadoko", "records", "steps", scenarioRecord.steps[0].step_record_id),
+        path.join(stepRecordDir(rootDir, scenarioRecord.steps[0].step_record_id)),
       );
       expect((stepRecord as { result?: unknown } | null)?.result).toEqual({ greeting: "hello ada" });
     } finally {

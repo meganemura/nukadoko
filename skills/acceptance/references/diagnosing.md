@@ -15,7 +15,7 @@ accept.
 
 `nuka run`'s stderr already names where to start: under the failed step's
 `failed` line, the first line of its error and the path of its step record
-(`record  <stateDir>/records/steps/<id>`), and after the summary, a
+(`record  <stateDir>/runs/<run_id>/steps/<id>`), and after the summary, a
 `failed\tscenario-failed\t<file>:<line>\t<name>: <error>` finding per
 failed scenario, whose `  do:` line runs that scenario alone.
 The same list is in the run's `run.json` (`nuka run --json` prints it):

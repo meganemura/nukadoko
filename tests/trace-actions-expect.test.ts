@@ -8,6 +8,7 @@ import {
   copyFixtureToTempDir,
   createCaptureSink,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -109,12 +110,7 @@ describe("actions on the step record: a real expect() wait", () => {
     const record = JSON.parse(lines[0]!);
     expect(record.status).toBe("passed");
 
-    const stepRecordPath = path.join(
-      rootDir,
-      ".nukadoko",
-      "records",
-      "steps",
-      record.steps[0].step_record_id as string,
+    const stepRecordPath = path.join(stepRecordDir(rootDir, record.steps[0].step_record_id as string),
       "record.json",
     );
     const stepRecord = JSON.parse(await readFile(stepRecordPath, "utf8")) as StoredStepRecord;

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stripRunProgressLines } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
 
 // Responsibility: a compat `defineParameterType` transformer is applied the
 // way cucumber-js applies one. Its `this` is the scenario World the step
@@ -11,7 +11,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stripRunProgres
 // pattern's `{later}` and for a RegExp pattern's group alike.
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 

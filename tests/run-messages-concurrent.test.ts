@@ -82,7 +82,7 @@ describe("nuka run: two concurrent invocations against the same project", () => 
     expect(exitA).toBe(0);
     expect(exitB).toBe(0);
 
-    const runIds = readdirSync(path.join(rootDir, ".nukadoko", "records", "runs"));
+    const runIds = readdirSync(path.join(rootDir, ".nukadoko", "runs"));
     expect(runIds).toHaveLength(2);
 
     const output = path.join(rootDir, ".nukadoko", "export", "messages.ndjson");

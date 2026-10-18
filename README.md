@@ -199,9 +199,9 @@ npm run test:scenarios
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  passed  0.0s  the output says "Hello, Ada!"
-steps     .nukadoko/records/steps/      2
-summary   .nukadoko/records/runs/run-20261016-123947-b4q6/summary.md
-run       .nukadoko/records/runs/run-20261016-123947-b4q6/run.json
+steps     .nukadoko/runs/run-20261016-123947-b4q6/steps/  2
+summary   .nukadoko/runs/run-20261016-123947-b4q6/summary.md
+run       .nukadoko/runs/run-20261016-123947-b4q6/run.json
 1 scenario: 1 passed, 0 failed  (2s)
 ```
 
@@ -217,10 +217,10 @@ scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  failed  0.0s  the output says "Hi, Ada!"
       text: expected "Hi, Ada!", got "Hello, Ada!"
-      record  .nukadoko/records/steps/step-20261016-123950-kjs1
-steps     .nukadoko/records/steps/      2
-summary   .nukadoko/records/runs/run-20261016-123950-zrhr/summary.md
-run       .nukadoko/records/runs/run-20261016-123950-zrhr/run.json
+      record  .nukadoko/runs/run-20261016-123950-zrhr/steps/step-20261016-123950-kjs1
+steps     .nukadoko/runs/run-20261016-123950-zrhr/steps/  2
+summary   .nukadoko/runs/run-20261016-123950-zrhr/summary.md
+run       .nukadoko/runs/run-20261016-123950-zrhr/run.json
 1 scenario: 0 passed, 1 failed  (1s)
 failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
   do: nuka run features/greet.feature:4
@@ -244,7 +244,7 @@ lands on the job's summary page by itself. Its first part:
 
 | scenario | line | status | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `.nukadoko/records/steps/step-20261016-123950-kjs1` |
+| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `steps/step-20261016-123950-kjs1` |
 ```
 
 In CI it is one more line beside the unit tests
@@ -1180,8 +1180,8 @@ counts, and each scenario's steps with their line, status, step record,
 and, for a failure, its error, the results it read, and the command that
 reruns it. Under `--json` stderr is empty, and a warning is a finding in
 the document, so the document is the only thing an agent's shell shows.
-`run.json` and the step records are on disk under `.nukadoko/records/`
-either way, and the run summary is rendered from `run.json` alone. No output depends on whether stdout or
+`run.json` and the step records are on disk in the run's own directory,
+`.nukadoko/runs/<run_id>/`, either way, and the run summary is rendered from `run.json` alone. No output depends on whether stdout or
 stderr is a terminal.
 A failed step prints the first line of its error and the path of its step
 record under its progress line, so a CI log says why it failed. When the
@@ -1194,14 +1194,14 @@ line runs it again. `--quiet` keeps all of these.
 ```text
   step 2/2  failed  0.0s  the sum is 5
       expected 5, got 4
-      record  .nukadoko/records/steps/<id>
+      record  .nukadoko/runs/<run_id>/steps/<id>
 ...
 failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
   do: nuka run features/sum.feature:3
 ```
 
 The same facts go into a Markdown run summary, written for a person rather
-than a log: `.nukadoko/records/runs/<run_id>/summary.md` on every run,
+than a log: `.nukadoko/runs/<run_id>/summary.md` on every run,
 appended to `$GITHUB_STEP_SUMMARY` when that is set, and to `--summary
 <path>` for a PR comment step. Its first line is `<!-- nukadoko:run -->`, so
 a CI step can update the comment it posted on an earlier push.

@@ -1,6 +1,5 @@
-import { readdirSync } from "node:fs";
 import path from "node:path";
-import { readStepRecord } from "../record/read-step-record.js";
+import { listStepRecordDirs, readStepRecord } from "../record/read-step-record.js";
 import type { TendIssue } from "./types.js";
 
 // Responsibility: docs/spec.md "Tending"'s post-navigation-read note - a
@@ -48,8 +47,8 @@ import type { TendIssue } from "./types.js";
 // step, a step that never calls `ctx.poll`, or a record from before `polls`
 // existed all fall back to this note's original behavior, unchanged.
 //
-// Reads every live step record under `<stateDir>/records/steps/`
-// (`readStepRecord`, src/record/read-step-record.ts - the same reader
+// Reads every live step record, under `<stateDir>/do/` and each run's
+// `<stateDir>/runs/<run_id>/steps/` (`listStepRecordDirs`, `readStepRecord`, src/record/read-step-record.ts - the same reader
 // src/report/allure/emitter.ts and `nuka do --use` already share). `do`,
 // `run`, and `external` step records all count the same way: this note is
 // about a step's own body, and that body runs the same whichever of the
@@ -57,8 +56,7 @@ import type { TendIssue } from "./types.js";
 //
 // A Background step runs once per scenario, so a suite with two dozen
 // scenarios produces two dozen step records for that one step every time
-// the suite runs, each in its own `.nukadoko/records/steps/<id>/`
-// directory. Reporting each of those as its own note would repeat one fact
+// the suite runs, each in its own `steps/<id>/` directory. Reporting each of those as its own note would repeat one fact
 // two dozen times rather than say it once - `groupMatches` (below) merges
 // every match sharing the same step, the same navigation method, and the
 // same following method into a single note, naming how many step records
@@ -148,8 +146,8 @@ function isWithinAnyPollWindow(readStartedAt: number, polls: readonly unknown[])
   return false;
 }
 
-/** `findPostNavigationReads` walks every step record directory under
- * `<stateDir>/records/steps/` (`readStepRecord`, src/record/
+/** `findPostNavigationReads` walks every step record directory
+ * (`listStepRecordDirs`, `readStepRecord`, src/record/
  * read-step-record.ts) and, for each one's own recorded `actions`, reports
  * every navigation call immediately followed by another call within
  * `NOT_WORTH_LISTING_ABOVE_MS` of the navigation's own end - unless that
@@ -169,12 +167,11 @@ function isWithinAnyPollWindow(readStartedAt: number, polls: readonly unknown[])
  * produce many matches that are all the same fact measured again, which is
  * exactly what `groupMatches` (below) exists to collapse. */
 interface Match {
-  /** This step record's own id: `<stateDir>/records/steps/<id>`'s own
-   * `<id>`, the directory name `generateId` (src/record/record-id.ts)
+  /** This step record's own id: its directory's name, the name `generateId` (src/record/record-id.ts)
    * stamped on it when this execution was recorded - already unique across
    * the whole project, so no composed key is needed here. */
   readonly stepRecordKey: string;
-  /** `<stateDir>/records/steps/<id>/record.json`, rootDir-relative - the
+  /** The step record's `record.json`, rootDir-relative - the
    * one file this match's own facts came from, and the path
    * `TendIssue.file` ends up citing for it. */
   readonly recordPath: string;
@@ -186,22 +183,11 @@ interface Match {
 
 function collectMatches(rootDir: string, stateDir: string): Match[] {
   const matches: Match[] = [];
-  const stepsDir = path.join(rootDir, stateDir, "records", "steps");
-
-  let entries;
-  try {
-    entries = readdirSync(stepsDir, { withFileTypes: true });
-  } catch {
-    // No run has ever written a step record here - nothing to report, never
-    // an error (this file's own header: a run that has not happened yet is
-    // not rot).
-    return matches;
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const id = entry.name;
-    const recordDir = path.join(stepsDir, id);
+  // Every step record, `nuka do` and every run alike. No step record at
+  // all is nothing to report, never an error (this file's own header: a
+  // run that has not happened yet is not rot).
+  for (const recordDir of listStepRecordDirs(rootDir, stateDir)) {
+    const id = path.basename(recordDir);
     const stepRecord = readStepRecord(recordDir);
     if (stepRecord === null) continue; // Missing or unparsable record.json - out of scope, not an error.
 

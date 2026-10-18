@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: this finding's own defensive parsing.
@@ -31,15 +31,15 @@ async function runTendJson(rootDir: string): Promise<Report> {
   return bySeverity(stdout.text()) as Report;
 }
 
-/** Writes one step record directly under `<rootDir>/.nukadoko/records/
- * steps/<id>/record.json`, the on-disk shape `nuka do`/`nuka run` produce
+/** Writes one step record directly under `<rootDir>/.nukadoko/do/<id>/
+ * record.json`, the on-disk shape `nuka do`/`nuka run` produce
  * and src/tend/post-navigation-read.ts now reads. `stepRecord` is passed
  * straight through to `JSON.stringify`, so its own `actions`/`polls` (or
  * lack of either) is exactly what that finding sees. Duplicated from
  * tests/post-navigation-read.test.ts's own helper of the same shape rather
  * than imported, since that file exports no helpers of its own to share. */
 async function writeStepRecordFile(rootDir: string, id: string, stepRecord: Record<string, unknown>): Promise<void> {
-  const dir = path.join(rootDir, ".nukadoko", "records", "steps", id);
+  const dir = path.join(stepRecordDir(rootDir, id));
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, "record.json"), JSON.stringify(stepRecord, null, 2));
 }
@@ -56,7 +56,7 @@ describe("nuka tend: post-navigation-read, malformed record.json", () => {
   });
 
   it("skips a record.json that is not valid JSON, without throwing, and still reports a well-formed record beside it", async () => {
-    const brokenDir = path.join(rootDir, ".nukadoko", "records", "steps", "broken");
+    const brokenDir = path.join(stepRecordDir(rootDir, "broken"));
     await mkdir(brokenDir, { recursive: true });
     // Deliberately unparsable - a truncated write, or a hand edit gone
     // wrong.

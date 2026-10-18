@@ -231,6 +231,7 @@ export default {
         "run-result.ts",
         "scenario-record.ts",
         "schema-version.ts",
+        "state-layout.ts",
         "types.ts",
         "write-step-record.ts",
       ],

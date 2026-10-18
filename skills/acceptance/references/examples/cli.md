@@ -190,7 +190,7 @@ first line of the message carries both values:
 ```
   step 4/4  failed  0.0s  the output is
       stdout: expected "food: 5.5\nrent: 101", got "food: 5.5\nrent: 100"
-      record  .nukadoko/records/steps/step-20261017-114020-t0lq
+      record  .nukadoko/runs/run-20261018-135515-h7mq/steps/step-20261018-135515-rux7
 ```
 
 The run that passed:

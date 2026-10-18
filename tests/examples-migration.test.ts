@@ -6,7 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTodoApp } from "../examples/todo/app/server.js";
-import { copyExampleToTempDir, removeTempDir, repoRoot, stripRunProgressLines } from "./helpers/fixtures.js";
+import { copyExampleToTempDir, removeTempDir, repoRoot, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,7 +71,7 @@ async function pointConfigAt(rootDir: string, baseURL: string): Promise<void> {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 

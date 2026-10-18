@@ -2,10 +2,10 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunDir, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: a record id that is already taken on disk never makes two
-// records share one directory. Ids carry four random characters per second,
+// records share one directory (a run's `steps/`, or `do/`). Ids carry four random characters per second,
 // so a fast run can draw the same id twice; the id sources are replaced here
 // so the duplicate happens on every run instead of by chance.
 
@@ -30,10 +30,11 @@ vi.mock("../src/run/scenario-id.js", async (importOriginal) => {
 const duplicateStepId = "step-20260101-000000-dupe";
 const duplicateScenarioId = "scn-20260101-000000-dupe";
 
-async function recordIdsOnDisk(rootDir: string, kind: "steps" | "scenarios"): Promise<string[]> {
-  const dir = path.join(rootDir, ".nukadoko", "records", kind);
+/** The ids in the record files under `dir`: a run's `steps/` or
+ * `scenarios/`, or `do/`. A directory that is not there holds none. */
+async function recordIdsOnDisk(dir: string, kind: "steps" | "scenarios"): Promise<string[]> {
   const ids: string[] = [];
-  for (const name of await readdir(dir)) {
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
     const record = JSON.parse(await readFile(path.join(dir, name, "record.json"), "utf8"));
     ids.push(kind === "steps" ? record.step_record_id : record.scenario_record_id);
   }
@@ -72,8 +73,8 @@ describe("a record id already taken on disk", () => {
     expect(new Set(stepIds).size).toBe(3);
     // Neither scenario left evidence, so the run removed both directories
     // once it was over: only then could a later run draw either id again.
-    expect(await recordIdsOnDisk(rootDir, "scenarios")).toEqual([]);
-    expect(await recordIdsOnDisk(rootDir, "steps")).toEqual([...stepIds].sort());
+    expect(await recordIdsOnDisk(path.join(latestRunDir(rootDir), "scenarios"), "scenarios")).toEqual([]);
+    expect(await recordIdsOnDisk(path.join(latestRunDir(rootDir), "steps"), "steps")).toEqual([...stepIds].sort());
   });
 
   it("gives a second nuka do its own record directory", async () => {
@@ -88,7 +89,7 @@ describe("a record id already taken on disk", () => {
       expect(exitCode).toBe(0);
     }
 
-    const ids = await recordIdsOnDisk(rootDir, "steps");
+    const ids = await recordIdsOnDisk(path.join(rootDir, ".nukadoko", "do"), "steps");
     expect(ids).toHaveLength(2);
     expect(ids[0]).toBe(duplicateStepId);
     expect(ids[1]).not.toBe(duplicateStepId);

@@ -45,7 +45,7 @@ const SECOND_FEATURE_SOURCE = `Feature: Shipping
 `;
 
 function writeStepRecordFile(rootDir: string, stepRecord: StepRecord): void {
-  const dir = path.join(rootDir, ".nukadoko", "records", "steps", stepRecord.step_record_id);
+  const dir = path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", stepRecord.step_record_id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}
 `);
@@ -92,7 +92,7 @@ describe("createMessagesEmitter", () => {
 
       emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
-      const recordDir = path.join(rootDir, ".nukadoko", "records", "steps", "step-1");
+      const recordDir = path.join(rootDir, ".nukadoko", "runs", "run-1", "steps", "step-1");
       mkdirSync(recordDir, { recursive: true });
       writeFileSync(path.join(recordDir, "note.txt"), "declared note");
 
@@ -111,14 +111,14 @@ describe("createMessagesEmitter", () => {
         run_id: "run-1",
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
-        evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [], http: "http.jsonl" },
+        evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [], http: "http.jsonl" },
         observed: { http_reads: 1, http_writes: 0, processes: null },
         mutates: true,
         declared: { attachments: ["note.txt"], logs: ["did the thing"] },
       };
       writeStepRecordFile(rootDir, stepRecord);
 
-      const scenarioDir = path.join(rootDir, ".nukadoko", "records", "scenarios", "scn-1");
+      const scenarioDir = path.join(rootDir, ".nukadoko", "runs", "run-1", "scenarios", "scn-1");
       mkdirSync(scenarioDir, { recursive: true });
       writeFileSync(path.join(scenarioDir, "shot1.png"), "png bytes");
 
@@ -140,7 +140,7 @@ describe("createMessagesEmitter", () => {
         steps: [step],
         hooks: [beforeHook, afterHook],
         evidence: {
-          dir: ".nukadoko/records/scenarios/scn-1",
+          dir: ".nukadoko/runs/run-1/scenarios/scn-1",
           screenshots: [{ file: "shot1.png", at: "2026-08-01T00:00:01.500Z" }],
         },
       };
@@ -160,7 +160,7 @@ describe("createMessagesEmitter", () => {
         finished_at: "2026-08-01T00:00:02.500Z",
         steps: [{ text: outlineRow.steps[0]!.text, status: "passed", step_record_id: null }],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-2", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-2", screenshots: [] },
       };
       emitter.emitScenario({ record: record2, pickle: outlineRow });
 
@@ -412,7 +412,7 @@ describe("createMessagesEmitter", () => {
       run_id: "run-1",
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
-      evidence: { dir: ".nukadoko/records/steps/step-missing-file", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/steps/step-missing-file", screenshots: [] },
       observed: { http_reads: 0, http_writes: 0, processes: null },
       mutates: true,
       declared: { attachments: ["never-written.txt"] },
@@ -433,7 +433,7 @@ describe("createMessagesEmitter", () => {
       finished_at: "2026-08-01T00:00:00.500Z",
       steps: [{ text: "the cart has items", status: "passed", step_record_id: "step-missing-file" }],
       hooks: [],
-      evidence: { dir: ".nukadoko/records/scenarios/scn-missing-file", screenshots: [] },
+      evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-missing-file", screenshots: [] },
     };
 
     expect(() => emitter.emitScenario({ record, pickle })).not.toThrow();
@@ -498,7 +498,7 @@ describe("createMessagesEmitter", () => {
         finished_at: "2026-08-01T00:00:00.500Z",
         steps: [{ text: "the cart has items", status: "passed", step_record_id: null }],
         hooks: [],
-        evidence: { dir: ".nukadoko/records/scenarios/scn-1", screenshots: [] },
+        evidence: { dir: ".nukadoko/runs/run-1/scenarios/scn-1", screenshots: [] },
       };
 
       expect(() => emitter.emitScenario({ record, pickle })).not.toThrow();

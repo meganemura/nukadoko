@@ -72,7 +72,7 @@ scenario reads is the one case to judge yourself.
 
 `post-navigation-read` is the one worth knowing the shape of, because
 there is a way to make it stop being true and only one. It reads every
-step record under `.nukadoko/records/steps/`, so a step that has only been
+step record under `.nukadoko/runs/` and `.nukadoko/do/`, so a step that has only been
 exercised with `nuka do` still shows up here. It lists a call a step made
 shortly after its own navigation, and it never says the gap was too short,
 since how long an application takes to render after a navigation is not

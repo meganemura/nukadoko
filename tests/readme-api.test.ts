@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { repoRoot } from "./helpers/fixtures.js";
+import { repoRoot, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: README.md's two HTTP sections work as written.
 //
@@ -217,7 +217,7 @@ describe(`README.md: ${SELF_STARTED}`, () => {
     expect(record.status).toBe("passed");
     const when = JSON.parse(
       await readFile(
-        path.join(projectDir, ".nukadoko", "records", "steps", record.steps[0]!.step_record_id, "record.json"),
+        path.join(stepRecordDir(projectDir, record.steps[0]!.step_record_id), "record.json"),
         "utf8",
       ),
     ) as { observed: { http_reads: number | null; http_writes: number | null } };
@@ -331,7 +331,7 @@ describe("README.md: An HTTP API", () => {
     };
     expect(record.status).toBe("passed");
     const when = JSON.parse(
-      await readFile(path.join(apiDir, ".nukadoko", "records", "steps", record.steps[0]!.step_record_id, "record.json"), "utf8"),
+      await readFile(path.join(stepRecordDir(apiDir, record.steps[0]!.step_record_id), "record.json"), "utf8"),
     ) as { observed: { http_reads: number; http_writes: number } };
     expect(when.observed).toMatchObject({ http_reads: 1, http_writes: 0 });
   }, 120_000);

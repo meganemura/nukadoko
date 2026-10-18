@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createTodoApp } from "../examples/todo/app/server.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { readOwnVersion } from "../src/version.js";
-import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { copyExampleToTempDir, createCaptureSink, ensureNukadokoShim, removeTempDir, stepRecordDir, stepRecordIds } from "./helpers/fixtures.js";
 
 const version = readOwnVersion();
 
@@ -428,10 +428,9 @@ describe("nuka experimental explore", () => {
 
     await writeFile(path.join(rootDir, "features", "pasted.feature"), `Feature: pasted\n\n${json.scenario}`);
     expect((await cli(["run", "features/pasted.feature", "--quiet"])).exitCode).toBe(0);
-    const recordsDir = path.join(rootDir, ".nukadoko", "records", "steps");
     const records = await Promise.all(
-      (await readdir(recordsDir)).map(async (id) =>
-        JSON.parse(await readFile(path.join(recordsDir, id, "record.json"), "utf8")) as { step: string; args: unknown; started_at: string },
+      stepRecordIds(rootDir).map(async (id) =>
+        JSON.parse(await readFile(path.join(stepRecordDir(rootDir, id), "record.json"), "utf8")) as { step: string; args: unknown; started_at: string },
       ),
     );
     const ran = records.sort((a, b) => a.started_at.localeCompare(b.started_at)).map(({ step, args }) => ({ step, args }));

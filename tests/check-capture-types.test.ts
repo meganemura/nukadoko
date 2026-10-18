@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka check` reports capture-type-mismatch for exactly the
@@ -105,7 +105,7 @@ describe("nuka check: capture type against args schema", () => {
       .filter((line) => line.startsWith("{"))
       .map((line) => JSON.parse(line) as { scenario: string; steps: { step_record_id: string }[] });
     const row = rows.find((candidate) => candidate.scenario === "ok-biginteger-bigint");
-    const recordPath = path.join(tempDir, ".nukadoko", "records", "steps", row!.steps[0]!.step_record_id, "record.json");
+    const recordPath = path.join(stepRecordDir(tempDir, row!.steps[0]!.step_record_id), "record.json");
     const stepRecord = JSON.parse(await readFile(recordPath, "utf8")) as { status: string; args: unknown };
 
     expect(exitCode).toBe(1);

@@ -7,6 +7,7 @@ import {
   createCaptureSink,
   fixture,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
   withoutNoConfigLine,
 } from "./helpers/fixtures.js";
@@ -36,12 +37,7 @@ describe("nuka run: preferForRegexpMatch", () => {
 
     const record = JSON.parse(stdout.text().trim());
     expect(record.steps[0].status).toBe("passed");
-    const stepRecordPath = path.join(
-      rootDir,
-      ".nukadoko",
-      "records",
-      "steps",
-      record.steps[0].step_record_id,
+    const stepRecordPath = path.join(stepRecordDir(rootDir, record.steps[0].step_record_id),
       "record.json",
     );
     expect(JSON.parse(await readFile(stepRecordPath, "utf8")).args).toEqual(["B:ABC"]);

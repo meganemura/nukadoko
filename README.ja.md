@@ -188,9 +188,9 @@ npm run test:scenarios
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  passed  0.0s  the output says "Hello, Ada!"
-steps     .nukadoko/records/steps/      2
-summary   .nukadoko/records/runs/run-20261016-123947-b4q6/summary.md
-run       .nukadoko/records/runs/run-20261016-123947-b4q6/run.json
+steps     .nukadoko/runs/run-20261016-123947-b4q6/steps/  2
+summary   .nukadoko/runs/run-20261016-123947-b4q6/summary.md
+run       .nukadoko/runs/run-20261016-123947-b4q6/run.json
 1 scenario: 1 passed, 0 failed  (2s)
 ```
 
@@ -206,10 +206,10 @@ scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  failed  0.0s  the output says "Hi, Ada!"
       text: expected "Hi, Ada!", got "Hello, Ada!"
-      record  .nukadoko/records/steps/step-20261016-123950-kjs1
-steps     .nukadoko/records/steps/      2
-summary   .nukadoko/records/runs/run-20261016-123950-zrhr/summary.md
-run       .nukadoko/records/runs/run-20261016-123950-zrhr/run.json
+      record  .nukadoko/runs/run-20261016-123950-zrhr/steps/step-20261016-123950-kjs1
+steps     .nukadoko/runs/run-20261016-123950-zrhr/steps/  2
+summary   .nukadoko/runs/run-20261016-123950-zrhr/summary.md
+run       .nukadoko/runs/run-20261016-123950-zrhr/run.json
 1 scenario: 0 passed, 1 failed  (1s)
 failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
   do: nuka run features/greet.feature:4
@@ -234,7 +234,7 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 
 | scenario | line | status | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `.nukadoko/records/steps/step-20261016-123950-kjs1` |
+| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `steps/step-20261016-123950-kjs1` |
 ```
 
 CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.ja.md](docs/ci.ja.md) に workflow 全体があります):
@@ -1077,7 +1077,7 @@ stdout には、求めたときだけ出力されます。
 それはすべての `--json` が出力する envelope で、`findings` の隣に run のフィールドが入ります。
 そこにはコミットと作業ツリーが dirty だったかどうか、environment、`:line` の対象が run を `partial` にしたかどうか、件数、各 scenario の step(行、status、step record、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
 `--json` のときは stderr は空で、警告は文書の中の finding になるので、エージェントのシェルに見えるのはその文書だけです。
-`run.json` と step record は、フラグにかかわらず `.nukadoko/records/` の下に書かれ、run サマリは `run.json` だけから描画されます。
+`run.json` と step record は、フラグにかかわらず run 自身のディレクトリ `.nukadoko/runs/<run_id>/` に書かれ、run サマリは `run.json` だけから描画されます。
 stdout や stderr が端末かどうかで変わる出力はありません。
 失敗した step は、進捗行の下にエラーの 1 行目と step record のパスを出力します。
 そのため、CI のログだけで失敗の理由が分かります。
@@ -1090,14 +1090,14 @@ stdout や stderr が端末かどうかで変わる出力はありません。
 ```text
   step 2/2  failed  0.0s  the sum is 5
       expected 5, got 4
-      record  .nukadoko/records/steps/<id>
+      record  .nukadoko/runs/<run_id>/steps/<id>
 ...
 failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
   do: nuka run features/sum.feature:3
 ```
 
 同じ事実は、ログではなく人のために書かれた Markdown の run サマリにも入ります。
-毎回の run で `.nukadoko/records/runs/<run_id>/summary.md` に書かれ、`$GITHUB_STEP_SUMMARY` が設定されていればそこに追記され、PR のコメント step 向けには `--summary <path>` にも書かれます。
+毎回の run で `.nukadoko/runs/<run_id>/summary.md` に書かれ、`$GITHUB_STEP_SUMMARY` が設定されていればそこに追記され、PR のコメント step 向けには `--summary <path>` にも書かれます。
 その 1 行目は `<!-- nukadoko:run -->` なので、CI の step は前の push で投稿したコメントを更新できます。
 
 **記録を置き換える retry は恒久的にスコープ外であり、「いまはまだ」ではありません。**

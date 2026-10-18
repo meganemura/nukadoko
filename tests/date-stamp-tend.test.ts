@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir, stepRecordIds } from "./helpers/fixtures.js";
 
 // A step that returns a Date or a bigint has to survive the real write
 // path: the stored form, then JSON.stringify into the step record. An empty
@@ -15,10 +15,9 @@ async function runAndReadStepRecord(rootDir: string, feature: string): Promise<s
     stderr: createCaptureSink(),
   });
   expect(runExit).toBe(0);
-  const stepsDir = path.join(rootDir, ".nukadoko", "records", "steps");
-  const stepIds = await readdir(stepsDir);
+  const stepIds = stepRecordIds(rootDir);
   expect(stepIds).toHaveLength(1);
-  return readFile(path.join(stepsDir, stepIds[0]!, "record.json"), "utf8");
+  return readFile(path.join(stepRecordDir(rootDir, stepIds[0]!), "record.json"), "utf8");
 }
 
 describe("a recorded Date or bigint result", () => {

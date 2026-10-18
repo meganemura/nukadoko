@@ -122,7 +122,7 @@ nothing.
    that stream. A child process spawned with `stdio: "inherit"` still
    writes to stdout directly. The run also
    writes a Markdown run summary for the person reviewing it, to
-   `.nukadoko/records/runs/<run_id>/summary.md` (the `summary` line names
+   `.nukadoko/runs/<run_id>/summary.md` (the `summary` line names
    it), to `$GITHUB_STEP_SUMMARY` when that is set, and to
    `--summary <path>` when a CI step posts it as a pull request comment. A compat World
    constructor that throws fails that scenario only: stderr gets one setup

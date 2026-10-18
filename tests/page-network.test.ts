@@ -8,6 +8,7 @@ import {
   copyFixtureToTempDir,
   createCaptureSink,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -87,7 +88,7 @@ function startTestServer(): Promise<{ server: Server; baseURL: string }> {
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<StoredStepRecord> {
-  const recordPath = path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json");
+  const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8")) as StoredStepRecord;
 }
 

@@ -4,6 +4,7 @@ import {
   copyFixtureToTempDir,
   createCaptureSink,
   removeTempDir,
+  stepRecordDir,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
@@ -44,13 +45,13 @@ describe("nuka run: process-scope fixture is built once, reused by a later scena
       .map((line) => JSON.parse(line) as { steps: { step_record_id: string }[] });
     expect(records).toHaveLength(2);
 
-    // Each scenario's own step record is written to .nukadoko/records/steps/<id>/
+    // Each scenario's own step record is written to .nukadoko/runs/<run>/steps/<id>/
     // record.json; read both back to check `result.count` and `fixtures`.
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
     async function readStepRecord(recordId: string): Promise<any> {
       const text = await fs.readFile(
-        path.join(rootDir, ".nukadoko", "records", "steps", recordId, "record.json"),
+        path.join(stepRecordDir(rootDir, recordId), "record.json"),
         "utf8",
       );
       return JSON.parse(text);

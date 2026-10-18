@@ -8,7 +8,7 @@ import path from "node:path";
 // `session list` (session/manage.ts) can enumerate every environment's
 // subdirectory instead of assuming there is exactly one.
 //
-// Lives under `cache/`, not `records/`: a session is avoided work (skipping
+// Lives under `cache/`, not with the runs: a session is avoided work (skipping
 // a login flow already proven once), not a measurement of anything that
 // happened. Losing it costs a repeated login, never a wrong verdict about
 // what a run did — the same distinction that puts `export/` on the

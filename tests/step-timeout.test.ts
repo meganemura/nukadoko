@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { DEFAULT_STEP_TIMEOUT_MS } from "../src/config/schema.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: a typed step that never returns is failed, not left to
 // take the run with it. A project's CI hit the job limit six times in a
@@ -92,7 +92,7 @@ describe("a typed step that never returns", () => {
 
     const { readFileSync } = await import("node:fs");
     const stepRecord = JSON.parse(
-      readFileSync(path.join(rootDir, ".nukadoko", "records", "steps", record.steps[0].step_record_id, "record.json"), "utf8"),
+      readFileSync(path.join(stepRecordDir(rootDir, record.steps[0].step_record_id), "record.json"), "utf8"),
     );
     expect(stepRecord.status).toBe("failed");
     expect(stepRecord.error.kind).toBe("timeout");

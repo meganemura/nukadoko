@@ -38,6 +38,26 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.17.0 から次のリリースへ
 
+- **各 run は 1 つのディレクトリ `.nukadoko/runs/<run_id>/` になり、`records/` は書かれなくなりました。**
+  state directory を読むスクリプト、CI の step、ツールは、次のパスを変えます。
+  - `.nukadoko/records/runs/<run_id>/run.json`、`summary.md`、`exports` は、`.nukadoko/runs/<run_id>/run.json`、`summary.md`、`exports` です。
+  - `.nukadoko/records/steps/<id>/` は、`nuka run` が走らせた step なら `.nukadoko/runs/<run_id>/steps/<id>/`、`nuka do` の呼び出しなら `.nukadoko/do/<id>/` です。
+  - `.nukadoko/records/scenarios/<id>/` は `.nukadoko/runs/<run_id>/scenarios/<id>/` です。
+  - `run.json` の中のパス(step の `record`、`used` のエントリの `record`、scenario の `evidence.dir`)はすべて run ディレクトリからの相対パスです。
+    `.nukadoko/records/steps/<id>` ではなく `steps/<id>` と書かれます。
+    `run.json` を持つディレクトリと結合してください。
+    run サマリの `record` のセルも同じパスです。
+    step record 自身の `evidence.dir` は、これまでどおりプロジェクトのルートからの相対パスです。
+  - `.nukadoko/records/` をアップロードしていた CI の step は、`.nukadoko/runs/` をアップロードします。
+    docs/ci.ja.md に、コミットに固定した `actions/upload-artifact` の step があります。
+    `.nukadoko` は隠しディレクトリなので、その step は `include-hidden-files: true` を設定します。
+  - retention の行の日数の部分に一致させていたスクリプトは、`unfinished runs and nuka do records older than` に一致させます。
+  以前のリリースが残した `.nukadoko/records/` は読まれず、retention も `nuka clean` もそれを消しません。
+  手で消してください(`rm -rf .nukadoko/records`)。
+  そのディレクトリの id を `nuka do --use` に渡すと、見つからないとして拒否されます。
+  値を作る step をもう一度走らせてください。
+  session、cache、export の出力は動きません。
+
 - **`run.json` が run のすべてを持ち、scenario record のファイルはなくなりました。**
   `run.json` や `nuka run --json` を読むスクリプトは、次の読み方を変えます。
   - `schema_version` は envelope の 2 で、文書は `command: "run"`、`verdict`、`findings` で始まります。
@@ -52,7 +72,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
     scenario record の `git.clean` を調べていたスクリプトは、`!commit.dirty` を調べます。
   - `.nukadoko/records/scenarios/<id>/record.json` を読んでいたスクリプトは、`run.json` の中のその scenario のエントリを読みます。
     このファイルはもう書かれません。
-    スクリーンショット、hook の trace、添付のどれも書かなかった scenario は、`records/scenarios/<id>/` のディレクトリを残しません。
+    スクリーンショット、hook の trace、添付のどれも書かなかった scenario は、scenario の evidence のディレクトリを残しません(それがいまどこに置かれるかは、上の run ディレクトリの項目を参照)。
   - stderr の「Partial run」の段落に一致させていたスクリプトは、`run.json` の `selection`(`partial` か `full`)か、run サマリの `- selection:` の行を読みます。
   - `--records` の行は、いまは scenario の `run.json` のエントリです。
     `run_id`、`environment`、`session`、`git`、`nukadoko`、`schema_version` は持たないので、それらは `run.json` から読みます。
@@ -99,7 +119,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   その列を解析していたスクリプトは、次の 3 つから 1 つを選びます。
   読んでいる `nuka run` に `--records` を足します(各行はいまは scenario の `run.json` のエントリで、下の `run.json` の項目で述べます)。
   または `--json` に切り替えます。
-  または、run がフラグにかかわらず書く `.nukadoko/records/runs/<run_id>/run.json` を読みます。
+  または、run がフラグにかかわらず書く `.nukadoko/runs/<run_id>/run.json` を読みます。
   ログを表示するだけの CI の step は、何も変える必要がありません。
   run サマリ、stderr の行、`nuka do` の stdout は変わりません。
 - **`evidence.attach` と `evidence.path` は `trace.<name>.zip` と `final.<name>.png` を拒否します。**
