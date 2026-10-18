@@ -57,6 +57,16 @@ just until 0.1.
   `exitCode` check that restores the failure, and says that `runCommand`
   runs no shell. docs/upgrading.ja.md and the acceptance skill's parts
   reference match.
+- **`no-step-files-found` names the scaffold command for the checked feature files.**
+  On a fresh project the first `nuka check` reported this error with a
+  `do:` that named no command, above `undefined-step` lines that did. The
+  `do:` now names `nuka scaffold --feature` with each checked file whose
+  lines are undefined, and says that step files outside `featuresDir` are
+  never read. A project with no feature file keeps the registry's `do:`.
+  The README, `llms.txt`, and the acceptance skill now say that
+  `--feature` stubs declare no `returns` and no `from`, so a When that
+  runs a program and the Thens that read its result are scaffolded one
+  at a time with `--command` and `--then --from`.
 - **`nuka scaffold` names the way past a refusal that a project file causes.**
   When the step file already existed, or a `--from` producer declared no
   `returns`, a `returns` that is not a `z.object`, or no such key, the

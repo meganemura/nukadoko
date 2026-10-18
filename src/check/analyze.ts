@@ -38,6 +38,7 @@ import { missingTsSourceSentence } from "./missing-ts-source.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing, playwrightImportMissing } from "./playwright-check.js";
 import { checkCodeDo } from "./codes.js";
+import { noStepFilesDo } from "./no-step-files-do.js";
 import { importSuppressionDo } from "./suppressed-do.js";
 import type { CheckFinding, CheckIssue, CheckReport } from "./types.js";
 import {
@@ -339,7 +340,8 @@ async function reportFor(
   // it here under a second code would be the same root cause reported
   // twice, not two distinct pieces of information for a reader to act on.
   const featuresRoot = path.join(rootDir, config.featuresDir);
-  if (walkedFiles.length === 0 && existsSync(featuresRoot)) {
+  const noStepFiles = walkedFiles.length === 0 && existsSync(featuresRoot) ? errors.length : undefined;
+  if (noStepFiles !== undefined) {
     errors.push({
       code: "no-step-files-found",
       message: `no .ts/.mts/.js/.mjs step file was found while scanning "${config.featuresDir}" (resolved to ${featuresRoot}); no step can ever be registered`,
@@ -602,6 +604,13 @@ async function reportFor(
     bindingResult.standIns,
   );
   warnings.push(...featureResult.warnings);
+  if (noStepFiles !== undefined) {
+    const scaffoldDo = noStepFilesDo(
+      featureResult.undefinedSteps.map((line) => line.file),
+      config.featuresDir,
+    );
+    if (scaffoldDo !== undefined) errors[noStepFiles] = { ...errors[noStepFiles]!, do: scaffoldDo };
+  }
   // A renamed sentence or pattern leaves a line undefined and a step unbound
   // in the same analysis; naming the unbound step beside the line keeps the
   // scaffold hint from being the only lead. Bound is judged on every feature

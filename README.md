@@ -421,6 +421,10 @@ the pattern and in `args` together. When a line reads more than one way
 (a registered type and a built-in both fit), or its reading would also
 match another line of the project, the stub keeps the line itself as its
 pattern, with no capture, and a `note:` line on stderr says so.
+The stubs declare no `returns` and no `from`. For a When that runs a
+program and the Thens that read its result, scaffold one step at a time
+with `--command` and `--then --from`, as
+[Beside your unit tests](#beside-your-unit-tests) does.
 
 A from-order violation is the case plain glue cannot even represent,
 because without a typed contract there is nothing for the concept to
