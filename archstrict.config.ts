@@ -308,6 +308,7 @@ export default {
         "match-step.ts",
         "probe-git.ts",
         "probe.ts",
+        "verdicts.ts",
         "process-signal.ts",
         "progress-log.ts",
         "run-concurrent.ts",

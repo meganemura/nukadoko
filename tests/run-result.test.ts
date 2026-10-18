@@ -63,8 +63,7 @@ describe("nuka run: run.json", () => {
       finished_at: expect.any(String),
       // The fixture copy sits inside this repository's own working tree.
       commit: { sha: expect.stringMatching(/^[0-9a-f]{40}$/), dirty: expect.any(Boolean) },
-      environment: "default",
-      target_version: null,
+      environments: [{ name: "default", target_version: null }],
       selection: "full",
       counts: { scenarios: 2, passed: 1, failed: 1 },
       scenarios: [
@@ -73,6 +72,7 @@ describe("nuka run: run.json", () => {
           feature: "features/failure/a.feature",
           line: 3,
           scenario: "named concurrent failure",
+          environment: "default",
           status: "failed",
           started_at: expect.any(String),
           finished_at: expect.any(String),
@@ -95,6 +95,7 @@ describe("nuka run: run.json", () => {
           feature: "features/failure/b.feature",
           line: 3,
           scenario: "concurrent pass",
+          environment: "default",
           status: "passed",
           started_at: expect.any(String),
           finished_at: expect.any(String),
@@ -111,6 +112,26 @@ describe("nuka run: run.json", () => {
             },
           ],
           hooks: [],
+        },
+      ],
+      verdicts: [
+        {
+          feature: "features/failure/a.feature",
+          line: 3,
+          scenario: "named concurrent failure",
+          environment: "default",
+          verdict: "failed",
+          executions: 1,
+          passed: 0,
+        },
+        {
+          feature: "features/failure/b.feature",
+          line: 3,
+          scenario: "concurrent pass",
+          environment: "default",
+          verdict: "passed",
+          executions: 1,
+          passed: 1,
         },
       ],
     });

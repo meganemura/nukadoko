@@ -81,6 +81,10 @@ spans lines. Double quotes expand `\n` and `\r`. The separator is `=`.
 "Sessions, environments, secrets". A line that is not a blank, a comment,
 or a binding is `env-file-skipped-line` from `nuka check`.
 
+A suite that ran once per target, a shell loop or one CI job per profile,
+becomes one run: name each target in `environments` and pass
+`nuka run --env a --env b`. The summary has one column per environment.
+
 ## Two stages, never at once
 
 Change one thing, then the next. Never both at once. If a step breaks

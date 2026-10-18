@@ -2036,7 +2036,7 @@ blockquote or a fence.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>] [--concurrency <n>] [--repeat <n>] [--probe] [--quiet] [--records] [--json] [--summary <path>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--quiet] [--records] [--json] [--summary <path>]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2140,8 +2140,8 @@ colliding with a suite's existing meaning for a short name.
 `--repeat <n>` runs every selected scenario `n` times in this one
 invocation: the whole selection once, then again, so a failure that depends
 on what ran before it meets the same neighbours on every pass. Each
-execution is its own entry in `run.json`'s `scenarios`, the summary
-counts executions, and a scenario that failed at least once gets a `repeat`
+execution is its own entry in `run.json`'s `scenarios`, its `verdicts`
+cell counts the executions and how many passed, and a scenario that failed at least once gets a `repeat`
 line after the failed list, `<passed> of <n> passed`, with no verdict
 attached: a scenario that fails every time is not flaky, and the count is
 what a reader needs. The flag exists for a failure that reproduces one time
@@ -2149,10 +2149,10 @@ in several. Without it, the answer was a shell loop of `nuka run`, which
 spreads the evidence over that many run ids, while the run summary and
 `nuka tend` read one. In the messages stream each execution is its own
 `testCase`, not a retry of one, so a formatter that lists test cases lists
-every execution. In Allure, every execution carries the scenario's own
+every execution. In Allure, every execution in one environment carries the scenario's own
 identity, so a report shows one test with the other executions as its
 retries, which is where a scenario that sometimes fails is easiest to read.
-The run summary lists each execution as its own row: green three times is
+The run summary's cell reads `<passed> of <n> passed`: green three times is
 a different claim from green once, and a reviewer sees the count. `nuka
 tend` counts a scenario
 once however many times it ran. Under `--concurrency`, each worker repeats
@@ -2184,6 +2184,36 @@ step's `run` is trusted as written, and the step the implementing agent
 wrote for itself is the one most likely to check nothing. Under
 `--concurrency` each worker probes its own scenarios, and under `--repeat`
 every execution probes.
+
+`--env` may repeat: `nuka run --env a --env b` is one run, with one
+`run_id`, one `run.json`, one summary, and one exit code, that runs every
+selected scenario once in each environment. The environments run one after
+another in the order given, the whole selection in `a` and then the whole
+selection in `b`, so two environments never share a target at once, and
+each pass is the run it would have been alone: its own env files, secrets,
+version probe, `baseURL`, and policy, its own BeforeAll and AfterAll, and
+its own `"process"`-scope fixtures, torn down before the next environment
+starts. An environment stays generic config: nukadoko has no notion of a
+feature flag, and what differs between two environments is whatever their
+env files and `baseURL` say. Each scenario entry carries its `environment`,
+and `verdicts` holds one cell per scenario and environment, red when any
+execution in it is red. The exit code is red when any cell is red. Naming
+one environment twice is refused before anything runs, since its cells
+could not be told apart. The other flags compose with it as follows.
+`--repeat <n>` repeats inside each environment, so a cell holds `n`
+executions. A `:line` target selects the scenarios, and each selected one
+runs in every environment. Under `--concurrency`, each environment is a
+pass of its own: its parallel phase and then its `@nukadoko:serial` files,
+before the next environment's workers start. A signal stops the run before
+the next environment starts. Retention counts runs, and a run over two
+environments is one run directory. `nuka tend` reads the newest run, and
+counts a scenario once however many environments it ran in. In the
+messages stream each execution is its own `testCase`, as under `--repeat`.
+In Allure the environment is part of a result's identity, so a scenario
+that passed in one environment and failed in the other is two tests, not a
+retry. With more than one environment, a finding and a `repeat` line name
+the environment after the scenario, and the progress log opens each pass
+with an `environment <name>` line.
 
 A `"process"`-scope fixture is built once per worker, and a compat
 `BeforeAll`/`AfterAll` runs once per worker, because a worker is a process.
@@ -2262,7 +2292,8 @@ every other step line. After the
 summary line, stderr prints each failed scenario as a finding,
 `failed\tscenario-failed\t<feature>:<line>\t<name>: <first error line>`,
 followed by a `  do:` line: `nuka run <feature>:<line>`, plus `--env <name>`
-when the run was given one, quoted for a POSIX shell where a word needs
+naming the environment the scenario ran in when the run was given `--env`,
+quoted for a POSIX shell where a word needs
 it. These lines appear for serial and concurrent runs, and `--quiet` keeps
 them. Under `--json`, stderr is empty: it carries none of the lines this
 paragraph and the two above it name, nor the retention line, and the
@@ -2299,8 +2330,7 @@ to act on the run without opening another file:
   "started_at": "...",
   "finished_at": "...",
   "commit": { "sha": "<40 hex characters>", "dirty": false },
-  "environment": "default",
-  "target_version": null,
+  "environments": [{ "name": "default", "target_version": null }],
   "selection": "full",
   "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
   "scenarios": [
@@ -2309,6 +2339,7 @@ to act on the run without opening another file:
       "feature": "features/greet.feature",
       "line": 4,
       "scenario": "greets by name",
+      "environment": "default",
       "status": "failed",
       "started_at": "...",
       "finished_at": "...",
@@ -2349,6 +2380,17 @@ to act on the run without opening another file:
       "hooks": [],
       "do": "nuka run features/greet.feature:4"
     }
+  ],
+  "verdicts": [
+    {
+      "feature": "features/greet.feature",
+      "line": 4,
+      "scenario": "greets by name",
+      "environment": "default",
+      "verdict": "failed",
+      "executions": 1,
+      "passed": 0
+    }
   ]
 }
 ```
@@ -2356,14 +2398,15 @@ to act on the run without opening another file:
 - `commit` is the commit `HEAD` named when the run started, and `dirty`
   says whether the working tree then had a change `git status --porcelain`
   reports, an untracked file included. It is `null` outside a git
-  repository or before the first commit. `environment` is the `--env` the
-  run targeted, and `target_version` what that environment's version probe
-  answered, `null` without one.
+  repository or before the first commit. `environments` lists each
+  environment the run targeted, in the order `--env` gave them (`default`
+  without `--env`), with `target_version`, what that environment's version
+  probe answered, `null` without one.
 - `selection` is `partial` when a `:line` target left out a scenario of its
   file, and `full` otherwise. A partial run is a debugging result, not
   what a reviewer should read as the feature passing (see "Review").
 - `scenarios` has one entry per scenario execution, in the order each
-  finished. Each step has its `line` in the feature file, its `text`, the
+  finished, with the `environment` it ran in. Each step has its `line` in the feature file, its `text`, the
   `step` it matched (`null` when none or more than one), and its `status`.
   A step that began has a `step_record_id` (the value `nuka do --use`
   takes) and a `record`, the step record's directory, with its `mutates`
@@ -2389,6 +2432,11 @@ to act on the run without opening another file:
   probe note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
   in text.
+- `verdicts` has one cell per scenario and environment, features by path,
+  scenarios by line, and environments in the order given: `verdict` is
+  `failed` when any execution in the cell failed, `executions` counts them
+  (more than 1 under `--repeat`), and `passed` counts the ones that passed.
+  It is the table the run summary draws.
 - `verdict` is the exit code's: it also counts a BeforeAll or AfterAll
   failure that no scenario carries, so it can be `failed` while
   `counts.failed` is 0.
@@ -3033,18 +3081,20 @@ holds:
   with every scenario green still reads `failed`, with a sentence saying the
   failure was outside every scenario) and its scenario counts;
 - the condition: the short commit sha and whether the tree had uncommitted
-  changes (from `commit`, or "unknown" without one), the environment and its
+  changes (from `commit`, or "unknown" without one), each environment and its
   target version, every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
   file), the nukadoko version, the run id, and the start and finish times;
 - one table per feature file, by path, with a row per scenario in line
-  order: scenario, line, status, duration, and for a failed one where it
+  order: scenario, line, one column per environment, named after it, with
+  that cell's verdict (`<passed> of <n> passed` under `--repeat`), the
+  duration of every execution in the row, and for a failed one where it
   failed (the first step that did not pass or skip, otherwise the first
   failed hook), the first line of that error, each `used` step whose process
   exited nonzero with its exit code and the first line of its stderr (as on
   stderr), the last command the step ran through `runCommand` that did not
-  exit 0, and the record's path. Under
-  `--repeat`, each execution is its own row;
+  exit 0, and the record's path, once for each environment it failed in
+  and prefixed by that environment when the run had more than one;
 - "Declared vs observed", over every step that ran and has a step record:
   each step that declared `mutates: false` but made at least one measured
   write (`observed.http_writes > 0`, see "Keyword semantics"), stated as a
@@ -3065,7 +3115,8 @@ holds:
   (a warning such as a file that was not written or a teardown that
   failed), one line each with its severity, code, location, and message;
 - for a failed run, each failed scenario's `do`, the `nuka run
-  <feature>:<line>` command, with `--env` when the run had one.
+  <feature>:<line>` command, with `--env` naming the environment it failed
+  in when the run had one.
 
 It is written to `.nukadoko/runs/<run_id>/summary.md` every time,
 appended to the file `$GITHUB_STEP_SUMMARY` names when that is set (GitHub
@@ -3089,7 +3140,7 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 - **Environments** name deployment targets. Each environment can define a
   `baseURL`, `envFiles`, `policy: "read-only"`, and an optional `version` probe.
   The read-only policy refuses mutating steps. Each step record stores the
-  probe result as `target_version`. The run summary states the environment
+  probe result as `target_version`. The run summary states each environment
   and version, so a reviewer knows the deployment where the run was green.
 - **Secrets** use git to classify their *origin*. An ignored or untracked env
   file is a secret source. Nukadoko does not distinguish between those two git
@@ -3957,8 +4008,8 @@ The following findings show what `tend` inspects and why each item is rot rather
   denominator is summed scenario time rather than wall clock, so this
   reads the same at any `--concurrency`. A run still in progress has no
   `run.json` yet, so the finding reads the newest run that ended. A
-  scenario that ran more than once in that run (`--repeat`) counts once,
-  as its last execution. It
+  scenario that ran more than once in that run (`--repeat`, or more than
+  one `--env`) counts once, as its last execution. It
   stops at the number. What to do about a shared opening depends on
   whether its steps write state a later scenario reads, and the step
   records carry each step's own `mutates` declaration. When every shared
@@ -4209,7 +4260,7 @@ The npm package is `nukadoko`. The one command it installs is `nuka`.
 `nuka --help` ends by naming `node_modules/nukadoko/llms.txt`, the file an agent with no skill loaded reads first.
 
 ```
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before
@@ -4217,7 +4268,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
                               --env targets a named environment ("default"
-                              when omitted).
+                              when omitted); repeated, it runs every selected
+                              scenario once in each, in order, in one run
+                              with one verdict per scenario and environment.
                               :line runs one scenario, for iteration only;
                               its summary covers only that scenario. Each target
                               can be a file, file:line, or directory. Targets
@@ -4251,8 +4304,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]
                               stdout is empty unless asked: --records
                               prints NDJSON, each scenario's run.json
                               entry, on a terminal or not. --json prints
-                              run.json (commit, environment, selection,
-                              counts, each scenario's steps with line,
+                              run.json (commit, environments, selection,
+                              counts, verdicts, each scenario's steps with line,
                               status, record, and error, each failed
                               scenario's do, the findings) as the one
                               document on stdout instead; run.json is
@@ -4631,7 +4684,7 @@ nuka experimental explore <file> [--seed <n>] [--runs <n>] [--length <n>] [--env
                               scenario. Exits 1 on a failure, 2 on a refusal
 ```
 
-A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do` and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
+A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do`, `--env` on `nuka run`, and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
 
 Text output (no `--json`) is formatted for a human reading it.
 `--json` is the machine-readable contract: stdout carries exactly one JSON

@@ -27,7 +27,7 @@ describe("nuka run: an environment's own version probe", () => {
       expect(stderr.text()).not.toContain("version-probe-failed");
       const document = latestRunJson(rootDir);
       expect(document.counts).toEqual({ scenarios: 1, passed: 1, failed: 0 });
-      expect(document.target_version).toBe("9.9.9");
+      expect(document.environments).toEqual([{ name: "probe-ok", target_version: "9.9.9" }]);
     } finally {
       await removeTempDir(rootDir);
     }
@@ -46,7 +46,7 @@ describe("nuka run: an environment's own version probe", () => {
       expect(exitCode).toBe(0);
       const document = latestRunJson(rootDir);
       expect(document.counts).toEqual({ scenarios: 1, passed: 1, failed: 0 });
-      expect(document.target_version).toBe(null);
+      expect(document.environments).toEqual([{ name: "probe-throws", target_version: null }]);
       expect(document.findings).toEqual([
         {
           severity: "warning",

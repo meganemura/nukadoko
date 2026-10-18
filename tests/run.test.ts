@@ -76,7 +76,7 @@ describe("nuka run", () => {
     // The stdout line is run.json's own entry for the scenario.
     const document = latestRunJson(rootDir);
     expect(document.scenarios).toEqual([record]);
-    expect(document.environment).toBe("default");
+    expect(document.environments).toEqual([{ name: "default", target_version: null }]);
 
     for (const step of record.steps) {
       const stepRecord = await readStepRecord(rootDir, step.step_record_id);

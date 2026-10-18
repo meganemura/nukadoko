@@ -3,14 +3,16 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { RunDocument, RunScenario, RunStep } from "../src/record/run-result.js";
 import { renderRunSummary } from "../src/run/run-summary.js";
+import { foldVerdicts } from "../src/run/verdicts.js";
 
 // Responsibility: the exact Markdown of the run summary, rendered from
-// literal run.json documents: a green run, a red run, and a run whose step
-// declared `mutates: false` and was measured writing. The properties are
-// that every scenario of a run gets exactly one row, whatever its name,
-// feature, or line, and that the title says the document's verdict, so a
-// reader never reads a run with a scenario missing, counted twice, or with
-// a verdict run.json does not hold.
+// literal run.json documents: a green run, a red run, a run over two
+// environments under `--repeat`, and a run whose step declared
+// `mutates: false` and was measured writing. The properties are that every
+// scenario of a run gets exactly one row, whatever its name, feature, or
+// line, and that the title says the document's verdict, so a reader never
+// reads a run with a scenario missing, counted twice, or with a verdict
+// run.json does not hold.
 
 const base: RunDocument = {
   schema_version: 2,
@@ -22,12 +24,25 @@ const base: RunDocument = {
   started_at: "2026-10-15T12:00:00.000Z",
   finished_at: "2026-10-15T12:01:05.000Z",
   commit: { sha: "0123456789abcdef0123456789abcdef01234567", dirty: false },
-  environment: "default",
-  target_version: null,
+  environments: [{ name: "default", target_version: null }],
   selection: "full",
   counts: { scenarios: 0, passed: 0, failed: 0 },
   scenarios: [],
+  verdicts: [],
 };
+
+// A document whose `verdicts` fold its own scenarios, as `nuka run` writes
+// them.
+function run(over: Partial<RunDocument>): RunDocument {
+  const document = { ...base, ...over };
+  return {
+    ...document,
+    verdicts: foldVerdicts(
+      document.scenarios,
+      document.environments.map((environment) => environment.name),
+    ),
+  };
+}
 
 function scenario(
   feature: string,
@@ -43,6 +58,7 @@ function scenario(
     feature,
     line,
     scenario: name,
+    environment: "default",
     status,
     started_at: new Date(started).toISOString(),
     finished_at: new Date(started + durationMs).toISOString(),
@@ -58,8 +74,7 @@ function step(text: string, extra: Partial<RunStep> = {}): RunStep {
 
 describe("renderRunSummary", () => {
   it("renders a green run", () => {
-    const markdown = renderRunSummary({
-      ...base,
+    const markdown = renderRunSummary(run({
       scenarios: [
         scenario("features/login.feature", 9, "a wrong password is refused", "passed", 800, {
           browser: { type: "chromium", version: "141.0.7390.37" },
@@ -69,7 +84,7 @@ describe("renderRunSummary", () => {
           browser: { type: "chromium", version: "141.0.7390.37" },
         }),
       ],
-    });
+    }));
     expect(markdown).toBe(
       [
         "<!-- nukadoko:run -->",
@@ -85,13 +100,13 @@ describe("renderRunSummary", () => {
         "",
         "## features/cart.feature",
         "",
-        "| scenario | line | status | duration | failure |",
+        "| scenario | line | default | duration | failure |",
         "| --- | --- | --- | --- | --- |",
         "| an item is added | 3 | passed | 1.3s |  |",
         "",
         "## features/login.feature",
         "",
-        "| scenario | line | status | duration | failure |",
+        "| scenario | line | default | duration | failure |",
         "| --- | --- | --- | --- | --- |",
         "| a member signs in | 3 | passed | 2.0s |  |",
         "| a wrong password is refused | 9 | passed | 0.8s |  |",
@@ -105,16 +120,15 @@ describe("renderRunSummary", () => {
   });
 
   it("renders a red run with the failing step, its error, what it ran, and how to rerun it", () => {
-    const markdown = renderRunSummary({
-      ...base,
+    const markdown = renderRunSummary(run({
       verdict: "failed",
-      environment: "staging",
-      target_version: "2.4.0",
+      environments: [{ name: "staging", target_version: "2.4.0" }],
       commit: { sha: "fedcba9876543210fedcba9876543210fedcba98", dirty: true },
       selection: "partial",
       scenarios: [
-        scenario("features/login.feature", 3, "a member signs in", "passed", 1000),
+        scenario("features/login.feature", 3, "a member signs in", "passed", 1000, { environment: "staging" }),
         scenario("features/login.feature", 9, "a wrong password | is refused", "failed", 400, {
+          environment: "staging",
           steps: [
             step("the seed ran", {
               record: "steps/stp-0",
@@ -143,12 +157,13 @@ describe("renderRunSummary", () => {
           do: "nuka run features/login.feature:9 --env staging",
         }),
         scenario("features/login.feature", 15, "a session expires", "failed", 0, {
+          environment: "staging",
           hooks: [{ type: "before", status: "failed", error: { kind: "step_error", message: "" } }],
           evidence: { dir: "scenarios/scn-2", screenshots: [] },
           do: "nuka run features/login.feature:15 --env staging",
         }),
       ],
-    });
+    }));
     expect(markdown).toBe(
       [
         "<!-- nukadoko:run -->",
@@ -164,7 +179,7 @@ describe("renderRunSummary", () => {
         "",
         "## features/login.feature",
         "",
-        "| scenario | line | status | duration | failure |",
+        "| scenario | line | staging | duration | failure |",
         "| --- | --- | --- | --- | --- |",
         "| a member signs in | 3 | passed | 1.0s |  |",
         '| a wrong password \\| is refused | 9 | failed | 0.4s | step "the error &lt;b>Locked&lt;/b> is shown": `` expected `Locked` \\| got `Open` ``<br>used the-seed-ran exit 2: `seed: no database`<br>ran `npm run seed`<br>record `steps/stp-1` |',
@@ -187,9 +202,66 @@ describe("renderRunSummary", () => {
     );
   });
 
+  it("draws one column per environment, and a cell per scenario and environment under --repeat", () => {
+    const at = (environment: string, status: "passed" | "failed", extra: Partial<RunScenario> = {}) =>
+      scenario("features/flag.feature", 4, "the banner is shown", status, 500, { environment, ...extra });
+    const markdown = renderRunSummary(run({
+      verdict: "failed",
+      environments: [
+        { name: "flag-on", target_version: null },
+        { name: "flag-off", target_version: "1.2.0" },
+      ],
+      scenarios: [
+        at("flag-on", "passed"),
+        at("flag-on", "passed"),
+        at("flag-off", "failed", {
+          steps: [step("the banner is shown", { status: "failed", record: "steps/stp-9", error: { kind: "step_error", message: "no banner" } })],
+          do: "nuka run features/flag.feature:4 --env flag-off",
+        }),
+        at("flag-off", "passed"),
+        scenario("features/flag.feature", 9, "the page loads", "passed", 250, { environment: "flag-on" }),
+        scenario("features/flag.feature", 9, "the page loads", "passed", 250, { environment: "flag-on" }),
+        scenario("features/flag.feature", 9, "the page loads", "passed", 250, { environment: "flag-off" }),
+        scenario("features/flag.feature", 9, "the page loads", "passed", 250, { environment: "flag-off" }),
+      ],
+    }));
+    expect(markdown).toBe(
+      [
+        "<!-- nukadoko:run -->",
+        "# nukadoko run failed: 2 scenarios in 2 environments, 3 passed, 1 failed",
+        "",
+        "- commit: `0123456`",
+        "- environment: flag-on",
+        "- environment: flag-off (target version 1.2.0)",
+        "- browser: none launched",
+        "- selection: full",
+        "- nukadoko: 0.14.1",
+        "- run: run-20261015-120000-abcd",
+        "- started 2026-10-15T12:00:00.000Z, finished 2026-10-15T12:01:05.000Z (1m 5s)",
+        "",
+        "## features/flag.feature",
+        "",
+        "| scenario | line | flag-on | flag-off | duration | failure |",
+        "| --- | --- | --- | --- | --- | --- |",
+        '| the banner is shown | 4 | 2 of 2 passed | 1 of 2 passed | 2.0s | flag-off: step "the banner is shown": `no banner`<br>record `steps/stp-9` |',
+        "| the page loads | 9 | 2 of 2 passed | 2 of 2 passed | 1.0s |  |",
+        "",
+        "## Declared vs observed",
+        "",
+        "No step declared `mutates: false` and was measured making a write.",
+        "",
+        "## Rerun a failed scenario",
+        "",
+        "```sh",
+        "nuka run features/flag.feature:4 --env flag-off",
+        "```",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("says when the run failed outside every scenario, and lists the findings that say why", () => {
-    const markdown = renderRunSummary({
-      ...base,
+    const markdown = renderRunSummary(run({
       verdict: "failed",
       commit: null,
       findings: [
@@ -197,7 +269,7 @@ describe("renderRunSummary", () => {
         { severity: "warning", code: "summary-not-written", message: "the run summary was not written to out.md: EACCES" },
       ],
       scenarios: [scenario("features/a.feature", 2, "s", "passed", 10)],
-    });
+    }));
     expect(markdown.split("\n").slice(0, 6)).toEqual([
       "<!-- nukadoko:run -->",
       "# nukadoko run failed: 1 scenario, 1 passed",
@@ -222,8 +294,7 @@ describe("renderRunSummary", () => {
       writes === null
         ? { http_reads: null, http_writes: null, processes: null }
         : { http_reads: 0, http_writes: writes, processes: null };
-    const markdown = renderRunSummary({
-      ...base,
+    const markdown = renderRunSummary(run({
       scenarios: [
         scenario("features/a.feature", 2, "a report is read", "passed", 10, {
           steps: [
@@ -237,7 +308,7 @@ describe("renderRunSummary", () => {
           ],
         }),
       ],
-    });
+    }));
     expect(markdown.slice(markdown.indexOf("## Declared vs observed"))).toBe(
       [
         "## Declared vs observed",
@@ -275,15 +346,20 @@ describe("renderRunSummary", () => {
     { maxSize: 12 },
   );
 
+  // One execution per scenario: the generated lines are made distinct, so
+  // a row and an execution are the same thing here.
+  const distinct = (entries: readonly RunScenario[]): RunScenario[] =>
+    entries.map((entry, index) => ({ ...entry, line: index + 1 }));
+
   it("gives every scenario of the run exactly one row", () =>
     hegel.test((tc) => {
       // Each row carries a unique duration, so a row can be traced back to
       // the one scenario it came from.
-      const scenarios = tc.draw(scenariosGen).map((entry, index) => ({
+      const scenarios = distinct(tc.draw(scenariosGen)).map((entry, index) => ({
         ...entry,
         finished_at: new Date(Date.parse(entry.started_at) + index * 100_000).toISOString(),
       }));
-      const markdown = renderRunSummary({ ...base, scenarios });
+      const markdown = renderRunSummary(run({ scenarios }));
       const rows = markdown.split("\n").filter((line) => /^\| .* \| (passed|failed) \| \d+\.\ds \|/.test(line));
       expect(rows).toHaveLength(scenarios.length);
       scenarios.forEach((_, index) => {
@@ -295,8 +371,8 @@ describe("renderRunSummary", () => {
   it("titles the summary with the document's verdict", () =>
     hegel.test((tc) => {
       const verdict = tc.draw(gs.sampledFrom(["passed", "failed"] as const));
-      const scenarios = tc.draw(scenariosGen);
-      const title = renderRunSummary({ ...base, verdict, scenarios }).split("\n")[1]!;
+      const scenarios = distinct(tc.draw(scenariosGen));
+      const title = renderRunSummary(run({ verdict, scenarios })).split("\n")[1]!;
       const failed = scenarios.filter((entry) => entry.status === "failed").length;
       const counts = [`${scenarios.length} scenario${scenarios.length === 1 ? "" : "s"}`, `${scenarios.length - failed} passed`];
       if (failed > 0) counts.push(`${failed} failed`);

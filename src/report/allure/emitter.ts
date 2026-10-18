@@ -296,6 +296,11 @@ export interface BeginScenarioInput {
   readonly pickle: Pickle;
   readonly gherkinDocument: GherkinDocument;
   readonly relativeFeaturePath: string;
+  /** The environment this execution runs under. One run can execute the
+   * same scenario under several environments (`nuka run --env a --env b`),
+   * so the environment is part of a result's identity: without it Allure
+   * would fold one environment's result into the other's as a retry. */
+  readonly environment: string;
   /** Captured by the caller (cli/run.ts) once, right before `runScenario`
    * itself runs, never later than that call's own `record.started_at`
    * (nothing async happens between the two). `beginScenario` uses this
@@ -540,6 +545,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
   let progressCeilingMs: number | null = null;
   let progressUuid: string | null = null;
   let progressSnapshotCount = 0;
+  let progressEnvironment = "";
 
   function toAbsolute(relativePath: string): string {
     return path.join(options.rootDir, relativePath);
@@ -728,12 +734,15 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
     const sequence = progressSnapshotCount;
     result.start = Math.min(anchor + sequence, ceiling);
     // Identity only. `mapScenario`'s own context
-    // parameters (environment/session/target_version) are excluded from
-    // historyId already, so a snapshot that never carries them changes
-    // nothing a reader could compare against the real result.
+    // parameters (session/target_version) are excluded from historyId
+    // already, so a snapshot that never carries them changes nothing a
+    // reader could compare against the real result. The environment is not
+    // context: it is part of the identity (`BeginScenarioInput.environment`),
+    // so the snapshot carries it the same way the real result does.
     result.parameters = [
       ...buildExampleParameters(gherkinDocument, pickle),
       { name: "nukadoko.scenario.steps", value: buildScenarioStepsSignature(pickle), mode: "hidden" },
+      { name: "environment", value: progressEnvironment },
     ];
     // The exact same allure-js-commons helpers `ReporterRuntime.stopTest`
     // itself calls for the real result (map-scenario.ts's own header) —
@@ -806,6 +815,7 @@ export function createAllureEmitter(options: AllureEmitterOptions): AllureEmitte
       bufferedSteps = [];
       scenarioStartedAtMs = input.startedAt.getTime();
       progressSnapshotCount = 0;
+      progressEnvironment = input.environment;
       progressAnchorMs = null;
       progressCeilingMs = null;
       progressUuid = null;

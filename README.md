@@ -242,7 +242,7 @@ lands on the job's summary page by itself. Its first part:
 
 ## features/greet.feature
 
-| scenario | line | status | duration | failure |
+| scenario | line | default | duration | failure |
 | --- | --- | --- | --- | --- |
 | greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `steps/step-20261016-123950-kjs1` |
 ```
@@ -1175,8 +1175,9 @@ ask: `nuka run --records` writes each scenario's `run.json` entry there,
 one JSON line per scenario as it finishes, and `nuka run --json` prints
 `run.json` itself instead, the envelope every `--json` prints with the
 run's fields beside `findings`: the commit and whether the tree was dirty,
-the environment, whether a `:line` target made the run `partial`, the
-counts, and each scenario's steps with their line, status, step record,
+each environment it ran in, whether a `:line` target made the run
+`partial`, the counts, one verdict per scenario and environment, and each
+scenario's steps with their line, status, step record,
 and, for a failure, its error, the results it read, and the command that
 reruns it. Under `--json` stderr is empty, and a warning is a finding in
 the document, so the document is the only thing an agent's shell shows.
@@ -1256,6 +1257,16 @@ flipped). A Then that still passes is a `then-passed-with-changed-capture`
 note in `run.json` and the run summary. It is a measurement, so the exit
 code stays the run's.
 
+`nuka run --env a --env b` runs every selected scenario once in each
+environment, in one run with one run id: all of `a` first, then all of
+`b`, each with its own env files, secrets, version probe, BeforeAll and
+AfterAll, and process-scope fixtures. `run.json` holds one verdict per
+scenario and environment, the summary table has one column per
+environment, and the exit code is red when any cell is. A scenario that
+passes with a feature flag on and fails with it off reads across one row.
+An environment is still only config: what differs between `a` and `b` is
+whatever their env files and `baseURL` say.
+
 ## What this does not do
 
 - **Step records are not unforgeable.** An agent with shell access can write
@@ -1324,9 +1335,9 @@ A person who approves without writing code reads two things on a PR: the
 `.feature` in the diff, to check it says what the ticket meant, and the
 run summary, to check what ran and at which commit. Everything under
 `.nukadoko/` and every `nuka` verb belongs to the agent or to CI. Every
-`nuka run` writes that summary as Markdown: the commit, the environment,
-the browser, one table per feature with each scenario's status, duration,
-and failing step, a closing section naming any step that declared
+`nuka run` writes that summary as Markdown: the commit, each environment,
+the browser, one table per feature with each scenario's verdict in each
+environment, its duration, and its failing step, a closing section naming any step that declared
 `mutates: false` while measured making a write, and the command that reruns
 each failed scenario. On GitHub Actions it lands on the job's summary page
 with no configuration, and `--summary <path>` writes a copy a CI step can

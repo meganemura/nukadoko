@@ -68,6 +68,7 @@ function baseBeginScenarioInput(
 ): BeginScenarioInput {
   return {
     relativeFeaturePath: "features/checkout.feature",
+    environment: "staging",
     startedAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };
@@ -280,7 +281,7 @@ describe("createAllureEmitter", () => {
       expect(result.labels?.some((l) => l.name === "parentSuite")).toBe(false);
       expect(result.labels?.some((l) => l.name === "suite")).toBe(false);
 
-      expect(result.parameters).toContainEqual({ name: "environment", value: "staging", excluded: true });
+      expect(result.parameters).toContainEqual({ name: "environment", value: "staging" });
       expect(result.parameters).toContainEqual({ name: "session", value: "sess-1", excluded: true });
       expect(result.parameters).toContainEqual({ name: "target_version", value: "9.9.9", excluded: true });
     });

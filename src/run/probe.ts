@@ -3,6 +3,7 @@ import type { RunScenario } from "../record/run-result.js";
 import type { ProbeValue } from "../record/scenario-record.js";
 import { runCodeInfo } from "../finding/run-codes.js";
 import { shellWord } from "../shell/shell-word.js";
+import type { RunConditions } from "./progress-log.js";
 
 // Responsibility: the pure half of `nuka run --probe`. Which value a
 // capture is changed to, and which note a probe that still passed becomes.
@@ -37,7 +38,7 @@ function shown(value: ProbeValue): string {
 
 /** One note for each probe that passed in a scenario that passed. A probe
  * that failed is the Then doing its job. */
-export function probeFindings(scenarios: readonly RunScenario[], rerunFlags: readonly string[]): Finding[] {
+export function probeFindings(scenarios: readonly RunScenario[], conditions: RunConditions): Finding[] {
   const info = runCodeInfo("then-passed-with-changed-capture");
   return scenarios.flatMap((scenario) =>
     scenario.status !== "passed"
@@ -52,9 +53,9 @@ export function probeFindings(scenarios: readonly RunScenario[], rerunFlags: rea
                   file: scenario.feature,
                   ...(probe.line === null ? {} : { line: probe.line }),
                   step: probe.step,
-                  message: `step "${probe.step}" passed with ${probe.key} ${shown(probe.changed)} in place of ${shown(probe.recorded)}`,
+                  message: `step "${probe.step}"${conditions.named ? ` (${scenario.environment})` : ""} passed with ${probe.key} ${shown(probe.changed)} in place of ${shown(probe.recorded)}`,
                   fix: info.fix,
-                  do: ["nuka", "run", `${scenario.feature}:${scenario.line}`, "--probe", ...rerunFlags].map(shellWord).join(" "),
+                  do: ["nuka", "run", `${scenario.feature}:${scenario.line}`, "--probe", ...conditions.rerunFlags(scenario.environment)].map(shellWord).join(" "),
                 },
               ],
         ),

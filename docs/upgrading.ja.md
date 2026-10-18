@@ -143,6 +143,18 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `--json` の拒否を行で区切っていたスクリプトは、stdout を 1 つの JSON 値として解析します。
   拒否はいまは整形されて出力されます。
   `nuka steps` のテキストを 80 以外の端末幅で比べていたテストは、80 で比べます。
+- **`run.json` は run のすべての environment を名指し、scenario と environment の組ごとに 1 つの断定を持ちます。**
+  run を読む側で変わるのは次のとおりです。
+  - `run.json` の `environment` を読んでいたスクリプトは `environments[0].name` を読み、`target_version` の代わりに `environments[0].target_version` を読みます。
+    `--env` の無い run は `default` の 1 件を持ちます。
+  - scenario を `scenarios` のエントリで判定していたスクリプトは `verdicts` を読みます。
+    scenario と environment の組ごとに 1 つのセルがあり、`verdict`、`executions`、`passed` を持ちます。
+    `scenarios` の各エントリも自分の `environment` を名指します。
+  - run サマリの表を解析していたスクリプトは、`status` を読んでいたところで environment の名前の列(`--env` が無ければ `default`)を読みます。
+    `--repeat` で実行ごとに 1 行だったところは、scenario ごとに 1 行になります。
+  - environment ごとに `nuka run --env` を走らせていた CI のジョブは、`nuka run --env a --env b` を 1 つの step にでき、サマリも 1 つになります。
+  - 古い history id を鍵にした Allure の履歴は、一度だけ最初からになります。
+    environment が result の identity の一部になったからです。
 
 ## 0.16.1 から 0.17.0 へ
 

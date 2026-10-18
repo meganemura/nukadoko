@@ -106,7 +106,10 @@ interface RunArgs {
   feature?: string[];
   /** `false` under `--no-check` (yargs' own boolean negation). */
   check?: boolean;
-  env?: string;
+  /** `--env`: one name, or every name when the flag repeats (yargs-parser
+   * collects a repeated string flag into an array). Not `array: true`,
+   * which would also swallow the feature targets that follow it. */
+  env?: string | string[];
   /** Suppresses the per-step/per-scenario progress lines — the
    * output-location and summary lines still print; run.ts's own header
    * explains why those two are exempt. */
@@ -588,7 +591,9 @@ export async function runCli(
         })
         .option("env", {
           type: "string",
-          describe: 'target a named environment (omit for the "default" environment)',
+          describe:
+            'target a named environment (omit for the "default" environment); repeat it to run every selected ' +
+            "scenario once in each, in one run with one verdict per scenario and environment",
         })
         .option("quiet", {
           type: "boolean",
@@ -639,7 +644,7 @@ export async function runCli(
             "also write the Markdown run summary to this path, for a CI step that posts it on a pull request " +
             "(it is always written to the run's directory, and appended to $GITHUB_STEP_SUMMARY when that is set)",
         })
-        .check(rejectRepeatedFlags(["env", "concurrency", "repeat", "summary"])) as Argv<RunArgs>,
+        .check(rejectRepeatedFlags(["concurrency", "repeat", "summary"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
@@ -648,7 +653,7 @@ export async function runCli(
         rootDir,
         featureArgs: args.feature ?? [],
         check: args.check ?? true,
-        env: args.env ?? null,
+        envs: args.env === undefined ? [] : typeof args.env === "string" ? [args.env] : args.env,
         quiet: args.quiet ?? false,
         records: args.records ?? false,
         json: args.json ?? false,

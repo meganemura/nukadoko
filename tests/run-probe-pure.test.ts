@@ -58,6 +58,7 @@ const scenario: gs.Generator<RunScenario> = gs
     feature: "features/a.feature",
     line,
     scenario: "a",
+    environment: "default",
     status,
     started_at: "2026-10-18T00:00:00.000Z",
     finished_at: "2026-10-18T00:00:00.000Z",
@@ -70,11 +71,35 @@ describe("probeFindings", () => {
   it("raises one note per passed probe of a passed scenario, and nothing else", () =>
     hegel.test((tc) => {
       const scenarios = tc.draw(gs.arrays(scenario, { maxSize: 5 }));
-      const findings = probeFindings(scenarios, []);
+      const findings = probeFindings(scenarios, { rerunFlags: () => [], named: false });
       const expected = scenarios
         .filter((entry) => entry.status === "passed")
         .flatMap((entry) => (entry.probes ?? []).filter((entry) => entry.status === "passed").map(() => entry.line));
       expect(findings.map((finding) => finding.do)).toEqual(expected.map((line) => `nuka run features/a.feature:${line} --probe`));
       expect(findings.every((finding) => finding.severity === "note" && finding.code === "then-passed-with-changed-capture")).toBe(true);
     }));
+
+  it("names the environment and reruns in it when the run had several", () => {
+    const findings = probeFindings(
+      [
+        {
+          scenario_record_id: "scenario-x",
+          feature: "features/a.feature",
+          line: 3,
+          scenario: "a",
+          environment: "flag-off",
+          status: "passed",
+          started_at: "2026-10-18T00:00:00.000Z",
+          finished_at: "2026-10-18T00:00:00.000Z",
+          steps: [],
+          hooks: [],
+          probes: [{ line: 4, step: "the total is", key: "total", recorded: 3, changed: 4, status: "passed" }],
+        },
+      ],
+      { rerunFlags: (environment) => ["--env", environment], named: true },
+    );
+    expect(findings.map((finding) => [finding.message, finding.do])).toEqual([
+      ['step "the total is" (flag-off) passed with total 4 in place of 3', "nuka run features/a.feature:3 --probe --env flag-off"],
+    ]);
+  });
 });

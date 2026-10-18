@@ -76,6 +76,7 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     feature: record.feature,
     line: record.line,
     scenario: record.scenario,
+    environment: record.environment,
     status: record.status,
     started_at: record.started_at,
     finished_at: record.finished_at,

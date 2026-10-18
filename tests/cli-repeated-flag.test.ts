@@ -11,11 +11,11 @@ import {
 
 // Responsibility: a string or number flag that takes one value must be
 // refused when it is given again, before the command writes anything.
-// `--use` and `--fail-on` are arrays on purpose and stay repeatable.
+// `--use` and `--fail-on` are arrays on purpose and stay repeatable, and so
+// is `nuka run --env`, which runs once per environment it names.
 // A boolean given twice stays that boolean.
 
 const REPEATED: ReadonlyArray<{ readonly flag: string; readonly argv: readonly string[]; readonly help: string }> = [
-  { flag: "--env", argv: ["run", "features/x.feature", "--env", "a", "--env", "b"], help: "nuka run --help" },
   { flag: "--concurrency", argv: ["run", "features/x.feature", "--concurrency", "2", "--concurrency", "3"], help: "nuka run --help" },
   { flag: "--repeat", argv: ["run", "features/x.feature", "--repeat", "2", "--repeat", "3"], help: "nuka run --help" },
   { flag: "--args", argv: ["do", "step", "--args", "{}", "--args", "{}"], help: "nuka do --help" },

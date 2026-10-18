@@ -123,10 +123,10 @@ describe("a command run in a directory with no config", () => {
         "  fix: Correct the command line; the command's --help lists its flags.\n" +
         "  do: nuka check --help\n",
     );
-    const repeated = await nuka(dir, ["run", "features/a.feature", "--env", "a", "--env", "b"]);
+    const repeated = await nuka(dir, ["run", "features/a.feature", "--repeat", "2", "--repeat", "3"]);
     expect(repeated.code).toBe(2);
     expect(repeated.stderr).toBe(
-      "refused\tinvalid-arguments\t-\t--env was given more than once.\n" +
+      "refused\tinvalid-arguments\t-\t--repeat was given more than once.\n" +
         "  fix: Correct the command line; the command's --help lists its flags.\n" +
         "  do: nuka run --help\n",
     );

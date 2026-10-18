@@ -221,6 +221,11 @@
       "note": "TypeScript の module augmentation(declare module \"nukadoko\" で StepFixtures にメンバーを足すこと)。docs/spec.ja.md \"Fixtures\" で使われていた訳に揃えた。動詞化するときは「StepFixtures を拡張する」"
     },
     {
+      "en": ["cell", "cells"],
+      "ja": "セル",
+      "note": "run.json の verdicts の 1 要素で、scenario と environment の 1 組の断定(verdict)。run サマリの表で scenario の行と environment の列が交わるところに描かれる"
+    },
+    {
       "en": ["outcome"],
       "ja": "成否",
       "note": "docs/spec.md \"Fixtures\" の fixture の use() が返す \"passed\" | \"failed\" を指す語として入った。result / 結果(実行が生んだ値そのもの)とは別で、成否は pass/fail の二値だけを指す"

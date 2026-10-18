@@ -70,6 +70,9 @@ export interface RunScenario {
   readonly feature: string;
   readonly line: number;
   readonly scenario: string;
+  /** The environment this execution ran under, one of the run's
+   * `environments`. */
+  readonly environment: string;
   readonly status: "passed" | "failed";
   readonly started_at: string;
   readonly finished_at: string;
@@ -83,7 +86,7 @@ export interface RunScenario {
    * of them, since the directory is then removed. */
   readonly evidence?: ScenarioEvidence;
   readonly teardown_errors?: readonly { readonly fixture: string; readonly message: string }[];
-  /** For a failed scenario: the command that runs it alone, in the same
+  /** For a failed scenario: the command that runs it alone, in its own
    * environment. */
   readonly do?: string;
   /** Under `--probe`: each Then re-run with one capture changed. Not a
@@ -103,6 +106,26 @@ export interface RunProbe {
   readonly status: "passed" | "failed";
 }
 
+/** One scenario under one environment: `failed` when any of its
+ * executions failed (src/run/verdicts.ts). */
+export interface RunVerdict {
+  readonly feature: string;
+  readonly line: number;
+  readonly scenario: string;
+  readonly environment: string;
+  readonly verdict: "passed" | "failed";
+  /** More than 1 under `--repeat`. */
+  readonly executions: number;
+  readonly passed: number;
+}
+
+/** A condition the run ran under: an environment from the config. */
+export interface RunEnvironment {
+  readonly name: string;
+  /** What the environment's version probe answered, `null` without one. */
+  readonly target_version: string | null;
+}
+
 /** The fields `nuka run` puts beside the envelope's `findings`. */
 export type RunFields = {
   readonly run_id: string;
@@ -111,14 +134,19 @@ export type RunFields = {
   /** The commit and whether the working tree had uncommitted changes when
    * the run started; `null` outside git or before the first commit. */
   readonly commit: { readonly sha: string; readonly dirty: boolean } | null;
-  readonly environment: string;
-  readonly target_version: string | null;
+  /** Every environment the run ran under, in the order `--env` named
+   * them; `default` alone without `--env`. Each selected scenario ran once
+   * per environment. */
+  readonly environments: readonly RunEnvironment[];
   /** `partial` when a `:line` target left out some scenarios of its file,
    * so the run covers less than the files it names. */
   readonly selection: "full" | "partial";
   readonly counts: { readonly scenarios: number; readonly passed: number; readonly failed: number };
   /** One entry per scenario execution, in the order they finished. */
   readonly scenarios: readonly RunScenario[];
+  /** One entry per (scenario, environment), red when any execution of it
+   * was red. */
+  readonly verdicts: readonly RunVerdict[];
 };
 
 /** run.json as a reader gets it: the envelope every `--json` shares, and

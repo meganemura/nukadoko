@@ -136,6 +136,7 @@ describe("runWithHeartbeat + AllureEmitter.emitStepProgress", () => {
       pickle,
       gherkinDocument,
       relativeFeaturePath: "features/checkout.feature",
+      environment: "staging",
       startedAt: new Date(),
     });
     expect(progressFileCount()).toBe(1);
@@ -186,6 +187,7 @@ describe("runWithHeartbeat + AllureEmitter.emitStepProgress", () => {
       pickle,
       gherkinDocument,
       relativeFeaturePath: "features/checkout.feature",
+      environment: "staging",
       startedAt: new Date(),
     });
     expect(progressFileCount()).toBe(1);
@@ -231,6 +233,7 @@ describe("runWithHeartbeat + AllureEmitter.emitStepProgress", () => {
       pickle,
       gherkinDocument,
       relativeFeaturePath: "features/checkout.feature",
+      environment: "staging",
       startedAt: new Date(),
     });
     expect(progressFileCount()).toBe(1);

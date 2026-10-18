@@ -31,8 +31,8 @@ tend` reports it as `package-type-missing`), and fails to import under
 `"type": "commonjs"`, with an error that names the file.
 
 A flag that takes one string or one number is refused when it is given
-more than once, and the command writes nothing. `--use` and `--fail-on`
-are the repeatable flags. Each value is kept, in the order given.
+more than once, and the command writes nothing. `--use`, `--fail-on`, and
+`nuka run`'s `--env` repeat. Each value is kept, in the order given.
 
 ## Environments
 
@@ -40,7 +40,10 @@ are the repeatable flags. Each value is kept, in the order given.
 targets one of the environments named in `nukadoko.config.ts`'s
 own `environments` key; omitting it targets `default`, which needs no
 entry there. Each entry can override `baseURL`, append its own `envFiles`
-after the top-level list, and set `policy: "read-only"`.
+after the top-level list, and set `policy: "read-only"`. `nuka run --env
+a --env b` runs every selected scenario in `a`, then in `b`, as one run:
+`verdicts` and the summary hold one cell per scenario and environment, a
+failure's `do:` names its environment, and any red cell makes the run red.
 
 Trial and error, `nuka do` while building a step and `nuka run` while
 getting a feature green, belongs on a verification environment; never
@@ -87,9 +90,8 @@ files, so `nuka check <targets>` reports the errors `nuka run <targets>`
 would stop on. `:line` belongs to `nuka run`.
 
 The walk that finds those feature files skips `node_modules` and any
-directory whose name starts with `.`, at every depth. A `.feature` file
-in one of those directories is not checked and not run. The skip reports
-nothing.
+directory whose name starts with `.`, at every depth: a `.feature` file
+there is not checked and not run, and the skip reports nothing.
 
 ## Running
 
@@ -113,8 +115,8 @@ nothing.
    way. To act on the result, pass `--json` instead: stdout is then
    `run.json` itself, one envelope
    `{ schema_version, nukadoko, command, verdict, findings, ... }` with the
-   run's fields beside `findings` (`commit`, `environment`, `selection`,
-   counts, and per scenario its steps with `line`, `status`, `record`, and
+   run's fields beside `findings` (`commit`, `environments`, `selection`,
+   counts, `verdicts`, and per scenario its steps with `line`, `status`, `record`, and
    a failed one's `error` and `used`, plus a failed scenario's `do`); the
    run writes the same bytes beside its summary, which is rendered from it. stderr is then empty: every
    warning and failed scenario is a finding in the envelope. Text a step, a hook, or a fixture writes through `console.log` or
@@ -137,7 +139,7 @@ nothing.
    and stderr says so.
 3. A failure that reproduces one time in several is a case for
    `nuka run <feature>:<line> --repeat <n>`, not for a shell loop: every
-   execution lands under one run id, the summary counts executions, and a
+   execution lands under one run id, its summary cell counts them, and a
    scenario that failed at least once gets a `repeat` line after the
    failed list, `<passed> of <n> passed`. Read the failing executions'
    records and screenshots (`references/diagnosing.md`) rather than the

@@ -307,6 +307,7 @@ export interface FailedScenario {
   readonly feature: string;
   readonly line: number;
   readonly scenario: string;
+  readonly environment: string;
   /** The first line of the first error the record holds, a step's or a
    * hook's, when it holds one. */
   readonly error?: string;
@@ -318,6 +319,7 @@ export function failedScenarioOf(record: {
   readonly feature: string;
   readonly line: number;
   readonly scenario: string;
+  readonly environment: string;
   readonly steps: readonly { readonly error?: { readonly message: string } }[];
   readonly hooks: readonly { readonly error?: { readonly message: string } }[];
 }): FailedScenario {
@@ -327,8 +329,22 @@ export function failedScenarioOf(record: {
     feature: record.feature,
     line: record.line,
     scenario: record.scenario,
+    environment: record.environment,
     ...(first !== undefined ? { error: first } : {}),
   };
+}
+
+/** How a run names one execution's condition: the rerun flags that land a
+ * command in the same environment, and whether a line names the
+ * environment, which it does once the run has more than one. */
+export interface RunConditions {
+  readonly rerunFlags: (environment: string) => readonly string[];
+  readonly named: boolean;
+}
+
+/** `name`, or `name (environment)` in a run over several environments. */
+export function scenarioLabel(scenario: string, environment: string, conditions: Pick<RunConditions, "named">): string {
+  return conditions.named ? `${scenario} (${environment})` : scenario;
 }
 
 /** `1h 2m 3s`, the unit a whole run reads in. */
@@ -364,12 +380,19 @@ export interface RepeatTally {
   readonly feature: string;
   readonly line: number;
   readonly scenario: string;
+  readonly environment: string;
   readonly passed: number;
   readonly total: number;
 }
 
 export interface RepeatTallyCollector {
-  note(record: { readonly feature: string; readonly line: number; readonly scenario: string; readonly status: string }): void;
+  note(record: {
+    readonly feature: string;
+    readonly line: number;
+    readonly scenario: string;
+    readonly environment: string;
+    readonly status: string;
+  }): void;
   /** Every scenario seen, in first-seen order. */
   list(): RepeatTally[];
 }
@@ -379,11 +402,18 @@ export interface RepeatTallyCollector {
  * plus two counters per scenario rather than as every record. Keyed by
  * feature and line, the same identity a `:line` target names. */
 export function createRepeatTally(): RepeatTallyCollector {
-  const tallies = new Map<string, { feature: string; line: number; scenario: string; passed: number; total: number }>();
+  const tallies = new Map<string, { feature: string; line: number; scenario: string; environment: string; passed: number; total: number }>();
   return {
     note(record): void {
-      const key = `${record.feature}\u0000${record.line}`;
-      const entry = tallies.get(key) ?? { feature: record.feature, line: record.line, scenario: record.scenario, passed: 0, total: 0 };
+      const key = `${record.feature}\u0000${record.line}\u0000${record.environment}`;
+      const entry = tallies.get(key) ?? {
+        feature: record.feature,
+        line: record.line,
+        scenario: record.scenario,
+        environment: record.environment,
+        passed: 0,
+        total: 0,
+      };
       entry.total += 1;
       if (record.status === "passed") entry.passed += 1;
       tallies.set(key, entry);
@@ -401,10 +431,11 @@ export function createRepeatTally(): RepeatTallyCollector {
  * stay silent. Neither "flaky" nor any other verdict is written: a
  * scenario failing every time is not flaky, and the count is what a
  * reader needs to decide. */
-export function writeRepeatTallies(stderr: WritableSink, tallies: readonly RepeatTally[]): void {
+export function writeRepeatTallies(stderr: WritableSink, tallies: readonly RepeatTally[], conditions: Pick<RunConditions, "named">): void {
   for (const tally of tallies) {
     if (tally.passed === tally.total) continue;
-    stderr.write(`repeat  ${tally.feature}:${tally.line}  ${tally.scenario}  ${tally.passed} of ${tally.total} passed\n`);
+    const name = scenarioLabel(tally.scenario, tally.environment, conditions);
+    stderr.write(`repeat  ${tally.feature}:${tally.line}  ${name}  ${tally.passed} of ${tally.total} passed\n`);
   }
 }
 
@@ -412,15 +443,18 @@ export function writeRepeatTallies(stderr: WritableSink, tallies: readonly Repea
  * by the summary, each with the command that reruns that scenario. The
  * caller retains these display values instead of retaining every record
  * from the run. */
-export function failedScenarioFindings(failures: readonly FailedScenario[], rerunFlags: readonly string[]): Finding[] {
-  return failures.map((failure) => ({
-    severity: "failed",
-    code: "scenario-failed",
-    file: failure.feature,
-    line: failure.line,
-    message: failure.error === undefined ? failure.scenario : `${failure.scenario}: ${failure.error}`,
-    do: formatRerunCommand(failure, rerunFlags),
-  }));
+export function failedScenarioFindings(failures: readonly FailedScenario[], conditions: RunConditions): Finding[] {
+  return failures.map((failure) => {
+    const name = scenarioLabel(failure.scenario, failure.environment, conditions);
+    return {
+      severity: "failed",
+      code: "scenario-failed",
+      file: failure.feature,
+      line: failure.line,
+      message: failure.error === undefined ? name : `${name}: ${failure.error}`,
+      do: formatRerunCommand(failure, conditions.rerunFlags(failure.environment)),
+    };
+  });
 }
 
 /** The command that runs one failed scenario again, in the same environment.

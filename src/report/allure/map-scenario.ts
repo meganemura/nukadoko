@@ -1179,12 +1179,15 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   // outcome changing from one run to the next is exactly the "regressed"/
   // "fixed" transition this identity exists to make visible, not a reason
   // to treat the two runs as different scenarios.
+  // The environment joins the identity: one run can execute a scenario
+  // under several environments, and a result that passed in one and failed
+  // in the other is two tests, not a retry of one.
   const identityParameters: MappedParameter[] = [
     { name: "nukadoko.scenario.steps", value: buildScenarioStepsSignature(pickle), mode: "hidden" },
+    { name: "environment", value: record.environment },
   ];
 
   const contextParameters: MappedParameter[] = [
-    { name: "environment", value: record.environment, excluded: true },
     ...(record.session !== null ? [{ name: "session", value: record.session, excluded: true }] : []),
     ...(record.target_version !== undefined ? [{ name: "target_version", value: record.target_version, excluded: true }] : []),
   ];

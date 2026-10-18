@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createTestResult, getTestResultHistoryId } from "allure-js-commons/sdk/reporter";
 import type { Examples, GherkinDocument, Pickle, Scenario, TableRow } from "@cucumber/messages";
 import { parseFeatureSource } from "../src/feature/load-features.js";
 import {
@@ -984,7 +985,7 @@ describe("mapScenario: parameter modes and context parameters read straight from
     expect(param!.excluded).toBeFalsy();
   });
 
-  it("marks environment/session/target_version excluded, read from record fields directly", () => {
+  it("marks session/target_version excluded and keeps environment in the identity, read from record fields directly", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const record = baseRecord({
@@ -996,9 +997,20 @@ describe("mapScenario: parameter modes and context parameters read straight from
 
     const mapped = callMapScenario({ record, gherkinDocument, pickle });
 
-    expect(mapped.parameters).toContainEqual({ name: "environment", value: "staging", excluded: true });
+    expect(mapped.parameters).toContainEqual({ name: "environment", value: "staging" });
     expect(mapped.parameters).toContainEqual({ name: "session", value: "sess-1", excluded: true });
     expect(mapped.parameters).toContainEqual({ name: "target_version", value: "9.9.9", excluded: true });
+  });
+
+  it("gives one scenario a different history in each environment, so Allure never folds one into the other as a retry", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const historyOf = (environment: string): string => {
+      const mapped = callMapScenario({ record: baseRecord({ steps: [], environment }), gherkinDocument, pickle });
+      return getTestResultHistoryId({ ...createTestResult("u"), fullName: "f", parameters: [...mapped.parameters] });
+    };
+    expect(historyOf("flag-on")).not.toBe(historyOf("flag-off"));
+    expect(historyOf("flag-on")).toBe(historyOf("flag-on"));
   });
 
   it("omits session when null and target_version when absent", () => {

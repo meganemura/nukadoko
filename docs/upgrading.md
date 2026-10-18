@@ -185,6 +185,24 @@ This part does not change release to release.
   refusal by lines parses stdout as one JSON value; it is pretty-printed
   now. A test that compared `nuka steps` text at a terminal width other
   than 80 compares at 80.
+- **`run.json` names every environment of the run, and holds one verdict
+  per scenario and environment.** What changes for a reader of a run:
+  - A script that read `run.json`'s `environment` reads
+    `environments[0].name`, and `target_version` is
+    `environments[0].target_version`. A run without `--env` has one entry,
+    `default`.
+  - A script that judged a scenario by its entries in `scenarios` reads
+    `verdicts`, one cell per scenario and environment with `verdict`,
+    `executions`, and `passed`. Each `scenarios` entry also names its
+    `environment`.
+  - A script that parsed the run summary's table reads the column named
+    after the environment (`default` without `--env`) where it read
+    `status`, and one row per scenario where `--repeat` gave one row per
+    execution.
+  - A CI job that ran `nuka run --env` once per environment can run
+    `nuka run --env a --env b` as one step, with one summary.
+  - An Allure history keyed on the old history ids starts over once: the
+    environment is now part of a result's identity.
 
 ## 0.16.1 to 0.17.0
 

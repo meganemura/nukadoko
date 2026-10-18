@@ -41,6 +41,7 @@ function baseBeginScenarioInput(
 ): BeginScenarioInput {
   return {
     relativeFeaturePath: "features/checkout.feature",
+    environment: "staging",
     startedAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };

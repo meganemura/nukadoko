@@ -41,7 +41,11 @@ import {
   writeRepeatTallies,
   createRepeatTally,
   formatRerunCommand,
+  type RunConditions,
 } from "../run/progress-log.js";
+import { foldVerdicts } from "../run/verdicts.js";
+import type { SecretSet } from "../secrets/types.js";
+import type { NukadokoConfig } from "../config/schema.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
@@ -266,6 +270,19 @@ const UNBUILDABLE_PATTERN_CODES: ReadonlySet<string> = new Set([
   "parameter-type-invalid",
 ]);
 
+// One environment a run executes under: what `--env <name>` resolves to,
+// and what follows from it before the first scenario runs.
+interface Condition {
+  readonly resolvedEnv: ResolvedEnvironment;
+  /** The name `--env` gave, or null when the run named no environment and
+   * ran under the default one. */
+  readonly envArg: string | null;
+  readonly envVars: Readonly<Record<string, string>>;
+  readonly secrets: SecretSet;
+  readonly targetVersion: string | undefined;
+  readonly runConfig: NukadokoConfig;
+}
+
 export interface RunRunOptions {
   /** Findings the invocation raised before the command ran, such as a
    * missing config file, which `--json` carries in the envelope. */
@@ -278,7 +295,9 @@ export interface RunRunOptions {
   /** `false` under `--no-check`: skip the static check this run otherwise
    * performs over its own selection before it executes anything. */
   check: boolean;
-  env: string | null;
+  /** `--env`, in the order given; empty for the `default` environment.
+   * Each selected scenario runs once per environment, in this order. */
+  envs: readonly string[];
   /** Suppresses the per-step and per-scenario progress lines — the
    * output-location and summary lines at the
    * end of a run are written either way; see this file's own header. */
@@ -356,7 +375,7 @@ function stepsLocation(
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, env, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
+  const { rootDir, envs, quiet, concurrency, repeat, summaryPath, stepSummaryPath, stderr } = options;
   const notices = options.notices ?? [];
   const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint, before: readonly Finding[] = []): number =>
     refuse({ json: options.json, stdout: options.stdout, stderr, command: "run" }, error, code, hint, [...notices, ...before]);
@@ -409,12 +428,27 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   }
   const featureArgs = options.featureArgs.length === 0 ? [config.featuresDir] : options.featureArgs;
 
+  // One environment twice would run every scenario twice under the same
+  // name, and its cells could not be told apart.
+  const repeated = envs.filter((name, index) => envs.indexOf(name) !== index);
+  if (repeated.length > 0) {
+    return refused(`--env names ${[...new Set(repeated)].map((name) => `"${name}"`).join(", ")} more than once`, "invalid-value");
+  }
   // A rerun line has to land in the same environment the failure came from.
-  const rerunFlags = env === null ? [] : ["--env", env];
+  // A run that named no environment ran under `default`, and its rerun
+  // names none either.
+  const conditionsOf: RunConditions = {
+    rerunFlags: (environment) => (envs.length === 0 ? [] : ["--env", environment]),
+    named: envs.length > 1,
+  };
+  const rerunFlags = envs.flatMap((name) => ["--env", name]);
 
-  let resolvedEnv: ResolvedEnvironment;
+  let resolvedEnvs: ResolvedEnvironment[];
   try {
-    resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
+    resolvedEnvs =
+      envs.length === 0
+        ? [resolveEnvironment(config, DEFAULT_ENVIRONMENT_NAME, false)]
+        : envs.map((name) => resolveEnvironment(config, name, true));
   } catch (error) {
     return refused(error);
   }
@@ -626,24 +660,38 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       return refused(formatFixtureDefinitionIssues(fixtureDefinitionIssues));
     }
 
-    const envFiles = resolvedEnv.envFiles;
-    const envVars = loadEnvFiles(rootDir, envFiles);
-    const classification = await classifyEnvFiles(rootDir, envFiles);
-    const secrets = buildSecretSet(rootDir, {
-      secretSourceFiles: classification.secretSource,
-      trackedFiles: classification.tracked,
-      publicKeys: config.secrets.public,
-      redactKeys: config.secrets.redact,
-    });
-
-    const probeResult = await probeVersion(resolvedEnv.version);
-    let targetVersion: string | undefined;
-    if (probeResult !== undefined) {
-      if (probeResult.ok) {
-        targetVersion = probeResult.version;
-      } else {
-        warnings("version-probe-failed").write(versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n");
+    // Each environment is a condition of its own: its env files, the
+    // secrets they hold, its version probe, and its baseURL. Only `baseURL`
+    // is overridden from the resolved environment, same as cli/do.ts: every
+    // other config field has no per-environment counterpart.
+    const conditions: Condition[] = [];
+    for (const resolvedEnv of resolvedEnvs) {
+      const envFiles = resolvedEnv.envFiles;
+      const envVars = loadEnvFiles(rootDir, envFiles);
+      const classification = await classifyEnvFiles(rootDir, envFiles);
+      const secrets = buildSecretSet(rootDir, {
+        secretSourceFiles: classification.secretSource,
+        trackedFiles: classification.tracked,
+        publicKeys: config.secrets.public,
+        redactKeys: config.secrets.redact,
+      });
+      const probeResult = await probeVersion(resolvedEnv.version);
+      let targetVersion: string | undefined;
+      if (probeResult !== undefined) {
+        if (probeResult.ok) {
+          targetVersion = probeResult.version;
+        } else {
+          warnings("version-probe-failed").write(versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n");
+        }
       }
+      conditions.push({
+        resolvedEnv,
+        envArg: envs.length === 0 ? null : resolvedEnv.name,
+        envVars,
+        secrets,
+        targetVersion,
+        runConfig: { ...config, baseURL: resolvedEnv.baseURL },
+      });
     }
 
     const runId = generateRunId();
@@ -678,7 +726,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         },
         recordPath: (stepRecordId) => path.join(RUN_FILE_DIRS.steps, stepRecordId),
         evidenceDir: relativeToRun(config.stateDir, runId, record.evidence.dir),
-        rerun: formatRerunCommand(record, rerunFlags),
+        rerun: formatRerunCommand(record, conditionsOf.rerunFlags(record.environment)),
       });
       runScenarios.push(entry);
       if (entry.evidence === undefined) emptyEvidenceDirs.push(path.join(rootDir, record.evidence.dir));
@@ -700,7 +748,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // a warning: the exit code is the run's verdict either way. Returns the
     // root-relative path of the summary in the run directory, or `null`.
     const finishRun = async (verdict: "passed" | "failed", failedScenarios: readonly FailedScenario[]): Promise<{ summaryPath: string | null; retention: string | null }> => {
-      runFindings.push(...failedScenarioFindings(failedScenarios, rerunFlags), ...probeFindings(runScenarios, rerunFlags));
+      runFindings.push(...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf));
       // The run's `scenarios/` goes too once no scenario left evidence in it.
       for (const dir of [...emptyEvidenceDirs, path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios)]) {
         try {
@@ -728,11 +776,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         started_at: invocationStartedAt.toISOString(),
         finished_at: new Date().toISOString(),
         commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean },
-        environment: resolvedEnv.name,
-        target_version: targetVersion ?? null,
+        environments: conditions.map((condition) => ({
+          name: condition.resolvedEnv.name,
+          target_version: condition.targetVersion ?? null,
+        })),
         selection,
         counts: countScenarios(runScenarios),
         scenarios: runScenarios,
+        verdicts: foldVerdicts(runScenarios, resolvedEnvs.map((resolvedEnv) => resolvedEnv.name)),
       };
       const exitCode = verdict === "passed" ? 0 : 1;
       let summaryPath: string | null = null;
@@ -776,10 +827,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         failed: counts.total - counts.passed,
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      for (const finding of [...failedScenarioFindings(failedScenarios, rerunFlags), ...probeFindings(runScenarios, rerunFlags)]) {
+      for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf)]) {
         progress.write(formatFinding(withHint(finding)));
       }
-      writeRepeatTallies(progress, tallies);
+      writeRepeatTallies(progress, tallies, conditionsOf);
       if (end.retention !== null) progress.write(`${end.retention}\n`);
     };
     // One instance for this whole `nuka run` invocation — passed unchanged
@@ -793,10 +844,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // shape as `onUnknownTraceVersion` just above. Built under `--quiet` too:
     // the logger itself drops every line but a failed step's.
     const onStepEnd = createStepProgressLogger(progress, { stateDir: config.stateDir, runId, quiet });
-
-    // Only `baseURL` is overridden from the resolved environment, same as
-    // cli/do.ts: every other config field has no per-environment counterpart.
-    const runConfig = { ...config, baseURL: resolvedEnv.baseURL };
 
     // Runs one BeforeAll/AfterAll
     // registration, in isolation — `label` is only ever "BeforeAll" or
@@ -866,14 +913,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         interruptedBy,
       } = await runConcurrentPickles({
           rootDir,
-          config: runConfig,
+          config,
           runId,
           repeat,
           probe: options.probe,
-          envArg: env,
-          environment: resolvedEnv.name,
-          targetVersion,
-          secrets,
+          conditions: conditions.map((condition) => ({
+            envArg: condition.envArg,
+            environment: condition.resolvedEnv.name,
+            targetVersion: condition.targetVersion,
+            secrets: condition.secrets,
+          })),
           quiet,
           concurrency: effectiveConcurrency,
           selected,
@@ -928,29 +977,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // `hasPickles` gates every step below, including AfterAll.
       const hasPickles = flatPickles.length > 0;
 
-      // This whole invocation's own `"process"`-scope fixture cache — one
-      // instance, shared by every `runScenario`
-      // call below, so a `"process"`-scope fixture named by more than one
-      // scenario is built exactly once and torn down exactly once, after
-      // the pickle loop
-      // (below, near AfterAll). Cheap to create even for a zero-pickle run
-      // — an empty cache's own teardown is a no-op.
-      const fixtureProcessCache = createFixtureCache();
-      // `"failed"` until the invocation's own outcome is known. A signal
-      // during a scenario reads this, or `interrupted`, and reports
-      // `"failed"` because that invocation did not finish.
-      let processOutcome: FixtureOutcome = "failed";
       processSignal = installProcessSignalHandlers();
-      const tearDownProcessFixtures = runOnce(async () => {
-        const outcome = processSignal?.interrupted === true ? "failed" : processOutcome;
-        const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
-        for (const teardownError of processFixtureTeardownErrors) {
-          // The line is the fixture's own text, with no scenario record to
-          // redact it first.
-          warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n");
-        }
-      });
-      processSignal.setProcessCleanup(tearDownProcessFixtures);
 
       // `allureResultsDirRel`/`messagesOutputRel` are computed once, above
       // the `--concurrency` branch this block sits after — the exact
@@ -979,9 +1006,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             resultsDir,
             rootDir,
             exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
-            environment: resolvedEnv.name,
-            targetVersion,
-            secrets,
+            // One emitter serves every environment of the run, so its
+            // environment.properties names them all; each result carries
+            // its own environment as a parameter. A version is only
+            // written when one environment ran, since it belongs to that
+            // one target.
+            environment: conditions.map((condition) => condition.resolvedEnv.name).join(", "),
+            ...(conditions.length === 1 && conditions[0]!.targetVersion !== undefined
+              ? { targetVersion: conditions[0]!.targetVersion }
+              : {}),
+            secrets: conditions.flatMap((condition) => condition.secrets),
             stderr: warnings("emitter-failed"),
             // The exact same cap run-scenario.ts's own heartbeat enforces
             // per step (src/report/allure/emitter.ts's own
@@ -1037,204 +1071,235 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         .slice()
         .reverse();
 
-      let beforeAllFailed = false;
-      if (hasPickles) {
-        for (const hook of beforeAllHooks) {
-          const ok = await runOneRunHook(hook, "BeforeAll");
-          if (!ok) {
-            beforeAllFailed = true;
-            allPassed = false;
-            // Stop at the first BeforeAll failure — same convention
-            // as scenario-level Before.
-            break;
-          }
-        }
-      }
-
-      // Iteration-major under `--repeat`: the whole selection once, then
-      // again, so a failure that depends on what ran before it meets the
-      // same neighbours on every pass. `executionIndex` numbers the
-      // boundary lines across every pass (1..total), not per pass.
+      // Environment by environment, in the order `--env` named them: a
+      // pass ends, its AfterAll and process fixtures included, before the
+      // next begins, so two conditions never share a moment or a fixture.
       const repeatTally = createRepeatTally();
-      if (hasPickles && !beforeAllFailed) {
-        for (let iteration = 0; iteration < repeat; iteration += 1) {
-        for (const [pickleIndex, { feature, pickle }] of flatPickles.entries()) {
-          const executionIndex = iteration * flatPickles.length + pickleIndex;
-          // This pickle's own boundary line, right before its execution
-          // actually begins.
-          if (!quiet) {
-            writeScenarioBoundary(progress, {
-              index: executionIndex + 1,
-              total: flatPickles.length * repeat,
+      for (const [conditionIndex, condition] of conditions.entries()) {
+        if (conditionsOf.named && hasPickles && !quiet) progress.write(`environment ${condition.resolvedEnv.name}\n`);
+        let passPassed = true;
+        // This environment's own `"process"`-scope fixture cache — one
+        // instance, shared by every `runScenario`
+        // call of its pass, so a `"process"`-scope fixture named by more than one
+        // scenario is built exactly once per environment and torn down once, after
+        // the pass
+        // (below, near AfterAll). Cheap to create even for a zero-pickle run
+        // — an empty cache's own teardown is a no-op.
+        const fixtureProcessCache = createFixtureCache();
+        // `"failed"` until the invocation's own outcome is known. A signal
+        // during a scenario reads this, or `interrupted`, and reports
+        // `"failed"` because that invocation did not finish.
+        let processOutcome: FixtureOutcome = "failed";
+        const tearDownProcessFixtures = runOnce(async () => {
+          const outcome = processSignal?.interrupted === true ? "failed" : processOutcome;
+          const processFixtureTeardownErrors = await teardownFixtureCache(fixtureProcessCache, outcome);
+          for (const teardownError of processFixtureTeardownErrors) {
+            // The line is the fixture's own text, with no scenario record to
+            // redact it first.
+            warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, condition.secrets) + "\n");
+          }
+        });
+        processSignal.setProcessCleanup(tearDownProcessFixtures);
+        let beforeAllFailed = false;
+        if (hasPickles) {
+          for (const hook of beforeAllHooks) {
+            const ok = await runOneRunHook(hook, "BeforeAll");
+            if (!ok) {
+              beforeAllFailed = true;
+              passPassed = false;
+              // Stop at the first BeforeAll failure — same convention
+              // as scenario-level Before.
+              break;
+            }
+          }
+        }
+
+        // Iteration-major under `--repeat`: the whole selection once, then
+        // again, so a failure that depends on what ran before it meets the
+        // same neighbours on every pass. `executionIndex` numbers the
+        // boundary lines across every pass (1..total), not per pass.
+        if (hasPickles && !beforeAllFailed) {
+          for (let iteration = 0; iteration < repeat; iteration += 1) {
+          for (const [pickleIndex, { feature, pickle }] of flatPickles.entries()) {
+            const executionIndex = (conditionIndex * repeat + iteration) * flatPickles.length + pickleIndex;
+            // This pickle's own boundary line, right before its execution
+            // actually begins.
+            if (!quiet) {
+              writeScenarioBoundary(progress, {
+                index: executionIndex + 1,
+                total: flatPickles.length * repeat * conditions.length,
+                relativeFeaturePath: feature.relativePath,
+                line: pickle.location?.line ?? 0,
+                name: pickle.name,
+              });
+            }
+
+            // Opens this scenario's own Allure scope right before its first
+            // step can possibly run — `emitStep` below needs it to already
+            // exist the moment the
+            // first step finishes. `undefined` — a no-op — when this run has
+            // no Allure emitter at all (setup failure or zero pickles, this
+            // file's own header). `startedAt` is captured here, not read back
+            // out of `record` below: this call always happens before
+            // `runScenario` even starts, so it can only ever be earlier than
+            // or equal to that call's own `record.started_at`, which is what
+            // keeps every progress snapshot's own `start` strictly below the
+            // real result's (src/report/allure/emitter.ts's own
+            // `BeginScenarioInput`).
+            allureEmitter?.beginScenario({
+              pickle,
+              gherkinDocument: feature.gherkinDocument,
               relativeFeaturePath: feature.relativePath,
-              line: pickle.location?.line ?? 0,
-              name: pickle.name,
+              environment: condition.resolvedEnv.name,
+              startedAt: new Date(),
             });
+
+            // One instance per pickle, unlike `onStepEnd` above: it closes
+            // over this
+            // pickle's own `gherkinDocument`/`relativeFeaturePath`, which
+            // `run-scenario.ts`'s own `StepFinishedInfo` does not carry (that
+            // struct is per-*step*, not per-*scenario*). Built regardless of
+            // `quiet` — the report's own granularity does not follow the
+            // terminal's — and is itself a
+            // no-op when `allureEmitter` is `null`.
+            const onStepFinished: ((info: StepFinishedInfo) => void) | undefined = allureEmitter
+              ? (info) => {
+                  allureEmitter?.emitStep({
+                    ...info,
+                    gherkinDocument: feature.gherkinDocument,
+                    pickle,
+                    relativeFeaturePath: feature.relativePath,
+                    environment: condition.resolvedEnv.name,
+                    session: null,
+                    targetVersion: condition.targetVersion,
+                    runId,
+                  });
+                }
+              : undefined;
+
+            // Same "no-op unless there's an Allure emitter to write to" shape
+            // as `onStepFinished` just above, built once per pickle for the
+            // same reason: this closure needs that pickle's own
+            // `gherkinDocument`/`relativeFeaturePath`, which
+            // `StepHeartbeatInfo` itself does not carry.
+            const onStepProgress: ((info: StepHeartbeatInfo) => void) | undefined = allureEmitter
+              ? (info) => {
+                  allureEmitter?.emitStepProgress({
+                    ...info,
+                    gherkinDocument: feature.gherkinDocument,
+                    pickle,
+                    relativeFeaturePath: feature.relativePath,
+                  });
+                }
+              : undefined;
+
+            const record = await runScenario({
+              rootDir,
+              config: condition.runConfig,
+              pickle,
+              relativeFeaturePath: feature.relativePath,
+              gherkinDocument: feature.gherkinDocument,
+              vocabulary,
+              bindings,
+              patterns,
+              runId,
+              git,
+              environment: condition.resolvedEnv.name,
+              policy: condition.resolvedEnv.policy,
+              targetVersion: condition.targetVersion,
+              env: condition.envVars,
+              secrets: condition.secrets,
+              instantiateCompatWorld,
+              onWorldSetupFailure: (message) => {
+                warnings("world-setup-failed").write(`${message}\n`);
+              },
+              compatHooks,
+              defaultTimeoutMs,
+              onUnknownTraceVersion,
+              onStepEnd,
+              onStepFinished,
+              onStepProgress,
+              fixtureGraph,
+              fixtureProcessCache,
+              processSignal,
+              probe: options.probe,
+            });
+
+            // One JSON line per completed scenario record, streamed as it
+            // finishes; everything else about
+            // this run goes to stderr, never stdout.
+            noteRecord(record);
+            scenariosWritten += 1;
+            if (record.status === "passed") {
+              scenariosPassed += 1;
+            }
+            if (repeat > 1) repeatTally.note(record);
+            stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
+            // A `"scenario"`-scope fixture's own teardown failure — already
+            // recorded on `record.teardown_
+            // errors` (src/run/run-scenario.ts); announced here too, on
+            // stderr, so it is never silent even though it never changes
+            // `record.status` or this run's own exit code. Redacted on this
+            // write as well: the record's copy is already redacted, and this
+            // stderr line has to stay that way on its own.
+            for (const teardownError of record.teardown_errors ?? []) {
+              warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, condition.secrets) + "\n");
+            }
+            // After the stdout line, always — see this file's own header.
+            // `allureEmitter` is `null` when this run selected zero pickles or
+            // its own setup failed above; `endScenario` itself never throws.
+            // Every one of this scenario's own steps has already had its own
+            // `emitStep` call by now, each one only buffered — this call is
+            // what actually writes this scenario's one Allure test result
+            // (every buffered step nested inside it), maps this scenario's
+            // own hooks into fixtures alongside it, and writes the scope both
+            // share.
+            allureEmitter?.endScenario({
+              record,
+              gherkinDocument: feature.gherkinDocument,
+              pickle,
+              relativeFeaturePath: feature.relativePath,
+            });
+            messagesEmitter?.emitScenario({ record, pickle });
+            if (record.status !== "passed") {
+              passPassed = false;
+              failedScenarios.push(failedScenarioOf(record));
+            }
           }
-
-          // Opens this scenario's own Allure scope right before its first
-          // step can possibly run — `emitStep` below needs it to already
-          // exist the moment the
-          // first step finishes. `undefined` — a no-op — when this run has
-          // no Allure emitter at all (setup failure or zero pickles, this
-          // file's own header). `startedAt` is captured here, not read back
-          // out of `record` below: this call always happens before
-          // `runScenario` even starts, so it can only ever be earlier than
-          // or equal to that call's own `record.started_at`, which is what
-          // keeps every progress snapshot's own `start` strictly below the
-          // real result's (src/report/allure/emitter.ts's own
-          // `BeginScenarioInput`).
-          allureEmitter?.beginScenario({
-            pickle,
-            gherkinDocument: feature.gherkinDocument,
-            relativeFeaturePath: feature.relativePath,
-            startedAt: new Date(),
-          });
-
-          // One instance per pickle, unlike `onStepEnd` above: it closes
-          // over this
-          // pickle's own `gherkinDocument`/`relativeFeaturePath`, which
-          // `run-scenario.ts`'s own `StepFinishedInfo` does not carry (that
-          // struct is per-*step*, not per-*scenario*). Built regardless of
-          // `quiet` — the report's own granularity does not follow the
-          // terminal's — and is itself a
-          // no-op when `allureEmitter` is `null`.
-          const onStepFinished: ((info: StepFinishedInfo) => void) | undefined = allureEmitter
-            ? (info) => {
-                allureEmitter?.emitStep({
-                  ...info,
-                  gherkinDocument: feature.gherkinDocument,
-                  pickle,
-                  relativeFeaturePath: feature.relativePath,
-                  environment: resolvedEnv.name,
-                  session: null,
-                  targetVersion,
-                  runId,
-                });
-              }
-            : undefined;
-
-          // Same "no-op unless there's an Allure emitter to write to" shape
-          // as `onStepFinished` just above, built once per pickle for the
-          // same reason: this closure needs that pickle's own
-          // `gherkinDocument`/`relativeFeaturePath`, which
-          // `StepHeartbeatInfo` itself does not carry.
-          const onStepProgress: ((info: StepHeartbeatInfo) => void) | undefined = allureEmitter
-            ? (info) => {
-                allureEmitter?.emitStepProgress({
-                  ...info,
-                  gherkinDocument: feature.gherkinDocument,
-                  pickle,
-                  relativeFeaturePath: feature.relativePath,
-                });
-              }
-            : undefined;
-
-          const record = await runScenario({
-            rootDir,
-            config: runConfig,
-            pickle,
-            relativeFeaturePath: feature.relativePath,
-            gherkinDocument: feature.gherkinDocument,
-            vocabulary,
-            bindings,
-            patterns,
-            runId,
-            git,
-            environment: resolvedEnv.name,
-            policy: resolvedEnv.policy,
-            targetVersion,
-            env: envVars,
-            secrets,
-            instantiateCompatWorld,
-            onWorldSetupFailure: (message) => {
-              warnings("world-setup-failed").write(`${message}\n`);
-            },
-            compatHooks,
-            defaultTimeoutMs,
-            onUnknownTraceVersion,
-            onStepEnd,
-            onStepFinished,
-            onStepProgress,
-            fixtureGraph,
-            fixtureProcessCache,
-            processSignal,
-            probe: options.probe,
-          });
-
-          // One JSON line per completed scenario record, streamed as it
-          // finishes; everything else about
-          // this run goes to stderr, never stdout.
-          noteRecord(record);
-          scenariosWritten += 1;
-          if (record.status === "passed") {
-            scenariosPassed += 1;
-          }
-          if (repeat > 1) repeatTally.note(record);
-          stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
-          // A `"scenario"`-scope fixture's own teardown failure — already
-          // recorded on `record.teardown_
-          // errors` (src/run/run-scenario.ts); announced here too, on
-          // stderr, so it is never silent even though it never changes
-          // `record.status` or this run's own exit code. Redacted on this
-          // write as well: the record's copy is already redacted, and this
-          // stderr line has to stay that way on its own.
-          for (const teardownError of record.teardown_errors ?? []) {
-            warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, secrets) + "\n");
-          }
-          // After the stdout line, always — see this file's own header.
-          // `allureEmitter` is `null` when this run selected zero pickles or
-          // its own setup failed above; `endScenario` itself never throws.
-          // Every one of this scenario's own steps has already had its own
-          // `emitStep` call by now, each one only buffered — this call is
-          // what actually writes this scenario's one Allure test result
-          // (every buffered step nested inside it), maps this scenario's
-          // own hooks into fixtures alongside it, and writes the scope both
-          // share.
-          allureEmitter?.endScenario({
-            record,
-            gherkinDocument: feature.gherkinDocument,
-            pickle,
-            relativeFeaturePath: feature.relativePath,
-          });
-          messagesEmitter?.emitScenario({ record, pickle });
-          if (record.status !== "passed") {
-            allPassed = false;
-            failedScenarios.push(failedScenarioOf(record));
           }
         }
+
+        // AfterAll is attempted whether or not BeforeAll failed, and whether
+        // or not any pickle actually passed — the only thing that suppresses it is
+        // `!hasPickles`, already excluded above. Every registration is
+        // attempted regardless of an earlier one's own failure (unlike
+        // BeforeAll) — same "teardown always runs, in full" convention as
+        // src/run/run-scenario.ts's own After-hook loop.
+        if (hasPickles) {
+          for (const hook of afterAllHooks) {
+            const ok = await runOneRunHook(hook, "AfterAll");
+            if (!ok) {
+              passPassed = false;
+            }
+          }
         }
+
+        // `"process"`-scope fixture teardown — once, after every scenario in
+        // this invocation has finished, after
+        // AfterAll (a `"process"`-scope fixture is nukadoko's own machinery,
+        // not a compat hook's teardown target, so it has no ordering promise
+        // relative to AfterAll beyond "after every scenario"). Never changes
+        // `allPassed` — a teardown failure must not turn an otherwise-green
+        // run red for a reason unrelated to the acceptance criteria, the same
+        // rule scenario-scope teardown follows — and, unlike a scenario-scope
+        // failure, has no single `ScenarioRecord` of its own to land on (this
+        // process-scope cache spans every scenario in the invocation, not
+        // one), so it is announced on stderr only. That line is the fixture's
+        // own text, with no scenario record to redact it first.
+        processOutcome = passPassed ? "passed" : "failed";
+        await tearDownProcessFixtures();
+        if (!passPassed) allPassed = false;
       }
-
-      // AfterAll is attempted whether or not BeforeAll failed, and whether
-      // or not any pickle actually passed — the only thing that suppresses it is
-      // `!hasPickles`, already excluded above. Every registration is
-      // attempted regardless of an earlier one's own failure (unlike
-      // BeforeAll) — same "teardown always runs, in full" convention as
-      // src/run/run-scenario.ts's own After-hook loop.
-      if (hasPickles) {
-        for (const hook of afterAllHooks) {
-          const ok = await runOneRunHook(hook, "AfterAll");
-          if (!ok) {
-            allPassed = false;
-          }
-        }
-      }
-
-      // `"process"`-scope fixture teardown — once, after every scenario in
-      // this invocation has finished, after
-      // AfterAll (a `"process"`-scope fixture is nukadoko's own machinery,
-      // not a compat hook's teardown target, so it has no ordering promise
-      // relative to AfterAll beyond "after every scenario"). Never changes
-      // `allPassed` — a teardown failure must not turn an otherwise-green
-      // run red for a reason unrelated to the acceptance criteria, the same
-      // rule scenario-scope teardown follows — and, unlike a scenario-scope
-      // failure, has no single `ScenarioRecord` of its own to land on (this
-      // process-scope cache spans every scenario in the invocation, not
-      // one), so it is announced on stderr only. That line is the fixture's
-      // own text, with no scenario record to redact it first.
-      processOutcome = allPassed ? "passed" : "failed";
-      await tearDownProcessFixtures();
 
       // See this file's own header for why this must run here — after
       // BeforeAll/AfterAll have

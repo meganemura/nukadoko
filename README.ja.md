@@ -232,7 +232,7 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 
 ## features/greet.feature
 
-| scenario | line | status | duration | failure |
+| scenario | line | default | duration | failure |
 | --- | --- | --- | --- | --- |
 | greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `steps/step-20261016-123950-kjs1` |
 ```
@@ -1075,7 +1075,7 @@ stdout には、求めたときだけ出力されます。
 `nuka run --records` は、scenario が終わるたびに、その scenario の `run.json` のエントリを 1 行 1 件の JSON として stdout に出力します。
 `nuka run --json` は、代わりに `run.json` そのものを出力します。
 それはすべての `--json` が出力する envelope で、`findings` の隣に run のフィールドが入ります。
-そこにはコミットと作業ツリーが dirty だったかどうか、environment、`:line` の対象が run を `partial` にしたかどうか、件数、各 scenario の step(行、status、step record、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
+そこにはコミットと作業ツリーが dirty だったかどうか、実行した各 environment、`:line` の対象が run を `partial` にしたかどうか、件数、scenario と environment の組ごとに 1 つの断定、各 scenario の step(行、status、step record、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
 `--json` のときは stderr は空で、警告は文書の中の finding になるので、エージェントのシェルに見えるのはその文書だけです。
 `run.json` と step record は、フラグにかかわらず run 自身のディレクトリ `.nukadoko/runs/<run_id>/` に書かれ、run サマリは `run.json` だけから描画されます。
 stdout や stderr が端末かどうかで変わる出力はありません。
@@ -1140,6 +1140,14 @@ scenario が通ったあと、値を capture した読み取り専用の Then �
 それでも通った Then は、`run.json` と run サマリの `then-passed-with-changed-capture` の note になります。
 これは計測なので、終了コードは run のものから変わりません。
 
+`nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。
+まず `a` ですべてを実行し、次に `b` ですべてを実行します。
+それぞれの environment が、自分の env file、secret、version の probe、BeforeAll と AfterAll、process スコープの fixture を持ちます。
+`run.json` は scenario と environment の組ごとに 1 つの断定を持ち、サマリの表は environment ごとに 1 列を持ち、どれか 1 つのセルが失敗なら終了コードも失敗です。
+feature flag を有効にすると通り、無効にすると失敗する scenario は、1 行を横に読めば分かります。
+environment はそれでも設定にすぎません。
+`a` と `b` で何が違うかは、それぞれの env file と `baseURL` が決めます。
+
 ## What this does not do
 
 **これがやらないこと**
@@ -1202,7 +1210,7 @@ diff の中の `.feature` を読んで、チケットの意図どおりに書か
 run サマリを読んで、何がどの commit で走ったかを確かめます。
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
 `nuka run` は毎回そのサマリを Markdown で書きます。
-commit、environment、ブラウザ、feature ごとの表(各 scenario の状態、所要時間、失敗した step)、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
+commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
 GitHub Actions では設定なしでジョブのサマリページに載り、`--summary <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
 
 PR の承認が sign-off です。

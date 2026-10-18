@@ -275,9 +275,12 @@ function toIssue(node: TrieNode, totalScenarioMs: number): TendIssue {
 }
 
 /** One record per scenario (feature and line), the latest started: a
- * `nuka run --repeat <n>` run holds `n` records for one scenario, and
- * counting them would report the scenario's own repetition as a shared
- * opening between "n scenarios" that are the same one. */
+ * `nuka run --repeat <n>` run holds `n` records for one scenario, and a
+ * run over several environments (`--env a --env b`) holds one per
+ * environment. Counting them would report the scenario's own repetition as
+ * a shared opening between "n scenarios" that are the same one; a process
+ * fixture is built once per environment anyway, so lifting it would save
+ * nothing across them. */
 function onePerScenario(records: readonly ScenarioRecord[]): ScenarioRecord[] {
   const latest = new Map<string, ScenarioRecord>();
   for (const record of records) {

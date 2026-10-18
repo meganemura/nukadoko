@@ -101,16 +101,28 @@ function pickleKey(relativeFeaturePath: string, line: number): string {
   return `${relativeFeaturePath}:${line}`;
 }
 
-export interface RunConcurrentOptions {
-  readonly rootDir: string;
-  readonly config: NukadokoConfig;
-  readonly runId: string;
-  /** `--env`'s raw value, or `null` — forwarded to every worker unresolved
-   * (this file's own header: a worker resolves it itself). */
+/** One environment the run executes under (src/cli/run.ts's `Condition`),
+ * reduced to what this module needs. */
+export interface ConcurrentCondition {
+  /** `--env`'s value for this environment, or `null` when the run named
+   * none. Forwarded to every worker unresolved: a worker resolves it
+   * itself. */
   readonly envArg: string | null;
   readonly environment: string;
   readonly targetVersion: string | undefined;
   readonly secrets: SecretSet;
+}
+
+export interface RunConcurrentOptions {
+  readonly rootDir: string;
+  readonly config: NukadokoConfig;
+  readonly runId: string;
+  /** Every environment of the run, in the order `--env` gave them. Each one
+   * is a pass of its own over every selected file: its parallel phase and
+   * then its serial files, before the next environment starts, so a
+   * `@nukadoko:serial` file still runs alone and two environments never
+   * share a target at once. */
+  readonly conditions: readonly ConcurrentCondition[];
   readonly quiet: boolean;
   readonly concurrency: number;
   /** `--repeat`; each worker runs its own files this many times
@@ -169,10 +181,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     rootDir,
     config,
     runId,
-    envArg,
-    environment,
-    targetVersion,
-    secrets,
+    conditions,
     quiet,
     concurrency,
     repeat,
@@ -189,6 +198,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const warnings = (code: string): WritableSink => warningSink(code, warn);
 
   const hasPickles = flatPickles.length > 0;
+  const expectedRecords = flatPickles.length * repeat * conditions.length;
 
   const pickleByKey = new Map<string, { readonly feature: SelectedFeature; readonly pickle: Pickle }>();
   for (const entry of flatPickles) {
@@ -203,9 +213,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         resultsDir,
         rootDir,
         exportsManifestPath: runExportsManifestPath(rootDir, config.stateDir, runId),
-        environment,
-        targetVersion,
-        secrets,
+        // Each worker's emitter writes its own environment onto its
+        // results; this one writes environment.properties for the run.
+        environment: conditions.map((condition) => condition.environment).join(", "),
+        ...(conditions.length === 1 && conditions[0]!.targetVersion !== undefined
+          ? { targetVersion: conditions[0]!.targetVersion }
+          : {}),
+        secrets: conditions.flatMap((condition) => condition.secrets),
         stderr: warnings("emitter-failed"),
       });
       allureEmitter.begin();
@@ -306,7 +320,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     if (!quiet) {
       writeScenarioBoundary(progress, {
         index: completedCount,
-        total: flatPickles.length * repeat,
+        total: expectedRecords,
         relativeFeaturePath: record.feature,
         line: record.line,
         name: record.scenario,
@@ -342,7 +356,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const liveWorkers = new Set<ChildProcess>();
   let interruptedBy: NodeJS.Signals | null = null;
 
-  async function runWorkerGroup(files: readonly SelectedFeature[], worker: number): Promise<WorkerGroupResult> {
+  async function runWorkerGroup(files: readonly SelectedFeature[], worker: number, envArg: string | null): Promise<WorkerGroupResult> {
     const filesWithRecords = new Set<string>();
     if (interruptedBy !== null) {
       return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
@@ -431,6 +445,17 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   };
   for (const signal of HANDLED_SIGNALS) process.on(signal, onSignal);
   try {
+    for (const condition of conditions) {
+      // A signal stops the run before the next environment starts.
+      if (interruptedBy !== null) break;
+      if (conditions.length > 1 && !quiet) progress.write(`environment ${condition.environment}\n`);
+      await runCondition(condition.envArg);
+    }
+  } finally {
+    for (const signal of HANDLED_SIGNALS) process.off(signal, onSignal);
+  }
+
+  async function runCondition(envArg: string | null): Promise<void> {
     const workerCount = Math.min(concurrency, parallelFeatures.length);
     if (workerCount > 0) {
       const buckets: SelectedFeature[][] = Array.from({ length: workerCount }, () => []);
@@ -438,12 +463,12 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         buckets[index % workerCount]!.push(feature);
       });
 
-      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1)));
+      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1, envArg)));
       for (const [bucketIndex, result] of results.entries()) {
         if (result.exitCode !== 0) {
           for (const feature of buckets[bucketIndex]!) {
             if (!result.filesWithRecords.has(feature.relativePath)) {
-              failedFiles.add(feature.relativePath);
+              failedFiles.add(envArg === null ? feature.relativePath : `${feature.relativePath} (${envArg})`);
             }
           }
         }
@@ -456,13 +481,11 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const feature of serialFeatures) {
       // Worker 1: a `@nukadoko:serial` file runs alone, so there is never a
       // second number to tell it apart from.
-      const result = await runWorkerGroup([feature], 1);
+      const result = await runWorkerGroup([feature], 1, envArg);
       if (result.exitCode !== 0 && !result.filesWithRecords.has(feature.relativePath)) {
-        failedFiles.add(feature.relativePath);
+        failedFiles.add(envArg === null ? feature.relativePath : `${feature.relativePath} (${envArg})`);
       }
     }
-  } finally {
-    for (const signal of HANDLED_SIGNALS) process.off(signal, onSignal);
   }
 
   if (interruptedBy !== null) {
@@ -470,7 +493,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       severity: "failed",
       code: "run-incomplete",
       message:
-        scenariosWritten === flatPickles.length * repeat
+        scenariosWritten === expectedRecords
           ? `${interruptedBy} arrived after every scenario had a record, so AfterAll hooks may not have run`
           : `${interruptedBy} stopped this run before every scenario had a record, so it is incomplete`,
     });
@@ -484,7 +507,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         "This run is incomplete and cannot be treated as a pass",
     });
     allPassed = false;
-  } else if (scenariosWritten !== flatPickles.length * repeat) {
+  } else if (scenariosWritten !== expectedRecords) {
     // The total check `failedFiles` cannot make. That set catches a worker
     // that produced nothing at all for a file it was given, which is the
     // loud case. A record lost some other way (an unreadable envelope line,
@@ -496,7 +519,8 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       severity: "failed",
       code: "run-incomplete",
       message:
-        `This run selected ${flatPickles.length} scenarios${repeat > 1 ? ` to run ${repeat} times each` : ""} ` +
+        `This run selected ${flatPickles.length} scenarios${repeat > 1 ? ` to run ${repeat} times each` : ""}` +
+        `${conditions.length > 1 ? ` in each of ${conditions.length} environments` : ""} ` +
         `and wrote ${scenariosWritten} records. ` +
         "The missing ones cannot be accounted for, so this run is incomplete",
     });

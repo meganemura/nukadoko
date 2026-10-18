@@ -333,6 +333,7 @@ async function main(): Promise<void> {
           pickle,
           gherkinDocument: feature.gherkinDocument,
           relativeFeaturePath: feature.relativePath,
+          environment: resolvedEnv.name,
           startedAt: new Date(),
         });
 

@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
-import type { RunDocument, RunScenario } from "../record/run-result.js";
+import type { RunDocument, RunScenario, RunVerdict } from "../record/run-result.js";
 import {
   collectDeclaredVsObserved,
   renderDeclaredVsObserved,
@@ -75,10 +75,18 @@ function runFindings(document: RunDocument): readonly Finding[] {
   return document.findings.filter((finding) => finding.code !== "scenario-failed");
 }
 
+// The counts are of verdicts, one per scenario and environment: under
+// `--repeat` a scenario that failed once has not passed, and under several
+// environments one scenario is as many verdicts as environments.
 function renderTitle(document: RunDocument): string[] {
-  const failed = document.scenarios.filter((scenario) => scenario.status === "failed").length;
-  const passed = document.scenarios.length - failed;
-  const counts = [plural(document.scenarios.length, "scenario"), `${passed} passed`];
+  const failed = document.verdicts.filter((cell) => cell.verdict === "failed").length;
+  const passed = document.verdicts.length - failed;
+  const rows = new Set(document.verdicts.map((cell) => `${cell.feature}\u0000${cell.line}`)).size;
+  const scope =
+    document.environments.length > 1
+      ? `${plural(rows, "scenario")} in ${document.environments.length} environments`
+      : plural(rows, "scenario");
+  const counts = [scope, `${passed} passed`];
   if (failed > 0) counts.push(`${failed} failed`);
   const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
   if (document.verdict === "failed" && failed === 0) {
@@ -96,10 +104,11 @@ function renderCondition(document: RunDocument): string[] {
     document.commit === null
       ? "- commit: unknown (no git state was readable when the run started)"
       : `- commit: \`${document.commit.sha.slice(0, 7)}\`${document.commit.dirty ? " with uncommitted changes" : ""}`;
-  const environment =
-    document.target_version === null
-      ? `- environment: ${document.environment}`
-      : `- environment: ${document.environment} (target version ${document.target_version})`;
+  const environments = document.environments.map((environment) =>
+    environment.target_version === null
+      ? `- environment: ${environment.name}`
+      : `- environment: ${environment.name} (target version ${environment.target_version})`,
+  );
   const browsers = new Map<string, string>();
   for (const scenario of document.scenarios) {
     if (scenario.browser !== undefined) {
@@ -115,7 +124,7 @@ function renderCondition(document: RunDocument): string[] {
   return [
     "",
     commit,
-    environment,
+    ...environments,
     browser,
     selection,
     `- nukadoko: ${document.nukadoko}`,
@@ -168,30 +177,69 @@ function durationOf(scenario: RunScenario): number {
   return Date.parse(scenario.finished_at) - Date.parse(scenario.started_at);
 }
 
+// What one cell of a scenario's row says: its verdict, or how many of its
+// executions passed under `--repeat`.
+function verdictCell(cell: RunVerdict | undefined): string {
+  if (cell === undefined) return "not run";
+  if (cell.executions === 1) return cell.verdict;
+  return `${cell.passed} of ${cell.executions} passed`;
+}
+
 // One table per feature file, features by path and scenarios by line, so
-// the same run reads the same way at any concurrency. A stable sort keeps
-// the executions of one scenario under `--repeat` in the order they ran.
-function renderFeatures(scenarios: readonly RunScenario[]): string[] {
-  const byFeature = new Map<string, RunScenario[]>();
-  for (const scenario of scenarios) {
-    const rows = byFeature.get(scenario.feature) ?? [];
+// the same run reads the same way at any concurrency. A row is one
+// scenario and a column is one environment, in the order `--env` gave
+// them, so a scenario that passed in one environment and failed in another
+// reads across one line. A row's duration sums every execution it holds,
+// and its failure cell names the first failed execution in each failed
+// environment, prefixed by that environment when there is more than one.
+function renderFeatures(document: RunDocument): string[] {
+  const environments = document.environments.map((environment) => environment.name);
+  const named = environments.length > 1;
+  const executions = new Map<string, RunScenario[]>();
+  for (const scenario of document.scenarios) {
+    const key = `${scenario.feature}\u0000${scenario.line}`;
+    const rows = executions.get(key) ?? [];
     rows.push(scenario);
-    byFeature.set(scenario.feature, rows);
+    executions.set(key, rows);
+  }
+  const byFeature = new Map<string, RunVerdict[][]>();
+  const rowOf = new Map<string, RunVerdict[]>();
+  for (const cell of document.verdicts) {
+    const key = `${cell.feature}\u0000${cell.line}`;
+    let row = rowOf.get(key);
+    if (row === undefined) {
+      row = [];
+      rowOf.set(key, row);
+      const rows = byFeature.get(cell.feature) ?? [];
+      rows.push(row);
+      byFeature.set(cell.feature, rows);
+    }
+    row.push(cell);
   }
   const lines: string[] = [];
   for (const feature of [...byFeature.keys()].sort()) {
-    const rows = [...byFeature.get(feature)!].sort((a, b) => a.line - b.line);
+    const rows = [...byFeature.get(feature)!].sort((a, b) => a[0]!.line - b[0]!.line);
     lines.push(
       "",
       `## ${cellText(feature)}`,
       "",
-      "| scenario | line | status | duration | failure |",
-      "| --- | --- | --- | --- | --- |",
+      `| scenario | line | ${environments.map(cellText).join(" | ")} | duration | failure |`,
+      `| --- | --- | ${environments.map(() => "---").join(" | ")} | --- | --- |`,
     );
     for (const row of rows) {
-      const failure = row.status === "failed" ? describeFailure(row) : undefined;
+      const first = row[0]!;
+      const ran = executions.get(`${first.feature}\u0000${first.line}`) ?? [];
+      const cells = environments.map((environment) => verdictCell(row.find((cell) => cell.environment === environment)));
+      const duration = ran.reduce((total, scenario) => total + durationOf(scenario), 0);
+      const failures = environments.flatMap((environment) => {
+        const failed = ran.find((scenario) => scenario.environment === environment && scenario.status === "failed");
+        const failure = failed === undefined ? undefined : describeFailure(failed);
+        if (failure === undefined) return [];
+        const text = renderFailureCell(failure);
+        return [named ? `${cellText(environment)}: ${text}` : text];
+      });
       lines.push(
-        `| ${cellText(row.scenario)} | ${row.line} | ${row.status} | ${formatStepDuration(durationOf(row))} | ${renderFailureCell(failure)} |`,
+        `| ${cellText(first.scenario)} | ${first.line} | ${cells.join(" | ")} | ${formatStepDuration(duration)} | ${failures.join("<br>")} |`,
       );
     }
   }
@@ -236,7 +284,7 @@ export function renderRunSummary(document: RunDocument): string {
     RUN_SUMMARY_MARKER,
     ...renderTitle(document),
     ...renderCondition(document),
-    ...renderFeatures(document.scenarios),
+    ...renderFeatures(document),
     ...renderDeclaredVsObserved(collectDeclaredVsObserved(comparedSteps(document.scenarios))),
     ...renderFindings(document),
     ...renderRerun(document),

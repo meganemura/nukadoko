@@ -163,6 +163,38 @@ just until 0.1.
   so no output depends on whether a stream is a terminal. `--quiet` keeps
   working, and `--json` implies it. See docs/upgrading.md.
 
+- **`nuka run --env` repeats: one run over several environments, with one
+  verdict per scenario and environment.** A suite that had to pass with a
+  feature flag on and off, or against two targets, ran `nuka run` once per
+  environment, so the evidence was spread over that many run ids and no
+  summary set one environment beside the other. `nuka run --env a --env b`
+  is one run with one `run_id` that runs every selected scenario in `a`,
+  then in `b`, each pass with its own env files, secrets, version probe,
+  `baseURL`, BeforeAll and AfterAll, and process-scope fixtures. An
+  environment stays generic config: nukadoko has no notion of a feature
+  flag. `run.json` replaces `environment` and `target_version` with
+  `environments`, a list of `{ name, target_version }` in the order given
+  (`[{ "name": "default", "target_version": null }]` without `--env`); each
+  scenario entry gains `environment`; and the new `verdicts` holds one cell
+  per scenario and environment, `{ feature, line, scenario, environment,
+  verdict, executions, passed }`, red when any execution in it is red. The
+  exit code is red when any cell is red. The run summary's table has one
+  column per environment, named after it, in place of `status`, and one
+  row per scenario: a cell reads `passed`, `failed`, or `<passed> of <n>
+  passed` under `--repeat`, which used to give each execution its own row;
+  the duration sums the row; the title counts cells. A failure's `do:`
+  names the environment it failed in, and with more than one environment a
+  finding, a `repeat` line, and a probe note name it after the scenario,
+  and the progress log opens each pass with `environment <name>`. Naming
+  one environment twice is refused as `invalid-value`. Under
+  `--concurrency` each environment is a pass of its own, its parallel
+  files and then its `@nukadoko:serial` ones. Retention counts the run
+  once, and `nuka tend` counts a scenario once. In Allure the environment
+  joins a result's identity (it is no longer an excluded parameter), so a
+  scenario that passed in one environment and failed in the other is two
+  tests rather than a retry; every result's history id changes once. See
+  docs/upgrading.md.
+
 ### Added
 
 - **`nuka run --probe` measures whether each passed Then could have
