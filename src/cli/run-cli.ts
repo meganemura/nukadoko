@@ -153,6 +153,8 @@ interface ScaffoldArgs {
   from?: string[];
   cwd?: string;
   argv?: string;
+  request?: string;
+  body?: string;
   replace?: boolean;
 }
 
@@ -190,6 +192,8 @@ function featureScaffoldConflict(args: ScaffoldArgs): string | null {
     (args.from ?? []).length > 0 ? "--from" : null,
     args.cwd !== undefined ? "--cwd" : null,
     args.argv !== undefined ? "--argv" : null,
+    args.request !== undefined ? "--request" : null,
+    args.body !== undefined ? "--body" : null,
     args.replace === true ? "--replace" : null,
   ].filter((option): option is string => option !== null);
   if (given.length === 0) return null;
@@ -804,6 +808,17 @@ export async function runCli(
           describe:
             "<key> with --command: split this string capture into argv elements on whitespace only (no quoting), so one feature line can carry every argument and flag",
         })
+        .option("request", {
+          type: "string",
+          nargs: 1,
+          describe:
+            '"<METHOD> <path>": a When step that sends one request through Playwright\'s request (resolved against baseURL) and returns status and body; each {key} in the path is that args key\'s value',
+        })
+        .option("body", {
+          type: "string",
+          nargs: 1,
+          describe: "<key> with --request: send this args key (a capture, a --from key, or docstring) as the request's data",
+        })
         .option("replace", {
           type: "boolean",
           default: false,
@@ -814,7 +829,7 @@ export async function runCli(
         // with a dash, so each takes the next word whatever it starts with,
         // as getopt_long does for a required value, and keeps its quotes.
         .parserConfiguration({ "nargs-eats-options": true })
-        .check(rejectRepeatedFlags(["pattern", "command", "description", "feature", "cwd", "argv"]))
+        .check(rejectRepeatedFlags(["pattern", "command", "description", "feature", "cwd", "argv", "request", "body"]))
         .check((args) => {
           if (args.feature !== undefined) return featureScaffoldConflict(args as unknown as ScaffoldArgs) ?? true;
           if (args.name !== undefined) return true;
@@ -852,6 +867,8 @@ export async function runCli(
         from: args.from ?? [],
         cwd: args.cwd ?? null,
         argvKey: args.argv ?? null,
+        request: args.request ?? null,
+        bodyKey: args.body ?? null,
         replace: args.replace ?? false,
         argv,
         stdout,

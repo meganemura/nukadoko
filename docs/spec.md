@@ -4145,7 +4145,7 @@ nuka describe <step>          full contract, the step file as file,
                               and carries its own from_errors, args_error,
                               or returns_error. A broken sibling step
                               elsewhere in the vocabulary does not fail it
-nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>] [--argv <key>]] [--from <step>.<key>]... [--description <text>] [--replace]
+nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>] [--argv <key>] | --request "<METHOD> <path>" [--body <key>]] [--from <step>.<key>]... [--description <text>] [--replace]
                               typed step template that fails until
                               implemented; the thrown message names the
                               args it was given, so the file compiles
@@ -4231,6 +4231,25 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               under a comment that says to set it to
                               false when the program changes nothing
                               outside a scratch directory.
+                              --request "<METHOD> <path>" writes a When
+                              step that sends one request through
+                              Playwright's request fixture, unwrapped:
+                              request.fetch(path, { method }), resolved
+                              against baseURL, returning status
+                              (response.status()) and body (the response
+                              text). Each {key} in the path is that args
+                              key's value, inserted as it is; a {key} no
+                              capture or --from fills, and any other
+                              brace, is refused. --body <key> sends that
+                              args key (a capture, a --from key, or the
+                              docstring) as data. A value the request
+                              does not read throws "pass <keys> where the
+                              request reads them: <file>:<line>" until it
+                              is placed. It writes mutates: true under a
+                              comment: the method is only a proxy for
+                              write semantics. --request is refused with
+                              --then or --command, and --body without
+                              --request.
                               --description writes the step's
                               description; without it the description
                               is "TODO: describe <name>" (with
@@ -4285,7 +4304,8 @@ nuka scaffold --feature <path>
                               differently. Refuses while
                               a step file does not import, and takes no
                               name, --pattern, --then, --command, --from,
-                              --cwd, --argv, --description, or --replace
+                              --cwd, --argv, --request, --body,
+                              --description, or --replace
 nuka check [feature..] [--json]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per

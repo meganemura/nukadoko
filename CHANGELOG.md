@@ -52,6 +52,25 @@ just until 0.1.
   such a stub now says it still holds the stub, and its `do:` line is the
   same command with `--replace`. `--feature` refuses `--replace`, and what
   it writes is unchanged.
+- **`nuka scaffold <name> --request "<METHOD> <path>"` writes the When step of an HTTP API.**
+  An HTTP project wrote its request step by hand: `returns`, the call, and
+  the base URL, before any Then could be scaffolded `--from` it. The step
+  is now one call on Playwright's own `request` fixture, not wrapped:
+  `request.fetch(path, { method })`, resolved against `baseURL`, returning
+  `status` and `body` (the response text), so `--then --from <step>.status`
+  and `--from <step>.body` work at once, and the call lands in the step
+  record's `http.jsonl` and `observed` counts, which a `fetch` body never
+  did. Each `{key}` in the path is that args key's value, put in as it is;
+  a `{key}` that no capture or `--from` fills, a lower-case method, a
+  space, or any other brace is refused. `--body <key>` sends an args key
+  (a capture, a `--from` key, or the line's `docstring`) as `data`. A
+  value the request does not read throws `pass <keys> where the request
+  reads them: <file>:<line>` until it is placed. The step writes `mutates:
+  true` under a comment, because the method is only a proxy for write
+  semantics. `--request` is refused beside `--then`, `--command`, and
+  `--feature`, and `--body` without `--request`. `--replace` recognizes
+  these files too. A project without Playwright gets `playwright-missing`
+  from `nuka check`, with the install line.
 - **`nuka scaffold --feature` ends with each stub's own `--replace` line.**
   The first single scaffold over a `--feature` stub was refused once, only
   to teach `--replace`: 9 commands from an empty CLI project to green, one

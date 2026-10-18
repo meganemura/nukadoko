@@ -320,6 +320,16 @@ export default defineStep({
 record's `observed.http_reads` and `observed.http_writes`. A `fetch` call
 leaves both at 0.
 
+`nuka scaffold <name> --pattern "<line>" --request "<METHOD> <path>"`
+writes the `request` form: one `request.fetch(path, { method })` call,
+resolved against `baseURL`, returning `status` and the body as text, so a
+Then is scaffolded `--from` it at once. Each `{key}` in the path is that
+args key's value, put in as it is, and `--body <key>` sends an args key
+(the line's `docstring`, say) as the request's data. A value the request
+does not read throws by name until it is placed. The step writes
+`mutates: true`: the method is a proxy for write semantics, so the
+author sets `false`.
+
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way
 `output-says` came from `run-greet`. The message carries no newline, so

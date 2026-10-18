@@ -312,6 +312,14 @@ export default defineStep({
 step の呼び出しを step record の `observed.http_reads` と `observed.http_writes` に数えるのは `ctx.request()` だけです。
 `fetch` の呼び出しでは、どちらも 0 のままです。
 
+`nuka scaffold <name> --pattern "<line>" --request "<METHOD> <path>"` は `request` を使う形を書きます。
+中身は `baseURL` を基準にした `request.fetch(path, { method })` の呼び出し 1 つで、`status` と本文のテキストを返すので、Then はすぐに `--from` で scaffold できます。
+path の中の `{key}` はその args キーの値で、そのまま埋め込まれます。
+`--body <key>` は args キー(たとえばその行の `docstring`)を request の data として送ります。
+request が読まない値は、置き場所が決まるまで名前を挙げて throw します。
+step は `mutates: true` を書きます。
+メソッドは書き込みの意味の代わりにすぎないので、`false` にするのは作者です。
+
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。
 メッセージには改行がないので、その assertion は scaffold が書いたまま、編集なしで動きます。

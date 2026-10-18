@@ -142,7 +142,8 @@ function draftPattern(tc: hegel.TestCase): string | null {
 /** The lines `isUneditedStub` reads an option back from. An edit there
  * may make the file another option's template, so the edit properties
  * leave them alone. */
-const READ_LINES = /^(?: {2}pattern: | {2}description: |const cli = |import | {4}[A-Za-z_$][A-Za-z0-9_$]*: \[| {4}return await runCommand\().*$/gm;
+const READ_LINES =
+  /^(?: {2}pattern: | {2}description: |const cli = |import | {4}[A-Za-z_$][A-Za-z0-9_$]*: \[| {4}return await runCommand\(| {4}const response = ).*$/gm;
 
 /** The offsets of `file` outside every line an option is read from. */
 function offsetsOutsideReadLines(file: string, inclusiveEnd: boolean): number[] {
@@ -156,6 +157,7 @@ function offsetsOutsideReadLines(file: string, inclusiveEnd: boolean): number[] 
 }
 
 const KEYS = ["dir", "out", "status", "body"] as const;
+const ATTACHMENT_KEY: Readonly<Record<Attachment, string>> = { docstring: "docstring", table: "table" };
 
 function draftChained(tc: hegel.TestCase, captureKeys: readonly string[]): ChainedField[] {
   const keys = tc.draw(gs.arrays(gs.sampledFrom(KEYS), { maxSize: 3, unique: true })).filter((key) => !captureKeys.includes(key));
@@ -179,10 +181,11 @@ function draftStub(tc: hegel.TestCase): { file: string; name: string; relativeFi
   const name = tc.draw(gs.sampledFrom(["i-run-greet-with", "the-output-is", "step-2"]));
   const relativeFilePath = `features/steps/${name}${tc.draw(gs.sampledFrom([".ts", ".mts"]))}`;
   const captures = pattern === null ? [] : stripCaptureNames(pattern).captures;
-  const variant = tc.draw(gs.sampledFrom(["when", "then", "command"] as const));
+  const variant = tc.draw(gs.sampledFrom(["when", "then", "command", "request"] as const));
   const chained = draftChained(tc, captures.map((capture) => capture.key));
   const stringKeys = [...captures.filter((capture) => capture.type === "string").map((capture) => capture.key)];
   const command = variant === "command";
+  const attachment = pattern === null || command ? null : tc.draw(gs.sampledFrom<Attachment | null>([null, "docstring", "table"]));
   const file = stepTemplate({
     name,
     pattern,
@@ -194,7 +197,12 @@ function draftStub(tc: hegel.TestCase): { file: string; name: string; relativeFi
     argvKey: command && stringKeys.length > 0 ? tc.draw(gs.sampledFrom([null, stringKeys[0]!])) : null,
     description: tc.draw(gs.sampledFrom([null, "Run the program", 'Say "hi" \\ twice'])),
     relativeFilePath,
-    attachment: pattern === null || command ? null : tc.draw(gs.sampledFrom<Attachment | null>([null, "docstring", "table"])),
+    attachment,
+    request:
+      variant === "request"
+        ? { method: tc.draw(gs.sampledFrom(["GET", "POST"])), path: [{ text: "/items/" }, ...captures.slice(0, 1).map((capture) => ({ key: capture.key }))] }
+        : null,
+    bodyKey: variant === "request" && attachment !== null ? tc.draw(gs.sampledFrom([null, ATTACHMENT_KEY[attachment]])) : null,
   });
   return { file, name, relativeFilePath };
 }

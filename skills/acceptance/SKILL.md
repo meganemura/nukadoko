@@ -76,14 +76,14 @@ If none is true, ask what this is supposed to do before writing anything.
    one contract; reuse before scaffolding. `nuka scaffold --feature <file>`
    stubs each undefined line, with no `returns` and no `from`, and prints
    each stub's own `nuka scaffold ... --replace` line (it refuses a file
-   anyone edited). Redo the When that runs a program and the Thens that
-   read it from those lines, adding `--description "<what it does>"`,
-   `--command <entry point>` for the When (`--cwd`, `--argv`), and
-   `--from <step>.<key>` per value an earlier step returns, whose producer
-   has to return that key already. Run each alone with `nuka do <step>
-   --args '<json>'` (`references/writing-steps.md`, which names the
-   references for the file, assertions, parts, and fixtures). Finished
-   projects: `references/examples/` (`cli.md`, `http-api.md`, `workflow.md`).
+   anyone edited). Redo the When that runs a program or sends a request,
+   and the Thens that read it, from those lines with `--description`,
+   `--command <entry point>` (`--cwd`, `--argv`) or `--request "<METHOD>
+   <path>"`, and `--from <step>.<key>` per value an earlier step returns
+   (its producer has to return that key already). Run each alone with
+   `nuka do <step> --args '<json>'` (`references/writing-steps.md`, its
+   references: the file, assertions, parts, fixtures). Finished projects:
+   `references/examples/` (`cli.md`, `http-api.md`, `workflow.md`).
 3. **`nuka check <feature>`.** Fix every error and read every warning: a
    warning is a question about intent, not noise. Each finding names its
    `file` and a `do:` line; run or apply it (`references/running.md`).

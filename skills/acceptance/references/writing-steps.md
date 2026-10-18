@@ -8,16 +8,13 @@ Fixtures, `scratch`, and `poll`: `fixtures.md`.
 ## Reading the vocabulary
 
 `nuka steps --json` lists the whole vocabulary; `nuka describe <step>`
-gives one step's full contract. Read the JSON itself for the field
-shapes rather than a description of them here, since a shape written
-down twice is the one that goes stale. Both name any step file that
-failed to import beside everything else they could still read, so a
-broken file elsewhere never hides the rest of the vocabulary; `nuka check`
-is where to fix the import itself. When a step's args or returns schema
-cannot be represented as JSON Schema, `nuka describe` still prints that
-step's contract, names the step on the failure, and exits 1. `nuka run`
-and `nuka do` refuse the whole call instead, and that refusal names the
-file.
+gives one step's full contract; read the JSON itself for the field
+shapes. Both name any step file that failed to import beside everything
+else they could still read, and `nuka check` is where to fix the import.
+When a step's args or returns schema cannot be represented as JSON
+Schema, `nuka describe` still prints that step's contract, names the step
+on the failure, and exits 1; `nuka run` and `nuka do` refuse the whole
+call, and that refusal names the file.
 
 Two fields carry less than they look like they do. A `needs` of `null`
 means this tool could not read that step's `run()`, so its fixture
@@ -25,9 +22,8 @@ contract is unknown, not empty. A `needs_inferred` list is a lexical
 guess at the same question: a starting inventory, never a finished one,
 and never grounds for concluding a step needs no browser.
 
-Prefer what already exists. If an acceptance condition can be expressed
-with an existing step, use it; do not scaffold a new one just because a
-criterion's wording doesn't match a pattern verbatim.
+Prefer what already exists: if an acceptance condition fits an existing
+step, use it, even when the criterion's wording differs from its pattern.
 
 ## When the vocabulary has no step for it
 
@@ -82,21 +78,25 @@ each stub's own single scaffold with `--replace`; add `--command` or
    (`--command src/cli.ts`, relative to the directory `nuka` runs in, and
    refused unless a file is there): it writes `const cli = resolve("<entry
    point>")`, the `runCommand` call in an empty `scratch.dir()`, and
-   `returns` of `exitCode`, `stdout`, and `stderr`, so a Then step can be
-   scaffolded `--from` it at once. A file a Given wrote is in the
-   directory that Given returned: `--from <given>.dir --cwd dir` runs the
-   program there instead (`examples/cli.md`). Only captures are argv, and
-   `--argv <key>` splits one on whitespace only (`"input.csv --json"`);
-   any other `--from` value throws by name until you pass it (`env`).
-   The step runs the entry point with `node` itself, so when the project's
-   `.ts` files import each other as `./x.js`, name the built program
-   (`dist/cli.js`, with `"pretest:scenarios": "npm run build"`); scaffold
-   refuses a `.ts` entry point whose `./x.js` import is absent beside an
-   `x.ts`. Without a value the `cli` line holds a TODO, and the step
-   throws `fill in the entry point: <file>:<line>` until it is filled in.
-   `--command` writes `mutates: true`, because scaffold cannot know what
-   the program writes; set it to `false`, with a comment that says why,
-   when the program writes nothing outside the scratch directory.
+   `returns` of `exitCode`, `stdout`, and `stderr`. A file a Given wrote
+   is in the directory that Given returned: `--from <given>.dir --cwd dir`
+   runs the program there (`examples/cli.md`). Only captures are argv;
+   `--argv <key>` splits one on whitespace only (`"input.csv --json"`),
+   and any other `--from` value throws by name until you pass it (`env`).
+   The entry point runs under plain `node`, so when `.ts` files import
+   each other as `./x.js`, name the built program (`dist/cli.js`, with
+   `"pretest:scenarios": "npm run build"`). Without a value the `cli` line
+   holds a TODO that throws `fill in the entry point: <file>:<line>`.
+   Add `--request "<METHOD> <path>"` for a When step that calls an HTTP
+   API: one `request.fetch(path, { method })` on Playwright's `request`,
+   against `baseURL`, returning `status` and `body` (the text). A `{key}`
+   in the path is that args key's value (`"GET /items/{id}"`), `--body
+   <key>` sends one as the data (`--body docstring`), and any other value
+   throws by name until you pass it. Quote a path in the feature line
+   (`When I request "/health"`) so `--feature` reads it as a value.
+   `--command` and `--request` write `mutates: true`, because scaffold
+   cannot know what the call writes; set it to `false`, with a comment
+   that says why, when it writes nothing a later scenario could read.
    Add `--description "<text>"` for what the step does; without it the
    description is `TODO: describe <name>`, which `nuka tend` reports as
    `step-description-todo`. Leave `--pattern` out for a step reached by

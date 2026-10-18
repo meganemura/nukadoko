@@ -177,6 +177,11 @@ export interface RunScaffoldOptions {
   /** `--argv`: the string capture `--command` splits on whitespace into
    * argv elements, or `null` to pass each capture as one element. */
   argvKey: string | null;
+  /** `--request`'s value, `<METHOD> <path>`, for a When step that sends
+   * one request through Playwright's `request`, or `null`. */
+  request: string | null;
+  /** `--body`: the args key `--request` sends as the request's data. */
+  bodyKey: string | null;
   /** `--replace`: overwrite the target file while it still holds the
    * unedited stub `--feature` (or scaffold without options) wrote. */
   replace: boolean;
@@ -217,7 +222,7 @@ export interface ChainedField {
 }
 
 /** What the step is for, which decides its outcome and its body. */
-export type Variant = "when" | "then" | "command";
+export type Variant = "when" | "then" | "command" | "request";
 
 interface VariantShape {
   /** Names the written `run` reads, so no args key may take them. */
@@ -231,6 +236,8 @@ const STUB_BODY_NAMES: ReadonlySet<string> = new Set(["Error", "JSON", "String"]
 const VARIANTS: Readonly<Record<Variant, VariantShape>> = {
   when: { bodyNames: STUB_BODY_NAMES, moduleNames: new Set() },
   then: { bodyNames: STUB_BODY_NAMES, moduleNames: new Set() },
+  // `request` is destructured beside the args, so an args key may not take it either.
+  request: { bodyNames: new Set(["request", "response"]), moduleNames: new Set() },
   command: {
     bodyNames: new Set(["cli", "runCommand", "process", "scratch", "String"]),
     // `process` is a global the body reads, so an import may not shadow it either.
@@ -268,6 +275,94 @@ export interface StepTemplate {
   readonly relativeFilePath: string;
   /** The docstring or table the feature line carries, when the stub is read from one. */
   readonly attachment?: Attachment | null;
+  /** What a `request` step sends. */
+  readonly request?: RequestShape | null;
+  /** The args key a `request` step sends as its data. */
+  readonly bodyKey?: string | null;
+}
+
+/** One piece of a `--request` path: text sent as it is, or an args key
+ * whose value is put in its place. */
+export type PathSegment = { readonly text: string } | { readonly key: string };
+
+/** `--request <METHOD> <path>`, read. */
+export interface RequestShape {
+  readonly method: string;
+  readonly path: readonly PathSegment[];
+}
+
+/** `<METHOD> <path>`, or the reason it is not one. A `{key}` in the path
+ * names an args key; any other brace is refused, so the written path
+ * never holds a brace the author meant as text and got as a key. */
+export function parseRequestFlag(text: string): RequestShape | { refusal: string } {
+  const refusal = {
+    refusal: `--request takes "<METHOD> <path>", an upper-case method and a path with no space, each {key} in it an args key, such as "GET /items/{id}", and got ${JSON.stringify(text)}`,
+  };
+  const parts = /^([A-Z]+) (\S+)$/.exec(text);
+  if (parts === null) return refusal;
+  const path: PathSegment[] = [];
+  const piece = /\{([A-Za-z_$][A-Za-z0-9_$]*)\}|([^{}]+)/gy;
+  let consumed = 0;
+  for (const match of parts[2]!.matchAll(piece)) {
+    consumed += match[0].length;
+    path.push(match[1] !== undefined ? { key: match[1] } : { text: match[2]! });
+  }
+  if (consumed !== parts[2]!.length) return refusal;
+  return { method: parts[1]!, path };
+}
+
+/** The path as a JavaScript expression: a string literal, or a template
+ * literal with each key in its place, the value inserted as it is. */
+export function requestPathExpression(path: readonly PathSegment[]): string {
+  if (path.every((segment) => "text" in segment)) return JSON.stringify(path.map((segment) => ("text" in segment ? segment.text : "")).join(""));
+  const body = path
+    .map((segment) => ("key" in segment ? `\${${segment.key}}` : segment.text.replace(/[\\`]|\$\{/g, (found) => `\\${found}`)))
+    .join("");
+  return `\`${body}\``;
+}
+
+/** `requestPathExpression`, read back, or `null` for any other text. */
+export function readRequestPath(expression: string): PathSegment[] | null {
+  if (expression.startsWith('"')) {
+    const text = jsonString(expression);
+    return text === null ? null : [{ text }];
+  }
+  if (!expression.startsWith("`") || !expression.endsWith("`") || expression.length < 2) return null;
+  const segments: PathSegment[] = [];
+  let text = "";
+  const inner = expression.slice(1, -1);
+  for (let at = 0; at < inner.length; ) {
+    if (inner[at] === "\\") {
+      const next = inner[at + 1];
+      if (next === "\\" || next === "`") {
+        text += next;
+        at += 2;
+      } else if (next === "$" && inner[at + 2] === "{") {
+        text += "${";
+        at += 3;
+      } else return null;
+      continue;
+    }
+    if (inner[at] === "`") return null;
+    const key = /^\$\{([A-Za-z_$][A-Za-z0-9_$]*)\}/.exec(inner.slice(at));
+    if (key !== null) {
+      if (text !== "") segments.push({ text });
+      text = "";
+      segments.push({ key: key[1]! });
+      at += key[0].length;
+      continue;
+    }
+    if (inner.startsWith("${", at)) return null;
+    text += inner[at];
+    at += 1;
+  }
+  if (text !== "") segments.push({ text });
+  return segments;
+}
+
+/** The `--request` text a shape was read from. */
+export function requestFlagText(shape: RequestShape): string {
+  return `${shape.method} ${shape.path.map((segment) => ("key" in segment ? `{${segment.key}}` : segment.text)).join("")}`;
 }
 
 /** The text `cli` holds until someone names the entry point. */
@@ -489,14 +584,23 @@ const LINE_MARKER = "\u0000line";
 /** The guard a `--command` step throws while a chained value has nowhere
  * to go yet. The values are in its message, so the step compiles under
  * `noUnusedParameters`, and the first failed run shows what was bound. */
-function unplacedGuard(relativeFilePath: string, unplaced: readonly Field[]): string[] {
+function unplacedGuard(relativeFilePath: string, unplaced: readonly Field[], reader: "program" | "request"): string[] {
   const keys = unplaced.map((field) => field.key);
   const mayHoldBigint = unplaced.some((field) => field.valueClass === "bigint" || field.valueClass === "other");
   const replacer = mayHoldBigint ? `, ${BIGINT_REPLACER}` : "";
+  const todo =
+    reader === "program"
+      ? [
+          "    // TODO: pass each chained value where the program reads it: an environment",
+          "    // variable (runCommand's env, with ...process.env), a flag, or --cwd. Then delete the throw.",
+        ]
+      : [
+          "    // TODO: pass each value where the request reads it: the path, or fetch's",
+          "    // data, headers, or params option. Then delete the throw.",
+        ];
   return [
-    "    // TODO: pass each chained value where the program reads it: an environment",
-    "    // variable (runCommand's env, with ...process.env), a flag, or --cwd. Then delete the throw.",
-    `    throw new Error(\`pass ${keys.join(", ")} where the program reads them: ${relativeFilePath}:${LINE_MARKER}; args \${JSON.stringify({ ${keys.join(", ")} }${replacer})}\`);`,
+    ...todo,
+    `    throw new Error(\`pass ${keys.join(", ")} where the ${reader} reads them: ${relativeFilePath}:${LINE_MARKER}; args \${JSON.stringify({ ${keys.join(", ")} }${replacer})}\`);`,
   ];
 }
 
@@ -531,6 +635,8 @@ export function stepTemplate({
   description,
   relativeFilePath,
   attachment = null,
+  request = null,
+  bodyKey = null,
 }: StepTemplate): string {
   const attached = attachment === null ? [] : [ATTACHMENT_FIELD[attachment].field];
   const fields = [...fieldsOf(captures, []), ...attached, ...fieldsOf([], chained)];
@@ -541,7 +647,7 @@ export function stepTemplate({
       ? ['  // pattern: "the feature line this step matches", (without one, the step is called by name only)']
       : [`  pattern: ${JSON.stringify(pattern)},`];
   const command = variant === "command";
-  // The docstring or table is the expected value as much as a capture is.
+  const sends = variant === "request" && request !== null;
   const asserts = assertsInBody(variant, captures.length + attached.length, chained.length);
   const headerLines = command
     ? [
@@ -571,7 +677,9 @@ export function stepTemplate({
       ? `${
           cwd === null ? "Run the command under test in an empty scratch directory" : `Run the command under test in the directory ${cwd} names`
         }${argvKey === null ? "" : `, with ${argvKey} split on whitespace into its arguments`}`
-      : `${DESCRIPTION_TODO_PREFIX} ${name}`);
+      : sends
+        ? `Send ${requestFlagText(request)} and return the response's status and body`
+        : `${DESCRIPTION_TODO_PREFIX} ${name}`);
   const outcomeLines =
     variant === "then"
       ? ["  mutates: false,"]
@@ -585,7 +693,16 @@ export function stepTemplate({
             "  // Set this to false when the program changes nothing outside a scratch directory.",
             "  mutates: true,",
           ]
-        : [
+        : sends
+          ? [
+              "  returns: z.object({",
+              "    status: z.number(),",
+              "    body: z.string(),",
+              "  }),",
+              "  // The method is no proof either way: set this to false when the request changes nothing on the server.",
+              "  mutates: true,",
+            ]
+          : [
             "  // Return what later steps cite and the values this step's correctness rests on;",
             '  // beside an absence (false, 0, ""), return proof the read was valid. Declare them here:',
             "  // returns: z.object({ ... }),",
@@ -595,11 +712,22 @@ export function stepTemplate({
   // holds the captures alone.
   const unplaced = fieldsOf([], chained).filter((field) => field.key !== cwd);
   const argvFields = fieldsOf(captures, []).filter((field) => field.key !== cwd);
-  const runLines = command
+  const placedInRequest = new Set(
+    sends ? [...request.path.flatMap((segment) => ("key" in segment ? [segment.key] : [])), ...(bodyKey === null ? [] : [bodyKey])] : [],
+  );
+  const unsent = fields.filter((field) => !placedInRequest.has(field.key));
+  const runLines = sends
+    ? [
+        `  async run({ request }${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
+        ...(unsent.length === 0 ? [] : unplacedGuard(relativeFilePath, unsent, "request")),
+        `    const response = await request.fetch(${requestPathExpression(request.path)}, { method: ${JSON.stringify(request.method)}${bodyKey === null ? "" : `, data: ${bodyKey}`} });`,
+        "    return { status: response.status(), body: await response.text() };",
+      ]
+    : command
     ? [
         `  async run(${cwd === null ? "{ scratch }" : "{}"}${argsParameter === "" ? "" : `, ${argsParameter}`}) {`,
         ...placeholderGuard,
-        ...(unplaced.length === 0 ? [] : unplacedGuard(relativeFilePath, unplaced)),
+        ...(unplaced.length === 0 ? [] : unplacedGuard(relativeFilePath, unplaced, "program")),
         `    return await runCommand(process.execPath, [${commandArgv(argvFields, argvKey)}], { cwd: ${cwd === null ? "scratch.dir()" : cwd} });`,
       ]
     : [
@@ -629,11 +757,12 @@ const DESCRIPTION_LINE = /^ {2}description: (".*"),$/m;
 const CLI_LINE = /^const cli = resolve\((".*")\);$/m;
 const CWD_OPTION = /\{ cwd: ([A-Za-z_$][A-Za-z0-9_$]*) \}\);$/m;
 const ARGV_SPREAD = /\.\.\.([A-Za-z_$][A-Za-z0-9_$]*)\.split\(/;
+const REQUEST_CALL = /^ {4}const response = await request\.fetch\((.*), \{ method: ("[A-Z]+")(?:, data: ([A-Za-z_$][A-Za-z0-9_$]*))? \}\);$/m;
 const RELATIVE_IMPORT = /^import ([A-Za-z_$][A-Za-z0-9_$]*) from ("\.[^"\n]*");$/gm;
 const FROM_ENTRY = /^ {4}([A-Za-z_$][A-Za-z0-9_$]*): \[.*\],$/;
 const FROM_CANDIDATE = /\[([A-Za-z_$][A-Za-z0-9_$]*), "([A-Za-z_$][A-Za-z0-9_$]*)"\]/g;
 
-const TEMPLATE_VARIANTS: readonly Variant[] = ["when", "then", "command"];
+const TEMPLATE_VARIANTS: readonly Variant[] = ["when", "then", "command", "request"];
 const TEMPLATE_ATTACHMENTS: readonly (Attachment | null)[] = [null, "docstring", "table"];
 const CHAINED_CLASSES: readonly PrimitiveClass[] = ["string", "number", "other"];
 
@@ -726,6 +855,11 @@ export function isUneditedStub(source: string, name: string, relativeFilePath: s
   const argvKey = ARGV_SPREAD.exec(source)?.[1] ?? null;
   const chainedKeys = chainedFromFile(source);
   if (chainedKeys === null || chainedKeys.length > MAX_CHAINED_KEYS) return false;
+  const call = REQUEST_CALL.exec(source);
+  const method = call === null ? null : jsonString(call[2]);
+  const requestPath = call === null ? null : readRequestPath(call[1]!);
+  const request = method === null || requestPath === null ? null : { method, path: requestPath };
+  const bodyKey = call?.[3] ?? null;
   return classAssignments(chainedKeys.length).some((classes) => {
     const chained = chainedKeys.map(({ key, producers }, index): ChainedField => ({
       key,
@@ -747,6 +881,8 @@ export function isUneditedStub(source: string, name: string, relativeFilePath: s
             description,
             relativeFilePath,
             attachment,
+            request,
+            bodyKey,
           }) === source,
       ),
     );
@@ -1060,10 +1196,23 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   if (command && then) {
     return refuse(sinks, "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false", help);
   }
+  let request: RequestShape | null = null;
+  if (options.request !== null) {
+    if (command) return refuse(sinks, "Refusing to scaffold: --request and --command together; one When step either sends a request or runs a program", help);
+    if (then) {
+      return refuse(sinks, "Refusing to scaffold: --request and --then together; the step that sends the request is a When, and a Then step reads its status or body with --from", help);
+    }
+    const parsed = parseRequestFlag(options.request);
+    if ("refusal" in parsed) return refuse(sinks, `Refusing to scaffold: ${parsed.refusal}`, help);
+    request = parsed;
+  }
+  if (options.bodyKey !== null && request === null) {
+    return refuse(sinks, "Refusing to scaffold: --body names the args key a --request step sends, and only a --request step sends one", help);
+  }
   if (cwd !== null && !command) {
     return refuse(sinks, "Refusing to scaffold: --cwd names the directory the program runs in, and only a --command step runs one", help);
   }
-  const variant: Variant = command ? "command" : then ? "then" : "when";
+  const variant: Variant = command ? "command" : request !== null ? "request" : then ? "then" : "when";
   const variantShape = VARIANTS[variant];
 
   if (description === "") {
@@ -1089,7 +1238,9 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const unplacedFrom = [...fromKeys].some((key) => key !== cwd);
   const guardNames = [...(entryPoint === null || unplacedFrom ? ["Error"] : []), ...(unplacedFrom ? ["JSON"] : [])];
   const shape: VariantShape =
-    command && guardNames.length > 0
+    request !== null
+      ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error", "JSON"]) }
+      : command && guardNames.length > 0
       ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, ...guardNames]) }
       : // Several --from for one key fill one field, so the count is of keys.
         assertsInBody(variant, read.captures.length, fromKeys.size)
@@ -1106,6 +1257,18 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   if (cwd !== null && !argsKeys.includes(cwd)) {
     const keys = argsKeys.length === 0 ? "it has none" : `its keys are ${argsKeys.join(", ")}`;
     return refuse(sinks, `Refusing to scaffold: --cwd ${cwd} names no args key of this step (${keys}); pass the key a --from or a capture fills`, help);
+  }
+
+  if (request !== null) {
+    const unknown = request.path.flatMap((segment) => ("key" in segment && !argsKeys.includes(segment.key) ? [segment.key] : []));
+    if (unknown.length > 0) {
+      const keys = argsKeys.length === 0 ? "it has none" : `its keys are ${argsKeys.join(", ")}`;
+      return refuse(
+        sinks,
+        `Refusing to scaffold: --request's path names ${unknown.map((key) => `{${key}}`).join(", ")}, which no capture or --from fills (${keys}); a {key} in the path is put in by that args key's value`,
+        help,
+      );
+    }
   }
 
   if (options.argvKey !== null) {
@@ -1206,6 +1369,23 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     );
   }
 
+  // A command's docstring has no place in argv, so it stays the author's call.
+  const attachment = pattern === null || variant === "command" ? null : attachmentInFeatures(rootDir, pattern, config);
+  if (options.bodyKey !== null) {
+    const sendable = [...argsKeys, ...(attachment === null ? [] : [ATTACHMENT_FIELD[attachment].field.key])];
+    if (!sendable.includes(options.bodyKey)) {
+      const attached =
+        options.bodyKey === "docstring" || options.bodyKey === "table"
+          ? `; no feature line this pattern matches carries a ${options.bodyKey} (write the line first)`
+          : "";
+      return refuse(
+        sinks,
+        `Refusing to scaffold: --body ${options.bodyKey} names no args key of this step (${sendable.length === 0 ? "it has none" : `its keys are ${sendable.join(", ")}`})${attached}`,
+        help,
+      );
+    }
+  }
+
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(
     filePath,
@@ -1220,8 +1400,9 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       argvKey: options.argvKey,
       description,
       relativeFilePath: relativeFilePath.split(path.sep).join("/"),
-      // A command's docstring has no place in argv, so it stays the author's call.
-      attachment: pattern === null || variant === "command" ? null : attachmentInFeatures(rootDir, pattern, config),
+      attachment,
+      request,
+      bodyKey: options.bodyKey,
     }),
   );
 
