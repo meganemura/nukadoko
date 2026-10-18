@@ -146,7 +146,6 @@ describe("a --json command that cannot report prints a refused envelope on stdou
         code: "removed-command",
         message: "`nuka experimental explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
         fix: "Write each sequence the model found as a scenario in a feature file.",
-        do: "nuka check",
       },
     },
     {
@@ -161,7 +160,6 @@ describe("a --json command that cannot report prints a refused envelope on stdou
         code: "removed-command",
         message: "`nuka explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
         fix: "Write each sequence the model found as a scenario in a feature file.",
-        do: "nuka check",
       },
     },
     {

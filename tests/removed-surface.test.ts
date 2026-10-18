@@ -13,8 +13,8 @@ describe("removed flags", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      "refused\tremoved-command\t-\tnuka run --quiet is removed: nuka run --json prints one document on stdout and nothing on stderr.\n" +
-        "  fix: Use what the message names in its place.\n  do: nuka run --help\n",
+      "refused\tremoved-flag\t-\tnuka run --quiet is removed: nuka run --json prints one document on stdout and nothing on stderr.\n" +
+        "  fix: Use what the message names in its place.\n",
     );
   });
 
@@ -26,9 +26,9 @@ describe("removed flags", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      "refused\tremoved-command\t-\tnuka run --summary is removed: nuka report --format markdown --out <path> writes the run " +
+      "refused\tremoved-flag\t-\tnuka run --summary is removed: nuka report --format markdown --out <path> writes the run " +
         "summary of the newest run to a path.\n" +
-        "  fix: Use what the message names in its place.\n  do: nuka run --help\n",
+        "  fix: Use what the message names in its place.\n",
     );
   });
 
@@ -44,9 +44,9 @@ describe("removed flags", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      "refused\tremoved-command\t-\tnuka do --session is removed: each nuka do call starts clean. A step that needs login state " +
+      "refused\tremoved-flag\t-\tnuka do --session is removed: each nuka do call starts clean. A step that needs login state " +
         "gets it from a fixture, and a page whose state cannot be repeated is explored through a Playwright MCP server.\n" +
-        "  fix: Use what the message names in its place.\n  do: nuka do --help\n",
+        "  fix: Use what the message names in its place.\n",
     );
   });
 });
@@ -87,7 +87,7 @@ describe("Markdown oaths, removed", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(withoutNoConfigLine(stderr.text())).toBe(
-      "refused\tremoved-command\t-\tfeatures/x.md is a Markdown file: Markdown oaths were removed, and nukadoko reads scenarios " +
+      "refused\tmarkdown-target\t-\tfeatures/x.md is a Markdown file: Markdown oaths were removed, and nukadoko reads scenarios " +
         "from .feature files only\n" +
         "  fix: Write the scenarios of features/x.md as Gherkin in a .feature file, and name that file.\n",
     );

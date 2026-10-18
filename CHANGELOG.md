@@ -13,15 +13,19 @@ just until 0.1.
   `nuka experimental explore` with its model API, and `nukadoko/mcp`.**
   Each was a second way to do something the rest of nukadoko already
   does, and each is refused by name with what to do instead, never
-  ignored.
-  - `nuka run --quiet` is refused with `removed-command`; `--json` already
+  ignored. A removed command is refused with `removed-command`, a removed
+  flag with the new `removed-flag`, and a Markdown target with the new
+  `markdown-target`; each carries a `fix` that names the replacement and
+  no `do`, since no one command is the next step for every caller.
+  - `nuka run --quiet` is refused with `removed-flag`; `--json` already
     prints one document on stdout and nothing on stderr.
   - The `oaths` config key is refused with the new `config-key-removed`
     refusal code, and a `.md` target of `nuka check` or `nuka run` is
-    refused with `removed-command`. The Markdown parser and the
+    refused with `markdown-target`. The Markdown parser and the
     `feature-parse-error` wording for an oath are gone.
-  - `nuka session list`, `nuka session clear`, and `nuka do --session` are
-    refused with `removed-command`. Each `nuka do` call starts clean, and
+  - `nuka session list` and `nuka session clear` are refused with
+    `removed-command`, and `nuka do --session` with `removed-flag`; the
+    fix names the configured state directory's `cache/`. Each `nuka do` call starts clean, and
     nothing is written under `.nukadoko/cache/`. `browserContext` and
     `requestContext` now pass `storageState` through to Playwright
     instead of refusing it, so a login state file is named in the config.
@@ -68,7 +72,7 @@ just until 0.1.
     `run.json`, or no run at all, with the new `run-not-found`.
   - The `allure` and `messages` config keys are refused with
     `config-key-removed`, and `nuka run --summary <path>` is refused with
-    `removed-command`. `nuka run` still writes `summary.md` into the run
+    `removed-flag`. `nuka run` still writes `summary.md` into the run
     directory and appends it to `$GITHUB_STEP_SUMMARY`.
   - In a messages stream of a run over more than one environment, each
     pickle gets one copy per environment, with fresh ids and the

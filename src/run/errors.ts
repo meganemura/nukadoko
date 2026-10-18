@@ -118,7 +118,7 @@ export class NoFeatureFilesFoundError extends Error {
  * removed, and parsing the file as Gherkin would report a parse error that
  * says nothing about why. */
 export class MarkdownTargetError extends Error {
-  readonly code = "removed-command";
+  readonly code = "markdown-target";
   readonly relativePath: string;
   readonly fix: string;
 

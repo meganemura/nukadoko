@@ -85,6 +85,10 @@ const REFUSAL_CODES = {
     description: "A target has a :line suffix, and the command reads whole files: nuka check analyzes every scenario in a file.",
     fix: "Remove the :line suffix from the target.",
   },
+  "markdown-target": {
+    description: "A target names a Markdown file: Markdown oaths were removed, and scenarios live in .feature files only.",
+    fix: "Write the scenarios of the file as Gherkin in a .feature file, and name that file.",
+  },
   "no-feature-files": {
     description: "A target directory holds no feature file, so nothing can run.",
     fix: "Add a feature file under the directory, or name another target.",
@@ -102,7 +106,11 @@ const REFUSAL_CODES = {
     fix: "Run the step against an environment that allows writes, or declare mutates: false if it only reads.",
   },
   "removed-command": {
-    description: "The command line names a command, a flag, or a flag value that an earlier release removed or moved.",
+    description: "The command line names a command that an earlier release removed.",
+    fix: "Use what the message names in its place.",
+  },
+  "removed-flag": {
+    description: "The command line names a flag that an earlier release removed.",
     fix: "Use what the message names in its place.",
   },
   "run-not-found": {

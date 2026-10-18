@@ -45,18 +45,19 @@ This part does not change release to release.
 
 ## 0.17.0 to the next release
 
-- **`nuka run --quiet` is removed.** It is refused with `removed-command`.
+- **`nuka run --quiet` is removed.** It is refused with `removed-flag`.
   A CI step that wanted a short log runs `nuka run --json`: stderr is
   empty, and stdout is `run.json`.
 
 - **Markdown oaths are removed.** The `oaths` config key is refused with
   `config-key-removed`, and a `.md` target of `nuka check` or `nuka run`
-  is refused with `removed-command`. Write the scenarios of each oath as
+  is refused with `markdown-target`. Write the scenarios of each oath as
   Gherkin in a `.feature` file under `featuresDir`, then delete the
   `oaths` key.
 
-- **Sessions are removed.** `nuka session list`, `nuka session clear`, and
-  `nuka do --session` are refused with `removed-command`. Each `nuka do`
+- **Sessions are removed.** `nuka session list` and `nuka session clear`
+  are refused with `removed-command`, and `nuka do --session` with
+  `removed-flag`. Each `nuka do`
   call starts clean, as each scenario already did.
   - A step that needs login state gets it from a fixture. A project that
     keeps a Playwright storageState file names it in
@@ -244,7 +245,7 @@ This part does not change release to release.
 - **`nuka run` writes no Allure results or messages stream; `nuka report`
   renders them after the run.** The `allure` and `messages` config keys
   are refused with `config-key-removed`, and `nuka run --summary` with
-  `removed-command`.
+  `removed-flag`.
   - Delete the `allure` and `messages` keys from the config.
   - Where a script or CI step read `.nukadoko/export/allure-results/`
     after `nuka run`, run `nuka report --format allure` after the run

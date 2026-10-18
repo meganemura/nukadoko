@@ -221,13 +221,17 @@ const CLEAN_REMOVES_EVERY_CATEGORY =
 // A removed flag is refused by name, with what replaces it, rather than
 // left to `.strict()`: "Unknown argument: session" says what is wrong with
 // an older command but not what to write instead. Hidden, so --help lists
-// only what works.
+// only what works. The message names the replacement, so the refusal has a
+// `fix` and no `do`: no one command is the right next step for every
+// caller, and a placeholder such as the command's help would read as one.
+const REMOVED_FIX = "Use what the message names in its place.";
+
 function refuseRemovedFlags(y: Argv, removed: Readonly<Record<string, string>>): Argv {
   const withOptions = Object.keys(removed).reduce((acc, flag) => acc.option(flag, { hidden: true }), y);
   return withOptions.check((args) => {
     const record = args as unknown as Record<string, unknown>;
     for (const [flag, message] of Object.entries(removed)) {
-      if (record[flag] !== undefined) throw new RefusalError("removed-command", message);
+      if (record[flag] !== undefined) throw new RefusalError("removed-flag", message, { fix: REMOVED_FIX });
     }
     return true;
   });
@@ -627,36 +631,46 @@ export async function runCli(
   // `harvest`, `session`, `explore`, and `experimental` were removed. Each
   // old spelling names what replaces it instead of yargs' bare "Unknown
   // argument", so a script that still calls it learns what to change.
-  // Hidden from the help: they run nothing.
-  const removedCommand = (command: string, message: string, hint: { fix?: string; do?: string }): CommandModule => ({
+  // Hidden from the help: they run nothing. A `fix` and no `do`, for the
+  // reason `refuseRemovedFlags` gives. A fix that names the state
+  // directory reads it from the config, when one loads.
+  const removedCommand = (command: string, message: string, fixFor: (stateDir: string) => string): CommandModule => ({
     command,
     describe: false,
     builder: (y: Argv) => y.strict(false),
-    handler: () => {
+    handler: async () => {
       if (argsFailed) return;
-      exitCode = refuse({ json: jsonRequested, stdout, stderr, command }, message, "removed-command", hint);
+      let stateDir = ".nukadoko";
+      try {
+        const { loadConfig } = await import("../config/load-config.js");
+        stateDir = (await loadConfig(rootDir)).stateDir;
+      } catch {
+        // No config, or one that does not load: the default is still the
+        // directory an earlier release wrote to.
+      }
+      exitCode = refuse({ json: jsonRequested, stdout, stderr, command }, message, "removed-command", { fix: fixFor(stateDir) });
     },
   });
   const removedHarvestCommand = removedCommand(
     "harvest",
     "`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)",
-    { fix: "Write the scenario from the steps you ran in a feature file.", do: "nuka check" },
+    () => "Write the scenario from the steps you ran in a feature file.",
   );
   const removedSessionCommand = removedCommand(
     "session",
     "`nuka session` was removed with sessions: each nuka do call starts clean, and a step that needs login state " +
       "gets it from a fixture (see docs/upgrading.md in the nukadoko package)",
-    { fix: "Give the step a fixture that logs in, and delete .nukadoko/cache/.", do: "nuka do --help" },
+    (stateDir) => `Give the step a fixture that logs in, and delete ${stateDir.replace(/\/+$/, "")}/cache/.`,
   );
   const removedExperimentalCommand = removedCommand(
     "experimental",
     "`nuka experimental explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
-    { fix: "Write each sequence the model found as a scenario in a feature file.", do: "nuka check" },
+    () => "Write each sequence the model found as a scenario in a feature file.",
   );
   const removedExploreCommand = removedCommand(
     "explore",
     "`nuka explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
-    { fix: "Write each sequence the model found as a scenario in a feature file.", do: "nuka check" },
+    () => "Write each sequence the model found as a scenario in a feature file.",
   );
 
   const initCommand: CommandModule<Record<string, never>, InitArgs> = {

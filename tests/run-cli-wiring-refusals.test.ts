@@ -1,6 +1,8 @@
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { createCaptureSink, fixture } from "./helpers/fixtures.js";
+import { createCaptureSink, createEmptyTempDir, fixture, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: the removed commands, each refused by name with what
 // replaces it, and `nuka describe`'s own ConfigError propagation, which
@@ -16,8 +18,7 @@ describe("nuka harvest, removed", () => {
       expect(exitCode).toBe(2);
       expect(stderr.text()).toBe(
         "refused\tremoved-command\t-\t`nuka harvest` was removed (see docs/upgrading.md in the nukadoko package)\n" +
-          "  fix: Write the scenario from the steps you ran in a feature file.\n" +
-          "  do: nuka check\n",
+          "  fix: Write the scenario from the steps you ran in a feature file.\n",
       );
       expect(stdout.text()).toBe("");
     }
@@ -31,24 +32,21 @@ describe("nuka session, nuka experimental explore and nuka explore, removed", ()
       stderr:
         "refused\tremoved-command\t-\t`nuka session` was removed with sessions: each nuka do call starts clean, and a step that needs " +
         "login state gets it from a fixture (see docs/upgrading.md in the nukadoko package)\n" +
-        "  fix: Give the step a fixture that logs in, and delete .nukadoko/cache/.\n" +
-        "  do: nuka do --help\n",
+        "  fix: Give the step a fixture that logs in, and delete .nukadoko/cache/.\n",
     },
     {
       argv: ["experimental", "explore", "features/model.ts"],
       stderr:
         "refused\tremoved-command\t-\t`nuka experimental explore` was removed with models and relations " +
         "(see docs/upgrading.md in the nukadoko package)\n" +
-        "  fix: Write each sequence the model found as a scenario in a feature file.\n" +
-        "  do: nuka check\n",
+        "  fix: Write each sequence the model found as a scenario in a feature file.\n",
     },
     {
       argv: ["explore", "features/model.ts"],
       stderr:
         "refused\tremoved-command\t-\t`nuka explore` was removed with models and relations " +
         "(see docs/upgrading.md in the nukadoko package)\n" +
-        "  fix: Write each sequence the model found as a scenario in a feature file.\n" +
-        "  do: nuka check\n",
+        "  fix: Write each sequence the model found as a scenario in a feature file.\n",
     },
   ];
 
@@ -79,5 +77,22 @@ describe("nuka describe: config load failure", () => {
     expect(refusal.code).toBe("config-invalid");
     expect(refusal.message).toContain("typo");
     expect(refusal.fix).toBe("Correct the fields the message names in nukadoko.config.ts.");
+  });
+});
+
+describe("nuka session, removed, in a project with its own stateDir", () => {
+  it("names the configured state directory's cache in its fix", async () => {
+    const rootDir = await createEmptyTempDir();
+    try {
+      await writeFile(path.join(rootDir, "nukadoko.config.ts"), 'export default { stateDir: "tmp/nuka-state" };\n');
+      const stdout = createCaptureSink();
+      const exitCode = await runCli(["session", "list", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
+      expect(exitCode).toBe(2);
+      const [finding] = (JSON.parse(stdout.text()) as { findings: { code: string; fix?: string; do?: string }[] }).findings;
+      expect(finding).toMatchObject({ code: "removed-command", fix: "Give the step a fixture that logs in, and delete tmp/nuka-state/cache/." });
+      expect(finding!.do).toBeUndefined();
+    } finally {
+      await removeTempDir(rootDir);
+    }
   });
 });

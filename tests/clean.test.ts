@@ -142,8 +142,8 @@ describe("nuka clean", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      `refused\tremoved-command\t-\tnuka clean ${flag} is removed: nuka clean always removes records and export together; ` +
-        "nuka clean --dry-run lists what it would remove.\n  fix: Use what the message names in its place.\n  do: nuka clean --help\n",
+      `refused\tremoved-flag\t-\tnuka clean ${flag} is removed: nuka clean always removes records and export together; ` +
+        "nuka clean --dry-run lists what it would remove.\n  fix: Use what the message names in its place.\n",
     );
     expect(existsSync(path.join(stateDir(rootDir), "do", "step-aaa"))).toBe(true);
     expect(existsSync(path.join(stateDir(rootDir), "export", "allure-results", "some-result.json"))).toBe(true);
@@ -163,12 +163,11 @@ describe("nuka clean", () => {
       findings: [
         {
           severity: "refused",
-          code: "removed-command",
+          code: "removed-flag",
           message:
             "nuka clean --cache is removed: nuka clean always removes records and export together; " +
             "nuka clean --dry-run lists what it would remove.",
           fix: "Use what the message names in its place.",
-          do: "nuka clean --help",
         },
       ],
     });

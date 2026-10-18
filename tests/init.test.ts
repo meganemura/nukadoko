@@ -535,7 +535,7 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toBe(`refused\tremoved-command\t-\t${message}\n  fix: Use what the message names in its place.\n  do: nuka init --help\n`);
+    expect(stderr.text()).toBe(`refused\tremoved-flag\t-\t${message}\n  fix: Use what the message names in its place.\n`);
     expect(await fileSet(rootDir)).toEqual(["package.json"]);
   });
 

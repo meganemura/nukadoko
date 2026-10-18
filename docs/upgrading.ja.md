@@ -39,17 +39,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 ## 0.17.0 から次のリリースへ
 
 - **`nuka run --quiet` は削除されました。**
-  `removed-command` で拒否されます。
+  `removed-flag` で拒否されます。
   短いログが欲しい CI の step は `nuka run --json` を走らせます。
   stderr は空になり、stdout は `run.json` です。
 
 - **Markdown oaths は削除されました。**
   config の `oaths` キーは `config-key-removed` で拒否されます。
-  `nuka check` や `nuka run` の `.md` の対象は `removed-command` で拒否されます。
+  `nuka check` や `nuka run` の `.md` の対象は `markdown-target` で拒否されます。
   各 oath の scenario を、`featuresDir` の下の `.feature` ファイルに Gherkin で書き、`oaths` キーを消してください。
 
 - **session は削除されました。**
-  `nuka session list`、`nuka session clear`、`nuka do --session` は `removed-command` で拒否されます。
+  `nuka session list` と `nuka session clear` は `removed-command` で、`nuka do --session` は `removed-flag` で拒否されます。
   各 scenario がすでにそうだったように、`nuka do` の各呼び出しはクリーンに始まります。
   - ログイン状態が必要な step は、それを fixture から得ます。
     Playwright の storageState のファイルを持つプロジェクトは、それを `browserContext.storageState` か `requestContext.storageState` に書きます。
@@ -189,7 +189,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
     environment が result の identity の一部になったからです。
 
 - **`nuka run` は Allure の result も messages ストリームも書かず、run の後に `nuka report` がそれを描き出します。**
-  `allure` と `messages` の config キーは `config-key-removed` で、`nuka run --summary` は `removed-command` で拒否されます。
+  `allure` と `messages` の config キーは `config-key-removed` で、`nuka run --summary` は `removed-flag` で拒否されます。
   - config から `allure` と `messages` のキーを消します。
   - `nuka run` の後に `.nukadoko/export/allure-results/` を読んでいたスクリプトや CI の step は、run の後にまず `nuka report --format allure` を実行します。
     `allure.resultsDir` で出力先を移していたなら、そのディレクトリを `--out` に渡します。

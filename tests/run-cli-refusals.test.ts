@@ -34,9 +34,9 @@ describe("nuka run: setup-phase refusals reachable before any pickle is selected
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      "refused\tremoved-command\t-\tnuka run --session is removed: a scenario that needs login state gets it from a fixture or a Given step " +
+      "refused\tremoved-flag\t-\tnuka run --session is removed: a scenario that needs login state gets it from a fixture or a Given step " +
         "its feature names.\n" +
-        "  fix: Use what the message names in its place.\n  do: nuka run --help\n",
+        "  fix: Use what the message names in its place.\n",
     );
   });
 
