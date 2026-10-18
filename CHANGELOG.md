@@ -51,6 +51,14 @@ just until 0.1.
 
 ### Fixed
 
+- **A Then that `nuka scaffold --then --from <step>.stdout` writes passes against a program that ends its output with a newline.**
+  The body compared `stdout` as it was, and a program that prints a line
+  ends with a newline that neither a quoted capture nor a docstring
+  carries, so the scaffolded Then failed on the first run with `expected
+  "Hello, Ada!", got "Hello, Ada!\n"` and every CLI project edited it by
+  hand. A chained `stdout` or `stderr` string now loses that one trailing
+  newline before the comparison; any other difference still fails.
+
 - **`nuka scaffold` gives a docstring or a table line the args key it fills.**
   A stub for a line with a docstring or a table declared no key for it,
   so the next `nuka check` reported `table-docstring-key-mismatch` on the

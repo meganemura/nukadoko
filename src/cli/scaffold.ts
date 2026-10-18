@@ -434,6 +434,12 @@ function messageText(key: string, valueClass: PrimitiveClass): string {
   return `\${JSON.stringify(${key})}`;
 }
 
+/** The keys a `--command` step returns a program's text in. Neither a
+ * capture nor a docstring can end with the newline a program prints last,
+ * so comparing them as they are fails for every program that ends its
+ * output the usual way. */
+const OUTPUT_STREAMS: ReadonlySet<string> = new Set(["stdout", "stderr"]);
+
 /** The Then body that compares the one chained value, or a TODO
  * placeholder, against the one captured value. A custom type may produce
  * an object, so its value is compared by structure. */
@@ -447,7 +453,12 @@ function assertBody(expected: Field, chained: Field | undefined): string[] {
           "    // TODO: read the value this line checks, for example from an earlier step's returns through `from`.",
           "    const actual: unknown = undefined;",
         ]
-      : [`    const actual = ${chained.key};`];
+      : OUTPUT_STREAMS.has(chained.key) && chained.valueClass === "string" && expected.valueClass === "string"
+        ? [
+            "    // The program ends its output with a newline that the feature line does not show.",
+            `    const actual = ${chained.key}.replace(/\\r?\\n$/, "");`,
+          ]
+        : [`    const actual = ${chained.key};`];
   return [...actualLines, `    assert.${method}(actual, ${expected.key}, \`${message}\`);`];
 }
 

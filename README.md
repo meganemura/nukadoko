@@ -143,7 +143,9 @@ features/steps/output-says.ts
 The body it writes is already an assertion: `actual` is the `stdout` the
 When step returned, and `node:assert/strict` compares it with the `text`
 the feature line supplies, with a message that names both values. greet
-ends its line with a newline, so trim it, the one edit this file needs:
+ends its line with a newline that the feature line does not show, so the
+body drops that one newline before it compares, and the file needs no
+edit:
 
 ```ts
 // features/steps/output-says.ts
@@ -164,7 +166,8 @@ export default defineStep({
   },
   mutates: false,
   run({}, { text, stdout }) {
-    const actual = stdout.trim();
+    // The program ends its output with a newline that the feature line does not show.
+    const actual = stdout.replace(/\r?\n$/, "");
     assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);
   },
 });

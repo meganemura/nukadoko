@@ -4163,7 +4163,10 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               TODO) with the capture, and the message
                               is "<key>: expected <value>, got
                               <actual>"; a custom type compares with
-                              deepEqual. When every feature line the
+                              deepEqual. A chained stdout or stderr
+                              string loses one trailing newline before
+                              the comparison, the one a program prints
+                              last. When every feature line the
                               pattern matches carries a docstring, args
                               gets docstring: z.string(), and for a
                               table, table: z.array(z.array(z.string()));

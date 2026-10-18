@@ -67,7 +67,8 @@ capture, so put the captures in by hand. Steps that need `--command` or
    and no `returns`. With one capture, the expected value, the body asserts
    with `node:assert/strict`: `actual` is the one `--from` value (or
    `undefined` under a TODO), and the message names the expected and the
-   actual value. A step whose feature lines carry a docstring or a table
+   actual value. A chained `stdout` or `stderr` is compared without the
+   newline the program printed last. A step whose feature lines carry a docstring or a table
    gets a `docstring` or `table` key, which a Then compares like a
    capture; write the feature line first, or add the key by hand, or
    `nuka check` reports `table-docstring-key-mismatch`.

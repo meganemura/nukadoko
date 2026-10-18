@@ -133,8 +133,8 @@ features/steps/output-says.ts
 
 書かれる本体は、すでに assertion になっています。
 `actual` は When の step が返した `stdout` で、`node:assert/strict` がそれを feature の行が与える `text` と比べ、メッセージには両方の値が入ります。
-greet は行を改行で終えるので、trim します。
-このファイルに要る編集はそれだけです:
+greet は行を改行で終えますが、feature の行にその改行はありません。
+そのため本体は比べる前にその改行を 1 つ取り除き、このファイルに編集は要りません:
 
 ```ts
 // features/steps/output-says.ts
@@ -155,7 +155,8 @@ export default defineStep({
   },
   mutates: false,
   run({}, { text, stdout }) {
-    const actual = stdout.trim();
+    // The program ends its output with a newline that the feature line does not show.
+    const actual = stdout.replace(/\r?\n$/, "");
     assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);
   },
 });

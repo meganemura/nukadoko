@@ -288,7 +288,7 @@ describe("nuka scaffold --command", () => {
     expect(run.stdout).not.toContain("not implemented: output-says");
   });
 
-  it("chains --from at once, and runs a real program green once the entry point is filled in and the output trimmed", async () => {
+  it("chains --from at once, and runs a real program green once the entry point is filled in", async () => {
     await mkdir(path.join(rootDir, "src"));
     await writeFile(
       path.join(rootDir, "src", "greet.mjs"),
@@ -323,10 +323,7 @@ describe("nuka scaffold --command", () => {
       runGreet,
       (await readFile(runGreet, "utf8")).replace("<TODO: the entry point>", path.join(rootDir, "src", "greet.mjs")),
     );
-    const outputSays = stepPath(rootDir, "output-says");
-    const unedited = "const actual = stdout;";
-    expect(await readFile(outputSays, "utf8")).toContain(unedited);
-    await writeFile(outputSays, (await readFile(outputSays, "utf8")).replace(unedited, "const actual = stdout.trim();"));
+    expect(await readFile(stepPath(rootDir, "output-says"), "utf8")).toContain('    const actual = stdout.replace(/\\r?\\n$/, "");\n');
 
     // The scaffolded assertion, unedited, names the expected and the actual value.
     const asserted = await cli(rootDir, ["scaffold", "exit-is", "--pattern", "it exits {code:int}", "--then", "--from", "run-greet.exitCode"]);

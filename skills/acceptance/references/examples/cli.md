@@ -126,7 +126,7 @@ export default defineStep({
 
 `features/steps/output-is.ts`. The scaffold wrote the import, the `from`
 entry, the key for the docstring, the assertion, and `mutates: false`;
-the key's name `expected` and trimming both sides are by hand:
+the key's name `expected` and `trimEnd()` on both sides are by hand:
 
 ```ts
 import { defineStep, z } from "nukadoko";

@@ -92,7 +92,7 @@ describe("README.md: Beside your unit tests", () => {
 
     const ran: string[] = [];
     // A file block the scaffold already wrote as shown, path comment aside:
-    // the walkthrough promises the When step needs no edit.
+    // the walkthrough promises neither step needs an edit.
     const unedited: string[] = [];
     for (const block of blocks) {
       const target = filePath(block);
@@ -116,6 +116,6 @@ describe("README.md: Beside your unit tests", () => {
       }
     }
     expect(ran.at(-1)).toBe("npm run test:scenarios");
-    expect(unedited).toEqual(["features/steps/run-greet.ts"]);
+    expect(unedited).toEqual(["features/steps/run-greet.ts", "features/steps/output-says.ts"]);
   }, 120_000);
 });
