@@ -76,7 +76,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
     expect(lines[0]?.method).toBe("PUT");
     expect(lines[0]?.url).toBe("https://example.com/items/1");
     expect(lines[0]?.via).toBe("request");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it("delete(): logs method DELETE and tallies a write", async () => {
@@ -89,7 +89,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("DELETE");
     expect(lines[0]?.url).toBe("https://example.com/items/1");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it("head(): logs method HEAD, records the response's own status, and tallies a read", async () => {
@@ -102,7 +102,7 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("HEAD");
     expect(lines[0]?.status).toBe(204);
-    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0 });
+    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0, processes: null });
   });
 
   it("put()/delete()/head() redact a secret found in the url, the same as get()/post() already do", async () => {
@@ -135,6 +135,6 @@ describe("wrapRequestContextWithLogging / put, delete, head, asyncDispose", () =
     // Nothing was ever logged: the append call this module's only write
     // path goes through never ran, so the file itself was never created.
     await expect(readFile(logFile, "utf8")).rejects.toThrow();
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 0 });
+    expect(observed.snapshot()).toEqual({ http_reads: null, http_writes: null, processes: null });
   });
 });

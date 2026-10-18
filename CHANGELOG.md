@@ -37,6 +37,20 @@ just until 0.1.
   `reportedByDefault` from each entry, so its `schema_version` is 2. The
   `declared:` line no longer adds "(nuka tend --all names each one)".
   See docs/upgrading.md.
+- **A step record's `observed` says `null` for a channel the step never
+  reached.** A step that called `fetch` recorded
+  `{"http_reads": 0, "http_writes": 0}`, which reads as a measurement of
+  requests nukadoko never saw. Now `http_reads` and `http_writes` are
+  numbers, `0` included, only when the step called `ctx.request()`,
+  `ctx.page()`, or `pageAs()` (directly, or through a `request`, `page`,
+  or `context` fixture or a project fixture built on one) or a request was
+  recorded during it; otherwise both are `null`. `observed.processes` is
+  always present: the `runCommand` list, or `null` when the step never
+  called `runCommand` (the key used to be left out). The step record's
+  `schema_version` is 2. The run summary's "Declared vs observed" section
+  adds one line counting the steps that declared `mutates: false` and
+  reached no HTTP channel, so they were not compared, and the Allure step
+  parameters show `not observed` for those counts. See docs/upgrading.md.
 
 ### Added
 

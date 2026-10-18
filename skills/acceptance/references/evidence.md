@@ -18,6 +18,12 @@ automatic evidence above. It lands on `observed` and on `http.jsonl` with
 `via: "request"`, the same way the `request` fixture does, and a GET or
 HEAD stays a read. In-page `fetch` and navigation stay `via: "page"`.
 
+A step that reaches none of `request`, `page`, `context`, or `pageAs` (a
+step that calls Node's own `fetch`, for instance) records
+`observed.http_reads` and `http_writes` as `null`, not `0`: nothing was
+measured. The run summary counts such read-only steps apart, as not
+compared. Use the `request` fixture when the count has to mean something.
+
 `evidence.attach(name, body)` writes and lists the attachment on the step
 record's `evidence.attachments` in one call. `evidence.path(name)` only
 allocates a path, Playwright's own `outputPath()`, for a step that writes

@@ -137,7 +137,7 @@ describe("createAllureEmitter", () => {
       writeFileSync(path.join(recordDir, "http.jsonl"), '{"method":"GET","url":"https://x","status":200,"duration_ms":5}\n');
 
       const stepRecord1: StepRecord = {
-        schema_version: 1,
+        schema_version: 2,
         nukadoko: "0.0.0-test",
         step_record_id: "step-1",
         step: "the cart has items",
@@ -153,7 +153,7 @@ describe("createAllureEmitter", () => {
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [], http: "http.jsonl", trace: "step-trace.zip" },
-        observed: { http_reads: 1, http_writes: 0 },
+        observed: { http_reads: 1, http_writes: 0, processes: null },
         mutates: true,
         declared: {
           attachments: ["note.txt"],
@@ -165,7 +165,7 @@ describe("createAllureEmitter", () => {
       writeFileSync(path.join(rootDir, ".nukadoko", "records", "steps", "step-1", "step-trace.zip"), "step trace bytes");
 
       const stepRecord2: StepRecord = {
-        schema_version: 1,
+        schema_version: 2,
         nukadoko: "0.0.0-test",
         step_record_id: "step-2",
         step: "the total is correct",
@@ -180,7 +180,7 @@ describe("createAllureEmitter", () => {
         started_at: "2026-08-01T00:00:01.000Z",
         finished_at: "2026-08-01T00:00:01.200Z",
         evidence: { dir: ".nukadoko/records/steps/step-2", screenshots: [] },
-        observed: { http_reads: 0, http_writes: 0 },
+        observed: { http_reads: 0, http_writes: 0, processes: null },
         mutates: false,
       };
       writeStepRecordFile(rootDir, stepRecord2);
@@ -599,7 +599,7 @@ describe("createAllureEmitter", () => {
       const { gherkinDocument, pickles } = parseFeatureSource(FEATURE_SOURCE, "features/checkout.feature");
       const pickle = pickles[0]!;
       const stepRecord: StepRecord = {
-        schema_version: 1,
+        schema_version: 2,
         nukadoko: "0.0.0-test",
         step_record_id: "step-fail-1",
         step: "the cart has items",
@@ -613,7 +613,7 @@ describe("createAllureEmitter", () => {
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         evidence: { dir: ".nukadoko/records/steps/step-fail-1", screenshots: [] },
-        observed: { http_reads: 0, http_writes: 0 },
+        observed: { http_reads: 0, http_writes: 0, processes: null },
         mutates: true,
         error: { message: "it broke on purpose", kind: "step_error" },
       };
@@ -815,7 +815,7 @@ describe("createAllureEmitter", () => {
       // endScenario (this file's own header: every attachment write for the
       // whole scenario now happens inside that one call).
       const stepRecord: StepRecord = {
-        schema_version: 1,
+        schema_version: 2,
         nukadoko: "0.0.0-test",
         step_record_id: "step-broken",
         step: "the cart has items",
@@ -830,7 +830,7 @@ describe("createAllureEmitter", () => {
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         evidence: { dir: ".nukadoko/records/steps/step-broken", screenshots: [], http: "http.jsonl" },
-        observed: { http_reads: 0, http_writes: 0 },
+        observed: { http_reads: 0, http_writes: 0, processes: null },
         mutates: true,
       };
       writeStepRecordFile(rootDir, stepRecord);
@@ -877,7 +877,7 @@ describe("createAllureEmitter", () => {
       const pickle = pickles[0]!;
 
       const stepRecord: StepRecord = {
-        schema_version: 1,
+        schema_version: 2,
         nukadoko: "0.0.0-test",
         step_record_id: "step-parts",
         step: "project-with-member",
@@ -892,7 +892,7 @@ describe("createAllureEmitter", () => {
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         evidence: { dir: ".nukadoko/records/steps/step-parts", screenshots: [] },
-        observed: { http_reads: 0, http_writes: 1 },
+        observed: { http_reads: 0, http_writes: 1, processes: null },
         mutates: true,
         calls: [
           {

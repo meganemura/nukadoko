@@ -6,7 +6,7 @@
 // tend report does not tell a step record reader to look again.
 
 export const SCHEMA_VERSIONS = {
-  step_record: 1,
+  step_record: 2,
   scenario_record: 1,
   run_result: 1,
   check_report: 1,

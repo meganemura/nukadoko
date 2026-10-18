@@ -381,8 +381,9 @@ export default defineStep({
 `fetch` needs nothing installed. `ctx.request()`, Playwright's
 `APIRequestContext`, is the other way to call the server: it needs
 `playwright` installed, and it is what counts the step's calls in the step
-record's `observed.http_reads` and `observed.http_writes`. A `fetch` call
-leaves both at 0.
+record's `observed.http_reads` and `observed.http_writes`. A step that only
+calls `fetch` records both as `null`: nukadoko did not see its requests, and
+`null` says so where `0` would claim a measurement.
 
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way
@@ -531,7 +532,7 @@ afterward. The result is a step record, not a pass/fail line.
   "args": { "title": "Buy milk" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 1 }
+  "observed": { "http_reads": 0, "http_writes": 1, "processes": null }
 }
 ```
 

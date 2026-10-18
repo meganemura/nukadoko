@@ -66,7 +66,7 @@ describe("schema_version", () => {
   it.each(Object.keys(SCHEMA_VERSIONS) as DocumentKind[])("%s starts with its schema_version", (kind) => {
     const document = documents.get(kind)!;
     expect(Object.keys(document)[0]).toBe("schema_version");
-    expect(document.schema_version).toBe(kind === "tend_codes" ? 2 : 1);
+    expect(document.schema_version).toBe(kind === "tend_codes" || kind === "step_record" ? 2 : 1);
   });
 
   it("names the nukadoko version on the step record, the scenario record, and run.json", () => {

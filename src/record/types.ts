@@ -28,12 +28,12 @@
 // fact does not move when the name does, so this rename costs a reader
 // nothing they depended on.
 //
-// `observed` is added now: the
-// network calls the tool itself measured this execution making, never what
-// a step declared. It is required on both `StepRecordPassed` and
-// `StepRecordFailed` — unlike `target_version`, there is no "not applicable"
-// case for it, only "zero calls happened" (`{ http_reads: 0, http_writes:
-// 0 }`).
+// `observed` is what the tool itself measured this execution reaching,
+// never what a step declared. It is required on both `StepRecordPassed`
+// and `StepRecordFailed`, and each channel in it is `null` when the
+// execution never reached that channel: "nothing was measured" and
+// "measured zero" are different facts, and a step that called `fetch`
+// must not read as having made no requests.
 //
 // `used` is added now: measured
 // provenance, the step records `ctx.resultOf` actually read a value from
@@ -245,17 +245,22 @@ export interface HttpOmittedCounts {
   [resourceType: string]: number;
 }
 
-/** Read/write tally for one step boundary — `nuka do`'s whole execution, or
- * one `nuka run` pickle step. Mirrors the
- * step record's own `observed` shape (docs/spec.md "Records"). */
-export interface ObservedCounts {
-  http_reads: number;
-  http_writes: number;
+/** What one step boundary reached (`nuka do`'s whole execution, or one
+ * `nuka run` pickle step). Mirrors the step record's own `observed` shape
+ * (docs/spec.md "Records"). */
+export type ObservedCounts = ObservedHttp & {
   /** Every child process `runCommand` started during this execution, in
-   * call order (docs/spec.md "Records"). Present only when non-empty, the
-   * same convention as `sections`. */
-  processes?: ProcessEntry[];
-}
+   * call order (docs/spec.md "Records"). `null` when the execution never
+   * called `runCommand`. */
+  processes: ProcessEntry[] | null;
+};
+
+/** Both counts are numbers when the execution reached `ctx.request()`,
+ * `page`, `context`, or `pageAs`, or a request was recorded during it, and
+ * both are `null` otherwise. */
+export type ObservedHttp =
+  | { http_reads: number; http_writes: number }
+  | { http_reads: null; http_writes: null };
 
 /** One process `runCommand` ran. Measured by the helper itself, never
  * declared by the step. */

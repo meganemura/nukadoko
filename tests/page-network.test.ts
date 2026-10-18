@@ -176,7 +176,7 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     // GETs total:
     // the document, three assets, the page-issued fetch, and the
     // ctx.request() call.
-    expect(stepRecord.observed).toEqual({ http_reads: 6, http_writes: 0 });
+    expect(stepRecord.observed).toEqual({ http_reads: 6, http_writes: 0, processes: null });
 
     // The raw token must appear nowhere: not in stdout, not in http.jsonl or
     // record.json on disk (the same three-exits check tests/secrets.test.ts

@@ -416,7 +416,7 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
         `${baseURL}/`,
       );
 
-      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 1 });
+      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 1, processes: null });
 
       const { evidence } = await dispose();
       // Both the navigation (`document`) and the in-page `fetch` land on
@@ -491,7 +491,7 @@ describe("createStepContext / page.request and context.request", () => {
         "DELETE /via-page-request-DELETE",
         "GET /via-page-request-GET",
       ]);
-      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 2 });
+      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 2, processes: null });
 
       const { evidence } = await dispose();
       expect(evidence.http).toBe("http.jsonl");

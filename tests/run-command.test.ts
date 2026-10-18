@@ -74,7 +74,7 @@ describe("runCommand result", () => {
   it("records nothing outside a step", async () => {
     const observed = createObservedCollector();
     await runCommand(node, ["-e", ""]);
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 0 });
+    expect(observed.snapshot()).toEqual({ http_reads: null, http_writes: null, processes: null });
   });
 });
 
@@ -173,9 +173,9 @@ describe("observed.processes on a step record", () => {
     ]);
   });
 
-  it("nuka run: a step that runs nothing has no processes field", async () => {
+  it("nuka run: a step that runs nothing has null processes and null HTTP counts", async () => {
     const stepRecord = await stepRecordOf(15);
-    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 0 });
+    expect(stepRecord.observed).toEqual({ http_reads: null, http_writes: null, processes: null });
   });
 
   it("nuka do: the step record carries the processes too", async () => {

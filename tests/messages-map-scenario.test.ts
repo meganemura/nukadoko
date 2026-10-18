@@ -61,7 +61,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     started_at: "2026-08-01T00:00:00.500Z",
     finished_at: "2026-08-01T00:00:01.000Z",
     evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [] },
-    observed: { http_reads: 0, http_writes: 0 },
+    observed: { http_reads: 0, http_writes: 0, processes: null },
     mutates: true,
     ...overrides,
   } as StepRecord;

@@ -930,10 +930,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
     baseURL: config.baseURL,
     async page(): Promise<Page> {
+      observed.watchHttp();
       return pageOf(undefined, undefined);
     },
     async pageAs(name: string, options?: BrowserContextOptions): Promise<Page> {
       assertValidContextName(name);
+      observed.watchHttp();
       if (requestedOptions.has(name)) {
         // A later call without options reaches the context as it is. One
         // with options must ask for what the context already has: Playwright
@@ -952,6 +954,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     async request(): Promise<APIRequestContext> {
       // Same sharing as `ctx.page()`: two concurrent first calls must not each
       // open a context and leak the first.
+      observed.watchHttp();
       requestSetup ??= setUpRequest().finally(() => {
         requestSetup = undefined;
       });

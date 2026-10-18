@@ -78,6 +78,8 @@ describe("nuka run: the run summary", () => {
         "",
         "No step declared `mutates: false` and was measured making a write.",
         "",
+        "1 step that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`), so nothing was compared for it.",
+        "",
       ].join("\n"),
     );
   });

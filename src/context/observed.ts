@@ -27,8 +27,16 @@ export interface ObservedCollector {
    * write attempt that fails on the wire is still a write the execution
    * made, not one it merely declared. */
   record(method: string): void;
-  /** Takes the next position in the process list when a process starts,
-   * and returns the function that fills it when the process ends. Entries
+  /** Says this boundary reached an HTTP channel nukadoko observes
+   * (`ctx.request()`, `ctx.page()`, `pageAs()`), so its counts are numbers,
+   * zero included. A boundary that neither reached one nor had a request
+   * recorded reports `null` for both counts: a step that called `fetch`
+   * made requests nothing here could see, and a 0 would read as a
+   * measurement of them. */
+  watchHttp(): void;
+  /** Takes the next position in the process list when a process starts
+   * (the list is `null` until the boundary's first `runCommand` call), and
+   * returns the function that fills it when the process ends. Entries
    * therefore appear in start order, whatever order the processes finish
    * in. A position never filled (the process was still running when the
    * step record was built) is left out of the snapshot. */
@@ -43,12 +51,17 @@ export interface ObservedCollector {
 const READ_METHODS = new Set(["GET", "HEAD"]);
 
 export function createObservedCollector(): ObservedCollector {
+  let httpWatched = false;
   let httpReads = 0;
   let httpWrites = 0;
-  let processes: (ProcessEntry | undefined)[] = [];
+  let processes: (ProcessEntry | undefined)[] | null = null;
 
   return {
+    watchHttp(): void {
+      httpWatched = true;
+    },
     record(method: string): void {
+      httpWatched = true;
       if (READ_METHODS.has(method.toUpperCase())) {
         httpReads += 1;
       } else {
@@ -58,6 +71,7 @@ export function createObservedCollector(): ObservedCollector {
     startProcess(): (entry: ProcessEntry) => void {
       // Captured, not re-read at fill time: a process that outlives a reset
       // fills the list it started in, never the next step's.
+      processes ??= [];
       const list = processes;
       const index = list.length;
       list.push(undefined);
@@ -66,17 +80,17 @@ export function createObservedCollector(): ObservedCollector {
       };
     },
     snapshot(): ObservedCounts {
-      const ran = processes.filter((entry): entry is ProcessEntry => entry !== undefined);
-      return {
-        http_reads: httpReads,
-        http_writes: httpWrites,
-        ...(ran.length > 0 ? { processes: ran } : {}),
-      };
+      const ran = processes?.filter((entry): entry is ProcessEntry => entry !== undefined) ?? null;
+      const http = httpWatched
+        ? { http_reads: httpReads, http_writes: httpWrites }
+        : { http_reads: null, http_writes: null };
+      return { ...http, processes: ran };
     },
     reset(): void {
+      httpWatched = false;
       httpReads = 0;
       httpWrites = 0;
-      processes = [];
+      processes = null;
     },
   };
 }

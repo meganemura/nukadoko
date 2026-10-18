@@ -69,6 +69,16 @@ This part does not change release to release.
   reads `nuka tend --codes` text reads three columns now (code, meaning,
   do), and one that reads `nuka tend --codes --json` gets
   `schema_version` 2, with no `reportedByDefault` on an entry.
+- **A step record's `observed` channels are `null` when the step never
+  reached them.** `http_reads` and `http_writes` are both `null` for a step
+  that called none of `ctx.request()`, `ctx.page()`, and `pageAs()` and
+  had no request recorded, and `observed.processes` is `null`, not absent,
+  for a step that never called `runCommand`. The step record's
+  `schema_version` is 2. A script that sums the counts treats `null` as
+  "not measured", not as `0`; a script that tested for a missing
+  `processes` key tests for `null`. A step whose zero count should mean
+  something calls the server through the `request` fixture instead of
+  `fetch`.
 
 ## 0.16.1 to 0.17.0
 

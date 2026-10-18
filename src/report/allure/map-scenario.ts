@@ -923,8 +923,8 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
       name: "mutates (declared)",
       value: stepRecord.mutates === null ? "not declared" : stepRecord.mutates ? "true" : "false",
     });
-    parameters.push({ name: "http reads (observed)", value: String(stepRecord.observed.http_reads) });
-    parameters.push({ name: "http writes (observed)", value: String(stepRecord.observed.http_writes) });
+    parameters.push({ name: "http reads (observed)", value: String(stepRecord.observed.http_reads ?? "not observed") });
+    parameters.push({ name: "http writes (observed)", value: String(stepRecord.observed.http_writes ?? "not observed") });
     if (stepRecord.world) {
       parameters.push({ name: "world reads (observed)", value: stepRecord.world.reads.join(", ") });
       parameters.push({ name: "world writes (observed)", value: stepRecord.world.writes.join(", ") });

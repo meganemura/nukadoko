@@ -368,7 +368,8 @@ export default defineStep({
 サーバを呼ぶもう 1 つの方法は、Playwright の `APIRequestContext` である `ctx.request()` です。
 こちらは `playwright` のインストールが必要です。
 step の呼び出しを step record の `observed.http_reads` と `observed.http_writes` に数えるのは `ctx.request()` だけです。
-`fetch` の呼び出しでは、どちらも 0 のままです。
+`fetch` だけを呼ぶ step では、どちらも `null` になります。
+nukadoko はその request を見ておらず、`0` なら計測したと主張するところを、`null` はそのとおりに伝えます。
 
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。
@@ -505,7 +506,7 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
   "args": { "title": "Buy milk" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 1 }
+  "observed": { "http_reads": 0, "http_writes": 1, "processes": null }
 }
 ```
 

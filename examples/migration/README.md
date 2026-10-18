@@ -250,7 +250,7 @@ output (`evidence`/`environment`/`session`/timestamps trimmed for space):
   "kind": "run",
   "result": null,
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 2 },
+  "observed": { "http_reads": 0, "http_writes": 2, "processes": null },
   "world": { "reads": [], "writes": ["seededCount"] }
 }
 ```
@@ -362,7 +362,7 @@ and `step-...-9x9l`), trimmed the same way:
   "step": "create-todo",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90", "title": "Read a book", "done": false },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 1 }
+  "observed": { "http_reads": 0, "http_writes": 1, "processes": null }
 }
 ```
 
@@ -372,13 +372,13 @@ and `step-...-9x9l`), trimmed the same way:
   "step": "read-created-todo-id",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90" },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 0 },
+  "observed": { "http_reads": null, "http_writes": null, "processes": null },
   "used": [{ "step_record_id": "step-20260802-141751-4kfn", "step": "create-todo" }]
 }
 ```
 
 `used` is the proof: the consumer made no network call of its own
-(`observed` is all zeros) and never touched a World -- there is no World
+(every `observed` channel is `null`: it reached none) and never touched a World -- there is no World
 field here at all, for either step record, because a typed step's `run`
 never receives `this` -- it read the producer's own validated `id`
 straight through the `resultOf` fixture, and that read is recorded by the

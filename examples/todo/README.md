@@ -137,7 +137,7 @@ nuka do add-todo --args '{"title":"Buy milk"}'
   "args": { "title": "Buy milk" },
   "result": { "id": "0d8b52bf-2281-4cde-9572-a885533c03d9", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 1 }
+  "observed": { "http_reads": 0, "http_writes": 1, "processes": null }
 }
 ```
 

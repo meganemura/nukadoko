@@ -134,12 +134,12 @@ describe("examples/migration", () => {
     // claim README.md's "measured for free" section quotes.
     const seedStepRecord = await readStepRecord(rootDir, seedStep.step_record_id);
     expect(seedStepRecord.result).toBeNull();
-    expect(seedStepRecord.observed).toEqual({ http_reads: 0, http_writes: 2 });
+    expect(seedStepRecord.observed).toEqual({ http_reads: 0, http_writes: 2, processes: null });
     expect(seedStepRecord.world).toEqual({ reads: [], writes: ["seededCount"] });
 
     // The RegExp-pattern count assertion: read-only, no World touch.
     const countStepRecord = await readStepRecord(rootDir, countStep.step_record_id);
-    expect(countStepRecord.observed).toEqual({ http_reads: 1, http_writes: 0 });
+    expect(countStepRecord.observed).toEqual({ http_reads: 1, http_writes: 0, processes: null });
     expect(countStepRecord.world).toBeUndefined();
 
     // Scenario 2 (the promoted pair): the producer's validated result is

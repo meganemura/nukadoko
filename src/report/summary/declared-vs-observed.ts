@@ -11,7 +11,10 @@ import type { StepRecord } from "../../record/types.js";
 // verdict. A step reading over POST lands here every time, by design: the
 // HTTP method is not a trustworthy signal of a write, which is the same
 // reason run-time `mutates` enforcement was dropped. So this section is a
-// record, not an accusation.
+// record, not an accusation. A read-only step that reached no HTTP channel
+// nukadoko observes (`observed.http_writes` is `null`) was not compared,
+// and the section counts those apart so "no write" is never claimed for a
+// step that called `fetch`.
 
 /** One step that ran and has a step record to compare. */
 export interface ComparedStep {
@@ -33,21 +36,29 @@ export interface DeclaredVsObserved {
   /** Compat steps carry `mutates: null`: nothing to compare, which is a
    * different fact from "compared and matched", so it is counted apart. */
   readonly compatStepCount: number;
+  /** Steps that declared `mutates: false` and reached no HTTP channel
+   * nukadoko observes, so there was nothing to compare. */
+  readonly unobservedReadOnlyCount: number;
 }
 
 export function collectDeclaredVsObserved(steps: Iterable<ComparedStep>): DeclaredVsObserved {
   const mismatches: DeclaredVsObservedMismatch[] = [];
   let compatStepCount = 0;
+  let unobservedReadOnlyCount = 0;
   for (const { scenarioName, stepText, stepRecord } of steps) {
     if (stepRecord.mutates === null) {
       compatStepCount += 1;
       continue;
     }
-    if (stepRecord.mutates === false && stepRecord.observed.http_writes > 0) {
-      mismatches.push({ scenarioName, stepText, writes: stepRecord.observed.http_writes });
+    if (stepRecord.mutates !== false) continue;
+    const writes = stepRecord.observed.http_writes;
+    if (writes === null) {
+      unobservedReadOnlyCount += 1;
+    } else if (writes > 0) {
+      mismatches.push({ scenarioName, stepText, writes });
     }
   }
-  return { mismatches, compatStepCount };
+  return { mismatches, compatStepCount, unobservedReadOnlyCount };
 }
 
 /** One roll-up section rather than a note per scenario: a per-scenario note
@@ -55,7 +66,7 @@ export function collectDeclaredVsObserved(steps: Iterable<ComparedStep>): Declar
  * present, even with no mismatch, so "compared, found nothing" stays
  * distinguishable from "never compared". */
 export function renderDeclaredVsObserved(result: DeclaredVsObserved): string[] {
-  const { mismatches, compatStepCount } = result;
+  const { mismatches, compatStepCount, unobservedReadOnlyCount } = result;
   const lines: string[] = ["", "## Declared vs observed", ""];
 
   if (mismatches.length === 0) {
@@ -71,6 +82,17 @@ export function renderDeclaredVsObserved(result: DeclaredVsObserved): string[] {
         `- "${mismatch.stepText}" (scenario "${mismatch.scenarioName}"): declared mutates: false, observed ${mismatch.writes} ${writeWord}`,
       );
     }
+  }
+
+  if (unobservedReadOnlyCount > 0) {
+    const subject =
+      unobservedReadOnlyCount === 1
+        ? "1 step that declared `mutates: false` reached"
+        : `${unobservedReadOnlyCount} steps that declared \`mutates: false\` reached`;
+    lines.push(
+      "",
+      `${subject} no HTTP channel nukadoko observes (\`request\`, \`page\`, \`context\`, \`pageAs\`), so nothing was compared for ${unobservedReadOnlyCount === 1 ? "it" : "them"}.`,
+    );
   }
 
   if (compatStepCount > 0) {

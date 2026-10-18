@@ -28,7 +28,7 @@ const drawnStep = gs.tuples(
 
 function stepRecordFor(index: number, startMs: number, stopMs: number): StepRecord {
   const stepRecord: StepRecord = {
-    schema_version: 1,
+    schema_version: 2,
     nukadoko: "0.0.0-test",
     step_record_id: `step-${index}`,
     step: `step ${index}`,
@@ -43,7 +43,7 @@ function stepRecordFor(index: number, startMs: number, stopMs: number): StepReco
     started_at: new Date(startMs).toISOString(),
     finished_at: new Date(stopMs).toISOString(),
     evidence: { dir: `.nukadoko/records/steps/step-${index}`, screenshots: [] },
-    observed: { http_reads: 0, http_writes: 0 },
+    observed: { http_reads: 0, http_writes: 0, processes: null },
     mutates: true,
   };
   return stepRecord;

@@ -257,6 +257,7 @@ export function createRunSummaryCollector(rootDir: string, stateDir: string): Ru
   const browsers = new Map<string, { type: string; version: string }>();
   const mismatches: DeclaredVsObservedMismatch[] = [];
   let compatStepCount = 0;
+  let unobservedReadOnlyCount = 0;
   return {
     note(record): void {
       const stepRecords = readStepRecordsForScenario(rootDir, record);
@@ -285,12 +286,13 @@ export function createRunSummaryCollector(rootDir: string, stateDir: string): Ru
       );
       mismatches.push(...compared.mismatches);
       compatStepCount += compared.compatStepCount;
+      unobservedReadOnlyCount += compared.unobservedReadOnlyCount;
     },
     collected() {
       return {
         scenarios,
         browsers: [...browsers.values()],
-        declaredVsObserved: { mismatches, compatStepCount },
+        declaredVsObserved: { mismatches, compatStepCount, unobservedReadOnlyCount },
       };
     },
   };

@@ -77,7 +77,34 @@ describe("measured mutates: request-side observed counts", () => {
     expect(stderr.text()).toBe("");
     const stepRecord = JSON.parse(stdout.text());
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ http_reads: 1, http_writes: 1 });
+    expect(stepRecord.observed).toEqual({ http_reads: 1, http_writes: 1, processes: null });
+  });
+
+  it("nuka run: a step that reached no HTTP channel records null counts, and one through request keeps its count", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["run", "features/unobserved.feature", "--records", "--summary", "summary.md"], {
+      rootDir,
+      stdout,
+      stderr: createCaptureSink(),
+    });
+
+    expect(exitCode).toBe(0);
+    const record = JSON.parse(stdout.text().trim().split("\n")[0]!);
+    const observed = await Promise.all(
+      record.steps.map(async (step: { step_record_id: string }) => {
+        const file = path.join(rootDir, ".nukadoko", "records", "steps", step.step_record_id, "record.json");
+        const stepRecord = JSON.parse(await readFile(file, "utf8"));
+        return [stepRecord.schema_version, stepRecord.step, stepRecord.observed];
+      }),
+    );
+    expect(observed).toEqual([
+      [2, "setup-step", { http_reads: null, http_writes: null, processes: null }],
+      [2, "only-a-read-happens", { http_reads: 1, http_writes: 0, processes: null }],
+      [2, "a-fetch-read-happens", { http_reads: null, http_writes: null, processes: null }],
+    ]);
+    expect(await readFile(path.join(rootDir, "summary.md"), "utf8")).toContain(
+      "2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`), so nothing was compared for them.",
+    );
   });
 
   it("nuka run: a Then-position step observing only reads passes", async () => {
@@ -137,7 +164,7 @@ describe("measured mutates: request-side observed counts", () => {
       ),
     );
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   // The "lie backstop": a declared `mutates: false` step that actually
@@ -156,7 +183,7 @@ describe("measured mutates: request-side observed counts", () => {
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   // `nuka run` against a read-only environment: the gap the previous slice
@@ -214,6 +241,6 @@ describe("measured mutates: request-side observed counts", () => {
       ),
     );
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 });

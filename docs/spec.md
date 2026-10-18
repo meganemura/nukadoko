@@ -2460,7 +2460,7 @@ array identifies each step record by id, so either record leads to the other.
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
@@ -2469,7 +2469,7 @@ array identifies each step record by id, so either record leads to the other.
   "result": { "id": "p_0001", "name": "acme" },
   "status": "passed",
   "mutates": true,
-  "observed": { "http_reads": 2, "http_writes": 1 },
+  "observed": { "http_reads": 2, "http_writes": 1, "processes": null },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
@@ -2564,17 +2564,26 @@ array identifies each step record by id, so either record leads to the other.
   `started_at`/`finished_at` use) is what the second file was standing in
   for without ever stating it, and it says the real thing: how long after
   this execution's own timeline the screenshot was actually taken.
-- `observed` counts the network calls that the tool saw during the execution,
-  through the `request` fixture, through `page.request` or `context.request`,
-  and through the page; non-GET/HEAD counts as
-  a write (HTTP method as a proxy for write semantics, not semantics
-  itself), so a POST-based read counts against a step that never wrote
-  anything (see Keyword semantics). It settles nothing on its own: Then
-  position and read-only environments act on the `mutates` declaration,
-  never on this count. `observed` sits beside `mutates` (declared) so a
-  wrong declaration is falsifiable, here and in the Allure report.
-- `observed.processes` (included only after at least one process ran)
-  lists each child process that `runCommand` started during the execution,
+- `observed` holds what the tool saw the execution reach, one key per
+  channel. A channel the execution never reached is `null`, never `0`:
+  "nothing was measured" and "measured zero" are different facts, and a
+  step that calls `fetch` makes requests no channel of nukadoko sees.
+- `observed.http_reads` and `observed.http_writes` count the network calls
+  that the tool saw during the execution, through the `request` fixture,
+  through `page.request` or `context.request`, and through the page;
+  non-GET/HEAD counts as a write (HTTP method as a proxy for write
+  semantics, not semantics itself), so a POST-based read counts against a
+  step that never wrote anything (see Keyword semantics). Both are
+  numbers, `0` included, when the execution called `ctx.request()`,
+  `ctx.page()`, or `pageAs()` (a `request`, `page`, or `context` fixture
+  calls one, directly or through a fixture of the project), or when a
+  request was recorded during it. Otherwise both are `null`. The counts
+  settle nothing on their own: Then position and read-only environments
+  act on the `mutates` declaration, never on this count. `observed` sits
+  beside `mutates` (declared) so a wrong declaration is falsifiable, here
+  and in the Allure report.
+- `observed.processes` (`null` when the execution never called
+  `runCommand`) lists each child process that `runCommand` started during the execution,
   in call order: `{ "command", "cwd", "exit_code", "duration_ms" }`, plus
   `"signal"` when a signal ended the process and `"timed_out": true` when
   the `timeout` option stopped it. `command` is an array, the program
@@ -2915,6 +2924,11 @@ run gets one summary from the parent, not one per worker. It holds:
   each step that declared `mutates: false` but made at least one measured
   write (`observed.http_writes > 0`, see "Keyword semantics"), stated as a
   raw fact (the declared value beside the observed count), never a verdict.
+  A step that declared `mutates: false` and reached no HTTP channel
+  (`observed.http_writes` is `null`) was not compared, and the section
+  counts those steps in one line ("2 steps that declared `mutates: false`
+  reached no HTTP channel nukadoko observes ..."), so a step that called
+  `fetch` is never reported as having made no write.
   A step that reads over POST lands here every time, by design: the same
   HTTP-method proxy that made run-time `mutates` enforcement unreliable. It
   is one section for the whole run, so it cannot be scanned past by
@@ -3435,7 +3449,7 @@ Never clamped to the parent step entry's own start/stop range: a timeline entry 
 The emitter presents `page_events` as up to three parameters (see "Records"): `console errors (observed)`, `page errors (observed)`, and `failed requests (observed)`. It adds a parameter only when that category has an entry, so readers can see the count without opening `record.json`.
 A category the collector truncated reports its true total beside the shown count, e.g. `100 of 4213`: the shown count alone would understate what actually happened.
 
-A step entry's parameters carry its declaration and what was actually observed side by side: `mutates (declared)` next to the measured `http reads (observed)` / `http writes (observed)` (and, for a compat step, `world reads (observed)` / `world writes (observed)`), not because the two are checked against each other automatically, but so a reviewer can.
+A step entry's parameters carry its declaration and what was actually observed side by side: `mutates (declared)` next to the measured `http reads (observed)` / `http writes (observed)`, each `not observed` when the step reached no HTTP channel (and, for a compat step, `world reads (observed)` / `world writes (observed)`), not because the two are checked against each other automatically, but so a reviewer can.
 The declaration is what nukadoko trusts and acts on, the observed counts are what actually happened, and this row is where the two sit close enough to compare by eye.
 The observed side is an HTTP-method proxy, not a semantic judgment (see "Keyword semantics"): a row can show a truthful `mutates (declared): false` next to a nonzero `http writes (observed)` when the step called a POST-based read, and that is the proxy showing through the table, not either number lying.
 
@@ -4492,7 +4506,9 @@ codes }`), `clean --json`, `explore --json`, and `session list --json`
 when a field the document already has changes its meaning, its type, or
 its name, or is removed. An added field does not move it. A reader checks
 the number before it trusts the shape. Each number is 1 today, except
-`tend --codes --json`, which is 2 (each entry lost `reportedByDefault`), and a
+`tend --codes --json`, which is 2 (each entry lost `reportedByDefault`),
+and the step record, which is 2 (an `observed` channel the execution
+never reached is `null`, and `observed.processes` is always present), and a
 record without `schema_version` was written by nukadoko 0.16.1 or
 earlier. The `experimental` commands print the server's own tool list, a
 shape nukadoko does not own, so they carry no number.

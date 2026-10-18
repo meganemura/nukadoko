@@ -2066,7 +2066,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
@@ -2075,7 +2075,7 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   "result": { "id": "p_0001", "name": "acme" },
   "status": "passed",
   "mutates": true,
-  "observed": { "http_reads": 2, "http_writes": 1 },
+  "observed": { "http_reads": 2, "http_writes": 1, "processes": null },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "session": "checkout-flow",
@@ -2151,13 +2151,18 @@ scenario record の `steps` 配列は各 step record を id で示すため、�
   `at`(ISO 8601。
   `started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
-- `observed` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`request` fixture、`page.request`、`context.request`、page のすべてを通じたもの)。
+- `observed` は、その実行が届いたものとしてツールが見たものを、チャネルごとに 1 つのキーで持ちます。
+  実行が一度も届かなかったチャネルは `0` ではなく `null` です。
+  「何も計測しなかった」と「0 を計測した」は別の事実であり、`fetch` を呼ぶ step の request は nukadoko のどのチャネルにも見えないからです。
+- `observed.http_reads` と `observed.http_writes` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`request` fixture、`page.request`、`context.request`、page のすべてを通じたもの)。
   GET/HEAD 以外はすべて書き込みとして数えられます。
   これは書き込みの意味論そのものではなく、HTTP メソッドをそのプロキシとして使っているため、一度も書き込んでいない step に POST ベースの読み取りが不利に働くことがあります(キーワードの意味論を参照してください)。
+  実行が `ctx.request()`、`ctx.page()`、`pageAs()` のどれかを呼んだとき(`request`、`page`、`context` の fixture は、直接でもプロジェクトの fixture を通じてでも、そのどれかを呼びます)、またはその実行の間に request が記録されたとき、2 つはどちらも数値で、`0` も含みます。
+  それ以外のとき、2 つはどちらも `null` です。
   この回数はそれ単独では何も決めません。
   Then の位置も読み取り専用の environment も、作用する対象は `mutates` の宣言であり、この回数では決してありません。
   `observed` は `mutates`(宣言)の隣に置かれているため、誤った宣言はここでも Allure のレポートでも反証可能です。
-- `observed.processes`(少なくとも 1 つのプロセスが実行された場合にのみ含まれます)は、その実行の間に `runCommand` が起動した子プロセスを、呼び出し順に並べます。
+- `observed.processes`(実行が一度も `runCommand` を呼ばなかったときは `null`)は、その実行の間に `runCommand` が起動した子プロセスを、呼び出し順に並べます。
   各エントリは `{ "command", "cwd", "exit_code", "duration_ms" }` です。
   シグナルがプロセスを終了させた場合は `"signal"` が加わり、`timeout` オプションがプロセスを止めた場合は `"timed_out": true` が加わります。
   `command` は配列で、プログラムとその引数を順に持ちます。
@@ -2387,6 +2392,8 @@ run が計測したものだけから、すべての record と run scope の ho
   実行時の `mutates` の強制を当てにならなくしたのと同じ、HTTP メソッドによる代理だからです。
   run 全体で 1 つの節なので、うっかり読み飛ばされません。
   何も食い違わなくても書かれるので、「比べて何も無かった」と「比べなかった」は区別できます。
+  `mutates: false` を宣言しながら HTTP のチャネルに届かなかった step(`observed.http_writes` が `null`)は比べられておらず、この節はそれらを 1 行で数えます("2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes ...")。
+  そのため、`fetch` を呼んだ step が書き込まなかったと報告されることはありません。
   compat step(`mutates: null`、「Compat steps(移行の扉)」を参照)には比べる宣言が無く、別に数えます。
 - 失敗した run では、失敗した各 scenario の `nuka run <feature>:<line>` コマンド。
   run に `--env` があればそれも付きます。
@@ -2894,6 +2901,7 @@ emitter は 1 件以上の entry を持つ種類だけに parameter を追加す
 
 step entry の parameter は、その宣言と実際に `observed` されたものを並べて運びます。
 計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
+step が HTTP のチャネルに届かなかったときは、`http reads (observed)` と `http writes (observed)` はどちらも `not observed` です。
 これは自動で照合されるからではなく、レビュアーが自分の目で見比べられるようにするためです。
 宣言は nukadoko が信頼し作用する対象であり、`observed` の回数は実際に起きたことであり、この行は両者を目で見比べられる場所です。
 `observed` は意味論上の判定ではなく HTTP メソッドによるプロキシです(「キーワードの意味論」を参照)。
@@ -3897,6 +3905,8 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 読み手は、形を信頼する前にこの番号を確かめます。
 どの番号も現在は 1 です。
 例外は `tend --codes --json` で、各エントリから `reportedByDefault` が消えたため 2 です。
+step record も 2 です。
+実行が届かなかった `observed` のチャネルは `null` になり、`observed.processes` は常に存在するからです。
 `schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
 `experimental` のコマンドは、nukadoko が持たない形であるサーバー自身の tool 一覧を出力するので、番号を持ちません。
 

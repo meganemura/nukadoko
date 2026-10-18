@@ -191,9 +191,9 @@ describe("nuka do", () => {
       expect(stepRecord.evidence.screenshots).toEqual([]);
       expect(stepRecord.evidence.trace).toBeUndefined();
       expect(stepRecord.evidence.http).toBeUndefined();
-      // No network call was ever made:
-      // `observed` is still always present on the step record, at zero.
-      expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 0 });
+      // The step reached no channel nukadoko observes, so every channel
+      // is null rather than a count of zero.
+      expect(stepRecord.observed).toEqual({ http_reads: null, http_writes: null, processes: null });
       // `echo` declares `mutates: false` explicitly: a typed step's step
       // record carries that declaration verbatim, never `null` (`null` is
       // reserved for a compat step, which has no declaration at all).

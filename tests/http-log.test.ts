@@ -67,7 +67,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("GET");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0 });
+    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0, processes: null });
   });
 
   // Every
@@ -96,7 +96,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("POST");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it("fetch(Request) with no options: method comes from the Request itself, not GET", async () => {
@@ -113,7 +113,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     // own method), this line and the tally below would both silently lie.
     expect(lines[0]?.method).toBe("POST");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it('fetch(Request, { method: "PUT" }): options.method wins over the Request\'s own method', async () => {
@@ -127,7 +127,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("PUT");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1 });
+    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it("fetch(Request): url is taken from request.url()", async () => {
@@ -141,6 +141,6 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.url).toBe("https://example.com/from-request");
     expect(lines[0]?.method).toBe("GET");
-    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0 });
+    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0, processes: null });
   });
 });

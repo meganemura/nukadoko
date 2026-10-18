@@ -99,6 +99,7 @@
       "note": "英語では2語だが日本語では区別せず、どちらも 拒否する"
     },
     { "en": ["measure", "measured", "measurement"], "ja": "計測" },
+    { "en": ["channel", "channels"], "ja": "チャネル", "note": "step record の observed のキー 1 つが表す、nukadoko が計測する入出力(HTTP、runCommand のプロセス)。経路は path/route に使われているので使わない" },
     {
       "en": ["validated", "validation", "validate"],
       "ja": "バリデーション(済み)",

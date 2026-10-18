@@ -34,7 +34,7 @@ describe("writeStepRecord", () => {
 
   it("writes record.json under the given directory", async () => {
     const stepRecord: StepRecord = {
-      schema_version: 1,
+      schema_version: 2,
       nukadoko: "0.0.0-test",
       step_record_id: "step-20260801-143022-a1b2",
       step: "noop",
@@ -49,7 +49,7 @@ describe("writeStepRecord", () => {
       started_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),
       evidence: { dir: ".nukadoko/records/steps/step-20260801-143022-a1b2", screenshots: [] },
-      observed: { http_reads: 0, http_writes: 0 },
+      observed: { http_reads: 0, http_writes: 0, processes: null },
       mutates: true,
     };
 

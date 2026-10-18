@@ -97,7 +97,7 @@ describe("createMessagesEmitter", () => {
       writeFileSync(path.join(recordDir, "note.txt"), "declared note");
 
       const stepRecord: StepRecord = {
-        schema_version: 1,
+        schema_version: 2,
         nukadoko: "0.0.0-test",
         step_record_id: "step-1",
         step: "the cart has items",
@@ -112,7 +112,7 @@ describe("createMessagesEmitter", () => {
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         evidence: { dir: ".nukadoko/records/steps/step-1", screenshots: [], http: "http.jsonl" },
-        observed: { http_reads: 1, http_writes: 0 },
+        observed: { http_reads: 1, http_writes: 0, processes: null },
         mutates: true,
         declared: { attachments: ["note.txt"], logs: ["did the thing"] },
       };
@@ -400,7 +400,7 @@ describe("createMessagesEmitter", () => {
     emitter.begin({ features: [{ relativeFeaturePath: "features/checkout.feature", gherkinDocument, pickles }] });
 
     const stepRecord: StepRecord = {
-      schema_version: 1,
+      schema_version: 2,
       nukadoko: "0.0.0-test",
       step_record_id: "step-missing-file",
       step: "the cart has items",
@@ -415,7 +415,7 @@ describe("createMessagesEmitter", () => {
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
       evidence: { dir: ".nukadoko/records/steps/step-missing-file", screenshots: [] },
-      observed: { http_reads: 0, http_writes: 0 },
+      observed: { http_reads: 0, http_writes: 0, processes: null },
       mutates: true,
       declared: { attachments: ["never-written.txt"] },
     };

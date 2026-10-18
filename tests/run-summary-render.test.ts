@@ -21,7 +21,7 @@ const base: RunSummaryInput = {
   git: { commit: "0123456789abcdef0123456789abcdef01234567", clean: true },
   browsers: [],
   scenarios: [],
-  declaredVsObserved: { mismatches: [], compatStepCount: 0 },
+  declaredVsObserved: { mismatches: [], compatStepCount: 0, unobservedReadOnlyCount: 0 },
   rerunFlags: [],
 };
 
@@ -161,6 +161,7 @@ describe("renderRunSummary", () => {
       declaredVsObserved: {
         mismatches: [{ scenarioName: "a report is read", stepText: "the report is fetched", writes: 1 }],
         compatStepCount: 2,
+        unobservedReadOnlyCount: 3,
       },
     });
     expect(markdown.slice(markdown.indexOf("## Declared vs observed"))).toBe(
@@ -170,6 +171,8 @@ describe("renderRunSummary", () => {
         "Steps that declared `mutates: false` and were measured making writes. This is a comparison, not a verdict: a step that reads over POST records writes by design.",
         "",
         '- "the report is fetched" (scenario "a report is read"): declared mutates: false, observed 1 write',
+        "",
+        "3 steps that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`), so nothing was compared for them.",
         "",
         "2 compat steps have no `mutates` declaration to compare.",
         "",

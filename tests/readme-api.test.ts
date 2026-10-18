@@ -220,8 +220,8 @@ describe(`README.md: ${SELF_STARTED}`, () => {
         path.join(projectDir, ".nukadoko", "records", "steps", record.steps[0]!.step_record_id, "record.json"),
         "utf8",
       ),
-    ) as { observed: { http_reads: number; http_writes: number } };
-    expect(when.observed).toMatchObject({ http_reads: 0, http_writes: 0 });
+    ) as { observed: { http_reads: number | null; http_writes: number | null } };
+    expect(when.observed).toMatchObject({ http_reads: null, http_writes: null });
   }, 120_000);
 });
 

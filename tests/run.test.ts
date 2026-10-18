@@ -80,9 +80,9 @@ describe("nuka run", () => {
       expect(stepRecord.scenario_record_id).toBe(record.scenario_record_id);
       expect(stepRecord.environment).toBe("default");
       expect(stepRecord.session).toBeNull();
-      // A pure step makes no network calls at all: `observed` is still
-      // always present, at zero.
-      expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 0 });
+      // A pure step reaches no channel nukadoko observes: `observed` is
+      // still always present, with every channel null.
+      expect(stepRecord.observed).toEqual({ http_reads: null, http_writes: null, processes: null });
     }
 
     // A typed step's step record carries its own declared `mutates`

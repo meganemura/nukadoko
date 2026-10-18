@@ -56,6 +56,13 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   素の `--json` を読んで一部の code にだけ対応するジョブは、`notes` を `code` で絞り込むか、対応する code ごとに `--fail-on` を渡します。
   `nuka tend --codes` のテキストを読むスクリプトが読む列は 3 つ(code、意味、do)になりました。
   `nuka tend --codes --json` を読むスクリプトは `schema_version` 2 を受け取り、エントリに `reportedByDefault` はありません。
+- **step record の `observed` のチャネルは、step が一度も届かなかったとき `null` です。**
+  `ctx.request()`、`ctx.page()`、`pageAs()` のどれも呼ばず、request も記録されなかった step では、`http_reads` と `http_writes` はどちらも `null` です。
+  一度も `runCommand` を呼ばなかった step では、`observed.processes` は欠けるのではなく `null` になります。
+  step record の `schema_version` は 2 です。
+  件数を合計するスクリプトは、`null` を `0` ではなく「計測していない」として扱います。
+  `processes` キーが無いことを調べていたスクリプトは、`null` を調べます。
+  0 という件数に意味を持たせたい step は、`fetch` ではなく `request` fixture を通じてサーバを呼びます。
 
 ## 0.16.1 から 0.17.0 へ
 
