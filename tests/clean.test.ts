@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { readOwnVersion } from "../src/version.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
@@ -50,6 +50,38 @@ describe("nuka clean", () => {
     const exitCode = await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
     expect(stdout.text()).toContain("ok: nothing to clean");
+  });
+
+  it("lists and removes the cache/ and records/ directories an earlier release wrote", async () => {
+    await mkdir(path.join(stateDir(rootDir), "cache", "sessions"), { recursive: true });
+    await writeFile(path.join(stateDir(rootDir), "cache", "sessions", "alice.json"), '{"cookies":[]}');
+    await mkdir(path.join(stateDir(rootDir), "records", "scenarios", "scn-a"), { recursive: true });
+
+    const dryRun = createCaptureSink();
+    expect(await runCli(["clean", "--dry-run", "--json"], { rootDir, stdout: dryRun, stderr: createCaptureSink() })).toBe(0);
+    expect((JSON.parse(dryRun.text()) as { legacy: string[] }).legacy).toEqual([".nukadoko/cache", ".nukadoko/records"]);
+    expect(existsSync(path.join(stateDir(rootDir), "cache", "sessions", "alice.json"))).toBe(true);
+
+    const stdout = createCaptureSink();
+    expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+    expect(stdout.text()).toBe(".nukadoko/cache\n.nukadoko/records\n");
+    expect([existsSync(path.join(stateDir(rootDir), "cache")), existsSync(path.join(stateDir(rootDir), "records"))]).toEqual([false, false]);
+  });
+
+  it("says in its help that the cache it removes is the one earlier releases left", async () => {
+    const logged: string[] = [];
+    const spy = vi.spyOn(console, "log").mockImplementation((...parts: unknown[]) => {
+      logged.push(parts.join(" "));
+    });
+    try {
+      await runCli(["clean", "--help"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(logged.join("\n").replace(/\s+/g, " ")).toContain(
+      "delete accumulated runs, do records, what nuka report wrote under export/ (export/allure-history.jsonl stays), " +
+        "and the cache/ and records/ directories earlier releases left, in the state directory",
+    );
   });
 
   it("creates no results directory where none was", async () => {

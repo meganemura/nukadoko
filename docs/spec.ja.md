@@ -2714,6 +2714,9 @@ nukadoko が実行時に書き込むものはすべて `.nukadoko/` の下に置
 すべての run ディレクトリ、すべての `do/` の record、そして Allure の history ファイルを除く `export/` のすべての entry を消します。
 run がファイルの一覧を残すようになる前に書かれた `allure-results/` を消すのもこのコマンドです。
 retention はそこに決して触れません。
+以前のリリースが state directory の下に書き、今は何も読まない `cache/` と `records/` のディレクトリも、一覧に出して消します。
+`cache/sessions/` は、各 session のブラウザの storage state を、cookie も含めて持っていました。
+`--json` の計画は、それらを `legacy` に挙げます。
 state directory の外へ `--out` で書いたレポートは呼び出し側のファイルであり、`nuka clean` は読みも消しもしません。
 あった results ディレクトリは空の状態で作り直すので、そこを指す `allure watch` は見失いません。
 空の results ディレクトリは一覧に出さないので、clean の直後の clean は `ok: nothing to clean` を出します。
@@ -3608,7 +3611,8 @@ nuka clean [--dry-run] [--json]
                               prints the same plan the real run would act on
                               without removing anything;
                               export/allure-history.jsonl is never
-                              removed
+                              removed; the cache/ and records/
+                              directories earlier releases left go too
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting

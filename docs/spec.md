@@ -3313,7 +3313,11 @@ of every run (see "Artifacts").
 run directory, every `do/` record, and every entry of `export/` but the
 Allure history file. It is also the operation for an `allure-results/`
 directory written before runs kept a manifest of their files, which
-retention never touches. A report written with `--out` outside the state
+retention never touches. It also lists and removes the `cache/` and
+`records/` directories an earlier release wrote under the state directory,
+which nothing reads any more; `cache/sessions/` held each session's
+browser storage state, cookies included. Its `--json` plan names them in
+`legacy`. A report written with `--out` outside the state
 directory is the caller's file, and `nuka clean` does not read or remove it.
 A results directory that existed is recreated empty, so an `allure watch`
 pointed at it keeps finding it; an empty one is not listed, so a clean
@@ -4221,7 +4225,8 @@ nuka clean [--dry-run] [--json]
                               prints the same plan the real run would act on
                               without removing anything;
                               export/allure-history.jsonl is never
-                              removed
+                              removed; the cache/ and records/
+                              directories earlier releases left go too
 nuka tend [--json] [--fail-on <code>]
                               scans featuresDir plus additionalFeatureDirs,
                               then where the bed is, then what is rotting

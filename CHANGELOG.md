@@ -30,8 +30,10 @@ just until 0.1.
     `requestContext` now pass `storageState` through to Playwright
     instead of refusing it, so a login state file is named in the config.
     The step record's `schema_version` is 3: its `session` field is gone.
-    `nuka clean` has no cache category, and its `--json` plan holds
-    `records` and `export`. The `invalid-session-name`,
+    `nuka clean` has no cache category; it lists and removes the
+    `cache/` and `records/` directories an earlier release left (the
+    former holds browser storage state, cookies included) under `legacy`
+    in its `--json` plan, beside `records` and `export`. The `invalid-session-name`,
     `session-clear-failed`, `session-file-malformed`, `session-locked`,
     `session-not-found`, and `invalid-environment-name` refusal codes are
     gone.

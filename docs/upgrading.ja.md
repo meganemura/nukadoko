@@ -54,9 +54,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   - ログイン状態が必要な step は、それを fixture から得ます。
     Playwright の storageState のファイルを持つプロジェクトは、それを `browserContext.storageState` か `requestContext.storageState` に書きます。
     config はこれらを拒否せず、そのまま Playwright に渡すようになりました。
-  - `.nukadoko/cache/` を消してください(`rm -rf .nukadoko/cache`)。
-    それを読むものはありません。
-    `nuka clean` はそれを一覧に出さなくなり、その `--json` の計画は `records` と `export` だけを持ちます。
+  - `nuka clean` を走らせるか、`.nukadoko/cache/` を手で消してください。
+    それを読むものはなく、`cache/sessions/` は各 session のブラウザの storage state を cookie も含めて持つので、消すまで古いログインがディスクに残ります。
+    `nuka clean` は、それと、以前のリリースが書いた `records/` ディレクトリを一覧に出して消し、`--json` の計画では `records` と `export` の横の `legacy` に挙げます。
   - step record の `schema_version` は 3 になり、record は `session` フィールドを持ちません。
     `schema_version === 2` を確かめていた読み手は 3 を確かめます。
 

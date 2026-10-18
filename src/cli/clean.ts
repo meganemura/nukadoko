@@ -46,6 +46,27 @@ export interface RunCleanOptions {
 interface CleanPlan {
   records: string[];
   export: string[];
+  legacy: string[];
+}
+
+/** Directories an earlier release wrote under the state directory and
+ * nothing reads any more: `cache/` held each session's browser storage
+ * state (cookies included), and `records/` held step and scenario records
+ * before each run got one directory. Listed and removed by name, so a
+ * project that upgraded does not keep a stale login on disk unnoticed. */
+const LEGACY_DIR_NAMES = ["cache", "records"] as const;
+
+async function buildLegacyPlan(rootDir: string, stateDir: string): Promise<string[]> {
+  const paths: string[] = [];
+  for (const name of LEGACY_DIR_NAMES) {
+    try {
+      await readdir(path.join(rootDir, stateDir, name));
+      paths.push(path.join(stateDir, name));
+    } catch {
+      // Not there, or not a directory: nothing to remove.
+    }
+  }
+  return paths;
 }
 
 /** Every run directory under `runs/` (run.json, summary.md, its step
@@ -127,10 +148,10 @@ function writePlan(
     stdout.write(formatEnvelope("clean", 0, notices, { ...plan, dry_run: dryRun }));
     return;
   }
-  for (const relativePath of [...plan.records, ...plan.export]) {
+  for (const relativePath of [...plan.records, ...plan.export, ...plan.legacy]) {
     stdout.write(`${relativePath}\n`);
   }
-  if (plan.records.length === 0 && plan.export.length === 0) {
+  if (plan.records.length === 0 && plan.export.length === 0 && plan.legacy.length === 0) {
     stdout.write("ok: nothing to clean\n");
   }
 }
@@ -151,6 +172,7 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   const plan: CleanPlan = {
     records: await buildRecordsPlan(rootDir, config.stateDir),
     export: exportPlan.paths,
+    legacy: await buildLegacyPlan(rootDir, config.stateDir),
   };
 
   // The plan printed here is exactly what the execution phase below acts
@@ -162,7 +184,7 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
     return 0;
   }
 
-  for (const relativePath of [...plan.records, ...plan.export]) {
+  for (const relativePath of [...plan.records, ...plan.export, ...plan.legacy]) {
     await rm(path.join(rootDir, relativePath), { recursive: true, force: true });
   }
   // Recreated empty, not just removed: this file's own header explains why

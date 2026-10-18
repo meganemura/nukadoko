@@ -40,7 +40,7 @@ Exploring one step at a time, when the path is not known yet:
 
 ## Other commands
 
-- `nuka clean [--dry-run] [--json]`: delete every run directory, every `nuka do` record, and every entry of `.nukadoko/export/` but `allure-history.jsonl`, all together; a report written with `--out` elsewhere is left alone. Retention removes old run directories whole at the end of every `nuka run`: the newest `retention.runs` runs stay, and a `nuka do` record or an unfinished run leaves after `retention.adHocDays` days.
+- `nuka clean [--dry-run] [--json]`: delete every run directory, every `nuka do` record, and every entry of `.nukadoko/export/` but `allure-history.jsonl`, and the `cache/` and `records/` directories an earlier release left (`legacy` in the `--json` plan), all together; a report written with `--out` elsewhere is left alone. Retention removes old run directories whole at the end of every `nuka run`: the newest `retention.runs` runs stay, and a `nuka do` record or an unfinished run leaves after `retention.adHocDays` days.
 - `nuka skill path`: the skills directory, one absolute path.
 
 Every JSON document nukadoko writes or prints (records, `--json` output, `nuka describe`) starts with `schema_version`, one integer per kind of document; test it before trusting the shape. Step records and `run.json` also carry `nukadoko`, the version that wrote them; `run.json` is the `nuka run --json` envelope, so its `schema_version` is the envelope's.

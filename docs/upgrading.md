@@ -63,9 +63,12 @@ This part does not change release to release.
     keeps a Playwright storageState file names it in
     `browserContext.storageState` or `requestContext.storageState`, which
     the config now passes through to Playwright instead of refusing.
-  - Delete `.nukadoko/cache/` (`rm -rf .nukadoko/cache`): nothing reads it.
-    `nuka clean` no longer lists it, and its `--json` plan has `records`
-    and `export` only.
+  - Run `nuka clean`, or delete `.nukadoko/cache/` by hand: nothing reads
+    it, and `cache/sessions/` holds each session's browser storage state,
+    cookies included, so a stale login stays on disk until it goes.
+    `nuka clean` lists and removes it, and the `records/` directory an
+    earlier release wrote, under `legacy` in its `--json` plan, beside
+    `records` and `export`.
   - A step record's `schema_version` is 3, and the record has no
     `session` field. A reader that checks `schema_version === 2` checks 3.
 
