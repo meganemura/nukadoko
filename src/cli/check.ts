@@ -8,7 +8,7 @@ import { loadConfig } from "../config/load-config.js";
 import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
 import { resolveOathPaths } from "../feature/resolve-oaths.js";
 import { readFeaturesForCheck, resolveFeatureTargets } from "../run/select-pickles.js";
-import { RefusalError, helpFor, refuse } from "./refusal.js";
+import { RefusalError, helpFor, refusalOf, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
 // Responsibility: `nuka check`'s actual work, kept out of run-cli.ts so
@@ -237,7 +237,9 @@ export async function readCheckTargets(
     const files = resolveFeatureTargets(rootDir, targets, oaths.files, oaths.directories);
     selected = readFeaturesForCheck(rootDir, files.map(([relativePath]) => relativePath));
   } catch (error) {
-    throw new Error(`${command}: ${error instanceof Error ? error.message : String(error)}`);
+    const message = `${command}: ${error instanceof Error ? error.message : String(error)}`;
+    const own = refusalOf(error, "").do;
+    throw own === "" ? new Error(message) : new RefusalError(message, own);
   }
   return selected;
 }

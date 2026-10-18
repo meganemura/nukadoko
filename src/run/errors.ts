@@ -51,12 +51,19 @@ export class FeatureParseFailedError extends Error {
 export class NoMatchingScenarioError extends Error {
   readonly relativePath: string;
   readonly line: number;
+  /** The lines that do select a pickle, read from the parsed file, so the
+   * refusal names a line that works rather than pointing at `--help`. */
+  readonly do: string;
 
-  constructor(relativePath: string, line: number) {
+  constructor(relativePath: string, line: number, scenarioLines: readonly number[]) {
     super(`No scenario found at ${relativePath}:${line}`);
     this.name = "NoMatchingScenarioError";
     this.relativePath = relativePath;
     this.line = line;
+    this.do =
+      scenarioLines.length === 0
+        ? `Add a scenario to ${relativePath}; nothing in it can run yet.`
+        : `Name a line a scenario or an Examples row starts on: ${scenarioLines.join(", ")}.`;
   }
 }
 
@@ -66,14 +73,19 @@ export class NoMatchingScenarioError extends Error {
 export class DirectoryTargetLineError extends Error {
   readonly relativePath: string;
   readonly line: number;
+  /** Every target as given, except that each directory loses its `:line`:
+   * the run the caller can start instead, since a directory target runs
+   * every scenario under it. */
+  readonly targetsWithoutLine: readonly string[];
 
-  constructor(relativePath: string, line: number) {
+  constructor(relativePath: string, line: number, targetsWithoutLine: readonly string[]) {
     super(
       `":line" has no meaning for a directory: ${relativePath}:${line} names a directory, not a feature file`,
     );
     this.name = "DirectoryTargetLineError";
     this.relativePath = relativePath;
     this.line = line;
+    this.targetsWithoutLine = targetsWithoutLine;
   }
 }
 
@@ -85,8 +97,15 @@ export class DirectoryTargetLineError extends Error {
 export class NoFeatureFilesFoundError extends Error {
   readonly relativePath: string;
   readonly resolvedPath: string;
+  readonly do: string;
 
-  constructor(relativePath: string, resolvedPath: string, consideredOaths = false, oathDirectory = false) {
+  constructor(
+    scannedPaths: readonly string[],
+    resolvedPath: string,
+    consideredOaths = false,
+    oathDirectory = false,
+  ) {
+    const relativePath = scannedPaths.join('" and "');
     super(
       oathDirectory
         ? `no Markdown file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`
@@ -97,5 +116,6 @@ export class NoFeatureFilesFoundError extends Error {
     this.name = "NoFeatureFilesFoundError";
     this.relativePath = relativePath;
     this.resolvedPath = resolvedPath;
+    this.do = `Add a ${oathDirectory ? "Markdown" : ".feature"} file under ${scannedPaths.join(" or ")}.`;
   }
 }

@@ -49,6 +49,14 @@ just until 0.1.
 
 ### Fixed
 
+- **A `nuka run` target that selects nothing names the next step as its `do:` line.**
+  Three refusals ended with `do: nuka run --help`. A directory given with
+  `:line` now names the same run with the `:line` dropped from each
+  directory, the other targets and `--env` kept. A `:line` that starts no
+  scenario lists the lines in that file that do (each Scenario and each
+  Examples row), or says the file has no scenario. A directory with no
+  `.feature` file says to add one under it (a Markdown file for an oath
+  directory); `nuka check` keeps that same `do:` line for the same refusal.
 - **An unknown `--env` names the environments the config defines as its `do:` line.**
   `nuka run`, `nuka do`, and `nuka session clear` ended this refusal with
   their own `--help`. The `do:` line now lists the names the config

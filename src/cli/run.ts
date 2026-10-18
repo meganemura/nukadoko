@@ -39,6 +39,7 @@ import {
   writeRepeatTallies,
   createRepeatTally,
   formatRerunCommand,
+  shellWord,
 } from "../run/progress-log.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
@@ -62,7 +63,7 @@ import {
   type StepFinishedInfo,
   type StepHeartbeatInfo,
 } from "../run/run-scenario.js";
-import { parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
+import { DirectoryTargetLineError, parseFeatureTarget, selectPickles } from "../run/select-pickles.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -358,6 +359,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   }
   const featureArgs = options.featureArgs.length === 0 ? [config.featuresDir] : options.featureArgs;
 
+  // A rerun line has to land in the same environment the failure came from.
+  const rerunFlags = env === null ? [] : ["--env", env];
+
   let resolvedEnv: ResolvedEnvironment;
   try {
     resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
@@ -376,6 +380,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         const oaths = resolveOathPaths(rootDir, config.oaths);
         return selectPickles(rootDir, featureArgs, oaths.files, oaths.directories);
       } catch (error) {
+        if (error instanceof DirectoryTargetLineError) {
+          const command = ["nuka", "run", ...error.targetsWithoutLine, ...rerunFlags].map(shellWord).join(" ");
+          return { refused: new RefusalError(error.message, command) };
+        }
         return { refused: error };
       }
     };
@@ -596,8 +604,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
     const runId = generateRunId();
     const git = await probeGitState(rootDir);
-    // A rerun line has to land in the same environment the failure came from.
-    const rerunFlags = env === null ? [] : ["--env", env];
     const summary = createRunSummaryCollector(rootDir, config.stateDir);
     const runScenarios: RunResultScenario[] = [];
     const noteRecord = (record: ScenarioRecord): void => {

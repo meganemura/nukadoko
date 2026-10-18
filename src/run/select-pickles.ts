@@ -18,6 +18,8 @@ import {
   NoMatchingScenarioError,
 } from "./errors.js";
 
+export { DirectoryTargetLineError };
+
 // Responsibility: turn `nuka run`'s `<feature[:line]>|<dir>` arguments into
 // the pickles they select, as one sorted and deduplicated file set. This is
 // the one place that each argument's syntax and
@@ -215,6 +217,8 @@ export function resolveFeatureTargets(
     return relativePath;
   };
   const scannedDirectories: { readonly relativePath: string; readonly absolutePath: string }[] = [];
+  let directoryLine: { readonly relativePath: string; readonly line: number } | null = null;
+  const targetsWithoutDirectoryLine: string[] = [];
 
   for (const featureArg of featureArgs) {
     const target = parseFeatureTarget(featureArg);
@@ -227,9 +231,11 @@ export function resolveFeatureTargets(
       isDirectory = false;
     }
 
+    targetsWithoutDirectoryLine.push(isDirectory ? target.relativePath : featureArg);
     if (isDirectory) {
       if (target.line !== null) {
-        throw new DirectoryTargetLineError(target.relativePath, target.line);
+        directoryLine ??= { relativePath: target.relativePath, line: target.line };
+        continue;
       }
       scannedDirectories.push({ relativePath: target.relativePath, absolutePath });
       for (const relativePath of featureFilesInDirectory(rootDir, target.relativePath)) {
@@ -257,8 +263,12 @@ export function resolveFeatureTargets(
     selections.set(key, lines);
   }
 
+  if (directoryLine !== null) {
+    throw new DirectoryTargetLineError(directoryLine.relativePath, directoryLine.line, targetsWithoutDirectoryLine);
+  }
+
   if (selections.size === 0) {
-    const relativePaths = scannedDirectories.map(({ relativePath }) => relativePath).join('" and "');
+    const relativePaths = scannedDirectories.map(({ relativePath }) => relativePath);
     const absolutePaths = scannedDirectories.map(({ absolutePath }) => absolutePath).join(", ");
     const onlyOathDirectories = scannedDirectories.every(({ relativePath }) =>
       oathDirectories.includes(path.normalize(relativePath.replace(/[\\/]+$/, "") || ".")),
@@ -295,7 +305,10 @@ export function selectPickles(
       }
       for (const line of selectedLines) {
         if (!feature.pickles.some((pickle) => pickle.location?.line === line)) {
-          throw new NoMatchingScenarioError(relativePath, line);
+          const scenarioLines = [
+            ...new Set(feature.pickles.flatMap((pickle) => (pickle.location === undefined ? [] : [pickle.location.line]))),
+          ].sort((a, b) => a - b);
+          throw new NoMatchingScenarioError(relativePath, line, scenarioLines);
         }
       }
       const pickles = feature.pickles.filter((pickle) => selectedLines.has(pickle.location?.line ?? 0));
