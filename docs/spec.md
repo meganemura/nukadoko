@@ -82,7 +82,7 @@ nukadoko deliberately owns as little as possible:
 | **Execution and measurement (records)** | **nukadoko** |
 | **Environments and secrets** | **nukadoko** |
 | **Keyword semantics (Then must not mutate)** | **nukadoko** |
-| **The run summary: the evidence of what ran, and what moved since the approved base** | **nukadoko** |
+| **The run summary: the evidence of what ran, and which criteria and step files changed since the approved base** | **nukadoko** |
 
 ## Problem
 
@@ -3415,8 +3415,9 @@ summary (see the run summary under "Records"). The feature says what was
 agreed, in the reviewer's own words. The run is the evidence for it, and
 the summary states that evidence: these scenarios ran at this commit,
 under these conditions, with these measurements, and, under
-`nuka run --since <ref>`, this is what moved in the criteria and in the
-step files they bind to since the base that was approved. nukadoko makes
+`nuka run --since <ref>`, these criteria changed, appeared, or went, and
+these files behind their steps changed, since the base that was approved,
+as far as the comparison under "Running" reaches. nukadoko makes
 that claim and no other: it does not decide who approves, and it does
 not record the approval. Where approval is recorded is the team's
 process, outside nukadoko: a pull request review, a change ticket, or an

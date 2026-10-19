@@ -7,8 +7,8 @@ Project context for agent sessions working in this repository.
 nukadoko is an agent-first engine that runs Gherkin: typed step contracts
 checked before anything runs, tool-measured execution records (step
 records), and a run summary that is the evidence: what ran, at which
-commit, under which conditions, and what moved in the criteria since the
-approved base. The person approving reads the `.feature` and that
+commit, under which conditions, and which criteria and step files
+changed since the approved base. The person approving reads the `.feature` and that
 evidence; where the approval is recorded stays outside nukadoko. The
 design source of truth is `docs/spec.md` — read it before changing behavior.
 

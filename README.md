@@ -15,7 +15,7 @@ Everything between those sentences and the system under test is typed,
 checked before execution, and reviewable in a diff. Every run ends in a
 Markdown run summary, and the run is the evidence for its criteria: these
 scenarios ran at this commit, under these conditions, and, with
-`nuka run --since <ref>`, this is what moved in the criteria since the
+`nuka run --since <ref>`, these criteria and step files changed since the
 base a person approved. A person reads the `.feature` and that summary.
 Where their approval is recorded, a pull request review, a change ticket,
 or an audit log, is the team's choice and stays outside nukadoko.
@@ -1318,8 +1318,8 @@ reading a directory of step records, which nobody does.
 
 A person who approves without writing code reads two things: the
 `.feature`, to check it says what the ticket meant, and the run summary,
-to check what ran, at which commit, and what moved since the base they
-approved. Everything under
+to check what ran, at which commit, and which criteria and step files
+changed since the base they approved. Everything under
 `.nukadoko/` and every `nuka` verb belongs to the agent or to CI. Every
 `nuka run` writes that summary as Markdown: the commit, each environment,
 the browser, one table per feature with each scenario's verdict in each

@@ -105,8 +105,8 @@ export const TEND_CODES: ReadonlySet<string> = new Set(listTendCodes().map((entr
  * names the replacement: a CI job written against the old code would
  * otherwise only learn that the code is gone, not what to gate on now. The
  * nine sign-off codes went away with `nuka accept`; the run summary that
- * `nuka run` writes, carried on the pull request, is what a person reads
- * instead. The two codes that repeated a `nuka check` finding now live only
+ * `nuka run` writes is the evidence a person reads instead, and where the
+ * approval is recorded is the team's process, outside nukadoko. The two codes that repeated a `nuka check` finding now live only
  * there, so `nuka check`'s exit code is the gate. */
 export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map([
   [

@@ -156,8 +156,8 @@ there is not checked and not run, and the skip reports nothing.
 
 Push the feature and its steps and open the pull request. CI runs the
 feature and posts the run summary on it (`docs/ci.md` in the nukadoko
-package has the workflow); `--since <base>` adds what moved since the
-approved base. A person reads the feature and the summary: the run is the
+package has the workflow); `--since <base>` adds which criteria and step
+files changed since the approved base. A person reads the feature and the summary: the run is the
 evidence, and the team records the approval where it records approvals.
 nukadoko writes or commits nothing else for it. Whether the criteria still hold later
 is a question for the next CI run, not for the old summary, and a failed

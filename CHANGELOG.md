@@ -796,8 +796,8 @@ just until 0.1.
   the todo example, llms.txt, and the package description no longer say
   that approving the pull request is the sign-off. They say what nukadoko
   claims: this run is the evidence for these criteria, at this commit,
-  under these conditions, and, with `nuka run --since <ref>`, here is what
-  moved since the approved base. Where a team records its approval (a
+  under these conditions, and, with `nuka run --since <ref>`, these
+  criteria and step files changed since the approved base. Where a team records its approval (a
   pull request review, a change ticket, an audit log) is its own process,
   and nukadoko writes no approval record. The refusal for a removed
   sign-off code under `nuka tend --fail-on` says the same.

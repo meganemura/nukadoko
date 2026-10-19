@@ -1,8 +1,8 @@
 # nukadoko
 
-> Typed step contracts for Gherkin. `nuka check` tells a scenario wrong before it runs. `nuka run` executes it and writes step records the tool measured, not ones an agent reported, plus a Markdown run summary: the run is the evidence for its criteria, at its commit, under its conditions, and, with `--since <ref>`, of what moved since the approved base. Where a person records approval stays outside nukadoko.
+> Typed step contracts for Gherkin. `nuka check` tells a scenario wrong before it runs. `nuka run` executes it and writes step records the tool measured, not ones an agent reported, plus a Markdown run summary: the run is the evidence for its criteria, at its commit, under its conditions, and, with `--since <ref>`, of which criteria and step files changed since the approved base. Where a person records approval stays outside nukadoko.
 
-It is not an untyped free-form agent runner, and it is not a substitute for human review: a person reads the `.feature` in the diff and the run summary.
+It is not an untyped free-form agent runner, and it approves nothing: a person reads the `.feature` and the run summary, and the team records the approval where it records approvals.
 
 Declaration is separate from observation. A step declares `mutates`, its `args` and `returns` schemas, and what it chains `from`; the record holds what the tool saw.
 
