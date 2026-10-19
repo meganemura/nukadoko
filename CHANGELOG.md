@@ -545,6 +545,9 @@ just until 0.1.
 
 ### Fixed
 
+- **The `unknown-environment` fix lists `default`.** `--env default` is
+  always accepted, and the fix now names it among the names `--env`
+  takes, or offers it when the config defines no environment.
 - **A refusal that names a next command keeps the fix for its code.** A
   refusal with its own `do` and no `fix` printed only the `do`, so
   `since-ref-unknown` said `do: git log --oneline` and never that a CI

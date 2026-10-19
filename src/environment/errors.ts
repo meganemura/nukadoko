@@ -11,8 +11,9 @@
 export class UnknownEnvironmentError extends Error {
   readonly code = "unknown-environment";
   readonly environmentName: string;
-  /** The names the config defines, which a CLI refusal's `fix:` line offers
-   * in place of the unknown one. */
+  /** The names `--env` accepts, which a CLI refusal's `fix:` line offers
+   * in place of the unknown one: `default` (always accepted, see
+   * resolve-environment.ts) and every name the config defines. */
   readonly fix: string;
 
   constructor(environmentName: string, definedNames: readonly string[]) {
@@ -22,10 +23,11 @@ export class UnknownEnvironmentError extends Error {
     this.name = "UnknownEnvironmentError";
     this.environmentName = environmentName;
     const add = `add environments.${environmentName} to the config file`;
+    const valid = [...new Set(["default", ...definedNames])].sort();
     this.fix =
       definedNames.length === 0
-        ? `Leave out --env (the config defines no environments), or ${add}.`
-        : `Pass --env with a name the config defines (${[...definedNames].sort().join(", ")}), or ${add}.`;
+        ? `Leave out --env or pass --env default (the config defines no other environment), or ${add}.`
+        : `Pass --env with a name it accepts (${valid.join(", ")}), or ${add}.`;
   }
 }
 

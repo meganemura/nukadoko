@@ -169,7 +169,7 @@ Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` pri
 | `unexpected-error` | refused | The command stopped on an error that has no code of its own. | Read the message; it is the error the command stopped on. |
 | `unfillable-required-key` | error | A step's args key is required, but nothing on this line (no pattern capture, no table/docstring attachment, and no declared from) can ever fill it. | Capture the key in the pattern, attach a table or a docstring, declare from for the key, or make the key optional. |
 | `unknown-capture-key` | error | A pattern captures a key that is not a key of the step's args schema. | Rename the capture to a key of the args schema, or add the key to the schema. |
-| `unknown-environment` | refused | --env names an environment that the config file does not define. | Pass an environment the config defines, or add it to environments in the config file. |
+| `unknown-environment` | refused | --env names an environment that the config file does not define. | Pass default or an environment the config defines, or add it to environments in the config file. |
 | `unknown-parameter-type` | error | A pattern names a parameter type this project has not registered, such as {custom} with no matching config.parameterTypes entry. | Register the type in config.parameterTypes, or use a built-in type such as {key:string}. |
 | `unknown-step` | refused | The command names a step that is not in the vocabulary. | Name a step that nuka steps lists. |
 | `unnamed-capture` | error | A step's pattern has a capture with no name, such as {int} instead of {key:int}; every capture must name the args key it fills. | Name the capture after the args key that it fills, as {key:type}. |

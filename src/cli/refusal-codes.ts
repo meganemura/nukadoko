@@ -163,7 +163,7 @@ const REFUSAL_CODES = {
   },
   "unknown-environment": {
     description: "--env names an environment that the config file does not define.",
-    fix: "Pass an environment the config defines, or add it to environments in the config file.",
+    fix: "Pass default or an environment the config defines, or add it to environments in the config file.",
   },
   "unknown-step": {
     description: "The command names a step that is not in the vocabulary.",
