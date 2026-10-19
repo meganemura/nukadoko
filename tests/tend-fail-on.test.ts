@@ -67,7 +67,7 @@ describe("nuka tend --fail-on", () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["tend", "--fail-on", "pattern-unbond"], { rootDir, stdout: createCaptureSink(), stderr });
     expect(exitCode).toBe(2);
-    expect(stderr.text()).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "pattern-unbond" is not a code nuka tend reports\n  do: nuka tend --codes\n');
+    expect(stderr.text()).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "pattern-unbond" is not a code nuka tend reports\n  fix: Name a code that nuka tend --codes lists.\n  do: nuka tend --codes\n');
   });
 
   it("refuses the codes removed with rationale and with the check duplicates, naming what to do instead", async () => {
@@ -87,7 +87,7 @@ describe("nuka tend --fail-on", () => {
       const stderr = createCaptureSink();
       expect(await runCli(["tend", "--fail-on", code], { rootDir, stdout, stderr })).toBe(2);
       expect(stdout.text()).toBe("");
-      expect(stderr.text()).toBe(`${message}  do: nuka tend\n`);
+      expect(stderr.text()).toBe(`${message}  fix: Name a code that nuka tend --codes lists.\n  do: nuka tend\n`);
     }
   });
 
@@ -101,7 +101,7 @@ describe("nuka tend --fail-on", () => {
       expect(stderr.text()).toBe(
         `refused\tfail-on-unknown-code\t-\t--fail-on: "${code}" was removed with \`nuka accept\`. A person now reads the run summary \`nuka run\` writes, ` +
           "which is the run's evidence, and the team records the approval where it records approvals (docs/upgrading.md).\n" +
-          "  do: nuka tend\n",
+          "  fix: Name a code that nuka tend --codes lists.\n  do: nuka tend\n",
       );
     }
   });

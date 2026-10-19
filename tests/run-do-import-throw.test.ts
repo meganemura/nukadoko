@@ -13,7 +13,7 @@ import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 const rootDir = fixture("import-throw-project");
 const relativePath = path.join("features", "steps", "reads-url.ts");
 const thrownMessage = "Cannot read properties of undefined (reading 'url')";
-const reported = `refused\tstep-file-import-failed\t-\t${relativePath}: ${thrownMessage}\n  do: nuka check\n`;
+const reported = `refused\tstep-file-import-failed\t-\t${relativePath}: ${thrownMessage}\n  fix: Correct the import or the error that the message names in the file, then run nuka check again.\n  do: nuka check\n`;
 
 async function run(argv: readonly string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const stdout = createCaptureSink();

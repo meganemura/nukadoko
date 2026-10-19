@@ -659,12 +659,12 @@ describe("nuka scaffold --command --argv", () => {
     [
       ["--pattern", "I run args with {words:string} in {dir:string}", "--command", "--argv", "argv"],
       "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv argv names no capture of the pattern; its string captures are words, dir\n" +
-        "  do: nuka scaffold broken --pattern 'I run args with {words:string} in {dir:string}' --command --argv words\n",
+        "  fix: Correct the command line; the command's --help lists its flags.\n  do: nuka scaffold broken --pattern 'I run args with {words:string} in {dir:string}' --command --argv words\n",
     ],
     [
       ["--pattern", "I run args with {words:string}", "--command", "--argv=argv"],
       "refused\tinvalid-arguments\t-\tRefusing to scaffold: --argv argv names no capture of the pattern; its string captures are words\n" +
-        "  do: nuka scaffold broken --pattern 'I run args with {words:string}' --command --argv=words\n",
+        "  fix: Correct the command line; the command's --help lists its flags.\n  do: nuka scaffold broken --pattern 'I run args with {words:string}' --command --argv=words\n",
     ],
     [
       ["--pattern", "I run args {n:int} times", "--command", "--argv", "n"],

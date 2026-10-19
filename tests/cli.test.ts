@@ -166,6 +166,7 @@ describe("nuka describe", () => {
       severity: "refused",
       code: "unknown-step",
       message: "Unknown step: no-such-step",
+      fix: "Name a step that nuka steps lists.",
       do: "nuka steps",
     });
   });

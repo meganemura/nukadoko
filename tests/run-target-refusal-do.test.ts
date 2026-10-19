@@ -46,7 +46,7 @@ describe("nuka run names the next step when a target selects nothing", () => {
       exitCode: 2,
       stderr:
         'refused\tline-on-directory\t-\t":line" has no meaning for a directory: features:3 names a directory, not a feature file\n' +
-        "  do: nuka run features features/a.feature:2 'no features' --env staging\n",
+        "  fix: Remove the :line suffix from the directory, or name a feature file.\n  do: nuka run features features/a.feature:2 'no features' --env staging\n",
     });
   });
 

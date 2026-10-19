@@ -125,7 +125,7 @@ describe("nuka describe: tolerant of a broken glue file", () => {
     expect(report.errors.map((issue: { code: string; file: string }) => [issue.code, issue.file])).toEqual([
       ["step-file-import-failed", "features/steps/broken.ts"],
     ]);
-    expect(report.refused).toEqual([{ code: "unknown-step", message: "Unknown step: no-such-step", do: "nuka steps" }]);
+    expect(report.refused).toEqual([{ code: "unknown-step", message: "Unknown step: no-such-step", fix: "Name a step that nuka steps lists.", do: "nuka steps" }]);
     expect(withoutNoConfigLine(stderr.text())).toBe("");
     expect(exitCode).toBe(2);
   });

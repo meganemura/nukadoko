@@ -54,7 +54,7 @@ describe("nuka report", () => {
     expect(await cli(["report", "--format", "markdown"])).toEqual({
       exitCode: 2,
       stdout: "",
-      stderr: "refused\trun-not-found\t-\tno run under .nukadoko/runs has a run.json\n  do: nuka run\n",
+      stderr: "refused\trun-not-found\t-\tno run under .nukadoko/runs has a run.json\n  fix: Name a run directory that holds a run.json, or run nuka run first.\n  do: nuka run\n",
     });
   });
 

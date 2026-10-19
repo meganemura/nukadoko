@@ -61,7 +61,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(withoutNoConfigLine(stderr.text())).toBe("refused\tunknown-step\t-\tUnknown step: step\n  do: nuka steps\n");
+    expect(withoutNoConfigLine(stderr.text())).toBe("refused\tunknown-step\t-\tUnknown step: step\n  fix: Name a step that nuka steps lists.\n  do: nuka steps\n");
   });
 
   it("keeps every --fail-on value", async () => {
@@ -76,7 +76,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(withoutNoConfigLine(stderr.text())).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "a", "b" are not codes nuka tend reports\n  do: nuka tend --codes\n');
+    expect(withoutNoConfigLine(stderr.text())).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "a", "b" are not codes nuka tend reports\n  fix: Name a code that nuka tend --codes lists.\n  do: nuka tend --codes\n');
   });
 
   it("treats a repeated boolean as that boolean", async () => {

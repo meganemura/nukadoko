@@ -22,7 +22,7 @@ describe("refuse", () => {
       const expected =
         ownDo === undefined
           ? { severity: "refused", code: "invalid-value", message, fix: "Correct the flag's value as the message says.", do: "nuka check --help" }
-          : { severity: "refused", code: "unknown-step", message, do: ownDo };
+          : { severity: "refused", code: "unknown-step", message, fix: "Name a step that nuka steps lists.", do: ownDo };
       expect(exitCode).toBe(2);
       if (json) {
         expect(stderr.text()).toBe("");
@@ -50,7 +50,7 @@ describe("refuse", () => {
     refuse({ json: false, stdout, stderr, command: "run" }, unregistered, "target-not-found");
 
     expect(stderr.text()).toBe(
-      "refused\tplaywright-missing\t-\tneeds playwright\n  do: npm install -D -E playwright@1.61.1\n" +
+      "refused\tplaywright-missing\t-\tneeds playwright\n  fix: Install the package that the message names in the project, at the version that the message names.\n  do: npm install -D -E playwright@1.61.1\n" +
         "refused\tunexpected-error\t-\t42\n  fix: Read the message; it is the error the command stopped on.\n  do: nuka run --help\n" +
         "refused\ttarget-not-found\t-\tno such file\n  fix: Name a file or a directory that exists.\n  do: nuka run --help\n",
     );
@@ -121,6 +121,7 @@ describe("a --json command that cannot report prints a refused envelope on stdou
       finding: {
         code: "line-not-supported",
         message: "nuka check: features/inside.feature:3: :line is not supported; check analyzes the whole file, not one scenario",
+        fix: "Remove the :line suffix from the target.",
         do: "nuka check features/inside.feature",
       },
     },
@@ -137,7 +138,7 @@ describe("a --json command that cannot report prints a refused envelope on stdou
     {
       argv: ["describe", "no-such-step"],
       root: "basic-project",
-      finding: { code: "unknown-step", message: "Unknown step: no-such-step", do: "nuka steps" },
+      finding: { code: "unknown-step", message: "Unknown step: no-such-step", fix: "Name a step that nuka steps lists.", do: "nuka steps" },
     },
     {
       argv: ["experimental", "explore", "models/a.ts", "--json", "--runs", "0"],
@@ -202,7 +203,7 @@ describe("a --json command that cannot report prints a refused envelope on stdou
 
     expect(result.stderr).toBe("");
     expect(refusedFindings(result.stdout)).toEqual([
-      { severity: "refused", code: "fail-on-unknown-code", message: '--fail-on: "bogus" is not a code nuka tend reports', do: "nuka tend --codes" },
+      { severity: "refused", code: "fail-on-unknown-code", message: '--fail-on: "bogus" is not a code nuka tend reports', fix: "Name a code that nuka tend --codes lists.", do: "nuka tend --codes" },
     ]);
     expect(result.exitCode).toBe(2);
   });
@@ -217,7 +218,7 @@ describe("a refusal in text mode is a refused finding on stderr", () => {
       ["check", "nope.feature"],
       "refused\ttarget-not-found\t-\tnuka check: feature file not found: nope.feature\n  fix: Name a file or a directory that exists.\n  do: nuka check --help\n",
     ],
-    [["do", "no-such-step", "--args", "{}"], "refused\tunknown-step\t-\tUnknown step: no-such-step\n  do: nuka steps\n"],
+    [["do", "no-such-step", "--args", "{}"], "refused\tunknown-step\t-\tUnknown step: no-such-step\n  fix: Name a step that nuka steps lists.\n  do: nuka steps\n"],
     [
       ["run", "--repeat", "0"],
       "refused\tinvalid-value\t-\t--repeat must be a whole number of 1 or more (got 0).\n  fix: Correct the flag's value as the message says.\n  do: nuka run --help\n",

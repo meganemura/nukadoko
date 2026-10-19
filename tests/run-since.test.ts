@@ -252,7 +252,7 @@ describe("nuka run --since", () => {
     expect(await cli(["run", "--since", "no-such-branch"])).toEqual({
       exitCode: 2,
       stdout: "",
-      stderr: "refused\tsince-ref-unknown\t-\t--since no-such-branch names no commit in the project's repository\n  do: git log --oneline\n",
+      stderr: "refused\tsince-ref-unknown\t-\t--since no-such-branch names no commit in the project's repository\n  fix: Name a branch, tag, or commit the repository holds, such as the base the criteria were approved at. In CI, fetch it first: git fetch origin <base branch>, or fetch-depth: 0 on actions/checkout.\n  do: git log --oneline\n",
     });
     expect(readdirSync(rootDir)).not.toContain(".nukadoko");
   });

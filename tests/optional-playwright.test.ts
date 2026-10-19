@@ -287,10 +287,10 @@ describe("a project without playwright installed", () => {
       ]);
       const done = await nuka(["do", "node prints {word:string}", "--args", '{"word":"hi"}']);
       expect(done.code).toBe(2);
-      expect(done.stderr).toBe(`refused\tplaywright-missing\t-\tfeatures/steps/expect-a.ts: ${message}\n  do: ${install}\n`);
+      expect(done.stderr).toBe(`refused\tplaywright-missing\t-\tfeatures/steps/expect-a.ts: ${message}\n  fix: Install the package that the message names in the project, at the version that the message names.\n  do: ${install}\n`);
       const run = await nuka(["run", "--no-check", "features/cli.feature"]);
       expect(run.code).toBe(2);
-      expect(run.stderr).toBe(`refused\tplaywright-missing\t-\tfeatures/steps/expect-a.ts: ${message}\n  do: ${install}\n`);
+      expect(run.stderr).toBe(`refused\tplaywright-missing\t-\tfeatures/steps/expect-a.ts: ${message}\n  fix: Install the package that the message names in the project, at the version that the message names.\n  do: ${install}\n`);
     } finally {
       await rm(path.join(steps, "expect-a.ts"), { force: true });
       await rm(path.join(steps, "expect-b.ts"), { force: true });

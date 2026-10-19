@@ -325,7 +325,7 @@ describe("nuka scaffold --feature", () => {
       stdout: "",
       stderr:
         "refused\tstep-file-import-failed\t-\tRefusing to scaffold: 1 step file(s) did not import, so which lines are undefined is not known (a line may belong to a step in one of them)\n" +
-        "  do: nuka check\n",
+        "  fix: Correct the import or the error that the message names in the file, then run nuka check again.\n  do: nuka check\n",
     });
     expect(existsSync(path.join(rootDir, "features", "steps", "the-output-is.ts"))).toBe(false);
   });

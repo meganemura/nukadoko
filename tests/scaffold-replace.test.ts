@@ -53,7 +53,7 @@ describe("nuka scaffold --replace", () => {
       stdout: "",
       stderr:
         `refused\tfile-exists\t-\tRefusing to scaffold: ${STUB} already exists, and it still holds what scaffold wrote\n` +
-        "  do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
+        "  fix: Pass --replace if scaffold wrote the file and nobody edited it, or delete the file.\n  do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
     });
     expect(await readFile(path.join(rootDir, STUB), "utf8")).toBe(stub);
   });
@@ -118,7 +118,7 @@ describe("nuka scaffold --replace", () => {
 
     expect(offered.stderr).toBe(
       `refused\tfile-exists\t-\tRefusing to scaffold: ${STUB} already exists, and it still holds what scaffold wrote\n` +
-        "  do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
+        "  fix: Pass --replace if scaffold wrote the file and nobody edited it, or delete the file.\n  do: nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts --replace\n",
     );
     expect(refused.exitCode).toBe(2);
     expect(refused.stderr).toContain("so --replace leaves it\n");

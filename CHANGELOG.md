@@ -545,6 +545,14 @@ just until 0.1.
 
 ### Fixed
 
+- **A refusal that names a next command keeps the fix for its code.** A
+  refusal with its own `do` and no `fix` printed only the `do`, so
+  `since-ref-unknown` said `do: git log --oneline` and never that a CI
+  checkout has to fetch the base first. Every refusal now carries its
+  code's `fix` beside a `do` it names: `unknown-step`, `step-args-invalid`,
+  `fail-on-unknown-code`, `run-not-found`, `line-not-supported`,
+  `line-on-directory`, `step-file-import-failed`, `config-invalid`,
+  `playwright-missing`, `file-exists`, and `invalid-arguments` among them.
 - **An exports manifest line is followed only for a file `nuka report`
   could have written.** A line that named a directory under `export/`
   made `nuka clean` remove the directory whole, and made retention fail

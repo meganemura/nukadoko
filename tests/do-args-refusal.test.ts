@@ -16,7 +16,7 @@ describe("nuka do without usable --args names the command that prints the args s
   it("--args left out", async () => {
     expect(await doRefusal(["do", "create-project"])).toEqual({
       exitCode: 2,
-      stderr: "refused\tstep-args-invalid\t-\t--args is required unless --use supplies this step's arguments\n  do: nuka describe create-project\n",
+      stderr: "refused\tstep-args-invalid\t-\t--args is required unless --use supplies this step's arguments\n  fix: Pass --args as a JSON object with the keys that nuka describe <step> lists.\n  do: nuka describe create-project\n",
     });
   });
 
@@ -24,7 +24,7 @@ describe("nuka do without usable --args names the command that prints the args s
     expect(await doRefusal(["do", "create-project", "--args", "name=x"])).toEqual({
       exitCode: 2,
       stderr:
-        "refused\tstep-args-invalid\t-\tInvalid JSON for --args: Unexpected token 'a', \"name=x\" is not valid JSON\n  do: nuka describe create-project\n",
+        "refused\tstep-args-invalid\t-\tInvalid JSON for --args: Unexpected token 'a', \"name=x\" is not valid JSON\n  fix: Pass --args as a JSON object with the keys that nuka describe <step> lists.\n  do: nuka describe create-project\n",
     });
   });
 
@@ -38,14 +38,14 @@ describe("nuka do without usable --args names the command that prints the args s
   it("--args left out for a name no step has is refused as an unknown step", async () => {
     expect(await doRefusal(["do", "no-such-step"])).toEqual({
       exitCode: 2,
-      stderr: "refused\tunknown-step\t-\tUnknown step: no-such-step\n  do: nuka steps\n",
+      stderr: "refused\tunknown-step\t-\tUnknown step: no-such-step\n  fix: Name a step that nuka steps lists.\n  do: nuka steps\n",
     });
   });
 
   it("--args that is not JSON for a name no step has is refused as an unknown step", async () => {
     expect(await doRefusal(["do", "no-such-step", "--args", "name=x"])).toEqual({
       exitCode: 2,
-      stderr: "refused\tunknown-step\t-\tUnknown step: no-such-step\n  do: nuka steps\n",
+      stderr: "refused\tunknown-step\t-\tUnknown step: no-such-step\n  fix: Name a step that nuka steps lists.\n  do: nuka steps\n",
     });
   });
 

@@ -113,7 +113,7 @@ describe("nuka check [target..]", () => {
     expect(result.stderr).toBe(
       "refused\tline-not-supported\t-\tnuka check: acceptance/outside.feature:4: :line is not supported; " +
         "check analyzes the whole file, not one scenario\n" +
-        "  do: nuka check acceptance/outside.feature\n",
+        "  fix: Remove the :line suffix from the target.\n  do: nuka check acceptance/outside.feature\n",
     );
   });
 

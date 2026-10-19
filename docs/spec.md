@@ -4505,7 +4505,9 @@ edit, in words: the file to change and what to write. A next step that is
 a choice between edits, or a command with a value nukadoko cannot fill, is
 a `fix`, never a guessed `do`. A finding that names neither gets the
 code's general `fix`, which `--codes` lists, so every finding says what
-gets past it.
+gets past it. A refusal that names only a `do` keeps that general `fix`
+beside it: the `do` is the next command, and the `fix` is what the
+refusal asks to change.
 
 In text, a finding is one line, `<severity>\t<code>\t<where>\t<message>`,
 where `<where>` is `<file>:<line>`, `<file>`, the step name, or `-`; a

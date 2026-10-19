@@ -155,6 +155,10 @@ function ownString(error: unknown, key: "fix" | "do"): string | undefined {
  * error's own `fix` and `do` when it has either, then `hint`, then the
  * code's general fix with the command's help as the `do`: the help is a
  * command that runs as written and lists every flag the command takes.
+ * A hint that names only a `do` keeps the code's general fix beside it:
+ * the `do` is the next command, and the fix is what the refusal asks to
+ * change, so a `do` alone once hid that `since-ref-unknown` wants the
+ * ref fetched.
  */
 export function refusalOf(error: unknown, code: RefusalCode, command: string, hint?: Hint): Finding {
   const message = error instanceof Error ? error.message : String(error);
@@ -170,11 +174,12 @@ export function refusalOf(error: unknown, code: RefusalCode, command: string, hi
       : hint !== undefined && (hint.fix !== undefined || hint.do !== undefined)
         ? hint
         : { fix: registryFix(resolved), do: helpFor(command) };
+  const fix = chosen.fix ?? registryFix(resolved);
   return {
     severity: "refused",
     code: resolved,
     message,
-    ...(chosen.fix !== undefined ? { fix: chosen.fix } : {}),
+    fix,
     ...(chosen.do !== undefined ? { do: chosen.do } : {}),
   };
 }
