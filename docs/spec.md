@@ -3520,7 +3520,7 @@ A relative `--out` is resolved against the project root, and an absolute one is 
 A missing directory on the way to `--out` is created, since the caller named the path.
 Anything else in the way is refused with `report-out-invalid` before the run is read: a directory where Markdown or messages writes a file, a file where Allure writes a directory, a FIFO or another special file, a dangling symbolic link, or a path under a regular file.
 `allure-history.jsonl` in the export directory is refused too, in any letter case and through a link to that directory, since a render over it would lose the history for good.
-A write the file system refuses (a read-only directory, a path under `/proc`) is refused with the same code and the error code it gave, such as `ENOENT` or `EACCES`.
+A markdown or messages file the file system refuses to write (under a read-only directory, under `/proc`) is refused with the same code and the error code it gave, such as `ENOENT` or `EACCES`. An Allure directory the file system refuses to write into ends as `report-incomplete`, because its results are written one file at a time.
 The refusal names the `--out` value as it was typed, or the default Allure directory when there is no `--out`.
 `nuka report` with no run directory renders the newest run; a run directory as its argument renders that run.
 When the run is one of this project's runs, each file written under `<stateDir>/export/` is noted in that run's exports manifest, so retention removes it with the run.
