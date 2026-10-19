@@ -99,14 +99,14 @@ there is not checked and not run, and the skip reports nothing.
    tree tells the reviewer it may not match what the pull request holds.
    Debugging against a dirty tree is fine.
 2. `nuka run <feature>`, repeat until every scenario is green. It first
-   reports what `nuka check` reports for the selected scenarios and exits
-   2 before executing anything on an error (a failed scenario exits 1, so
-   2 always means nothing ran); `--no-check` skips that check to run a
-   scenario `check` refuses. stderr prints a boundary line per scenario, one line per step as it finishes,
-   and, once the run ends, every path it actually wrote plus a summary
-   line. A failed step adds its error's first line and its step record
-   path, and each failed scenario gets a `scenario-failed` finding after
-   the summary, whose `do:` line reruns it.
+   reports what `nuka check` reports for the selected scenarios and exits 2
+   before executing anything on an error (a failed scenario exits 1, so 2
+   always means nothing ran); `--no-check` skips that check to run a
+   scenario `check` refuses. stderr prints a boundary line per scenario, one
+   line per step as it finishes, and, once the run ends, every path it
+   actually wrote plus a summary line. A failed step adds its error's first
+   line and its step record path, and each failed scenario gets a
+   `scenario-failed` finding after the summary, whose `do:` line reruns it.
    stdout is empty unless you ask: `--records` writes NDJSON there, one
    scenario's `run.json` entry per line, and `run.json` is on disk either
    way. To act on the result, pass `--json` instead: stdout is then
@@ -116,28 +116,28 @@ there is not checked and not run, and the skip reports nothing.
    scenario its steps with `line`, `status`, `record`, and a failed one's
    `error` and `used`, plus a failed scenario's `do`); the run writes the
    same bytes beside its summary, which is rendered from it. nukadoko then
-   writes nothing to stderr: every warning and failed scenario is a
-   finding. Only Node's own process warnings (`package-type-missing` names
-   their cause) and a step's own output reach it: text a step, hook, or
-   fixture writes through `console.log` or `process.stdout.write` goes to
-   stderr, so it does not break stdout; a child process spawned with
-   `stdio: "inherit"` still writes to stdout directly. The run also
-   writes a Markdown run summary for the person reviewing it, to
-   `.nukadoko/runs/<run_id>/summary.md` (the `summary` line names
-   it), and to `$GITHUB_STEP_SUMMARY` when that is set; `nuka report
-   --format markdown --out <path>` writes it again for a CI step that posts
-   it as a pull request comment. A compat World
-   constructor that throws fails that scenario only: stderr gets one setup
-   line, and later scenarios still run.
-   There is no step record for that failure. With no target, `nuka run`
-   runs `featuresDir`, which is what `npm run test:scenarios` does.
-   When a scenario fails, diagnose it before repeating the whole run
-   (see `references/diagnosing.md`) rather than treating a full re-run as
-   the default first move. `<feature>:<line>` is fine for narrowing this
-   while iterating, but the run this step ends on must cover the whole
-   feature: a partial run's summary covers only the scenarios it selected,
-   and says so with `selection: partial` in its header, as run.json's
-   `selection` does. stderr does not say so.
+   writes nothing to stderr: every warning and failed scenario is a finding.
+   Only Node's own process warnings and a step's own output reach it: a
+   `MODULE_TYPELESS_PACKAGE_JSON` warning goes with `package-type-missing`
+   (`nuka tend`), and under `"type": "commonjs"` a "Failed to load the ES
+   module" warning goes with `step-file-import-failed` (`config-invalid` for
+   the config). Text a step, hook, or fixture writes through `console.log`
+   or `process.stdout.write` goes to stderr; a child process spawned with
+   `stdio: "inherit"` still writes to stdout. The run also writes a Markdown
+   run summary for the person reviewing it, to
+   `.nukadoko/runs/<run_id>/summary.md` (the `summary` line names it), and
+   to `$GITHUB_STEP_SUMMARY` when that is set; `nuka report --format
+   markdown --out <path>` writes it again for a CI step that posts it as a
+   pull request comment. A compat World constructor that throws fails that
+   scenario only: stderr gets one setup line and no step record, and later
+   scenarios still run. With no target, `nuka run` runs `featuresDir`, which
+   is what `npm run test:scenarios` does. When a scenario fails, diagnose it
+   before repeating the whole run (see `references/diagnosing.md`) rather
+   than treating a full re-run as the default first move. `<feature>:<line>`
+   is fine for narrowing this while iterating, but the run this step ends on
+   must cover the whole feature: a partial run's summary covers only the
+   scenarios it selected, and says so with `selection: partial` in its
+   header, as run.json's `selection` does. stderr does not say so.
 3. A failure that reproduces one time in several is a case for
    `nuka run <feature>:<line> --repeat <n>`, not for a shell loop: every
    execution lands under one run id, its summary cell counts them, and a

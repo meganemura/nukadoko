@@ -36,13 +36,13 @@ If the project is not initialized yet (no `nukadoko.config.ts` or
 `nukadoko.config.mts`), run `nuka init` first. An existing suite can be
 CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
 `nukadoko.config.mts` there and `nuka scaffold` writes `.mts` step files.
-A `.ts` file there loads with a Node warning (`nuka tend` reports
-`package-type-missing` for each `.ts` or `.js` file it loads), and fails to import under
-`"type": "commonjs"`, with an error that names the file. `nuka run`
-writes no report of its own: a suite whose formatter or JUnit-based CI
-reads cucumber messages renders the stream after each run with `nuka
-report --format messages --out <path>`, and `nuka report --format
-allure` does the same for Allure results.
+A `.ts` file there loads with a Node warning (`nuka tend` reports one
+`package-type-missing` per `package.json` with no `"type"`, counting the
+`.ts` and `.js` files it governs), and fails to import under `"type":
+"commonjs"`, with an error that names the file. `nuka run` writes no
+report of its own: a suite whose formatter or JUnit-based CI reads
+cucumber messages renders the stream after each run with `nuka report
+--format messages --out <path>`, and `--format allure` does the same.
 nukadoko uses the project's own `playwright`, an optional peer dependency
 with a caret range (`npm view nukadoko peerDependencies`); npm refuses to
 install nukadoko beside a `playwright` outside it.

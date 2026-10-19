@@ -861,6 +861,15 @@ just until 0.1.
   `step-file-import-failed`; `nuka clean`'s scope under `export/`, what
   `nuka check` reports about env files, the full `stands for` finding
   text, and `@#456` as a valid tag are corrected.
+- **What explains a Node warning, and what `package-type-missing`
+  counts.** The running reference said `package-type-missing` explains
+  Node's warnings under `--json`; it explains a
+  `MODULE_TYPELESS_PACKAGE_JSON` warning, and a "Failed to load the ES
+  module" warning under `"type": "commonjs"` goes with
+  `step-file-import-failed` (`config-invalid` for the config). The
+  migration skill said the note comes once per file; it comes once per
+  `package.json` with no `"type"`, counting the `.ts` and `.js` files it
+  governs.
 - **What `nuka report` reads and notes, per format.** llms.txt, the
   spec's command summary, and the running reference said a render needs
   `sources.json` and that any file written under the state directory
