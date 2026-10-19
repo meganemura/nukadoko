@@ -3070,6 +3070,7 @@ Allure の result は、nukadoko の計測の余剰が見えるようになる�
 出力先は stdout、または `--out` が名指すファイルです。
 相対の `--out` はプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 Allure の result と同じく、ストリームは run の後に run ディレクトリだけから描き出され、`nuka run` は何も書きません。
+scenario 自身のスクリーンショットと各 hook の trace はストリームに envelope がないので読みませんが、そのうち run ディレクトリの外へ出るパスは、Allure の result と同じく `report-incomplete` の finding になります。
 このプロジェクト自身の run について `<stateDir>/export/` の下に書いたファイルは、その run の exports manifest に記されるので、retention と `nuka clean` が run と一緒に消します。
 
 - 1 回の描き出しは、1 つの run の 1 つのストリームです。

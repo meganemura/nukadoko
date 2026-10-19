@@ -179,6 +179,35 @@ describe("nuka report on an edited run directory", () => {
     }
   });
 
+  it("reports a scenario screenshot and a hook trace that leave the run in the messages stream, as the Allure results do", async () => {
+    expect((await cli(["run", "--no-check", "features/passing.feature"])).exitCode).toBe(0);
+    const runId = latestRunJson(rootDir).run_id as string;
+    const copy = path.join(outside, runId);
+    cpSync(path.join(rootDir, ".nukadoko", "runs", runId), copy, { recursive: true });
+    const runJson = JSON.parse(readFileSync(path.join(copy, "run.json"), "utf8")) as { scenarios: Record<string, unknown>[] };
+    const scenario = runJson.scenarios[0]!;
+    scenario.evidence = { dir: "..", screenshots: [{ file: "secret.txt", at: scenario.finished_at }] };
+    scenario.hooks = [{ type: "after", status: "passed", name: "tidy", trace: "secret.txt" }];
+    writeFileSync(path.join(copy, "run.json"), JSON.stringify(runJson));
+    for (const format of ["allure", "messages"]) {
+      const result = await cli(["report", copy, "--format", format, ...(format === "allure" ? ["--out", path.join(outside, "allure")] : [])]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).not.toContain(Buffer.from(SECRET).toString("base64"));
+      const problems = result.stderr.split("\n").filter((line) => line.includes("secret.txt"));
+      expect(problems).toEqual(
+        format === "allure"
+          ? [
+              `failed\treport-incomplete\t-\tallure: could not attach runs/secret.txt: runs/secret.txt resolves outside the run directory, so it is not read`,
+              `failed\treport-incomplete\t-\tallure: could not attach runs/secret.txt: runs/secret.txt resolves outside the run directory, so it is not read`,
+            ]
+          : [
+              `failed\treport-incomplete\t-\tmessages: could not check evidence runs/secret.txt: runs/secret.txt resolves outside the run directory, so it is not read`,
+              `failed\treport-incomplete\t-\tmessages: could not check evidence runs/secret.txt: runs/secret.txt resolves outside the run directory, so it is not read`,
+            ],
+      );
+    }
+  });
+
   for (const { name, evidence, attachments, link } of cases) {
     it(`refuses ${name} in Allure results and the messages stream, and names it`, async () => {
       const copy = await copiedRun(evidence, attachments, link);

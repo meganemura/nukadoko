@@ -142,6 +142,26 @@ export function writeMessagesStream(
     });
   }
 
+  // The scenario's own screenshots and each hook's traces have no
+  // envelope here, so the stream never reads them. A path among them that
+  // resolves outside the run directory is still reported, as the Allure
+  // results report it: a forged run directory must read as incomplete in
+  // every format, not only in the one that happens to open the file.
+  function checkUnstreamedEvidence(record: ScenarioRecord): void {
+    const dir = record.evidence.dir.replace(/\/+$/, "");
+    const files = [
+      ...record.evidence.screenshots.map((screenshot) => screenshot.file),
+      ...record.hooks.flatMap((hook) => [...(hook.trace === undefined ? [] : [hook.trace]), ...(hook.named_traces ?? []).map((named) => named.file)]),
+    ];
+    for (const file of files) {
+      try {
+        options.resolvePath(`${dir}/${file}`);
+      } catch (error) {
+        options.warn(`messages: could not check evidence ${dir}/${file}: ${errorMessage(error)}`);
+      }
+    }
+  }
+
   append({ meta: buildMeta(options.nukadokoVersion) });
   // One (`source`, `gherkinDocument`, `pickle`*N) group per feature, every
   // envelope of a group under that file's one uri, so a reader joining the
@@ -205,6 +225,7 @@ export function writeMessagesStream(
   // attempt, so a red first execution followed by a green one would read
   // as green.
   for (const scenario of scenarios) {
+    checkUnstreamedEvidence(scenario.record);
     const pickle = pickleFor(scenario);
     let mapped: ReturnType<typeof mapScenario>;
     try {

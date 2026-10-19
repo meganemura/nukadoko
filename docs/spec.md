@@ -3653,7 +3653,11 @@ messages stream through `@cucumber/messages`: NDJSON, one envelope per line.
 It goes to stdout, or to the file `--out` names. A relative `--out` is
 resolved against the project root, and an absolute one is used as given.
 Like the Allure results, the stream is rendered from the run directory
-alone, after the run, and `nuka run` writes none. A file written under the
+alone, after the run, and `nuka run` writes none. A scenario's own
+screenshots and its hooks' traces have no envelope in the stream, so it
+never reads them, but a path among them that resolves outside the run
+directory is a `report-incomplete` finding, as it is in the Allure
+results. A file written under the
 `<stateDir>/export/` for this project's own run is noted in that run's exports
 manifest, so retention and `nuka clean` remove it with the run.
 
