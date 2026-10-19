@@ -545,6 +545,14 @@ just until 0.1.
 
 ### Fixed
 
+- **An exports manifest line is followed only for a file `nuka report`
+  could have written.** A line that named a directory under `export/`
+  made `nuka clean` remove the directory whole, and made retention fail
+  with `retention-failed` (EISDIR) on every later run, so no old run was
+  removed again; a line naming `export/allure-history.jsonl` removed the
+  Allure history. A line now has to name a regular file (not a
+  directory or a symlink) other than `allure-history.jsonl`, and
+  retention goes on past a file it cannot remove.
 - **`--env default` names the implicit environment.** `nuka run --help`
   said that leaving out `--env` runs the "default" environment, and
   run.json and the summary name it `default`, but `--env default` was

@@ -160,7 +160,10 @@ questions: "what happens if this is deleted" and "who gets to change it":
   followed only when it resolves, symlinks included, to a file inside
   `export/`, and a manifest only when it is a file of a run directory that
   is not itself a symlink: a run directory copied in from elsewhere does
-  not get to name a project file for removal.
+  not get to name a project file for removal. The line must also name
+  what `nuka report` could have written: a regular file, not a directory
+  or a symlink, and never `export/allure-history.jsonl`. Retention skips
+  any other line and goes on removing old runs.
   `nuka clean [--dry-run] [--json]` is the whole-category operation that
   remains. It cleans all three categories together. `--dry-run` prints the
   same plan that the real run would use, but removes nothing. A report

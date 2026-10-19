@@ -14,7 +14,7 @@ import { formatVocabularyError } from "./vocabulary.js";
 import { listenAddress } from "../context/run-server.js";
 import { isPlaywrightInstalled, PlaywrightMissingError } from "../context/load-playwright.js";
 import type { WritableSink } from "../sink/writable-sink.js";
-import { allureResultsRelativeDir } from "../record/state-layout.js";
+import { allureHistoryRelativePath, allureResultsRelativeDir } from "../record/state-layout.js";
 
 // Responsibility: `nuka init`'s actual work, kept out of run-cli.ts so it's
 // unit-testable without going through yargs
@@ -486,7 +486,7 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     // Posix-joined (not `path.join`) since this becomes a string literal
     // inside a generated .mjs file, which should read the same on every
     // host OS regardless of which one generated it.
-    const historyPathRelative = [defaults.stateDir, "export", "allure-history.jsonl"].join("/");
+    const historyPathRelative = allureHistoryRelativePath(defaults.stateDir).split(path.sep).join("/");
 
     const allurercWritten = await ensureAllurercFile(rootDir, historyPathRelative, stderr);
     if (allurercWritten !== null) {

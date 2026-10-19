@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -83,7 +83,7 @@ describe("readOwnedExports", () => {
 
   const segment = gs.sampledFrom(["sub", "evil", "..", "src", "a.json", ".nukadoko", "export"]);
 
-  it("accepts a line only when its real parent directory is inside export/'s real path", () =>
+  it("accepts a line only when its real parent directory is inside export/'s real path and it names a regular file or nothing", () =>
     hegel.test(
       (tc) => {
         const segments = tc.draw(gs.arrays(segment, { minSize: 1, maxSize: 5 }));
@@ -103,10 +103,26 @@ describe("readOwnedExports", () => {
         // reach; only one that does is decided by where it really is.
         if (parentReal === null) return;
         const inside = parentReal === exportReal || parentReal.startsWith(`${exportReal}${path.sep}`);
-        expect(owned.files.map((file) => file.line)).toEqual(inside ? [line] : []);
+        // Only something nuka report could have written: a regular file,
+        // or nothing yet. A directory (`sub`) or a link (`evil`) is not.
+        let written: boolean;
+        try {
+          written = lstatSync(absolute).isFile();
+        } catch {
+          written = true;
+        }
+        expect(owned.files.map((file) => file.line)).toEqual(inside && written ? [line] : []);
       },
       { testCases: 200 },
     ));
+
+  it("never owns export/allure-history.jsonl, which Allure writes and nuka report never does", () => {
+    writeFileSync(path.join(rootDir, ".nukadoko", "export", "allure-history.jsonl"), "{}\n");
+    writeFileSync(path.join(rootDir, ".nukadoko", "export", "own.md"), "own");
+    const lines = [path.join(".nukadoko", "export", "allure-history.jsonl"), path.join(".nukadoko", "export", "own.md")];
+    writeFileSync(runExportsManifestPath(rootDir, ".nukadoko", "run-1"), `${lines.join("\n")}\n`);
+    expect(readOwnedExports(rootDir, ".nukadoko", "run-1").files.map((file) => file.line)).toEqual([path.join(".nukadoko", "export", "own.md")]);
+  });
 
   it("owns nothing through a manifest that is a symlink out of the run directory", () => {
     writeFileSync(path.join(rootDir, "forged"), `${path.join(".nukadoko", "export", "sub", "a.json")}\n`);

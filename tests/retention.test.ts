@@ -339,6 +339,27 @@ describe("applyRetention", () => {
     expect(readFileSync(abs("forged-manifest"), "utf8")).toBe("victim.txt\n");
   });
 
+  it("skips a manifest line that names a directory or allure-history.jsonl, and still removes every older run", async () => {
+    const exportDir = abs(stateDir, "export");
+    await mkdir(path.join(exportDir, "allure-report"), { recursive: true });
+    await writeFile(path.join(exportDir, "allure-report", "index.html"), "<html></html>");
+    await writeFile(path.join(exportDir, "allure-history.jsonl"), "{}\n");
+    await writeFile(path.join(exportDir, "own.md"), "own");
+    await writeEnded("run-old-a", "2026-08-01T00:00:00Z");
+    const lines = ["allure-report", "allure-history.jsonl", "own.md"].map((name) => path.join(stateDir, "export", name));
+    await writeFile(runExportsManifestPath(rootDir, stateDir, "run-old-a"), `${lines.join("\n")}\n`);
+    await seedRun("run-old-b", "2026-08-02T00:00:00Z");
+    await seedRun("run-new", "2026-09-01T00:00:00Z");
+
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
+    expect(outcome).toEqual({ runsKept: 2, runsRemoved: 2, unownedRemoved: 0 });
+    expect(existsSync(inRun("run-old-a"))).toBe(false);
+    expect(existsSync(inRun("run-old-b"))).toBe(false);
+    expect(existsSync(path.join(exportDir, "own.md"))).toBe(false);
+    expect(readFileSync(path.join(exportDir, "allure-report", "index.html"), "utf8")).toBe("<html></html>");
+    expect(readFileSync(path.join(exportDir, "allure-history.jsonl"), "utf8")).toBe("{}\n");
+  });
+
   it("removes a symlinked run directory as the link, and nothing its manifest names", async () => {
     const outside = mkdtempSync(path.join(os.tmpdir(), "nukadoko-retention-linked-"));
     try {

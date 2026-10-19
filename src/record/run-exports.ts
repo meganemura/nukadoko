@@ -1,7 +1,7 @@
-import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { exportDirOf, isSymlinkedRunDir, removableWithin, staysWithin } from "./contained-path.js";
-import { runRelativeDir } from "./state-layout.js";
+import { allureHistoryRelativePath, runRelativeDir } from "./state-layout.js";
 
 // Responsibility: which export files were written for one run, kept as an
 // append-only manifest in the run's own directory,
@@ -41,6 +41,13 @@ import { runRelativeDir } from "./state-layout.js";
 // file of a run directory that is not a symlink. The alternative refused
 // was the lexical project-root check retention had, which let a copied run
 // delete any project file its manifest named.
+//
+// A line is also followed only for something `nuka report` could have
+// written: a regular file (by lstat, so neither a directory nor a link),
+// or nothing at all yet, and never `export/allure-history.jsonl`, which
+// Allure writes and `nuka report` never does. A directory line once made
+// `nuka clean` remove the directory whole and made retention fail with
+// EISDIR on every run, so no old run was removed again.
 //
 // Not a run record. The manifest carries no status, no timing, and no
 // scenario ids; those live in the run's run.json.
@@ -99,7 +106,8 @@ export interface OwnedExports {
    * is a symlink under `<stateDir>/runs/`, or the manifest resolves
    * outside the run directory. */
   readonly manifestPath: string | null;
-  /** The lines that name a file inside `<stateDir>/export/`, each with its
+  /** The lines that name a regular file (or nothing yet) inside
+   * `<stateDir>/export/`, other than `allure-history.jsonl`, each with its
    * absolute path. */
   readonly files: readonly { readonly line: string; readonly absolutePath: string }[];
 }
@@ -113,8 +121,20 @@ export function readOwnedExports(rootDir: string, stateDir: string, runId: strin
   const exportDir = exportDirOf(rootDir, stateDir);
   const files = readExportsManifest(manifestPath)
     .map((line) => ({ line, absolutePath: path.resolve(rootDir, line) }))
-    .filter(({ absolutePath }) => removableWithin(exportDir, absolutePath));
+    .filter(({ absolutePath }) => isWrittenExport(rootDir, stateDir, exportDir, absolutePath));
   return { manifestPath, files };
+}
+
+function isWrittenExport(rootDir: string, stateDir: string, exportDir: string, absolutePath: string): boolean {
+  if (!removableWithin(exportDir, absolutePath)) return false;
+  if (absolutePath === path.resolve(rootDir, allureHistoryRelativePath(stateDir))) return false;
+  try {
+    return lstatSync(absolutePath).isFile();
+  } catch (error) {
+    // A file already gone owns nothing to remove, but its line is still
+    // the run's, so a later render can forget it.
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
+  }
 }
 
 /** Whether a file `nuka report` wrote belongs in a manifest: only a file

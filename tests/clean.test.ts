@@ -199,6 +199,26 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(rootDir, "forged-manifest"))).toBe(true);
   });
 
+  it("does not follow a manifest line that names a directory, a symlink, or allure-history.jsonl, and removes the regular file beside them", async () => {
+    const exportDir = path.join(stateDir(rootDir), "export");
+    await mkdir(path.join(exportDir, "allure-report"), { recursive: true });
+    await writeFile(path.join(exportDir, "allure-report", "index.html"), "<html></html>");
+    await writeFile(path.join(exportDir, "allure-history.jsonl"), '{"kept":true}\n');
+    await writeFile(path.join(exportDir, "own.md"), "own");
+    await writeFile(path.join(exportDir, "target.md"), "target");
+    await symlink(path.join(exportDir, "target.md"), path.join(exportDir, "link.md"));
+    await mkdir(path.join(stateDir(rootDir), "runs", "run-hhh"), { recursive: true });
+    const lines = ["allure-report", "allure-history.jsonl", "link.md", "own.md"].map((name) => path.join(".nukadoko", "export", name));
+    await writeFile(path.join(stateDir(rootDir), "runs", "run-hhh", "exports"), `${lines.join("\n")}\n`);
+    const stdout = createCaptureSink();
+    expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+    expect(stdout.text()).toBe(`${path.join(".nukadoko", "runs", "run-hhh")}\n${path.join(".nukadoko", "export", "own.md")}\n`);
+    expect(existsSync(path.join(exportDir, "allure-report", "index.html"))).toBe(true);
+    expect(existsSync(path.join(exportDir, "allure-history.jsonl"))).toBe(true);
+    expect(existsSync(path.join(exportDir, "link.md"))).toBe(true);
+    expect(existsSync(path.join(exportDir, "own.md"))).toBe(false);
+  });
+
   it("removes a manifest-named file whose name starts with two dots, since it is inside export/", async () => {
     await mkdir(path.join(stateDir(rootDir), "export"), { recursive: true });
     await writeFile(path.join(stateDir(rootDir), "export", "..messages.ndjson"), "line1\n");

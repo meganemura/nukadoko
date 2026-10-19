@@ -42,6 +42,14 @@ export function allureResultsRelativeDir(stateDir: string): string {
   return path.join(exportRelativeDir(stateDir), "allure-results");
 }
 
+/** `<stateDir>/export/allure-history.jsonl`, the history file the
+ * allurerc.mjs `nuka init --allure` writes points Allure at. Allure
+ * writes it, `nuka report` never does, and nothing nukadoko removes may
+ * name it. */
+export function allureHistoryRelativePath(stateDir: string): string {
+  return path.join(exportRelativeDir(stateDir), "allure-history.jsonl");
+}
+
 /** `<stateDir>/do`, the parent of every `nuka do` step record. */
 export function doRelativeDir(stateDir: string): string {
   return path.join(stateDir, "do");

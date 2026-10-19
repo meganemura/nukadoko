@@ -141,7 +141,16 @@ export interface RetentionOutcome {
 /** Removes one run directory whole, after the export files its manifest
  * lists. */
 async function removeRunDir(rootDir: string, stateDir: string, runId: string): Promise<void> {
-  for (const { absolutePath } of readOwnedExports(rootDir, stateDir, runId).files) await rm(absolutePath, { force: true });
+  for (const { absolutePath } of readOwnedExports(rootDir, stateDir, runId).files) {
+    // One export file that cannot be removed must not stop the rest, nor
+    // the run directory: an abort here would leave every older run in
+    // place and repeat the same failure on every later run.
+    try {
+      await rm(absolutePath, { force: true });
+    } catch {
+      continue;
+    }
+  }
   // A symlinked run directory is removed as the link: `rm` does not follow
   // it into where it points.
   await rm(runDir(rootDir, stateDir, runId), { recursive: true, force: true });
