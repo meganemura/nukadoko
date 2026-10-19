@@ -1305,9 +1305,10 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   if (existsSync(filePath)) {
     const posixPath = relativeFilePath.split(path.sep).join("/");
     const unedited = isUneditedStub(await readFile(filePath, "utf8"), name, posixPath);
+    // No `do`: the command that was just refused is no next step until the
+    // file is gone, and running it again as written is refused again.
     const removeIt = {
-      fix: `Delete ${relativeFilePath} if it holds no step to keep, or choose another step name.`,
-      do: rerun,
+      fix: `Delete ${relativeFilePath} if it holds no step to keep, then run the same command again; or choose another step name.`,
     };
     if (!options.replace) {
       return unedited

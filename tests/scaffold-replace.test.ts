@@ -77,22 +77,19 @@ describe("nuka scaffold --replace", () => {
     const replaced = await cli(rootDir, [...COMMAND, "--replace"]);
     const plain = await cli(rootDir, COMMAND);
 
-    const rerun = "nuka scaffold i-run-greet-with --pattern 'I run greet with {name:string}' --command src/cli.ts";
     expect(replaced).toEqual({
       exitCode: 2,
       stdout: "",
       stderr:
         `refused\tfile-edited\t-\tRefusing to scaffold: ${STUB} is not what scaffold writes (someone edited it, or scaffold did not write it), so --replace leaves it\n` +
-        `  fix: Delete ${STUB} if it holds no step to keep, or choose another step name.\n` +
-        `  do: ${rerun} --replace\n`,
+        `  fix: Delete ${STUB} if it holds no step to keep, then run the same command again; or choose another step name.\n`,
     });
     expect(plain).toEqual({
       exitCode: 2,
       stdout: "",
       stderr:
         `refused\tfile-exists\t-\tRefusing to scaffold: ${STUB} already exists\n` +
-        `  fix: Delete ${STUB} if it holds no step to keep, or choose another step name.\n` +
-        `  do: ${rerun}\n`,
+        `  fix: Delete ${STUB} if it holds no step to keep, then run the same command again; or choose another step name.\n`,
     });
     expect(await readFile(path.join(rootDir, STUB), "utf8")).toBe(edited);
   });

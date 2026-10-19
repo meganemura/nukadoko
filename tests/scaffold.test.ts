@@ -173,8 +173,7 @@ describe("nuka scaffold", () => {
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe(
       "refused\tfile-exists\t-\tRefusing to scaffold: features/steps/send-invite.ts already exists\n" +
-        "  fix: Delete features/steps/send-invite.ts if it holds no step to keep, or choose another step name.\n" +
-        "  do: nuka scaffold send-invite --pattern 'I invite {email:string} to Bob'\\''s team'\n",
+        "  fix: Delete features/steps/send-invite.ts if it holds no step to keep, then run the same command again; or choose another step name.\n",
     );
     expect(await readFile(filePath, "utf8")).toBe(original);
   });

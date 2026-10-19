@@ -545,6 +545,10 @@ just until 0.1.
 
 ### Fixed
 
+- **`file-exists` and `file-edited` no longer repeat the refused command
+  as their `do:`.** Running it again as written is refused again; the
+  `fix:` now says to delete the file and then run the same command. An
+  unedited scaffold file still gets the `--replace` command as its `do:`.
 - **`nuka steps --json` and `nuka describe` say why they exit 1.** A step
   whose `needs`, `from` entry, or args or returns schema could not be read
   gave verdict `failed` and an empty `findings`. Each such part is now a
