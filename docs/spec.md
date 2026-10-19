@@ -2067,28 +2067,52 @@ wrote for itself is the one most likely to check nothing. Under
 every execution probes.
 
 `--since <git ref>` says what moved in the criteria since a base a person
-approved, such as the target branch of a pull request. Before anything
-runs, each selected scenario's own lines are compared with the same
-scenario at the commit the ref names: every Background step of its feature
-and of its Rule, its own steps with their keywords, docstrings, and data
-tables, and for a Scenario Outline row the Examples header and that row.
-The lines come from the Gherkin tree, not the file, so indentation, blank
-lines, comments, and tags never count as a change. A scenario is found at
-the ref by its Rule, its name, and which scenario of that name it is in
-the file; an Examples row by its values. Each scenario's `run.json` entry
-gets `criteria.changed_since`: `unchanged`, `changed`, or `new` (a renamed
-scenario, a row whose values changed, or a file the ref lacks), with the
-current `lines` of a changed or new one and the `step_files` its lines
-bound to. `since` names the ref, its commit, and whether the text of each
-bound step file differs from the commit's, read before the first scenario
-runs. The summary's "Criteria since" section counts the three and quotes
-each changed or new scenario, so whoever approves the change reads
-those lines and sees which step files moved under the ones that did not.
-It reports only: no flag turns a change into a failure, and the exit code
-is the run's. A ref that names no commit is refused with
-`since-ref-unknown`, and a project outside git with `since-outside-git`,
-before anything runs. Without the flag, every scenario has
-`criteria: { changed_since: null }` and `since` is `null`.
+approved, such as the target branch of a pull request, as far as the
+comparison below reaches. Before anything runs, the feature files the run
+targets are compared with the commit the ref names. A directory target
+also brings in every `.feature` file the commit holds under it, so a file
+deleted since the ref has its criteria removed; a file target compares
+that file only, and `since.compared` names the targets. A scenario's
+criteria are what decides how it runs, read from the compiled scenario
+rather than the file: every tag it carries (Feature, Rule, Scenario, and
+Examples tags, since they choose hooks, serial runs, and selection), every
+Background step of its feature and of its Rule, its own steps with their
+effective keyword (an `And` or `But` takes the keyword it continues), their
+text, their docstring's content and media type, and their data table's
+cells, and for a Scenario Outline row the Examples header and that row.
+Indentation, blank lines, comments, a docstring's delimiter, and the order
+of other scenarios never count. The comparison is of that structure, so a
+table cell that holds `|` is not two cells. A scenario is found at the ref
+by its Rule and its name; an Examples row by its header and values. When a
+name repeats, at the ref or now, the scenarios of that name are matched by
+content first; one edited scenario among them is `changed`, and when
+content cannot pair them one to one, each unpaired one is `ambiguous`,
+with a `reason`, rather than matched by position. Each scenario's
+`run.json` entry gets `criteria.changed_since`: `unchanged`, `changed`,
+`new` (a renamed scenario, a row whose values changed, or a file the ref
+lacks), `ambiguous`, or `unknown` (the file does not parse at the ref,
+with a `reason`), with the current `lines` of every scenario that is not
+unchanged and its `step_files`: the files that register the steps its
+lines bound to, the files of the parts those steps declare, and the config
+file when one of those steps needs a fixture it defines. What those files
+import is not compared. `since` names the ref, its commit, the `compared`
+targets, the `removed` criteria (each with its feature, Rule, scenario,
+and the `lines` it had at the ref), and each step file's `change`:
+`unchanged` or `changed` as `git diff` compares the file with the commit
+(so line endings and filters apply), or `untracked` when the commit does
+not hold it, read before the first scenario runs. The summary's "Criteria
+since" section counts each kind, says what was compared, quotes every
+scenario that is not unchanged and every removed criterion, and lists
+under each changed step file every scenario that names it, unchanged ones
+included, so whoever approves the change reads those lines and sees which
+step files moved under the ones that did not. It reports only: no flag
+turns a change into a failure, and the exit code is the run's. A ref that
+names no commit is refused with `since-ref-unknown`, a project outside git
+with `since-outside-git`, and any other git failure (git missing, or a
+command that fails for a reason other than a file the commit does not
+hold) with `since-git-failed`, before anything runs. Without the flag,
+every scenario has `criteria: { changed_since: null }` and `since` is
+`null`.
 
 `--env` may repeat: `nuka run --env a --env b` is one run, with one
 `run_id`, one `run.json`, one summary, and one exit code, that runs every
@@ -2342,10 +2366,12 @@ to act on the run without opening another file:
   `message`, and is the `then-probe-not-measured` note. A probe has no
   step record.
 - Every scenario has `criteria`. `changed_since` is `null` without
-  `--since`; with it, `unchanged`, `changed`, or `new`, with the current
-  `lines` of a changed or new scenario and the `step_files` its lines bound
-  to. `since` is `null` without the flag; with it, the `ref`, its `commit`,
-  and each bound step file's `file` and whether it `changed`.
+  `--since`; with it, `unchanged`, `changed`, `new`, `ambiguous`, or
+  `unknown`, with a `reason` for the last two, the current `lines` of every
+  scenario that is not unchanged, and the `step_files` it names. `since` is
+  `null` without the flag; with it, the `ref`, its `commit`, the `compared`
+  targets, the `removed` criteria, and each step file's `file` and its
+  `change` (`unchanged`, `changed`, or `untracked`).
 - `findings` holds every finding the run raised: each failed scenario, each
   probe note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
@@ -3001,8 +3027,12 @@ holds:
   `selection` (`partial` says a line target left out other scenarios of its
   file), the nukadoko version, the run id, and the start and finish times;
 - under `--since`, "Criteria since `<ref>`": how many scenarios are
-  unchanged, changed, and new, the step files that changed, and the lines
-  of each changed or new scenario in a `gherkin` block;
+  unchanged, changed, and new, how many criteria were removed (and how many
+  are ambiguous or not compared, when any are), which targets and which
+  step files were compared, the step files that changed, the lines of each
+  scenario that is not unchanged and of each removed criterion in a
+  `gherkin` block, and under each changed step file every scenario that
+  names it;
 - one table per feature file, by path, with a row per scenario in line
   order: scenario, line, one column per environment, named after it, with
   that cell's verdict (`<passed> of <n> passed` under `--repeat`), the
@@ -4023,13 +4053,18 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               could not measure (then-probe-not-measured);
                               the exit code is unchanged.
                               --since <git ref> compares each scenario's
-                              own lines and each step file it bound to with
-                              the commit the ref names: criteria.changed_since
-                              is unchanged, changed, or new, since names the
-                              step files that changed, and the summary quotes
-                              what moved. It reports only. An unknown ref
-                              (since-ref-unknown) or a project outside git
-                              (since-outside-git) is refused.
+                              criteria (tags, steps with their effective
+                              keyword, docstrings, tables, its Examples row)
+                              and the files that register its steps, their
+                              parts, and the fixtures they need with the
+                              commit the ref names: criteria.changed_since is
+                              unchanged, changed, new, ambiguous, or unknown,
+                              since lists the removed criteria and the step
+                              files that changed, and the summary quotes what
+                              moved. It reports only. An unknown ref
+                              (since-ref-unknown), a project outside git
+                              (since-outside-git), or another git failure
+                              (since-git-failed) is refused.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set, and writes

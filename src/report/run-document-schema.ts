@@ -111,7 +111,8 @@ const scenario = z.looseObject({
     .optional(),
   criteria: z
     .looseObject({
-      changed_since: z.enum(["unchanged", "changed", "new"]).nullable(),
+      changed_since: z.enum(["unchanged", "changed", "new", "ambiguous", "unknown"]).nullable(),
+      reason: z.string().optional(),
       lines: z.array(z.string()).optional(),
       step_files: z.array(z.string()).optional(),
     })
@@ -155,7 +156,13 @@ const document = z.looseObject({
     }),
   ),
   since: z
-    .looseObject({ ref: z.string(), commit: z.string(), step_files: z.array(z.looseObject({ file: z.string(), changed: z.boolean() })) })
+    .looseObject({
+      ref: z.string(),
+      commit: z.string(),
+      compared: z.array(z.string()),
+      removed: z.array(z.looseObject({ feature: z.string(), rule: z.string().nullable(), scenario: z.string(), lines: z.array(z.string()) })),
+      step_files: z.array(z.looseObject({ file: z.string(), change: z.enum(["unchanged", "changed", "untracked"]) })),
+    })
     .nullable()
     .optional(),
 });

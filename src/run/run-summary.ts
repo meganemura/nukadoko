@@ -9,6 +9,7 @@ import {
   type ComparedStep,
 } from "../report/summary/declared-vs-observed.js";
 import { hookLabel } from "../report/summary/hook-label.js";
+import { scenarioKey } from "./criteria-since.js";
 import {
   exitedProducers,
   firstErrorLine,
@@ -82,7 +83,7 @@ function renderTitle(document: RunDocument): string[] {
   const failed = document.verdicts.filter((cell) => cell.verdict === "failed").length;
   const notRun = document.verdicts.filter((cell) => cell.verdict === "not-run").length;
   const passed = document.verdicts.length - failed - notRun;
-  const rows = new Set(document.verdicts.map((cell) => `${cell.feature}\u0000${cell.line}`)).size;
+  const rows = new Set(document.verdicts.map((cell) => scenarioKey(cell.feature, cell.line))).size;
   const scope =
     document.environments.length > 1
       ? `${plural(rows, "scenario")} in ${document.environments.length} environments`
@@ -199,7 +200,7 @@ function renderFeatures(document: RunDocument): string[] {
   const named = environments.length > 1;
   const executions = new Map<string, RunScenario[]>();
   for (const scenario of document.scenarios) {
-    const key = `${scenario.feature}\u0000${scenario.line}`;
+    const key = scenarioKey(scenario.feature, scenario.line);
     const rows = executions.get(key) ?? [];
     rows.push(scenario);
     executions.set(key, rows);
@@ -207,7 +208,7 @@ function renderFeatures(document: RunDocument): string[] {
   const byFeature = new Map<string, RunVerdict[][]>();
   const rowOf = new Map<string, RunVerdict[]>();
   for (const cell of document.verdicts) {
-    const key = `${cell.feature}\u0000${cell.line}`;
+    const key = scenarioKey(cell.feature, cell.line);
     let row = rowOf.get(key);
     if (row === undefined) {
       row = [];
@@ -230,7 +231,7 @@ function renderFeatures(document: RunDocument): string[] {
     );
     for (const row of rows) {
       const first = row[0]!;
-      const ran = executions.get(`${first.feature}\u0000${first.line}`) ?? [];
+      const ran = executions.get(scenarioKey(first.feature, first.line)) ?? [];
       const cells = environments.map((environment) => verdictCell(row.find((cell) => cell.environment === environment)));
       const duration = ran.reduce((total, scenario) => total + durationOf(scenario), 0);
       const failures = environments.flatMap((environment) => {
@@ -262,36 +263,67 @@ function comparedSteps(scenarios: readonly RunScenario[]): ComparedStep[] {
 
 // What moved in the criteria since `--since`'s ref, for the person who
 // approved that base: one row per scenario (environments and repeats of it
-// counted once), the text of each changed or new one quoted in full, since
-// that text is what they are asked to approve again, and the step files
-// whose source changed under criteria that did not.
+// counted once), the text of each scenario that is not unchanged quoted in
+// full, since that text is what they are asked to approve again, the
+// criteria the ref held that are gone, and, under each step file that
+// changed, every scenario that names it, unchanged ones included, since
+// unchanged criteria over a changed step file is the case a reader would
+// otherwise not see. It says what was compared, so a partial comparison is
+// not read as the whole project's.
 function renderCriteriaSince(document: RunDocument): string[] {
   const since = document.since;
   if (since === undefined || since === null) return [];
   const byScenario = new Map<string, RunScenario>();
   for (const scenario of document.scenarios) {
-    const key = `${scenario.feature}\u0000${scenario.line}`;
+    const key = scenarioKey(scenario.feature, scenario.line);
     if (!byScenario.has(key)) byScenario.set(key, scenario);
   }
   const scenarios = [...byScenario.values()].sort((a, b) => a.feature.localeCompare(b.feature) || a.line - b.line);
   const count = (change: string): number => scenarios.filter((scenario) => scenario.criteria?.changed_since === change).length;
-  const changedFiles = since.step_files.filter((entry) => entry.changed).map((entry) => entry.file);
+  const filesWith = (change: string): string[] => since.step_files.filter((entry) => entry.change === change).map((entry) => entry.file);
+  const changedFiles = filesWith("changed");
+  const untrackedFiles = filesWith("untracked");
+  const counts = [
+    `${count("unchanged")} unchanged`,
+    `${count("changed")} changed`,
+    `${count("new")} new`,
+    `${since.removed.length} removed`,
+    ...(count("ambiguous") > 0 ? [`${count("ambiguous")} ambiguous`] : []),
+    ...(count("unknown") > 0 ? [`${count("unknown")} not compared`] : []),
+  ];
+  const fenced = (text: readonly string[]): string[] => {
+    const longestRun = Math.max(2, ...text.flatMap((line) => line.match(/`+/g) ?? []).map((run) => run.length));
+    const fence = "`".repeat(longestRun + 1);
+    return [`${fence}gherkin`, ...text, fence];
+  };
   const lines = [
     "",
     `## Criteria since ${cellCode(since.ref)} (\`${since.commit.slice(0, 7)}\`)`,
     "",
-    `${count("unchanged")} unchanged, ${count("changed")} changed, ${count("new")} new.`,
-    changedFiles.length === 0
-      ? "No step file a scenario bound to changed."
-      : `Step files changed: ${changedFiles.map((file) => cellCode(file)).join(", ")}.`,
+    `${counts.join(", ")}.`,
+    `Compared: the feature files in ${since.compared.map((target) => cellCode(target)).join(", ")} at the ref and in the working tree; a feature file outside them is not compared.`,
+    "Step files compared: the files that register the bound steps, the files of their parts, and the config file when a step needs a fixture it defines, not the files those import.",
+    changedFiles.length === 0 ? "No step file changed." : `Step files changed: ${changedFiles.map((file) => cellCode(file)).join(", ")}.`,
+    ...(untrackedFiles.length === 0 ? [] : [`Not in the ref's commit: ${untrackedFiles.map((file) => cellCode(file)).join(", ")}.`]),
   ];
+  const headings: Record<string, string> = { changed: "Changed", new: "New", ambiguous: "Ambiguous", unknown: "Not compared" };
   for (const scenario of scenarios) {
     const change = scenario.criteria?.changed_since;
-    if (change !== "changed" && change !== "new") continue;
-    const text = scenario.criteria?.lines ?? [];
-    const longestRun = Math.max(2, ...text.flatMap((line) => line.match(/`+/g) ?? []).map((run) => run.length));
-    const fence = "`".repeat(longestRun + 1);
-    lines.push("", `### ${change === "changed" ? "Changed" : "New"}: ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}`, "", `${fence}gherkin`, ...text, fence);
+    if (change === undefined || change === null || change === "unchanged") continue;
+    lines.push("", `### ${headings[change]}: ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}`, "");
+    if (scenario.criteria?.reason !== undefined) lines.push(`${cellText(scenario.criteria.reason)}.`, "");
+    lines.push(...fenced(scenario.criteria?.lines ?? []));
+  }
+  for (const removed of since.removed) {
+    const name = removed.rule === null ? removed.scenario : `${removed.rule} / ${removed.scenario}`;
+    lines.push("", `### Removed: ${cellCode(removed.feature)} ${cellText(name)}`, "", ...fenced(removed.lines));
+  }
+  for (const file of [...changedFiles, ...untrackedFiles]) {
+    lines.push("", `### Step file ${changedFiles.includes(file) ? "changed" : "not in the ref's commit"}: ${cellCode(file)}`, "");
+    for (const scenario of scenarios) {
+      if (!(scenario.criteria?.step_files ?? []).includes(file)) continue;
+      lines.push(`- ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}, criteria ${scenario.criteria?.changed_since === "unknown" ? "not compared" : scenario.criteria?.changed_since}`);
+    }
   }
   return lines;
 }

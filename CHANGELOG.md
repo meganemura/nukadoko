@@ -330,28 +330,43 @@ just until 0.1.
 ### Added
 
 - **`nuka run --since <git ref>` says what moved in the criteria since an
-  approved base.** A run proved the scenarios passed, but a reader of the
-  pull request had to diff the feature files by hand to learn which
-  criteria they were approving again. Before anything runs, each selected
-  scenario's own lines (every Background step of its feature and Rule, its
-  steps with docstrings and data tables, and an outline row's Examples
-  header and row, read from the Gherkin tree so indentation, blank lines,
-  comments, and tags do not count) are compared with the same scenario at
-  the commit the ref names, found by its Rule, its name, and which
-  scenario of that name it is; a row is found by its values.
+  approved base, as far as its comparison reaches.** A run proved the
+  scenarios passed, but a reader of the pull request had to diff the
+  feature files by hand to learn which criteria they were approving
+  again. Before anything runs, the feature files the run targets are
+  compared with the commit the ref names; a directory target also brings
+  in the `.feature` files the commit holds under it. A scenario's criteria
+  are read from the compiled scenario: its tags (Feature, Rule, Scenario,
+  and Examples), every Background step of its feature and Rule, its steps
+  with their effective keyword (`And` and `But` take the keyword they
+  continue), docstrings with their media type, and data tables, and an
+  outline row's Examples header and row. Indentation, blank lines,
+  comments, and a docstring's delimiter do not count, and the comparison
+  is of that structure, so a table cell holding `|` is not two cells. A
+  scenario is found by its Rule and its name, and scenarios of one name
+  are matched by content first; a row is found by its header and values.
   - Every scenario in `run.json` has `criteria`: `changed_since` is
-    `unchanged`, `changed`, or `new` under `--since` and `null` without it,
-    with the current `lines` of a changed or new scenario and the
-    `step_files` its lines bound to.
-  - `since` gives the `ref`, its `commit`, and each bound step file with
-    whether its source differs from the commit's; it is `null` without
-    the flag.
-  - The run summary gains "Criteria since `<ref>`": the three counts, the
-    step files that changed, and each changed or new scenario's lines in a
-    `gherkin` block.
+    `unchanged`, `changed`, `new`, `ambiguous` (scenarios of one name that
+    content cannot pair one to one), or `unknown` (the file does not parse
+    at the ref) under `--since`, and `null` without it, with a `reason`
+    for the last two, the current `lines` of every scenario that is not
+    unchanged, and its `step_files`: the files that register the steps
+    its lines bound to, the files of their parts, and the config file
+    when a step needs a fixture it defines.
+  - `since` gives the `ref`, its `commit`, the `compared` targets, the
+    `removed` criteria with the lines they had at the ref, and each step
+    file's `change`: `unchanged` or `changed` as `git diff` compares it
+    with the commit, or `untracked` when the commit does not hold it. It
+    is `null` without the flag.
+  - The run summary gains "Criteria since `<ref>`": the counts, removed
+    included, what was compared, the step files that changed, the lines of
+    each scenario that is not unchanged and of each removed criterion in a
+    `gherkin` block, and the scenarios under each changed step file.
   - It reports only, and the exit code stays the run's. A ref that names
-    no commit is refused with the new `since-ref-unknown`, and a project
-    outside git with the new `since-outside-git`.
+    no commit is refused with the new `since-ref-unknown`, whose fix names
+    the fetch a CI checkout needs, a project outside git with the new
+    `since-outside-git`, and any other git failure, a missing git binary
+    included, with the new `since-git-failed`.
 
 - **`nuka run --probe` measures whether each passed Then could have
   failed.** A pass meant only that nothing threw, so a Then whose `run`

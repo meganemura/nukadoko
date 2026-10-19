@@ -6,7 +6,7 @@ import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback
 import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
-import { loadConfig } from "../config/load-config.js";
+import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
@@ -58,8 +58,8 @@ import {
   type RunScenario,
   type RunSince,
 } from "../record/run-result.js";
-import { classifyCriteria, criteriaAtRef, criteriaOf } from "../run/criteria-since.js";
-import { changedSince, readAtCommit, resolveSince } from "../run/git-since.js";
+import { compareSince, scenarioKey, type SinceComparison } from "../run/criteria-since.js";
+import { resolveSince, SinceGitError } from "../run/git-since.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
 import {
@@ -79,7 +79,9 @@ import {
   validateFixtureDefinitions,
   validateStepFixtures,
 } from "../fixture/validate-fixtures.js";
+import type { Step } from "../step/define-step.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
+import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { asFinding, writeCheckIssueLines } from "./check.js";
 import { formatFinding, warningSink, type Finding } from "../finding/finding.js";
@@ -339,9 +341,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   if (options.since !== undefined) {
     const resolved = await resolveSince(rootDir, options.since);
     if ("problem" in resolved) {
-      return resolved.problem === "outside-git"
-        ? refused(resolved.message, "since-outside-git")
-        : refused(resolved.message, "since-ref-unknown", { do: "git log --oneline" });
+      if (resolved.problem === "outside-git") return refused(resolved.message, "since-outside-git");
+      if (resolved.problem === "git-failed") return refused(resolved.message, "since-git-failed");
+      return refused(resolved.message, "since-ref-unknown", { do: "git log --oneline" });
     }
     since = { ref: options.since, commit: resolved.commit };
   }
@@ -631,48 +633,68 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // file's text are compared with the ref before the first scenario runs,
     // so a step that edits a file mid-run does not change what the run
     // reports about the files it started from.
-    const criteriaByPickle = new Map<string, RunCriteria>();
-    const stepFileChanged = new Map<string, boolean>();
     const projectRelative = (filePath: string): string => path.relative(rootDir, path.resolve(rootDir, filePath));
-    if (since !== undefined) {
-      const atRef = new Map<string, ReadonlyMap<string, readonly string[]>>();
-      for (const { feature, pickle } of flatPickles) {
-        let before = atRef.get(feature.relativePath);
-        if (before === undefined) {
-          before = criteriaAtRef(await readAtCommit(rootDir, since.commit, feature.relativePath), feature.relativePath);
-          atRef.set(feature.relativePath, before);
+    // The files a scenario's lines name: the file that registers each step
+    // a line matched, the files of the parts that step declares, however
+    // deep, and the config file when one of those steps needs a fixture the
+    // config defines. Not what those files import.
+    const fileOfStep = new Map<unknown, string>();
+    for (const entry of vocabulary.values()) if (entry.kind === "typed") fileOfStep.set(entry.step, projectRelative(entry.filePath));
+    const configFile = resolveConfigFileName(rootDir);
+    const definedFixtures = new Set(Object.keys(config.fixtures));
+    const filesOfEntry = (entryName: string): string[] => {
+      const entry = vocabulary.get(entryName);
+      if (entry === undefined) return [];
+      const files = new Set([projectRelative(entry.filePath)]);
+      if (entry.kind === "typed") {
+        const seen = new Set<Step>();
+        const visit = (step: Step): void => {
+          if (seen.has(step)) return;
+          seen.add(step);
+          const file = fileOfStep.get(step);
+          if (file !== undefined) files.add(file);
+          for (const part of step.parts) visit(part);
+        };
+        visit(entry.step);
+        let needs: readonly string[] = [];
+        try {
+          needs = stepFixtureNames(entry.step);
+        } catch {
+          // A run() whose fixtures cannot be read names none here; the
+          // fixture check reports it.
         }
-        const now = criteriaOf(feature.gherkinDocument, pickle);
-        if (now === undefined) continue;
-        const change = classifyCriteria(before.get(now.key), now.lines);
-        criteriaByPickle.set(`${feature.relativePath}\u0000${pickle.location?.line ?? 0}`, {
-          changed_since: change,
-          ...(change === "unchanged" ? {} : { lines: now.lines }),
-        });
+        if (needs.some((name) => definedFixtures.has(name))) files.add(configFile);
       }
-      for (const entry of vocabulary.values()) {
-        const file = projectRelative(entry.filePath);
-        if (!stepFileChanged.has(file)) stepFileChanged.set(file, await changedSince(rootDir, since.commit, file));
+      return [...files];
+    };
+    let comparison: SinceComparison | undefined;
+    if (since !== undefined) {
+      try {
+        comparison = await compareSince({
+          rootDir,
+          commit: since.commit,
+          features: selected.features.map((feature) => ({ relativePath: feature.relativePath, source: feature.source })),
+          targets: [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
+          stepFiles: [...new Set([...vocabulary.keys()].flatMap(filesOfEntry))].sort((a, b) => a.localeCompare(b)),
+        });
+      } catch (error) {
+        if (error instanceof SinceGitError) return refused(`nuka run --since ${since.ref} could not read the ref: ${error.message}`, "since-git-failed");
+        throw error;
       }
     }
-    // The step files a scenario's lines bound to: the file of the step each
-    // line matched. A part a step calls is the calling step's own business
-    // and is not listed.
     const boundStepFiles = (scenario: RunScenario): string[] => {
       const files = new Set<string>();
-      for (const step of scenario.steps) {
-        const entry = step.step === null ? undefined : vocabulary.get(step.step);
-        if (entry !== undefined) files.add(projectRelative(entry.filePath));
-      }
+      for (const step of scenario.steps) if (step.step !== null) for (const file of filesOfEntry(step.step)) files.add(file);
       return [...files].sort((a, b) => a.localeCompare(b));
     };
-    const criteriaFor = (scenario: RunScenario): RunCriteria =>
-      since === undefined
-        ? { changed_since: null }
-        : {
-            ...(criteriaByPickle.get(`${scenario.feature}\u0000${scenario.line}`) ?? { changed_since: "new" as const }),
-            step_files: boundStepFiles(scenario),
-          };
+    const criteriaFor = (scenario: RunScenario): RunCriteria => {
+      if (comparison === undefined) return { changed_since: null };
+      const found = comparison.criteria.get(scenarioKey(scenario.feature, scenario.line));
+      // Every selected pickle was compared before the run started, so a
+      // scenario without criteria is a bug here, never a `new` scenario.
+      if (found === undefined) throw new Error(`${scenario.feature}:${scenario.line} ran but was not compared with the --since ref`);
+      return { ...found, step_files: boundStepFiles(scenario) };
+    };
     // Each scenario's run.json entry is built when its record arrives, from
     // the step records it cites, so a `--repeat` run never holds more than
     // one scenario's step records at a time. The lines and step names come
@@ -685,7 +707,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         lines = gherkinStepLines(feature.gherkinDocument);
         documentLines.set(feature.relativePath, lines);
       }
-      pickleLines.set(`${feature.relativePath}\u0000${pickle.location?.line ?? 0}`, pickleStepLines(pickle, lines));
+      pickleLines.set(scenarioKey(feature.relativePath, pickle.location?.line ?? 0), pickleStepLines(pickle, lines));
     }
     const runScenarios: RunScenario[] = [];
     // A scenario's evidence directory is made before it runs, so its id is
@@ -705,7 +727,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
       const built = buildRunScenario(record, {
         stepRecords,
-        stepLine: pickleLines.get(`${record.feature}\u0000${record.line}`) ?? (() => null),
+        stepLine: pickleLines.get(scenarioKey(record.feature, record.line)) ?? (() => null),
         stepName: (text) => {
           const { stepNames } = matchPickleStepText(text, patterns);
           return stepNames.length === 1 ? stepNames[0]! : null;
@@ -742,9 +764,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // added after the summary is rendered, and before the document is
     // printed. Returns the root-relative path of the summary in the
     // run directory, or `null`, and the exit code.
-    const sinceOf = (resolved: { ref: string; commit: string }): RunSince => {
+    const sinceOf = (resolved: { ref: string; commit: string }, compared: SinceComparison): RunSince => {
       const files = [...new Set(runScenarios.flatMap((scenario) => scenario.criteria?.step_files ?? []))].sort((a, b) => a.localeCompare(b));
-      return { ref: resolved.ref, commit: resolved.commit, step_files: files.map((file) => ({ file, changed: stepFileChanged.get(file) ?? true })) };
+      return {
+        ref: resolved.ref,
+        commit: resolved.commit,
+        compared: [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
+        removed: compared.removed,
+        step_files: files.map((file) => {
+          const change = compared.stepFiles.get(file);
+          if (change === undefined) throw new Error(`${file} was named by a scenario but not compared with the --since ref`);
+          return { file, change };
+        }),
+      };
     };
     const finishRun = async (
       verdict: "passed" | "failed",
@@ -792,7 +824,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         counts: countScenarios(runScenarios, verdicts),
         scenarios: runScenarios,
         verdicts,
-        since: since === undefined ? null : sinceOf(since),
+        since: since === undefined || comparison === undefined ? null : sinceOf(since, comparison),
       };
       let exitCode = verdict === "passed" ? 0 : 1;
       // sources.json first, before anything is serialized, so a failure to

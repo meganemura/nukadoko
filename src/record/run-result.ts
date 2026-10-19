@@ -107,19 +107,39 @@ export interface RunScenario {
   readonly criteria?: RunCriteria;
 }
 
-/** How a scenario's own lines (Background, steps, docstrings, tables, its
- * Examples row) compare with the same scenario at the `--since` ref. */
-export type CriteriaChange = "unchanged" | "changed" | "new";
+/** How a scenario's own criteria (its tags, steps with their effective
+ * keyword, docstrings and tables, and its Examples row) compare with the
+ * same scenario at the `--since` ref: `ambiguous` when scenarios of one
+ * name differ in content and cannot be paired, `unknown` when the ref's
+ * file does not parse. src/run/criteria-since.ts says what counts. */
+export type CriteriaChange = "unchanged" | "changed" | "new" | "ambiguous" | "unknown";
 
 export interface RunCriteria {
   /** `null` for a run without `--since`. */
   readonly changed_since: CriteriaChange | null;
-  /** The scenario's lines in the working tree, for a `changed` or `new`
-   * one: what a reader approves. */
+  /** Why an `ambiguous` or `unknown` scenario could not be decided. */
+  readonly reason?: string;
+  /** The scenario's criteria in the working tree, as a person reads them,
+   * for any scenario that is not `unchanged`: what a reader approves. */
   readonly lines?: readonly string[];
-  /** Under `--since`: the step files the scenario's lines bound to,
-   * relative to the project root. `since.step_files` says which changed. */
+  /** Under `--since`: the files that register the steps the scenario's
+   * lines bound to, the files of the parts those steps declare, and the
+   * config file when a step needs a fixture it defines, relative to the
+   * project root. `since.step_files` says which changed. */
   readonly step_files?: readonly string[];
+}
+
+/** How a step file compares with the `--since` commit, as git compares
+ * them: `untracked` when the commit does not hold it. */
+export type StepFileChange = "unchanged" | "changed" | "untracked";
+
+/** A criterion the ref held that nothing in the run matches. */
+export interface RemovedCriterion {
+  readonly feature: string;
+  readonly rule: string | null;
+  readonly scenario: string;
+  /** The criterion at the ref, as a person reads it. */
+  readonly lines: readonly string[];
 }
 
 /** The ref `nuka run --since` compared against. */
@@ -128,9 +148,14 @@ export interface RunSince {
   readonly ref: string;
   /** The commit it named when the run started. */
   readonly commit: string;
-  /** Every step file a scenario of the run bound to, relative to the
-   * project root, and whether its text differs from the commit's. */
-  readonly step_files: readonly { readonly file: string; readonly changed: boolean }[];
+  /** The run's targets, relative to the project root, without a `:line`:
+   * what was compared. A feature file outside them is not. */
+  readonly compared: readonly string[];
+  /** Criteria the ref held in the compared files that are gone. */
+  readonly removed: readonly RemovedCriterion[];
+  /** Every file a scenario's `step_files` names, and how it compares with
+   * the commit. */
+  readonly step_files: readonly { readonly file: string; readonly change: StepFileChange }[];
 }
 
 export interface RunProbe {

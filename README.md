@@ -1225,15 +1225,22 @@ schema refused the changed value) is a `then-probe-not-measured` note. It
 is a measurement, so the exit code stays the run's.
 
 `nuka run --since <git ref>` says what moved in the criteria since a base
-a person approved, such as `origin/main`. Each scenario's own lines (its
-Background, steps, docstrings, tables, and Examples row, read from the
-Gherkin tree so indentation and comments do not count) are compared with
-the same scenario at that commit, and `run.json` gives each one
-`criteria.changed_since`: `unchanged`, `changed`, or `new`. `since` lists
-each step file a scenario bound to and whether its source changed. The run
-summary's "Criteria since" section quotes every changed or new scenario,
-which is what the reader is asked to approve again. It reports only; the
-exit code stays the run's.
+a person approved, such as `origin/main`. Each scenario's criteria (its
+tags, its Background and own steps with their effective keyword,
+docstrings, and tables, and its Examples row, read from the compiled
+scenario so indentation, comments, and a docstring's delimiter do not
+count) are compared with the same scenario at that commit, and `run.json`
+gives each one `criteria.changed_since`: `unchanged`, `changed`, `new`,
+`ambiguous` (scenarios of one name that content cannot pair), or `unknown`
+(the file does not parse at the ref). `since` lists the criteria the ref
+held that are gone, what was compared (the run's targets: a directory
+target brings in the files the ref held under it), and each file that
+registers a bound step, its parts, or the fixtures it needs, with whether
+git sees it `changed` or `untracked` at the ref. The run summary's
+"Criteria since" section quotes every scenario that is not unchanged and
+every removed criterion, which is what the reader is asked to approve
+again, and lists the scenarios under each changed step file. It reports
+only; the exit code stays the run's.
 
 `nuka run --env a --env b` runs every selected scenario once in each
 environment, in one run with one run id: all of `a` first, then all of

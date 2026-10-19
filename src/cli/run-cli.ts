@@ -611,9 +611,11 @@ export async function runCli(
           type: "string",
           nargs: 1,
           describe:
-            "compare each scenario's own lines (Background, steps, docstrings, tables, its Examples row) and each step " +
-            "file it bound to with the commit a git ref names: run.json gives each scenario criteria.changed_since " +
-            "(unchanged, changed, or new), and the summary quotes what moved. Reports only; never changes the exit code",
+            "compare each scenario's criteria (its tags, its Background and own steps with their effective keyword, " +
+            "docstrings and tables, its Examples row) and the files that register its steps, their parts, and the fixtures " +
+            "they need with the commit a git ref names: run.json gives each scenario criteria.changed_since (unchanged, " +
+            "changed, new, ambiguous, or unknown) and lists the criteria the ref held that are gone, and the summary quotes " +
+            "what moved. Compares the feature files the run targets. Reports only; never changes the exit code",
         })
         .check(rejectRepeatedFlags(["concurrency", "repeat", "since"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {

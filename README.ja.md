@@ -1111,11 +1111,12 @@ probe が計測できなかった Then(走ったとき、または再実行で�
 これは計測なので、終了コードは run のものから変わりません。
 
 `nuka run --since <git ref>` は、人が承認した基点(`origin/main` など)から、受け入れ基準の何が動いたかを述べます。
-各 scenario 自身の行(Background、step、docstring、table、Examples の行)を、そのコミットの同じ scenario と比べます。
-行は Gherkin の木から読むので、インデントやコメントは数えません。
-`run.json` は各 scenario に `criteria.changed_since` を与え、値は `unchanged`、`changed`、`new` のどれかです。
-`since` は、scenario が束ねた各 step ファイルと、そのソースが変わったかどうかを並べます。
-run サマリの「Criteria since」の節は changed と new の各 scenario を引用し、読み手がもう一度承認するのはその行です。
+各 scenario の受け入れ基準(tag、実効の keyword を持つ Background と scenario 自身の step、docstring、table、Examples の行)を、そのコミットの同じ scenario と比べます。
+受け入れ基準はコンパイルした scenario から読むので、インデント、コメント、docstring の区切りは数えません。
+`run.json` は各 scenario に `criteria.changed_since` を与え、値は `unchanged`、`changed`、`new`、`ambiguous`(中身で対応づけられない、同じ名前の scenario)、`unknown`(ref でファイルが parse できない)のどれかです。
+`since` は、ref にあって今は消えた受け入れ基準、比べたもの(run の対象で、ディレクトリを対象にすると ref がその下に持っていたファイルも比べます)、そして束ねた step、その part、それが必要とする fixture を登録する各ファイルと、git から見てそれが `changed` か ref で `untracked` かを並べます。
+run サマリの「Criteria since」の節は、unchanged ではない各 scenario と消えた各受け入れ基準を引用し、読み手がもう一度承認するのはその行です。
+変わった各 step ファイルの下には、それを名指す scenario を並べます。
 これは報告するだけで、終了コードは run のものから変わりません。
 
 `nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。

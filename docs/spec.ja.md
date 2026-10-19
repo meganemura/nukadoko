@@ -1743,21 +1743,32 @@ probe は、nukadoko がこれまで問えなかった 1 つの問いに答え�
 step の `run` は書かれたとおりに信頼されており、実装したエージェントが自分のために書いた step こそ、何も確かめていない見込みが最も高いのです。
 `--concurrency` の下では各 worker が自分の scenario を probe し、`--repeat` の下ではすべての実行が probe します。
 
-`--since <git ref>` は、人が承認した基点(pull request の向かう先のブランチなど)から、受け入れ基準の何が動いたかを述べます。
-何かを実行する前に、選ばれた各 scenario 自身の行を、ref が名指すコミットの同じ scenario と比べます。
-比べるのは、その feature と Rule のすべての Background の step、keyword と docstring と data table を含む scenario 自身の step、そして Scenario Outline の行については Examples の見出しとその行です。
-行はファイルからではなく Gherkin の木から取るので、インデント、空行、コメント、tag が変わっても変更とは数えません。
-ref の側の scenario は、Rule、名前、ファイルの中でその名前の何番目の scenario か、で見つけます。
-Examples の行は、その値で見つけます。
+`--since <git ref>` は、人が承認した基点(pull request の向かう先のブランチなど)から、受け入れ基準の何が動いたかを、以下の比較が届く範囲で述べます。
+何かを実行する前に、run が対象にした feature ファイルを、ref が名指すコミットと比べます。
+対象がディレクトリなら、コミットがその下に持つすべての `.feature` ファイルも比べるので、ref の後で消したファイルの受け入れ基準は removed になります。
+対象がファイルなら、そのファイルだけを比べ、`since.compared` が対象を名指します。
+scenario の受け入れ基準は、その scenario がどう走るかを決めるもので、ファイルではなくコンパイルした scenario から読みます。
+それは、scenario が持つすべての tag(Feature、Rule、Scenario、Examples の tag で、hook、直列の実行、選択を決めます)、その feature と Rule のすべての Background の step、scenario 自身の step です。
+step は、実効の keyword(`And` と `But` は続けている keyword を取ります)、本文、docstring の中身と media type、data table のセルで比べ、Scenario Outline の行については Examples の見出しとその行も比べます。
+インデント、空行、コメント、docstring の区切り、他の scenario の順番は、変わっても変更とは数えません。
+比べるのはこの構造なので、`|` を含む表のセルが 2 つのセルと取り違えられることはありません。
+ref の側の scenario は、Rule と名前で見つけます。
+Examples の行は、見出しと値で見つけます。
+名前が ref か今のどちらかで重なるときは、その名前の scenario をまず中身で対応づけます。
+その中の 1 つだけを書き換えたなら、それは `changed` です。
+中身で 1 対 1 に対応づけられないときは、対応しない各 scenario を位置で対応づけず、`reason` を添えて `ambiguous` にします。
 各 scenario の `run.json` のエントリは `criteria.changed_since` を持ちます。
-値は `unchanged`、`changed`、`new` のどれかです(`new` は、名前を変えた scenario、値が変わった行、ref にないファイルです)。
-changed か new の scenario は現在の `lines` を、どの scenario もその行が束ねた `step_files` を持ちます。
-`since` は、ref、そのコミット、束ねた各 step ファイルの文面がそのコミットと違うかどうかを名指し、最初の scenario が走る前に読みます。
-サマリの「Criteria since」の節は 3 つを数え、changed と new の各 scenario を引用します。
+値は `unchanged`、`changed`、`new`(名前を変えた scenario、値が変わった行、ref にないファイル)、`ambiguous`、`unknown`(ref でファイルが parse できないもので、`reason` を持ちます)のどれかです。
+unchanged ではない scenario は現在の `lines` を持ち、どの scenario も `step_files` を持ちます。
+`step_files` は、その行が束ねた step を登録するファイル、その step が宣言する part のファイル、そしてその step が config の定義する fixture を必要とするときの config ファイルです。
+それらのファイルが import するものは比べません。
+`since` は、ref、そのコミット、比べた対象の `compared`、消えた受け入れ基準の `removed`(各々の feature、Rule、scenario、ref での `lines`)、各 step ファイルの `change` を名指し、最初の scenario が走る前に読みます。
+`change` は、`git diff` がファイルをコミットと比べた結果の `unchanged` か `changed` で(そのため改行コードとフィルタが効きます)、コミットがそのファイルを持たなければ `untracked` です。
+サマリの「Criteria since」の節は、それぞれの数を数え、何を比べたかを述べ、unchanged ではない各 scenario と消えた各受け入れ基準を引用し、変わった各 step ファイルの下に、それを名指すすべての scenario を unchanged のものも含めて並べます。
 そのため変更を承認する人はその行を読み、変わらなかった行の下でどの step ファイルが動いたかを見られます。
 これは報告するだけです。
 変更を失敗に変えるフラグはなく、終了コードは run のものです。
-コミットを名指さない ref は `since-ref-unknown` で、git の外のプロジェクトは `since-outside-git` で、何かを実行する前に拒否されます。
+コミットを名指さない ref は `since-ref-unknown` で、git の外のプロジェクトは `since-outside-git` で、それ以外の git の失敗(git がない、またはコミットがファイルを持たないこと以外の理由で失敗したコマンド)は `since-git-failed` で、何かを実行する前に拒否されます。
 フラグがないとき、すべての scenario は `criteria: { changed_since: null }` を持ち、`since` は `null` です。
 
 `--env` は繰り返せます。
@@ -1973,9 +1984,10 @@ run が終わったとき、最後の step record と run サマリの後に、�
   probe には step record がありません。
 - すべての scenario は `criteria` を持ちます。
   `changed_since` は、`--since` がなければ `null` です。
-  あれば `unchanged`、`changed`、`new` のどれかで、changed か new の scenario は現在の `lines` を、どれもその行が束ねた `step_files` を持ちます。
+  あれば `unchanged`、`changed`、`new`、`ambiguous`、`unknown` のどれかで、後の 2 つは `reason` を持ちます。
+  unchanged ではない scenario は現在の `lines` を、どれも名指す `step_files` を持ちます。
   `since` は、フラグがなければ `null` です。
-  あれば `ref`、その `commit`、束ねた各 step ファイルの `file` と、それが `changed` かどうかを持ちます。
+  あれば `ref`、その `commit`、比べた対象の `compared`、消えた受け入れ基準の `removed`、各 step ファイルの `file` とその `change`(`unchanged`、`changed`、`untracked`)を持ちます。
 - `findings` は、run が出したすべての所見を持ちます。
   失敗した各 scenario と、各 probe の note と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
 - `verdicts` は scenario と environment の組ごとに 1 つのセルを持ち、feature はパス順、scenario は行順、environment は与えた順に並びます。
@@ -2436,7 +2448,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - 条件。
   短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--since` のときは「Criteria since `<ref>`」。
-  unchanged、changed、new の scenario の数、変わった step ファイル、そして changed と new の各 scenario の行を `gherkin` のブロックで載せます。
+  unchanged、changed、new の scenario の数、消えた受け入れ基準の数(ambiguous か比べられなかったものがあればその数も)、比べた対象と step ファイル、変わった step ファイル、unchanged ではない各 scenario と消えた各受け入れ基準の行を `gherkin` のブロックで、そして変わった各 step ファイルの下にそれを名指すすべての scenario を載せます。
 - feature ファイルごとの表(パス順)。
   scenario ごとに 1 行を行番号順に並べ、scenario、行、environment ごとに 1 列(列名は environment の名前)のセルの断定(`--repeat` のときは `<passed> of <n> passed`)、その行のすべての実行の所要時間を載せます。
   失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
@@ -3396,13 +3408,18 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               could not measure (then-probe-not-measured);
                               the exit code is unchanged.
                               --since <git ref> compares each scenario's
-                              own lines and each step file it bound to with
-                              the commit the ref names: criteria.changed_since
-                              is unchanged, changed, or new, since names the
-                              step files that changed, and the summary quotes
-                              what moved. It reports only. An unknown ref
-                              (since-ref-unknown) or a project outside git
-                              (since-outside-git) is refused.
+                              criteria (tags, steps with their effective
+                              keyword, docstrings, tables, its Examples row)
+                              and the files that register its steps, their
+                              parts, and the fixtures they need with the
+                              commit the ref names: criteria.changed_since is
+                              unchanged, changed, new, ambiguous, or unknown,
+                              since lists the removed criteria and the step
+                              files that changed, and the summary quotes what
+                              moved. It reports only. An unknown ref
+                              (since-ref-unknown), a project outside git
+                              (since-outside-git), or another git failure
+                              (since-git-failed) is refused.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set, and writes

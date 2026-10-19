@@ -91,7 +91,7 @@ If none is true, ask what this is supposed to do before writing anything.
    it. On green, `--probe` notes a Then that passes with a capture changed.
 5. **Commit before the run you report**, push, and open the pull
    request; CI posts the run summary (`docs/ci.md` in the package), and
-   `nuka run --since <base>` quotes each scenario that changed since it.
+   `nuka run --since <base>` quotes each criterion that moved or went.
 6. **Decide where the feature lives**, in the same pull request: the
    product's core path moves into `featuresDir`, which `nuka run` runs on
    every commit; a feature for one change stays outside it, named in
