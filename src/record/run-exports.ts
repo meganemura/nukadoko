@@ -44,8 +44,9 @@ import { allureHistoryRelativePath, runRelativeDir } from "./state-layout.js";
 //
 // A line is also followed only for something `nuka report` could have
 // written: a regular file (by lstat, so neither a directory nor a link),
-// or nothing at all yet, and never `export/allure-history.jsonl`, which
-// Allure writes and `nuka report` never does. A directory line once made
+// or nothing at all yet, and never a file named `allure-history.jsonl`
+// (in any case, through any alias): that is the history Allure writes,
+// and `nuka report` never does. A directory line once made
 // `nuka clean` remove the directory whole and made retention fail with
 // EISDIR on every run, so no old run was removed again.
 //
@@ -121,13 +122,16 @@ export function readOwnedExports(rootDir: string, stateDir: string, runId: strin
   const exportDir = exportDirOf(rootDir, stateDir);
   const files = readExportsManifest(manifestPath)
     .map((line) => ({ line, absolutePath: path.resolve(rootDir, line) }))
-    .filter(({ absolutePath }) => isWrittenExport(rootDir, stateDir, exportDir, absolutePath));
+    .filter(({ absolutePath }) => isWrittenExport(stateDir, exportDir, absolutePath));
   return { manifestPath, files };
 }
 
-function isWrittenExport(rootDir: string, stateDir: string, exportDir: string, absolutePath: string): boolean {
+function isWrittenExport(stateDir: string, exportDir: string, absolutePath: string): boolean {
   if (!removableWithin(exportDir, absolutePath)) return false;
-  if (absolutePath === path.resolve(rootDir, allureHistoryRelativePath(stateDir))) return false;
+  // By name, not by path: `export/alias/allure-history.jsonl` with
+  // `alias -> .` is the history file under another spelling, and a
+  // case-insensitive file system holds it under any case.
+  if (path.basename(absolutePath).toLowerCase() === path.basename(allureHistoryRelativePath(stateDir)).toLowerCase()) return false;
   try {
     return lstatSync(absolutePath).isFile();
   } catch (error) {

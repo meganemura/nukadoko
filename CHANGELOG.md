@@ -545,6 +545,11 @@ just until 0.1.
 
 ### Fixed
 
+- **An exports manifest line never names `allure-history.jsonl`, through
+  any alias.** A line such as `.nukadoko/export/alias/allure-history.jsonl`,
+  with `alias` a symlink to `.`, passed the exact-path check, so `nuka
+  clean`, retention, and a second render deleted the Allure history. A
+  line is now refused by its file name, compared case-insensitively.
 - **The `unknown-environment` fix lists `default`.** `--env default` is
   always accepted, and the fix now names it among the names `--env`
   takes, or offers it when the config defines no environment.

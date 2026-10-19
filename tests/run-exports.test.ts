@@ -124,6 +124,15 @@ describe("readOwnedExports", () => {
     expect(readOwnedExports(rootDir, ".nukadoko", "run-1").files.map((file) => file.line)).toEqual([path.join(".nukadoko", "export", "own.md")]);
   });
 
+  it("never owns allure-history.jsonl through a symlinked alias or in another case", () => {
+    writeFileSync(path.join(rootDir, ".nukadoko", "export", "allure-history.jsonl"), "{}\n");
+    symlinkSync(".", path.join(rootDir, ".nukadoko", "export", "alias"));
+    const lines = [path.join(".nukadoko", "export", "alias", "allure-history.jsonl"), path.join(".nukadoko", "export", "sub", "Allure-History.JSONL")];
+    writeFileSync(path.join(rootDir, ".nukadoko", "export", "sub", "Allure-History.JSONL"), "{}\n");
+    writeFileSync(runExportsManifestPath(rootDir, ".nukadoko", "run-1"), `${lines.join("\n")}\n`);
+    expect(readOwnedExports(rootDir, ".nukadoko", "run-1").files).toEqual([]);
+  });
+
   it("owns nothing through a manifest that is a symlink out of the run directory", () => {
     writeFileSync(path.join(rootDir, "forged"), `${path.join(".nukadoko", "export", "sub", "a.json")}\n`);
     symlinkSync(path.join(rootDir, "forged"), runExportsManifestPath(rootDir, ".nukadoko", "run-1"));

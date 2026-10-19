@@ -162,7 +162,8 @@ questions: "what happens if this is deleted" and "who gets to change it":
   is not itself a symlink: a run directory copied in from elsewhere does
   not get to name a project file for removal. The line must also name
   what `nuka report` could have written: a regular file, not a directory
-  or a symlink, and never `export/allure-history.jsonl`. Retention skips
+  or a symlink, and never a file named `allure-history.jsonl`, in any
+  case and under any directory alias. Retention skips
   any other line and goes on removing old runs.
   `nuka clean [--dry-run] [--json]` is the whole-category operation that
   remains. It cleans all three categories together. `--dry-run` prints the

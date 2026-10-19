@@ -219,6 +219,19 @@ describe("nuka clean", () => {
     expect(existsSync(path.join(exportDir, "own.md"))).toBe(false);
   });
 
+  it("keeps allure-history.jsonl when a manifest names it through a symlinked alias", async () => {
+    const exportDir = path.join(stateDir(rootDir), "export");
+    await mkdir(exportDir, { recursive: true });
+    await writeFile(path.join(exportDir, "allure-history.jsonl"), '{"kept":true}\n');
+    await symlink(".", path.join(exportDir, "alias"));
+    await mkdir(path.join(stateDir(rootDir), "runs", "run-iii"), { recursive: true });
+    await writeFile(path.join(stateDir(rootDir), "runs", "run-iii", "exports"), `${path.join(".nukadoko", "export", "alias", "allure-history.jsonl")}\n`);
+    const stdout = createCaptureSink();
+    expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+    expect(stdout.text()).toBe(`${path.join(".nukadoko", "runs", "run-iii")}\n`);
+    expect(existsSync(path.join(exportDir, "allure-history.jsonl"))).toBe(true);
+  });
+
   it("removes a manifest-named file whose name starts with two dots, since it is inside export/", async () => {
     await mkdir(path.join(stateDir(rootDir), "export"), { recursive: true });
     await writeFile(path.join(stateDir(rootDir), "export", "..messages.ndjson"), "line1\n");
