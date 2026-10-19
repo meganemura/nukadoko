@@ -156,9 +156,10 @@ there is not checked and not run, and the skip reports nothing.
 
 Push the feature and its steps and open the pull request. CI runs the
 feature and posts the run summary on it (`docs/ci.md` in the nukadoko
-package has the workflow). A person reads the feature in the diff and the
-summary beside it, and approving the pull request is the sign-off. Nothing
-else is written or committed for it. Whether the criteria still hold later
+package has the workflow); `--since <base>` adds what moved since the
+approved base. A person reads the feature and the summary: the run is the
+evidence, and the team records the approval where it records approvals.
+nukadoko writes or commits nothing else for it. Whether the criteria still hold later
 is a question for the next CI run, not for the old summary, and a failed
 run that a later run fixed is history the pull request can show.
 

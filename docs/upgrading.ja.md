@@ -504,7 +504,7 @@ Allure と messages の emitter は既定で無効になりました。
 
 **`nuka accept` は無くなり、run サマリがそれを置き換えます。**
 それが書いた記録を残し続けたプロジェクトはありませんでした。
-run サマリの横で pull request を承認することは同じ主張(「このコミットで green」)をし、forge がそれをコミットに結び付けます。
+run サマリが同じ主張(「このコミットで green」)を、そのコミットに結び付いた証跡として運び、承認そのものはチームが承認を記録する場所に記録されます。
 すべての `nuka run` がそのサマリを書くようになりました。
 pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります。
 やることは次のとおりです。
@@ -516,7 +516,8 @@ pull request に投稿する方法は [docs/ci.ja.md](ci.ja.md) にあります�
   `nuka run <features> --summary <path>` を実行し、そのファイルを pull request にコメントする step を続けます([docs/ci.ja.md](ci.ja.md) の workflow にあります)。
 - **feature に sign-off の記録があるかを見る PR の検査を置き換えます。**
   変更された各 feature の隣に `<feature>.*.md` のファイルを探すジョブや、`nuka tend --fail-on feature-never-signed` を実行するジョブには、もう確かめるものがありません。
-  レビュアーは差分の中の `.feature` と pull request 上の run サマリを読み、pull request の承認が sign-off になります。
+  レビュアーは差分の中の `.feature` と pull request 上の run サマリを読みます。
+  run が証跡であり、承認をどこに記録するかはチームのプロセスです(docs/spec.ja.md の「レビュー」を参照)。
   削除された code(`feature-never-signed`、`signed-feature-unscanned`、`signoff-condition-mismatch`、`signoff-feature-changed`、`signoff-feature-missing`、`signoff-record-old-format`、`signoff-record-unreadable`、`signoff-result-invalid`、`signoff-step-missing`)のどれかを付けた `nuka tend --fail-on` は、何も解析する前に 1 で終わります(0.16.1 の次のリリースからは 2 で終わります)。
   stderr はその code を名指し、run サマリが置き換えたと述べます。
   フラグを外すか、`nuka tend` がまだ報告する code でゲートしてください。

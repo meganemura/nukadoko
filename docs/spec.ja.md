@@ -75,12 +75,12 @@ nukadoko は意図的に、所有する範囲を最小限にとどめていま�
 | Gherkin の構文(Background、Scenario Outline、tables、docstrings、tags) | `@cucumber/gherkin`(feature を平坦な「pickle」にコンパイルする公式パーサ) |
 | Step のパターンマッチング(`{string}`、`{int}`、カスタム parameter type) | `@cucumber/cucumber-expressions` |
 | 見やすいレポート | Allure(nukadoko は `allure-results` を出力するのみで、HTML のレンダリングは行いません) |
-| 「何が何を証明するか」の承認 | git(feature と step 定義の PR レビュー、CODEOWNERS) |
+| 「何が何を証明するか」の承認と、それをどこに記録するか | チーム自身のプロセス(pull request のレビュー、CODEOWNERS、変更チケット、監査ログ) |
 | **型付き step の契約** | **nukadoko** |
 | **実行と計測(record)** | **nukadoko** |
 | **Environment、secret** | **nukadoko** |
 | **キーワードの意味論(Then は mutate してはならない)** | **nukadoko** |
-| **pull request が運ぶ run サマリ** | **nukadoko** |
+| **run サマリ: 何が走ったかの証跡と、承認された基点から何が動いたか** | **nukadoko** |
 
 ## 課題
 
@@ -1752,7 +1752,7 @@ Examples の行は、その値で見つけます。
 changed か new の scenario は現在の `lines` を、どの scenario もその行が束ねた `step_files` を持ちます。
 `since` は、ref、そのコミット、束ねた各 step ファイルの文面がそのコミットと違うかどうかを名指し、最初の scenario が走る前に読みます。
 サマリの「Criteria since」の節は 3 つを数え、changed と new の各 scenario を引用します。
-そのため pull request の読み手はその行を承認し、変わらなかった行の下でどの step ファイルが動いたかを見られます。
+そのため変更を承認する人はその行を読み、変わらなかった行の下でどの step ファイルが動いたかを見られます。
 これは報告するだけです。
 変更を失敗に変えるフラグはなく、終了コードは run のものです。
 コミットを名指さない ref は `since-ref-unknown` で、git の外のプロジェクトは `since-outside-git` で、何かを実行する前に拒否されます。
@@ -2761,13 +2761,16 @@ state directory の外へ `--out` で書いたレポートは呼び出し側の�
 ## レビュー
 
 変更が受け入れ基準を満たすかどうかは人が決めます。
-nukadoko はその人に、どちらも pull request の中にある 2 つの読み物を渡します。
-差分の中の feature ファイルと、CI がその横に投稿する run サマリです(「Records」の run サマリの説明を参照)。
+nukadoko はその人に 2 つの読み物を渡します。
+feature ファイルと run サマリです(「Records」の run サマリの説明を参照)。
 feature は、何が合意されたかをレビュアー自身の言葉で述べます。
-サマリは、何が、どのコミットで、どの条件で実行され、何が計測されたかを述べます。
-pull request の承認が sign-off です。
-nukadoko はその承認の記録を別に書きませんし、必要としません。
-forge がすでに CI のチェックと承認を 1 つのコミットに結び付け、両方を pull request とともに保ち、後の変更は新しい差分として見せるからです。
+run はその証跡であり、サマリはその証跡を述べます。
+これらの scenario がこのコミットで、この条件のもとで、この計測とともに走ったこと、そして `nuka run --since <ref>` のもとでは、承認された基点から受け入れ基準とそれが結び付く step ファイルの何が動いたかです。
+nukadoko が述べるのはこの主張だけです。
+誰が承認するかは決めず、承認も記録しません。
+承認をどこに記録するかはチームのプロセスで、nukadoko の外にあります。
+pull request のレビューも、変更チケットも、監査ログも、サマリが名指すコミットと run id でその run を指せます。
+後の変更は、自分の「Criteria since」の節を持つ新しい run として現れます。
 
 green の run は「この scenario はコミット X で通った」という過去形の主張です。
 サマリもそのように述べます。
@@ -2808,13 +2811,15 @@ agent は、チケットの受け入れ基準に対して次の手順を実行�
 5. green になるまで `nuka run <feature>` します。
    デバッグ中は `<feature>:<line>` の run でかまいません。
    その run サマリは選んだ scenario しか扱いません。
-6. pull request を開きます。
-   CI が feature を実行し、run サマリをそこに投稿します(`docs/ci.ja.md` を参照)。
-7. 人が差分の中の feature と、その横のサマリを読みます。
-   pull request の承認が sign-off です。
+6. pull request などで、変更をレビューに出します。
+   CI が feature を実行し、run サマリをその横に公開します(`docs/ci.ja.md` を参照)。
+   `--since <base>` には、最後に承認された基点を名指します。
+7. 人が feature とサマリを読みます。
+   run が証跡です。
+   その人が承認をどこに記録するかは、チームのプロセスです。
 
 手順 1 から 4 に作業があります。
-新しい型付き step と feature は通常の pull request の題材です。
+新しい型付き step と feature は通常のレビューの題材です。
 手順 5 と 6 は機械的です。
 手順 7 は、nukadoko が人に残す 1 つの判断です。
 scenario がチケットの求めたことを述べているか、そしてサマリが記述する run が数えるべき run かどうかです。
@@ -3943,7 +3948,8 @@ step record の `error.kind` は「Records」に一覧があります。
 - **M3(reporting interop)**: scenario 実行のための cucumber messages(NDJSON)ストリーム(移行チームの既存 formatter、JUnit ベースの CI、HTML レポートを動き続けさせる互換面)と、旗艦ダッシュボードとしての allure-results。
   どちらも最初は run の間に書かれていましたが、いまは `nuka report` が終わった run から描き出します。
 - **M4(sign-off)**: green の run を feature の隣にコミットする記録として凍結するコマンドとして実装され、その後削除されました。
-  その記録を残し続けたプロジェクトは無く、pull request 上の run サマリが同じ主張を運び、forge がそれをコミットに結び付けるからです(「レビュー」を参照)。
+  その記録を残し続けたプロジェクトは無かったからです。
+  記録が述べていた主張はいま run サマリが、コミットと run id に結び付いた証跡として運び、承認そのものはチームが承認を記録する場所に記録されます(「レビュー」を参照)。
 - **M5(skills)**: nukadoko が同梱する skill と、`nuka skill path` です。
   CLI は意図的に小さな動詞の集まりです。
   skill は、それらを agent が指示なしに従えるワークフローに変えるものであり、そのどれもエンジンを変えません。

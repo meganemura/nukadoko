@@ -760,6 +760,17 @@ just until 0.1.
   translation settled (adoption, state directory, pin exactly) and the
   heading rule for the new file.
 
+- **The run is the evidence; the approval stays outside nukadoko.** The
+  README, the spec's "Review" section, docs/ci.md, the acceptance skill,
+  the todo example, llms.txt, and the package description no longer say
+  that approving the pull request is the sign-off. They say what nukadoko
+  claims: this run is the evidence for these criteria, at this commit,
+  under these conditions, and, with `nuka run --since <ref>`, here is what
+  moved since the approved base. Where a team records its approval (a
+  pull request review, a change ticket, an audit log) is its own process,
+  and nukadoko writes no approval record. The refusal for a removed
+  sign-off code under `nuka tend --fail-on` says the same.
+
 ## 0.17.0 — 2026-10-17
 
 ### Breaking

@@ -4,7 +4,7 @@
 
 > Implementations are generated now. What checks them cannot be. Typed step
 > contracts checked before anything runs, step records the tool measured,
-> and a run summary the pull request carries, between natural-language
+> and a run summary that is the evidence, between natural-language
 > acceptance criteria and what actually ran.
 
 nukadoko runs Gherkin scenarios under typed step contracts and writes a
@@ -13,9 +13,12 @@ relying on an agent's report. The criteria remain in the language used by
 the people who set them.
 Everything between those sentences and the system under test is typed,
 checked before execution, and reviewable in a diff. Every run ends in a
-Markdown run summary that CI posts on the pull request: a person reads the
-`.feature` in the diff and the summary beside it, and approving the pull
-request is the sign-off.
+Markdown run summary, and the run is the evidence for its criteria: these
+scenarios ran at this commit, under these conditions, and, with
+`nuka run --since <ref>`, this is what moved in the criteria since the
+base a person approved. A person reads the `.feature` and that summary.
+Where their approval is recorded, a pull request review, a change ticket,
+or an audit log, is the team's choice and stays outside nukadoko.
 
 ## Install
 
@@ -546,7 +549,7 @@ has no typed contract, so `nuka check` has nothing here to hold a feature
 line against, and `nuka do` refuses to run one by name at all.
 
 `check` is the cheap static gate; `run` leaves the step record trail and
-the run summary a pull request carries; `tend` is the periodic one, and the
+the run summary that is the run's evidence; `tend` is the periodic one, and the
 only one you are meant to *not* run before every change.
 
 ## Why this exists now
@@ -960,9 +963,9 @@ nukadoko ships two skills following the
 Claude Code, Copilot, Cursor, Codex and Gemini CLI can all load them:
 
 - **acceptance.** Takes a ticket's acceptance criteria through to a
-  pull request a person can approve: read the vocabulary, scaffold what's
-  missing, write the feature, run it green, and hand over the feature and
-  its run summary.
+  feature and the run that is its evidence: read the vocabulary, scaffold
+  what's missing, write the feature, run it green, and hand over the
+  feature and its run summary for a person to review.
 - **migration.** Moves a cucumber-js suite across in two stages, and
   explains which differences are the point rather than listing recipes.
 
@@ -1306,9 +1309,10 @@ reading a directory of step records, which nobody does.
 
 ## Who reads what
 
-A person who approves without writing code reads two things on a PR: the
-`.feature` in the diff, to check it says what the ticket meant, and the
-run summary, to check what ran and at which commit. Everything under
+A person who approves without writing code reads two things: the
+`.feature`, to check it says what the ticket meant, and the run summary,
+to check what ran, at which commit, and what moved since the base they
+approved. Everything under
 `.nukadoko/` and every `nuka` verb belongs to the agent or to CI. Every
 `nuka run` writes that summary as Markdown: the commit, each environment,
 the browser, one table per feature with each scenario's verdict in each
@@ -1316,10 +1320,11 @@ environment, its duration, and its failing step, a closing section naming any st
 `mutates: false` while measured making a write, and the command that reruns
 each failed scenario. On GitHub Actions it lands on the job's summary page
 with no configuration, and `nuka report --format markdown --out <path>`
-writes a copy a CI step can post as a PR comment ([docs/ci.md](docs/ci.md)). Approving the PR is the
-sign-off: the forge already binds the CI check and the approval to one
-commit, so nukadoko writes no record of its own beside the feature (see
-[Review](docs/spec.md#review)).
+writes a copy a CI step can post as a PR comment ([docs/ci.md](docs/ci.md)). nukadoko records the
+evidence, not the approval: the summary names the commit it describes, so
+an approval recorded anywhere (a pull request review, a change ticket, an
+audit log) can point at the run it approved, and nukadoko writes no
+approval record of its own (see [Review](docs/spec.md#review)).
 
 ## Design
 

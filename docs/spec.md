@@ -77,12 +77,12 @@ nukadoko deliberately owns as little as possible:
 | Gherkin syntax (Background, Scenario Outline, tables, docstrings, tags) | `@cucumber/gherkin`: the official parser compiles features into flat "pickles" |
 | Step pattern matching (`{string}`, `{int}`, custom parameter types) | `@cucumber/cucumber-expressions` |
 | Pretty reports | Allure: nukadoko emits `allure-results`, never renders HTML |
-| Approval of what-would-prove-what | git: PR review of features and step definitions, CODEOWNERS |
+| Approval of what-would-prove-what, and where it is recorded | the team's own process: a pull request review, CODEOWNERS, a change ticket, an audit log |
 | **Typed step contracts** | **nukadoko** |
 | **Execution and measurement (records)** | **nukadoko** |
 | **Environments and secrets** | **nukadoko** |
 | **Keyword semantics (Then must not mutate)** | **nukadoko** |
-| **The run summary a pull request carries** | **nukadoko** |
+| **The run summary: the evidence of what ran, and what moved since the approved base** | **nukadoko** |
 
 ## Problem
 
@@ -2078,7 +2078,7 @@ current `lines` of a changed or new one and the `step_files` its lines
 bound to. `since` names the ref, its commit, and whether the text of each
 bound step file differs from the commit's, read before the first scenario
 runs. The summary's "Criteria since" section counts the three and quotes
-each changed or new scenario, so the reader of the pull request approves
+each changed or new scenario, so whoever approves the change reads
 those lines and sees which step files moved under the ones that did not.
 It reports only: no flag turns a change into a failure, and the exit code
 is the run's. A ref that names no commit is refused with
@@ -3376,14 +3376,19 @@ The repository contains the durable artifacts: feature files and typed steps.
 ## Review
 
 A person decides whether a change meets its acceptance criteria, and nukadoko
-gives that person two things to read, both in the pull request: the feature
-file in the diff, and the run summary that CI posts beside it (see the run
-summary under "Records"). The feature says what was agreed, in the
-reviewer's own words. The summary says what ran, at which commit, under
-which condition, and what was measured. Approving the pull request is the
-sign-off. nukadoko writes no separate record of that approval and needs none:
-the forge already binds the CI check and the approval to one commit, keeps
-both with the pull request, and shows any later change as a new diff.
+gives that person two things to read: the feature file, and the run
+summary (see the run summary under "Records"). The feature says what was
+agreed, in the reviewer's own words. The run is the evidence for it, and
+the summary states that evidence: these scenarios ran at this commit,
+under these conditions, with these measurements, and, under
+`nuka run --since <ref>`, this is what moved in the criteria and in the
+step files they bind to since the base that was approved. nukadoko makes
+that claim and no other: it does not decide who approves, and it does
+not record the approval. Where approval is recorded is the team's
+process, outside nukadoko: a pull request review, a change ticket, or an
+audit log can each point at the run by the commit and run id the summary
+names, and a later change shows up as a new run with its own "Criteria
+since" section.
 
 A green run is a past-tense claim, "these scenarios passed at commit X", and
 the summary states it that way: the commit, whether the tree had uncommitted
@@ -3429,13 +3434,14 @@ An agent follows this process for a ticket's acceptance criteria:
    nowhere else is exactly what it does not reach.
 5. `nuka run <feature>` until green. A `<feature>:<line>` run is fine while
    debugging; its summary covers only the scenarios it selected.
-6. Open the pull request. CI runs the feature and posts the run summary on
-   it (see `docs/ci.md`).
-7. A person reads the feature in the diff and the summary beside it.
-   Approving the pull request is the sign-off.
+6. Open the change for review, such as a pull request. CI runs the
+   feature and publishes the run summary beside it (see `docs/ci.md`),
+   with `--since <base>` naming the base that was last approved.
+7. A person reads the feature and the summary. The run is the evidence;
+   where the person records their approval is the team's process.
 
 Steps 1 through 4 contain the work. New typed steps and the feature are
-ordinary pull request material. Steps 5 and 6 are mechanical. Step 7 is the
+ordinary review material. Steps 5 and 6 are mechanical. Step 7 is the
 one judgment nukadoko leaves to a person: whether the scenarios say what the
 ticket asked for, and whether the run that the summary describes is the one
 that counts.
@@ -4602,8 +4608,9 @@ would be running against glue it never actually read.
   run at first; `nuka report` now renders each from a finished run.
 - **M4 (sign-off)**: implemented as a command that froze a green run into a
   committed record beside the feature, then removed: no project kept the
-  records, and the run summary on the pull request carries the same claim,
-  bound to the commit by the forge (see "Review").
+  records. The run summary now carries the claim a record made, as
+  evidence bound to its commit and run id, and the approval itself is
+  recorded wherever the team records approvals (see "Review").
 - **M5 (skills)**: the skills nukadoko ships, and `nuka skill path`. The
   CLI is deliberately a set of small verbs. A skill turns them into a
   workflow an agent can follow without being told, and none of it changes

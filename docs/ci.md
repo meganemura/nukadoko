@@ -248,8 +248,12 @@ Five things the workflow above leaves to the team, each small.
 
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
-  the diff and the summary beside it, and approving the pull request is the
-  sign-off (see "Review" in [docs/spec.md](spec.md#review)).
+  the diff and the summary beside it, which is the evidence of what ran at
+  that commit. Running `nuka run --since origin/<base branch>` (with the
+  base branch fetched) adds what moved in the criteria since the approved
+  base. Where the approval is recorded, the pull request review or
+  anything else, is the team's process; nukadoko records the evidence, not
+  the approval (see "Review" in [docs/spec.md](spec.md#review)).
   `nuka report --format markdown --out <path>` writes the same Markdown of
   the newest run to a file, and one more step posts it:
 

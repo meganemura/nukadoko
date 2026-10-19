@@ -133,6 +133,6 @@ export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map([
     "signoff-step-missing",
   ].map((code) => [
     code,
-    "was removed with `nuka accept`. A person now reads the run summary `nuka run` writes, on the pull request, and approving the pull request is the sign-off (docs/upgrading.md)",
+    "was removed with `nuka accept`. A person now reads the run summary `nuka run` writes, which is the run's evidence, and the team records the approval where it records approvals (docs/upgrading.md)",
   ] as const),
 ]);

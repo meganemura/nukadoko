@@ -346,8 +346,9 @@ on the pull request, and under GitHub Actions the job's own summary page
 shows it with no configuration (`docs/ci.md` has the workflow). A reviewer
 who writes no code then reads two things in the PR: the `.feature` in the
 diff, to check it says what the ticket meant, and the run summary beside
-it, to check what ran. Approving the pull request is the sign-off; nothing
-else is written or committed for it.
+it, the evidence of what ran at that commit. nukadoko records that
+evidence and not the approval: where the reviewer's approval is recorded
+is the team's process, and nukadoko writes or commits nothing else for it.
 
 To tie a feature to a ticket, write the ticket in the feature itself; there
 is no separate field, on purpose. A tag or a description line above the

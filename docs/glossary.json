@@ -17,6 +17,16 @@
       "ja": "受け入れ基準",
       "note": "以前 受け入れ条件 と割れていたが統一済み"
     },
+    {
+      "en": ["evidence (of a run)", "the run is the evidence"],
+      "ja": "証跡",
+      "note": "run と run サマリが受け入れ基準について述べる主張(どの commit で、どの条件で、何が走ったか)。step record の evidence フィールドは英語のまま(keep_english の evidence)"
+    },
+    {
+      "en": ["approved base"],
+      "ja": "承認された基点",
+      "note": "nuka run --since <ref> が名指す、人が最後に承認した commit。人が承認した基点、とも書く"
+    },
     { "en": ["problem"], "ja": "課題", "context": "節タイトル" },
     { "en": ["running"], "ja": "実行", "context": "scenario の実行を指す節タイトル" },
     {
@@ -400,7 +410,7 @@
       "why": "mutates フィールド名と地続きの動詞として常に英語。「状態を mutate する」のように活用させずに使う"
     },
     { "term": "pull request", "why": "GitHub などの forge の機能名。docs/ci.ja.md と docs/spec.ja.md で英語のまま使っている。レビュアーが feature の差分と run サマリを読む場所" },
-    { "term": "sign-off", "why": "pull request の承認を指す語。以前は nuka accept が書く記録の呼び名だったが、そのコマンドは削除済み。docs/upgrading の移行の説明と、承認が sign-off だと言う文でだけ使う。常にハイフン付きの英語" },
+    { "term": "sign-off", "why": "承認を指す語。以前は nuka accept が書く記録の呼び名だったが、そのコマンドは削除済み。nukadoko は承認を記録せず、承認をどこに記録するかはチームのプロセスなので、docs/upgrading の移行の説明でだけ使う。常にハイフン付きの英語" },
     {
       "term": "Export",
       "why": "docs/spec.md \"Artifacts\" の成果物分類表にある行名。allure-results/ と messages.ndjson を指す。TypeScript の export キーワード(小文字、常に英語のまま)とは別の語で、行名としては大文字のまま訳さない"

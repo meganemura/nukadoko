@@ -215,7 +215,10 @@ jobs:
 
 - **pull request のコメントとしての run サマリ。**
   ジョブのサマリページにはすでに表示されますが、レビュアーが読むのは pull request です。
-  差分の中の feature とその横のサマリを読み、pull request の承認が sign-off になります(docs/spec.ja.md の「レビュー」を参照)。
+  差分の中の feature と、その横のサマリを読みます。
+  サマリは、その commit で何が走ったかの証跡です。
+  `nuka run --since origin/<base branch>` を(基点のブランチを fetch したうえで)走らせると、承認された基点から受け入れ基準の何が動いたかも加わります。
+  承認をどこに記録するか(pull request のレビューなど)はチームのプロセスで、nukadoko が記録するのは証跡であり承認ではありません(docs/spec.ja.md の「レビュー」を参照)。
   `nuka report --format markdown --out <path>` は最新の run の同じ Markdown をファイルに書き、もう 1 つの step がそれを投稿します。
 
   ```yaml

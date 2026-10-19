@@ -1,6 +1,6 @@
 # nukadoko
 
-> Typed step contracts for Gherkin. `nuka check` tells a scenario wrong before it runs. `nuka run` executes it and writes step records the tool measured, not ones an agent reported, plus a Markdown run summary a pull request carries. A person approves the pull request, and that is the sign-off.
+> Typed step contracts for Gherkin. `nuka check` tells a scenario wrong before it runs. `nuka run` executes it and writes step records the tool measured, not ones an agent reported, plus a Markdown run summary: the run is the evidence for its criteria, at its commit, under its conditions, and, with `--since <ref>`, of what moved since the approved base. Where a person records approval stays outside nukadoko.
 
 It is not an untyped free-form agent runner, and it is not a substitute for human review: a person reads the `.feature` in the diff and the run summary.
 
@@ -51,7 +51,7 @@ A command that stops before it has anything to report (a bad flag, a missing tar
 
 ## Documentation
 
-- [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md): a requirement to a pull request a person approves. `references/` beside it holds the rules a scenario follows (`scenario-rules.md`) and each procedure: writing steps, step files, steps that check something, parts, writing the feature, running, diagnosing, exploring, fixtures, evidence, maintenance, and starting from prose. `references/examples/` holds three finished projects (a CLI, an HTTP API, a stateful workflow) with the output of real runs.
+- [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md): a requirement to a scenario and the run that is its evidence, for a person to review. `references/` beside it holds the rules a scenario follows (`scenario-rules.md`) and each procedure: writing steps, step files, steps that check something, parts, writing the feature, running, diagnosing, exploring, fixtures, evidence, maintenance, and starting from prose. `references/examples/` holds three finished projects (a CLI, an HTTP API, a stateful workflow) with the output of real runs.
 - [skills/migration/SKILL.md](skills/migration/SKILL.md): moving a cucumber-js or Playwright Test suite across, in two stages.
 - [docs/spec.md](docs/spec.md): the design. "Typed steps" for `defineStep`; "Running" for scenarios and single steps; "Records" for every file a run writes; "Environments and secrets"; "Review" for what a person reads; "Tending"; "CLI summary" for every command and flag; "Out of scope (honest limits)".
 - [docs/ci.md](docs/ci.md): the GitHub Actions job and the pull request comment.

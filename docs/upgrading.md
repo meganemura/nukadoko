@@ -621,9 +621,9 @@ Compat behaviour a project can notice, one redaction change, and one evidence-na
 The Allure and messages emitters are off by default now, which a project that reads either export has to act on.
 
 **`nuka accept` is gone, and the run summary replaces it.** No project kept
-the records it wrote, and approving a pull request beside its run summary
-makes the same claim ("green at this commit"), bound to the commit by the
-forge. Every `nuka run` now writes that summary; [docs/ci.md](ci.md) shows
+the records it wrote, and the run summary carries the same claim ("green
+at this commit") as evidence bound to its commit; the approval itself is
+recorded wherever the team records approvals. Every `nuka run` now writes that summary; [docs/ci.md](ci.md) shows
 how to post it on the pull request. What to do:
 
 - **Remove `nuka accept` from scripts and CI.** The command no longer
@@ -637,7 +637,9 @@ how to post it on the pull request. What to do:
   looked for a `<feature>.*.md` file beside each changed feature, or ran
   `nuka tend --fail-on feature-never-signed`, has nothing left to check.
   The reviewer now reads the `.feature` in the diff and the run summary on
-  the pull request, and approving the pull request is the sign-off. `nuka
+  the pull request; the run is the evidence, and where the approval is
+  recorded is the team's process (see "Review" in
+  [docs/spec.md](spec.md#review)). `nuka
   tend --fail-on` with any of the removed codes (`feature-never-signed`,
   `signed-feature-unscanned`, `signoff-condition-mismatch`,
   `signoff-feature-changed`, `signoff-feature-missing`,

@@ -1,15 +1,15 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a Gherkin scenario a person approves on a pull request, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first.
+description: Use when turning a requirement into a Gherkin scenario and the run that is its evidence, for a person to review, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first.
 compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka tend).
 license: MIT
 ---
 
 # nukadoko acceptance loop
 
-A person approves a change by reading the feature file in the pull
-request's diff and the run summary CI posts beside it; approving is the
-sign-off. The feature is written before the implementation it judges,
+A person approves a change by reading the feature file and the run
+summary: the run is the evidence, and where the approval is recorded is
+the team's process. The feature is written before the implementation it judges,
 from the criteria and never from the program's output, which is what
 makes a green run evidence rather than agreement. This file is the order
 of work: open the reference a step names when you reach it.

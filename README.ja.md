@@ -2,7 +2,7 @@
 
 > 実装は、いま生成されるようになった。
 > それを検査するものは、そうであってはならない。
-> 自然言語の受け入れ基準と、実際に走ったものとのあいだをつなぐ、何かが走る前に検査される型付き step の契約、ツールが計測する step record、そして pull request が運ぶ run サマリ。
+> 自然言語の受け入れ基準と、実際に走ったものとのあいだをつなぐ、何かが走る前に検査される型付き step の契約、ツールが計測する step record、そして証跡となる run サマリ。
 
 > 原文は README.md。
 > 相違があれば原文が正。
@@ -11,8 +11,10 @@ nukadoko は、型付き step の契約のもとで Gherkin の scenario を実�
 この record は agent の報告に頼らず、ツールが計測します。
 受け入れ基準は、それを定めた人たちが使う言語のまま残ります。
 その文と検証対象のシステムとのあいだにあるものはすべて型を持ち、実行前に検査され、diff でレビューできます。
-どの run も、CI が pull request に投稿する Markdown の run サマリで終わります。
-人は差分の中の `.feature` とその横のサマリを読み、pull request の承認が sign-off になります。
+どの run も Markdown の run サマリで終わり、run はその受け入れ基準の証跡です。
+これらの scenario がこの commit で、この条件のもとで走ったこと、そして `nuka run --since <ref>` を使えば、人が承認した基点から受け入れ基準の何が動いたかを示します。
+人は `.feature` とそのサマリを読みます。
+その承認をどこに記録するか(pull request のレビュー、変更チケット、監査ログ)はチームが選ぶことで、nukadoko の外にあります。
 
 ## Install
 
@@ -516,7 +518,7 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 ただし compat の step には型付きの契約がなく、`nuka check` にはここで feature の行を突き合わせる相手がありません。
 `nuka do` は、そうした step を名前で実行することを一切拒否します。
 
-`check` は安価な静的ゲートであり、`run` は step record の証跡と pull request が運ぶ run サマリを残し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
+`check` は安価な静的ゲートであり、`run` は step record の証跡と、run の証跡である run サマリを残し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
 
 ## Why this exists now
 
@@ -883,7 +885,7 @@ step record は実行が何をしたかを示しますが、assertion がいま�
 
 nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 2 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
 
-- **acceptance** はチケットの受け入れ基準を、人が承認できる pull request まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、feature とその run サマリを渡します)。
+- **acceptance** はチケットの受け入れ基準を、feature とその証跡となる run まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、人がレビューできるよう feature とその run サマリを渡します)。
 - **migration** は cucumber-js のスイートを 2 段階で移行させ、どの違いがレシピではなく要点なのかを説明します。
 
 ```sh
@@ -1181,16 +1183,17 @@ description のないスキーマフィールドは、ファイルを見る人�
 
 ## 誰が何を読むか
 
-コードを書かずに承認する人が PR で読むのは 2 つのものです。
-diff の中の `.feature` を読んで、チケットの意図どおりに書かれているかを確かめます。
-run サマリを読んで、何がどの commit で走ったかを確かめます。
+コードを書かずに承認する人が読むのは 2 つのものです。
+`.feature` を読んで、チケットの意図どおりに書かれているかを確かめます。
+run サマリを読んで、何がどの commit で走ったか、そして自分が承認した基点から何が動いたかを確かめます。
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
 `nuka run` は毎回そのサマリを Markdown で書きます。
 commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
 GitHub Actions では設定なしでジョブのサマリページに載り、`nuka report --format markdown --out <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
 
-PR の承認が sign-off です。
-forge がすでに CI のチェックと承認を 1 つの commit に結び付けるので、nukadoko は feature の隣に独自の記録を書きません([レビュー](docs/spec.ja.md#レビュー)を参照)。
+nukadoko が記録するのは証跡であり、承認ではありません。
+サマリは自分が述べる commit を名指すので、どこに記録した承認(pull request のレビュー、変更チケット、監査ログ)も、承認した run を指せます。
+nukadoko は承認の記録を自分では書きません([レビュー](docs/spec.ja.md#レビュー)を参照)。
 
 ## Design
 

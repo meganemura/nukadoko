@@ -100,7 +100,7 @@ describe("nuka tend --fail-on", () => {
       expect(stdout.text()).toBe("");
       expect(stderr.text()).toBe(
         `refused\tfail-on-unknown-code\t-\t--fail-on: "${code}" was removed with \`nuka accept\`. A person now reads the run summary \`nuka run\` writes, ` +
-          "on the pull request, and approving the pull request is the sign-off (docs/upgrading.md).\n" +
+          "which is the run's evidence, and the team records the approval where it records approvals (docs/upgrading.md).\n" +
           "  do: nuka tend\n",
       );
     }

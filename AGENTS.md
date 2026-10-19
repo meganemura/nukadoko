@@ -6,8 +6,10 @@ Project context for agent sessions working in this repository.
 
 nukadoko is an agent-first engine that runs Gherkin: typed step contracts
 checked before anything runs, tool-measured execution records (step
-records), and a run summary the pull request carries, so the person
-approving it reads the `.feature` in the diff and what ran beside it. The
+records), and a run summary that is the evidence: what ran, at which
+commit, under which conditions, and what moved in the criteria since the
+approved base. The person approving reads the `.feature` and that
+evidence; where the approval is recorded stays outside nukadoko. The
 design source of truth is `docs/spec.md` — read it before changing behavior.
 
 **What it is for.** Implementations are increasingly generated: someone
@@ -39,9 +41,9 @@ under docs/spec.md "Compat steps"). Of M3+, the Allure emitter and the
 cucumber-messages emitter, both agent skills, and compat gap detection in
 `nuka check` (the migration skill's prerequisite) are all implemented,
 closing out M1-M5. Sign-off (M4) shipped as `nuka accept` and was later
-removed: no project kept the records it wrote, and approving the pull
-request beside its run summary makes the same claim, bound to the commit by
-the forge. M6 (chained arguments) is
+removed: no project kept the records it wrote, and the run summary now
+carries the same claim as evidence bound to its commit, while the approval
+is recorded wherever the team records approvals. M6 (chained arguments) is
 implemented too: `from` on `defineStep`, the binding-order check `nuka
 check` and `nuka run` share, `nuka do --use`, and `used` naming the step
 beside each step record. M7 (tending) is in: `nuka tend`, for what is rotting
