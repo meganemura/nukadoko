@@ -1,4 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { shownTargetPath } from "../feature/feature-arg-read.js";
+import { createOutDir, outTargetProblem, type OutKind } from "./report-out.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
@@ -102,8 +104,22 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   let manifestRefused = false;
   const outPath = options.out === undefined ? undefined : path.resolve(rootDir, options.out);
 
+  // Where the render goes is checked before anything is read, so a target
+  // that cannot hold it is refused at once rather than after the render.
+  const shown = (absolute: string): string => shownTargetPath(rootDir, path.relative(rootDir, absolute));
+  const outKind: OutKind = format === "allure" ? "dir" : "file";
+  const outTarget = outPath ?? (format === "allure" ? path.join(rootDir, allureResultsRelativeDir(stateDir!)) : undefined);
+  if (outTarget !== undefined) {
+    const problem = outTargetProblem(outTarget, outKind, shown);
+    if (problem !== null) return refuse(sinks, problem, "report-out-invalid", undefined, notices);
+  }
+
   const output = produce();
   if ("refusal" in output) return refuse(sinks, output.refusal.message, output.refusal.code, undefined, notices);
+  if (outTarget !== undefined) {
+    const problem = createOutDir(outKind === "dir" ? outTarget : path.dirname(outTarget), shown);
+    if (problem !== null) return refuse(sinks, problem, "report-out-invalid", undefined, notices);
+  }
   return deliver(output);
 
   // Each format only produces its output: one text, or a directory of

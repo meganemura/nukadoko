@@ -545,6 +545,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka report --out` refuses a target it cannot write, at once.**
+  `--format allure --out /proc/x` spun at full CPU forever inside Node's
+  recursive `mkdir`, a directory where a file goes was `unexpected-error`,
+  and a FIFO blocked the render. Each is now the new `report-out-invalid`
+  refusal, which says what is in the way, before the run is read. A
+  missing directory on the way is still created, one component at a time.
 - **A missing target outside the project is named by its absolute path.**
   `nuka run` and `nuka check` printed `/tmp/x.feature` as
   `../../../../tmp/x.feature`. A target inside the project is still

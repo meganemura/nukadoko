@@ -946,7 +946,8 @@ export async function runCli(
           nargs: 1,
           describe:
             "where to write: a file for markdown and messages (stdout without it), a directory for allure " +
-            "(<stateDir>/export/allure-results without it)",
+            "(<stateDir>/export/allure-results without it); a missing directory on the way is created, and " +
+            "anything else in the way (a directory where a file goes, a FIFO, a file above it) is refused with report-out-invalid",
         })
         .option("json", {
           type: "boolean",

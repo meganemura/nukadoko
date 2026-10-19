@@ -2875,6 +2875,9 @@ run の後に描き出せば、1 つの run を別の形式や別のディレク
 
 result の出力先は `.nukadoko/export/allure-results/`、または `--out` が名指すディレクトリです。
 相対の `--out` はプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
+`--out` までの途中にないディレクトリは、呼び出し側がそのパスを名指したので作ります。
+それ以外のものが行く手にあれば、run を読む前に `report-out-invalid` で拒否します。
+Markdown や messages がファイルを書く場所にあるディレクトリ、Allure がディレクトリを書く場所にあるファイル、FIFO などの特殊なファイル、通常のファイルの下のパスです。
 run ディレクトリを渡さない `nuka report` は最新の run を描き出し、run ディレクトリを引数に渡せばその run を描き出します。
 その run がこのプロジェクトの run であれば、`<stateDir>/export/` の下に書いた各ファイルはその run の exports manifest に記され、retention が run と一緒に消します。
 同じ run を同じディレクトリへ描き直すと、前回その run を描き出したときにそこへ書いたファイルと、manifest のその行を先に消すため、ディレクトリには各 scenario が 1 つずつ残り、manifest は各ファイルを 1 度だけ名指します。
@@ -3453,7 +3456,10 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               whose sources.json is corrupt or of another
                               version (run-sources-invalid). A
                               render that left out part of the run exits
-                              1 with report-incomplete
+                              1 with report-incomplete. A missing
+                              directory on the way to --out is created;
+                              anything else in the way is refused
+                              (report-out-invalid)
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               --env as on nuka run; each call starts clean.

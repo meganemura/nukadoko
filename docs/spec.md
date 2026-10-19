@@ -3515,6 +3515,8 @@ Rendering after the run also lets one run be rendered again, in another format o
 
 The results go to `.nukadoko/export/allure-results/`, or to the directory `--out` names.
 A relative `--out` is resolved against the project root, and an absolute one is used as given.
+A missing directory on the way to `--out` is created, since the caller named the path.
+Anything else in the way is refused with `report-out-invalid` before the run is read: a directory where Markdown or messages writes a file, a file where Allure writes a directory, a FIFO or another special file, or a path under a regular file.
 `nuka report` with no run directory renders the newest run; a run directory as its argument renders that run.
 When the run is one of this project's runs, each file written under `<stateDir>/export/` is noted in that run's exports manifest, so retention removes it with the run.
 Rendering the same run into the same directory again first removes the files the last render of that run wrote there, and their lines in the manifest, so the directory holds one copy of each scenario and the manifest names each file once.
@@ -4104,7 +4106,10 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               whose sources.json is corrupt or of another
                               version (run-sources-invalid). A
                               render that left out part of the run exits
-                              1 with report-incomplete
+                              1 with report-incomplete. A missing
+                              directory on the way to --out is created;
+                              anything else in the way is refused
+                              (report-out-invalid)
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               --env as on nuka run; each call starts clean.
