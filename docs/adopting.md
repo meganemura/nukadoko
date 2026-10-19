@@ -66,7 +66,9 @@ Decide the optional flags now. `nuka init` refuses to run again once
   [A server you start yourself](../README.md#a-server-you-start-yourself).
 
 A CommonJS project (no `"type": "module"`) gets `nukadoko.config.mts`
-instead; its step files also need `.mts`.
+instead, and `nuka scaffold` writes its step files as `.mts`. A `.ts`
+step file works there too, with a `MODULE_TYPELESS_PACKAGE_JSON` warning
+from Node each time it loads.
 
 ## 3. Write the first feature
 
@@ -146,8 +148,10 @@ step that no option covers, write `run` yourself; `nuka steps` and
 npm run test:scenarios
 ```
 
+npm's first line names your package and its version:
+
 ```text
-> test:scenarios
+> <name>@<version> test:scenarios
 > nuka run
 
 scenario 1/1  features/greet.feature:3  greets by name
@@ -200,7 +204,9 @@ Every `nuka run` writes one directory under `.nukadoko/runs/`:
   `http.jsonl`) sit beside it.
 - `scenarios/<id>/` holds a scenario's own evidence, when it wrote any.
 - `sources.json` is the feature text the run parsed, and `exports` lists
-  what `nuka report` wrote from this run.
+  the files `nuka report` wrote from this run under
+  `.nukadoko/export/`, which retention removes with the run. A report
+  written anywhere else is not listed.
 
 By default nukadoko keeps the newest 20 runs (`retention.runs`). `nuka clean`
 deletes them. Do not commit `.nukadoko/`: traces and screenshots are not
@@ -241,7 +247,8 @@ Commit `features/`, `nukadoko.config.ts`, and the changes to
 
 - A coding agent loads the acceptance skill
   ([skills/acceptance/SKILL.md](../skills/acceptance/SKILL.md)).
-  `nuka skill path` prints the copy that matches your installed version.
+  `nuka skill path` prints the `skills/` directory of your installed
+  version, which holds that copy.
 - A project with a cucumber-js suite brings it in by switching one
   import: [docs/migration.md](migration.md).
 - What `nuka check` catches before anything runs:

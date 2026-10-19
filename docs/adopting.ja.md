@@ -64,8 +64,8 @@ next: read node_modules/nukadoko/llms.txt, written for an agent: the loop, every
 - `--server "<command>" --server-url <url>` は、request を送る scenario ごとにサーバを起動する fixture を書きます。
   [A server you start yourself](../README.ja.md#a-server-you-start-yourself) を参照してください。
 
-CommonJS のプロジェクト(`"type": "module"` がないもの)では、代わりに `nukadoko.config.mts` が書かれます。
-その場合、step ファイルも `.mts` にする必要があります。
+CommonJS のプロジェクト(`"type": "module"` がないもの)では、代わりに `nukadoko.config.mts` が書かれ、`nuka scaffold` は step ファイルを `.mts` で書きます。
+`.ts` の step ファイルもそこで動きますが、読み込むたびに Node が `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
 
 ## 3. 最初の feature を書く
 
@@ -141,8 +141,10 @@ ok: no issues found
 npm run test:scenarios
 ```
 
+npm の最初の行は、パッケージの名前とバージョンを名指します。
+
 ```text
-> test:scenarios
+> <name>@<version> test:scenarios
 > nuka run
 
 scenario 1/1  features/greet.feature:3  greets by name
@@ -187,7 +189,9 @@ scenario が失敗すると、stderr にその step、エラー、step record、
   引数、バリデーション済みの結果、そしてツールが観測したもの(`runCommand` が起動したプロセスなど)を持ちます。
   evidence のファイル(trace、スクリーンショット、`http.jsonl`)はその隣に置かれます。
 - `scenarios/<id>/` は、scenario が自分の evidence を書いたときにだけ、それを持ちます。
-- `sources.json` は run が読んだ feature のテキストで、`exports` はこの run から `nuka report` が書いたものの一覧です。
+- `sources.json` は run が読んだ feature のテキストで、`exports` はこの run から `nuka report` が `.nukadoko/export/` の下に書いたファイルの一覧です。
+  retention は run と一緒にそれらを消します。
+  ほかの場所に書いたレポートは一覧に入りません。
 
 既定では、nukadoko は新しいほうから 20 個の run を残します(`retention.runs`)。
 `nuka clean` はそれらを消します。
@@ -224,7 +228,7 @@ workflow の全体、ブラウザを使う場合、run ディレクトリのア�
 ## 次に読むもの
 
 - coding agent は acceptance の skill([skills/acceptance/SKILL.md](../skills/acceptance/SKILL.md))を読み込みます。
-  `nuka skill path` は、インストールした版に合うコピーの場所を出力します。
+  `nuka skill path` は、インストールした版の `skills/` ディレクトリを出力し、そこにそのコピーがあります。
 - cucumber-js のスイートを持つプロジェクトは、import を 1 つ切り替えて取り込みます。
   [docs/migration.ja.md](migration.ja.md) を参照してください。
 - 何かが実行される前に `nuka check` が捕まえるもの: [Wrong before it runs](../README.ja.md#wrong-before-it-runs)。
