@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, lutimesSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { mkdir, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -311,6 +311,49 @@ describe("applyRetention", () => {
 
       await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
       expect(existsSync(victim)).toBe(true);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("never removes a project file a forged manifest names, by its spelling, through a symlinked directory, or through a symlinked manifest", async () => {
+    await mkdir(abs(stateDir, "export"), { recursive: true });
+    await writeFile(abs("victim.txt"), "victim");
+    await mkdir(abs("src"), { recursive: true });
+    await writeFile(abs("src", "app.ts"), "app");
+    await writeFile(abs("forged-manifest"), "victim.txt\n");
+    // export/evil is inside export/ by its spelling and the project root once followed.
+    symlinkSync(rootDir, abs(stateDir, "export", "evil"));
+    await writeEnded("run-old-a", "2026-08-01T00:00:00Z");
+    await writeFile(runExportsManifestPath(rootDir, stateDir, "run-old-a"), `victim.txt\n${path.join(stateDir, "export", "evil", "src", "app.ts")}\n`);
+    await writeEnded("run-old-b", "2026-08-02T00:00:00Z");
+    symlinkSync(abs("forged-manifest"), runExportsManifestPath(rootDir, stateDir, "run-old-b"));
+    await seedRun("run-new", "2026-09-01T00:00:00Z");
+
+    const outcome = await applyRetention({ rootDir, stateDir, policy, now, currentRun: current });
+    expect(outcome.runsRemoved).toBe(2);
+    expect(existsSync(inRun("run-old-a"))).toBe(false);
+    expect(existsSync(inRun("run-old-b"))).toBe(false);
+    expect(readFileSync(abs("victim.txt"), "utf8")).toBe("victim");
+    expect(readFileSync(abs("src", "app.ts"), "utf8")).toBe("app");
+    expect(readFileSync(abs("forged-manifest"), "utf8")).toBe("victim.txt\n");
+  });
+
+  it("removes a symlinked run directory as the link, and nothing its manifest names", async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "nukadoko-retention-linked-"));
+    try {
+      await mkdir(abs(stateDir, "export"), { recursive: true });
+      await writeFile(abs(stateDir, "export", "kept.md"), "kept");
+      await writeFile(path.join(outside, "exports"), `${path.join(stateDir, "export", "kept.md")}\n`);
+      await writeFile(path.join(outside, "run.json"), "{}");
+      await mkdir(abs(stateDir, "runs"), { recursive: true });
+      symlinkSync(outside, inRun("run-linked"));
+      const old = new Date("2026-08-01T00:00:00Z");
+      lutimesSync(inRun("run-linked"), old, old);
+
+      await applyRetention({ rootDir, stateDir, policy: { runs: 1, adHocDays: 7 }, now, currentRun: current });
+      expect(readFileSync(abs(stateDir, "export", "kept.md"), "utf8")).toBe("kept");
+      expect(readdirSync(outside).sort()).toEqual(["exports", "run.json"]);
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }

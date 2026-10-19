@@ -526,6 +526,21 @@ just until 0.1.
 
 ### Fixed
 
+- **Retention, `nuka clean`, and `nuka report` remove only export files
+  that really sit inside `export/`, and refuse a symlinked run directory.**
+  A run directory copied into `<stateDir>/runs/` could list any project
+  file in its `exports` manifest, and retention deleted that file when it
+  dropped the run; a symlinked manifest was followed, and a directory
+  symlink under `export/` passed the old check by its spelling. One helper
+  now reads a manifest for all three: the manifest is read only when it is
+  a file of a run directory that is not a symlink, and a line is followed
+  only when its parent directories, symlinks resolved, stay inside
+  `export/`. A render notes only the files it wrote under `export/`.
+  `nuka report` refuses a run directory under `runs/` that is a symlink
+  with `run-invalid`, since every containment check takes the run
+  directory as its root; a run directory named by a path outside `runs/`
+  is read with its real target as that root.
+
 - **A printed command line quotes a word that starts with `=`.**
   `do:` and `rerun` lines left such a word bare, and zsh, the default
   macOS shell, reads an unquoted `=name` as the path of the command

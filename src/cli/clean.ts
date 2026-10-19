@@ -1,8 +1,8 @@
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
-import { readExportsManifest, RUN_EXPORTS_FILE_NAME } from "../record/run-exports.js";
-import { allureResultsRelativeDir, doRelativeDir, exportRelativeDir, isInsideDir, runsRelativeDir } from "../record/state-layout.js";
+import { readOwnedExports } from "../record/run-exports.js";
+import { allureResultsRelativeDir, doRelativeDir, isInsideDir, runsRelativeDir } from "../record/state-layout.js";
 import type { Finding } from "../finding/finding.js";
 import { formatEnvelope, refuse } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -131,11 +131,11 @@ async function exists(filePath: string): Promise<boolean> {
  * exports manifest names that is still there, inside `export/` and outside
  * `allure-results/`. An empty `allure-results/` is what the previous clean
  * left behind, so listing it would make every second clean report a path.
- * A manifest line that leaves `export/` is not followed: a manifest is a
- * file in the run directory, and a clean deletes only what nukadoko writes
- * there. */
+ * A manifest line that leaves `export/`, through a symlink or by its
+ * spelling, is not followed, and neither is the manifest of a symlinked run
+ * directory (src/record/run-exports.ts's `readOwnedExports`): a clean
+ * deletes only what nukadoko writes there. */
 async function buildExportPlan(rootDir: string, stateDir: string): Promise<ExportPlan> {
-  const exportDir = path.resolve(rootDir, exportRelativeDir(stateDir));
   const resultsRelative = allureResultsRelativeDir(stateDir);
   const resultsDir = path.resolve(rootDir, resultsRelative);
   const resultsDirExists = await exists(resultsDir);
@@ -148,9 +148,8 @@ async function buildExportPlan(rootDir: string, stateDir: string): Promise<Expor
     // No runs: no manifest to read.
   }
   for (const runName of runNames) {
-    for (const relativePath of readExportsManifest(path.join(rootDir, runsRelativeDir(stateDir), runName, RUN_EXPORTS_FILE_NAME))) {
-      const absolutePath = path.resolve(rootDir, relativePath);
-      if (!isInsideDir(exportDir, absolutePath) || absolutePath === resultsDir || isInsideDir(resultsDir, absolutePath)) continue;
+    for (const { absolutePath } of readOwnedExports(rootDir, stateDir, runName).files) {
+      if (absolutePath === resultsDir || isInsideDir(resultsDir, absolutePath)) continue;
       if (await exists(absolutePath)) paths.add(path.relative(rootDir, absolutePath));
     }
   }

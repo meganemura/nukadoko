@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { exportDirOf, isSymlinkedRunDir, removableWithin, staysWithin } from "./contained-path.js";
 import { runRelativeDir } from "./state-layout.js";
 
 // Responsibility: which export files were written for one run, kept as an
@@ -31,6 +32,15 @@ import { runRelativeDir } from "./state-layout.js";
 // Root-relative paths, not results-dir-relative: one run can be rendered
 // into more than one directory, and a removal must target where each file
 // actually is.
+//
+// Every reader that removes or replaces what a manifest names goes through
+// `readOwnedExports`. A run directory can be copied in from elsewhere, so
+// its manifest is not trusted to name only what `nuka report` wrote: a
+// line is followed only when it resolves, through every symlink, to a file
+// inside `<stateDir>/export/`, and the manifest itself only when it is a
+// file of a run directory that is not a symlink. The alternative refused
+// was the lexical project-root check retention had, which let a copied run
+// delete any project file its manifest named.
 //
 // Not a run record. The manifest carries no status, no timing, and no
 // scenario ids; those live in the run's run.json.
@@ -82,6 +92,36 @@ export function readExportsManifest(filePath: string): string[] {
     }
   }
   return [...seen];
+}
+
+export interface OwnedExports {
+  /** The manifest path, or `null` when it was refused: the run directory
+   * is a symlink under `<stateDir>/runs/`, or the manifest resolves
+   * outside the run directory. */
+  readonly manifestPath: string | null;
+  /** The lines that name a file inside `<stateDir>/export/`, each with its
+   * absolute path. */
+  readonly files: readonly { readonly line: string; readonly absolutePath: string }[];
+}
+
+/** The files run `runId`'s manifest names that this tool may remove or
+ * replace. A refused manifest owns nothing. */
+export function readOwnedExports(rootDir: string, stateDir: string, runId: string): OwnedExports {
+  const dir = runDir(rootDir, stateDir, runId);
+  const manifestPath = path.join(dir, RUN_EXPORTS_FILE_NAME);
+  if (isSymlinkedRunDir(rootDir, stateDir, dir) || !staysWithin(dir, manifestPath)) return { manifestPath: null, files: [] };
+  const exportDir = exportDirOf(rootDir, stateDir);
+  const files = readExportsManifest(manifestPath)
+    .map((line) => ({ line, absolutePath: path.resolve(rootDir, line) }))
+    .filter(({ absolutePath }) => removableWithin(exportDir, absolutePath));
+  return { manifestPath, files };
+}
+
+/** Whether a file `nuka report` wrote belongs in a manifest: only a file
+ * inside `<stateDir>/export/` is ever removed through one, so only such a
+ * file is noted. */
+export function isExportFile(rootDir: string, stateDir: string, absolutePath: string): boolean {
+  return removableWithin(exportDirOf(rootDir, stateDir), absolutePath);
 }
 
 /** Removes every line of the manifest that names one of

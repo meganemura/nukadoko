@@ -1,9 +1,9 @@
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { compareNewestFirst, rankRunsNewestFirst, type RunStart } from "./newest-run.js";
-import { readExportsManifest, RUN_EXPORTS_FILE_NAME, runDir } from "./run-exports.js";
+import { readOwnedExports, runDir } from "./run-exports.js";
 import { readEndedRuns } from "./run-result.js";
-import { doRelativeDir, isInsideDir, runsRelativeDir } from "./state-layout.js";
+import { doRelativeDir, runsRelativeDir } from "./state-layout.js";
 
 // Responsibility: what leaves the state directory on its own, and when.
 // Applied at the end of every `nuka run` (src/cli/run.ts). The unit is a
@@ -36,10 +36,11 @@ import { doRelativeDir, isInsideDir, runsRelativeDir } from "./state-layout.js";
 // Export files are removed only through a manifest. A results directory
 // can be shared with another tool's Allure output, so a file nothing here
 // wrote is never touched, however old; `nuka clean` is the operation for a
-// directory that predates manifests. A manifest line that resolves outside
-// the project root is skipped as well: `nuka report --out` can point above
-// the project, and a removal that leaves the project is not one this tool
-// makes on its own.
+// directory that predates manifests. A manifest line is followed only when
+// it resolves, through every symlink, inside `<stateDir>/export/`
+// (src/record/run-exports.ts's `readOwnedExports`): a run directory can be
+// copied in from elsewhere, and its manifest is not trusted to name only
+// what `nuka report` wrote.
 
 export interface RetentionPolicy {
   readonly runs: number;
@@ -140,15 +141,10 @@ export interface RetentionOutcome {
 /** Removes one run directory whole, after the export files its manifest
  * lists. */
 async function removeRunDir(rootDir: string, stateDir: string, runId: string): Promise<void> {
-  const dir = runDir(rootDir, stateDir, runId);
-  for (const relativePath of readExportsManifest(path.join(dir, RUN_EXPORTS_FILE_NAME))) {
-    const absolutePath = path.resolve(rootDir, relativePath);
-    // A manifest is this tool's own file, but a removal that could reach
-    // outside the project is still refused rather than trusted.
-    if (!isInsideDir(rootDir, absolutePath)) continue;
-    await rm(absolutePath, { force: true });
-  }
-  await rm(dir, { recursive: true, force: true });
+  for (const { absolutePath } of readOwnedExports(rootDir, stateDir, runId).files) await rm(absolutePath, { force: true });
+  // A symlinked run directory is removed as the link: `rm` does not follow
+  // it into where it points.
+  await rm(runDir(rootDir, stateDir, runId), { recursive: true, force: true });
 }
 
 export async function applyRetention(options: ApplyRetentionOptions): Promise<RetentionOutcome> {

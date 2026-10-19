@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -180,6 +180,23 @@ describe("nuka clean", () => {
     expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
     expect(stdout.text()).toBe(`${path.join(".nukadoko", "runs", "run-ddd")}\n`);
     expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
+  });
+
+  it("does not follow a manifest line that leaves export/ through a symlinked directory, nor a symlinked manifest", async () => {
+    await mkdir(path.join(stateDir(rootDir), "export"), { recursive: true });
+    await symlink(rootDir, path.join(stateDir(rootDir), "export", "evil"));
+    await writeFile(path.join(rootDir, "keep.txt"), "keep");
+    await writeFile(path.join(rootDir, "forged-manifest"), `${path.join(".nukadoko", "export", "evil", "keep.txt")}\nkeep.txt\n`);
+    await mkdir(path.join(stateDir(rootDir), "runs", "run-fff"), { recursive: true });
+    await writeFile(path.join(stateDir(rootDir), "runs", "run-fff", "exports"), `${path.join(".nukadoko", "export", "evil", "nukadoko.config.ts")}\n`);
+    await mkdir(path.join(stateDir(rootDir), "runs", "run-ggg"), { recursive: true });
+    await symlink(path.join(rootDir, "forged-manifest"), path.join(stateDir(rootDir), "runs", "run-ggg", "exports"));
+    const stdout = createCaptureSink();
+    expect(await runCli(["clean"], { rootDir, stdout, stderr: createCaptureSink() })).toBe(0);
+    expect(stdout.text()).toBe(`${path.join(".nukadoko", "runs", "run-fff")}\n${path.join(".nukadoko", "runs", "run-ggg")}\n`);
+    expect(existsSync(path.join(rootDir, "nukadoko.config.ts"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "keep.txt"))).toBe(true);
+    expect(existsSync(path.join(rootDir, "forged-manifest"))).toBe(true);
   });
 
   it("removes a manifest-named file whose name starts with two dots, since it is inside export/", async () => {

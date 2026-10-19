@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -148,6 +148,35 @@ describe("nuka report on an edited run directory", () => {
       new RegExp(`^failed\\treport-incomplete\\t-\\texports of run ${runId} resolves outside the run directory, so this render is not noted in it$`, "m"),
     );
     expect(readFileSync(victim, "utf8")).toBe("keep\n");
+  });
+
+  it("keeps a project file that this project's own exports manifest names through a symlinked directory under export/", async () => {
+    expect((await cli(["run", "--no-check", "features/passing.feature"])).exitCode).toBe(0);
+    const runId = latestRunJson(rootDir).run_id as string;
+    writeFileSync(path.join(rootDir, "keep.txt"), "keep\n");
+    const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
+    mkdirSync(resultsDir, { recursive: true });
+    symlinkSync(rootDir, path.join(resultsDir, "evil"));
+    writeFileSync(path.join(rootDir, ".nukadoko", "runs", runId, "exports"), `${path.join(".nukadoko", "export", "allure-results", "evil", "keep.txt")}\n`);
+    const allure = await cli(["report", "--format", "allure"]);
+    expect(allure.exitCode).toBe(0);
+    expect(readFileSync(path.join(rootDir, "keep.txt"), "utf8")).toBe("keep\n");
+  });
+
+  it("refuses a run directory under runs/ that is a symlink, and reads nothing through it", async () => {
+    const copy = await copiedRun((stepDir) => stepDir, []);
+    const linked = path.join(rootDir, ".nukadoko", "runs", "run-20261019-000000-link");
+    symlinkSync(copy, linked);
+    const relative = path.join(".nukadoko", "runs", "run-20261019-000000-link");
+    for (const format of ["markdown", "allure", "messages"]) {
+      const report = await cli(["report", relative, "--format", format, ...(format === "allure" ? ["--out", path.join(outside, "allure")] : [])]);
+      expect(report.exitCode).toBe(2);
+      expect(report.stdout).toBe("");
+      expect(report.stderr).toBe(
+        `refused\trun-invalid\t-\t${relative} is a symlink under ${path.join(".nukadoko", "runs")}, so it is not read: a run directory there is one nuka run wrote\n` +
+          "  fix: Copy the run directory in instead of linking it, or name the directory the link points to.\n",
+      );
+    }
   });
 
   for (const { name, evidence, attachments, link } of cases) {

@@ -205,6 +205,7 @@ export default {
       name: "record",
       glob: "src/record/**",
       surface: [
+        "contained-path.ts",
         "newest-run.ts",
         "read-step-record.ts",
         "record-id.ts",

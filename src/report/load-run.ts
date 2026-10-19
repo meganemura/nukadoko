@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { parseFeatureSource } from "../feature/load-features.js";
@@ -7,7 +7,8 @@ import { RUN_RESULT_FILE_NAME, type RunDocument, type RunScenario } from "../rec
 import { parseRunDocument } from "./run-document-schema.js";
 import { readRunSources, runSourcesPath } from "../record/run-sources.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
-import { isInsideDir, RUN_FILE_DIRS, resolveRecordedPath, runRelativeDir } from "../record/state-layout.js";
+import { isWithin, realTarget } from "../record/contained-path.js";
+import { RUN_FILE_DIRS, resolveRecordedPath, runRelativeDir } from "../record/state-layout.js";
 import type { StepRecord } from "../record/types.js";
 
 // Responsibility: one run directory, read back into what the report
@@ -110,24 +111,10 @@ export function scenarioRecordOf(document: RunDocument, scenario: RunScenario): 
   };
 }
 
-function isWithin(parent: string, child: string): boolean {
-  return path.resolve(parent) === path.resolve(child) || isInsideDir(parent, child);
-}
-
-/** `target` with every symlink resolved, or, when it does not exist, the
- * nearest existing parent resolved with the rest appended, so a missing
- * file behind a symlinked directory still resolves to where it would be. */
-function realTarget(target: string): string {
-  const absolute = path.resolve(target);
-  try {
-    return realpathSync(absolute);
-  } catch {
-    const parent = path.dirname(absolute);
-    return parent === absolute ? absolute : path.join(realTarget(parent), path.basename(absolute));
-  }
-}
-
-/** The resolver a loaded run hands its writers. Exported for its tests. */
+/** The resolver a loaded run hands its writers. Exported for its tests.
+ * The root is `runDir`'s real path: for a run directory named by an
+ * explicit path, that is where it points, and src/cli/report.ts refuses a
+ * symlinked directory under `<stateDir>/runs/` before it gets here. */
 export function containedResolver(runId: string, runDir: string, rootDir: string): (recordedPath: string) => string {
   const allowed = realTarget(runDir);
   return (recordedPath) => {

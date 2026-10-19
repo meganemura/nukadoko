@@ -150,6 +150,8 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   それより少ないと、数分おきに走るスイートでは 1 時間前に追っていた失敗が消えてしまいます。
   export ファイルは、run 自身の一覧を通してだけ消され、古さで消されることはありません。
   results ディレクトリは他のツールの Allure 出力と共有されることがあり、nukadoko が書いていないファイルは nukadoko が消してよいものではないからです。
+  manifest の行は、symlink も含めて解決して `export/` の中のファイルになるときだけたどり、manifest 自体も、symlink ではない run ディレクトリのファイルであるときだけ読みます。
+  よそからコピーした run ディレクトリに、プロジェクトのファイルを消す対象として名指させないためです。
   `nuka clean [--dry-run] [--json]` は、カテゴリ丸ごとを消す操作として残ります。
   3 つのカテゴリをまとめて消します。
   `--dry-run` は実際の run と同じ計画を出力しますが、何も消しません。
@@ -2839,6 +2841,9 @@ run.json、step record、そして run が parse した feature の本文であ�
 このプロジェクト自身の run でも、読める範囲は広がりません。
 state ディレクトリへコピーしたディレクトリも自身の run として扱われるからで、`nuka run` が記録するファイルはどれも run ディレクトリの中にあります。
 report が自分で開くファイル（run.json、`sources.json`、各 step の `record.json`、run の exports manifest）も、実パスで同じ規則に従うので、その中の symlink をたどって外へ出ることはありません。
+`<stateDir>/runs/` の下の run ディレクトリが symlink であれば、`run-invalid` で拒否します。
+ここまでの確認はどれも run ディレクトリを基点にしているからです。
+`runs/` の外のパスで名指した run ディレクトリは呼び出し側の選択であり、その実体が基点になります。
 外へ出るパスは読まず、`report-incomplete` の finding になり、そのファイルが result にも messages ストリームにも入ることはありません。
 report は `run_id` をパスへつなぐので、`nuka run` が生成する 1 つのパス要素（`run-YYYYMMDD-HHMMSS-xxxx`）でない `run_id` を持つ run.json は `run-invalid` で拒否します。
 3 つの形式のどれかが読むフィールドが欠けている、null である、あるいは別の型である run.json も、同じく `run-invalid` で拒否します。
@@ -2853,7 +2858,7 @@ run の後に描き出せば、1 つの run を別の形式や別のディレク
 result の出力先は `.nukadoko/export/allure-results/`、または `--out` が名指すディレクトリです。
 相対の `--out` はプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 run ディレクトリを渡さない `nuka report` は最新の run を描き出し、run ディレクトリを引数に渡せばその run を描き出します。
-その run がこのプロジェクトの run であれば、state directory の下に書いた各ファイルはその run の exports manifest に記され、retention が run と一緒に消します。
+その run がこのプロジェクトの run であれば、`<stateDir>/export/` の下に書いた各ファイルはその run の exports manifest に記され、retention が run と一緒に消します。
 同じ run を同じディレクトリへ描き直すと、前回その run を描き出したときにそこへ書いたファイルと、manifest のその行を先に消すため、ディレクトリには各 scenario が 1 つずつ残り、manifest は各ファイルを 1 度だけ名指します。
 result、container、attachment の名前は、ランダムではなく run id、scenario record、environment から決まります。
 そのため、同じ run の 2 回目の描き出しは、どこへ書いても 1 回目を上書きします。
@@ -3052,7 +3057,7 @@ Allure の result は、nukadoko の計測の余剰が見えるようになる�
 出力先は stdout、または `--out` が名指すファイルです。
 相対の `--out` はプロジェクトの root を基準に解決し、絶対パスはそのまま使います。
 Allure の result と同じく、ストリームは run の後に run ディレクトリだけから描き出され、`nuka run` は何も書きません。
-このプロジェクト自身の run について state directory の下に書いたファイルは、その run の exports manifest に記されるので、retention と `nuka clean` が run と一緒に消します。
+このプロジェクト自身の run について `<stateDir>/export/` の下に書いたファイルは、その run の exports manifest に記されるので、retention と `nuka clean` が run と一緒に消します。
 
 - 1 回の描き出しは、1 つの run の 1 つのストリームです。
   2 つの run がストリームを共有することはなく、書き終えたストリームは変わらないので、読み手が目にする書きかけのストリームはありません。

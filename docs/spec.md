@@ -156,7 +156,11 @@ questions: "what happens if this is deleted" and "who gets to change it":
   minutes. An export file
   is removed only through a run's own manifest, never by age: a results
   directory can be shared with another tool's Allure output, and a file
-  nukadoko did not write is not nukadoko's to remove.
+  nukadoko did not write is not nukadoko's to remove. A manifest line is
+  followed only when it resolves, symlinks included, to a file inside
+  `export/`, and a manifest only when it is a file of a run directory that
+  is not itself a symlink: a run directory copied in from elsewhere does
+  not get to name a project file for removal.
   `nuka clean [--dry-run] [--json]` is the whole-category operation that
   remains. It cleans all three categories together. `--dry-run` prints the
   same plan that the real run would use, but removes nothing. A report
@@ -3459,6 +3463,7 @@ A run directory copied off a CI machine therefore renders the same results as th
 Such a directory is untrusted input, so every path a record names is resolved, symlinks included, and read only while it stays inside the run directory.
 A run of this project's own gets no wider reach: a directory copied into the state directory counts as one, and every file `nuka run` records is inside its run directory.
 The files the report opens itself (run.json, `sources.json`, each step's `record.json`, and the run's `exports` manifest) are held to the same rule by their real path, so a symlink among them is not followed out.
+A run directory under `<stateDir>/runs/` that is a symlink is refused with `run-invalid`, since every check above takes the run directory as its root. A run directory named by a path outside `runs/` is the caller's choice, and its real target is that root.
 A path that leaves is not read: it is a `report-incomplete` finding, and the file it names never reaches the results or the messages stream.
 A run.json whose `run_id` is not the one path segment `nuka run` generates (`run-YYYYMMDD-HHMMSS-xxxx`) is refused with `run-invalid`, since the report joins it into paths.
 So is a run.json with any field one of the three formats reads missing, null, or of another type: the check covers what all three read, so no format meets a field it has to guess at.
@@ -3472,7 +3477,7 @@ Rendering after the run also lets one run be rendered again, in another format o
 The results go to `.nukadoko/export/allure-results/`, or to the directory `--out` names.
 A relative `--out` is resolved against the project root, and an absolute one is used as given.
 `nuka report` with no run directory renders the newest run; a run directory as its argument renders that run.
-When the run is one of this project's runs, each file written under the state directory is noted in that run's exports manifest, so retention removes it with the run.
+When the run is one of this project's runs, each file written under `<stateDir>/export/` is noted in that run's exports manifest, so retention removes it with the run.
 Rendering the same run into the same directory again first removes the files the last render of that run wrote there, and their lines in the manifest, so the directory holds one copy of each scenario and the manifest names each file once.
 Each result, container, and attachment is named from the run id, the scenario record, and the environment rather than at random, so a second render of the same run overwrites the first wherever it goes: into an `--out` directory outside the state directory, and a copied run into the default directory, too.
 A render of a different run adds its results beside the others; whether two runs count as one Allure launch or two is the caller's choice.
@@ -3618,7 +3623,7 @@ It goes to stdout, or to the file `--out` names. A relative `--out` is
 resolved against the project root, and an absolute one is used as given.
 Like the Allure results, the stream is rendered from the run directory
 alone, after the run, and `nuka run` writes none. A file written under the
-state directory of this project's own run is noted in that run's exports
+`<stateDir>/export/` for this project's own run is noted in that run's exports
 manifest, so retention and `nuka clean` remove it with the run.
 
 - One render is one stream of one run. Two runs never share a stream, and

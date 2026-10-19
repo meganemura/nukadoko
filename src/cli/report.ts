@@ -3,11 +3,12 @@ import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
 import { rankRunsNewestFirst } from "../record/newest-run.js";
-import { createExportsManifest, forgetExports, readExportsManifest, RUN_EXPORTS_FILE_NAME, runExportsManifestPath } from "../record/run-exports.js";
+import { createExportsManifest, forgetExports, isExportFile, type OwnedExports, readOwnedExports, RUN_EXPORTS_FILE_NAME } from "../record/run-exports.js";
 import { readEndedRuns } from "../record/run-result.js";
-import { allureResultsRelativeDir, isInsideDir, runRelativeDir } from "../record/state-layout.js";
+import { isSymlinkedRunDir } from "../record/contained-path.js";
+import { allureResultsRelativeDir, isInsideDir, runRelativeDir, runsRelativeDir } from "../record/state-layout.js";
 import { writeAllureResults } from "../report/allure/write-results.js";
-import { containedFile, isOwnRun, loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
+import { isOwnRun, loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
 import { writeMessagesStream } from "../report/messages/write-stream.js";
 import { renderRunSummary } from "../run/run-summary.js";
 import { writeOutputLocations } from "../run/progress-log.js";
@@ -31,7 +32,7 @@ import type { RefusalCode } from "./refusal-codes.js";
 // names a file; Allure results are a directory, so they go to
 // `<stateDir>/export/allure-results` unless `--out` names another. When the
 // run directory is one of this project's runs, every file written under
-// the state directory is noted in that run's exports manifest, so
+// `<stateDir>/export/` is noted in that run's exports manifest, so
 // retention removes it with the run, and rendering the same run into the
 // same directory again first removes what the last render of it wrote
 // there. A report written elsewhere, or of a run from another project, is
@@ -82,6 +83,19 @@ export async function runReport(options: RunReportOptions): Promise<number> {
       return refuse(sinks, `no run under ${runRelativeDir(stateDir!, "")} has a run.json`, "run-not-found", { do: "nuka run" }, notices);
     }
     runDir = path.join(rootDir, runRelativeDir(stateDir!, newest.runId));
+  }
+  // Every path a run names is checked against the run directory's real
+  // path, so a symlink under `runs/` would make wherever it points the
+  // root those checks trust. A directory named by an explicit path outside
+  // `runs/` is the caller's choice, and its real target is the root.
+  if (stateDir !== null && isSymlinkedRunDir(rootDir, stateDir, runDir)) {
+    return refuse(
+      sinks,
+      `${path.relative(rootDir, runDir)} is a symlink under ${runsRelativeDir(stateDir)}, so it is not read: a run directory there is one nuka run wrote`,
+      "run-invalid",
+      { fix: "Copy the run directory in instead of linking it, or name the directory the link points to." },
+      notices,
+    );
   }
 
   const findings: Finding[] = [...notices];
@@ -197,40 +211,37 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   // writes, is the previous render of the same run, so it goes before the
   // new one is written instead of piling up beside it.
   function replaceOwnFiles(output: ReportOutput, target: string, kind: "file" | "dir"): void {
-    const manifestPath = ownManifest(output);
-    if (manifestPath === null) return;
+    const owned = ownExports(output);
+    if (owned === null || owned.manifestPath === null) return;
     const replaced = new Set<string>();
-    for (const relativePath of readExportsManifest(manifestPath)) {
-      const absolutePath = path.resolve(rootDir, relativePath);
+    for (const { line, absolutePath } of owned.files) {
       if (kind === "file" ? absolutePath === target : isInsideDir(target, absolutePath)) {
         rmSync(absolutePath, { force: true });
-        replaced.add(relativePath);
+        replaced.add(line);
       }
     }
-    if (replaced.size > 0) forgetExports(manifestPath, replaced);
+    if (replaced.size > 0) forgetExports(owned.manifestPath, replaced);
   }
 
-  // The exports manifest of this project's own run, or `null` for a run
-  // that is not, or for a manifest that is a symlink out of the run
-  // directory: following it would read or append to a file elsewhere.
-  function ownManifest(output: ReportOutput): string | null {
+  // What this project's own run's exports manifest names, or `null` for a
+  // run that is not this project's. A manifest that is a symlink out of
+  // the run directory is refused (`manifestPath` `null`): following it
+  // would read or append to a file elsewhere.
+  function ownExports(output: ReportOutput): OwnedExports | null {
     if (!output.ownRun || stateDir === null) return null;
-    const manifestPath = runExportsManifestPath(rootDir, stateDir, output.runId);
-    try {
-      return containedFile(runDir, manifestPath, RUN_EXPORTS_FILE_NAME);
-    } catch {
-      if (!manifestRefused) noteProblems([`${RUN_EXPORTS_FILE_NAME} of run ${output.runId} resolves outside the run directory, so this render is not noted in it`]);
+    const owned = readOwnedExports(rootDir, stateDir, output.runId);
+    if (owned.manifestPath === null && !manifestRefused) {
+      noteProblems([`${RUN_EXPORTS_FILE_NAME} of run ${output.runId} resolves outside the run directory, so this render is not noted in it`]);
       manifestRefused = true;
-      return null;
     }
+    return owned;
   }
 
   function noteOwnFiles(output: ReportOutput, files: readonly string[]): void {
-    const manifestPath = ownManifest(output);
-    if (manifestPath === null || stateDir === null) return;
-    const stateRoot = path.resolve(rootDir, stateDir);
-    const manifest = createExportsManifest(manifestPath, rootDir);
-    for (const file of files) if (isInsideDir(stateRoot, file)) manifest.note(file);
+    const owned = ownExports(output);
+    if (owned === null || owned.manifestPath === null || stateDir === null) return;
+    const manifest = createExportsManifest(owned.manifestPath, rootDir);
+    for (const file of files) if (isExportFile(rootDir, stateDir, file)) manifest.note(file);
   }
 }
 
