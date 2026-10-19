@@ -12,9 +12,10 @@ gives one step's full contract; read the JSON itself for the field
 shapes. Both name any step file that failed to import beside everything
 else they could still read, and `nuka check` is where to fix the import.
 When a step's args or returns schema cannot be represented as JSON
-Schema, `nuka describe` still prints that step's contract, names the step
-on the failure, and exits 1; `nuka run` and `nuka do` refuse the whole
-call, and that refusal names the file.
+Schema (a `z.date()`, say), `nuka describe` still prints that step's
+contract with `args_error` or `returns_error` naming the step, and exits
+1. `nuka run` and `nuka do` run the step anyway: zod still validates the
+values, and only the published contract is missing.
 
 Two fields carry less than they look like they do. A `needs` of `null`
 means this tool could not read that step's `run()`, so its fixture
