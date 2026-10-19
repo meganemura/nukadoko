@@ -62,11 +62,14 @@ describe("nuka report --out", () => {
   it.runIf(process.platform === "linux" && existsSync("/proc/self"))("refuses a file target the write itself is refused at, with the reason", async () => {
     for (const [out, reason] of [
       ["/proc/nukadoko-nope.md", "could not write it (ENOENT)"],
-      ["/proc/self/status", "could not write it (EINVAL)"],
       ["/proc/nukadoko-nope/x.md", "could not create /proc/nukadoko-nope (ENOENT)"],
     ] as const) {
       expect(await report("markdown", out)).toEqual({ exitCode: 2, stderr: `refused\treport-out-invalid\t-\t--out ${out}: ${reason}\n${FIX}` });
     }
+    // The kernel answers a write to /proc/self/status with EINVAL for root and EACCES for anyone else.
+    const status = await report("markdown", "/proc/self/status");
+    expect(status.exitCode).toBe(2);
+    expect(status.stderr).toMatch(/^refused\treport-out-invalid\t-\t--out \/proc\/self\/status: could not write it \((EINVAL|EACCES)\)\n/);
   });
 
   it("refuses the Allure history file in any letter case, and through an alias of the export directory", async () => {
