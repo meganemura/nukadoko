@@ -752,7 +752,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const finishRun = async (
       verdict: "passed" | "failed",
       failedScenarios: readonly FailedScenario[],
-    ): Promise<{ summaryPath: string | null; retention: string | null; runResultWritten: boolean; exitCode: number }> => {
+    ): Promise<{ summaryPath: string | null; retention: string | null; runResultWritten: boolean; exitCode: number; notRun: number }> => {
       runFindings.push(...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf));
       // The run's `scenarios/` goes too once no scenario left evidence in it.
       for (const dir of [...emptyEvidenceDirs, path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios)]) {
@@ -854,7 +854,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
       if (options.json) options.stdout.write(document);
-      return { summaryPath, retention, runResultWritten, exitCode };
+      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run };
     };
     // The text a person reads at the end, after the files are written: where
     // they are, the count, each failed scenario, the repeat tallies, and
@@ -864,13 +864,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       counts: { total: number; passed: number },
       failedScenarios: readonly FailedScenario[],
       tallies: Parameters<typeof writeRepeatTallies>[1],
-      end: { summaryPath: string | null; retention: string | null; runResultWritten: boolean },
+      end: { summaryPath: string | null; retention: string | null; runResultWritten: boolean; notRun?: number },
     ): void => {
       writeOutputLocations(progress, [...locations, ...summaryLocation(end.summaryPath, end.runResultWritten)]);
       writeRunSummary(progress, {
         total: counts.total,
         passed: counts.passed,
         failed: counts.total - counts.passed,
+        ...(end.notRun !== undefined ? { notRun: end.notRun } : {}),
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
       for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf)]) {

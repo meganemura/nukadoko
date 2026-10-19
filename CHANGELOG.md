@@ -545,6 +545,10 @@ just until 0.1.
 
 ### Fixed
 
+- **The stderr summary line counts cells that never ran.** A run whose
+  BeforeAll failed printed `0 scenarios: 0 passed, 0 failed`, while
+  run.json counted the cells under `not_run`. The line now adds `, <n>
+  not run` when there are any.
 - **`file-exists` and `file-edited` no longer repeat the refused command
   as their `do:`.** Running it again as written is refused again; the
   `fix:` now says to delete the file and then run the same command. An

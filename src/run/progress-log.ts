@@ -292,6 +292,9 @@ export interface RunSummary {
   readonly total: number;
   readonly passed: number;
   readonly failed: number;
+  /** Scenario and environment cells that never ran, as run.json's
+   * `counts.not_run` counts them (a BeforeAll that failed first). */
+  readonly notRun?: number;
   readonly durationMs: number;
 }
 
@@ -361,7 +364,7 @@ export function formatSummaryDuration(durationMs: number): string {
 export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void {
   stderr.write(
     `${summary.total} scenario${summary.total === 1 ? "" : "s"}: ${summary.passed} passed, ` +
-      `${summary.failed} failed  (${formatSummaryDuration(summary.durationMs)})\n`,
+      `${summary.failed} failed${(summary.notRun ?? 0) > 0 ? `, ${summary.notRun} not run` : ""}  (${formatSummaryDuration(summary.durationMs)})\n`,
   );
 }
 

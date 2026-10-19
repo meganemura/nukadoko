@@ -342,5 +342,12 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
       // the files no worker wrote a record for.
       expect(document.findings.filter((finding) => finding.code === "hook-failed")).toEqual(concurrency === "1" ? [hookFailed] : [hookFailed, hookFailed]);
     });
+
+    it(`counts the not-run cells in the stderr summary line, as run.json does, at --concurrency ${concurrency}`, async () => {
+      await copyFile(join(rootDir, "features", "one-scenario.feature"), join(rootDir, "features", "two-scenario.feature"));
+      const stderr = createCaptureSink();
+      expect(await runCli(["run", "--no-check", "--concurrency", concurrency, "features"], { rootDir, stdout: createCaptureSink(), stderr })).toBe(1);
+      expect(stderr.text().split("\n").filter((line) => /^\d+ scenarios?: /.test(line)).map((line) => line.replace(/  \(.*\)$/, ""))).toEqual(["0 scenarios: 0 passed, 0 failed, 2 not run"]);
+    });
   }
 });
