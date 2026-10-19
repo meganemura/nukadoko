@@ -131,3 +131,38 @@ describe("nuka run when sources.json cannot be written", () => {
     expect(written.findings.map((finding) => finding.code)).toEqual(["run-sources-not-written"]);
   });
 });
+
+describe("nuka run --json when the summary cannot be written", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("pure-step-project");
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("carries summary-not-written in the --json document and in run.json, and still passes", async () => {
+    const before = process.env.GITHUB_STEP_SUMMARY;
+    // A directory: appending to it fails the way a read-only summary file would.
+    process.env.GITHUB_STEP_SUMMARY = path.join(rootDir, "features");
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    let exitCode: number;
+    try {
+      exitCode = await runCli(["run", "--json", "features/greeting.feature"], { rootDir, stdout, stderr });
+    } finally {
+      if (before === undefined) delete process.env.GITHUB_STEP_SUMMARY;
+      else process.env.GITHUB_STEP_SUMMARY = before;
+    }
+    expect(exitCode).toBe(0);
+    expect(stderr.text()).toBe("");
+    const document = JSON.parse(stdout.text()) as { verdict: string; run_id: string; findings: { severity: string; code: string; message: string }[] };
+    expect(document.verdict).toBe("passed");
+    expect(document.findings.map((finding) => [finding.severity, finding.code])).toEqual([["warning", "summary-not-written"]]);
+    expect(document.findings[0]!.message).toMatch(/^the run summary was not written to GITHUB_STEP_SUMMARY: EISDIR/);
+    const runJson = JSON.parse(readFileSync(path.join(rootDir, ".nukadoko", "runs", document.run_id, "run.json"), "utf8")) as typeof document;
+    expect(runJson.findings).toEqual(document.findings);
+  });
+});

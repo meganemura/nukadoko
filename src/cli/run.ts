@@ -738,7 +738,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // later command reads, so a green exit without it would claim evidence
     // that does not exist. Its finding is added to the document before the
     // summary is rendered and before the document is printed, so the
-    // summary and `--json` carry it too. Returns the root-relative path of the summary in the
+    // summary and `--json` carry it too. A summary that was not written is
+    // added after the summary is rendered, and before the document is
+    // printed. Returns the root-relative path of the summary in the
     // run directory, or `null`, and the exit code.
     const sinceOf = (resolved: { ref: string; commit: string }): RunSince => {
       const files = [...new Set(runScenarios.flatMap((scenario) => scenario.criteria?.step_files ?? []))].sort((a, b) => a.localeCompare(b));
@@ -831,6 +833,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         });
         for (const warning of written.warnings) warnings("summary-not-written").write(`${warning}\n`);
         summaryPath = written.runSummaryPath;
+        // A summary that was not written is a finding of the run, so the
+        // document is serialized again with it, for `--json` and for
+        // run.json alike. The verdict stays the one the run.json write
+        // decided: a missing summary is a warning, never a failure. A
+        // second write that fails leaves the first run.json, which differs
+        // only by this warning.
+        if (written.warnings.length > 0) {
+          document = formatEnvelope("run", exitCode, runFindings, fields);
+          if (runResultWritten) {
+            try {
+              writeRunResult(rootDir, config.stateDir, runId, document);
+            } catch {
+              // The first run.json stands.
+            }
+          }
+        }
       }
       if (options.json) options.stdout.write(document);
       return { summaryPath, retention, runResultWritten, exitCode };
