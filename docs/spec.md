@@ -4083,23 +4083,25 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               no export file
 nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json]
                               render one finished run from its run directory
-                              alone (run.json, the step records,
+                              alone (markdown: run.json; allure and
+                              messages: run.json, the step records,
                               sources.json); with no run dir, the newest
                               run. markdown: the run summary, on stdout or
                               to --out; allure: an allure-results directory,
                               .nukadoko/export/allure-results or --out;
                               messages: a cucumber-messages NDJSON stream, on
-                              stdout or to --out. Files written under the
-                              state directory leave with the run, and a
-                              second render of the same run replaces the
-                              first. --json prints {run_id, format, written}
+                              stdout or to --out. Files written under
+                              <stateDir>/export/ leave with the run, and a
+                              second render of the same run there replaces
+                              the first; no other file is noted. --json prints {run_id, format, written}
                               and needs --out for markdown and messages.
                               A run directory with no run.json is refused
                               (run-not-found), one whose run.json is not
-                              one this release reads (run-invalid), one
-                              with no sources.json (run-sources-missing),
-                              and one whose sources.json is corrupt or of
-                              another version (run-sources-invalid). A
+                              one this release reads (run-invalid), and,
+                              for allure and messages, one with no
+                              sources.json (run-sources-missing) or one
+                              whose sources.json is corrupt or of another
+                              version (run-sources-invalid). A
                               render that left out part of the run exits
                               1 with report-incomplete
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]

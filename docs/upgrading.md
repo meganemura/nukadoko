@@ -261,8 +261,9 @@ This part does not change release to release.
   - Where `nuka run --summary <path>` wrote a pull request comment, run
     `nuka report --format markdown --out <path>` in a step after the run,
     with `if: always()` so a red run is posted too.
-  - A run from an earlier release has no `sources.json` and is refused
-    with `run-sources-missing`: run the scenarios again to render them.
+  - A run from an earlier release has no `sources.json`, so its Allure or
+    messages render is refused with `run-sources-missing`: run the
+    scenarios again to render them.
   - An Allure history carries on: the result identity is unchanged. The
     `host` and `thread` labels are gone, and `allure watch` shows a run
     when it is rendered, not while it runs.

@@ -811,6 +811,13 @@ just until 0.1.
 
 ### Documentation
 
+- **What `nuka report` reads and notes, per format.** llms.txt, the
+  spec's command summary, and the running reference said a render needs
+  `sources.json` and that any file written under the state directory
+  leaves with its run. A Markdown render reads `run.json` alone; only
+  `allure` and `messages` need `sources.json` and refuse with
+  `run-sources-missing` or `run-sources-invalid`. Only a file written
+  under `<stateDir>/export/` is noted in the exports manifest.
 - **A step-by-step adoption guide, [docs/adopting.md](docs/adopting.md),
   with its Japanese pair [docs/adopting.ja.md](docs/adopting.ja.md).** It
   takes an existing Node project from `npm install -D -E nukadoko` through

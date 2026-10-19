@@ -126,7 +126,7 @@ const REFUSAL_CODES = {
     fix: "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
   },
   "run-sources-missing": {
-    description: "The run directory holds no sources.json, the feature text nuka report parses the run's scenarios from. A run an earlier release wrote has none.",
+    description: "The run directory holds no sources.json, the feature text nuka report --format allure and messages parse the run's scenarios from. A run an earlier release wrote has none.",
     fix: "Run the scenarios again with this release, and render that run.",
   },
   "since-git-failed": {

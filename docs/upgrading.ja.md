@@ -197,7 +197,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
     `messages.<run_id>.ndjson` を読んでいたところでは、その run を `nuka report .nukadoko/runs/<run_id> --format messages --out <path>` で描き出します。
   - `nuka run --summary <path>` で pull request のコメントを書いていたところでは、run の後の step で `nuka report --format markdown --out <path>` を実行します。
     赤い run も投稿されるよう、その step には `if: always()` を付けます。
-  - 以前のリリースの run には `sources.json` がなく、`run-sources-missing` で拒否されます。
+  - 以前のリリースの run には `sources.json` がないため、その run の Allure や messages への描き出しは `run-sources-missing` で拒否されます。
     描き出すには、scenario をもう一度実行します。
   - Allure の履歴はそのまま続きます。
     result の identity は変わっていません。
