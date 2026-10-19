@@ -60,4 +60,21 @@ describe("sinceStepFiles", () => {
       const union = [...new Set([...vocabulary.keys()].flatMap((name) => files.ofEntry(name)))].sort((a, b) => a.localeCompare(b));
       expect(files.all).toEqual(union);
     }));
+
+  it("walks the vocabulary only when all is first read", () => {
+    let walks = 0;
+    const counted: Vocabulary = Object.assign(new Map(vocabulary), {
+      keys(this: Map<string, VocabularyEntry>) {
+        walks += 1;
+        return Map.prototype.keys.call(this);
+      },
+    });
+    const files = sinceStepFiles({ rootDir, vocabulary: counted, configFile: "nukadoko.config.ts", definedFixtures: new Set() });
+    expect(walks).toBe(0);
+    expect(files.ofEntry("a-part")).toEqual(["features/steps/a-part.ts"]);
+    expect(walks).toBe(0);
+    expect(files.all).toEqual(["features/steps/a-part.ts", "features/steps/an-outer-step.ts"]);
+    expect(files.all).toBe(files.all);
+    expect(walks).toBe(1);
+  });
 });

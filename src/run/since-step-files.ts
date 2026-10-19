@@ -59,6 +59,14 @@ export function sinceStepFiles(input: SinceStepFilesInput): SinceStepFiles {
     }
     return [...files];
   };
-  const all = [...new Set([...vocabulary.keys()].flatMap(ofEntry))].sort((a, b) => a.localeCompare(b));
-  return { all, ofEntry };
+  // Walked on first read, not here: a run without --since never compares a
+  // step file, so it never pays for walking every step's parts.
+  let all: readonly string[] | undefined;
+  return {
+    get all(): readonly string[] {
+      all ??= [...new Set([...vocabulary.keys()].flatMap(ofEntry))].sort((a, b) => a.localeCompare(b));
+      return all;
+    },
+    ofEntry,
+  };
 }
