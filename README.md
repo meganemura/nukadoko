@@ -16,7 +16,7 @@ checked before execution, and reviewable in a diff. Every run ends in a
 Markdown run summary, and the run is the evidence for its criteria: these
 scenarios ran at this commit, under these conditions, and, with
 `nuka run --since <ref>`, these criteria and step files changed since the
-base a person approved. A person reads the `.feature` and that summary.
+base a person approved, as far as its comparison reaches. A person reads the `.feature` and that summary.
 Where their approval is recorded, a pull request review, a change ticket,
 or an audit log, is the team's choice and stays outside nukadoko.
 
@@ -1225,7 +1225,8 @@ schema refused the changed value) is a `then-probe-not-measured` note. It
 is a measurement, so the exit code stays the run's.
 
 `nuka run --since <git ref>` says what moved in the criteria since a base
-a person approved, such as `origin/main`. Each scenario's criteria (its
+a person approved, such as `origin/main`, as far as its comparison
+reaches. Each scenario's criteria (its
 tags, its Background and own steps with their effective keyword,
 docstrings, and tables, and its Examples row, read from the compiled
 scenario so indentation, comments, and a docstring's delimiter do not

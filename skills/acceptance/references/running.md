@@ -77,9 +77,8 @@ declares a done() callback is `done-callback-arity`. The finding covers a
 hook whose parameter count is past what the executor passes, and a matched
 compat step whose function takes more arguments than the line's captures
 plus a table or docstring. A `"pending"` or `"skipped"` return is still
-only visible to `nuka run`. `nuka check --codes` names every
-finding code `check` can produce. Read the catalog there rather than from
-a list kept anywhere else.
+only visible to `nuka run`. `nuka check --codes` names every finding
+code `check` can produce: read the catalog there, not a list elsewhere.
 
 If the feature's directory is in `additionalFeatureDirs` (see "The loop"
 in `SKILL.md`, step 6), a bare `nuka check` already covers it, the same as any
@@ -160,11 +159,12 @@ there is not checked and not run, and the skip reports nothing.
 Push the feature and its steps and open the pull request. CI runs the
 feature and posts the run summary on it (`docs/ci.md` in the nukadoko
 package has the workflow); `--since <base>` adds which criteria and step
-files changed since the approved base. A person reads the feature and the summary: the run is the
-evidence, and the team records the approval where it records approvals.
-nukadoko writes or commits nothing else for it. Whether the criteria still hold later
-is a question for the next CI run, not for the old summary, and a failed
-run that a later run fixed is history the pull request can show.
+files changed since the approved base, as far as its comparison reaches.
+A person reads the feature and the summary: the run is the evidence. The
+team records the approval where it records approvals; nukadoko writes or
+commits nothing else for it. Whether the criteria still hold later is a
+question for the next CI run, not the old summary, and a failed run that
+a later run fixed is history the pull request can show.
 
 ## What a run writes
 
@@ -192,9 +192,9 @@ finished one. Nukadoko never renders HTML itself. The messages stream is
 for the opposite reason: feeding a suite's existing cucumber-js-era
 formatter or JUnit-based CI while it migrates, not for reading by hand.
 
-Rendering the same run again replaces what its last render wrote under the
-state directory. Those files leave with their run: `nuka run` keeps the
+Rendering the same run again replaces what its last render wrote under
+`<stateDir>/export/`. Those files leave with their run: `nuka run` keeps the
 newest `retention.runs` runs (default 20) and removes older ones, records
 and export files alike, at the end of every run, printing one
 `retention:` line when it did. `nuka clean` removes all of them at once. A
-report written with `--out` outside the state directory is yours to keep.
+report written with `--out` outside `export/` and `runs/` is yours to keep.

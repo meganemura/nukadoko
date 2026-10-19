@@ -82,7 +82,7 @@ nukadoko deliberately owns as little as possible:
 | **Execution and measurement (records)** | **nukadoko** |
 | **Environments and secrets** | **nukadoko** |
 | **Keyword semantics (Then must not mutate)** | **nukadoko** |
-| **The run summary: the evidence of what ran, and which criteria and step files changed since the approved base** | **nukadoko** |
+| **The run summary: the evidence of what ran, and which criteria and step files changed since the approved base, as far as its comparison reaches** | **nukadoko** |
 
 ## Problem
 

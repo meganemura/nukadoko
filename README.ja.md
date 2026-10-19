@@ -12,7 +12,7 @@ nukadoko は、型付き step の契約のもとで Gherkin の scenario を実�
 受け入れ基準は、それを定めた人たちが使う言語のまま残ります。
 その文と検証対象のシステムとのあいだにあるものはすべて型を持ち、実行前に検査され、diff でレビューできます。
 どの run も Markdown の run サマリで終わり、run はその受け入れ基準の証跡です。
-これらの scenario がこの commit で、この条件のもとで走ったこと、そして `nuka run --since <ref>` を使えば、人が承認した基点からどの受け入れ基準と step ファイルが変わったかを示します。
+これらの scenario がこの commit で、この条件のもとで走ったこと、そして `nuka run --since <ref>` を使えば、人が承認した基点からどの受け入れ基準と step ファイルが変わったかを、その比較が届く範囲で示します。
 人は `.feature` とそのサマリを読みます。
 その承認をどこに記録するか(pull request のレビュー、変更チケット、監査ログ)はチームが選ぶことで、nukadoko の外にあります。
 
@@ -1110,7 +1110,7 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 probe が計測できなかった Then(走ったとき、または再実行で書き込んだ、あるいは args schema が変えた値を拒んだ)は、`then-probe-not-measured` の note になります。
 これは計測なので、終了コードは run のものから変わりません。
 
-`nuka run --since <git ref>` は、人が承認した基点(`origin/main` など)から、受け入れ基準の何が動いたかを述べます。
+`nuka run --since <git ref>` は、人が承認した基点(`origin/main` など)から、受け入れ基準の何が動いたかを、その比較が届く範囲で述べます。
 各 scenario の受け入れ基準(tag、実効の keyword を持つ Background と scenario 自身の step、docstring、table、Examples の行)を、そのコミットの同じ scenario と比べます。
 受け入れ基準はコンパイルした scenario から読むので、インデント、コメント、docstring の区切りは数えません。
 `run.json` は各 scenario に `criteria.changed_since` を与え、値は `unchanged`、`changed`、`new`、`ambiguous`(中身で対応づけられない、同じ名前の scenario)、`unknown`(ref でファイルが parse できない)のどれかです。
