@@ -249,9 +249,29 @@ Five things the workflow above leaves to the team, each small.
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
   the diff and the summary beside it, which is the evidence of what ran at
-  that commit. Running `nuka run --since origin/<base branch>` (with the
-  base branch fetched) adds what moved in the criteria since the approved
-  base. Where the approval is recorded, the pull request review or
+  that commit. `nuka run --since <base commit>` adds what moved in the
+  criteria since the approved base, as far as its comparison reaches
+  ("Running" in [docs/spec.md](spec.md#running) says what it compares). The base
+  has to be in the checkout, and the commit to name is where the branch
+  left it, not wherever the base branch has moved since:
+
+  ```yaml
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the base branch and the history merge-base needs
+      # ...
+      - run: npx nuka run --since "$(git merge-base HEAD origin/${{ github.base_ref }})"
+  ```
+
+  `git merge-base` names the commit the branch started from, so a change
+  that landed on the base branch afterward is not reported as one this
+  pull request reverts. On a `pull_request` event, the checkout is the
+  merge commit GitHub made of the branch and the base branch's tip, and
+  the merge base of that is the tip itself, so the same line is right for
+  it too. A shallow checkout (`fetch-depth: 1`, the default) has no
+  history for `merge-base`; with only `git fetch origin <base branch>`,
+  name `origin/<base branch>` directly, which is right for the merge
+  commit and only for it. Where the approval is recorded, the pull request review or
   anything else, is the team's process; nukadoko records the evidence, not
   the approval (see "Review" in [docs/spec.md](spec.md#review)).
   `nuka report --format markdown --out <path>` writes the same Markdown of

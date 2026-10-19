@@ -217,7 +217,22 @@ jobs:
   ジョブのサマリページにはすでに表示されますが、レビュアーが読むのは pull request です。
   差分の中の feature と、その横のサマリを読みます。
   サマリは、その commit で何が走ったかの証跡です。
-  `nuka run --since origin/<base branch>` を(基点のブランチを fetch したうえで)走らせると、承認された基点から受け入れ基準の何が動いたかも加わります。
+  `nuka run --since <base commit>` を走らせると、承認された基点から受け入れ基準の何が動いたかも、その比較が届く範囲で加わります(何を比べるかは docs/spec.ja.md の「実行」が述べます)。
+  基点は checkout の中になければならず、名指すコミットは、基点のブランチがその後どこまで進んだかではなく、ブランチが分かれたところです。
+
+  ```yaml
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the base branch and the history merge-base needs
+      # ...
+      - run: npx nuka run --since "$(git merge-base HEAD origin/${{ github.base_ref }})"
+  ```
+
+  `git merge-base` はブランチが分かれたコミットを名指すので、その後に基点のブランチへ入った変更を、この pull request が戻したものとして報告しません。
+  `pull_request` イベントでは、checkout はブランチと基点のブランチの先端から GitHub が作った merge コミットで、その merge base は先端そのものなので、同じ行がそこでも正しく働きます。
+  浅い checkout(既定の `fetch-depth: 1`)には `merge-base` が使う履歴がありません。
+  `git fetch origin <base branch>` だけのときは `origin/<base branch>` を直に名指します。
+  これは merge コミットのときだけ正しく働きます。
   承認をどこに記録するか(pull request のレビューなど)はチームのプロセスで、nukadoko が記録するのは証跡であり承認ではありません(docs/spec.ja.md の「レビュー」を参照)。
   `nuka report --format markdown --out <path>` は最新の run の同じ Markdown をファイルに書き、もう 1 つの step がそれを投稿します。
 
