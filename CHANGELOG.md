@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.18.0 — 2026-10-19
+
 ### Breaking
 
 - **Five surfaces are removed: `--quiet`, Markdown oaths, sessions,
@@ -898,6 +900,31 @@ just until 0.1.
   pull request review, a change ticket, an audit log) is its own process,
   and nukadoko writes no approval record. The refusal for a removed
   sign-off code under `nuka tend --fail-on` says the same.
+
+### Skill eval
+
+One run of one model, as `docs/releasing.md` describes: the `cli` example,
+Claude Sonnet, without `cli.md` in the installed skill. `nuka check` and
+`nuka run` passed (5 scenarios).
+
+| Rule | Result | Reason |
+| --- | --- | --- |
+| S1 | met | Every Then claims a value: an exact exit code, or the exact stdout, stderr, or JSON object in a docstring. |
+| S2 | met | Each scenario ends with two Then lines after its When. |
+| S3 | met | The feature was written before the first `nuka run`, and every expected value comes from the ticket's wording. |
+| S4 | met | The sentences name what a user sees: running tally, the exit code, the output, the error output. |
+| S5 | met | File names, CSV lines, arguments, and expected text are in the sentence, the docstring, or the Examples table. |
+| S6 | met | The unreadable file and the bad line are separate scenarios, each with its exact exit code and stderr line. |
+| S7 | met | The Outline name includes `<line>`, so each row runs under its own name. |
+| S8 | met | Each scenario writes its own file in a new directory. Nothing is shared. |
+| S9 | met | One When per scenario, and the exit code and the output are claimed on separate Then lines. |
+| S10 | met | The Givens only set up a file or a directory, and running tally is always the When. |
+| S11 | met | Each assertion message names both the expected and the actual value. |
+| S12 | met | The ticket is copied verbatim under `Feature:`, and each scenario proves one sentence of it. |
+
+The ticket gives no sample CSV, so the agent chose whole-number amounts and
+listed its assumptions under `Feature:`. The decimal format the worked
+example checks is not covered by this run.
 
 ## 0.17.0 — 2026-10-17
 

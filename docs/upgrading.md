@@ -43,7 +43,7 @@ This part does not change release to release.
   whose range ends above your version: a project on 0.13.0, 0.13.1, or
   0.14.0 starts at "0.14.0 to 0.14.1".
 
-## 0.17.0 to the next release
+## 0.17.0 to 0.18.0
 
 - **`nuka run --quiet` is removed.** It is refused with `removed-flag`.
   A CI step that wanted a short log runs `nuka run --json`: stderr is
