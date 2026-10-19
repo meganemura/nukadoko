@@ -7,7 +7,7 @@ import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
-import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
+import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
@@ -420,8 +420,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       try {
         analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features);
       } catch (error) {
-        if (error instanceof EnvFileUnreadableError) return refused(error);
-        throw error;
+        return refused(error);
       }
       const { report } = analysis;
       if (report.errors.length > 0) {

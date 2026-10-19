@@ -22,4 +22,8 @@ describe("a duplicate in the vocabulary names both files in its fix", () => {
   it("two defineWorld calls", async () => {
     expect(await refusal(["steps"], "typed-world-duplicate-project")).toEqual({ exitCode: 2, fix: "Keep one defineWorld call: remove the one in features/steps/second-world.ts or the one in features/steps/first-world.ts." });
   });
+
+  it("two defineWorld calls, under nuka run with its check", async () => {
+    expect(await refusal(["run"], "typed-world-duplicate-project")).toEqual({ exitCode: 2, fix: "Keep one defineWorld call: remove the one in features/steps/second-world.ts or the one in features/steps/first-world.ts." });
+  });
 });
