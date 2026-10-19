@@ -2660,6 +2660,7 @@ dotenv のユーザーにはおなじみの、共通設定と上書きの重ね�
 ディスク上にないパスは、何も寄与しません。
 `nuka check` は `env-file-missing` で警告し、environment 自身のリストにあるパスは `environment-env-file-missing` で警告します。
 存在しているが読めないパス、またはそのパスにあるディレクトリは、setup を止めます。
+拒否は `env-file-unreadable` で、`nuka check`、`nuka run`（`--no-check` の有無を問わず）、`nuka do`、`nuka tend` のどれでも exit 2 です。
 拒否は、設定されたパスと errno を名指しします。
 同じ読み取りが `env` fixture と secret の集合の両方を埋めるので、ファイルがロードされたかどうかは両者で一致します。
 `policy` と `version` は environment ごとにしか存在しません。

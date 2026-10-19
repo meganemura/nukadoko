@@ -1,5 +1,5 @@
 export { parseEnvFile } from "../env/parse-env-file.js";
-export { loadEnvFiles } from "../env/load-env-files.js";
+export { EnvFileUnreadableError, loadEnvFiles } from "../env/load-env-files.js";
 
 // Responsibility: the import path for `ctx.env`'s loader and the shared
 // KEY=VALUE parser. The read itself lives in src/env/load-env-files.ts so

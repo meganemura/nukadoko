@@ -5,7 +5,7 @@ import { executeTypedStep } from "../run/execute-typed-step.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
-import { loadEnvFiles } from "../context/env.js";
+import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
 import { omitUsedResults } from "../context/used.js";
@@ -345,14 +345,23 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // below: the probe's failure reason is redacted with this set, and the
     // set does not exist until classification has run.
     const envFiles = resolvedEnv.envFiles;
-    const envVars = loadEnvFiles(rootDir, envFiles);
-    const classification = await classifyEnvFiles(rootDir, envFiles);
-    const secrets = buildSecretSet(rootDir, {
-      secretSourceFiles: classification.secretSource,
-      trackedFiles: classification.tracked,
-      publicKeys: config.secrets.public,
-      redactKeys: config.secrets.redact,
-    });
+    // An env file that cannot be read is refused before the step runs, the
+    // same way `nuka run` refuses it.
+    let envVars: Record<string, string>;
+    let secrets: ReturnType<typeof buildSecretSet>;
+    try {
+      envVars = loadEnvFiles(rootDir, envFiles);
+      const classification = await classifyEnvFiles(rootDir, envFiles);
+      secrets = buildSecretSet(rootDir, {
+        secretSourceFiles: classification.secretSource,
+        trackedFiles: classification.tracked,
+        publicKeys: config.secrets.public,
+        redactKeys: config.secrets.redact,
+      });
+    } catch (error) {
+      if (error instanceof EnvFileUnreadableError) return refuse(sinks, error, "env-file-unreadable");
+      throw error;
+    }
 
     // The version probe is metadata about the target the tool records
     // for itself, never something a step's own `run` can see or trigger. A

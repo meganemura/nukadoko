@@ -95,6 +95,7 @@ Every code a finding can carry. `nuka check --codes` and `nuka tend --codes` pri
 | `duplicate-world` | refused | defineWorld is called more than once in the step files. | Keep one defineWorld call, and remove the others. |
 | `env-file-missing` | warning | A configured envFile does not exist on disk, so nothing in it is ever loaded. | Create the file, or remove it from envFiles in the config file. |
 | `env-file-skipped-line` | warning | A line in a configured envFile is not a blank line, a comment, or a binding, so nothing on it was loaded. | Rewrite the line as KEY=value, or start it with # to make it a comment. |
+| `env-file-unreadable` | refused | A configured envFiles path is on disk and could not be read: a directory, or a file without read permission. The run stops before any step runs. | Make the file readable, replace the directory with a file, or remove the path from envFiles. |
 | `environment-env-file-missing` | warning | An entry in one environment's own envFiles does not exist on disk. | Create the file, or remove it from that environment's envFiles in the config file. |
 | `fail-on-unknown-code` | refused | --fail-on names a code that nuka tend does not report. | Name a code that nuka tend --codes lists. |
 | `feature-parse-error` | error | A .feature file could not be parsed, so nothing in it was checked. | Correct the Gherkin at the line that the message names, then run nuka check on the file again. |

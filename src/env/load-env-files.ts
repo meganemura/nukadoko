@@ -10,14 +10,29 @@ import { parseEnvFile } from "./parse-env-file.js";
 //
 // A path that is not on disk (ENOENT) contributes nothing. A missing
 // optional env file is not this function's call to make fatal: `nuka check`
-// is what warns about it. Every other read error is thrown. The message
-// names the configured path and the errno, and the caller in setup prints
-// that message and stops. Swallowing EACCES or EISDIR used to look exactly
+// is what warns about it. Every other read error is thrown as
+// `EnvFileUnreadableError`, whose `code` the CLI refuses with
+// (`env-file-unreadable`). The message names the configured path and the
+// errno, and every command that reads the env files refuses on it before
+// any step runs. Swallowing EACCES or EISDIR used to look exactly
 // like ENOENT, so the first requireEnv blamed the key for a file that was
 // never read.
 //
 // The process environment is never merged in. docs/spec.md's determinism
 // goal means the same envFiles must produce the same record on any machine.
+
+/** A configured env file that is on disk and could not be read. `code` is
+ * the refusal code, read by the CLI the way it reads any error's own code. */
+export class EnvFileUnreadableError extends Error {
+  readonly code = "env-file-unreadable";
+  readonly relativePath: string;
+
+  constructor(relativePath: string, detail: string, cause: unknown) {
+    super(`env file "${relativePath}" could not be read: ${detail}`, { cause });
+    this.name = "EnvFileUnreadableError";
+    this.relativePath = relativePath;
+  }
+}
 
 /**
  * Reads and merges `envFiles` (paths relative to `rootDir`) into a single
@@ -50,7 +65,7 @@ function readEnvFile(rootDir: string, relativePath: string): string | undefined 
     }
     const code = nodeErrorCode(error);
     const detail = code ?? (error instanceof Error ? error.message : String(error));
-    throw new Error(`env file "${relativePath}" could not be read: ${detail}`, { cause: error });
+    throw new EnvFileUnreadableError(relativePath, detail, error);
   }
 }
 

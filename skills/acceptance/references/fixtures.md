@@ -146,7 +146,7 @@ redacted value too short to redact safely (`secrets-redact-key-too-short`). A pa
 on disk contributes nothing, and `nuka check` warns (`env-file-missing`,
 or `environment-env-file-missing` for one environment's own list). A path
 that is present but cannot be read, or a directory at that path, is
-refused before the step runs. The refusal names the configured path and
+refused before the step runs (`env-file-unreadable`). The refusal names the configured path and
 the errno. `requireEnv` runs only after those files have been read, and
 its message names the missing key.
 

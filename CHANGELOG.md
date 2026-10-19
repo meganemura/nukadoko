@@ -573,6 +573,13 @@ just until 0.1.
   `../../../../tmp/x.feature`, and so did `target-unreadable` for a
   target outside the project that could not be read, such as a directory.
   A target inside the project is still printed relative to its root.
+- **An env file that cannot be read has a code of its own.** A configured
+  `envFiles` path that is a directory or has no read permission was
+  `unexpected-error`, and under `nuka run --no-check` an `error` finding
+  with exit 1. It is now the `env-file-unreadable` refusal, exit 2, under
+  `nuka check`, `nuka run` with or without `--no-check`, `nuka do`, and
+  `nuka tend`, before any step runs; the message names the configured path
+  and the errno.
 - **An exports manifest line never names `allure-history.jsonl`, through
   any alias.** A line such as `.nukadoko/export/alias/allure-history.jsonl`,
   with `alias` a symlink to `.`, passed the exact-path check, so `nuka

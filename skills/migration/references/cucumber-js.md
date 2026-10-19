@@ -64,11 +64,11 @@ isn't self-explanatory can be looked up without leaving the CLI. If the
 suite already has env files, point `envFiles` at them (see `SKILL.md`,
 "Env files"). A line the parser skips is `env-file-skipped-line`.
 
-`envFiles` in `nukadoko.config.ts` is read at setup. A path that is not
-on disk contributes nothing, and `nuka check` warns. A path that is
-present but cannot be read, or a directory at that path, stops the run
-before any step runs: an `error` finding that names the configured path
-and the errno, and exit 1.
+`envFiles` in `nukadoko.config.ts` is read at setup. A path not on disk
+contributes nothing, and `nuka check` warns. A path present but unreadable,
+or a directory there, is refused before any step runs: `env-file-unreadable`
+and exit 2, naming the path and the errno, under `nuka check`, `nuka run`
+(with or without `--no-check`), `nuka do`, and `nuka tend`.
 
 A compat step, a hook, a BeforeAll or AfterAll, or a World constructor
 that writes through `console.log` or `process.stdout.write` has that text

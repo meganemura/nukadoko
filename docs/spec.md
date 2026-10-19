@@ -3287,8 +3287,10 @@ This order provides the common and override layers familiar to dotenv users.
 A path that is not on disk contributes nothing. `nuka check` warns with
 `env-file-missing`, or with `environment-env-file-missing` when the path
 belongs to one environment. A path that is present but cannot be read, or
-a directory at that path, stops setup. The refusal names the configured
-path and the errno. The same read fills the `env` fixture and the secret set, so
+a directory at that path, stops setup. The refusal is
+`env-file-unreadable`, exit 2, under `nuka check`, `nuka run` (with or
+without `--no-check`), `nuka do`, and `nuka tend`, and it names the
+configured path and the errno. The same read fills the `env` fixture and the secret set, so
 the two agree on whether the file was loaded.
 Only an environment can define `policy` and `version`. Without `--env`, the
 environment name is `default`, which needs no entry. An entry named `default`

@@ -53,6 +53,10 @@ const REFUSAL_CODES = {
     description: "defineWorld is called more than once in the step files.",
     fix: "Keep one defineWorld call, and remove the others.",
   },
+  "env-file-unreadable": {
+    description: "A configured envFiles path is on disk and could not be read: a directory, or a file without read permission. The run stops before any step runs.",
+    fix: "Make the file readable, replace the directory with a file, or remove the path from envFiles.",
+  },
   "fail-on-unknown-code": {
     description: "--fail-on names a code that nuka tend does not report.",
     fix: "Name a code that nuka tend --codes lists.",

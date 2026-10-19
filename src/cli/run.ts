@@ -7,7 +7,7 @@ import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
-import { loadEnvFiles } from "../context/env.js";
+import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
@@ -420,7 +420,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       try {
         analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features);
       } catch (error) {
-        return refused(error);
+        if (error instanceof EnvFileUnreadableError) return refused(error);
+        throw error;
       }
       const { report } = analysis;
       if (report.errors.length > 0) {
@@ -598,14 +599,23 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const conditions: Condition[] = [];
     for (const resolvedEnv of resolvedEnvs) {
       const envFiles = resolvedEnv.envFiles;
-      const envVars = loadEnvFiles(rootDir, envFiles);
-      const classification = await classifyEnvFiles(rootDir, envFiles);
-      const secrets = buildSecretSet(rootDir, {
-        secretSourceFiles: classification.secretSource,
-        trackedFiles: classification.tracked,
-        publicKeys: config.secrets.public,
-        redactKeys: config.secrets.redact,
-      });
+      // An env file that cannot be read is a setup problem, refused like
+      // an invalid config under --no-check too: nothing has run yet, and
+      // an `error` finding would read as a run that failed.
+      let envVars: Record<string, string>;
+      let secrets: ReturnType<typeof buildSecretSet>;
+      try {
+        envVars = loadEnvFiles(rootDir, envFiles);
+        const classification = await classifyEnvFiles(rootDir, envFiles);
+        secrets = buildSecretSet(rootDir, {
+          secretSourceFiles: classification.secretSource,
+          trackedFiles: classification.tracked,
+          publicKeys: config.secrets.public,
+          redactKeys: config.secrets.redact,
+        });
+      } catch (error) {
+        return refused(error);
+      }
       const probeResult = await probeVersion(resolvedEnv.version);
       let targetVersion: string | undefined;
       if (probeResult !== undefined) {

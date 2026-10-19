@@ -212,6 +212,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
     `allure generate` のレポートのように nukadoko が書いていないファイルはそこに残ります。
     以前の clean で消えていたなら、自分で消します。
 
+- **読めない env ファイルは、`nuka run --no-check` でも `env-file-unreadable` と exit 2 で拒否されます。**
+  これまではどのコマンドでも `unexpected-error` で、`--no-check` では exit 1 の `error` finding でした。
+  読めない env ファイルを `unexpected-error` に合わせていたスクリプトや、そこでの exit 1 を失敗した run と読んでいたスクリプトは、`env-file-unreadable` と exit 2 に合わせます。
+  何も実行されていないからです。
+
 ## 0.16.1 から 0.17.0 へ
 
 - **`nuka run` は、stdout が端末のとき、stdout に scenario record を出力しません。**

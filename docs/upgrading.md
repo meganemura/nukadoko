@@ -281,6 +281,13 @@ This part does not change release to release.
     nukadoko did not write there, such as an `allure generate` report,
     stays; delete it yourself if a clean used to.
 
+- **An env file that cannot be read is refused with
+  `env-file-unreadable`, exit 2, under `nuka run --no-check` too.** It was
+  `unexpected-error` under every command, and an `error` finding with exit
+  1 under `--no-check`. A script that matched `unexpected-error` for an
+  unreadable env file, or read exit 1 there as a failed run, matches
+  `env-file-unreadable` and exit 2: nothing ran.
+
 ## 0.16.1 to 0.17.0
 
 - **`nuka run` writes no scenario record to stdout when stdout is a
