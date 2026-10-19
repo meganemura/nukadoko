@@ -54,8 +54,10 @@ builds it once for the whole `nuka run` invocation instead of once per
 scenario, for something genuinely shared across scenarios rather than owned
 by one (not for something that must happen exactly once in the world
 regardless of process count, like seeding a database: `process` is one
-address space, not one invocation). A fixture that forgets to call `use()`,
-or calls it twice, fails loudly by name rather than hanging the run; `nuka
+address space, not one invocation). A fixture that never calls `use()`
+fails its step by name rather than hanging the run. A second `use()` call
+throws at that call, which is in teardown, so it is reported as
+`fixture-teardown-failed` and leaves the scenario's status as it was; `nuka
 check` catches a dependency cycle among fixtures, a `process`-scope
 fixture depending on a `scenario`-scope one, and a fixture that destructures
 `call` (only a step's `run` can use that) before anything runs.
@@ -138,7 +140,9 @@ name it was read by: both draw from the project's configured `envFiles`
 `envFiles` appends after it), which is exactly where a secret is most
 likely to live. Git classifies those files. A tracked env file stays plain
 only while its working tree matches HEAD. Uncommitted edits are redacted.
-`nuka check` reports the classification. A path in that list that is not
+`nuka check` reports what that classification makes risky: a tracked env
+file that holds a secret-looking key (`tracked-secret-looking-key`), and a
+redacted value too short to redact safely (`secrets-redact-key-too-short`). A path in that list that is not
 on disk contributes nothing, and `nuka check` warns (`env-file-missing`,
 or `environment-env-file-missing` for one environment's own list). A path
 that is present but cannot be read, or a directory at that path, is

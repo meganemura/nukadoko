@@ -7,11 +7,10 @@ workspace, that is the package, not the root. When there is no config,
 `nuka init` writes it, `features/steps/`, `.gitignore` lines for
 `.nukadoko/` and `.env` files, and a `test:scenarios` script in
 `package.json`, so `npm run test:scenarios` runs `nuka run`, which checks
-`featuresDir` and then executes it. A
-`test:scenarios` script the project already has stays, and `init` says so
-on stderr; run `nuka run` directly then. It also adds the steps and the
-config to `tsconfig.json`'s `include`, and
-`"rewriteRelativeImportExtensions": true` to its `compilerOptions` so
+`featuresDir` and then executes it. A `test:scenarios` script the project
+already has stays, and `init` says so on stderr; run `nuka run` directly
+then. It also adds the steps and the config to `tsconfig.json`'s
+`include`, and `"rewriteRelativeImportExtensions": true` to its `compilerOptions` so
 `tsc` accepts the `.ts` import names `nuka scaffold` writes, keeping its
 comments and trailing commas. When `compilerOptions` comes only through
 `extends`, `init` says on stderr what to add instead of editing.
@@ -33,13 +32,13 @@ tend` reports it as `package-type-missing`), and fails to import under
 `"type": "commonjs"`, with an error that names the file.
 
 A flag that takes one string or one number is refused when it is given
-more than once, and the command writes nothing. `--use`, `--fail-on`, and
-`nuka run`'s `--env` repeat. Each value is kept, in the order given.
+more than once, and the command writes nothing. `--use`, `--fail-on`,
+`nuka run`'s `--env`, and `nuka scaffold`'s `--from` repeat, each value
+kept in the order given.
 
 ## Environments
 
-`--env <name>` on `nuka do` and `nuka run`
-targets one of the environments named in `nukadoko.config.ts`'s
+`--env <name>` on `nuka do` and `nuka run` targets one of the environments named in `nukadoko.config.ts`'s
 own `environments` key; omitting it targets `default`, which needs no
 entry there. Each entry can override `baseURL`, append its own `envFiles`
 after the top-level list, and set `policy: "read-only"`. `nuka run --env
@@ -102,9 +101,8 @@ there is not checked and not run, and the skip reports nothing.
 2. `nuka run <feature>`, repeat until every scenario is green. It first
    reports what `nuka check` reports for the selected scenarios and exits
    2 before executing anything on an error (a failed scenario exits 1, so
-   2 always means nothing ran); `--no-check` skips that check
-   to run a scenario `check` refuses. stderr
-   prints a boundary line per scenario, one line per step as it finishes,
+   2 always means nothing ran); `--no-check` skips that check to run a
+   scenario `check` refuses. stderr prints a boundary line per scenario, one line per step as it finishes,
    and, once the run ends, every path it actually wrote plus a summary
    line. A failed step adds its error's first line and its step record
    path, and each failed scenario gets a `scenario-failed` finding after
@@ -112,16 +110,18 @@ there is not checked and not run, and the skip reports nothing.
    stdout is empty unless you ask: `--records` writes NDJSON there, one
    scenario's `run.json` entry per line, and `run.json` is on disk either
    way. To act on the result, pass `--json` instead: stdout is then
-   `run.json` itself, one envelope
-   `{ schema_version, nukadoko, command, verdict, findings, ... }` with the
-   run's fields beside `findings` (`commit`, `environments`, `selection`,
-   counts, `verdicts`, and per scenario its steps with `line`, `status`, `record`, and
-   a failed one's `error` and `used`, plus a failed scenario's `do`); the
-   run writes the same bytes beside its summary, which is rendered from it. stderr is then empty: every
-   warning and failed scenario is a finding in the envelope. Text a step, a hook, or a fixture writes through `console.log` or
-   `process.stdout.write` is delivered on stderr, so it does not break
-   that stream. A child process spawned with `stdio: "inherit"` still
-   writes to stdout directly. The run also
+   `run.json` itself, one envelope `{ schema_version, nukadoko, command,
+   verdict, findings, ... }` with the run's fields beside `findings`
+   (`commit`, `environments`, `selection`, counts, `verdicts`, and per
+   scenario its steps with `line`, `status`, `record`, and a failed one's
+   `error` and `used`, plus a failed scenario's `do`); the run writes the
+   same bytes beside its summary, which is rendered from it. nukadoko then
+   writes nothing to stderr: every warning and failed scenario is a
+   finding. Only Node's own process warnings (`package-type-missing` names
+   their cause) and a step's own output reach it: text a step, hook, or
+   fixture writes through `console.log` or `process.stdout.write` goes to
+   stderr, so it does not break stdout; a child process spawned with
+   `stdio: "inherit"` still writes to stdout directly. The run also
    writes a Markdown run summary for the person reviewing it, to
    `.nukadoko/runs/<run_id>/summary.md` (the `summary` line names
    it), and to `$GITHUB_STEP_SUMMARY` when that is set; `nuka report

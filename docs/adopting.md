@@ -66,9 +66,11 @@ Decide the optional flags now. `nuka init` refuses to run again once
   [A server you start yourself](../README.md#a-server-you-start-yourself).
 
 A CommonJS project (no `"type": "module"`) gets `nukadoko.config.mts`
-instead, and `nuka scaffold` writes its step files as `.mts`. A `.ts`
-step file works there too, with a `MODULE_TYPELESS_PACKAGE_JSON` warning
-from Node each time it loads.
+instead, and `nuka scaffold` writes its step files as `.mts`. When the
+package has no `"type"` at all, a `.ts` step file works there too, with a
+`MODULE_TYPELESS_PACKAGE_JSON` warning from Node each time it loads.
+Under `"type": "commonjs"` a `.ts` step file does not import, and `nuka
+check` reports it as `step-file-import-failed`.
 
 ## 3. Write the first feature
 

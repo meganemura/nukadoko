@@ -98,10 +98,10 @@ each stub's own single scaffold with `--replace`; add `--command` or
    `--command` and `--request` write `mutates: true`, because scaffold
    cannot know what the call writes; set it to `false`, with a comment
    that says why, when it writes nothing a later scenario could read.
-   Add `--description "<text>"` for what the step does; without it the
-   description is `TODO: describe <name>`, which `nuka tend` reports as
-   `step-description-todo`. Leave `--pattern` out for a step reached by
-   name only.
+   Add `--description "<text>"` for what the step does. Without it,
+   `--command` and `--request` write a description of what they generate;
+   any other form writes `TODO: describe <name>`, which `nuka tend`
+   reports as `step-description-todo`. Leave `--pattern` out for a step reached by name only.
 2. Implement it. The shape of that file is in `step-files.md`.
 3. `nuka do <step> --args '<json>'`, exercise it alone, check the step
    record, before it ever touches a feature. Fix and re-run until it does

@@ -773,7 +773,7 @@ export async function runCli(
         .option("description", {
           type: "string",
           nargs: 1,
-          describe: "what the step does, written as its description; without it the description is a TODO nuka tend reports",
+          describe: "what the step does, written as its description; without it --command and --request write one of what they generate, and any other form writes a TODO nuka tend reports",
         })
         .option("from", {
           type: "string",

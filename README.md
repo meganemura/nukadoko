@@ -1322,7 +1322,8 @@ reading a directory of step records, which nobody does.
 A person who approves without writing code reads two things: the
 `.feature`, to check it says what the ticket meant, and the run summary,
 to check what ran, at which commit, and which criteria and step files
-changed since the base they approved. Everything under
+changed since the base they approved, as far as its comparison reaches.
+Everything under
 `.nukadoko/` and every `nuka` verb belongs to the agent or to CI. Every
 `nuka run` writes that summary as Markdown: the commit, each environment,
 the browser, one table per feature with each scenario's verdict in each

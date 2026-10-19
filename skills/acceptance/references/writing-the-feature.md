@@ -36,8 +36,9 @@ Feature: Sign in with valid credentials
 
 The tag carries the id in a form something can grep for; the free text
 under `Feature:` carries what a person needs. Follow whatever tag shape the
-project already uses (`@PROJ-123`, `@issue-456`): Gherkin tags cannot
-contain `#`, so a bare issue number needs a prefix.
+project already uses (`@PROJ-123`, `@issue-456`). A bare `@#456` parses
+as a tag, but `#` reads as a comment to most readers and tools, so give
+an issue number a prefix.
 
 With no tracker to carry across, drop the tag and the `Ticket:` line and
 keep the free text. That block is the place for anything a reader needs

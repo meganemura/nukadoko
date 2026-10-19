@@ -838,6 +838,16 @@ just until 0.1.
 
 ### Documentation
 
+- **The skills, llms.txt, and the adoption guide follow the CLI.** The
+  `--json` contract says nukadoko writes nothing to stderr, and that
+  Node's own process warnings and a step's own output still can.
+  `scaffold --from` is listed as repeatable; `--command` and `--request`
+  are said to write a generated description, not a TODO; a second
+  `use()` call is said to be a reported teardown failure; a `.ts` step
+  file under `"type": "commonjs"` is said to fail with
+  `step-file-import-failed`; `nuka clean`'s scope under `export/`, what
+  `nuka check` reports about env files, the full `stands for` finding
+  text, and `@#456` as a valid tag are corrected.
 - **What `nuka report` reads and notes, per format.** llms.txt, the
   spec's command summary, and the running reference said a render needs
   `sources.json` and that any file written under the state directory

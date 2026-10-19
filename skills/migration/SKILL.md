@@ -37,7 +37,7 @@ If the project is not initialized yet (no `nukadoko.config.ts` or
 CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
 `nukadoko.config.mts` there and `nuka scaffold` writes `.mts` step files.
 A `.ts` file there loads with a Node warning (`nuka tend` reports
-`package-type-missing` for the config), and fails to import under
+`package-type-missing` for each `.ts` or `.js` file it loads), and fails to import under
 `"type": "commonjs"`, with an error that names the file. `nuka run`
 writes no report of its own: a suite whose formatter or JUnit-based CI
 reads cucumber messages renders the stream after each run with `nuka
@@ -120,8 +120,8 @@ the same rule.
   `await this.openRequest()`. `nuka check` reports `step-file-import-failed`
   and `nuka run` stops on the same import. The message names the field.
 - **Don't treat a committed env file as plain after a local edit.**
-  Uncommitted edits are redacted. `nuka check` reports each env file's
-  classification.
+  Uncommitted edits are redacted. `nuka check` reports
+  `tracked-secret-looking-key` and `secrets-redact-key-too-short`.
 - **Don't expect a loaded secret to remain visible in a record once it
   has been percent-encoded or JSON-escaped.** Those forms are removed
   with the same `{{secret.NAME}}` token as the raw value. A JSON number

@@ -13,8 +13,8 @@ A step file that failed to import is `nuka check`'s report, not tend's.
 `nuka check` names it as `step-file-import-failed`, and `nuka tend` counts
 only the steps that imported, so its counts and findings leave that file's
 steps out. Fix that import first; the tend report is not complete until
-it is. When the finding ends with `stands
-for features/steps/<name>.ts, which does not exist`, a step file was
+it is. When the finding ends with `; <path>.js stands for
+<path>.ts, which does not exist; update the import in <file>`, a step file was
 renamed or deleted under an import that still names it: point the import
 in the file it names at the new file, or remove it.
 

@@ -66,8 +66,9 @@ suite already has env files, point `envFiles` at them (see `SKILL.md`,
 
 `envFiles` in `nukadoko.config.ts` is read at setup. A path that is not
 on disk contributes nothing, and `nuka check` warns. A path that is
-present but cannot be read, or a directory at that path, is refused
-before any step runs. The refusal names the configured path and the errno.
+present but cannot be read, or a directory at that path, stops the run
+before any step runs: an `error` finding that names the configured path
+and the errno, and exit 1.
 
 A compat step, a hook, a BeforeAll or AfterAll, or a World constructor
 that writes through `console.log` or `process.stdout.write` has that text
@@ -123,7 +124,7 @@ line's captures plus a table or docstring. A `"pending"` or `"skipped"`
 return is not in that set. It still surfaces only when the step runs.
 A custom World constructor that throws is one of those run failures:
 that scenario fails, stderr gets one setup line, later scenarios in the
-same `nuka run` still run, and the messages export is finalized. A list
+same `nuka run` still run. A list
 written here would go stale the moment compat's coverage grows; the CLI's
 own output never does. One declaration is refused up front:
 `defineWorld` cannot name `page` or `request`. Those are harness getters,

@@ -65,7 +65,8 @@ next: read node_modules/nukadoko/llms.txt, written for an agent: the loop, every
   [A server you start yourself](../README.ja.md#a-server-you-start-yourself) を参照してください。
 
 CommonJS のプロジェクト(`"type": "module"` がないもの)では、代わりに `nukadoko.config.mts` が書かれ、`nuka scaffold` は step ファイルを `.mts` で書きます。
-`.ts` の step ファイルもそこで動きますが、読み込むたびに Node が `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
+package.json に `"type"` がまったくなければ、`.ts` の step ファイルもそこで動きますが、読み込むたびに Node が `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
+`"type": "commonjs"` のもとでは `.ts` の step ファイルは import できず、`nuka check` は `step-file-import-failed` として報告します。
 
 ## 3. 最初の feature を書く
 
