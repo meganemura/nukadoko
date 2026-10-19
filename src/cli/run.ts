@@ -58,7 +58,7 @@ import {
   type RunScenario,
   type RunSince,
 } from "../record/run-result.js";
-import { compareSince, scenarioKey, type SinceComparison } from "../run/criteria-since.js";
+import { compareSince, scenarioKey, sinceStepFiles, type SinceComparison } from "../run/criteria-since.js";
 import { resolveSince, SinceGitError } from "../run/git-since.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
@@ -79,9 +79,7 @@ import {
   validateFixtureDefinitions,
   validateStepFixtures,
 } from "../fixture/validate-fixtures.js";
-import type { Step } from "../step/define-step.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
-import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { asFinding, writeCheckIssueLines } from "./check.js";
 import { formatFinding, warningSink, type Finding } from "../finding/finding.js";
@@ -634,39 +632,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // so a step that edits a file mid-run does not change what the run
     // reports about the files it started from.
     const projectRelative = (filePath: string): string => path.relative(rootDir, path.resolve(rootDir, filePath));
-    // The files a scenario's lines name: the file that registers each step
-    // a line matched, the files of the parts that step declares, however
-    // deep, and the config file when one of those steps needs a fixture the
-    // config defines. Not what those files import.
-    const fileOfStep = new Map<unknown, string>();
-    for (const entry of vocabulary.values()) if (entry.kind === "typed") fileOfStep.set(entry.step, projectRelative(entry.filePath));
-    const configFile = resolveConfigFileName(rootDir);
-    const definedFixtures = new Set(Object.keys(config.fixtures));
-    const filesOfEntry = (entryName: string): string[] => {
-      const entry = vocabulary.get(entryName);
-      if (entry === undefined) return [];
-      const files = new Set([projectRelative(entry.filePath)]);
-      if (entry.kind === "typed") {
-        const seen = new Set<Step>();
-        const visit = (step: Step): void => {
-          if (seen.has(step)) return;
-          seen.add(step);
-          const file = fileOfStep.get(step);
-          if (file !== undefined) files.add(file);
-          for (const part of step.parts) visit(part);
-        };
-        visit(entry.step);
-        let needs: readonly string[] = [];
-        try {
-          needs = stepFixtureNames(entry.step);
-        } catch {
-          // A run() whose fixtures cannot be read names none here; the
-          // fixture check reports it.
-        }
-        if (needs.some((name) => definedFixtures.has(name))) files.add(configFile);
-      }
-      return [...files];
-    };
+    const stepFiles = sinceStepFiles({
+      rootDir,
+      vocabulary,
+      configFile: resolveConfigFileName(rootDir),
+      definedFixtures: new Set(Object.keys(config.fixtures)),
+    });
     let comparison: SinceComparison | undefined;
     if (since !== undefined) {
       try {
@@ -675,7 +646,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           commit: since.commit,
           features: selected.features.map((feature) => ({ relativePath: feature.relativePath, source: feature.source })),
           targets: [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
-          stepFiles: [...new Set([...vocabulary.keys()].flatMap(filesOfEntry))].sort((a, b) => a.localeCompare(b)),
+          stepFiles: stepFiles.all,
         });
       } catch (error) {
         if (error instanceof SinceGitError) return refused(`nuka run --since ${since.ref} could not read the ref: ${error.message}`, "since-git-failed");
@@ -684,7 +655,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
     const boundStepFiles = (scenario: RunScenario): string[] => {
       const files = new Set<string>();
-      for (const step of scenario.steps) if (step.step !== null) for (const file of filesOfEntry(step.step)) files.add(file);
+      for (const step of scenario.steps) if (step.step !== null) for (const file of stepFiles.ofEntry(step.step)) files.add(file);
       return [...files].sort((a, b) => a.localeCompare(b));
     };
     const criteriaFor = (scenario: RunScenario): RunCriteria => {

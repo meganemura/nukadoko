@@ -7,7 +7,8 @@ import { listFeatureFilesAtCommit, readAtCommit, stepFileChange } from "./git-si
 // scenario's own criteria are unchanged, changed, new, or not decidable
 // since the ref, which criteria the ref held that are gone, and whether
 // each step file differs from the ref. `compareSince` is the one entry
-// point src/cli/run.ts calls; the matching under it is pure and exported
+// point src/cli/run.ts calls, with the step files `sinceStepFiles`
+// names; the matching under it is pure and exported
 // for its tests. Boundary: reading the ref out of git is
 // src/run/git-since.ts, and writing the result into run.json is
 // src/cli/run.ts.
@@ -32,6 +33,10 @@ import { listFeatureFilesAtCommit, readAtCommit, stepFileChange } from "./git-si
 // name repeats, at the ref or now, the scenarios of that name are matched
 // by content first; what content cannot pair one to one is `ambiguous`,
 // with the reason, rather than matched by position, which is a guess.
+
+// The step files a run compares come from its vocabulary; that walk is
+// src/run/since-step-files.ts, offered here beside the comparison it feeds.
+export { sinceStepFiles, type SinceStepFiles } from "./since-step-files.js";
 
 /** The key run.json and the summary find one scenario execution by: its
  * feature file and its pickle's line. */
