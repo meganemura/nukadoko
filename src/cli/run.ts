@@ -165,12 +165,12 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // inside src/run/run-scenario.ts, because it needs that pickle's own step
 // order.
 //
-// A `:line` target that selects fewer scenarios than its file holds writes
-// one stderr line after `selectPickles`, naming that the run is partial and that its run summary covers only the
-// selected scenarios, so a summary pasted onto a pull request is not read
-// as the whole feature (docs/spec.md "Scenarios (the scripted path)"). stdout is untouched: its
-// one-record-per-line contract is read by machines, and this notice is not
-// part of it.
+// A `:line` target that selects fewer scenarios than its file holds makes
+// the run `selection: partial`, in run.json and in the summary's header,
+// so a summary pasted onto a pull request is not read as the whole
+// feature (docs/spec.md "Scenarios (the scripted path)"). The summary is
+// where that reader looks; a stderr line would say it only to the person
+// who already chose the line.
 //
 // Progress lines (src/run/progress-log.ts) go to stderr, never stdout.
 // stdout's one-JSON-record-per-scenario contract stays a machine contract.

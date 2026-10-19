@@ -135,7 +135,8 @@ there is not checked and not run, and the skip reports nothing.
    the default first move. `<feature>:<line>` is fine for narrowing this
    while iterating, but the run this step ends on must cover the whole
    feature: a partial run's summary covers only the scenarios it selected,
-   and stderr says so.
+   and says so with `selection: partial` in its header, as run.json's
+   `selection` does. stderr does not say so.
 3. A failure that reproduces one time in several is a case for
    `nuka run <feature>:<line> --repeat <n>`, not for a shell loop: every
    execution lands under one run id, its summary cell counts them, and a
