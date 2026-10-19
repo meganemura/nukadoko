@@ -1,3 +1,4 @@
+import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -34,5 +35,24 @@ describe("a target outside the project is named by its absolute path", () => {
     const exitCode = await runCli(argv, { rootDir: fixture("pure-step-project"), stdout: createCaptureSink(), stderr });
     expect(exitCode).toBe(2);
     expect(stderr.text().split("\n").filter((line) => !line.startsWith("warning")).slice(0, 1).join("\n") + "\n").toBe(firstLine);
+  });
+});
+
+describe("an unreadable target outside the project is named by its absolute path", () => {
+  it.each([
+    ["run", "Failed to read feature file"],
+    ["check", "nuka check: Failed to read feature file"],
+  ])("nuka %s <a directory outside the project>", async (command, prefix) => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "nukadoko-target-dir-"));
+    try {
+      const stderr = createCaptureSink();
+      const exitCode = await runCli([command, outside], { rootDir: fixture("pure-step-project"), stdout: createCaptureSink(), stderr });
+      expect(exitCode).toBe(2);
+      expect(stderr.text().split("\n").filter((line) => !line.startsWith("warning")).slice(0, 1).join("\n") + "\n").toBe(
+        `refused\ttarget-unreadable\t-\t${prefix} "${outside}": EISDIR: illegal operation on a directory, read\n`,
+      );
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

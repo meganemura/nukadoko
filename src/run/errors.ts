@@ -26,8 +26,10 @@ export class FeatureReadFailedError extends Error {
   readonly code = "target-unreadable";
   readonly relativePath: string;
 
-  constructor(relativePath: string, cause: unknown) {
-    super(`Failed to read feature file "${relativePath}": ${cause instanceof Error ? cause.message : String(cause)}`, {
+  /** `shownPath` is the path as the message prints it, the same way
+   * `FeatureFileNotFoundError` prints it. */
+  constructor(relativePath: string, cause: unknown, shownPath: string = relativePath) {
+    super(`Failed to read feature file "${shownPath}": ${cause instanceof Error ? cause.message : String(cause)}`, {
       cause,
     });
     this.name = "FeatureReadFailedError";

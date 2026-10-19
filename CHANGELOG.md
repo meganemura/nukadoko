@@ -570,8 +570,9 @@ just until 0.1.
   default Allure directory when there is no `--out`.
 - **A missing target outside the project is named by its absolute path.**
   `nuka run` and `nuka check` printed `/tmp/x.feature` as
-  `../../../../tmp/x.feature`. A target inside the project is still
-  printed relative to its root.
+  `../../../../tmp/x.feature`, and so did `target-unreadable` for a
+  target outside the project that could not be read, such as a directory.
+  A target inside the project is still printed relative to its root.
 - **An exports manifest line never names `allure-history.jsonl`, through
   any alias.** A line such as `.nukadoko/export/alias/allure-history.jsonl`,
   with `alias` a symlink to `.`, passed the exact-path check, so `nuka

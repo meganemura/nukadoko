@@ -107,7 +107,7 @@ function readFeatureSource(rootDir: string, relativePath: string): string {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new FeatureFileNotFoundError(relativePath, shownTargetPath(rootDir, relativePath));
     }
-    throw new FeatureReadFailedError(relativePath, error);
+    throw new FeatureReadFailedError(relativePath, error, shownTargetPath(rootDir, relativePath));
   }
 }
 
