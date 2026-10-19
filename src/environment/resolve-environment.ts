@@ -17,11 +17,16 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 //
 // Unknown-name handling depends on whether `--env` was given
 // explicitly: an explicit name with no matching `environments` entry is a
-// setup failure (`UnknownEnvironmentError`), but the implicit "default" (no
-// `--env` at all) is *not* required to have a matching entry — it just
-// resolves with no per-environment overrides. This is not a special case for
-// the string "default"; it is a special case for "the name was never asked
-// for", which the CLI layer signals via `explicit`.
+// setup failure (`UnknownEnvironmentError`), but the implicit environment
+// (no `--env` at all) is *not* required to have a matching entry: it just
+// resolves with no per-environment overrides. The implicit environment is
+// named "default" everywhere a run records one (run.json's cells, the
+// summary's columns, a scenario's `environment`), so `--env default` names
+// it too, and `nuka run --env default --env staging` runs both. The
+// alternative refused was refusing `--env default` unless the config
+// defines it, which left the environment every record names as the one
+// name `--env` could not combine with others. A config that does define
+// `environments.default` keeps its entry, as before.
 
 export const DEFAULT_ENVIRONMENT_NAME = "default";
 
@@ -46,7 +51,7 @@ export function resolveEnvironment(
     environments !== undefined && Object.hasOwn(environments, name)
       ? environments[name]
       : undefined;
-  if (envConfig === undefined && explicit) {
+  if (envConfig === undefined && explicit && name !== DEFAULT_ENVIRONMENT_NAME) {
     throw new UnknownEnvironmentError(name, Object.keys(environments ?? {}));
   }
 

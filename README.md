@@ -1249,6 +1249,8 @@ AfterAll, and process-scope fixtures. `run.json` holds one verdict per
 scenario and environment, the summary table has one column per
 environment, and the exit code is red when any cell is. A scenario that
 passes with a feature flag on and fails with it off reads across one row.
+`--env default` names the environment a run without `--env` uses, as
+`run.json` names it, so `--env default --env staging` runs both.
 An environment is still only config: what differs between `a` and `b` is
 whatever their env files and `baseURL` say.
 

@@ -1122,6 +1122,7 @@ run サマリの「Criteria since」の節は、unchanged ではない各 scenar
 `nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。
 まず `a` ですべてを実行し、次に `b` ですべてを実行します。
 それぞれの environment が、自分の env file、secret、version の probe、BeforeAll と AfterAll、process スコープの fixture を持ちます。
+`--env default` は `--env` なしの run が使う environment を、`run.json` が名付けるとおりに名指すので、`--env default --env staging` は両方を実行します。
 `run.json` は scenario と environment の組ごとに 1 つの断定を持ち、サマリの表は environment ごとに 1 列を持ち、どれか 1 つのセルが失敗なら終了コードも失敗です。
 feature flag を有効にすると通り、無効にすると失敗する scenario は、1 行を横に読めば分かります。
 environment はそれでも設定にすぎません。

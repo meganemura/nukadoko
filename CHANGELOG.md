@@ -545,6 +545,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`--env default` names the implicit environment.** `nuka run --help`
+  said that leaving out `--env` runs the "default" environment, and
+  run.json and the summary name it `default`, but `--env default` was
+  refused with `unknown-environment` unless the config defined
+  `environments.default`, so the implicit environment was the one that
+  could not be combined with named ones. `nuka run --env default --env
+  staging` now runs both, and `nuka do --env default` runs a step there:
+  the top-level settings, or the config's `environments.default` entry
+  when it defines one.
 - **Retention, `nuka clean`, and `nuka report` remove only export files
   that really sit inside `export/`, and refuse a symlinked run directory.**
   A run directory copied into `<stateDir>/runs/` could list any project

@@ -5,8 +5,8 @@
 // convention as config/errors.ts.
 
 /** Thrown only when `--env <name>` was given explicitly and `name` has no
- * matching entry in nukadoko.config.ts's `environments`. The implicit
- * "default" environment never throws this even
+ * matching entry in nukadoko.config.ts's `environments`. The "default"
+ * environment, implicit or named by `--env default`, never throws this even
  * when `environments.default` is undefined — see resolve-environment.ts. */
 export class UnknownEnvironmentError extends Error {
   readonly code = "unknown-environment";

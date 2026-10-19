@@ -507,7 +507,9 @@ export async function runCli(
         })
         .option("env", {
           type: "string",
-          describe: 'target a named environment (omit for the "default" environment)',
+          describe:
+            'target a named environment (omit it, or name "default", for the "default" environment: the top-level ' +
+            "settings, or environments.default when the config defines it)",
         })
         .option("use", {
           type: "string",
@@ -566,8 +568,9 @@ export async function runCli(
         .option("env", {
           type: "string",
           describe:
-            'target a named environment (omit for the "default" environment); repeat it to run every selected ' +
-            "scenario once in each, in one run with one verdict per scenario and environment",
+            'target a named environment (omit it, or name "default", for the "default" environment: the top-level ' +
+            "settings, or environments.default when the config defines it); repeat it to run every selected " +
+            'scenario once in each, in one run with one verdict per scenario and environment, "default" among them',
         })
         .option("records", {
           type: "boolean",

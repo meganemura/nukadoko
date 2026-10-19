@@ -2116,7 +2116,11 @@ every scenario has `criteria: { changed_since: null }` and `since` is
 
 `--env` may repeat: `nuka run --env a --env b` is one run, with one
 `run_id`, one `run.json`, one summary, and one exit code, that runs every
-selected scenario once in each environment. The environments run one after
+selected scenario once in each environment. `default` is a name `--env`
+takes too, whether or not the config defines it: it is the environment a
+run without `--env` uses (the top-level settings, or `environments.default`
+when the config defines one) and the name `run.json` gives it, so
+`--env default --env staging` runs both. The environments run one after
 another in the order given, the whole selection in `a` and then the whole
 selection in `b`, so two environments never share a target at once, and
 each pass is the run it would have been alone: its own env files, secrets,

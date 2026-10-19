@@ -1773,6 +1773,8 @@ unchanged ではない scenario は現在の `lines` を持ち、どの scenario
 
 `--env` は繰り返せます。
 `nuka run --env a --env b` は、1 つの `run_id`、1 つの `run.json`、1 つのサマリ、1 つの終了コードを持つ 1 回の run で、選ばれたすべての scenario を各 environment で 1 回ずつ実行します。
+`--env` は、config が定義していてもいなくても `default` という名前を受け付けます。
+それは `--env` なしの run が使う environment(トップレベルの設定、または config が定義していれば `environments.default`)で、`run.json` がそう名付けるものなので、`--env default --env staging` は両方を実行します。
 environment は与えた順に 1 つずつ走ります。
 `a` で選択全体を実行し、それから `b` で選択全体を実行するので、2 つの environment が同時に同じ対象を共有することはありません。
 各回は、それだけを走らせたときと同じ run です。
