@@ -25,7 +25,9 @@ port and fails by name when the program exits first, never listens, or
 finds the port already taken. Install `playwright` when init says so.
 
 A CommonJS project (no `"type": "module"` in `package.json`) gets
-`nukadoko.config.mts`, and step files need `.mts` too. A hand-written
+`nukadoko.config.mts` and `.mts` step files from `nuka scaffold`. A `.ts`
+step file loads there with a Node warning, unless `"type": "commonjs"`
+is set, where it needs `.mts`. A hand-written
 `nukadoko.config.ts` there loads with a Node warning on every run (`nuka
 tend` reports it as `package-type-missing`), and fails to import under
 `"type": "commonjs"`, with an error that names the file.

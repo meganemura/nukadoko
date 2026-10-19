@@ -23,8 +23,7 @@ This one only says which file, and what must stay true on every path.
   A config fixture whose destructuring `nuka check` cannot read is
   `fixture-structural-violation`, and the finding names the fixture.
   A custom World constructor that throws fails that scenario on `nuka run`:
-  one setup line, later scenarios still run, and the messages export is
-  finalized.
+  one setup line, and later scenarios still run.
   `nuka check` reports `done-callback-arity` for done-callback glue before
   `nuka run`.
 - **A Playwright Test suite with no cucumber and no Gherkin yet.** Nothing
@@ -36,22 +35,22 @@ This one only says which file, and what must stay true on every path.
 If the project is not initialized yet (no `nukadoko.config.ts` or
 `nukadoko.config.mts`), run `nuka init` first. An existing suite can be
 CommonJS (no `"type": "module"` in `package.json`); `nuka init` writes
-`nukadoko.config.mts` there instead, and step files need the same `.mts`
-extension. A hand-written `nukadoko.config.ts` there loads with a Node
-warning on every run (`nuka tend` reports it as `package-type-missing`), and fails to import under `"type": "commonjs"`, with
-an error that names the file. `nuka run` writes no report of its own: a
-suite whose existing formatter or JUnit-based CI reads cucumber messages
-renders the stream after each run with `nuka report --format messages
---out <path>`, and `nuka report --format allure` does the same for Allure
-results.
+`nukadoko.config.mts` there and `nuka scaffold` writes `.mts` step files.
+A `.ts` file there loads with a Node warning (`nuka tend` reports
+`package-type-missing` for the config), and fails to import under
+`"type": "commonjs"`, with an error that names the file. `nuka run`
+writes no report of its own: a suite whose formatter or JUnit-based CI
+reads cucumber messages renders the stream after each run with `nuka
+report --format messages --out <path>`, and `nuka report --format
+allure` does the same for Allure results.
 nukadoko uses the project's own `playwright`, an optional peer dependency
-at an exact version (`npm view nukadoko peerDependencies`). A suite that
-drives a browser keeps `playwright` in its `devDependencies` at that
-version; npm refuses to install nukadoko beside a different one.
+with a caret range (`npm view nukadoko peerDependencies`); npm refuses to
+install nukadoko beside a `playwright` outside it.
 
 A flag that takes one string or one number is refused when it is given
-more than once, and the command writes nothing. `--use` and `--fail-on`
-are the repeatable flags. Each value is kept, in the order given.
+more than once, and the command writes nothing. The repeatable flags are
+`nuka run --env`, `nuka do --use`, `nuka tend --fail-on`, and `nuka
+scaffold --from`. Each value is kept, in the order given.
 
 ## Before the first change
 
