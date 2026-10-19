@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { shownTargetPath } from "../feature/feature-arg-read.js";
-import { createOutDir, outTargetProblem, type OutKind } from "./report-out.js";
+import { createOutDir, outTargetProblem, writeOutFile, type OutKind, type ReservedFile } from "./report-out.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
@@ -8,7 +8,7 @@ import { rankRunsNewestFirst } from "../record/newest-run.js";
 import { createExportsManifest, forgetExports, isExportFile, type OwnedExports, readOwnedExports, RUN_EXPORTS_FILE_NAME } from "../record/run-exports.js";
 import { readEndedRuns } from "../record/run-result.js";
 import { isSymlinkedRunDir } from "../record/contained-path.js";
-import { allureResultsRelativeDir, isInsideDir, runRelativeDir, runsRelativeDir } from "../record/state-layout.js";
+import { allureHistoryRelativePath, allureResultsRelativeDir, exportRelativeDir, isInsideDir, runRelativeDir, runsRelativeDir } from "../record/state-layout.js";
 import { writeAllureResults } from "../report/allure/write-results.js";
 import { isOwnRun, loadRun, loadRunDocument, type LoadedRun } from "../report/load-run.js";
 import { writeMessagesStream } from "../report/messages/write-stream.js";
@@ -109,15 +109,20 @@ export async function runReport(options: RunReportOptions): Promise<number> {
   const shown = (absolute: string): string => shownTargetPath(rootDir, path.relative(rootDir, absolute));
   const outKind: OutKind = format === "allure" ? "dir" : "file";
   const outTarget = outPath ?? (format === "allure" ? path.join(rootDir, allureResultsRelativeDir(stateDir!)) : undefined);
+  const outLabel = options.out !== undefined ? `--out ${options.out}` : outTarget !== undefined ? `the default allure directory ${shown(outTarget)}` : "";
+  // The history file is what lets a later render keep a scenario's trend;
+  // a render over it would lose that for good.
+  const reserved: ReservedFile | undefined =
+    stateDir === null ? undefined : { dir: path.join(rootDir, exportRelativeDir(stateDir)), name: path.basename(allureHistoryRelativePath(stateDir)), why: `the Allure history file under ${exportRelativeDir(stateDir)}` };
   if (outTarget !== undefined) {
-    const problem = outTargetProblem(outTarget, outKind, shown);
+    const problem = outTargetProblem(outTarget, outKind, outLabel, shown, reserved);
     if (problem !== null) return refuse(sinks, problem, "report-out-invalid", undefined, notices);
   }
 
   const output = produce();
   if ("refusal" in output) return refuse(sinks, output.refusal.message, output.refusal.code, undefined, notices);
   if (outTarget !== undefined) {
-    const problem = createOutDir(outKind === "dir" ? outTarget : path.dirname(outTarget), shown);
+    const problem = createOutDir(outKind === "dir" ? outTarget : path.dirname(outTarget), outLabel, shown);
     if (problem !== null) return refuse(sinks, problem, "report-out-invalid", undefined, notices);
   }
   return deliver(output);
@@ -195,7 +200,8 @@ export async function runReport(options: RunReportOptions): Promise<number> {
     replaceOwnFiles(output, target, output.kind === "text" ? "file" : "dir");
     const written: string[] = [];
     if (output.kind === "text") {
-      writeFile(target, output.text);
+      const problem = writeOutFile(target, output.text, outLabel);
+      if (problem !== null) return refuse(sinks, problem, "report-out-invalid", undefined, notices);
       written.push(target);
     } else {
       output.write(target, (absolutePath) => written.push(absolutePath));
@@ -281,7 +287,3 @@ function selectedPickles(run: LoadedRun, relativePath: string) {
   return run.features.find((feature) => feature.relativePath === relativePath)!.pickles.filter((pickle) => selected.has(pickle));
 }
 
-function writeFile(filePath: string, text: string): void {
-  mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(filePath, text);
-}

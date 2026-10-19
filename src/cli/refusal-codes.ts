@@ -114,7 +114,7 @@ const REFUSAL_CODES = {
     fix: "Use what the message names in its place.",
   },
   "report-out-invalid": {
-    description: "nuka report --out names a place the render cannot write: a directory where a file goes, a file where a directory goes, a FIFO or another special file, or a path under a regular file.",
+    description: "nuka report --out names a place the render cannot write: a directory where a file goes, a file where a directory goes, a FIFO or another special file, a dangling symbolic link, a path under a regular file, the Allure history file, or a file the file system refuses to write.",
     fix: "Name a regular file for markdown and messages, or a directory for allure, under a directory that exists or can be created.",
   },
   "run-not-found": {

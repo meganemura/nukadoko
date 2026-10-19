@@ -563,6 +563,11 @@ just until 0.1.
   and a FIFO blocked the render. Each is now the new `report-out-invalid`
   refusal, which says what is in the way, before the run is read. A
   missing directory on the way is still created, one component at a time.
+  The same refusal covers a dangling symbolic link (it was `EEXIST`), a
+  file write the file system refuses (it was `unexpected-error`), and
+  `allure-history.jsonl` in the export directory in any letter case, which
+  a render used to overwrite. The message names `--out` as typed, or the
+  default Allure directory when there is no `--out`.
 - **A missing target outside the project is named by its absolute path.**
   `nuka run` and `nuka check` printed `/tmp/x.feature` as
   `../../../../tmp/x.feature`. A target inside the project is still
