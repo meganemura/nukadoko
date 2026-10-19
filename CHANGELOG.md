@@ -545,6 +545,10 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka steps --json` and `nuka describe` say why they exit 1.** A step
+  whose `needs`, `from` entry, or args or returns schema could not be read
+  gave verdict `failed` and an empty `findings`. Each such part is now a
+  `contract-unreadable` finding that names the step and the error.
 - **`nuka report --out` refuses a target it cannot write, at once.**
   `--format allure --out /proc/x` spun at full CPU forever inside Node's
   recursive `mkdir`, a directory where a file goes was `unexpected-error`,

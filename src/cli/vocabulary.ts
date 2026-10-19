@@ -137,6 +137,29 @@ export function toImportFailureSummaries(
   }));
 }
 
+/** One `contract-unreadable` finding per part of a step's contract this
+ * command printed without: its `needs`, each `from` entry, its args or
+ * returns schema. Exit 1 alone, with no finding, left a `--json` reader
+ * nothing to switch on. */
+export function contractFindings(entries: ReadonlyArray<{
+  readonly name: string;
+  readonly file: string;
+  readonly needs_error?: string;
+  readonly from_errors?: readonly FromKeyError[];
+  readonly args_error?: string;
+  readonly returns_error?: string;
+}>): Finding[] {
+  const findings: Finding[] = [];
+  for (const entry of entries) {
+    const at = { severity: "failed" as const, code: "contract-unreadable", file: entry.file, step: entry.name };
+    if (entry.needs_error !== undefined) findings.push({ ...at, message: `${entry.name}: needs could not be read: ${entry.needs_error}` });
+    for (const fromError of entry.from_errors ?? []) findings.push({ ...at, message: `${entry.name}: ${fromError.message}` });
+    if (entry.args_error !== undefined) findings.push({ ...at, message: entry.args_error });
+    if (entry.returns_error !== undefined) findings.push({ ...at, message: entry.returns_error });
+  }
+  return findings;
+}
+
 /** Each step file that did not import, as a `step-file-import-failed`
  * finding: `steps` and `describe` print what they could read and say which
  * files they could not, in the same grammar `nuka check` uses. Takes

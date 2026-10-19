@@ -1,5 +1,6 @@
-// Responsibility: every finding code `nuka run` prints that `nuka check`
-// does not, each with its severity, the description `nuka check --codes`
+// Responsibility: every finding code `nuka run` (and `nuka report`,
+// `nuka steps`, and `nuka describe`, which read what a run or a step file
+// holds) prints that `nuka check` does not, each with its severity, the description `nuka check --codes`
 // prints, and the edit that gets past it. Boundary: data only; the run
 // raises them, and a check code it reuses (a pattern that did not build)
 // stays in src/check/codes.ts.
@@ -13,6 +14,12 @@ export interface RunCodeInfo {
 }
 
 const RUN_CODES = {
+  "contract-unreadable": {
+    severity: "failed",
+    description:
+      "nuka steps --json or nuka describe could not read part of a step's contract: its needs, a from entry, or an args or returns schema that JSON Schema cannot represent. The rest is printed, and the command exits 1.",
+    fix: "Correct what the message names in the step file; a schema JSON Schema cannot represent, such as z.date(), still runs, and only its published contract is missing.",
+  },
   "fixture-teardown-failed": {
     severity: "warning",
     description: "A fixture's teardown threw after its scenario or the run finished.",

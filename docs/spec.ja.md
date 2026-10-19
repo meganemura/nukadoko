@@ -3483,7 +3483,10 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
                               is a step-file-import-failed finding, exiting
                               1 if there is one or
                               any step's needs_error or from_errors is
-                              present, output printed either way. Text
+                              present, output printed either way, and
+                              under --json each such part is a
+                              contract-unreadable finding naming the
+                              step. Text
                               wraps at 80 columns, in a terminal or not
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
@@ -3496,8 +3499,10 @@ nuka describe <step>          full contract, the step file as file,
                               and why; the rest of the contract is still
                               printed. Exits 1 when a step file did not
                               import, or when the described step is typed
-                              and carries its own from_errors, args_error,
-                              or returns_error. A broken sibling step
+                              and carries its own needs_error, from_errors,
+                              args_error, or returns_error, each also a
+                              contract-unreadable finding naming the
+                              step. A broken sibling step
                               elsewhere in the vocabulary does not fail it
 nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--cwd <key>] [--argv <key>] | --request "<METHOD> <path>" [--body <key>]] [--from <step>.<key>]... [--description <text>] [--replace]
                               typed step template that fails until

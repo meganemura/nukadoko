@@ -333,6 +333,7 @@ export async function runCli(
         {
           assertFeaturesDirExists,
           buildStepNames,
+          contractFindings,
           importFailureFindings,
           formatVocabulary,
           loadVocabulary,
@@ -371,7 +372,11 @@ export async function runCli(
           // exactly the "machine reader treats an incomplete list as
           // complete" failure this field exists to prevent.
           const incomplete = importFailures.length > 0 || summaries.some((s) => s.needs_error !== undefined || s.from_errors !== undefined);
-          stdout.write(formatEnvelope("steps", incomplete ? 1 : 0, [...notices, ...importFailureFindings(rootDir, importFailureSummaries)], { steps: summaries }));
+          stdout.write(
+            formatEnvelope("steps", incomplete ? 1 : 0, [...notices, ...importFailureFindings(rootDir, importFailureSummaries), ...contractFindings(summaries)], {
+              steps: summaries,
+            }),
+          );
         } else {
           // A fixed width, not the terminal's: the same project prints the
           // same text in a terminal, a pipe, and an agent's shell.
@@ -415,6 +420,7 @@ export async function runCli(
           assertFeaturesDirExists,
           buildStepNames,
           describeContract,
+          contractFindings,
           importFailureFindings,
           loadVocabulary,
           toImportFailureSummaries,
@@ -468,9 +474,12 @@ export async function runCli(
               contract.args_error !== undefined ||
               contract.returns_error !== undefined));
         stdout.write(
-          formatEnvelope("describe", incomplete ? 1 : 0, [...notices, ...importFailureFindings(rootDir, importFailureSummaries)], {
-            ...contract,
-          }),
+          formatEnvelope(
+            "describe",
+            incomplete ? 1 : 0,
+            [...notices, ...importFailureFindings(rootDir, importFailureSummaries), ...(contract.kind === "typed" ? contractFindings([contract]) : [])],
+            { ...contract },
+          ),
         );
         // Same rule as `steps` above, scoped to this one contract: an
         // import failure elsewhere in the project, this step's own
