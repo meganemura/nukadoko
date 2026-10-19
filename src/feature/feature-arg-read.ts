@@ -20,12 +20,25 @@ const LINE_SUFFIX_PATTERN = /^(.+):(\d+)$/;
 
 export type FeatureArgCommand = "nuka check" | "nuka scaffold --feature";
 
+/** A target path as a refusal prints it: relative to the project root when
+ * it lies inside, absolute when it lies outside. A relative path that
+ * climbs out (`../../../../tmp/x.feature`) names the same file and is
+ * harder to read than the absolute one. */
+export function shownTargetPath(rootDir: string, relativePath: string): string {
+  return relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)
+    ? path.resolve(rootDir, relativePath)
+    : relativePath;
+}
+
 export type FeatureArgReadKind = "not-found" | "line" | "other";
 
 export interface FeatureArgReadInput {
   readonly command: FeatureArgCommand;
   /** Root-relative path, including a `:line` suffix when one was given. */
   readonly relativePath: string;
+  /** The path as the message shows it (`shownTargetPath`); the
+   * root-relative path when left out. */
+  readonly shownPath?: string;
   /** `code` from a Node system error, when the failure has one. */
   readonly code: string | undefined;
   /** The thrown error's own message. Used for every code other than ENOENT. */
@@ -64,7 +77,7 @@ export function describeFeatureArgRead(input: FeatureArgReadInput): FeatureArgRe
   }
   return {
     kind: "not-found",
-    message: `${input.command}: feature file not found: ${input.relativePath}`,
+    message: `${input.command}: feature file not found: ${input.shownPath ?? input.relativePath}`,
   };
 }
 
@@ -94,5 +107,5 @@ export function describeFailedFeatureRead(
   const errorMessage = error instanceof Error ? error.message : String(error);
   const lineMatch = code === "ENOENT" ? LINE_SUFFIX_PATTERN.exec(relativePath) : null;
   const lineBaseExists = lineMatch !== null && existsSync(path.join(rootDir, lineMatch[1]!));
-  return describeFeatureArgRead({ command, relativePath, code, errorMessage, lineBaseExists });
+  return describeFeatureArgRead({ command, relativePath, shownPath: shownTargetPath(rootDir, relativePath), code, errorMessage, lineBaseExists });
 }

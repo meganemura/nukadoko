@@ -7,6 +7,7 @@ import {
   walkFeatureFiles,
   type FeatureParseError,
 } from "../feature/load-features.js";
+import { shownTargetPath } from "../feature/feature-arg-read.js";
 import {
   DirectoryTargetLineError,
   FeatureFileNotFoundError,
@@ -104,7 +105,7 @@ function readFeatureSource(rootDir: string, relativePath: string): string {
     return readFileSync(path.join(rootDir, relativePath), "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new FeatureFileNotFoundError(relativePath);
+      throw new FeatureFileNotFoundError(relativePath, shownTargetPath(rootDir, relativePath));
     }
     throw new FeatureReadFailedError(relativePath, error);
   }

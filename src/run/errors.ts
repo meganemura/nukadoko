@@ -9,8 +9,10 @@ export class FeatureFileNotFoundError extends Error {
   readonly code = "target-not-found";
   readonly relativePath: string;
 
-  constructor(relativePath: string) {
-    super(`Feature file not found: ${relativePath}`);
+  /** `shownPath` is the path as the message prints it: root-relative
+   * inside the project, absolute outside it. */
+  constructor(relativePath: string, shownPath: string = relativePath) {
+    super(`Feature file not found: ${shownPath}`);
     this.name = "FeatureFileNotFoundError";
     this.relativePath = relativePath;
   }
