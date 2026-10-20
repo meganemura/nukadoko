@@ -2240,6 +2240,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   `command` は、ほかのフィールドと同じく redact されます。
   `runCommand(command, args, { cwd, env, input, timeout })` は `nukadoko` からの import であり、fixture ではありません。
   0 以外を含むすべての終了で `{ exitCode, signal, stdout, stderr }` に resolve し、reject するのは、プログラムを起動できなかった場合と `timeout` がプロセスを止めた場合だけです。
+  Windows では、`npm` のような拡張子のないプログラム名を `PATH` と `PATHEXT` で探し、`.cmd` と `.bat` のファイルは `cmd.exe` を通して各引数をそのまま渡して実行します。
+  そのため step はどのプラットフォームでも同じ名前でプログラムを指定でき、`command` には step が書いた名前が残ります。
   step の `run`、part、compat step の中の呼び出しはエントリを加えます。
   それ以外の場所の呼び出しは同じように動き、エントリを加えません。
   step がほかの手段(`node:child_process` の直接利用)で起動したプロセスは計測されないため、ここには現れません。

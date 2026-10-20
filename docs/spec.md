@@ -2712,7 +2712,11 @@ its scenario record's id, so either record leads to the other.
   import from `nukadoko`, not a fixture. It resolves to
   `{ exitCode, signal, stdout, stderr }` for every exit, nonzero included,
   and rejects only when the program could not start or `timeout` stopped
-  it. A call inside a step's `run`, a part, or a compat step adds an entry;
+  it. On Windows, a bare program name such as `npm` is looked up through
+  `PATH` and `PATHEXT`, and a `.cmd` or `.bat` file runs through
+  `cmd.exe` with each argument passed unchanged, so a step names a program
+  the same way on every platform; `command` keeps the name the step wrote.
+  A call inside a step's `run`, a part, or a compat step adds an entry;
   a call anywhere else runs the same way and adds none. A process that a
   step starts by other means (`node:child_process` directly) is not
   measured, so it does not appear here.

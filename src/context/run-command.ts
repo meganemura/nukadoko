@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import type { ProcessEntry } from "../record/types.js";
+import { windowsSpawnPlan } from "./windows-command.js";
 
 // Responsibility: `runCommand`, the exported helper a step uses to run a
 // command-line program under test, and the scope that lets it add what it
@@ -24,6 +25,11 @@ import type { ProcessEntry } from "../record/types.js";
 // Output is decoded once, after the process closes, from the concatenated
 // bytes. Decoding each chunk on its own breaks a multi-byte character that
 // a chunk boundary cuts through.
+//
+// On Windows a bare name such as `npm` resolves through PATH and PATHEXT,
+// and a `.cmd` or `.bat` file runs through cmd.exe (windows-command.ts),
+// so a step names a program the same way on every platform. The step record
+// keeps the command as the step wrote it.
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
@@ -92,11 +98,18 @@ export function runCommand(
   const finish = scope().getStore()?.startProcess();
   const startedAt = performance.now();
 
+  const env = options.env ?? process.env;
+  const plan =
+    process.platform === "win32"
+      ? windowsSpawnPlan(command, args, env)
+      : { file: command, args: [...args], verbatim: false };
+
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(command, args, {
+    const child = spawn(plan.file, plan.args, {
       cwd,
-      env: options.env ?? process.env,
+      env,
       stdio: ["pipe", "pipe", "pipe"],
+      windowsVerbatimArguments: plan.verbatim,
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
@@ -108,7 +121,13 @@ export function runCommand(
         ? undefined
         : setTimeout(() => {
             timedOut = true;
-            child.kill("SIGTERM");
+            // Stopping cmd.exe alone would leave the program it started
+            // running, so the whole tree is ended.
+            if (plan.verbatim && child.pid !== undefined) {
+              spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" }).on("error", () => child.kill());
+            } else {
+              child.kill("SIGTERM");
+            }
           }, options.timeout);
 
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));

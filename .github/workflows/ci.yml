@@ -81,3 +81,19 @@ jobs:
       # project under examples/acceptance/ against the same kind of install,
       # and compared with the transcripts its Markdown quotes.
       - run: node scripts/skill-examples.ts
+
+  # How runCommand starts a program on Windows: a bare name found through
+  # PATH and PATHEXT, and a .cmd file run through cmd.exe with its arguments
+  # escaped. Only Windows has cmd.exe, so only this job can check the
+  # escaping against it. The rest of the suite runs on ubuntu.
+  windows-run-command:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx vitest run tests/windows-command.test.ts

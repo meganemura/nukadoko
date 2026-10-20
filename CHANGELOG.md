@@ -7,6 +7,19 @@ just until 0.1.
 
 ## Unreleased
 
+### Fixed
+
+- **`runCommand("npm", ...)` starts npm on Windows.** Node looks up only
+  `.com` and `.exe` files and refuses to start a `.cmd` or `.bat`
+  file without a shell, so a step that ran `npm`, `npx`, or a
+  `node_modules/.bin` shim by name failed there with `ENOENT` or
+  `EINVAL`. On Windows, `runCommand` now looks a bare name up through
+  `PATH` and `PATHEXT`, and runs a `.cmd` or `.bat` file through
+  `cmd.exe /d /s /c` with each argument quoted and escaped so it arrives
+  unchanged. A timeout ends the whole process tree there. The step
+  record's `command` keeps the name the step wrote. Other platforms are
+  unchanged. A CI job runs the escaping against a real `cmd.exe`.
+
 ## 0.18.0 — 2026-10-19
 
 ### Breaking
