@@ -27,7 +27,7 @@ const execFileAsync = promisify(execFile);
 // that, and it now runs for every skill directory, not just acceptance.
 
 const skillsDir = path.join(repoRoot, "skills");
-const skillNames = ["acceptance", "migration"];
+const skillNames = ["acceptance", "migration", "verification"];
 
 async function readFrontmatterOf(name: string): Promise<string> {
   const content = await readFile(path.join(repoRoot, "skills", name, "SKILL.md"), "utf8");

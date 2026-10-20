@@ -7,6 +7,26 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **A third bundled skill, `verification`, puts scenarios under a
+  project's verification skill.** A verification skill (a control CLI
+  that drives one long-lived instance of the app, plus a feature map of
+  what the app does) lets an agent check its own work, but its proof is a
+  transcript and a screenshot judged by the agent that made the change.
+  The new skill keeps the control CLI and the map, and adds nukadoko as
+  the proof layer under them: each sub-feature of the map links the
+  scenario that proves it (`<file>:<line>`) or says `no scenario`; the CLI
+  and the steps call one library, and when the instance's handle is a
+  value (a directory, a URL) `nuka do --args` and `--use` run single steps
+  against the state the CLI built; expected values come from promises the
+  project made, never from program output; a report is reproduced red on
+  the base branch before the fix; and evidence leaves the run directory
+  through `nuka report --out` before retention or cleanup removes it.
+  It was written from three trial runs: a web app, a command-line tool,
+  and the reproduction of a past bug. `nuka skill path` and
+  `gh skill install meganemura/nukadoko --all` now include it.
+
 ### Fixed
 
 - **`runCommand("npm", ...)` starts npm on Windows.** Node looks up only

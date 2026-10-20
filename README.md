@@ -412,7 +412,7 @@ Everything past the loop above, one line each:
 - [Reports fill themselves](#reports-fill-themselves): `nuka report`, which renders a finished run as Allure results, a cucumber-messages stream, or the Markdown summary.
 - [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, and `--repeat`.
 - Environments and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Environments and secrets" in [docs/spec.md](docs/spec.md#environments-and-secrets)): named environments, redaction.
-- [Skills for coding agents](#skills-for-coding-agents): the two skills an agent loads to run this loop.
+- [Skills for coding agents](#skills-for-coding-agents): the three skills an agent loads to run this loop.
 - [The bed has to be tended](#the-bed-has-to-be-tended): `nuka tend`, for what is rotting rather than broken.
 - [Setup details](#setup-details), [Upgrading](#upgrading), [Status](#status), and [Why this exists now](#why-this-exists-now).
 
@@ -958,7 +958,7 @@ has meaning. Review must catch that problem, as
 
 ## Skills for coding agents
 
-nukadoko ships two skills following the
+nukadoko ships three skills following the
 [Agent Skills specification](https://agentskills.io/specification), so
 Claude Code, Copilot, Cursor, Codex and Gemini CLI can all load them:
 
@@ -968,9 +968,14 @@ Claude Code, Copilot, Cursor, Codex and Gemini CLI can all load them:
   feature and its run summary for a person to review.
 - **migration.** Moves a cucumber-js suite across in two stages, and
   explains which differences are the point rather than listing recipes.
+- **verification.** Puts scenarios under a project's verification skill
+  (a control CLI that drives the running app, and a map of its
+  features): which claims of the map a scenario proves, how the CLI and
+  the steps share one library, how a bug report is reproduced red before
+  it is fixed, and how evidence outlives cleanup.
 
 ```sh
-gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host
+gh skill install meganemura/nukadoko --all   # all three, on any Agent Skills host
 nuka skill path                              # the copy matching your installed version
 ```
 
@@ -978,7 +983,7 @@ An agent with no skill loaded starts at `node_modules/nukadoko/llms.txt`:
 the install facts, the loop, every command, and every finding code, in one
 file. `nuka --help` ends by naming it, and so does `nuka init`.
 
-Neither skill writes down what the CLI can answer (vocabulary, contracts,
+No skill writes down what the CLI can answer (vocabulary, contracts,
 refusal reasons all come from `nuka steps`, `nuka describe`, and stderr),
 because a skill that copies those starts lying the moment a command
 changes.

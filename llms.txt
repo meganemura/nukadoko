@@ -54,6 +54,7 @@ A command that stops before it has anything to report (a bad flag, a missing tar
 
 - [skills/acceptance/SKILL.md](skills/acceptance/SKILL.md): a requirement to a scenario and the run that is its evidence, for a person to review. `references/` beside it holds the rules a scenario follows (`scenario-rules.md`) and each procedure: writing steps, step files, steps that check something, parts, writing the feature, running, diagnosing, exploring, fixtures, evidence, maintenance, and starting from prose. `references/examples/` holds three finished projects (a CLI, an HTTP API, a stateful workflow) with the output of real runs.
 - [skills/migration/SKILL.md](skills/migration/SKILL.md): moving a cucumber-js or Playwright Test suite across, in two stages.
+- [skills/verification/SKILL.md](skills/verification/SKILL.md): scenarios as the proof layer under a project's verification skill (a control CLI and a feature map): linking the map to scenarios, sharing one library between the CLI and the steps, reproducing a report red before the fix, and keeping evidence after cleanup.
 - [docs/spec.md](docs/spec.md): the design. "Typed steps" for `defineStep`; "Running" for scenarios and single steps; "Records" for every file a run writes; "Environments and secrets"; "Review" for what a person reads; "Tending"; "CLI summary" for every command and flag; "Out of scope (honest limits)".
 - [docs/ci.md](docs/ci.md): the GitHub Actions job and the pull request comment.
 - [docs/upgrading.md](docs/upgrading.md): what a project changes between releases.

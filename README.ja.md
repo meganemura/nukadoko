@@ -399,7 +399,7 @@ Feature: greet API
 - [Reports fill themselves](#reports-fill-themselves): 終わった run を Allure の結果、cucumber-messages のストリーム、Markdown のサマリとして描き出す `nuka report`。
 - [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`。
 - environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md) の「Environment、secret」): 名前付きの environment、redact。
-- [Skills for coding agents](#skills-for-coding-agents): agent がこのループを回すために読み込む 2 つの skill。
+- [Skills for coding agents](#skills-for-coding-agents): agent がこのループを回すために読み込む 3 つの skill。
 - [The bed has to be tended](#the-bed-has-to-be-tended): 壊れているものではなく腐りつつあるもののための `nuka tend`。
 - [Setup details](#setup-details)、[Upgrading](#upgrading)、[Status](#status)、[Why this exists now](#why-this-exists-now)。
 
@@ -883,13 +883,14 @@ step record は実行が何をしたかを示しますが、assertion がいま�
 
 **コーディング agent のための skill**
 
-nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 2 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
+nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 3 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
 
 - **acceptance** はチケットの受け入れ基準を、feature とその証跡となる run まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、人がレビューできるよう feature とその run サマリを渡します)。
 - **migration** は cucumber-js のスイートを 2 段階で移行させ、どの違いがレシピではなく要点なのかを説明します。
+- **verification** は、プロジェクトの verification skill(動いているアプリを操作する control CLI と機能の地図)の下に scenario を置き、地図のどの主張を scenario で証明するか、CLI とステップで 1 つのライブラリを共有する方法、バグ報告を直す前に赤で再現する方法、cleanup の後も証拠を残す方法を扱います。
 
 ```sh
-gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host
+gh skill install meganemura/nukadoko --all   # all three, on any Agent Skills host
 nuka skill path                              # the copy matching your installed version
 ```
 
@@ -897,7 +898,7 @@ skill を読み込んでいない agent は `node_modules/nukadoko/llms.txt` か
 インストールの事実、ループ、すべてのコマンド、すべての finding code が 1 つのファイルにあります。
 `nuka --help` の最後と `nuka init` の最後がこのファイルを指します。
 
-どちらの skill も、CLI が答えられる内容を書き写しません(語彙、契約、拒否の理由はすべて `nuka steps`、`nuka describe`、stderr から得られます)。
+どの skill も、CLI が答えられる内容を書き写しません(語彙、契約、拒否の理由はすべて `nuka steps`、`nuka describe`、stderr から得られます)。
 それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
 
 skill が代わりに運ぶのは、放っておくと agent が自分では思いつかない規律です。
