@@ -42,12 +42,12 @@ describe("windowsSpawnPlan", () => {
     const plan = windowsSpawnPlan("npm", ["pack", "a b", 'say "hi"'], env, (file) => file === "C:\\Program Files\\nodejs\\npm.CMD");
     expect(plan).toEqual({
       file: "C:\\Windows\\system32\\cmd.exe",
-      args: ["/d", "/s", "/c", '"C:\\Program^ Files\\nodejs\\npm.CMD ^"pack^" ^"a^ b^" ^"say^ \\^"hi\\^"^""'],
+      args: ["/d", "/s", "/c", '"C:\\Program^ Files\\nodejs\\npm.CMD ^^^"pack^^^" ^^^"a^^^ b^^^" ^^^"say^^^ \\^^^"hi\\^^^"^^^""'],
       verbatim: true,
     });
   });
 
-  it("escapes a node_modules/.bin shim's arguments twice", () => {
+  it("escapes every batch file's arguments twice, since the batch file reads them again", () => {
     const plan = windowsSpawnPlan("C:\\app\\node_modules\\.bin\\tsc.cmd", ["a&b"], env);
     expect(plan.args[3]).toBe('"C:\\app\\node_modules\\.bin\\tsc.cmd ^^^"a^^^&b^^^""');
   });
@@ -81,12 +81,11 @@ function readOneArgument(text: string): string {
 }
 
 describe("quoteForCmd", () => {
-  it("reads back as the same argument after cmd.exe's caret pass, once or twice", () =>
+  it("reads back as the same argument after cmd.exe's two caret passes", () =>
     hegel.test(
       (tc) => {
         const arg = tc.draw(gs.text({ alphabet: 'ab \\"%^!&|<>()[];,*?`=\t' }));
-        expect(readOneArgument(uncaret(quoteForCmd(arg, false)))).toBe(arg);
-        expect(readOneArgument(uncaret(uncaret(quoteForCmd(arg, true))))).toBe(arg);
+        expect(readOneArgument(uncaret(uncaret(quoteForCmd(arg))))).toBe(arg);
       },
       { testCases: 200 },
     ));

@@ -9,11 +9,15 @@ import path from "node:path";
 // so that cmd.exe passes it through unchanged.
 // It decides nothing on another platform: the caller asks only on win32.
 //
-// The escaping follows cross-spawn's, which execa and many test runners use:
-// quote each argument as a C runtime would read it, then put a caret before
-// every character cmd.exe treats specially. A shim under node_modules/.bin
-// hands its `%*` to cmd.exe a second time, so its arguments get the carets
-// twice.
+// Each argument is quoted as a C runtime reads it, then every character
+// cmd.exe treats specially gets a caret, twice. cmd.exe reads the line once
+// to start the batch file, and again when the batch file expands `%*` or
+// `%1` into its own command line. With one set of carets, the second read
+// sees `"\"<"` as a quoted `\` followed by a redirection; measured on a
+// Windows runner, the argument `"<` then failed with "The system cannot find
+// the path specified". cross-spawn doubles the carets only for the shims
+// under node_modules/.bin, but npm.cmd and any other batch file that passes
+// its arguments on read them the same second time.
 
 export interface SpawnPlan {
   file: string;
@@ -24,7 +28,6 @@ export interface SpawnPlan {
 }
 
 const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
-const CMD_SHIM = /node_modules[\\/]\.bin[\\/][^\\/]+\.cmd$/i;
 const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
 
 /** The value of `name` in a Windows environment, whose names ignore case. */
@@ -57,12 +60,11 @@ export function resolveWindowsCommand(
 }
 
 /** One argument, quoted so a C runtime reads it back unchanged, then with
- * cmd.exe's special characters escaped once, or twice for a shim. */
-export function quoteForCmd(arg: string, twice: boolean): string {
+ * cmd.exe's special characters escaped for its two reads. */
+export function quoteForCmd(arg: string): string {
   // Backslashes before a quote, and before the closing quote, are doubled.
-  let quoted = arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1");
-  quoted = `"${quoted}"`.replace(CMD_META, "^$1");
-  return twice ? quoted.replace(CMD_META, "^$1") : quoted;
+  const quoted = arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1");
+  return `"${quoted}"`.replace(CMD_META, "^$1").replace(CMD_META, "^$1");
 }
 
 /** How to start `command` with `args` on Windows. */
@@ -74,8 +76,7 @@ export function windowsSpawnPlan(
 ): SpawnPlan {
   const file = resolveWindowsCommand(command, env, exists);
   if (!/\.(cmd|bat)$/i.test(file)) return { file, args: [...args], verbatim: false };
-  const twice = CMD_SHIM.test(file);
-  const line = [file.replace(CMD_META, "^$1"), ...args.map((arg) => quoteForCmd(arg, twice))].join(" ");
+  const line = [file.replace(CMD_META, "^$1"), ...args.map(quoteForCmd)].join(" ");
   return {
     file: envValue(env, "COMSPEC") ?? "cmd.exe",
     args: ["/d", "/s", "/c", `"${line}"`],
