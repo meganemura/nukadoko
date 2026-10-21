@@ -2218,7 +2218,10 @@ Node writes before an uncaught error (the location it was thrown from,
 that source line, and a line of carets) and take the first visible line
 after it, such as `Error: Cannot find module '../dist/cli.js'`, so a
 crashed Node program is named by its error. Text before the location and
-a `: ` is kept. Any other text keeps its own first line. It says why a Then step read an
+a `: ` is kept. Any other text keeps its own first line. A first line that
+ends in a colon, such as `init exited 1:`, only introduces what follows, so
+it is joined to the next visible line once (`init exited 1: Error: ...`),
+with the same header skipped there. It says why a Then step read an
 empty stdout: the program it ran did not start, or failed, and the step
 that ran it still passed, because an exit code is a result, not a failure.
 The text comes from the step record, so a secret in it is already

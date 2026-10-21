@@ -50,12 +50,40 @@ describe("firstErrorLine", () => {
   it("returns the first visible line, trimmed, whatever follows it", () =>
     hegel.test((tc) => {
       const leading = tc.draw(gs.arrays(blankLine, { maxSize: 3 }));
-      const line = tc.draw(visibleLine);
+      const line = tc.draw(visibleLine.filter((drawn) => !drawn.trim().endsWith(":")));
       const rest = tc.draw(gs.text({ maxSize: 40 }));
       const newline = tc.draw(gs.sampledFrom(["\n", "\r\n", "\r"]));
       const message = [...leading, line].join(newline) + newline + rest;
       expect(firstErrorLine(message)).toBe(line.trim());
     }));
+
+  it("joins a first line that ends in a colon to the next visible line, and to nothing after it", () =>
+    hegel.test((tc) => {
+      const introduction = `${tc.draw(visibleLine)}:`;
+      const blanks = tc.draw(gs.arrays(blankLine, { maxSize: 3 }));
+      const next = tc.draw(visibleLine);
+      const rest = tc.draw(gs.text({ maxSize: 40 }));
+      const newline = tc.draw(gs.sampledFrom(["\n", "\r\n", "\r"]));
+      const message = [introduction, ...blanks, next].join(newline) + newline + rest;
+      expect(firstErrorLine(message)).toBe(`${introduction.trim()} ${next.trim()}`);
+    }));
+
+  it("keeps a colon-ended line as it is when nothing visible follows it", () => {
+    expect(firstErrorLine("init exited 1:\n  \n")).toBe("init exited 1:");
+  });
+
+  it("names a crashed program after the colon by its error, not by Node's header", () => {
+    const message = [
+      "init exited 1:",
+      "/tmp/project/node_modules/tool/cli.js:3",
+      "import { run } from '../dist/cli.js';",
+      "^^^^^^",
+      "",
+      "Error: Cannot find module '../dist/cli.js'",
+      "    at load (node:internal/modules/cjs/loader:1)",
+    ].join("\n");
+    expect(firstErrorLine(message)).toBe("init exited 1: Error: Cannot find module '../dist/cli.js'");
+  });
 
   it("ignores terminal color codes", () =>
     hegel.test((tc) => {

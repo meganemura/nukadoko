@@ -63,15 +63,23 @@ export function firstErrorLine(message: string): string {
 const NODE_THROW_LOCATION = /^(?:(.*?): )?(?:node:|file:\/\/|\/|[A-Za-z]:[\\/]).*:\d+$/;
 const CARETS = /^\s*\^+\s*$/;
 
-function firstVisibleLine(text: string): string | undefined {
+// A first line that ends in a colon (`init exited 1:`) only introduces
+// what follows, so alone it names no cause. It is joined to the next
+// visible line, once: a second colon-ended line is shown as it is, so the
+// result stays one line of the message and never a paragraph.
+function firstVisibleLine(text: string, joinIntroduction = true): string | undefined {
   const lines = text.replace(ANSI_ESCAPE, "").split(/\r\n?|[\n\u2028\u2029]/);
   const first = lines.findIndex((line) => line.trim().length > 0);
   if (first === -1) return undefined;
   const firstLine = lines[first]!.trim();
   const location = NODE_THROW_LOCATION.exec(firstLine);
   if (location !== null && first + 2 < lines.length && CARETS.test(lines[first + 2]!)) {
-    const error = firstVisibleLine(lines.slice(first + 3).join("\n"));
+    const error = firstVisibleLine(lines.slice(first + 3).join("\n"), joinIntroduction);
     if (error !== undefined) return location[1] === undefined ? error : `${location[1]}: ${error}`;
+  }
+  if (joinIntroduction && firstLine.endsWith(":")) {
+    const next = firstVisibleLine(lines.slice(first + 1).join("\n"), false);
+    if (next !== undefined) return `${firstLine} ${next}`;
   }
   return firstLine;
 }

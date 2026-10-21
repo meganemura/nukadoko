@@ -27,6 +27,15 @@ just until 0.1.
   `{{secret.NAME}}` in the recorded `command`, with the same rules as a
   loaded secret; the program still receives the real value.
 
+### Fixed
+
+- **A failed step whose error starts with a colon-ended line names the
+  cause.** A step that reports a program as `init exited 1:` followed by
+  its stderr showed only `init exited 1:` on the progress line and in the
+  run summary, and nothing said the reason was on the next line. A first
+  line that ends in a colon is now joined to the next visible line, once,
+  with Node's throw header skipped there as before.
+
 ## 0.19.0 — 2026-10-21
 
 ### Added
