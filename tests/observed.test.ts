@@ -105,7 +105,7 @@ describe("measured mutates: request-side observed counts", () => {
       [3, "a-fetch-read-happens", { http_reads: null, http_writes: null, processes: null }],
     ]);
     expect(await readFile(path.join(rootDir, ".nukadoko", "runs", latestRunJson(rootDir).run_id, "summary.md"), "utf8")).toContain(
-      "2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`), so nothing was compared for them.",
+      "2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`) and ran no process through `runCommand` whose files were measured, so nothing was compared for them.",
     );
   });
 

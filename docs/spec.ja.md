@@ -2254,6 +2254,13 @@ scenario record は独立したファイルではなく、その run の `run.js
   シグナルがプロセスを終了させた場合は `"signal"` が加わり、`timeout` オプションがプロセスを止めた場合は `"timed_out": true` が加わります。
   `command` は配列で、プログラムとその引数を順に持ちます。
   `command` は、ほかのフィールドと同じく redact されます。
+  step の中では、各エントリに `"files"` も加わります。
+  これは、起動の前と終了の後に `cwd` をたどった結果の差で、`added`、`changed`、`removed` のパスを `cwd` からの相対パス(区切りは `/`、ディレクトリは末尾に `/`)で並べます。
+  サイズ、更新時刻、変更時刻、inode のどれかが違えば変更とみなすので、同じバイト列での書き直しも載ります。
+  ファイルの中身は読みません。
+  `node_modules` と `.git` のディレクトリ、そして run 自身が書き込む project の state ディレクトリはたどらず、`"skipped"` に名前を載せます。
+  エントリが 20000 を超える作業ディレクトリや読めない作業ディレクトリでは、代わりに `{ "unmeasured": "<理由>" }` になります。
+  計測するのはプロセスではなくディレクトリなので、同じときにそこへ書き込んだほかのものも差に含まれます。
   step 自身が持つ値(step が署名したトークンなど)は読み込んだ secret ではありません。
   `redact: { NAME: value }` を渡すと、その値は `command` の中で `{{secret.NAME}}` と書かれ、プログラムには本当の値が渡ります。
   `runCommand(command, args, { cwd, env, input, timeout, redact })` は `nukadoko` からの import であり、fixture ではありません。
@@ -2480,13 +2487,13 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   これは失敗した environment ごとに 1 つずつ載り、run に environment が 2 つ以上あればその environment の名前が前に付きます。
 - 「Declared vs observed」。
   実行されて step record を持つすべての step が対象です。
-  `mutates: false` を宣言しながら計測上 1 回以上書き込んだ(`observed.http_writes > 0`、「キーワードの意味論」を参照)step を、断定ではなく生の事実として(宣言の値と計測した件数を並べて)示します。
+  `mutates: false` を宣言しながら計測上 1 回以上書き込んだ(`observed.http_writes > 0`、「キーワードの意味論」を参照)step、または作業ディレクトリが変わったプロセスを実行した(`observed.processes[].files`)step を、断定ではなく生の事実として(宣言の値と計測した件数、そして変わったパスを 3 つまで並べて)示します。
   POST で読み取る step は、設計上いつもここに載ります。
   実行時の `mutates` の強制を当てにならなくしたのと同じ、HTTP メソッドによる代理だからです。
   run 全体で 1 つの節なので、うっかり読み飛ばされません。
   何も食い違わなくても書かれるので、「比べて何も無かった」と「比べなかった」は区別できます。
-  `mutates: false` を宣言しながら HTTP のチャネルに届かなかった step(`observed.http_writes` が `null`)は比べられておらず、この節はそれらを 1 行で数えます("2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes ...")。
-  そのため、`fetch` を呼んだ step が書き込まなかったと報告されることはありません。
+  `mutates: false` を宣言しながら HTTP のチャネルに届かず、ファイルを計測したプロセスも実行しなかった step(`observed.http_writes` が `null`)は比べられておらず、この節はそれらを 1 行で数えます("2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes ...")。
+  そのため、`fetch` を呼んだ step や自分でファイルを書いた step が書き込まなかったと報告されることはありません。
   compat step(`mutates: null`、「Compat steps(移行の扉)」を参照)には比べる宣言が無く、別に数えます。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。

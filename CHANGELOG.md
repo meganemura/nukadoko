@@ -27,6 +27,18 @@ just until 0.1.
   `{{secret.NAME}}` in the recorded `command`, with the same rules as a
   loaded secret; the program still receives the real value.
 
+- **A read-only CLI step is checked against the files it changed.**
+  Declared vs observed compared `mutates: false` with HTTP writes only, so
+  a step that ran a writing program through `runCommand` was never
+  compared. Each `observed.processes` entry recorded inside a step now has
+  `files`: the paths added, changed, and removed under its working
+  directory between a walk before the spawn and one after the close (size,
+  times, and inode, never content). `node_modules`, `.git`, and the state
+  directory are not walked and are named in `skipped`; past 20000
+  entries the entry reads `{ "unmeasured": "<why>" }`. The run summary
+  lists such a step with up to three changed paths, and counts a
+  read-only step as compared when either channel was measured.
+
 ### Fixed
 
 - **`nuka run --probe` measures a Then whose expected value is a table or a

@@ -277,7 +277,23 @@ export interface ProcessEntry {
    * only then. */
   readonly timed_out?: true;
   readonly duration_ms: number;
+  /** What changed under `cwd` between the spawn and the close. Present
+   * only for a process run inside a step. */
+  readonly files?: ProcessFiles;
 }
+
+/** Paths relative to the process's `cwd`, `/`-separated, a directory's
+ * ending in `/`, each list sorted. `skipped` names the `node_modules`
+ * and `.git` directories that were not walked. `unmeasured` says why
+ * nothing was compared (too many entries, or an unreadable directory). */
+export type ProcessFiles =
+  | {
+      readonly added: readonly string[];
+      readonly changed: readonly string[];
+      readonly removed: readonly string[];
+      readonly skipped?: readonly string[];
+    }
+  | { readonly unmeasured: string };
 
 /** One `console.error` call, error type only (warning is excluded as
  * noise). */

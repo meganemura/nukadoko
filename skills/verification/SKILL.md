@@ -125,10 +125,10 @@ or reaches the pull request through CI's run summary (`docs/ci.md` in the
 package). The control CLI's own evidence goes beside it: screenshots and
 accessibility snapshots for a web app; for a command-line tool, a
 transcript of argv, exit code, stdout, and stderr, and a diff of the files
-each command wrote. A step that must not write files measures that on
-disk (hash the files before and after) and returns the changed paths,
-because the step record compares declared and observed writes for HTTP
-only. Confirm the evidence exists after the verification skill's cleanup
+each command wrote. A step that runs the tool through `runCommand`
+gets that diff measured: each process lists the files added, changed,
+and removed under its working directory (`observed.processes[].files`),
+and the run summary sets them against `mutates: false`. Confirm the evidence exists after the verification skill's cleanup
 has run.
 
 ## 6. Reproducing a report

@@ -27,6 +27,17 @@ const process = z.looseObject({
   signal: z.string().optional(),
   timed_out: z.literal(true).optional(),
   duration_ms: z.number(),
+  files: z
+    .union([
+      z.looseObject({
+        added: z.array(z.string()),
+        changed: z.array(z.string()),
+        removed: z.array(z.string()),
+        skipped: z.array(z.string()).optional(),
+      }),
+      z.looseObject({ unmeasured: z.string() }),
+    ])
+    .optional(),
 });
 
 const observed = z.looseObject({

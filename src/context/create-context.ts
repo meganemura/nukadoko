@@ -616,7 +616,12 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // One collector for this ctx's whole lifetime; `beginStep` resets its
   // *counts*, never replaces the object itself, so every network path
   // opened before or after a reset still tallies into the same instance.
-  const observed = createObservedCollector();
+  // The state directory is where this run writes step records and traces
+  // while a step runs, so a `runCommand` snapshot would otherwise read the
+  // executor's own writes as the program's.
+  const observed = createObservedCollector({
+    unwatchedDirs: config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)],
+  });
   // Same lifetime rule as `observed`, for provenance instead of network
   // calls.
   const used = createUsedCollector();

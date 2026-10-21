@@ -41,6 +41,8 @@ export interface ObservedCollector {
    * in. A position never filled (the process was still running when the
    * step record was built) is left out of the snapshot. */
   startProcess(): (entry: ProcessEntry) => void;
+  /** Directories `runCommand` leaves out of its file snapshot. */
+  readonly unwatchedDirs: readonly string[];
   /** A snapshot of the counts accumulated since the last `reset()` (or since
    * creation, for `nuka do`'s single execution-wide boundary). */
   snapshot(): ObservedCounts;
@@ -50,13 +52,14 @@ export interface ObservedCollector {
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
 
-export function createObservedCollector(): ObservedCollector {
+export function createObservedCollector(options: { readonly unwatchedDirs?: readonly string[] } = {}): ObservedCollector {
   let httpWatched = false;
   let httpReads = 0;
   let httpWrites = 0;
   let processes: (ProcessEntry | undefined)[] | null = null;
 
   return {
+    unwatchedDirs: options.unwatchedDirs ?? [],
     watchHttp(): void {
       httpWatched = true;
     },

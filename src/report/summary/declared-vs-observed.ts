@@ -1,4 +1,4 @@
-import type { StepRecord } from "../../record/types.js";
+import type { ProcessEntry, StepRecord } from "../../record/types.js";
 
 // Responsibility: the "Declared vs observed" section of the run summary
 // `nuka run` writes (src/run/run-summary.ts), the Markdown a person reads
@@ -7,14 +7,19 @@ import type { StepRecord } from "../../record/types.js";
 // a step that never ran).
 //
 // The section sets a step's declaration (`mutates`) against what was
-// measured (`observed.http_writes`) and states only the raw fact, never a
-// verdict. A step reading over POST lands here every time, by design: the
+// measured (`observed.http_writes`, and the files that changed under the
+// working directory of each process the step ran,
+// `observed.processes[].files`) and states only the raw fact, never a
+// verdict. A file change is a measurement, not a proxy, but it is a change
+// in a directory, not proof that the step's own process made it, so it is
+// stated the same way. A step reading over POST lands here every time, by design: the
 // HTTP method is not a trustworthy signal of a write, which is the same
 // reason run-time `mutates` enforcement was dropped. So this section is a
-// record, not an accusation. A read-only step that reached no HTTP channel
-// nukadoko observes (`observed.http_writes` is `null`) was not compared,
-// and the section counts those apart so "no write" is never claimed for a
-// step that called `fetch`.
+// record, not an accusation. A read-only step that reached neither an HTTP
+// channel nukadoko observes (`observed.http_writes` is `null`) nor a
+// process whose files were measured was not compared, and the section
+// counts those apart so "no write" is never claimed for a step that called
+// `fetch` or wrote a file itself.
 
 /** One step that ran and has a step record to compare. */
 export interface ComparedStep {
@@ -28,8 +33,33 @@ export interface ComparedStep {
 export interface DeclaredVsObservedMismatch {
   readonly scenarioName: string;
   readonly stepText: string;
+  /** Measured HTTP writes, 0 when the step reached HTTP and wrote nothing
+   * or reached no HTTP channel. */
   readonly writes: number;
+  /** Each file change under a process's working directory, as
+   * `<added|changed|removed> <cwd>/<path>`, in process order. */
+  readonly fileChanges: readonly string[];
 }
+
+/** The file changes of every process whose files were measured, and
+ * whether any was: a process with `unmeasured` files, or one recorded by a
+ * release before this field, compares nothing. */
+function fileChangesOf(processes: readonly ProcessEntry[] | null): { measured: boolean; changes: string[] } {
+  let measured = false;
+  const changes: string[] = [];
+  for (const entry of processes ?? []) {
+    const files = entry.files;
+    if (files === undefined || "unmeasured" in files) continue;
+    measured = true;
+    const base = entry.cwd.replaceAll("\\", "/").replace(/\/$/, "");
+    for (const [change, paths] of [["added", files.added], ["changed", files.changed], ["removed", files.removed]] as const) {
+      for (const path of paths) changes.push(`${change} ${base}/${path}`);
+    }
+  }
+  return { measured, changes };
+}
+
+const MAX_LISTED_FILE_CHANGES = 3;
 
 export interface DeclaredVsObserved {
   readonly mismatches: readonly DeclaredVsObservedMismatch[];
@@ -55,10 +85,11 @@ export function collectDeclaredVsObserved(steps: Iterable<ComparedStep>, unreada
     }
     if (stepRecord.mutates !== false) continue;
     const writes = stepRecord.observed.http_writes;
-    if (writes === null) {
+    const files = fileChangesOf(stepRecord.observed.processes);
+    if (writes === null && !files.measured) {
       unobservedReadOnlyCount += 1;
-    } else if (writes > 0) {
-      mismatches.push({ scenarioName, stepText, writes });
+    } else if ((writes ?? 0) > 0 || files.changes.length > 0) {
+      mismatches.push({ scenarioName, stepText, writes: writes ?? 0, fileChanges: files.changes });
     }
   }
   return { mismatches, compatStepCount, unobservedReadOnlyCount, unreadableCount };
@@ -73,16 +104,23 @@ export function renderDeclaredVsObserved(result: DeclaredVsObserved): string[] {
   const lines: string[] = ["", "## Declared vs observed", ""];
 
   if (mismatches.length === 0) {
-    lines.push("No step declared `mutates: false` and was measured making a write.");
+    lines.push("No step declared `mutates: false` and was measured making a write or changing a file.");
   } else {
     lines.push(
-      "Steps that declared `mutates: false` and were measured making writes. This is a comparison, not a verdict: a step that reads over POST records writes by design.",
+      "Steps that declared `mutates: false` and were measured making writes or changing files. This is a comparison, not a verdict: a step that reads over POST records writes by design, and a file change is a change under a process's working directory, whoever made it.",
       "",
     );
     for (const mismatch of mismatches) {
-      const writeWord = mismatch.writes === 1 ? "write" : "writes";
+      const observed: string[] = [];
+      if (mismatch.writes > 0) observed.push(`${mismatch.writes} ${mismatch.writes === 1 ? "write" : "writes"}`);
+      const count = mismatch.fileChanges.length;
+      if (count > 0) {
+        const listed = mismatch.fileChanges.slice(0, MAX_LISTED_FILE_CHANGES).join(", ");
+        const more = count > MAX_LISTED_FILE_CHANGES ? `, and ${count - MAX_LISTED_FILE_CHANGES} more in its step record` : "";
+        observed.push(`${count} file ${count === 1 ? "change" : "changes"} (${listed}${more})`);
+      }
       lines.push(
-        `- "${mismatch.stepText}" (scenario "${mismatch.scenarioName}"): declared mutates: false, observed ${mismatch.writes} ${writeWord}`,
+        `- "${mismatch.stepText}" (scenario "${mismatch.scenarioName}"): declared mutates: false, observed ${observed.join(" and ")}`,
       );
     }
   }
@@ -94,7 +132,7 @@ export function renderDeclaredVsObserved(result: DeclaredVsObserved): string[] {
         : `${unobservedReadOnlyCount} steps that declared \`mutates: false\` reached`;
     lines.push(
       "",
-      `${subject} no HTTP channel nukadoko observes (\`request\`, \`page\`, \`context\`, \`pageAs\`), so nothing was compared for ${unobservedReadOnlyCount === 1 ? "it" : "them"}.`,
+      `${subject} no HTTP channel nukadoko observes (\`request\`, \`page\`, \`context\`, \`pageAs\`) and ran no process through \`runCommand\` whose files were measured, so nothing was compared for ${unobservedReadOnlyCount === 1 ? "it" : "them"}.`,
     );
   }
 

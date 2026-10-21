@@ -181,11 +181,18 @@ describe("observed.processes on a step record", () => {
     const stepRecord = await stepRecordOf(3);
     expect(stepRecord.result).toEqual({ first: 3, second: "hello" });
     const processes = stepRecord.observed.processes as Record<string, unknown>[];
-    expect(processes.map(({ duration_ms: _ms, ...rest }) => rest)).toEqual([
+    // The files under the working directory are measured, but this test
+    // runs in the repository root, where other tests write at the same time.
+    expect(processes.map(({ duration_ms: _ms, files: _files, ...rest }) => rest)).toEqual([
       { command: [node, "-e", "process.exit(3)"], cwd: process.cwd(), exit_code: 3 },
       { command: [node, "-e", "process.stdout.write('hello')"], cwd: process.cwd(), exit_code: 0 },
     ]);
     expect(typeof processes[0]!.duration_ms).toBe("number");
+    expect(processes[0]!.files).toHaveProperty("added");
+    // The fixture's own state directory is where this run writes, so it is
+    // skipped rather than read as the program's write.
+    const skipped = (processes[0]!.files as { skipped: string[] }).skipped;
+    expect(skipped).toContain(`${path.relative(process.cwd(), path.join(rootDir, ".nukadoko")).split(path.sep).join("/")}/`);
   });
 
   it("nuka run: a loaded secret in an argument is redacted", async () => {

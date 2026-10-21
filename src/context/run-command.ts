@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import type { ProcessEntry } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
+import { diffSnapshots, takeSnapshot } from "./file-snapshot.js";
 import { windowsSpawnPlan } from "./windows-command.js";
 
 // Responsibility: `runCommand`, the exported helper a step uses to run a
@@ -38,11 +39,22 @@ import { windowsSpawnPlan } from "./windows-command.js";
 // otherwise reach the record, the run summary, and every report built
 // from them. It is replaced here, before the entry leaves this module,
 // because the executor never sees which values the step treats as secret.
+//
+// Inside a step, the working directory is snapshotted before the spawn and
+// after the close (file-snapshot.ts), and the difference is the entry's
+// `files`. A step that runs a command-line tool writes to disk, not over
+// HTTP, so without it a `mutates: false` step that ran a writing program
+// had nothing to be compared against. Outside a step nothing is recorded,
+// so nothing is walked.
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
 export interface ProcessRecorder {
   startProcess(): (entry: ProcessEntry) => void;
+  /** Absolute directories the executor writes to while a step runs, left
+   * out of the file snapshot. Optional, so an older copy's recorder still
+   * fits. */
+  readonly unwatchedDirs?: readonly string[];
 }
 
 const SCOPE_KEY = Symbol.for("nukadoko.runCommand.scope");
@@ -101,7 +113,7 @@ export interface RunCommandResult {
  * of the step record, so a loaded secret in an argument does not reach it;
  * a secret the step holds itself is named in `redact`.
  */
-export function runCommand(
+export async function runCommand(
   command: string,
   args: readonly string[] = [],
   options: RunCommandOptions = {},
@@ -109,7 +121,10 @@ export function runCommand(
   const cwd = resolve(options.cwd ?? process.cwd());
   // Taken at call time, so the position in `observed.processes` is the
   // call order even when calls overlap.
-  const finish = scope().getStore()?.startProcess();
+  const recorder = scope().getStore();
+  const finish = recorder?.startProcess();
+  const unwatched = recorder?.unwatchedDirs ?? [];
+  const before = finish === undefined ? undefined : takeSnapshot(cwd, unwatched);
   const startedAt = performance.now();
 
   const env = options.env ?? process.env;
@@ -168,6 +183,7 @@ export function runCommand(
       clearTimeout(timer);
       const durationMs = Math.round(performance.now() - startedAt);
       const secrets = Object.entries(options.redact ?? {}).map(([name, value]) => ({ name, value }));
+      const files = before === undefined ? undefined : diffSnapshots(before, takeSnapshot(cwd, unwatched));
       finish?.({
         command: [command, ...args].map((part) => redactString(part, secrets)),
         cwd,
@@ -175,6 +191,7 @@ export function runCommand(
         ...(signal !== null ? { signal } : {}),
         ...(timedOut ? { timed_out: true as const } : {}),
         duration_ms: durationMs,
+        ...(files === undefined ? {} : { files }),
       });
       if (timedOut) {
         rejectPromise(

@@ -2729,7 +2729,18 @@ its scenario record's id, so either record leads to the other.
   `"signal"` when a signal ended the process and `"timed_out": true` when
   the `timeout` option stopped it. `command` is an array, the program
   followed by its arguments, and the record redacts it like every other
-  field. A value the step holds itself, such as a token it signed, is
+  field. Inside a step, each entry also has `"files"`: the paths, relative
+  to `cwd` with `/` separators and a trailing `/` for a directory, that
+  were `added`, `changed`, or `removed` between a walk of `cwd` before
+  the spawn and one after the close. A file is changed when its size,
+  modification time, change time, or inode differs, so a rewrite with the
+  same bytes still shows; no content is read. `node_modules` and `.git`
+  directories, and the project's state directory (where the run itself
+  writes), are not walked and are named in `"skipped"`. A working
+  directory past 20000 entries, or one that cannot be read, gives
+  `{ "unmeasured": "<why>" }` instead. It measures a directory, not a
+  process: anything else writing there at the same time is in the
+  difference too. A value the step holds itself, such as a token it signed, is
   not a loaded secret; `redact: { NAME: value }` writes it as
   `{{secret.NAME}}` in `command` while the program still receives it.
   `runCommand(command, args, { cwd, env, input, timeout, redact })` is an
@@ -3081,13 +3092,16 @@ holds:
   and prefixed by that environment when the run had more than one;
 - "Declared vs observed", over every step that ran and has a step record:
   each step that declared `mutates: false` but made at least one measured
-  write (`observed.http_writes > 0`, see "Keyword semantics"), stated as a
-  raw fact (the declared value beside the observed count), never a verdict.
-  A step that declared `mutates: false` and reached no HTTP channel
-  (`observed.http_writes` is `null`) was not compared, and the section
-  counts those steps in one line ("2 steps that declared `mutates: false`
-  reached no HTTP channel nukadoko observes ..."), so a step that called
-  `fetch` is never reported as having made no write.
+  write (`observed.http_writes > 0`, see "Keyword semantics") or ran a
+  process whose working directory changed (`observed.processes[].files`),
+  stated as a raw fact (the declared value beside the observed count, and
+  up to three changed paths), never a verdict.
+  A step that declared `mutates: false`, reached no HTTP channel
+  (`observed.http_writes` is `null`), and ran no process whose files were
+  measured was not compared, and the section counts those steps in one
+  line ("2 steps that declared `mutates: false` reached no HTTP channel
+  nukadoko observes ..."), so a step that called `fetch` or wrote a file
+  itself is never reported as having made no write.
   A step that reads over POST lands here every time, by design: the same
   HTTP-method proxy that made run-time `mutates` enforcement unreliable. It
   is one section for the whole run, so it cannot be scanned past by
