@@ -122,7 +122,7 @@ describe("renderRunSummary", () => {
   it("renders a red run with the failing step, its error, what it ran, and how to rerun it", () => {
     const markdown = renderRunSummary(run({
       verdict: "failed",
-      environments: [{ name: "staging", target_version: "2.4.0" }],
+      environments: [{ name: "staging", target_version: "2.4.0", base_url: "https://staging.example.test" }],
       commit: { sha: "fedcba9876543210fedcba9876543210fedcba98", dirty: true },
       selection: "partial",
       scenarios: [
@@ -170,7 +170,7 @@ describe("renderRunSummary", () => {
         "# nukadoko run failed: 3 scenarios, 1 passed, 2 failed",
         "",
         "- commit: `fedcba9` with uncommitted changes",
-        "- environment: staging (target version 2.4.0)",
+        "- environment: staging at https://staging.example.test (target version 2.4.0)",
         "- browser: none launched",
         "- selection: partial (a line target left out other scenarios of its file)",
         "- nukadoko: 0.14.1",

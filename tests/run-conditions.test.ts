@@ -36,8 +36,8 @@ describe("nuka run over several environments", () => {
     const { exitCode, document, stderr } = await run(["features/", ...ENVS]);
     expect(exitCode).toBe(1);
     expect(document.environments).toEqual([
-      { name: "flag-on", target_version: "2.0.0" },
-      { name: "flag-off", target_version: null },
+      { name: "flag-on", target_version: "2.0.0", base_url: "http://127.0.0.1:3201" },
+      { name: "flag-off", target_version: null, base_url: null },
     ]);
     expect(document.verdict).toBe("failed");
     expect(document.counts).toEqual({ scenarios: 6, passed: 5, failed: 1, not_run: 0 });

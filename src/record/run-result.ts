@@ -193,11 +193,20 @@ export interface RunEnvironment {
   readonly name: string;
   /** What the environment's version probe answered, `null` without one. */
   readonly target_version: string | null;
+  /** The `baseURL` the environment resolved to, `null` without one, so
+   * the run names the instance it judged and not only the commit. Absent
+   * in a run.json an earlier build wrote. */
+  readonly base_url?: string | null;
 }
 
 /** The fields `nuka run` puts beside the envelope's `findings`. */
 export type RunFields = {
   readonly run_id: string;
+  /** The run directory, relative to the project root with `/`
+   * separators, so a script passes it to `nuka report` without knowing
+   * the state directory's layout. Absent in a run.json an earlier build
+   * wrote. */
+  readonly run_dir?: string;
   readonly started_at: string;
   readonly finished_at: string;
   /** The commit and whether the working tree had uncommitted changes when

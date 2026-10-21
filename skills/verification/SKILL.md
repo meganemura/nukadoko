@@ -115,8 +115,11 @@ and `nuka clean` removes all of them. Evidence for a pull request leaves
 the run directory:
 
 ```sh
-npx nuka report .nukadoko/runs/<run_id> --format markdown --out <evidence dir>/summary.md
+npx nuka report "$(npx nuka run --json | jq -r .run_dir)" --format markdown --out <evidence dir>/summary.md
 ```
+
+`run_dir` in run.json is the run directory; `environments[].base_url`
+names the instance the run judged, so the evidence says which one it was.
 
 or reaches the pull request through CI's run summary (`docs/ci.md` in the
 package). The control CLI's own evidence goes beside it: screenshots and

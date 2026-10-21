@@ -1964,6 +1964,12 @@ run が終わったとき、最後の step record と run サマリの後に、�
   git リポジトリの外や最初のコミットの前では `null` です。
   `environments` は run が対象にした各 environment を `--env` が与えた順に並べます(`--env` が無ければ `default`)。
   各要素の `target_version` は、その environment のバージョン probe が答えた値です(probe がなければ `null`)。
+  各要素の `base_url` は、その environment が解決した `baseURL` です(なければ `null`)。
+  これで run は、コミットだけでなく、判定した相手のインスタンスも名指しします。
+  `base_url` は `target_version` と同じく redact され、summary の environment の行にも出ます。
+- `run_dir` は run ディレクトリを、プロジェクトのルートからの相対パスで `/` 区切りで示します。
+  スクリプトは state ディレクトリの構成を知らずに、これを `nuka report` に渡せます。
+  run.json の中のパスは、これまでどおりこのディレクトリからの相対パスです。
 - `selection` は、`:line` の対象がそのファイルの scenario を 1 つでも外したとき `partial` で、それ以外は `full` です。
   部分実行はデバッグの結果であり、レビュアーが feature が通ったと読むべきものではありません(「レビュー」を参照)。
 - `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` を持ちます。

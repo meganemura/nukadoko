@@ -791,6 +791,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       );
       const fields: RunFields = {
         run_id: runId,
+        run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
         started_at: invocationStartedAt.toISOString(),
         finished_at: new Date().toISOString(),
         commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean },
@@ -799,6 +800,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // Unlike a scenario record, run.json is not redacted as a whole,
           // and a version probe can answer with a secret value.
           target_version: condition.targetVersion === undefined ? null : redactString(condition.targetVersion, condition.secrets),
+          base_url: condition.resolvedEnv.baseURL === undefined ? null : redactString(condition.resolvedEnv.baseURL, condition.secrets),
         })),
         selection,
         counts: countScenarios(runScenarios, verdicts),

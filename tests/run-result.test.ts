@@ -59,11 +59,12 @@ describe("nuka run: run.json", () => {
         },
       ],
       run_id: runId,
+      run_dir: `.nukadoko/runs/${runId}`,
       started_at: expect.any(String),
       finished_at: expect.any(String),
       // The fixture copy sits inside this repository's own working tree.
       commit: { sha: expect.stringMatching(/^[0-9a-f]{40}$/), dirty: expect.any(Boolean) },
-      environments: [{ name: "default", target_version: null }],
+      environments: [{ name: "default", target_version: null, base_url: null }],
       selection: "full",
       counts: { scenarios: 2, passed: 1, failed: 1, not_run: 0 },
       scenarios: [

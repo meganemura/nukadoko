@@ -107,11 +107,12 @@ function renderCondition(document: RunDocument): string[] {
     document.commit === null
       ? "- commit: unknown (no git state was readable when the run started)"
       : `- commit: \`${document.commit.sha.slice(0, 7)}\`${document.commit.dirty ? " with uncommitted changes" : ""}`;
-  const environments = document.environments.map((environment) =>
-    environment.target_version === null
-      ? `- environment: ${environment.name}`
-      : `- environment: ${environment.name} (target version ${environment.target_version})`,
-  );
+  const environments = document.environments.map((environment) => {
+    const at = environment.base_url === undefined || environment.base_url === null ? "" : ` at ${environment.base_url}`;
+    return environment.target_version === null
+      ? `- environment: ${environment.name}${at}`
+      : `- environment: ${environment.name}${at} (target version ${environment.target_version})`;
+  });
   const browsers = new Map<string, string>();
   for (const scenario of document.scenarios) {
     if (scenario.browser !== undefined) {

@@ -130,7 +130,7 @@ const document = z.looseObject({
   started_at: z.iso.datetime(),
   finished_at: z.iso.datetime(),
   commit: z.looseObject({ sha: z.string(), dirty: z.boolean() }).nullable(),
-  environments: z.array(z.looseObject({ name: z.string(), target_version: z.string().nullable() })),
+  environments: z.array(z.looseObject({ name: z.string(), target_version: z.string().nullable(), base_url: z.string().nullable().optional() })),
   selection: z.enum(["full", "partial"]),
   counts: z.looseObject({ scenarios: z.number().int(), passed: z.number().int(), failed: z.number().int(), not_run: z.number().int() }),
   scenarios: z.array(scenario),

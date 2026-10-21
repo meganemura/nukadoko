@@ -2260,10 +2260,11 @@ to act on the run without opening another file:
     }
   ],
   "run_id": "run-20260801-143022-a1b2",
+  "run_dir": ".nukadoko/runs/run-20260801-143022-a1b2",
   "started_at": "...",
   "finished_at": "...",
   "commit": { "sha": "<40 hex characters>", "dirty": false },
-  "environments": [{ "name": "default", "target_version": null }],
+  "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "selection": "full",
   "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
   "scenarios": [
@@ -2334,7 +2335,14 @@ to act on the run without opening another file:
   repository or before the first commit. `environments` lists each
   environment the run targeted, in the order `--env` gave them (`default`
   without `--env`), with `target_version`, what that environment's version
-  probe answered, `null` without one.
+  probe answered, `null` without one, and `base_url`, the `baseURL` it
+  resolved to, `null` without one, so the run names the instance it
+  judged and not only the commit. `base_url` is redacted like
+  `target_version`; the summary's environment line names it too.
+- `run_dir` is the run directory, relative to the project root with `/`
+  separators, so a script passes it to `nuka report` without knowing the
+  state directory's layout. The paths inside run.json stay relative to
+  that directory.
 - `selection` is `partial` when a `:line` target left out a scenario of its
   file, and `full` otherwise. A partial run is a debugging result, not
   what a reviewer should read as the feature passing (see "Review").

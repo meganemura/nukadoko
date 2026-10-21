@@ -7,7 +7,7 @@ import { defineConfig } from "./nukadoko-shim.js";
 export default defineConfig({
   secrets: { public: ["BANNER"] },
   environments: {
-    "flag-on": { envFiles: [".env.flag-on"], version: () => "2.0.0" },
+    "flag-on": { envFiles: [".env.flag-on"], version: () => "2.0.0", baseURL: "http://127.0.0.1:3201" },
     "flag-off": { envFiles: [".env.flag-off"] },
   },
 });

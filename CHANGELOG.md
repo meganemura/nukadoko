@@ -9,6 +9,16 @@ just until 0.1.
 
 ### Added
 
+- **run.json names the instance each environment judged, and its own
+  directory.** Each `environments` entry gets `base_url`, the `baseURL`
+  that environment resolved to (`null` without one), redacted like
+  `target_version`, and the summary's environment line names it. A run
+  against the wrong instance used to look the same as a correct one. A
+  new top-level `run_dir` is the run directory relative to the project
+  root, so a script passes `nuka report "$(jq -r .run_dir)"` without
+  knowing the state directory's layout. Both fields are absent in a
+  run.json an earlier release wrote, and `nuka report` still reads one.
+
 - **`runCommand` takes `redact: { NAME: value }` for a secret the step
   holds.** The executor redacts only values it loaded from env files, so
   a token a step signed or read from a response and then passed as an
