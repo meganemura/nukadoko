@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.20.0 — 2026-10-21
+
 ### Added
 
 - **run.json names the instance each environment judged, and its own
@@ -86,6 +88,33 @@ just until 0.1.
   `stdout: ` and stdout's first visible line, a JSON stdout compacted
   onto one line and cut at 200 characters. With nothing visible on either
   stream it reads `(no output)` instead of `(no stderr)`.
+
+### Skill eval
+
+One run of one model, as `docs/releasing.md` describes: the `cli`
+example, Claude Sonnet, without `cli.md` in the installed skill.
+`nuka check` and `nuka run` passed (4 scenarios, 16 steps).
+
+| Rule | Result | Reason |
+| --- | --- | --- |
+| S1 | met | Every Then claims a value: an exact exit code, the exact stdout in a docstring, the exact stderr line, or the exact JSON object. |
+| S2 | met | Every scenario ends with its Then lines after its When. |
+| S3 | met | The feature was written before the first `nuka run`. The ticket gives no data, so the agent chose the input lines and wrote the totals from them; it listed the success exit code 0 under `Feature:` as an assumption. |
+| S4 | met | The sentences name the file, the arguments, the exit code, and the output a user reads. |
+| S5 | met | File names, arguments, and the expected output are in the sentence or the docstring. |
+| S6 | met | The unreadable file and the bad line are their own scenarios, each claiming the exit code and the exact refusal text. |
+| S7 | not applicable | The feature has no Scenario Outline. |
+| S8 | met | Each scenario writes its own file into a new `scratch` directory. |
+| S9 | met | One When per scenario, and the exit code and the output are claimed on separate Then lines. |
+| S10 | met | The Givens only write files, and running `tally` is always the When. |
+| S11 | met | Each assertion message names the expected and the actual value. |
+| S12 | met | The ticket is copied verbatim under `Feature:`, and each scenario proves one of its sentences. |
+
+The agent asked, in its report, the questions the ticket leaves open (the
+order "sorted by name" means, other malformed lines, a missing argument)
+instead of writing scenarios for them. Its When step runs `tally` through
+`runCommand` and declares `mutates: false`, so this release's file
+channel compares that declaration with what the run changed on disk.
 
 ## 0.19.0 — 2026-10-21
 
