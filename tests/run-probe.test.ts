@@ -308,6 +308,67 @@ describe("nuka run --probe", () => {
     ]);
   });
 
+  it("probes a Then whose expected value is only a docstring or a table", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "steps", "output-is.ts"),
+      `import { z } from "zod";
+import { defineStep } from "../../nukadoko-shim.js";
+
+export default defineStep({
+  pattern: "the output is",
+  description: "Reads the output and never compares it with the docstring",
+  args: z.object({ expected: z.string() }),
+  returns: z.object({}),
+  mutates: false,
+  async run() {
+    return {};
+  },
+});
+`,
+    );
+    await writeFile(
+      path.join(rootDir, "features", "steps", "rows-are.ts"),
+      `import { z } from "zod";
+import { defineStep } from "../../nukadoko-shim.js";
+
+export default defineStep({
+  pattern: "the rows are",
+  description: "Compares the rows with the table",
+  args: z.object({ rows: z.array(z.array(z.string())) }),
+  returns: z.object({}),
+  mutates: false,
+  async run({}, args) {
+    if (JSON.stringify(args.rows) !== JSON.stringify([["name"], ["Ada"]])) throw new Error("rows differ");
+    return {};
+  },
+});
+`,
+    );
+    await writeFile(
+      path.join(rootDir, "features", "attached.feature"),
+      `Feature: Attached values
+
+  Scenario: a docstring and a table
+    Then the output is
+      """
+      hello
+      """
+    And the rows are
+      | name |
+      | Ada  |
+`,
+    );
+    const { exitCode, document } = await run(["--probe", "features/attached.feature"]);
+    expect(exitCode).toBe(0);
+    expect(document.scenarios[0]!.probes).toEqual([
+      { line: 4, step: "output-is", text: "the output is", key: "expected", recorded: "hello", changed: "hello-probe", status: "passed" },
+      { line: 8, step: "rows-are", text: "the rows are", key: "rows[1][0]", recorded: "Ada", changed: "Ada-probe", status: "caught" },
+    ]);
+    expect(document.findings.map((finding) => [finding.code, finding.message])).toEqual([
+      ["then-passed-with-changed-capture", 'the output is: step "output-is" passed with expected "hello-probe" in place of "hello"'],
+    ]);
+  });
+
   it("folds the notes of --repeat into one per step and key", async () => {
     const { document } = await run(["--probe", "--repeat", "3", "features/greeting.feature"]);
     expect(document.findings.map((finding) => [finding.code, finding.message])).toEqual([

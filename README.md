@@ -1221,9 +1221,11 @@ execution is its own record under one run id, and a scenario that failed
 at least once is tallied after the summary, `<passed> of <n> passed`.
 
 `nuka run --probe` asks whether each passed Then could have failed. Right
-after a read-only Then that captured a value passes, and before the next
-step, it runs again, alone, with one capture changed (a string suffixed, a
-number +1, a boolean flipped). A Then that still passes is a
+after a read-only Then that captured a value, or was given a table or a
+docstring, passes, and before the next step, it runs again, alone, with one
+capture changed (a string suffixed, a number +1, a boolean flipped), and
+once more with its docstring suffixed or the last cell of its table
+suffixed. A Then that still passes is a
 `then-passed-with-changed-capture` note in `run.json` and the run summary,
 and a Then the probe could not measure (it or its re-run wrote, or its args
 schema refused the changed value) is a `then-probe-not-measured` note. It

@@ -2,12 +2,51 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import type { RunProbe, RunScenario } from "../src/record/run-result.js";
-import { mutateCapture, probeFindings } from "../src/run/probe.js";
+import { mutateCapture, probeFindings, probeTargets } from "../src/run/probe.js";
 
 // Responsibility: the capture mutator and the probe notes `nuka run
 // --probe` raises, as properties over any value and any run.
 
 const capture = gs.oneOf<unknown>(gs.text(), gs.booleans(), gs.floats(), gs.integers());
+
+describe("probeTargets", () => {
+  const cell = gs.text({ maxSize: 6 });
+  const table = gs.arrays(gs.arrays(cell, { minSize: 1, maxSize: 4 }), { minSize: 1, maxSize: 4 });
+
+  it("changes exactly the last cell of the last row of a table, and keeps every other cell", () =>
+    hegel.test((tc) => {
+      const rows = tc.draw(table);
+      const [target, ...rest] = probeTargets({ rows }, [], "rows");
+      expect(rest).toEqual([]);
+      const row = rows.length - 1;
+      const column = rows[row]!.length - 1;
+      expect(target!.key).toBe(`rows[${row}][${column}]`);
+      expect([target!.recorded, target!.changed]).toEqual([rows[row]![column], `${rows[row]![column]}-probe`]);
+      const changed = target!.args.rows as string[][];
+      expect(changed.map((cells) => cells.length)).toEqual(rows.map((cells) => cells.length));
+      changed.forEach((cells, r) => cells.forEach((value, c) => expect(value).toBe(r === row && c === column ? `${rows[r]![c]}-probe` : rows[r]![c])));
+      // The step's own table is left as it was bound.
+      expect(rows[row]![column]).toBe(target!.recorded);
+    }));
+
+  it("suffixes a docstring, and probes it after the captures", () =>
+    hegel.test((tc) => {
+      const docstring = tc.draw(gs.text());
+      const name = tc.draw(gs.text({ maxSize: 6 }));
+      const targets = probeTargets({ name, docstring, fromKey: 3 }, ["name"], "docstring");
+      expect(targets.map((target) => target.key)).toEqual(["name", "docstring"]);
+      expect(targets[1]!.args).toEqual({ name, docstring: `${docstring}-probe`, fromKey: 3 });
+      expect(targets[0]!.args).toEqual({ name: `${name}-probe`, docstring, fromKey: 3 });
+    }));
+
+  it("probes no attachment for an empty table, a table with an empty row last, or a value of another shape", () => {
+    expect(probeTargets({ rows: [] }, [], "rows")).toEqual([]);
+    expect(probeTargets({ rows: [["a"], []] }, [], "rows")).toEqual([]);
+    expect(probeTargets({ rows: [[1]] }, [], "rows")).toEqual([]);
+    expect(probeTargets({ rows: { a: "b" } }, [], "rows")).toEqual([]);
+    expect(probeTargets({ name: "a" }, ["name"], null).map((target) => target.key)).toEqual(["name"]);
+  });
+});
 
 describe("mutateCapture", () => {
   it("changes a string, a boolean, or a number and keeps its type", () =>

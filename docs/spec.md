@@ -2035,7 +2035,7 @@ once is not what this flag does.
 `--probe` measures whether a passed Then could have failed. Each step
 that ran in a Then position (the Gherkin `Then`, and an `And` or `But`
 after it), declared `mutates: false`, and bound at least one capture from
-its pattern runs again right after it passes, before its AfterStep hooks
+its pattern, or a table or docstring, runs again right after it passes, before its AfterStep hooks
 and the next step, so the re-run sees the state the Then saw. It runs
 alone, in the same scenario's ctx and fixtures, with the args it was bound
 with and one capture changed: a string gets the suffix `-probe`, a number
@@ -2043,7 +2043,13 @@ with and one capture changed: a string gets the suffix `-probe`, a number
 schema as the first run's did. A capture of another type, or a number +1
 does not change, is not probed, and neither is a compat step, which
 declares no `mutates`. Each capture gets its own re-run, and a value
-`from` filled is never changed. The When is not re-run, and a step whose
+`from` filled is never changed. A table or docstring is often the whole
+expected value of a Then, so it gets one re-run too, after the captures:
+a docstring gets the suffix `-probe`, and a table changes only the last
+cell of its last row, since its first row is often a header a step matches
+on. Its `key` is the args key the docstring filled, or
+`<key>[<row>][<column>]` for the table cell, with that cell's values as
+`recorded` and `changed`. The When is not re-run, and a step whose
 own observation shows a process or an HTTP write is not re-run either, so
 a probe runs nothing the feature did not name a second time. A Then that
 still passes is a `then-passed-with-changed-capture` note at the Then's
@@ -4089,7 +4095,8 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
                               --probe re-runs each read-only Then right after
-                              it passes, with one capture changed, and notes
+                              it passes, with one capture, its table, or its
+                              docstring changed, and notes
                               one that still passes
                               (then-passed-with-changed-capture) or that it
                               could not measure (then-probe-not-measured);

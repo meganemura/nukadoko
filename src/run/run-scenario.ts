@@ -55,7 +55,7 @@ import {
 
 export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
-import { mutateCapture } from "./probe.js";
+import { probeTargets } from "./probe.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import type { ErrorKind, FixtureUsageEntry, ObservedCounts, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
@@ -73,7 +73,6 @@ import {
   hookDisplayTitle,
   type ScenarioHookRecord,
   type ProbeNotMeasuredReason,
-  type ProbeValue,
   type ScenarioProbe,
   type ScenarioRecord,
   type ScenarioStepEntry,
@@ -1013,6 +1012,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     step: Step,
     args: Record<string, unknown>,
     keys: readonly string[],
+    attachmentKey: string | null,
   ): Promise<void> => {
     // A step that wrote is not run again: the probe runs nothing the
     // feature did not name a second time, and a read-only declaration
@@ -1034,10 +1034,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     let probeWrote = false;
     const probeDir = path.join(scenarioDir, ".probe");
     try {
-      for (const key of keys) {
-        const changed = mutateCapture(args[key]);
-        if (changed === null) continue;
-        const base = { step_index: stepIndex, step: stepName, text, key, recorded: args[key] as ProbeValue, changed: changed.value };
+      for (const target of probeTargets(args, keys, attachmentKey)) {
+        const base = { step_index: stepIndex, step: stepName, text, key: target.key, recorded: target.recorded, changed: target.changed };
         if (stepWrote !== null) {
           probes.push({ ...base, status: "not-measured", reason: "wrote", message: `the step ${stepWrote} when it ran, so it is not run again` });
           continue;
@@ -1048,7 +1046,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         }
         await mkdir(probeDir, { recursive: true });
         await contextHandle.beginStep(probeDir);
-        const outcome = await probeStep(step, stepName, { ...args, [key]: changed.value });
+        const outcome = await probeStep(step, stepName, target.args);
         const rerunWrote = writes(contextHandle.observedCounts());
         if (rerunWrote !== null) {
           probeWrote = true;
@@ -1952,6 +1950,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           entry.step.args,
           new Set(Object.keys(entry.step.from)),
         );
+        // The key a table or docstring filled, read before `from` adds
+        // its keys to the same object: the one bound key no capture names.
+        const captureKeys = new Set(outcome.captures.map((capture) => capture.key));
+        const attachmentKey =
+          bindResult.ok && pickleStep.argument !== undefined && bindResult.value !== null && typeof bindResult.value === "object"
+            ? (Object.keys(bindResult.value).find((key) => !captureKeys.has(key)) ?? null)
+            : null;
 
         const stepStartedAt = new Date();
         let status: "passed" | "failed";
@@ -2089,7 +2094,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           status === "passed" &&
           pickleStep.type === "Outcome" &&
           entry.step.mutates === false &&
-          outcome.captures.length > 0 &&
+          (outcome.captures.length > 0 || attachmentKey !== null) &&
           bindResult.ok &&
           bindResult.value !== null &&
           typeof bindResult.value === "object"
@@ -2103,7 +2108,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             pickleStep.text,
             entry.step,
             bindResult.value as Record<string, unknown>,
-            [...new Set(outcome.captures.map((capture) => capture.key))],
+            [...captureKeys],
+            attachmentKey,
           );
         }
         await runAfterStepHooks(stepIndex, {

@@ -1106,7 +1106,8 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 1 回でも失敗した scenario は、summary の後に `<passed> of <n> passed` の形で集計されます。
 
 `nuka run --probe` は、通った各 Then が失敗しえたかどうかを問います。
-値を capture した読み取り専用の Then が通った直後、次の step より前に、capture を 1 つ変えて(文字列には接尾辞、数には 1、真偽値は反転)もう一度単独で走らせます。
+値を capture した、または表か docstring を渡された読み取り専用の Then が通った直後、次の step より前に、capture を 1 つ変えて(文字列には接尾辞、数には 1、真偽値は反転)もう一度単独で走らせます。
+docstring に接尾辞を付けたもの、または表の最後のセルに接尾辞を付けたものでも、もう 1 回走らせます。
 それでも通った Then は、`run.json` と run サマリの `then-passed-with-changed-capture` の note になります。
 probe が計測できなかった Then(走ったとき、または再実行で書き込んだ、あるいは args schema が変えた値を拒んだ)は、`then-probe-not-measured` の note になります。
 これは計測なので、終了コードは run のものから変わりません。

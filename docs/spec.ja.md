@@ -1719,7 +1719,7 @@ run サマリのセルは `<passed> of <n> passed` と読めます。
 1 つの scenario を複数の worker で同時に走らせることは、このフラグの仕事ではありません。
 
 `--probe` は、通った Then が失敗しえたかどうかを計測します。
-Then の位置(Gherkin の `Then` と、その後の `And` や `But`)で走り、`mutates: false` を宣言し、pattern の capture を 1 つ以上結び付けた step を、通った直後、その AfterStep hook と次の step より前に、もう一度走らせます。
+Then の位置(Gherkin の `Then` と、その後の `And` や `But`)で走り、`mutates: false` を宣言し、pattern の capture を 1 つ以上、または表か docstring を結び付けた step を、通った直後、その AfterStep hook と次の step より前に、もう一度走らせます。
 そのため再実行は、Then が見たのと同じ状態を見ます。
 同じ scenario の ctx と fixture の中で単独で走り、結び付けたときの args のまま、capture を 1 つだけ変えます。
 文字列には接尾辞 `-probe` を付け、数には 1 を足し、真偽値は反転します。
@@ -1727,6 +1727,10 @@ Then の位置(Gherkin の `Then` と、その後の `And` や `But`)で走り�
 ほかの型の capture と、1 を足しても変わらない数は probe しません。
 `mutates` を宣言しない compat の step も probe しません。
 capture ごとに 1 回ずつ再実行し、`from` が埋めた値は変えません。
+表や docstring は Then の期待値そのものであることが多いので、capture の後にそれも 1 回再実行します。
+docstring には接尾辞 `-probe` を付け、表は最後の行の最後のセルだけを変えます。
+表の最初の行は、step が比べずに照合に使う見出しであることが多いからです。
+その `key` は docstring が埋めた args のキー、表なら `<key>[<row>][<column>]` で、`recorded` と `changed` はそのセルの値です。
 When は再実行しません。
 走ったときの観測に process か HTTP の書き込みがある step も再実行しないので、probe は feature が名指していないものを 2 度目に走らせません。
 それでも通った Then は、その Then の行の `then-passed-with-changed-capture` という note になります。

@@ -33,6 +33,57 @@ export function mutateCapture(value: unknown): { readonly value: ProbeValue } | 
   return null;
 }
 
+/** One value a probe changes: the args key it reports, the value the step
+ * ran with and the one the probe runs it with, and the args to re-run the
+ * step with. */
+export interface ProbeTarget {
+  readonly key: string;
+  readonly recorded: ProbeValue;
+  readonly changed: ProbeValue;
+  readonly args: Record<string, unknown>;
+}
+
+// A table or docstring is often the whole expected value of a Then (`the
+// output is` with a docstring, a table of rows to find), so a probe that
+// changed only captures would leave the strongest claim in the scenario
+// unmeasured and say nothing about it. A docstring gets the suffix a
+// string capture gets. A table changes one cell, the last cell of its last
+// row, because the first row is often a header a step matches on rather
+// than compares; it is reported as `<key>[<row>][<column>]` so the note
+// names the cell, and the rest of the table is unchanged.
+/** The values a probe changes for one Then, in order: each capture key
+ * `mutateCapture` changes, then the table or docstring the step was given
+ * under `attachmentKey`, if any. */
+export function probeTargets(
+  args: Record<string, unknown>,
+  captureKeys: readonly string[],
+  attachmentKey: string | null,
+): ProbeTarget[] {
+  const targets: ProbeTarget[] = [];
+  for (const key of captureKeys) {
+    const changed = mutateCapture(args[key]);
+    if (changed === null) continue;
+    targets.push({ key, recorded: args[key] as ProbeValue, changed: changed.value, args: { ...args, [key]: changed.value } });
+  }
+  if (attachmentKey === null) return targets;
+  const attachment = args[attachmentKey];
+  if (typeof attachment === "string") {
+    const changed = `${attachment}${PROBE_SUFFIX}`;
+    targets.push({ key: attachmentKey, recorded: attachment, changed, args: { ...args, [attachmentKey]: changed } });
+  } else if (Array.isArray(attachment) && attachment.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string"))) {
+    const rows = attachment as readonly (readonly string[])[];
+    const row = rows.length - 1;
+    const column = row === -1 ? -1 : rows[row]!.length - 1;
+    if (column !== -1) {
+      const recorded = rows[row]![column]!;
+      const changed = `${recorded}${PROBE_SUFFIX}`;
+      const table = rows.map((cells, index) => (index === row ? cells.map((cell, at) => (at === column ? changed : cell)) : [...cells]));
+      targets.push({ key: `${attachmentKey}[${row}][${column}]`, recorded, changed, args: { ...args, [attachmentKey]: table } });
+    }
+  }
+  return targets;
+}
+
 function shown(value: ProbeValue): string {
   return JSON.stringify(value);
 }

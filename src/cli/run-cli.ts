@@ -615,7 +615,8 @@ export async function runCli(
           default: false,
           describe:
             "right after a read-only Then passes, and before the next step, run it again with one capture changed (a " +
-            "string suffixed, a number +1, a boolean flipped); a Then that still passes is a " +
+            "string suffixed, a number +1, a boolean flipped), and once with its docstring or the last cell of its table " +
+            "suffixed; a Then that still passes is a " +
             "then-passed-with-changed-capture note, and one the probe could not measure is a then-probe-not-measured " +
             "note. Never changes the exit code",
         })

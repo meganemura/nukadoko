@@ -29,6 +29,15 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka run --probe` measures a Then whose expected value is a table or a
+  docstring.** A read-only Then probed only its captures, so a Then whose
+  whole claim was a docstring (`the output is`) or a table got no probe
+  entry and no note, and a reader could not tell it was never measured.
+  Such a Then now runs once more with its docstring suffixed with
+  `-probe`, or with the last cell of its table's last row suffixed (the
+  first row is often a header). The probe's `key` is the docstring's args
+  key, or `<key>[<row>][<column>]` for the table cell.
+
 - **A failed step whose error starts with a colon-ended line names the
   cause.** A step that reports a program as `init exited 1:` followed by
   its stderr showed only `init exited 1:` on the progress line and in the
