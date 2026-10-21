@@ -36,6 +36,14 @@ just until 0.1.
   line that ends in a colon is now joined to the next visible line, once,
   with Node's throw header skipped there as before.
 
+- **A producer that refused on stdout is named by what it printed.** The
+  `used` line of a failed step read `(no stderr)` when the program it ran
+  exited nonzero with an empty stderr, as a program run with `--json`
+  does, so the cause was only in the step record. The line now reads
+  `stdout: ` and stdout's first visible line, a JSON stdout compacted
+  onto one line and cut at 200 characters. With nothing visible on either
+  stream it reads `(no output)` instead of `(no stderr)`.
+
 ## 0.19.0 — 2026-10-21
 
 ### Added

@@ -2212,8 +2212,12 @@ has no step record and gets the error line only. Between the two, one more
 line names each `used` entry whose `result` is a process that exited
 nonzero: an object with a number `exitCode` other than 0 and a string
 `stderr`, the shape `runCommand` returns. The line reads `used    <step>
-exit <code>  <first line of stderr>`, or `(no stderr)` when the process
-wrote nothing visible, in `used` order. The error line and this line skip the header
+exit <code>  <first line of stderr>`, in `used` order. When stderr is
+empty, as it is for a program that prints a refusal under `--json`, the
+line reads `stdout: ` and the first visible line of stdout instead; a
+stdout that is JSON is shown compacted onto one line and cut at 200
+characters, because a pretty-printed one starts with a bare `{`. With
+nothing visible on either stream it reads `(no output)`. The error line and this line skip the header
 Node writes before an uncaught error (the location it was thrown from,
 that source line, and a line of carets) and take the first visible line
 after it, such as `Error: Cannot find module '../dist/cli.js'`, so a
@@ -3065,8 +3069,8 @@ holds:
   duration of every execution in the row, and for a failed one where it
   failed (the first step that did not pass or skip, otherwise the first
   failed hook), the first line of that error, each `used` step whose process
-  exited nonzero with its exit code and the first line of its stderr (as on
-  stderr), the last command the step ran through `runCommand` that did not
+  exited nonzero with its exit code and the first line of its stderr, or of
+  its stdout when stderr is empty (as on stderr), the last command the step ran through `runCommand` that did not
   exit 0, and the record's path, once for each environment it failed in
   and prefixed by that environment when the run had more than one;
 - "Declared vs observed", over every step that ran and has a step record:

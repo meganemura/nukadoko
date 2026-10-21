@@ -198,12 +198,41 @@ describe("formatStepFailure: a used producer that exited nonzero", () => {
     ]);
   });
 
-  it("reads (no stderr) when the process wrote nothing visible", () => {
-    expect(failed([{ step: "run-greet", result: { exitCode: 2, stderr: " \n" } }])).toEqual([
+  it("reads (no output) when the process wrote nothing visible on either stream", () => {
+    expect(failed([{ step: "run-greet", result: { exitCode: 2, stdout: "\n", stderr: " \n" } }])).toEqual([
       'expected "Hello, Ada!", got ""',
-      "used    run-greet  exit 2  (no stderr)",
+      "used    run-greet  exit 2  (no output)",
       `record  ${record}`,
     ]);
+  });
+
+  it("names stdout's first visible line when stderr is empty", () => {
+    expect(failed([{ step: "run-greet", result: { exitCode: 2, stdout: "\nrefused: unknown environment\nmore\n", stderr: "" } }])).toEqual([
+      'expected "Hello, Ada!", got ""',
+      "used    run-greet  exit 2  stdout: refused: unknown environment",
+      `record  ${record}`,
+    ]);
+  });
+
+  it("compacts a JSON stdout, which a pretty printer starts with a bare brace, and cuts it at 200 characters", () => {
+    const refusal = { schema_version: 2, verdict: "refused", findings: [{ code: "unknown-environment" }] };
+    expect(failed([{ step: "run-nuka", result: { exitCode: 2, stdout: JSON.stringify(refusal, null, 2), stderr: "" } }])[1]).toBe(
+      `used    run-nuka  exit 2  stdout: ${JSON.stringify(refusal)}`,
+    );
+    const long = JSON.stringify({ message: "x".repeat(300) }, null, 2);
+    const line = failed([{ step: "run-nuka", result: { exitCode: 2, stdout: long, stderr: "" } }])[1]!;
+    expect(line).toBe(`used    run-nuka  exit 2  stdout: ${JSON.stringify({ message: "x".repeat(300) }).slice(0, 200)}...`);
+  });
+
+  it("keeps a JSON stdout on one line when a string in it holds a line separator", () => {
+    const line = failed([{ step: "run-nuka", result: { exitCode: 2, stdout: '{"message": "a\u2028b"}', stderr: "" } }])[1]!;
+    expect(line).toBe('used    run-nuka  exit 2  stdout: {"message":"a\\u2028b"}');
+  });
+
+  it("prefers stderr when the process wrote on both streams", () => {
+    expect(failed([{ step: "run-greet", result: { exitCode: 1, stdout: "partial", stderr: "boom" } }])[1]).toBe(
+      "used    run-greet  exit 1  boom",
+    );
   });
 
   it("says nothing for exit 0, a signal, a result that is not a process, or no result", () => {
@@ -245,12 +274,13 @@ describe("exitedProducers", () => {
   );
   const result = gs.oneOf<unknown>(
     gs.record({ exitCode: field, stderr: field }),
+    gs.record({ exitCode: field, stdout: gs.oneOf<unknown>(field, gs.sampledFrom(["{\n  \"a\": 1\n}", "[1,", "\n\n"])), stderr: field }),
     gs.record({ exitCode: field }),
     gs.record({ stderr: field }),
     field,
   );
 
-  it("keeps exactly the entries with a nonzero number exitCode and a string stderr, in order", () =>
+  it("keeps exactly the entries with a nonzero number exitCode and a string stderr, in order, each with one visible line", () =>
     hegel.test((tc) => {
       const used = tc.draw(
         gs.arrays(
@@ -271,8 +301,8 @@ describe("exitedProducers", () => {
       const exited = exitedProducers(used);
       expect(exited.map((producer) => producer.step)).toEqual(expected.map((entry) => entry.step));
       for (const producer of exited) {
-        expect(producer.stderrLine.trim().length).toBeGreaterThan(0);
-        expect(producer.stderrLine).not.toMatch(/[\r\n\u2028\u2029]/);
+        expect(producer.outputLine.trim().length).toBeGreaterThan(0);
+        expect(producer.outputLine).not.toMatch(/[\r\n\u2028\u2029]/);
       }
     }));
 });

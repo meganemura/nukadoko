@@ -170,7 +170,7 @@ function renderFailureCell(failure: SummaryFailure | undefined): string {
   if (failure === undefined) return "";
   const parts = [`${cellText(failure.where)}: ${cellCode(failure.errorLine)}`];
   for (const producer of failure.exited ?? []) {
-    parts.push(`used ${cellText(producer.step)} exit ${producer.exitCode}: ${cellCode(producer.stderrLine)}`);
+    parts.push(`used ${cellText(producer.step)} exit ${producer.exitCode}: ${cellCode(producer.outputLine)}`);
   }
   if (failure.command !== undefined) parts.push(`ran ${cellCode(failure.command)}`);
   if (failure.recordPath !== null) parts.push(`record ${cellCode(failure.recordPath)}`);

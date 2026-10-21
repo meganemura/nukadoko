@@ -29,7 +29,9 @@ two: a Then step that got an empty stdout usually failed there, because
 the program did not start (a missing build, a missing dependency, a `.js`
 import of a `.ts` file under `node`), and the step that ran it passed.
 When that program was Node and it crashed, the line shows the `Error:`
-line, not the location Node printed above it.
+line, not the location Node printed above it. A program that wrote its
+refusal on stdout and nothing on stderr (as under `--json`) shows
+`stdout: ` and what it printed there.
 Open that path's `record.json` rather than
 searching the records directory.
 

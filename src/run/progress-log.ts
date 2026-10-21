@@ -130,8 +130,34 @@ export function assertionDetailLines(message: string): string[] {
 export interface ExitedProducer {
   readonly step: string;
   readonly exitCode: number;
-  /** The first visible line of the process's stderr, or `(no stderr)`. */
-  readonly stderrLine: string;
+  /** The first visible line of the process's stderr; with none, its
+   * stdout as `stdoutLine` reads it, after `stdout: `; with neither,
+   * `(no output)`. */
+  readonly outputLine: string;
+}
+
+const MAX_STDOUT_JSON_LENGTH = 200;
+
+// A program run with --json prints its refusal on stdout and leaves stderr
+// empty, so stderr alone would name no cause. A JSON stdout is shown
+// compacted, because its first line is a bare `{` when it is pretty
+// printed; it is cut by code point, as an expect detail is. Reading a
+// field such as a finding's `code` would guess at one program's schema.
+function stdoutLine(stdout: string): string | undefined {
+  const text = stdout.replace(ANSI_ESCAPE, "").trim();
+  if (text.length === 0) return undefined;
+  let compact: string | undefined;
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      // JSON.stringify leaves U+2028 and U+2029 raw, and both end a line.
+      compact = JSON.stringify(JSON.parse(text)).replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
+    } catch {
+      compact = undefined;
+    }
+  }
+  if (compact === undefined) return firstVisibleLine(text);
+  const codePoints = Array.from(compact);
+  return codePoints.length > MAX_STDOUT_JSON_LENGTH ? `${codePoints.slice(0, MAX_STDOUT_JSON_LENGTH).join("")}...` : compact;
 }
 
 /** The `used` entries whose result has the shape `runCommand` returns, a
@@ -145,9 +171,11 @@ export function exitedProducers(used: readonly { readonly step: string; readonly
   for (const entry of used ?? []) {
     const result = entry.result;
     if (typeof result !== "object" || result === null) continue;
-    const { exitCode, stderr } = result as { exitCode?: unknown; stderr?: unknown };
+    const { exitCode, stderr, stdout } = result as { exitCode?: unknown; stderr?: unknown; stdout?: unknown };
     if (typeof exitCode !== "number" || exitCode === 0 || typeof stderr !== "string") continue;
-    exited.push({ step: entry.step, exitCode, stderrLine: firstVisibleLine(stderr) ?? "(no stderr)" });
+    const fromStdout = typeof stdout === "string" ? stdoutLine(stdout) : undefined;
+    const outputLine = firstVisibleLine(stderr) ?? (fromStdout === undefined ? "(no output)" : `stdout: ${fromStdout}`);
+    exited.push({ step: entry.step, exitCode, outputLine });
   }
   return exited;
 }
@@ -172,9 +200,9 @@ export function formatStepFailure(failure: StepFailure): string[] {
   return lines;
 }
 
-/** `used    <step>  exit <code>  <first stderr line>`. */
+/** `used    <step>  exit <code>  <output line>` (`ExitedProducer.outputLine`). */
 export function formatExitedProducer(producer: ExitedProducer): string {
-  return `used    ${producer.step}  exit ${producer.exitCode}  ${producer.stderrLine}`;
+  return `used    ${producer.step}  exit ${producer.exitCode}  ${producer.outputLine}`;
 }
 
 /** `<stateDir>/runs/<run_id>/steps/<id>`, the directory a run's step

@@ -1847,7 +1847,11 @@ matcher の名前だけでは、ページが間違っているのか期待が間
 始まらなかった step には step record がないため、エラーの行だけが付きます。
 この 2 行の間には、`result` が 0 以外で終わったプロセスである `used` のエントリごとに、もう 1 行が入ります。
 そのような `result` とは、0 以外の数値の `exitCode` と文字列の `stderr` を持つオブジェクトで、`runCommand` が返す形です。
-その行は `used    <step>  exit <code>  <stderr の最初の行>` で、プロセスが目に見える文字を何も書かなかったときは `(no stderr)` です。
+その行は `used    <step>  exit <code>  <stderr の最初の行>` です。
+`--json` で拒否を出すプログラムのように stderr が空のときは、代わりに `stdout: ` と stdout の目に見える最初の行を載せます。
+JSON の stdout は 1 行に詰めて 200 文字で切ります。
+整形された JSON の最初の行は `{` だけだからです。
+どちらにも目に見える文字が無いときは `(no output)` です。
 並びは `used` の順です。
 エラーの行とこの行は、Node が uncaught error の前に書くヘッダ(投げられた場所、そのソースの行、キャレットの行)を飛ばし、その後の目に見える最初の行を取ります。
 たとえば `Error: Cannot find module '../dist/cli.js'` です。
@@ -2468,7 +2472,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   unchanged、changed、new の scenario の数、消えた受け入れ基準の数(ambiguous か比べられなかったものがあればその数も)、比べた対象と step ファイル、変わった step ファイル、unchanged ではない各 scenario と消えた各受け入れ基準の行を `gherkin` のブロックで、そして変わった各 step ファイルの下にそれを名指すすべての scenario を載せます。
 - feature ファイルごとの表(パス順)。
   scenario ごとに 1 行を行番号順に並べ、scenario、行、environment ごとに 1 列(列名は environment の名前)のセルの断定(`--repeat` のときは `<passed> of <n> passed`)、その行のすべての実行の所要時間を載せます。
-  失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
+  失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
   これは失敗した environment ごとに 1 つずつ載り、run に environment が 2 つ以上あればその environment の名前が前に付きます。
 - 「Declared vs observed」。
   実行されて step record を持つすべての step が対象です。
