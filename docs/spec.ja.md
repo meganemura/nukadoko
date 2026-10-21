@@ -2238,7 +2238,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   シグナルがプロセスを終了させた場合は `"signal"` が加わり、`timeout` オプションがプロセスを止めた場合は `"timed_out": true` が加わります。
   `command` は配列で、プログラムとその引数を順に持ちます。
   `command` は、ほかのフィールドと同じく redact されます。
-  `runCommand(command, args, { cwd, env, input, timeout })` は `nukadoko` からの import であり、fixture ではありません。
+  step 自身が持つ値(step が署名したトークンなど)は読み込んだ secret ではありません。
+  `redact: { NAME: value }` を渡すと、その値は `command` の中で `{{secret.NAME}}` と書かれ、プログラムには本当の値が渡ります。
+  `runCommand(command, args, { cwd, env, input, timeout, redact })` は `nukadoko` からの import であり、fixture ではありません。
   0 以外を含むすべての終了で `{ exitCode, signal, stdout, stderr }` に resolve し、reject するのは、プログラムを起動できなかった場合と `timeout` がプロセスを止めた場合だけです。
   Windows では、`npm` のような拡張子のないプログラム名を `PATH` と `PATHEXT` で探し、`.cmd` と `.bat` のファイルは `cmd.exe` を通して各引数をそのまま渡して実行します。
   そのため step はどのプラットフォームでも同じ名前でプログラムを指定でき、`command` には step が書いた名前が残ります。

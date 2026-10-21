@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **`runCommand` takes `redact: { NAME: value }` for a secret the step
+  holds.** The executor redacts only values it loaded from env files, so
+  a token a step signed or read from a response and then passed as an
+  argument reached `observed.processes`, the run summary, and every
+  report in plaintext. Each named value is now written as
+  `{{secret.NAME}}` in the recorded `command`, with the same rules as a
+  loaded secret; the program still receives the real value.
+
 ## 0.19.0 — 2026-10-21
 
 ### Added

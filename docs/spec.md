@@ -2708,7 +2708,10 @@ its scenario record's id, so either record leads to the other.
   `"signal"` when a signal ended the process and `"timed_out": true` when
   the `timeout` option stopped it. `command` is an array, the program
   followed by its arguments, and the record redacts it like every other
-  field. `runCommand(command, args, { cwd, env, input, timeout })` is an
+  field. A value the step holds itself, such as a token it signed, is
+  not a loaded secret; `redact: { NAME: value }` writes it as
+  `{{secret.NAME}}` in `command` while the program still receives it.
+  `runCommand(command, args, { cwd, env, input, timeout, redact })` is an
   import from `nukadoko`, not a fixture. It resolves to
   `{ exitCode, signal, stdout, stderr }` for every exit, nonzero included,
   and rejects only when the program could not start or `timeout` stopped

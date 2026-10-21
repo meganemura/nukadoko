@@ -39,7 +39,9 @@ After a failure, what should be knowable about it?
   exit, so a step that needs the command to succeed checks `exitCode`
   itself, and each process it starts is listed in the calling step's
   `observed.processes`, so a failure record shows the command, its working
-  directory, and its exit code.
+  directory, and its exit code. A secret the step holds itself and passes
+  as an argument goes in `redact: { NAME: value }`, so the record shows
+  `{{secret.NAME}}` instead of the value.
 
 A part is a step, not a new kind of thing. That is what makes the split
 below cost the feature file nothing.

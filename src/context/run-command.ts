@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import type { ProcessEntry } from "../record/types.js";
+import { redactString } from "../secrets/redact.js";
 import { windowsSpawnPlan } from "./windows-command.js";
 
 // Responsibility: `runCommand`, the exported helper a step uses to run a
@@ -30,6 +31,13 @@ import { windowsSpawnPlan } from "./windows-command.js";
 // and a `.cmd` or `.bat` file runs through cmd.exe (windows-command.ts),
 // so a step names a program the same way on every platform. The step record
 // keeps the command as the step wrote it.
+//
+// `redact` is for a value the step itself holds, such as a token it
+// signed or read from a response, passed as an argument. The executor
+// redacts only what it loaded from env files, so such a value would
+// otherwise reach the record, the run summary, and every report built
+// from them. It is replaced here, before the entry leaves this module,
+// because the executor never sees which values the step treats as secret.
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
@@ -65,6 +73,11 @@ export interface RunCommandOptions {
    * then throws, because a program that never finished has no exit code
    * for a step to assert on. */
   timeout?: number;
+  /** Secrets the step holds, by name. Each value is written as
+   * `{{secret.NAME}}` in the recorded `command`, with the same rules as a
+   * loaded secret (a value shorter than 4 characters is left as it is).
+   * The program still receives the real value. */
+  redact?: Readonly<Record<string, string>>;
 }
 
 export interface RunCommandResult {
@@ -85,7 +98,8 @@ export interface RunCommandResult {
  * Inside a step's `run` (and inside a part it calls), each call adds
  * `{ command, cwd, exit_code, duration_ms }` to that step record's
  * `observed.processes`, in call order. The record is redacted like the rest
- * of the step record, so a loaded secret in an argument does not reach it.
+ * of the step record, so a loaded secret in an argument does not reach it;
+ * a secret the step holds itself is named in `redact`.
  */
 export function runCommand(
   command: string,
@@ -153,8 +167,9 @@ export function runCommand(
       settled = true;
       clearTimeout(timer);
       const durationMs = Math.round(performance.now() - startedAt);
+      const secrets = Object.entries(options.redact ?? {}).map(([name, value]) => ({ name, value }));
       finish?.({
-        command: [command, ...args],
+        command: [command, ...args].map((part) => redactString(part, secrets)),
         cwd,
         exit_code: code,
         ...(signal !== null ? { signal } : {}),

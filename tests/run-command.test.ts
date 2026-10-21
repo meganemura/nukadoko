@@ -71,6 +71,38 @@ describe("runCommand result", () => {
     expect(entry).toMatchObject({ exit_code: null, signal: "SIGTERM", timed_out: true });
   });
 
+  it("writes a value named in redact as its token in the recorded command, and passes the real value", async () => {
+    const observed = createObservedCollector();
+    const result = await withProcessRecording(observed, () =>
+      runCommand(node, ["-e", "process.stdout.write(process.argv[1])", "receipt=abc.def.ghi"], {
+        redact: { RECEIPT: "abc.def.ghi" },
+      }),
+    );
+    expect(result.stdout).toBe("receipt=abc.def.ghi");
+    expect(observed.snapshot().processes?.[0]?.command).toEqual([
+      node,
+      "-e",
+      "process.stdout.write(process.argv[1])",
+      "receipt={{secret.RECEIPT}}",
+    ]);
+  });
+
+  it("leaves no value named in redact in the recorded command", () =>
+    hegel.testAsync(
+      async (tc) => {
+        const secret = tc.draw(gs.text({ alphabet: "abcxyz0123-._", minSize: 4, maxSize: 12 }));
+        const before = tc.draw(gs.text({ alphabet: "ab=-", maxSize: 4 }));
+        const observed = createObservedCollector();
+        await withProcessRecording(observed, () =>
+          runCommand(node, ["-e", "", "--", `${before}${secret}`, secret], { redact: { TOKEN: secret } }),
+        );
+        const recorded = observed.snapshot().processes?.[0]?.command ?? [];
+        expect(recorded.slice(4).join(" ").replaceAll("{{secret.TOKEN}}", "")).not.toContain(secret);
+        expect(recorded[5]).toBe("{{secret.TOKEN}}");
+      },
+      { testCases: 15 },
+    ));
+
   it("records nothing outside a step", async () => {
     const observed = createObservedCollector();
     await runCommand(node, ["-e", ""]);
