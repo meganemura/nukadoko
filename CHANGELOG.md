@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.19.0 — 2026-10-21
+
 ### Added
 
 - **A third bundled skill, `verification`, puts scenarios under a
@@ -39,6 +41,33 @@ just until 0.1.
   unchanged. A timeout ends the whole process tree there. The step
   record's `command` keeps the name the step wrote. Other platforms are
   unchanged. A CI job runs the escaping against a real `cmd.exe`.
+
+### Skill eval
+
+One run of one model, as `docs/releasing.md` describes: the `http-api`
+example, Claude Sonnet, without `http-api.md` in the installed skill.
+`nuka check` and `nuka run` passed (8 scenarios).
+
+| Rule | Result | Reason |
+| --- | --- | --- |
+| S1 | not met | Two Thens claim presence, not a value: `the response carries an error` and `the response item has an id`. The ticket gives no error text and no id, and the agent listed that as an assumption instead of asking. |
+| S2 | met | Every scenario ends with its Then lines after its When. |
+| S3 | met | The feature was written before the first `nuka run`, and no expected value was copied from a run. |
+| S4 | met | The sentences name the route, the status, and the item a user reads back. |
+| S5 | met | Names, the unknown id 999, and the bodies are in the sentence, the docstring, or the Examples table. |
+| S6 | not met | The bad-body rows claim the status and that an error is present, not the exact refusal text. |
+| S7 | met | The Outline name includes `<body>` and `<status>`, so each row runs under its own name. |
+| S8 | met | The fixture starts a new server for each scenario, and each scenario creates the items it reads. |
+| S9 | met | One When per scenario, and the status and the body are claimed on separate Then lines. |
+| S10 | met | The Givens only create items, and the request under test is always the When. |
+| S11 | met | Each assertion message names the expected and the actual value. |
+| S12 | met | The ticket is copied verbatim under `Feature:`, and each scenario proves one of its sentences. |
+
+Playwright was not installed in the scratch project, so the agent wrote a
+fixture that starts the server and sends requests with `fetch` instead of
+the `request` fixture. The two rules not met share one cause: where the
+ticket gives no value, S3 says to write the question and stop, and the
+agent wrote an assumption and a weaker claim instead.
 
 ## 0.18.0 — 2026-10-19
 
