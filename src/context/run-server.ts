@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { connect } from "node:net";
 import { resolve } from "node:path";
+import { windowsSpawnPlan } from "./windows-command.js";
 
 // Responsibility: `runServer`, the exported helper a fixture uses to start
 // the program under test (an HTTP server) and stop it after the scenario.
@@ -23,6 +24,13 @@ import { resolve } from "node:path";
 //
 // It is an import, not a member of `ctx`, for the reason `runCommand` is:
 // starting a process needs nothing the executor injects.
+//
+// On Windows a program is found and started the way `runCommand` starts
+// one (windows-command.ts), so `runServer("npm", ["start"])` works there
+// too. `stop()` ends the whole process tree with taskkill: a signal on
+// Windows ends only the process it names, so stopping `cmd.exe` or
+// `npm` alone left the server it started holding the port, and the next
+// scenario was refused for a port it could not have known was taken.
 
 export interface RunServerOptions {
   /** The URL the program listens at, such as the config's `baseURL`. A
@@ -41,7 +49,8 @@ export interface RunningServer {
   /** The URL the program accepted a connection at. */
   readonly url: string;
   /** Ends the program with SIGTERM, then SIGKILL if it has not exited
-   * 5 seconds later, and resolves once it has exited. */
+   * 5 seconds later, and resolves once it has exited. On Windows it ends
+   * the program and every process it started, with `taskkill /t /f`. */
   stop(): Promise<void>;
 }
 
@@ -109,10 +118,14 @@ export async function runServer(command: string, args: readonly string[], option
     );
   }
 
-  const child = spawn(command, args, {
+  const env = options.env ?? process.env;
+  const plan =
+    process.platform === "win32" ? windowsSpawnPlan(command, args, env) : { file: command, args: [...args], verbatim: false };
+  const child = spawn(plan.file, plan.args, {
     cwd: resolve(options.cwd ?? process.cwd()),
-    env: options.env ?? process.env,
+    env,
     stdio: ["ignore", "ignore", "pipe"],
+    windowsVerbatimArguments: plan.verbatim,
   });
   let stderr = "";
   child.stderr.setEncoding("utf8");
@@ -136,6 +149,11 @@ export async function runServer(command: string, args: readonly string[], option
 
   const stop = async (): Promise<void> => {
     if (exited !== null) return;
+    if (process.platform === "win32" && child.pid !== undefined) {
+      spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" }).on("error", () => child.kill());
+      await exit;
+      return;
+    }
     child.kill("SIGTERM");
     const killer = setTimeout(() => child.kill("SIGKILL"), STOP_GRACE_MS);
     await exit;

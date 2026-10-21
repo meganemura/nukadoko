@@ -1011,6 +1011,11 @@ timeout passes (10 seconds by default), after it stops the program.
 It does not tell the program a port: a `PORT` variable is a convention, so
 the program listens at the URL by its own means.
 `stop()` sends SIGTERM, then SIGKILL after 5 seconds.
+On Windows the program is found and started the way `runCommand` starts
+one, so a bare `npm` or a `.cmd` file works, and `stop()` ends the program
+and every process it started with `taskkill /t /f`, since a signal there
+ends only the process it names and the server `npm` started would keep
+the port.
 The generated fixture keeps the default `scenario` scope, the one that
 never shares server state between scenarios; `{ scope: "process" }` is the
 author's declaration that the server keeps none.

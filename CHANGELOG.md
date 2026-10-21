@@ -48,6 +48,14 @@ just until 0.1.
 
 ### Fixed
 
+- **`runServer` starts and stops a program on Windows.** It spawned the
+  command as given, so `runServer("npm", ["start"])` was not found
+  there, and `stop()` ended only the process it started, so a server that
+  `npm` or a `.cmd` file started kept its port and the next scenario was
+  refused. It now finds and starts the program the way `runCommand` does,
+  and `stop()` on Windows ends the whole process tree with
+  `taskkill /t /f`.
+
 - **`nuka run --probe` measures a Then whose expected value is a table or a
   docstring.** A read-only Then probed only its captures, so a Then whose
   whole claim was a docstring (`the output is`) or a table got no probe

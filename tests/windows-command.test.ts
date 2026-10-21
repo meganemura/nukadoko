@@ -1,15 +1,17 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import { runCommand } from "../src/index.js";
+import { runCommand, runServer } from "../src/index.js";
 import { quoteForCmd, resolveWindowsCommand, windowsSpawnPlan } from "../src/context/windows-command.js";
 
-// Responsibility: how runCommand starts a program on Windows. The lookup and
-// the quoting are plain functions, checked on every platform; the last block
-// starts real .cmd files through cmd.exe and runs only on Windows.
+// Responsibility: how runCommand and runServer start a program on Windows.
+// The lookup and the quoting are plain functions, checked on every
+// platform; the last two blocks start real .cmd files through cmd.exe and
+// run only on Windows.
 
 const env = { Path: "C:\\tools;C:\\Program Files\\nodejs", PATHEXT: ".COM;.EXE;.BAT;.CMD", ComSpec: "C:\\Windows\\system32\\cmd.exe" };
 
@@ -134,5 +136,37 @@ describe.runIf(process.platform === "win32")("runCommand on Windows", () => {
     const result = await runCommand("npm", ["--version"]);
     expect(result.exitCode, result.stderr).toBe(0);
     expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});
+
+describe.runIf(process.platform === "win32")("runServer on Windows", () => {
+  it("starts a server through a .cmd file, and stop() ends the server the batch file started", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "nukadoko-server-"));
+    try {
+      const probe = createServer();
+      await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
+      const { port } = probe.address() as { port: number };
+      await new Promise<void>((resolve) => probe.close(() => resolve()));
+      writeFileSync(
+        path.join(dir, "serve.js"),
+        `require("node:http").createServer((q, s) => s.end("ok")).listen(${port}, "127.0.0.1");\n`,
+      );
+      writeFileSync(path.join(dir, "serve.cmd"), '@node "%~dp0serve.js"\r\n');
+      const childEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH"));
+      childEnv.PATH = `${dir};${process.env.PATH ?? ""}`;
+      const url = `http://127.0.0.1:${port}`;
+      const server = await runServer("serve", [], { url, env: childEnv });
+      expect(await (await fetch(url)).text()).toBe("ok");
+      await server.stop();
+      // The node process the batch file started is gone too, so the port is free.
+      const reuse = createServer();
+      await new Promise<void>((resolve, reject) => {
+        reuse.once("error", reject);
+        reuse.listen(port, "127.0.0.1", resolve);
+      });
+      await new Promise<void>((resolve) => reuse.close(() => resolve()));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
