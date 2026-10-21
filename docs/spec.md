@@ -2743,11 +2743,14 @@ its scenario record's id, so either record leads to the other.
   difference too. A value the step holds itself, such as a token it signed, is
   not a loaded secret; `redact: { NAME: value }` writes it as
   `{{secret.NAME}}` in `command` while the program still receives it.
-  `runCommand(command, args, { cwd, env, input, timeout, redact })` is an
-  import from `nukadoko`, not a fixture. It resolves to
-  `{ exitCode, signal, stdout, stderr }` for every exit, nonzero included,
-  and rejects only when the program could not start or `timeout` stopped
-  it. On Windows, a bare program name such as `npm` is looked up through
+  `runCommand(command, args, { cwd, env, input, timeout, redact, files })`
+  is an import from `nukadoko`, not a fixture. It resolves to
+  `{ exitCode, signal, stdout, stderr, files }` for every exit, nonzero
+  included, and rejects only when the program could not start or
+  `timeout` stopped it. `files` is the same value as the entry's
+  `"files"`, so a step whose claim is "the command writes nothing" returns
+  the measurement instead of walking the directory itself. It is present
+  inside a step, and outside one only with `files: true`. On Windows, a bare program name such as `npm` is looked up through
   `PATH` and `PATHEXT`, and a `.cmd` or `.bat` file runs through
   `cmd.exe` with each argument passed unchanged, so a step names a program
   the same way on every platform; `command` keeps the name the step wrote.

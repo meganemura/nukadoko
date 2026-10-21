@@ -47,6 +47,7 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "PollOptions",
     "PollRecord",
     "ProcessEntry",
+    "ProcessFiles",
     "ReplaceableFixtures",
     "RunCommandOptions",
     "RunCommandResult",

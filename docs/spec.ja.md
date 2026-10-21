@@ -2263,8 +2263,11 @@ scenario record は独立したファイルではなく、その run の `run.js
   計測するのはプロセスではなくディレクトリなので、同じときにそこへ書き込んだほかのものも差に含まれます。
   step 自身が持つ値(step が署名したトークンなど)は読み込んだ secret ではありません。
   `redact: { NAME: value }` を渡すと、その値は `command` の中で `{{secret.NAME}}` と書かれ、プログラムには本当の値が渡ります。
-  `runCommand(command, args, { cwd, env, input, timeout, redact })` は `nukadoko` からの import であり、fixture ではありません。
-  0 以外を含むすべての終了で `{ exitCode, signal, stdout, stderr }` に resolve し、reject するのは、プログラムを起動できなかった場合と `timeout` がプロセスを止めた場合だけです。
+  `runCommand(command, args, { cwd, env, input, timeout, redact, files })` は `nukadoko` からの import であり、fixture ではありません。
+  0 以外を含むすべての終了で `{ exitCode, signal, stdout, stderr, files }` に resolve し、reject するのは、プログラムを起動できなかった場合と `timeout` がプロセスを止めた場合だけです。
+  `files` はエントリの `"files"` と同じ値です。
+  そのため、「このコマンドは何も書かない」を主張する step は、自分でディレクトリをたどらずに、この計測を返せます。
+  `files` は step の中では必ずあり、step の外では `files: true` を渡したときだけあります。
   Windows では、`npm` のような拡張子のないプログラム名を `PATH` と `PATHEXT` で探し、`.cmd` と `.bat` のファイルは `cmd.exe` を通して各引数をそのまま渡して実行します。
   そのため step はどのプラットフォームでも同じ名前でプログラムを指定でき、`command` には step が書いた名前が残ります。
   step の `run`、part、compat step の中の呼び出しはエントリを加えます。

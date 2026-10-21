@@ -35,11 +35,12 @@ After a failure, what should be knowable about it?
   buy a schema to maintain and nothing else.
   A helper that runs the CLI under test calls `runCommand` from
   `nukadoko` instead of `spawnSync` or `execFileSync`: it returns
-  `{ exitCode, signal, stdout, stderr }` without throwing on a nonzero
+  `{ exitCode, signal, stdout, stderr, files }` without throwing on a nonzero
   exit, so a step that needs the command to succeed checks `exitCode`
   itself, and each process it starts is listed in the calling step's
   `observed.processes`, so a failure record shows the command, its working
-  directory, and its exit code. A secret the step holds itself and passes
+  directory, its exit code, and the files it changed (`files`, also on the
+  result, so "writes nothing" needs no hand-rolled diff). A secret the step holds itself and passes
   as an argument goes in `redact: { NAME: value }`, so the record shows
   `{{secret.NAME}}` instead of the value.
 

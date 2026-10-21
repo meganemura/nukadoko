@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import type { ProcessEntry } from "../record/types.js";
+import type { ProcessEntry, ProcessFiles } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
 import { diffSnapshots, takeSnapshot } from "./file-snapshot.js";
 import { windowsSpawnPlan } from "./windows-command.js";
@@ -44,8 +44,12 @@ import { windowsSpawnPlan } from "./windows-command.js";
 // after the close (file-snapshot.ts), and the difference is the entry's
 // `files`. A step that runs a command-line tool writes to disk, not over
 // HTTP, so without it a `mutates: false` step that ran a writing program
-// had nothing to be compared against. Outside a step nothing is recorded,
-// so nothing is walked.
+// had nothing to be compared against. The same difference is returned to
+// the step as `files`, so a step whose claim is "the command writes
+// nothing" reads the measurement instead of walking the directory itself.
+// Outside a step nothing is recorded, so nothing is walked unless the
+// caller asks with `files: true` (a control CLI that drives the same
+// program between steps).
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
@@ -90,6 +94,9 @@ export interface RunCommandOptions {
    * loaded secret (a value shorter than 4 characters is left as it is).
    * The program still receives the real value. */
   redact?: Readonly<Record<string, string>>;
+  /** Measures the files under `cwd` outside a step too, and returns them
+   * as the result's `files`. Inside a step they are always measured. */
+  files?: boolean;
 }
 
 export interface RunCommandResult {
@@ -99,6 +106,10 @@ export interface RunCommandResult {
   signal: NodeJS.Signals | null;
   stdout: string;
   stderr: string;
+  /** What changed under `cwd` while the program ran, the same value as
+   * the step record's `observed.processes[].files`. Present inside a step,
+   * or with the `files` option; absent otherwise. */
+  files?: ProcessFiles;
 }
 
 /**
@@ -124,7 +135,7 @@ export async function runCommand(
   const recorder = scope().getStore();
   const finish = recorder?.startProcess();
   const unwatched = recorder?.unwatchedDirs ?? [];
-  const before = finish === undefined ? undefined : takeSnapshot(cwd, unwatched);
+  const before = finish === undefined && options.files !== true ? undefined : takeSnapshot(cwd, unwatched);
   const startedAt = performance.now();
 
   const env = options.env ?? process.env;
@@ -206,6 +217,7 @@ export async function runCommand(
         signal,
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
+        ...(files === undefined ? {} : { files }),
       });
     });
   });

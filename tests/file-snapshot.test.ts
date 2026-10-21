@@ -114,6 +114,21 @@ describe("runCommand's files", () => {
     expect(files).toEqual({ added: [], changed: [], removed: [], skipped: ["state/"] });
   });
 
+  it("returns the files it recorded to the step", async () => {
+    const observed = createObservedCollector();
+    const result = await withProcessRecording(observed, () =>
+      runCommand(node, ["-e", "require('node:fs').writeFileSync('made.txt', '')"], { cwd: dir }),
+    );
+    expect(result.files).toEqual({ added: ["made.txt"], changed: [], removed: [] });
+    expect(result.files).toEqual(observed.snapshot().processes![0]!.files);
+  });
+
+  it("measures files outside a step only when asked", async () => {
+    const script = "require('node:fs').writeFileSync('made.txt', String(Date.now()))";
+    expect((await runCommand(node, ["-e", script], { cwd: dir })).files).toBeUndefined();
+    expect((await runCommand(node, ["-e", script], { cwd: dir, files: true })).files).toEqual({ added: [], changed: ["made.txt"], removed: [] });
+  });
+
   it("records nothing about files outside a step", async () => {
     const observed = createObservedCollector();
     await runCommand(node, ["-e", "require('node:fs').writeFileSync('x', '')"], { cwd: dir });

@@ -54,6 +54,7 @@ export type {
   NamedTraceEntry,
   PollRecord,
   ProcessEntry,
+  ProcessFiles,
   ScreenshotEntry,
   SectionEntry,
   StepRecord,

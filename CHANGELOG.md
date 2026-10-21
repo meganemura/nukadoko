@@ -39,6 +39,13 @@ just until 0.1.
   lists such a step with up to three changed paths, and counts a
   read-only step as compared when either channel was measured.
 
+- **`runCommand` returns the files it measured.** The result carries
+  `files`, the same added, changed, and removed paths the step record
+  gets, so a step whose claim is "the command writes nothing" returns the
+  measurement instead of hashing the directory itself. It is present
+  inside a step; outside one, `files: true` measures it too, for a
+  control CLI that drives the same program. `ProcessFiles` is exported.
+
 ### Fixed
 
 - **`nuka run --probe` measures a Then whose expected value is a table or a
