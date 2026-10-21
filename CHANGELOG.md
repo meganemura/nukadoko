@@ -48,6 +48,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A fixture written in `defineConfig` gets its parameter types.** The
+  config type gave a fixture no type, so under `strict` both shapes,
+  `name: async ({}, use) => ...` and the `[fn, { scope: "process" }]`
+  tuple, failed `tsc` with "Parameter 'use' implicitly has an 'any'
+  type", the spec's own example included. `deps` is now `FixtureDeps` and
+  `use` is `UseFn` in both.
+
 - **`runServer` starts and stops a program on Windows.** It spawned the
   command as given, so `runServer("npm", ["start"])` was not found
   there, and `stop()` ended only the process it started, so a server that

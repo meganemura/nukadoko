@@ -163,7 +163,7 @@ function isFixtureFunction(value: unknown): value is (...args: never[]) => unkno
  * behavior. The feature file names everything that ran, and an engine that
  * constructs a fixture nothing named would break that, so this package
  * never claims to be "Playwright fixture compatible". */
-const fixtureDefinitionSchema: z.ZodType<FixtureDefinition> = z
+const fixtureDefinitionSchema: z.ZodType<FixtureDefinition, FixtureDefinition> = z
   .custom<FixtureDefinition>(
     (value) => isFixtureFunction(value) || (Array.isArray(value) && value.length === 2 && isFixtureFunction(value[0])),
     { message: "must be a function, or a [function, options] tuple (the same shape Playwright's own fixture definitions take)" },
