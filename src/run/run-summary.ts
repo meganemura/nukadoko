@@ -51,15 +51,19 @@ interface SummaryFailure {
   readonly exited?: readonly ExitedProducer[];
 }
 
-// Text a reader sees in a table cell. A `|` would end the cell, and `<`
-// could open an HTML tag in GitHub's renderer.
+// Text a reader sees outside a code span. The table parser removes a `\`
+// that sits immediately before a `|`, and the inline parser then removes a
+// `\` that sits before ASCII punctuation, so a single `\` written for the
+// pipe leaves `\\|`, which renders as `|`. Doubling every `\` first makes
+// `\\\|` render as `\|`. `<` would open an HTML tag in GitHub's renderer.
 function cellText(text: string): string {
-  return text.replace(/\|/g, "\\|").replace(/</g, "&lt;");
+  return text.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/</g, "&lt;");
 }
 
 // A code span longer than any backtick run inside it, so an error message
 // that quotes code cannot close it early. In a table, `|` still needs its
-// backslash inside a code span.
+// backslash inside a code span. A code span shows any other `\` as itself,
+// so those are left alone.
 function cellCode(text: string): string {
   const longestRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
   const fence = "`".repeat(longestRun + 1);

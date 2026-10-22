@@ -9,6 +9,12 @@ just until 0.1.
 
 ### Fixed
 
+- **A backslash in a run summary stays a backslash.** Plain text such as
+  a scenario name used to lose a `\` that sat immediately before a `|`,
+  or before the `&` of an escaped `<`. The summary now writes that
+  backslash so the rendered name is the name that ran. Text inside a
+  code span was already left as written.
+
 - **`nuka scaffold` refuses a capture named with a reserved word.** A
   pattern such as `{if:string}` was a legal capture name, and the file
   it wrote destructures that name (`{ if }`), which does not parse. The

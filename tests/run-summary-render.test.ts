@@ -381,6 +381,62 @@ describe("renderRunSummary", () => {
       });
     }));
 
+  // cmark-gfm splits a row only on a `|` whose preceding character is not `\`,
+  // and it removes that one backslash. A plain cell is then parsed as inline,
+  // so `\` before ASCII punctuation disappears there too. A code span keeps
+  // every other backslash. `<` in a plain cell is `&lt;` and reads back as `<`.
+  const INLINE_PUNCTUATION = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+
+  function splitTableRow(row: string): string[] {
+    const cells: string[] = [];
+    let current = "";
+    for (let index = 0; index < row.length; index += 1) {
+      const character = row[index]!;
+      if (character === "\\" && row[index + 1] === "|") {
+        current += "|";
+        index += 1;
+        continue;
+      }
+      if (character === "|") {
+        cells.push(current.trim());
+        current = "";
+      } else current += character;
+    }
+    return cells;
+  }
+
+  function plainCell(cell: string): string {
+    let text = "";
+    for (let index = 0; index < cell.length; index += 1) {
+      const character = cell[index]!;
+      const next = cell[index + 1];
+      if (character === "\\" && next !== undefined && INLINE_PUNCTUATION.includes(next)) {
+        text += next;
+        index += 1;
+      } else text += character;
+    }
+    return text.replaceAll("&lt;", "<");
+  }
+
+  it("shows a backslash in a scenario name as that backslash", () =>
+    hegel.test((tc) => {
+      const name = tc.draw(gs.text({ minSize: 1, maxSize: 12, alphabet: "ab\\|<" }));
+      const markdown = renderRunSummary(
+        run({
+          scenarios: [
+            scenario("features/login.feature", 3, name, "failed", 100, {
+              steps: [step("the step", { status: "failed", error: { kind: null, message: name } })],
+            }),
+          ],
+        }),
+      );
+      const row = markdown.split("\n").find((line) => line.startsWith("| ") && !line.startsWith("| scenario") && !line.startsWith("| ---"));
+      const cells = splitTableRow(row ?? "");
+      expect(cells).toHaveLength(6);
+      expect(plainCell(cells[1] ?? "")).toBe(name);
+      expect(cells[5]?.match(/`([^`]*)`/)?.[1]).toBe(name);
+    }));
+
   it("titles the summary with the document's verdict", () =>
     hegel.test((tc) => {
       const verdict = tc.draw(gs.sampledFrom(["passed", "failed"] as const));
