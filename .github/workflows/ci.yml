@@ -9,7 +9,10 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    # queue is where a change lands before main. A push there has to run
+    # this gate. main runs it again when that branch moves. publish.yml
+    # stays on main only, so a push here does not publish.
+    branches: [main, queue]
   pull_request:
 
 # Nothing here writes anything back. An injected workflow is limited by what
