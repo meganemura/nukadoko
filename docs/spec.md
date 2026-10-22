@@ -3174,17 +3174,24 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   give opposite instructions. Nukadoko reports this conflict as a config error.
   The executor redacts secret values from either origin when it writes a step
   record surface: `record.json`, the stdout copy from `do`, or http.jsonl.
-  A step's `run` cannot control this process. Each loaded value is removed
-  in three forms, all replaced by the same `{{secret.NAME}}` token: the
-  value itself, the percent-encoded form `encodeURIComponent` produces, and
-  the JSON-escaped form `JSON.stringify` writes inside a string. The quotes
-  `JSON.stringify` adds are not part of that form. A query string therefore
-  loses a secret that was encoded before it was logged, and text that
-  already holds JSON loses a secret whose quotes or backslashes were
-  escaped. A form that is itself some key's loaded value uses that key's
-  name, the alphabetically first name when several keys share the value.
-  A percent-encoded or JSON-escaped form that no key loaded as its raw
-  value uses the alphabetically first key that produces it. Longer forms
+  A step's `run` cannot control this process.   Each loaded value is removed
+  in every spelling below, and each spelling is replaced by the same
+  `{{secret.NAME}}` token. The spellings are the value itself, the
+  percent-encoded form `encodeURIComponent` produces, that same form with
+  each `'` written as `%27`, the `application/x-www-form-urlencoded` form
+  `URLSearchParams` produces, and the JSON-escaped form `JSON.stringify`
+  writes inside a string. The quotes `JSON.stringify` adds are not part of
+  that form. A URL href uses the `%27` spelling and still writes a space as
+  `%20`. `URLSearchParams` writes a space as `+`, and it percent-encodes
+  `!`, `'`, `(`, `)`, and `~`, which `encodeURIComponent` leaves as
+  themselves. A query string therefore loses a secret that was encoded in
+  any of those ways before it was logged, and text that already holds JSON
+  loses a secret whose quotes or backslashes were escaped. A form that is
+  itself some key's loaded value uses that key's name, the alphabetically
+  first name when several keys share the value.
+  A percent-encoded, form-urlencoded, or JSON-escaped form that no key
+  loaded as its raw value uses the alphabetically first key that produces
+  it. Longer forms
   are replaced first, so a shorter secret cannot take a bite out of a
   longer one. A JSON number that equals a numeric secret is left as a
   number. Matching it would rewrite ordinary counts and timings whenever

@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Fixed
+
+- **A secret in a `URLSearchParams` query is redacted.** That serializer
+  writes a space as `+` and percent-encodes `!`, `'`, `(`, `)`, and `~`.
+  `encodeURIComponent` leaves those characters as themselves and writes a
+  space as `%20`, so a password or a token logged from `URLSearchParams`
+  stayed in the step record and in http.jsonl. That spelling is now the
+  same `{{secret.NAME}}` token. A URL href that keeps `%20` and only
+  rewrites `'` is unchanged.
+
 ## 0.20.0 — 2026-10-21
 
 ### Added

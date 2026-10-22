@@ -16,11 +16,14 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 //   - the same token also replaces other spellings of that loaded value.
 //     A query string holds encodeURIComponent(value) by the time http.jsonl
 //     is built. A URL's toJSON is the href, and that href percent-encodes
-//     "'" as "%27" where encodeURIComponent leaves it. Text that already
-//     contains JSON holds the interior of JSON.stringify(value). All of
-//     these are the loaded value, so leaving them is a leak of a secret
-//     nukadoko itself read. The JSON form is the interior only: the quotes
-//     JSON.stringify adds are syntax, not part of the value;
+//     "'" as "%27" where encodeURIComponent leaves it, while a space stays
+//     "%20". URLSearchParams serializes application/x-www-form-urlencoded:
+//     a space is "+", and "!", "'", "(", ")", and "~" are percent-encoded.
+//     Text that already contains JSON holds the interior of
+//     JSON.stringify(value). All of these are the loaded value, so leaving
+//     them is a leak of a secret nukadoko itself read. The JSON form is the
+//     interior only: the quotes JSON.stringify adds are syntax, not part of
+//     the value;
 //   - values shorter than MIN_REDACTABLE_LENGTH are never redacted, in
 //     any spelling (Honest limits: a short value would false-positive
 //     constantly and destroy the step record it's supposed to protect).
@@ -39,14 +42,15 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 //     is matched as itself. A loaded value that occurs inside
 //     `{{secret.NAME}}` (the word "secret", or a piece of the name) therefore
 //     cannot nest a second token there, and a second redact of the same
-//     text changes nothing. Percent-encoded and JSON-escaped spellings are
-//     entries in that same list: one pass replaces them and does not drop
-//     them;
+//     text changes nothing. Percent-encoded, form-urlencoded, and
+//     JSON-escaped spellings are entries in that same list: one pass
+//     replaces them and does not drop them;
 //   - a raw loaded value claims its spelling before any other secret's
-//     percent-encoded or JSON-escaped form does. Among raw values that
-//     are equal, and among derived forms that no raw value claimed, the
-//     alphabetically-first key name wins, so which name a step record
-//     shows is deterministic rather than dependent on iteration order;
+//     percent-encoded, form-urlencoded, or JSON-escaped form does. Among
+//     raw values that are equal, and among derived forms that no raw value
+//     claimed, the alphabetically-first key name wins, so which name a
+//     step record shows is deterministic rather than dependent on
+//     iteration order;
 //   - the value is redacted in its stored form (src/stored-form): toJSON
 //     applied and a bigint as its decimal string. Date and URL have no
 //     enumerable properties, so walking them as objects would store {}
@@ -67,6 +71,12 @@ interface Replacement {
 function jsonStringContents(value: string): string {
   const encoded = JSON.stringify(value);
   return encoded.slice(1, -1);
+}
+
+// `slice(2)` drops the "k=" prefix. `toString` percent-encodes "&" and
+// "=", so the value never contains a second parameter.
+function formUrlEncoded(value: string): string {
+  return new URLSearchParams([["k", value]]).toString().slice(2);
 }
 
 function claim(nameBySpelling: Map<string, string>, spelling: string, name: string): void {
@@ -91,7 +101,10 @@ function buildReplacements(secrets: SecretSet): Replacement[] {
     claim(nameBySpelling, encodeURIComponent(value), name);
     // URL.toJSON percent-encodes "'" as "%27". encodeURIComponent leaves
     // that character as itself, so the href would still carry the secret.
+    // A space in that href stays "%20", which is why this is not the
+    // URLSearchParams spelling below.
     claim(nameBySpelling, encodeURIComponent(value).replaceAll("'", "%27"), name);
+    claim(nameBySpelling, formUrlEncoded(value), name);
     claim(nameBySpelling, jsonStringContents(value), name);
   }
 

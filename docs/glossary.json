@@ -320,6 +320,11 @@
       "note": "JSON.stringify が文字列の中に書く綴り。前後の引用符は含まない。redact が読み込んだ値と同じ {{secret.NAME}} で置き換える。コード上の JSON.stringify は識別子なので原文のまま"
     },
     {
+      "en": ["form-urlencoded form", "form-urlencoded", "application/x-www-form-urlencoded"],
+      "ja": "application/x-www-form-urlencoded の形",
+      "note": "URLSearchParams が返すクエリの綴り。空白は +。! ' ( ) ~ はパーセントエンコードされる。URL の href は ' だけを %27 にし、空白は %20 のままなので別の綴り。redact が読み込んだ値と同じ {{secret.NAME}} で置き換える。application/x-www-form-urlencoded と URLSearchParams は識別子なので原文のまま"
+    },
+    {
       "en": ["adopt", "adopting", "adoption"],
       "ja": "導入",
       "note": "docs/adopting.md(既存のプロジェクトに nukadoko を加える手順)で入った語。動詞は 導入する。採用 と訳すと、使うかどうかを決める判断の話に読めてしまう。このガイドが扱うのは決めたあとの手順"

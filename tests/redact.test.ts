@@ -57,6 +57,54 @@ describe("redactString", () => {
     expect(redactString("nothing to see here", [])).toBe("nothing to see here");
   });
 
+  it("redacts a secret in a URLSearchParams query", () => {
+    // URLSearchParams writes a space as "+" and percent-encodes
+    // "!", "'", "(", ")", and "~". encodeURIComponent does none of that,
+    // so a query built this way used to keep the secret.
+    const password: SecretEntry[] = [{ name: "PW", value: "p@ss w0rd" }];
+    const query = new URLSearchParams([["pw", "p@ss w0rd"]]).toString();
+    expect(query).toBe("pw=p%40ss+w0rd");
+    expect(query).not.toContain(encodeURIComponent("p@ss w0rd"));
+    expect(redactString(`https://example.com/login?${query}`, password)).toBe(
+      "https://example.com/login?pw={{secret.PW}}",
+    );
+
+    const token = "tok(en)!x~y";
+    const shaped = new URLSearchParams([["t", token]]).toString();
+    expect(shaped).toBe("t=tok%28en%29%21x%7Ey");
+    expect(redactString(shaped, [{ name: "T", value: token }])).toBe("t={{secret.T}}");
+
+    // A URL href built from encodeURIComponent keeps "%20" and only
+    // rewrites "'". That spelling stays covered beside the form one.
+    const quoted = "it's secret";
+    const href = new URL(`https://example.com/q?pw=${encodeURIComponent(quoted)}`).href;
+    expect(href).toContain("it%27s%20secret");
+    expect(redactString(href, [{ name: "PW", value: quoted }])).toBe("https://example.com/q?pw={{secret.PW}}");
+
+    // The longer secret's form spelling contains the shorter one's
+    // ("a+b+c+d" starts with "a+b+c"). The whole longer spelling goes.
+    const nested = new URLSearchParams([["q", "a b c d"]]).toString();
+    expect(nested).toBe("q=a+b+c+d");
+    expect(redactString(nested, [
+      { name: "SHORT", value: "a b c" },
+      { name: "LONG", value: "a b c d" },
+    ])).toBe("q={{secret.LONG}}");
+  });
+
+  it("redacts the URLSearchParams spelling of any eligible secret, and a second call changes nothing", () => {
+    hegel.test((tc) => {
+      const secret = tc.draw(gs.text({ minSize: MIN_REDACTABLE_LENGTH, maxSize: 40 }));
+      const secrets: SecretEntry[] = [{ name: "PW", value: secret }];
+      const query = new URLSearchParams([["pw", secret]]).toString();
+      const url = new URL("https://example.com/q");
+      url.searchParams.set("pw", secret);
+      const once = redactString(query, secrets);
+      expect(once).toBe("pw={{secret.PW}}");
+      expect(redactString(once, secrets)).toBe(once);
+      expect(redact(url, secrets)).toBe("https://example.com/q?pw={{secret.PW}}");
+    });
+  });
+
   it("redacts the percent-encoded and JSON-escaped forms of a loaded secret", () => {
     // A query string stores encodeURIComponent(secret), and a string that
     // already holds JSON text stores JSON.stringify(secret) without the
