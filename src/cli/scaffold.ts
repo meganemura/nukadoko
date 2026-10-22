@@ -979,6 +979,17 @@ function readFromFlags(
     keys.add(request.key);
     requests.push(request);
   }
+  // A reserved word is a legal capture name and an illegal binding. The
+  // template destructures each key, so `{ if }` does not parse.
+  const reserved = [...keys].filter((key) => RESERVED_WORDS.has(key));
+  if (reserved.length > 0) {
+    const quoted = reserved.map((key) => `"${key}"`).join(", ");
+    const word = reserved.length === 1 ? "a reserved word" : "reserved words";
+    const pronoun = reserved.length === 1 ? "it" : "them";
+    return {
+      refusal: `the pattern captures ${quoted}, ${word}, and the written step destructures ${pronoun}, which does not parse; name the capture something else`,
+    };
+  }
   const shadowing = [...keys].filter((key) => bodyNames.has(key));
   if (shadowing.length > 0) {
     return {

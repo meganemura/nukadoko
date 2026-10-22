@@ -9,6 +9,11 @@ just until 0.1.
 
 ### Fixed
 
+- **`nuka scaffold` refuses a capture named with a reserved word.** A
+  pattern such as `{if:string}` was a legal capture name, and the file
+  it wrote destructures that name (`{ if }`), which does not parse. The
+  command now refuses and writes nothing.
+
 - **A secret in a `URLSearchParams` query is redacted.** That serializer
   writes a space as `+` and percent-encodes `!`, `'`, `(`, `)`, and `~`.
   `encodeURIComponent` leaves those characters as themselves and writes a

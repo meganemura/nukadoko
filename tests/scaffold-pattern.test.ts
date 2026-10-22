@@ -122,6 +122,27 @@ describe("nuka scaffold --pattern", () => {
   });
 
   it.each([
+    ["if", "when {if:string} happens"],
+    ["await", "wait {await:string}"],
+    ["null", "got {null:string}"],
+  ])("refuses a capture named %s, a reserved word, and writes nothing", async (key, pattern) => {
+    const result = await cli(rootDir, ["scaffold", "when-reserved", "--pattern", pattern]);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain(`the pattern captures "${key}", a reserved word`);
+    expect(result.stderr).toContain("which does not parse");
+    expect(existsSync(path.join(rootDir, "features", "steps", "when-reserved.ts"))).toBe(false);
+  });
+
+  it("names every reserved capture when the pattern has more than one", async () => {
+    const result = await cli(rootDir, ["scaffold", "when-reserved", "--pattern", "when {if:string} meets {class:string}"]);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain('the pattern captures "if", "class", reserved words');
+    expect(existsSync(path.join(rootDir, "features", "steps", "when-reserved.ts"))).toBe(false);
+  });
+
+  it.each([
     ["an unnamed capture", "a {string}", 'Parameter "{string}" has no name'],
     ["a key captured twice", "from {x:int} to {x:int}", 'the pattern captures "x" more than once'],
     ["an empty optional", "a () b", "An optional must contain some text."],
