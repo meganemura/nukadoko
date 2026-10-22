@@ -55,9 +55,11 @@ jobs:
       - run: npm run selftest
 
   # The packed tarball, installed into a fresh project and driven through
-  # the CLI (scripts/pack-check.mjs), on the lowest release package.json's
-  # `engines` allows and on the newest line. The main job runs on 24 only,
-  # because its lockfile needs npm 11; here npm installs the tarball alone,
+  # the CLI (scripts/pack-check.mjs), on the patched 22 release and on the
+  # newest line. 22.23.4 fixes the Brotli decoder out-of-bounds write and
+  # the TLS hostname-check bypasses. package.json engines still allow
+  # 22.18.0, so this pin is not that floor. The main job runs on 24 only,
+  # because its lockfile needs npm 11. Here npm installs the tarball alone,
   # which any npm can do, so the build happens on 24 and the check on the
   # matrix release.
   packed-tarball:
@@ -66,7 +68,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ["22.18.0", "26"]
+        node: ["22.23.4", "26"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

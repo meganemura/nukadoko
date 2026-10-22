@@ -7,4 +7,4 @@
 # This pins the development environment only. package.json's own `engines`
 # (^22.18.0 || >=23.6.0) is what nukadoko asks of a project that installs it;
 # nothing here narrows that.
-node = "26.7.0"
+node = "26.12.1"
