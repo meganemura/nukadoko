@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **The skill says how to drive an app through an e2e session.** A project
+  already on e2e (`tester-army/e2e`) opens its sessions from nukadoko
+  fixtures through `e2e/runner`'s `openHost`, with no dependency added to
+  nukadoko. `references/fixtures.md` shows the two fixtures, keeps Then
+  claims on `screen` and `expect` rather than `agent.assert`, folds e2e's
+  multi-line error into the one line `nuka run` prints, and attaches the
+  session's steps as evidence.
+
 ## 0.21.0 — 2026-10-23
 
 ### Changed

@@ -29,7 +29,8 @@ touch, then one line for each of these that applies:
 - A step that needs `page`, `context`, `pageAs`, or `request` needs the project's
   own `playwright`; `nuka check` reports `playwright-missing` with the
   install line. Adding it is a dependency change: ask first. A `page` step
-  makes `nuka run` open a browser and take minutes.
+  makes `nuka run` open a browser and take minutes. A project on e2e
+  drives it through e2e instead (`references/fixtures.md`, last section).
 - A Playwright MCP server, when the loop explores a browser app whose
   state cannot be repeated, drives the real application with whatever
   login it holds. A click that submits something there needs the same

@@ -156,3 +156,38 @@ value that spans lines. Double quotes expand `\n` and `\r`. The separator
 is `=`. `$NAME` is not expanded. The full rules are in docs/spec.md under
 "Environments and secrets". A line that is not a blank, a comment,
 or a binding is `env-file-skipped-line` from `nuka check`.
+
+## Driving the app through another runner's session
+
+A project already on e2e (`tester-army/e2e`) keeps its engines: its
+`e2e/runner` exports `openHost`, which opens e2e sessions inside another
+runner. Open the host in a process fixture and one session per scenario;
+nukadoko gains no dependency, since the project already has `e2e`.
+
+```ts
+e2eHost: [async ({ site }, use) => {
+  const host = await openHost({ config: { targets: [
+    { name: "web", engine: web(), app: { url: site.url } }] } });
+  try { await use(host); } finally { await host.close(); }
+}, { scope: "process" }],
+e2e: async ({ e2eHost }, use) => {
+  const session = await e2eHost.openSession({ name: "scenario" });
+  try { await use(session); } finally { await session.close(); }
+},
+```
+
+A step reads `e2e.fixtures.app`, `screen`, and `agent`. Then:
+
+- **Then claims through `screen` and `expect`**, never `agent.assert`: a
+  model's judgment is not a value the scenario stated (S1). `agent.act`
+  can be a Given or a When; declare `mutates` for what it submits.
+- **Fold the error into one line.** e2e's first line names only the
+  matcher (`expect.toHaveText failed`) and `nuka run` prints the first
+  line (S11). Catch, and rethrow
+  `message.replaceAll("\n", "; ")` with the error as `cause`.
+- **Attach what the session did.** `ctx.page()`'s screenshot, trace, and
+  HTTP log do not cover e2e's browser. Attach
+  `JSON.stringify(e2e.steps())` from the step, in a `finally`; the
+  session writes `trace.md` under `.e2e/results/host/` on close.
+- One hosted session per process: `--concurrency` runs processes, so it
+  still works.
