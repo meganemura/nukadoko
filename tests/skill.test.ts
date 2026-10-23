@@ -16,7 +16,7 @@ const execFileAsync = promisify(execFile);
 // Responsibility: `nuka skill path`, and every skills/*/SKILL.md's own
 // compliance with the open Agent Skills specification
 // (https://agentskills.io/specification) that `gh skill install` and other
-// multi-host tooling read (covers skills/migration too). `install` was
+// multi-host tooling read (covers every skill directory). `install` was
 // removed —
 // see src/cli/skill.ts's header for why — so this file only exercises
 // `path`, plus the frontmatter/body shape of each skill source itself. The
@@ -27,7 +27,7 @@ const execFileAsync = promisify(execFile);
 // that, and it now runs for every skill directory, not just acceptance.
 
 const skillsDir = path.join(repoRoot, "skills");
-const skillNames = ["acceptance", "migration", "verification"];
+const skillNames = ["acceptance", "verification"];
 
 async function readFrontmatterOf(name: string): Promise<string> {
   const content = await readFile(path.join(repoRoot, "skills", name, "SKILL.md"), "utf8");

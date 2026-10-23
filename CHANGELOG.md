@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Removed
+
+- **The migration skill is removed.** A suite moves across once, so a
+  skill loaded on every session was the wrong place for it. Its rules and
+  the facts it carried that the guide lacked (the two-stage rule, what not
+  to do, env files, CommonJS, report formats, the feature walk, `poll`,
+  and the typed-step DSL door) are now in docs/migration.md, under
+  "Working rules" and "Coming from a typed-step DSL". Point an agent there
+  instead.
+
 ### Added
 
 - **A step record keeps what each `runCommand` process printed.** Each

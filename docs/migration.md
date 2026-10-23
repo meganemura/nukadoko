@@ -14,7 +14,11 @@ output, see
 Nothing below applies if there is no cucumber-js suite to begin with. A
 project already running Playwright Test directly, with no feature files and
 no glue to switch, starts from a different door instead: see
-[docs/migration-playwright-test.md](migration-playwright-test.md).
+[docs/migration-playwright-test.md](migration-playwright-test.md). A suite
+already shaped as typed steps, in a DSL of its own, starts at
+[Coming from a typed-step DSL](#coming-from-a-typed-step-dsl). Whatever the
+starting point, [Working rules](#working-rules) holds on every path; an
+agent doing the migration reads it before the first change.
 
 ## Stage 0: install and point nukadoko at your suite
 
@@ -359,6 +363,71 @@ this tool at all (a validated `result`, a contract `nuka check` can hold a
 feature against, `from`, a run summary that attests to more than "it ran")
 lives on the other side of the promotion. Promote the steps whose contracts
 you want, which over time should be most of the ones that matter.
+
+## Coming from a typed-step DSL
+
+If there are no feature files and no cucumber glue, the compat door above
+does not apply. `pattern` is optional on `defineStep`: a step with no
+pattern is still complete vocabulary, runnable with `nuka do` and readable
+with `nuka describe`. That gives a different pair of stages from the same
+rule: move each step to a typed `defineStep` first, and give it a Gherkin
+`pattern` later, when a feature file makes it worth doing.
+
+A source DSL that already carries a description, args, returns, a write
+flag, and a run function translates directly: `defineStep` has a field
+for each. A translated schema that JSON Schema cannot represent does not
+stop `nuka describe`: it still prints that step's contract, names the
+step, and exits 1.
+
+## Working rules
+
+These hold whichever door the suite came in through.
+
+- **Two stages, never at once.** Change one thing, then the next. When a
+  step breaks after two changes landed together, nothing tells which one
+  broke it. Here the pair is "switch the import", then "add typing"; the
+  other doors derive their own pair from the same rule.
+- **Say where you are before the first change.** Name the stage, what it
+  touches, and what it leaves alone. Switching the import is reversible
+  (see [The way back](#the-way-back)); promoting a step to `defineStep` is
+  not, so it gets the owner's word before the first one, not after the
+  tenth.
+- **The suite keeps running partway migrated.** Compat and typed steps
+  share a feature file. Never make "fully typed" a precondition for
+  "runs". `nuka run` refuses a scenario `nuka check` reports an error for:
+  fix the finding, or pass `--no-check` while the rest catches up.
+- **Delete compat glue only after its typed replacement passes.** Write
+  the new step, run it with `nuka do`, then remove the old one.
+- **Fix what `nuka check` and `nuka run` report, not a hunch.** Each
+  finding names the file and a `fix:` or `do:` line.
+- **A quiet `nuka run --probe` says nothing about compat Thens.** The probe
+  re-runs only typed steps declared `mutates: false`. Promote a Then
+  before its probe means anything.
+
+Facts a migration runs into:
+
+- `envFiles` points at the env files the suite already has (`KEY=VALUE`,
+  with the rules in docs/spec.md "Environments and secrets"). A line that
+  is not a blank, a comment, or a binding is `env-file-skipped-line`. A
+  suite that ran once per target (a shell loop, one CI job per profile)
+  becomes one run: name each target in `environments` and pass
+  `nuka run --env a --env b`.
+- A `package.json` with no `"type"` loads a `.ts` file with a Node
+  warning, and `nuka tend` reports it as `package-type-missing`.
+- `nuka run` writes no report of its own. A formatter or a JUnit-based CI
+  that read cucumber messages renders them after each run with
+  `nuka report --format messages --out <path>`, and `--format allure`
+  does the same for Allure.
+- The walk for `.feature` files skips `node_modules` and every directory
+  whose name starts with `.`, at any depth, and says nothing about it.
+- A glue loop that slept and tried again becomes `poll` on the fixture
+  bag. Its `timeout` is a budget for the whole call (docs/spec.md
+  "Context API").
+- A global `After` hook that cleaned up can become a fixture's teardown.
+  `nuka check` reports `fixture-structural-violation` when the fixture's
+  destructuring cannot be read or names an unknown fixture.
+- A promoted schema that coerces its capture (`z.coerce.number()` on a
+  `{string}`) is not `capture-type-mismatch`: the run accepts it.
 
 ## Known limits
 

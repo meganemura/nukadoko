@@ -39,7 +39,7 @@ that is the whole 0.x range rather than something that ends at 0.1. M1
 gates have been run (typed-step drafting, and the compat audit reported
 under docs/spec.md "Compat steps"). Of M3+, the Allure emitter and the
 cucumber-messages emitter, both agent skills, and compat gap detection in
-`nuka check` (the migration skill's prerequisite) are all implemented,
+`nuka check` (the migration path's prerequisite) are all implemented,
 closing out M1-M5. Sign-off (M4) shipped as `nuka accept` and was later
 removed: no project kept the records it wrote, and the run summary now
 carries the same claim as evidence bound to its commit, while the approval
@@ -164,7 +164,9 @@ change against before writing it.
   teaches the previous CLI — the feature ships and nobody can find it. Both
   need checking on every such change: `skills/acceptance/SKILL.md` (write a
   scenario, run it, open the pull request a person approves) and
-  `skills/migration/SKILL.md` (move an existing cucumber-js suite across). Skills never copy a fact the CLI
+  `skills/verification/SKILL.md` (scenarios under a verification skill).
+  Moving a suite across has no skill: docs/migration.md ("Working rules")
+  carries it, and needs the same check. Skills never copy a fact the CLI
   itself answers — vocabulary, contracts, refusal reasons go stale the
   moment a command changes — but they must name the commands, flags, and
   checks that exist, and must not name ones that don't.

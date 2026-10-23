@@ -4762,7 +4762,7 @@ would be running against glue it never actually read.
   `nuka skill path` exists for the one thing neither of those can offer:
   the skill that shipped with the installed nukadoko, at the version that
   installed it. A skill describes a CLI and drifts into fiction when the two
-  diverge. Two ship. The **acceptance skill** drives the acceptance loop
+  diverge. Two shipped. The **acceptance skill** drives the acceptance loop
   end to end: criteria in, vocabulary read with `steps` and `describe`,
   missing operations scaffolded and implemented, the scenario written, then
   `run` until green, and the pull request a person reviews. The **migration skill** carries what the
@@ -4772,6 +4772,9 @@ would be running against glue it never actually read.
   check` now does (see "Compat steps"). Neither skill writes down a fact
   the CLI already answers (vocabulary, contracts, refusal reasons), because
   a skill that copies those starts lying the moment the command changes.
+  The migration skill was later removed: a migration happens once per
+  suite, so its rules moved into docs/migration.md ("Working rules"),
+  which an agent reads when it is pointed there.
 - **M6 (chained arguments)**: `from`, the scenario-order check `nuka check`
   and `nuka run` share, `--use` on `do`, and a `used` entry that names the
   step beside the step record it cites. Where a step's inputs come from stops

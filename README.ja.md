@@ -883,16 +883,19 @@ step record は実行が何をしたかを示しますが、assertion がいま�
 
 **コーディング agent のための skill**
 
-nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 3 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
+nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 2 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
 
 - **acceptance** はチケットの受け入れ基準を、feature とその証跡となる run まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、人がレビューできるよう feature とその run サマリを渡します)。
-- **migration** は cucumber-js のスイートを 2 段階で移行させ、どの違いがレシピではなく要点なのかを説明します。
 - **verification** は、プロジェクトの verification skill(動いているアプリを操作する control CLI と機能の地図)の下に scenario を置き、地図のどの主張を scenario で証明するか、CLI とステップで 1 つのライブラリを共有する方法、バグ報告を直す前に赤で再現する方法、cleanup の後も証拠を残す方法を扱います。
 
 ```sh
-gh skill install meganemura/nukadoko --all   # all three, on any Agent Skills host
+gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host
 nuka skill path                              # the copy matching your installed version
 ```
+
+既存のスイートの移行には skill がありません。
+移行は一度しか起きないので、agent には [docs/migration.ja.md](docs/migration.ja.md) を案内します。
+その「進め方の決まり」の節は、移行を行う人やエージェントのために書かれています。
 
 skill を読み込んでいない agent は `node_modules/nukadoko/llms.txt` から始めます。
 インストールの事実、ループ、すべてのコマンド、すべての finding code が 1 つのファイルにあります。

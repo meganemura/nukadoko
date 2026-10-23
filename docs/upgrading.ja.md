@@ -38,6 +38,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.20.0 から次のリリースへ
 
+- **migration skill はなくなりました。**
+  `gh skill install meganemura/nukadoko --all` で入れたホストには、消すまで古いコピーが残ります。
+  それを消し、スイートを移行するエージェントには、代わりに docs/migration.ja.md を案内してください。
+  その「進め方の決まり」の節が、skill が言っていたことを運んでいます。
+
 - **evidence の名前が 2 つ、harness のものになりました。**
   `ctx.evidence.attach` と `ctx.evidence.path` は、`process-<n>.stdout.txt` と `process-<n>.stderr.txt` を、大文字小文字にかかわらず `ReservedEvidenceNameError` で拒否します。
   nukadoko が、`runCommand` のプロセスが出力したものをその名前で残すようになったからです。

@@ -36,7 +36,7 @@ function packageRoot(): string {
 }
 
 // Prints the directory holding *every* skill this package ships, not any one
-// of them: there are two (acceptance, migration) and a project takes
+// of them: there are two (acceptance, verification) and a project takes
 // whichever it wants. No `<name>` argument until something needs one — `ls`
 // already answers "which skills are in there" without a second verb to
 // maintain.

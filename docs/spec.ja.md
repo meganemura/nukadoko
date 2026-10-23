@@ -4051,12 +4051,14 @@ step record の `error.kind` は「Records」に一覧があります。
   nukadoko 自身はどのホストのディレクトリにもファイルをコピーしません。
   `nuka skill path` が残るのは、その 2 つには出せないものを答えるためです(インストール済みの nukadoko と同じバージョンの skill の在り処)。
   skill は CLI を説明したものなので、両者のバージョンがずれると記述が虚構になります。
-  2 つとも出荷済みです。
+  2 つとも出荷されました。
   **acceptance skill** は受け入れループを最初から最後まで動かします(基準を入力に、`steps` と `describe` で語彙を読み、欠けている操作を scaffold して実装し、scenario を書き、green になるまで `run` し、人がレビューする pull request へ渡す)。
   **migration skill** は compat の監査が計測したことを運びます(実際の cucumber-js のスイートが実際にぶつかる gap を、ドキュメントの順序ではなくつまずく順序で)。
   その最初の段階は `nuka check` がそれらの gap を報告することに依存しており、`nuka check` は今それを行っています(「Compat steps」を参照)。
   どちらの skill も、CLI がすでに答えられる事実(語彙、契約、拒否の根拠)を書き写しません。
   それらを書き写した skill は、コマンドが変わった瞬間から嘘をつき始めるからです。
+  migration skill は、のちに削除されました。
+  移行はスイートごとに一度しか起きないので、その決まりは docs/migration.ja.md(「進め方の決まり」)に移り、エージェントはそこを案内されたときに読みます。
 - **M6(chained arguments)**: `from`、`nuka check` と `nuka run` が共有する scenario 順序チェック、`do` の `--use`、そして引用する step record の隣に step 名を記す `used` のエントリです。
   step の入力がどこから来るかは、`run` の本体の中の散文であることをやめ、ツールが読む宣言になります(「step の連鎖」を参照)。
 - **M7(tending)**: `nuka tend`、壊れることではなく腐ることについての所見です(「Tending(手入れ)」を参照)。

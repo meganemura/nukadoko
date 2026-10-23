@@ -13,6 +13,9 @@ nukadoko の設定と step ファイルの両方で、`.ts` の代わりに `.mt
 そもそも cucumber-js のスイートがなければ、以下はどれも当てはまりません。
 Playwright Test に対して直接書かれたプロジェクトで、feature ファイルも切り替える glue もない場合は、別の扉から始まります。
 [docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照してください。
+独自の DSL で、すでに型付き step の形をしたスイートは、[型付き step の DSL から来る場合](#型付き-step-の-dsl-から来る場合)から始まります。
+どこから始めても、[進め方の決まり](#進め方の決まり)はすべての道で成り立ちます。
+移行を行うエージェントは、最初の変更の前にそれを読みます。
 
 ## Stage 0: nukadoko をインストールしてスイートに向ける
 
@@ -261,6 +264,65 @@ nukadoko はその変換のためのツールを同梱しておらず、これ�
 import の可逆性が存在するのは最初の一歩を編集 1 つ分のコストにするためであって、型付き側を選択制にするためではありません: compat はスイートが到着する場所であり、このツールをそもそも走らせる理由のすべて(バリデーション済みの `result`、`nuka check` が feature を突き合わせられる契約、`from`、「実行された」以上のことを証言する run サマリ)は、昇格の向こう側にあります。
 契約を持たせたい step を昇格させてください。
 時間が経てば、それが重要な step の大半になっているはずです。
+
+## 型付き step の DSL から来る場合
+
+feature ファイルも cucumber の glue も無いなら、上の compat の扉は当てはまりません。
+`defineStep` の `pattern` は省略できます。
+pattern の無い step も完全な語彙であり、`nuka do` で実行でき、`nuka describe` で読めます。
+そのため、同じ規則から別の 2 段階が出てきます。
+まず各 step を型付きの `defineStep` に移し、feature ファイルで使う価値が出たときに Gherkin の `pattern` を与えます。
+
+移行元の DSL が description、args、returns、書き込みのフラグ、run 関数をすでに持っているなら、そのまま移せます。
+`defineStep` にはそれぞれを受け取るフィールドがあります。
+移したスキーマを JSON Schema で表せなくても、`nuka describe` は止まりません。
+その step の契約を出力し、step の名前を挙げ、1 で終了します。
+
+## 進め方の決まり
+
+どの扉からスイートが入っても、これらは成り立ちます。
+
+- **2 段階を、決して同時にしない。**
+  1 つ変えてから、次を変えます。
+  2 つの変更が一緒に入ったあとで step が壊れると、どちらが壊したのかを知る手がかりがありません。
+  ここではその 2 段階は「import を差し替える」と「型を付ける」です。
+  ほかの扉は、同じ規則から自分の 2 段階を導きます。
+- **最初の変更の前に、今どこにいるかを言う。**
+  段階の名前、それが触るもの、触らないものを言います。
+  import の切り替えは可逆です([戻り道](#戻り道)を参照)。
+  step を `defineStep` に昇格させることは可逆ではありません。
+  そのため、10 個目のあとではなく、最初の 1 個の前に持ち主の了承を得ます。
+- **移行の途中でもスイートは走り続ける。**
+  compat の step と型付きの step は、1 つの feature ファイルを共有します。
+  「すべて型付き」を「走る」の前提条件にしないでください。
+  `nuka run` は、`nuka check` がエラーを報告した scenario を拒否します。
+  finding を直すか、残りが追いつくまで `--no-check` を渡します。
+- **compat の glue を消すのは、型付きの置き換えが通ってから。**
+  新しい step を書き、`nuka do` で走らせてから、古いものを消します。
+- **直すのは `nuka check` と `nuka run` が報告したもので、勘ではない。**
+  各 finding は、ファイルと `fix:` または `do:` の行を挙げます。
+- **静かな `nuka run --probe` は、compat の Then について何も言っていない。**
+  probe が再実行するのは、`mutates: false` を宣言した型付きの step だけです。
+  probe に意味を持たせるには、先に Then を昇格させます。
+
+移行で出会う事実です。
+
+- `envFiles` は、スイートがすでに持っている env ファイルを指します(`KEY=VALUE` で、規則は docs/spec.ja.md の「Environment、secret」にあります)。
+  空行でもコメントでも束縛でもない行は `env-file-skipped-line` です。
+  対象ごとに 1 回走らせていたスイート(シェルのループや、プロファイルごとの CI ジョブ)は、1 回の run になります。
+  各対象を `environments` で名付け、`nuka run --env a --env b` を渡します。
+- `"type"` の無い `package.json` の下では、`.ts` ファイルは Node の警告つきで読み込まれます。
+  `nuka tend` はそれを `package-type-missing` として報告します。
+- `nuka run` は自分のレポートを書きません。
+  cucumber messages を読んでいたフォーマッタや JUnit ベースの CI は、各 run のあとに `nuka report --format messages --out <path>` で描きます。
+  Allure なら `--format allure` で同じことをします。
+- `.feature` ファイルを探す走査は、どの深さでも `node_modules` と `.` で始まる名前のディレクトリを飛ばし、そのことを何も言いません。
+- 待ってからやり直していた glue のループは、fixture の束の `poll` になります。
+  その `timeout` は呼び出し全体の予算です(docs/spec.ja.md の「Context API」)。
+- 後片付けをしていた全体の `After` hook は、fixture の teardown にできます。
+  fixture の分割代入が読めないとき、または知らない fixture を挙げているとき、`nuka check` は `fixture-structural-violation` を報告します。
+- capture を coerce する昇格済みのスキーマ(`{string}` に対する `z.coerce.number()`)は `capture-type-mismatch` ではありません。
+  run はそれを受け入れます。
 
 ## 既知の限界
 

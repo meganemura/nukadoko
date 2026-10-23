@@ -45,6 +45,12 @@ This part does not change release to release.
 
 ## 0.20.0 to the next release
 
+- **The migration skill is gone.** A host that installed it with
+  `gh skill install meganemura/nukadoko --all` keeps the old copy until
+  it is removed; remove it, and point an agent that is moving a suite at
+  docs/migration.md instead. Its "Working rules" section carries what the
+  skill said.
+
 - **Two more evidence names are the harness's.** `ctx.evidence.attach`
   and `ctx.evidence.path` refuse `process-<n>.stdout.txt` and
   `process-<n>.stderr.txt` with `ReservedEvidenceNameError`, in any case:
