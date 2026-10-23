@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.21.0 — 2026-10-23
+
 ### Changed
 
 - **The two skills are renamed.** `acceptance` is now `nukadoko`, and

@@ -43,7 +43,7 @@ This part does not change release to release.
   whose range ends above your version: a project on 0.13.0, 0.13.1, or
   0.14.0 starts at "0.14.0 to 0.14.1".
 
-## 0.20.0 to the next release
+## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and
   `verification` is `nukadoko-verification`. A host that installed them
