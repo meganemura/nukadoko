@@ -71,6 +71,33 @@ just until 0.1.
   same `{{secret.NAME}}` token. A URL href that keeps `%20` and only
   rewrites `'` is unchanged.
 
+### Skill eval
+
+One run of one model, as `docs/releasing.md` describes: the `http-api`
+example, Claude Sonnet, without `http-api.md` in the installed skill.
+`nuka check` and `nuka run` passed (7 scenarios, 21 steps).
+
+| Rule | Result | Reason |
+| --- | --- | --- |
+| S1 | met | Each Then claims a status code, a name, a list of names in a docstring, or the item the scenario created. "the answer carries an error" claims only a non-empty `error` field, because the ticket gives no error text. |
+| S2 | met | Every scenario ends with its Then lines after its When. |
+| S3 | met | The ticket gives no data, so the agent chose the names, the unknown id, and the bad bodies, listed them under `Feature:` as assumptions, and asserted no literal id. |
+| S4 | met | The sentences name the route, the body, the status, and the answer, never a handler or the store. |
+| S5 | met | Names, the id, and the bodies are in the sentence, the docstring, or the Examples table. |
+| S6 | not met | The 404, 400, and 422 paths are their own scenarios, but none claims the exact refusal: the ticket gives no error text, and the agent listed that as a question instead of stopping before those scenarios. |
+| S7 | met | The Outline's name carries `<body>` and `<status>`. |
+| S8 | met | A fixture starts the server per scenario, and each scenario that reads an item creates it with a Given. |
+| S9 | met | One When per scenario, and status and body are claimed on separate Then lines. |
+| S10 | met | The Givens create items, and the request under test is always the When. |
+| S11 | met | Each assertion message names the expected and the actual value. |
+| S12 | met | The ticket is copied verbatim under `Feature:`. The empty-list scenario reads "every item created so far" as covering none; the agent flagged it as its own reading for the person to keep or delete. |
+
+The agent ran `nuka init --server` first and could not use what it
+generated: the program exports `startServer()` and does not listen on its
+own, and the generated `request` fixture needs Playwright, which this
+project does not have. It wrote a per-scenario fixture around
+`startServer()` and used Node's `fetch` instead.
+
 ## 0.20.0 — 2026-10-21
 
 ### Added
