@@ -7,6 +7,15 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- **The two skills are renamed.** `acceptance` is now `nukadoko`, and
+  `verification` is now `nukadoko-verification`, in `skills/` and in
+  each `SKILL.md`'s `name`. A bare "acceptance" or "verification" in a
+  host's skill list did not say which tool it came from, and the second
+  one collided with a project's own verification skill, which it is meant
+  to sit beside.
+
 ### Removed
 
 - **The migration skill is removed.** A suite moves across once, so a

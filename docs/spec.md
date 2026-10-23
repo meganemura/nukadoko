@@ -2580,7 +2580,7 @@ once or an invoice that would be issued twice, it is not possible at all.
 
 nukadoko does not hold a world open for that. An agent's host can already
 run a Playwright MCP server, which keeps one browser open across calls and
-lets the agent act on whatever page the last call left. The acceptance
+lets the agent act on whatever page the last call left. The nukadoko
 skill sends an agent there for a browser app whose state cannot be
 repeated, and says how to tell whether that server is connected. A
 process of nukadoko's own doing the same thing would add a second browser

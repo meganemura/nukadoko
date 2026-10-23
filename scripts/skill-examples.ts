@@ -1,5 +1,5 @@
-// Responsibility: keep the acceptance skill's worked examples true. Each
-// example is a Markdown file under skills/acceptance/references/examples/
+// Responsibility: keep the nukadoko skill's worked examples true. Each
+// example is a Markdown file under skills/nukadoko/references/examples/
 // and a project under examples/acceptance/ that it was copied from. The
 // project stays out of the npm tarball; the Markdown ships.
 //
@@ -29,7 +29,7 @@ export interface Example {
 }
 
 export const EXAMPLES: readonly Example[] = ["cli", "http-api", "workflow"].map((shape) => ({
-  markdown: `skills/acceptance/references/examples/${shape}.md`,
+  markdown: `skills/nukadoko/references/examples/${shape}.md`,
   project: `examples/acceptance/${shape}`,
 }));
 

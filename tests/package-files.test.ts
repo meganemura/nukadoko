@@ -69,7 +69,7 @@ describe("the packed file list", () => {
       ...markdownUnder("skills"),
     ];
     expect(required.filter((file) => !packedSet.has(file))).toEqual([]);
-    expect(required).toContain("skills/acceptance/references/running.md");
+    expect(required).toContain("skills/nukadoko/references/running.md");
   });
 
   it("every relative link in llms.txt and in a packed Markdown file lands on a packed file", () => {
@@ -98,20 +98,20 @@ describe("the packed file list", () => {
 describe("relativeLinks", () => {
   it("reads a link's file part and skips URLs, fragments, code spans, and fences", () => {
     const text = [
-      "See [the skill](skills/acceptance/SKILL.md) and [CI](docs/ci.md#the-job).",
+      "See [the skill](skills/nukadoko/SKILL.md) and [CI](docs/ci.md#the-job).",
       "[site](https://example.com) [top](#install) `[not](a.md)`",
       "```",
       "[fenced](b.md)",
       "```",
       '[titled](docs/spec.md "The spec") [spaced](docs/a%20b.md)',
     ].join("\n");
-    expect(relativeLinks(text)).toEqual(["skills/acceptance/SKILL.md", "docs/ci.md", "docs/spec.md", "docs/a b.md"]);
+    expect(relativeLinks(text)).toEqual(["skills/nukadoko/SKILL.md", "docs/ci.md", "docs/spec.md", "docs/a b.md"]);
   });
 });
 
 describe("resolveLink", () => {
   it("resolves against the linking file's directory", () => {
-    expect(resolveLink("skills/acceptance/SKILL.md", "references/running.md")).toBe("skills/acceptance/references/running.md");
+    expect(resolveLink("skills/nukadoko/SKILL.md", "references/running.md")).toBe("skills/nukadoko/references/running.md");
     expect(resolveLink("docs/releasing.md", "../.github/workflows/publish.yml")).toBe(".github/workflows/publish.yml");
     expect(resolveLink("llms.txt", "skills/")).toBe("skills");
     expect(resolveLink("docs/spec.md", "../../outside.md")).toBeNull();

@@ -61,7 +61,7 @@ included. M11 (live sessions) was built and then removed: `nuka session
 start` held one `ctx` open in a process so `nuka do` could land on a world
 already partway through, and a Playwright MCP server the agent's host
 already runs does the same exploring with no process of nukadoko's own;
-the acceptance skill says how. M12 (concurrency) is in: `nuka run
+the nukadoko skill says how. M12 (concurrency) is in: `nuka run
 --concurrency <n>` distributes whole feature files to worker processes,
 and `@nukadoko:serial` declares a feature that has to run alone. Still
 unimplemented: the AI-assisted glue converter.
@@ -162,9 +162,9 @@ change against before writing it.
   catches is not finished until `skills/` says so too.** The skills are how
   a user actually reaches a feature, so a skill describing the previous CLI
   teaches the previous CLI — the feature ships and nobody can find it. Both
-  need checking on every such change: `skills/acceptance/SKILL.md` (write a
+  need checking on every such change: `skills/nukadoko/SKILL.md` (write a
   scenario, run it, open the pull request a person approves) and
-  `skills/verification/SKILL.md` (scenarios under a verification skill).
+  `skills/nukadoko-verification/SKILL.md` (scenarios under a verification skill).
   Moving a suite across has no skill: docs/migration.md ("Working rules")
   carries it, and needs the same check. Skills never copy a fact the CLI
   itself answers — vocabulary, contracts, refusal reasons go stale the

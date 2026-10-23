@@ -40,7 +40,7 @@ import type { UsedEntry, UsedEntryWithResult } from "../record/types.js";
 // one key a `from` injection happened to read: a diagnosis needs
 // "why did this value come out this way", and narrowing to the cited key
 // would recreate, on the step record side, the same citation-only trap
-// `skills/acceptance/SKILL.md`'s `returns` guidance already warns against.
+// `skills/nukadoko/SKILL.md`'s `returns` guidance already warns against.
 //
 // `UsedEntry` vs `UsedEntryWithResult`: a bare optional `result?: unknown` let a new
 // step-record-construction site forget to strip it and still compile — the same

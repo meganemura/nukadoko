@@ -211,7 +211,7 @@ export const configSchema = z
      * whole project, not just of what `nuka run` would execute today. This
      * is why an acceptance
      * feature — recommended to live outside `featuresDir` precisely so it is
-     * never picked up as a regression (skills/acceptance/SKILL.md) — belongs
+     * never picked up as a regression (skills/nukadoko/SKILL.md) — belongs
      * here: it must never run unattended, but a static check that doesn't
      * see it will wrongly call the steps it uses unbound. `nuka check`
      * (no argument) and `nuka tend` read both sets; `nuka run` (no argument)

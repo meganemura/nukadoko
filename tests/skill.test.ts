@@ -24,10 +24,10 @@ const execFileAsync = promisify(execFile);
 // `name: nukadoko-acceptance` didn't match its `skills/acceptance/`
 // directory, which a spec-compliant runtime refuses to load — the "name
 // matches parent directory" test below is a direct regression guard for
-// that, and it now runs for every skill directory, not just acceptance.
+// that, and it now runs for every skill directory, not just the first.
 
 const skillsDir = path.join(repoRoot, "skills");
-const skillNames = ["acceptance", "verification"];
+const skillNames = ["nukadoko", "nukadoko-verification"];
 
 async function readFrontmatterOf(name: string): Promise<string> {
   const content = await readFile(path.join(repoRoot, "skills", name, "SKILL.md"), "utf8");
@@ -155,7 +155,7 @@ describe("nuka skill (process)", () => {
   });
 });
 
-// The acceptance skill is read by an agent with a context budget, so its
+// The nukadoko skill is read by an agent with a context budget, so its
 // size is a contract: SKILL.md is the order of work and stays at 120 lines,
 // each reference stays at 200, and a rule that does not fit replaces one
 // that is there. The worked examples are exempt because their output
@@ -182,7 +182,7 @@ function budgetProblems(skillDir: string): string[] {
   return problems;
 }
 
-describe("acceptance skill size budget", () => {
+describe("nukadoko skill size budget", () => {
   it("counts the lines wc -l counts", () => {
     hegel.test((tc) => {
       const lines = tc.draw(gs.arrays(gs.text({ alphabet: "ab \t`" }), { maxSize: 40 }));
@@ -192,7 +192,7 @@ describe("acceptance skill size budget", () => {
   });
 
   it("keeps SKILL.md and every reference within budget", () => {
-    expect(budgetProblems(path.join(skillsDir, "acceptance"))).toEqual([]);
+    expect(budgetProblems(path.join(skillsDir, "nukadoko"))).toEqual([]);
   });
 
   it("names a SKILL.md and a reference one line over budget, and leaves examples/ alone", async () => {
@@ -244,7 +244,7 @@ function ruleShapeProblems(text: string): string[] {
 
 describe("scenario-rules.md rule shape", () => {
   it("gives every rule a Bad:, a Good:, and a Checked by: line that names real codes or review", async () => {
-    const text = await readFile(path.join(skillsDir, "acceptance", "references", "scenario-rules.md"), "utf8");
+    const text = await readFile(path.join(skillsDir, "nukadoko", "references", "scenario-rules.md"), "utf8");
     expect(ruleShapeProblems(text)).toEqual([]);
     expect(text.match(/^## S\d+\. /gm)).toHaveLength(12);
   });

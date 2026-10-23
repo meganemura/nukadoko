@@ -885,8 +885,8 @@ step record は実行が何をしたかを示しますが、assertion がいま�
 
 nukadoko は [Agent Skills specification](https://agentskills.io/specification) に従う 2 つの skill を同梱しており、Claude Code、Copilot、Cursor、Codex、Gemini CLI のどれからでも読み込めます。
 
-- **acceptance** はチケットの受け入れ基準を、feature とその証跡となる run まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、人がレビューできるよう feature とその run サマリを渡します)。
-- **verification** は、プロジェクトの verification skill(動いているアプリを操作する control CLI と機能の地図)の下に scenario を置き、地図のどの主張を scenario で証明するか、CLI とステップで 1 つのライブラリを共有する方法、バグ報告を直す前に赤で再現する方法、cleanup の後も証拠を残す方法を扱います。
+- **nukadoko** はチケットの受け入れ基準を、feature とその証跡となる run まで運びます(語彙を読み、欠けているものを scaffold し、feature を書き、green になるまで実行し、人がレビューできるよう feature とその run サマリを渡します)。
+- **nukadoko-verification** は、プロジェクトの verification skill(動いているアプリを操作する control CLI と機能の地図)の下に scenario を置き、地図のどの主張を scenario で証明するか、CLI とステップで 1 つのライブラリを共有する方法、バグ報告を直す前に赤で再現する方法、cleanup の後も証拠を残す方法を扱います。
 
 ```sh
 gh skill install meganemura/nukadoko --all   # both, on any Agent Skills host

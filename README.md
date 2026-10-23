@@ -962,11 +962,11 @@ nukadoko ships two skills following the
 [Agent Skills specification](https://agentskills.io/specification), so
 Claude Code, Copilot, Cursor, Codex and Gemini CLI can all load them:
 
-- **acceptance.** Takes a ticket's acceptance criteria through to a
+- **nukadoko.** Takes a ticket's acceptance criteria through to a
   feature and the run that is its evidence: read the vocabulary, scaffold
   what's missing, write the feature, run it green, and hand over the
   feature and its run summary for a person to review.
-- **verification.** Puts scenarios under a project's verification skill
+- **nukadoko-verification.** Puts scenarios under a project's verification skill
   (a control CLI that drives the running app, and a map of its
   features): which claims of the map a scenario proves, how the CLI and
   the steps share one library, how a bug report is reproduced red before

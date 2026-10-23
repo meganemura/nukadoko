@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest";
 import { EXAMPLES, GAP, fencedBlocks, mismatch, normalizeLine, staticDrift, transcripts } from "../scripts/skill-examples.js";
 import { repoRoot } from "./helpers/fixtures.js";
 
-// Responsibility: the acceptance skill's worked examples quote their
+// Responsibility: the nukadoko skill's worked examples quote their
 // projects' files as they are, and the transcript matcher that
 // `npm run skill-examples` replays them with reads `...` and durations the
 // way the Markdown means them.
 
-describe("the acceptance skill's worked examples", () => {
+describe("the nukadoko skill's worked examples", () => {
   for (const example of EXAMPLES) {
     it(`${example.markdown} quotes ${example.project} as it is`, () => {
       expect(staticDrift(repoRoot, example)).toEqual([]);

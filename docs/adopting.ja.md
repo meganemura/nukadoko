@@ -228,7 +228,7 @@ workflow の全体、ブラウザを使う場合、run ディレクトリのア�
 
 ## 次に読むもの
 
-- coding agent は acceptance の skill([skills/acceptance/SKILL.md](../skills/acceptance/SKILL.md))を読み込みます。
+- coding agent は nukadoko の skill([skills/nukadoko/SKILL.md](../skills/nukadoko/SKILL.md))を読み込みます。
   `nuka skill path` は、インストールした版の `skills/` ディレクトリを出力し、そこにそのコピーがあります。
 - cucumber-js のスイートを持つプロジェクトは、import を 1 つ切り替えて取り込みます。
   [docs/migration.ja.md](migration.ja.md) を参照してください。

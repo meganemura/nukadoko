@@ -45,6 +45,12 @@ This part does not change release to release.
 
 ## 0.20.0 to the next release
 
+- **The skills have new names.** `acceptance` is `nukadoko`, and
+  `verification` is `nukadoko-verification`. A host that installed them
+  with `gh skill install meganemura/nukadoko --all` installs again and
+  removes the copies under the old names. A path written as
+  `<nuka skill path>/acceptance/` becomes `<nuka skill path>/nukadoko/`.
+
 - **The migration skill is gone.** A host that installed it with
   `gh skill install meganemura/nukadoko --all` keeps the old copy until
   it is removed; remove it, and point an agent that is moving a suite at

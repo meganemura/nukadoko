@@ -38,6 +38,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.20.0 から次のリリースへ
 
+- **skill の名前が変わりました。**
+  `acceptance` は `nukadoko` に、`verification` は `nukadoko-verification` になりました。
+  `gh skill install meganemura/nukadoko --all` で入れたホストは、もう一度インストールし、古い名前のコピーを消してください。
+  `<nuka skill path>/acceptance/` と書いたパスは `<nuka skill path>/nukadoko/` になります。
+
 - **migration skill はなくなりました。**
   `gh skill install meganemura/nukadoko --all` で入れたホストには、消すまで古いコピーが残ります。
   それを消し、スイートを移行するエージェントには、代わりに docs/migration.ja.md を案内してください。

@@ -365,7 +365,7 @@
     },
     {
       "term": "Playwright MCP server",
-      "why": "acceptance skill が、繰り返せない状態の探索に使わせるホスト側の MCP サーバ。製品名 Playwright と MCP はそのまま残し、server だけを terms の サーバ に訳して Playwright MCP サーバ と書く"
+      "why": "nukadoko skill が、繰り返せない状態の探索に使わせるホスト側の MCP サーバ。製品名 Playwright と MCP はそのまま残し、server だけを terms の サーバ に訳して Playwright MCP サーバ と書く"
     },
     {
       "term": "lock file",

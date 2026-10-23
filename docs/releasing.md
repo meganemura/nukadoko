@@ -113,20 +113,20 @@ registers the trusted publisher.
    `skill-examples` installs the same tarball into a copy of each project
    under `examples/acceptance/`, runs `nuka check`, `nuka run`, and
    `nuka tend` there, and compares the output with the transcripts in
-   `skills/acceptance/references/examples/`.
+   `skills/nukadoko/references/examples/`.
 
 3. When `skills/` changed since the previous tag
    (`git diff --stat v<previous>..HEAD -- skills/` prints a line), run one
    skill eval by hand. Pick one worked example under
-   `skills/acceptance/references/examples/`. In a scratch project, put
+   `skills/nukadoko/references/examples/`. In a scratch project, put
    that example's program (`src/` of its project under
    `examples/acceptance/`) and install this checkout's tarball. Delete
    that example's Markdown file from the installed skill, under
-   `node_modules/nukadoko/skills/acceptance/references/examples/`, and
+   `node_modules/nukadoko/skills/nukadoko/references/examples/`, and
    give the agent no other copy of it. Give the agent the
    example's "The ticket" section and ask it to write and run the
    scenarios. Score the feature it writes against each rule, S1 to S12, of
-   `skills/acceptance/references/scenario-rules.md`: met, not met, or
+   `skills/nukadoko/references/scenario-rules.md`: met, not met, or
    not applicable. Put the table, the example's name, and the model
    under this version's heading in `CHANGELOG.md`, so the release notes
    carry it. A rule that is not met is a finding for the skill, not a

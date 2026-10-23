@@ -247,8 +247,8 @@ Commit `features/`, `nukadoko.config.ts`, and the changes to
 
 ## Where to go next
 
-- A coding agent loads the acceptance skill
-  ([skills/acceptance/SKILL.md](../skills/acceptance/SKILL.md)).
+- A coding agent loads the nukadoko skill
+  ([skills/nukadoko/SKILL.md](../skills/nukadoko/SKILL.md)).
   `nuka skill path` prints the `skills/` directory of your installed
   version, which holds that copy.
 - A project with a cucumber-js suite brings it in by switching one
