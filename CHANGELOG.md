@@ -7,6 +7,17 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **The acceptance skill walks a person through a run, one step at a time.**
+  A new reference, `references/reviewing.md`, has the agent run the
+  scenario once and then show each step record in order: the sentence,
+  what was measured (arguments, result, requests, processes and the files
+  they changed, values taken from an earlier step), whether that matches
+  the sentence, and the file to open to confirm it. It waits for the
+  person before the next step. Raw step output is rarely enough for a
+  person to judge; the agent reads it for them and says where it read it.
+
 ### Fixed
 
 - **A backslash in a run summary stays a backslash.** Plain text such as

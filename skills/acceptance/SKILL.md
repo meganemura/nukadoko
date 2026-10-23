@@ -1,6 +1,6 @@
 ---
 name: acceptance
-description: Use when turning a requirement into a Gherkin scenario and the run that is its evidence, for a person to review, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, or a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first.
+description: Use when turning a requirement into a Gherkin scenario and the run that is its evidence, for a person to review, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first, or a run a person wants to check one step at a time with the agent explaining each step record.
 compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka tend).
 license: MIT
 ---
@@ -59,6 +59,8 @@ pick the one line that is true:
    adds it with `claude mcp add playwright npx @playwright/mcp@latest`
    once the person agrees. Then line 4 (`references/exploring.md`,
    "Exploring state that cannot be repeated").
+6. **A scenario the person wants to check step by step with you**: run it
+   once and walk its step records one at a time (`references/reviewing.md`).
 
 If none is true, ask what this is supposed to do before writing anything.
 
