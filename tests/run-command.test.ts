@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as hegel from "@hegeldev/hegel";
@@ -7,15 +8,18 @@ import { runCli } from "../src/cli/run-cli.js";
 import { createObservedCollector } from "../src/context/observed.js";
 import { runCommand } from "../src/index.js";
 import { withProcessRecording } from "../src/context/run-command.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, createEmptyTempDir, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
 
 // Responsibility: `runCommand`'s own result (exit code, output, stdin,
 // environment, the two cases it rejects) and the `observed.processes` it
 // adds to a step record: one entry per call in call order, recorded for a
 // typed step, a part, and a compat step, redacted, and absent when no
-// process ran.
+// process ran; and what each process printed, kept as redacted files beside
+// the step record.
 
 const node = process.execPath;
+// The script the secret-argument fixture step runs.
+const PRINT_ARGUMENT = "process.stdout.write(process.argv[1]); process.stderr.write(process.argv[1])";
 
 describe("runCommand result", () => {
   it("resolves a nonzero exit with its code and both streams", async () => {
@@ -85,6 +89,19 @@ describe("runCommand result", () => {
       "process.stdout.write(process.argv[1])",
       "receipt={{secret.RECEIPT}}",
     ]);
+  });
+
+  it("writes a value named in redact as its token in what the process printed", async () => {
+    const dir = await createEmptyTempDir();
+    try {
+      const observed = createObservedCollector({ outputDir: () => dir });
+      await withProcessRecording(observed, () =>
+        runCommand(node, ["-e", "process.stdout.write(process.argv[1])", "receipt=abc.def.ghi"], { redact: { RECEIPT: "abc.def.ghi" } }),
+      );
+      expect(readFileSync(path.join(dir, "process-1.stdout.txt"), "utf8")).toBe("receipt={{secret.RECEIPT}}");
+    } finally {
+      await removeTempDir(dir);
+    }
   });
 
   it("leaves no value named in redact in the recorded command", () =>
@@ -185,8 +202,10 @@ describe("observed.processes on a step record", () => {
     // runs in the repository root, where other tests write at the same time.
     expect(processes.map(({ duration_ms: _ms, files: _files, ...rest }) => rest)).toEqual([
       { command: [node, "-e", "process.exit(3)"], cwd: process.cwd(), exit_code: 3 },
-      { command: [node, "-e", "process.stdout.write('hello')"], cwd: process.cwd(), exit_code: 0 },
+      { command: [node, "-e", "process.stdout.write('hello')"], cwd: process.cwd(), exit_code: 0, stdout: "process-2.stdout.txt" },
     ]);
+    // The first process printed nothing, so it names no file.
+    expect(await readFile(path.join(rootDir, stepRecord.evidence.dir, "process-2.stdout.txt"), "utf8")).toBe("hello");
     expect(typeof processes[0]!.duration_ms).toBe("number");
     expect(processes[0]!.files).toHaveProperty("added");
     // The fixture's own state directory is where this run writes, so it is
@@ -195,9 +214,14 @@ describe("observed.processes on a step record", () => {
     expect(skipped).toContain(`${path.relative(process.cwd(), path.join(rootDir, ".nukadoko")).split(path.sep).join("/")}/`);
   });
 
-  it("nuka run: a loaded secret in an argument is redacted", async () => {
+  it("nuka run: a loaded secret in an argument is redacted, in the command and in what the process printed", async () => {
     const stepRecord = await stepRecordOf(6);
-    expect(stepRecord.observed.processes[0].command).toEqual([node, "-e", "", "{{secret.CLI_TOKEN}}"]);
+    const entry = stepRecord.observed.processes[0];
+    expect(entry.command).toEqual([node, "-e", PRINT_ARGUMENT, "{{secret.CLI_TOKEN}}"]);
+    expect(entry).toMatchObject({ stdout: "process-1.stdout.txt", stderr: "process-1.stderr.txt" });
+    for (const file of ["process-1.stdout.txt", "process-1.stderr.txt"]) {
+      expect(await readFile(path.join(rootDir, stepRecord.evidence.dir, file), "utf8")).toBe("{{secret.CLI_TOKEN}}");
+    }
   });
 
   it("nuka run: a part's process lands on the calling step's record", async () => {
@@ -223,5 +247,6 @@ describe("observed.processes on a step record", () => {
     expect(exitCode).toBe(0);
     const record = JSON.parse(stdout.text());
     expect(record.observed.processes.map((entry: { exit_code: number }) => entry.exit_code)).toEqual([3, 0]);
+    expect(await readFile(path.join(rootDir, record.evidence.dir, record.observed.processes[1].stdout), "utf8")).toBe("hello");
   });
 });

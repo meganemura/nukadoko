@@ -9,6 +9,17 @@ just until 0.1.
 
 ### Added
 
+- **A step record keeps what each `runCommand` process printed.** Each
+  entry of `observed.processes` names `stdout` and `stderr` files in the
+  record's directory (`process-<n>.stdout.txt`, `process-<n>.stderr.txt`)
+  when the process wrote to that stream. They hold the whole stream,
+  redacted like http.jsonl, with the step's own `redact` values replaced
+  too. A person reviewing a step needs what the program printed, and the
+  step's result keeps only what the step chose to return. The run.json
+  entry stays small because the output is a file, not a field.
+  `ctx.evidence` now refuses those two names with
+  `ReservedEvidenceNameError` (see docs/upgrading.md).
+
 - **The acceptance skill walks a person through a run, one step at a time.**
   A new reference, `references/reviewing.md`, has the agent run the
   scenario once and then show each step record in order: the sentence,

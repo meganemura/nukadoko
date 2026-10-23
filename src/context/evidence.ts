@@ -4,6 +4,7 @@ import path from "node:path";
 import type { EvidenceAttachmentEntry, EvidenceMeta } from "../record/types.js";
 import { isNamedContextHarnessFile } from "./context-name.js";
 import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js";
+import { isProcessOutputFileName } from "./process-output.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
 // step-facing counterpart to Playwright's `testInfo.attach()`/
@@ -136,7 +137,8 @@ function assertSafeEvidenceName(name: string): void {
   const key = evidenceNameKey(name);
   if (
     HARNESS_EVIDENCE_FILE_NAMES.some((reserved) => evidenceNameKey(reserved) === key) ||
-    isNamedContextHarnessFile(name)
+    isNamedContextHarnessFile(name) ||
+    isProcessOutputFileName(name)
   ) {
     throw new ReservedEvidenceNameError(name);
   }

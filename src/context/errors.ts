@@ -170,7 +170,8 @@ export class ReservedEvidenceNameError extends Error {
     super(
       `ctx.evidence name ${JSON.stringify(name)} is reserved for a file the harness writes ` +
         "itself (record.json, final.png, trace.zip, http.jsonl, or the trace.<name>.zip and " +
-        "final.<name>.png files of a pageAs() context). A name that differs only " +
+        "final.<name>.png files of a pageAs() context, or the process-<n>.stdout.txt and " +
+        "process-<n>.stderr.txt files that keep what a runCommand process printed). A name that differs only " +
         "by case is the same file on a case-insensitive volume, so it is reserved too. " +
         "Choose a different name.",
     );

@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import type { ProcessEntry, ProcessFiles } from "../record/types.js";
+import type { ProcessEntry, ProcessFiles, ProcessOutput } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
 import { diffSnapshots, takeSnapshot } from "./file-snapshot.js";
 import { windowsSpawnPlan } from "./windows-command.js";
@@ -50,11 +50,19 @@ import { windowsSpawnPlan } from "./windows-command.js";
 // Outside a step nothing is recorded, so nothing is walked unless the
 // caller asks with `files: true` (a control CLI that drives the same
 // program between steps).
+//
+// The output goes to the recorder beside the entry, not inside it, with the
+// step's own `redact` values already replaced. The recorder keeps it as
+// evidence files: a person reviewing a step needs what the program printed,
+// and the step's result keeps only the part the step chose to return. A
+// second argument, rather than a new entry field, keeps a recorder from an
+// older copy of this module working: it ignores the argument, and the
+// output never lands inline in its record.
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
 export interface ProcessRecorder {
-  startProcess(): (entry: ProcessEntry) => void;
+  startProcess(): (entry: ProcessEntry, output?: ProcessOutput) => void;
   /** Absolute directories the executor writes to while a step runs, left
    * out of the file snapshot. Optional, so an older copy's recorder still
    * fits. */
@@ -195,6 +203,8 @@ export async function runCommand(
       const durationMs = Math.round(performance.now() - startedAt);
       const secrets = Object.entries(options.redact ?? {}).map(([name, value]) => ({ name, value }));
       const files = before === undefined ? undefined : diffSnapshots(before, takeSnapshot(cwd, unwatched));
+      const out = Buffer.concat(stdout).toString("utf8");
+      const err = Buffer.concat(stderr).toString("utf8");
       finish?.({
         command: [command, ...args].map((part) => redactString(part, secrets)),
         cwd,
@@ -203,7 +213,7 @@ export async function runCommand(
         ...(timedOut ? { timed_out: true as const } : {}),
         duration_ms: durationMs,
         ...(files === undefined ? {} : { files }),
-      });
+      }, { stdout: redactString(out, secrets), stderr: redactString(err, secrets) });
       if (timedOut) {
         rejectPromise(
           new Error(
@@ -215,8 +225,8 @@ export async function runCommand(
       resolvePromise({
         exitCode: code,
         signal,
-        stdout: Buffer.concat(stdout).toString("utf8"),
-        stderr: Buffer.concat(stderr).toString("utf8"),
+        stdout: out,
+        stderr: err,
         ...(files === undefined ? {} : { files }),
       });
     });

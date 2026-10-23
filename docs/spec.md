@@ -656,8 +656,9 @@ The fixture names:
   evidence. A step needs one method about as often as it needs the other. A
   `name` that contains a path separator is refused. A `name` equal to `.`,
   `..`, or the empty string is also refused. A `name` of `record.json`,
-  `final.png`, `trace.zip`, or `http.jsonl` is refused too, including a
-  spelling that differs only by case (`ReservedEvidenceNameError`). Those
+  `final.png`, `trace.zip`, or `http.jsonl`, or of the shape
+  `process-<n>.stdout.txt` or `process-<n>.stderr.txt`, is refused too,
+  including a spelling that differs only by case (`ReservedEvidenceNameError`). Those
   are files the harness writes in that directory, and a step name that
   landed on one of them would replace it. Nukadoko never silently rewrites
   these names. A loud error at the call is better than letting a step trust a
@@ -2745,7 +2746,17 @@ its scenario record's id, so either record leads to the other.
   directory past 20000 entries, or one that cannot be read, gives
   `{ "unmeasured": "<why>" }` instead. It measures a directory, not a
   process: anything else writing there at the same time is in the
-  difference too. A value the step holds itself, such as a token it signed, is
+  difference too. Each entry also has `"stdout"` and `"stderr"` when the
+  process wrote to that stream and the execution has an evidence
+  directory: the name of a file in it, `process-<n>.stdout.txt` or
+  `process-<n>.stderr.txt`, that holds the whole stream, redacted like
+  http.jsonl, with a step's own `redact` values replaced too. The output
+  is a file rather than a field because it can be large, and the entry
+  that `run.json` copies stays small. `n` counts the processes of the
+  execution from 1, and moves to the next free number when hooks of one
+  scenario share a directory. A person reviewing a step needs what the
+  program printed, and the step's result keeps only what the step chose
+  to return. A value the step holds itself, such as a token it signed, is
   not a loaded secret; `redact: { NAME: value }` writes it as
   `{{secret.NAME}}` in `command` while the program still receives it.
   `runCommand(command, args, { cwd, env, input, timeout, redact, files })`
@@ -2810,8 +2821,9 @@ its scenario record's id, so either record leads to the other.
   call. A `name` containing a path separator, or equal to `.`/`..`/the
   empty string, is refused before anything is written, never silently
   rewritten into something safe. A `name` of `record.json`, `final.png`,
-  `trace.zip`, or `http.jsonl`, or of the shape `trace.<name>.zip` or
-  `final.<name>.png` for a valid `pageAs` name, is refused the same way
+  `trace.zip`, or `http.jsonl`, of the shape `trace.<name>.zip` or
+  `final.<name>.png` for a valid `pageAs` name, or of the shape
+  `process-<n>.stdout.txt` or `process-<n>.stderr.txt`, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by
   case: those are files the harness writes in this directory. Capped at 100
   entries, sorted by `at`, the

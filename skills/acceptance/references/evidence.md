@@ -35,7 +35,9 @@ the first. A name that differs only by case counts as the same name, so
 the second call is suffixed the same way (`Report.txt`, then
 `report-2.txt`) and the two do not share one path. A harness file name is
 refused with `ReservedEvidenceNameError`: `record.json`, `final.png`,
-`trace.zip`, and `http.jsonl`, in any case. Pick another name.
+`trace.zip`, `http.jsonl`, and `process-<n>.stdout.txt` and
+`process-<n>.stderr.txt` (what a `runCommand` process printed), in any
+case. Pick another name.
 
 Compat glue uses `this.attach` instead, in cucumber-js's forms (a
 `base64:` media type, `{ mediaType, fileName }`, a stream the step

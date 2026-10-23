@@ -46,8 +46,9 @@ What each part of `observed` says:
   `page`, `context`, or `pageAs`. `null` means nothing was measured, not
   that nothing happened.
 - `processes` lists each `runCommand`, with its command, `cwd`,
-  `exit_code`, and `files`: what it added, changed, or removed under its
-  working directory.
+  `exit_code`, `files` (what it added, changed, or removed under its
+  working directory), and `stdout` and `stderr`: the files in the
+  record's directory that hold what it printed.
 - `used` names the earlier step records this step read through `from`,
   and the values it took from them.
 - `evidence` points at the screenshots, the trace, `http.jsonl`, and any
@@ -73,9 +74,10 @@ says. Expect one of four answers, each citing the field it rests on:
 Without a subagent, judge it yourself from the record alone and say so.
 
 A Then that reads a file or a process output and asserts on it often
-comes back as cannot tell: the record keeps a process exit code and the
-files it changed, not what it printed, and nothing at all of a file a step
-only read. That is a gap in the evidence, not a wrong step. Have the step
+comes back as cannot tell when the step only read a file: the record
+keeps what a process printed and the files it changed, and nothing of a
+file the step read itself. That is a gap in the evidence, not a wrong
+step. Have the step
 attach what it asserted on with `evidence.attach` (`evidence.md`), run
 again, and the next walk can show it.
 

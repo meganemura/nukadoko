@@ -621,6 +621,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // executor's own writes as the program's.
   const observed = createObservedCollector({
     unwatchedDirs: config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)],
+    outputDir: () => boundaryDir,
+    secrets,
   });
   // Same lifetime rule as `observed`, for provenance instead of network
   // calls.

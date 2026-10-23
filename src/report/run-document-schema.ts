@@ -27,6 +27,8 @@ const process = z.looseObject({
   signal: z.string().optional(),
   timed_out: z.literal(true).optional(),
   duration_ms: z.number(),
+  stdout: z.string().optional(),
+  stderr: z.string().optional(),
   files: z
     .union([
       z.looseObject({

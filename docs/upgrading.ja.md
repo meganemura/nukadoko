@@ -36,6 +36,15 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   自分のバージョンより上で終わる最初の節から読み始めます。
   たとえば 0.13.0、0.13.1、0.14.0 のプロジェクトは、「0.14.0 から 0.14.1 へ」から読み始めます。
 
+## 0.20.0 から次のリリースへ
+
+- **evidence の名前が 2 つ、harness のものになりました。**
+  `ctx.evidence.attach` と `ctx.evidence.path` は、`process-<n>.stdout.txt` と `process-<n>.stderr.txt` を、大文字小文字にかかわらず `ReservedEvidenceNameError` で拒否します。
+  nukadoko が、`runCommand` のプロセスが出力したものをその名前で残すようになったからです。
+  そのどちらかの名前でファイルを添付していた step は、別の名前を選んでください。
+  レビューする人に読ませるためだけにコマンドの出力を添付していた step は、その添付をやめられます。
+  step record がすでにそのファイルを名指しします。
+
 ## 0.17.0 から 0.18.0 へ
 
 - **`nuka run --quiet` は削除されました。**

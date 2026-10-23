@@ -280,6 +280,19 @@ export interface ProcessEntry {
   /** What changed under `cwd` between the spawn and the close. Present
    * only for a process run inside a step. */
   readonly files?: ProcessFiles;
+  /** The file, in the step record's evidence directory, that holds what
+   * the process wrote to stdout, redacted. Present only when it wrote
+   * something and the execution had an evidence directory. */
+  readonly stdout?: string;
+  /** The same, for stderr. */
+  readonly stderr?: string;
+}
+
+/** What a process wrote, decoded as UTF-8, handed to the collector beside
+ * its entry so the collector can keep it as evidence files. */
+export interface ProcessOutput {
+  readonly stdout: string;
+  readonly stderr: string;
 }
 
 /** Paths relative to the process's `cwd`, `/`-separated, a directory's

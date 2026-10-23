@@ -564,6 +564,7 @@ fixture の名前:
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
   `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name` も拒否されます。
+  `process-<n>.stdout.txt` と `process-<n>.stderr.txt` という形の `name` も拒否されます。
   大文字小文字だけが違う綴りも同じです。
   それらは harness がその directory に自分で書くファイルであり、step の名前がそこに重なるとそのファイルを置き換えるからです。
   拒否は `ReservedEvidenceNameError` です。
@@ -2264,6 +2265,14 @@ scenario record は独立したファイルではなく、その run の `run.js
   `node_modules` と `.git` のディレクトリ、そして run 自身が書き込む project の state ディレクトリはたどらず、`"skipped"` に名前を載せます。
   エントリが 20000 を超える作業ディレクトリや読めない作業ディレクトリでは、代わりに `{ "unmeasured": "<理由>" }` になります。
   計測するのはプロセスではなくディレクトリなので、同じときにそこへ書き込んだほかのものも差に含まれます。
+  プロセスがその stream に書き込み、実行に evidence directory があるときは、各エントリに `"stdout"` と `"stderr"` も加わります。
+  値はその directory にあるファイルの名前(`process-<n>.stdout.txt` または `process-<n>.stderr.txt`)で、ファイルは stream の全体を持ちます。
+  中身は http.jsonl と同じく redact され、step 自身の `redact` の値も置き換えられます。
+  出力をフィールドではなくファイルにするのは、出力は大きくなることがあり、`run.json` が写すエントリを小さく保つためです。
+  `n` は実行の中のプロセスを 1 から数えます。
+  1 つの scenario の hook が同じ directory を共有するときは、空いている次の番号に進みます。
+  step を確かめる人には、プログラムが出力したものが必要です。
+  step の result には、step が返すと決めた部分しか残りません。
   step 自身が持つ値(step が署名したトークンなど)は読み込んだ secret ではありません。
   `redact: { NAME: value }` を渡すと、その値は `command` の中で `{{secret.NAME}}` と書かれ、プログラムには本当の値が渡ります。
   `runCommand(command, args, { cwd, env, input, timeout, redact, files })` は `nukadoko` からの import であり、fixture ではありません。
@@ -2306,7 +2315,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name`、そして有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt` と `process-<n>.stderr.txt` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。

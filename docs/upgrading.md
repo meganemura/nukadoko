@@ -43,6 +43,16 @@ This part does not change release to release.
   whose range ends above your version: a project on 0.13.0, 0.13.1, or
   0.14.0 starts at "0.14.0 to 0.14.1".
 
+## 0.20.0 to the next release
+
+- **Two more evidence names are the harness's.** `ctx.evidence.attach`
+  and `ctx.evidence.path` refuse `process-<n>.stdout.txt` and
+  `process-<n>.stderr.txt` with `ReservedEvidenceNameError`, in any case:
+  nukadoko now keeps what a `runCommand` process printed under those
+  names. A step that attached a file under one of them picks another
+  name. A step that attached a command's output only so a reviewer could
+  read it can stop: the step record already names that file.
+
 ## 0.17.0 to 0.18.0
 
 - **`nuka run --quiet` is removed.** It is refused with `removed-flag`.
