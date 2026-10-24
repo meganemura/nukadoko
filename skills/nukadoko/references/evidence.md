@@ -45,7 +45,8 @@ open when the run ends gets its line then. The record does not count it.
 
 What nukadoko saw but cannot measure is in `observed.unmeasured`: a
 process started through `node:child_process` instead of `runCommand`
-(named by its program and argument count only, never its arguments), a
+(named by its program and argument count only, never its arguments or a
+`NAME=value` word, however it ended), a
 `Worker`, a connection the step opened or wrote to that carries no
 recorded request (a database client, a pool opened before the step),
 what a WebSocket or a CONNECT tunnel carried after its handshake, or a

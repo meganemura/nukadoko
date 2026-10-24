@@ -2880,13 +2880,23 @@ its scenario record's id, so either record leads to the other.
   not measure, each distinct action once, as `{ "kind", "detail" }`.
   `child_process` is a process started through `node:child_process`
   instead of `runCommand`, and `detail` is the call, the program's name
-  (the last segment of its path, or the first word of a shell command
-  line), and how many arguments it was given, such as `execFile git with
+  (the last segment of its path, at either separator, or of the first
+  word of a shell command line that is not a `NAME=value` assignment),
+  and how many arguments it was given, such as `execFile git with
   2 arguments`. The arguments are left out: the process was not
   measured, and a step passes a token it holds on a command line as
   easily as anywhere else, with no `redact` option on these calls to
-  name it. A step that needs the command recorded runs it through
-  `runCommand`. `worker_thread` is a `worker_threads.Worker`, whose own globals no
+  name it. For the same reason `detail` holds no word with a `=` in
+  it: the assignments are not counted, and a program name that holds one
+  is `(name hidden: it holds an equals sign)`. A shell command line is
+  split into words the way a POSIX shell splits it, except on Windows or
+  for a `cmd.exe` shell, where a backslash is a path separator and only
+  double quotes group. A call is marked once it started a process,
+  however the process ended: an `execSync` or `execFileSync` whose
+  program exited non-zero or timed out is marked, and the step gets the
+  call's own error unchanged. A call that threw on its arguments, or
+  whose program was not found, started none and is not marked. A step
+  that needs the command recorded runs it through `runCommand`. `worker_thread` is a `worker_threads.Worker`, whose own globals no
   patch reaches, and `detail` names its script. `socket` is client
   traffic that no recorded request accounts for, judged when the step's
   record is built: a connection the step opened (a database client),

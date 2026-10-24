@@ -648,10 +648,18 @@ function installChildProcess(): void {
     if (typeof original !== "function") continue;
     const marked = sameShape(function (this: unknown, ...args: unknown[]): unknown {
       const rec = channelRecorder();
-      // `exec` calls `spawn`: one process, recorded once. Marked after the
-      // call returns, so a call that threw on its arguments marks nothing.
-      const result = insideSyncCall(() => original.apply(this, args));
-      rec?.markUnmeasured({ kind: "child_process", detail: childProcessDetail(name, args) });
+      // `exec` calls `spawn`: one process, recorded once.
+      let result: unknown;
+      try {
+        result = insideSyncCall(() => original.apply(this, args));
+      } catch (error) {
+        // `execSync` and `execFileSync` throw for a process that ran and
+        // failed, so the mark comes first, and the caller gets the very
+        // error the call threw.
+        if (rec !== undefined && startedProcess(name, error, true)) markProcess(rec, name, args);
+        throw error;
+      }
+      if (rec !== undefined && startedProcess(name, result, false)) markProcess(rec, name, args);
       return result;
     }, original);
     // `promisify(exec)` and `promisify(execFile)` resolve to
@@ -664,6 +672,40 @@ function installChildProcess(): void {
     }
     target[name] = marked;
   }
+}
+
+/** Whether a `node:child_process` call started a process, from what it
+ * returned or threw, so a call that started none marks nothing. The
+ * measure is the child's pid: a ChildProcess has one once its spawn
+ * succeeded, and none when the program was not found (the error comes
+ * later, as an event); `spawnSync`'s result, and the error `execSync`
+ * and `execFileSync` throw for a process that exited non-zero, timed
+ * out, or overflowed its buffer, carry it, 0 when the spawn failed. An
+ * error thrown on the arguments carries none. `execSync` and
+ * `execFileSync` return only the output, which they have only from a
+ * process that ran. */
+function startedProcess(call: string, outcome: unknown, threw: boolean): boolean {
+  if (!threw && (call === "execSync" || call === "execFileSync")) return true;
+  try {
+    const pid = typeof outcome === "object" && outcome !== null ? (outcome as { pid?: unknown }).pid : undefined;
+    return typeof pid === "number" && pid > 0;
+  } catch {
+    // A getter that throws on a value the call gave back is no pid.
+    return false;
+  }
+}
+
+function markProcess(rec: ChannelRecorder, call: string, args: readonly unknown[]): void {
+  let detail: string;
+  try {
+    detail = childProcessDetail(call, args);
+  } catch {
+    // The call accepted these arguments, so reading them again throws only
+    // for a value whose getter changed its mind; the process is still
+    // marked, without its name.
+    detail = `${call} (a program nukadoko could not name)`;
+  }
+  rec.markUnmeasured({ kind: "child_process", detail });
 }
 
 type ExecOutput = { stdout: unknown; stderr: unknown };

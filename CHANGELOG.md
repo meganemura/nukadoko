@@ -64,8 +64,9 @@ just until 0.1.
   never in the next step's files, run.json's `after_step_end` names
   the `http.jsonl` that holds the requests, and a request still open
   when the run ends gets its line before run.json is written. `unmeasured` lists, as
-  `{ kind, detail }`, each process started without `runCommand` (by
-  its program and argument count, never its arguments), `Worker`, and
+  `{ kind, detail }`, each process started without `runCommand`
+  however it ended (by its program and argument count, never its
+  arguments, a `NAME=value` word, or a directory), `Worker`, and
   connection that carries no recorded request, one the step opened or
   one opened before the step that it wrote to, and the run
   summary gives each such step one line under "Unmeasured actions",

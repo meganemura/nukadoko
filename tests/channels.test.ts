@@ -1,4 +1,4 @@
-import { exec, execFile, spawnSync } from "node:child_process";
+import { exec, execFile, execFileSync, execSync, spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -222,6 +222,42 @@ describe("unmeasured actions", () => {
       { kind: "socket", detail: `connect 127.0.0.1:${port}` },
     ]);
     expect(observed.snapshot().processes).toHaveLength(1);
+  });
+
+  it("marks a process execSync or execFileSync started however it ended, with the call's own error, and no call that started none", async () => {
+    const missing = path.join(dir, "no-such-program");
+    const run = (): unknown[] => {
+      const outcomes: unknown[] = [];
+      const attempt = (call: () => unknown): void => {
+        try {
+          call();
+          outcomes.push("returned");
+        } catch (error) {
+          const { constructor, message, code, status, signal } = error as NodeJS.ErrnoException & { status?: number; signal?: string };
+          outcomes.push({ type: constructor, message, code, status, signal });
+        }
+      };
+      attempt(() => execSync(`"${node}" -e "process.exit(3)"`, { stdio: "ignore" }));
+      attempt(() => execFileSync(node, ["-e", "process.exit(2)"], { stdio: "ignore" }));
+      attempt(() => execFileSync(node, ["-e", "setTimeout(() => {}, 10000)", "timed"], { stdio: "ignore", timeout: 300 }));
+      attempt(() => execFileSync(missing, [], { stdio: "ignore" }));
+      attempt(() => spawnSync(missing));
+      attempt(() => execFileSync(1 as unknown as string));
+      return outcomes;
+    };
+    const outside = run();
+    const inside = await inStep(async () => {
+      const outcomes = run();
+      await new Promise((resolve) => spawn(missing).on("error", resolve));
+      return outcomes;
+    });
+    expect(inside).toEqual(outside);
+    expect(outside.map((outcome) => (outcome as { status?: unknown }).status)).toEqual([3, 2, null, null, undefined, undefined]);
+    expect(observed.snapshot().unmeasured).toEqual([
+      { kind: "child_process", detail: "execSync node with 2 arguments" },
+      { kind: "child_process", detail: "execFileSync node with 2 arguments" },
+      { kind: "child_process", detail: "execFileSync node with 3 arguments" },
+    ]);
   });
 
   it("keeps the promise form of exec and execFile, and marks a process started through it", async () => {
