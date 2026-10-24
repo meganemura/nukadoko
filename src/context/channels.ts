@@ -29,6 +29,11 @@ import type { Identity } from "./step-files.js";
 // calls the original and nothing else, and every patched function keeps
 // the original's name, length, and synchronous throws, so a fixture, a
 // hook, and the executor itself see the builtins as Node ships them.
+// Inside a step, recording never throws: a patch reads its arguments
+// before the original validates them, so an argument the original rejects
+// (a Symbol, a file URL with a host, a relative path after the working
+// directory was removed) must reach the original and fail there, with the
+// original's own error.
 // Inside a step, nukadoko's own I/O must not record itself: runCommand's
 // spawn, Playwright's request send and browser launch, and the recorder's
 // own writes run under `withoutChannelRecording`, and the recorder drops
@@ -182,8 +187,15 @@ function sameShape<T extends object>(wrapper: T, original: (...args: never[]) =>
   return wrapper;
 }
 
+/** The first line of what was thrown, for a line's `error`. Anything can
+ * be thrown, a Symbol or an object whose `toString` throws included. */
 function firstLine(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  let message: string;
+  try {
+    message = error instanceof Error ? error.message : String(error);
+  } catch {
+    return "a thrown value that has no text";
+  }
   return message.split("\n", 1)[0] ?? "";
 }
 
@@ -616,6 +628,14 @@ function promisedExec(call: (...args: unknown[]) => unknown): (...args: unknown[
  * passes its own normalized `[options, callback]` array from
  * `net.connect`, and the public forms otherwise. */
 function socketAddress(args: unknown[]): string {
+  try {
+    return readSocketAddress(args);
+  } catch {
+    return "an address nukadoko could not read";
+  }
+}
+
+function readSocketAddress(args: unknown[]): string {
   let first = args[0];
   if (Array.isArray(first)) first = first[0];
   if (typeof first === "object" && first !== null) {
@@ -650,12 +670,22 @@ function installNet(): void {
   const proto = net.Socket.prototype as unknown as Record<"connect" | "write" | "end", (...args: unknown[]) => unknown>;
   const connect = proto.connect;
   proto.connect = sameShape(function (this: net.Socket, ...args: unknown[]): unknown {
-    if (!sockets.has(this)) {
-      const use = { address: socketAddress(args), owned: isNukadokoOwnIo() };
-      sockets.set(this, use);
-      if (!use.owned) channelRecorder()?.noteSocket(use, "connect");
+    if (sockets.has(this)) return connect.apply(this, args);
+    // Known before the call, so a request that takes the socket while it
+    // connects finds it; noted after it, so arguments `connect` rejects
+    // connect nothing and name nothing.
+    const use = { address: socketAddress(args), owned: isNukadokoOwnIo() };
+    const rec = use.owned ? undefined : channelRecorder();
+    sockets.set(this, use);
+    let result: unknown;
+    try {
+      result = connect.apply(this, args);
+    } catch (error) {
+      sockets.delete(this);
+      throw error;
     }
-    return connect.apply(this, args);
+    rec?.noteSocket(use, "connect");
+    return result;
   }, connect);
   // `write` is Writable's, and `end` with data does not call it, so both
   // are wrapped. The lookup is a WeakMap read for any socket nobody tracks.
@@ -671,10 +701,18 @@ function installNet(): void {
   }, end);
 }
 
+/** The absolute path a write call names, or `undefined` when it names
+ * none nukadoko can place. A file URL with a host, or a relative path
+ * after the working directory was removed, throws here; the original then
+ * fails on the same argument, so no write happened to record. */
 function pathOf(value: unknown): string | undefined {
-  if (typeof value === "string") return path.resolve(value);
-  if (value instanceof URL) return value.protocol === "file:" ? path.resolve(fileURLToPath(value)) : undefined;
-  if (Buffer.isBuffer(value)) return path.resolve(value.toString());
+  try {
+    if (typeof value === "string") return path.resolve(value);
+    if (value instanceof URL) return value.protocol === "file:" ? path.resolve(fileURLToPath(value)) : undefined;
+    if (Buffer.isBuffer(value)) return path.resolve(value.toString());
+  } catch {
+    return undefined;
+  }
   return undefined;
 }
 
@@ -782,19 +820,25 @@ function installFs(): void {
   wrapMkdtemp(promises, "mkdtemp", "promise");
 }
 
+/** What a Worker runs. */
+function workerScript([filename, options]: ConstructorParameters<typeof workerThreads.Worker>): string {
+  try {
+    return options?.eval === true ? "inline code" : filename instanceof URL ? filename.href : String(filename);
+  } catch {
+    return "a script nukadoko could not read";
+  }
+}
+
 // A Worker has its own globals, so none of the patches above reach what
 // it does. It can only be marked.
 function installWorker(): void {
   const Original = workerThreads.Worker;
   const Marked = class Worker extends Original {
     constructor(...args: ConstructorParameters<typeof Original>) {
-      const rec = channelRecorder();
-      if (rec !== undefined) {
-        const [filename, options] = args;
-        const script = options?.eval === true ? "inline code" : filename instanceof URL ? filename.href : String(filename);
-        rec.markUnmeasured({ kind: "worker_thread", detail: `new Worker ${script}` });
-      }
+      // Marked once the Worker exists: arguments the constructor rejects
+      // start nothing.
       super(...args);
+      channelRecorder()?.markUnmeasured({ kind: "worker_thread", detail: `new Worker ${workerScript(args)}` });
     }
   };
   (workerThreads as { Worker: typeof Original }).Worker = sameShape(Marked, Original as unknown as (...args: never[]) => unknown);

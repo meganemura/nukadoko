@@ -2710,6 +2710,10 @@ its scenario record's id, so either record leads to the other.
   every patched function keeps the original's `name`, `length`, promise
   form (`util.promisify` of `exec` and `execFile`), and synchronous
   throws, so code outside a step sees the builtins as Node ships them.
+  Inside a step, recording never throws into the step's code and never
+  ends the run: an argument the original rejects (a file URL with a host,
+  a Symbol) reaches the original, and the step gets the original's own
+  error, as it would outside a step.
   nukadoko's own I/O inside a step is not recorded as the step's: a
   `runCommand` spawn, the browser launch, the send of a `request` fixture
   call (its own line already records it), the writes under the state
@@ -2835,7 +2839,12 @@ its scenario record's id, so either record leads to the other.
   modification time, change time, inode) differs between the first call
   and the end of the step. A failed call, a `mkdir` of a directory that
   exists, and a file created and removed within the step are therefore
-  not listed. Where both sources name a path, the scratch comparison
+  not listed. `ENOENT` and `ENOTDIR` from `lstat` say the path does not
+  exist. A path whose identity cannot be read, at the first call or at
+  the step's end (`lstat` fails with `EACCES`, `ELOOP`, or another
+  error), is not a change of either kind: it is an `unmeasured` entry of
+  kind `files`, `<path> could not be inspected: <code>`, and the run goes
+  on. Where both sources name a path, the scratch comparison
   wins. The project root is not walked: it would cost more than most
   steps take, and would read a dev server's writes as the step's. `path`
   is absolute, with a trailing `/` for a directory, and `change` is
@@ -2876,8 +2885,9 @@ its scenario record's id, so either record leads to the other.
   included). Only connections that call `Socket#connect` are judged, so
   console output, `process.stdout` and `process.stderr`, the stdin
   `runCommand` writes, a server's accepted connections, and the IPC
-  channel `--concurrency` workers use are never one. `files` is a scratch directory that could not be compared,
-  or a step past the path limit. The run summary gives each step with an
+  channel `--concurrency` workers use are never one. `files` is a scratch
+  directory that could not be compared, a path the step wrote whose
+  identity could not be read, or a step past the path limit. The run summary gives each step with an
   entry here one line (see the run summary, below), and adds nothing for
   a step without one.
 - `after_step_end`: a step's code can keep running after its record is

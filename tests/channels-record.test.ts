@@ -21,7 +21,8 @@ import {
 // wrote in a scratch directory, the command's environment and stdin, an
 // action nukadoko cannot measure and the run summary's line for it, a
 // request and a command a step left behind that start after its record
-// was written, the step's own channels never read as an unmeasured
+// was written, a written path that stops being inspectable, the step's own
+// channels never read as an unmeasured
 // connection (also across --concurrency workers), and where each argument
 // of a chained step came from.
 
@@ -172,6 +173,23 @@ describe("an action a step started after its record was written", () => {
     expect(summary).toContain(
       `- \`features/channels.feature:17\` a step leaves a request and a command for later: started after the step ended: 1 request, 1 process; record \``,
     );
+  });
+});
+
+describe("a path the step wrote that cannot be inspected at the step's end", () => {
+  it("does not end the run, and the record lists what changed on disk", async () => {
+    const [stepRecord] = await runLine("features/paths.feature");
+    const scratchDir = stepRecord!.evidence.scratch[0];
+    expect(stepRecord!.status).toBe("passed");
+    expect(stepRecord!.observed).toEqual({
+      processes: null,
+      http: null,
+      files: [
+        { path: `${scratchDir}/`, change: "added" },
+        { path: `${scratchDir}/d`, change: "added", bytes: 10, content: { text: "now a file", bytes: 10 } },
+      ],
+      unmeasured: [],
+    });
   });
 });
 

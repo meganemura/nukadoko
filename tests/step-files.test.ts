@@ -11,6 +11,7 @@ import {
   compareScratch,
   describeChanges,
   type Identity,
+  identityOf,
   mergeFileChanges,
   type PathChange,
   snapshotScratch,
@@ -20,9 +21,11 @@ import { createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
 // Responsibility: the step record's `observed.files`
 // (src/context/step-files.ts). The properties: the changes the write
 // patch's first-touch identities imply are exactly the paths whose
-// identity moved, and merging them with the scratch comparison gives one
-// sorted entry per path, the scratch side winning. The examples: a scratch
-// directory compared before and after, and the content caps.
+// identity moved, a path whose identity could not be read on either side
+// is named apart and never a change, and merging them with the scratch
+// comparison gives one sorted entry per path, the scratch side winning.
+// The examples: an identity that cannot be read, a scratch directory
+// compared before and after, and the content caps.
 
 const paths = gs.sampledFrom(["/w/a", "/w/b", "/w/c", "/w/d/", "/w/e"]);
 const change = gs.sampledFrom<PathChange["change"]>(["added", "changed", "removed"]);
@@ -30,6 +33,7 @@ const changes = gs
   .maps(paths, change, { maxSize: 5 })
   .map((entries) => [...entries].map(([target, each]) => ({ path: target, change: each })));
 const identity = gs.sampledFrom<Identity>([null, "file:1:1:1:1", "file:2:2:2:1", "link:1:1:1:2"]);
+const inspection = gs.sampledFrom<Identity | { error: string }>([null, "file:1:1:1:1", "dir", { error: "EACCES" }, { error: "ELOOP" }]);
 
 describe("mergeFileChanges", () => {
   it("lists every path once, sorted, with the scratch comparison's change where both name it", () =>
@@ -52,6 +56,7 @@ describe("changesFromTouches", () => {
       const before = tc.draw(gs.maps(gs.sampledFrom(["/w/a", "/w/b", "/w/c"]), identity, { maxSize: 3 }));
       const after = new Map([...before.keys()].map((target) => [target, tc.draw(identity)]));
       const reported = changesFromTouches(before, (target) => after.get(target) ?? null);
+      expect(reported.uninspected).toEqual([]);
       const expected = [...before]
         .filter(([target, was]) => after.get(target) !== was)
         .map(([target, was]) => ({
@@ -59,11 +64,47 @@ describe("changesFromTouches", () => {
           change: was === null ? "added" : after.get(target) === null ? "removed" : "changed",
         }))
         .sort((a, b) => (a.path < b.path ? -1 : 1));
-      expect(reported).toEqual(expected);
+      expect(reported.changes).toEqual(expected);
+    }));
+
+  it("names a path it could not inspect on either side apart, with the first error, and never as a change", () =>
+    hegel.test((tc) => {
+      const before = tc.draw(gs.maps(gs.sampledFrom(["/w/a", "/w/b", "/w/c"]), inspection, { maxSize: 3 }));
+      const after = new Map([...before.keys()].map((target) => [target, tc.draw(inspection)]));
+      const reported = changesFromTouches(before, (target) => after.get(target) ?? null);
+      const errorOf = (value: Identity | { error: string } | undefined): string | undefined =>
+        typeof value === "object" && value !== null ? value.error : undefined;
+      const expected = [...before]
+        .filter(([target, was]) => errorOf(was) !== undefined || errorOf(after.get(target)) !== undefined)
+        .map(([target, was]) => ({ path: target, error: errorOf(was) ?? errorOf(after.get(target))! }))
+        .sort((a, b) => (a.path < b.path ? -1 : 1));
+      expect(reported.uninspected).toEqual(expected);
+      const unread = new Set(expected.map((entry) => entry.path));
+      for (const entry of reported.changes) expect(unread.has(entry.path.replace(/\/$/, ""))).toBe(false);
     }));
 
   it("names a directory with a trailing separator", () => {
-    expect(changesFromTouches(new Map([["/w/out", null]]), () => "dir")).toEqual([{ path: "/w/out/", change: "added" }]);
+    expect(changesFromTouches(new Map([["/w/out", null]]), () => "dir").changes).toEqual([{ path: "/w/out/", change: "added" }]);
+  });
+});
+
+describe("identityOf", () => {
+  let base: string;
+  beforeEach(async () => {
+    base = await createEmptyTempDir();
+  });
+  afterEach(async () => {
+    await removeTempDir(base);
+  });
+
+  it("reads a path under a file as absent, and a path it cannot resolve as the error's code", () => {
+    fs.writeFileSync(path.join(base, "plain"), "x");
+    expect(identityOf(path.join(base, "plain", "child"))).toBeNull();
+    expect(identityOf(path.join(base, "missing"))).toBeNull();
+    fs.symlinkSync(path.join(base, "b"), path.join(base, "a"));
+    fs.symlinkSync(path.join(base, "a"), path.join(base, "b"));
+    expect(identityOf(path.join(base, "a", "x"))).toEqual({ error: "ELOOP" });
+    expect(identityOf(path.join(base, "x".repeat(300)))).toEqual({ error: "ENAMETOOLONG" });
   });
 });
 

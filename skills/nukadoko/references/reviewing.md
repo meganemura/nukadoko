@@ -57,7 +57,7 @@ What each part of `observed` says:
 - `unmeasured` lists what the step did that nukadoko saw but cannot
   measure: a process started without `runCommand` (its program and
   argument count only), a `Worker`, a connection that carries no recorded
-  request. The record has no evidence of what such an action did, so a
+  request, a written path nukadoko could not inspect. The record has no evidence of what such an action did, so a
   claim that rests on it is cannot tell. An empty list is not proof that
   nothing else happened: a child process's own traffic is never seen.
 

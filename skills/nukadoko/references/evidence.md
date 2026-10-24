@@ -39,8 +39,9 @@ What nukadoko saw but cannot measure is in `observed.unmeasured`: a
 process started through `node:child_process` instead of `runCommand`
 (named by its program and argument count only, never its arguments), a
 `Worker`, a connection the step opened or wrote to that carries no
-recorded request (a database client, a pool opened before the step), or
-what a WebSocket or a CONNECT tunnel carried after its handshake. Such an
+recorded request (a database client, a pool opened before the step),
+what a WebSocket or a CONNECT tunnel carried after its handshake, or a
+path the step wrote whose identity nukadoko could not read. Such an
 entry says the record holds no evidence of what that action did. Start
 the program with `runCommand`, or attach the evidence the action
 produced. An empty list means nukadoko saw nothing it could not measure,

@@ -2241,6 +2241,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   step の外では、差し替えたものは元の関数を呼ぶだけで、何も記録しません。
   差し替えたどの関数も、元の関数の `name`、`length`、promise の形(`exec` と `execFile` の `util.promisify`)、同期的な throw を保ちます。
   そのため step の外のコードには、Node が出荷したとおりの組み込みに見えます。
+  step の中でも、記録が step のコードへ throw したり run を終わらせたりすることはありません。
+  元の関数が拒む引数(ホストを持つ file URL、Symbol)は元の関数に届き、step は step の外と同じく元の関数自身のエラーを受け取ります。
   step の中の nukadoko 自身の I/O は、step のものとして記録しません。
   `runCommand` の起動、ブラウザの起動、`request` fixture の呼び出しの送信(その行がすでに記録します)、state ディレクトリの下への書き込み、Playwright が nukadoko のために書くファイル(trace のチャンク、ネットワークのログ、リソース、context が求めたときの HAR と動画)がそれです。
   Playwright のファイルは、起動の `artifactsDir` と `tracesDir` に書かれます。
@@ -2325,6 +2327,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   もう 1 つは、step 自身のプロセスの `node:fs` の書き込みの呼び出し(`writeFile`、`appendFile`、`mkdir`、`rm`、`rename`、`copyFile`、書き込みフラグ付きの `open`、書き込み stream と、それぞれの sync 版と promise 版)です。
   これは state ディレクトリの外のどこのパスでも名指し、最初の呼び出しと step の終わりとでそのパスの同一性(サイズ、更新時刻、変更時刻、inode)が違えば、そのパスを数えます。
   したがって、失敗した呼び出し、すでにあるディレクトリの `mkdir`、step の中で作って消したファイルは載りません。
+  `lstat` の `ENOENT` と `ENOTDIR` は、そのパスが存在しないことを示します。
+  最初の呼び出しか step の終わりで同一性を読めないパス(`lstat` が `EACCES`、`ELOOP` などのエラーで失敗したもの)は、どちらの種類の変化でもありません。
+  そのパスは kind が `files` の `unmeasured` のエントリ `<path> could not be inspected: <code>` になり、run は続きます。
   両方の出どころが同じパスを名指すときは、scratch の比較が勝ちます。
   project のルートはたどりません。
   たどると多くの step の所要時間より長くかかり、dev サーバの書き込みを step のものと読んでしまうからです。
@@ -2356,7 +2361,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   agent がいつその接続をリクエストに渡しても同じで、少し遅れて接続する proxy の agent も含みます。
   判定するのは `Socket#connect` を呼ぶ接続だけです。
   そのため、コンソールの出力、`process.stdout` と `process.stderr`、`runCommand` が書く stdin、サーバが受け入れた接続、`--concurrency` の worker プロセスが使う IPC のチャネルは、これに当たりません。
-  `files` は、比べられなかった scratch のディレクトリか、パスの上限を超えた step です。
+  `files` は、比べられなかった scratch のディレクトリ、step が書いたパスのうち同一性を読めなかったもの、またはパスの上限を超えた step です。
   run サマリは、ここにエントリがある step ごとに 1 行を載せ(下の run サマリを参照)、エントリがない step については何も加えません。
 - `after_step_end`: step のコードは、残したタイマーから、またはタイムアウトのあとに、record を書いたあとも動き続けることがあります。
   そのとき始めたリクエストや `runCommand` のプロセスは、その step のものであり、そのとき動いている step のものではありません。

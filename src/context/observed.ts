@@ -15,6 +15,7 @@ import {
   describeChanges,
   type Identity,
   identityOf,
+  type Uninspected,
   mergeFileChanges,
   type ScratchState,
   snapshotScratch,
@@ -96,7 +97,7 @@ interface Boundary {
   processes: (ProcessEntry | undefined)[] | null;
   http: number;
   pending: PendingCapture[];
-  readonly touched: Map<string, Identity>;
+  readonly touched: Map<string, Identity | Uninspected>;
   touchesOverflowed: boolean;
   readonly unmeasured: Map<string, UnmeasuredEntry>;
   /** Each socket the step connected or wrote to, by how it first saw it. */
@@ -260,7 +261,8 @@ export function createObservedCollector(
         state.scratchBefore === undefined
           ? { changes: [], unmeasured: [] }
           : compareScratch(state.scratchBefore, scratchDirs, unwatchedDirs);
-      const changes = mergeFileChanges(scratch.changes, changesFromTouches(state.touched, identityOf));
+      const touches = changesFromTouches(state.touched, identityOf);
+      const changes = mergeFileChanges(scratch.changes, touches.changes);
       const files = changes.length === 0 ? null : withoutChannelRecording(() => describeChanges(changes, secrets));
       const sockets = new Map<string, UnmeasuredEntry>();
       for (const [use, how] of state.sockets) {
@@ -272,6 +274,7 @@ export function createObservedCollector(
         ...state.unmeasured.values(),
         ...sockets.values(),
         ...scratch.unmeasured,
+        ...touches.uninspected.map(({ path: target, error }) => ({ kind: "files" as const, detail: `${target} could not be inspected: ${error}` })),
         ...(state.touchesOverflowed
           ? [{ kind: "files" as const, detail: `more than ${MAX_ENTRIES} paths written; the rest are not listed` }]
           : []),

@@ -315,7 +315,8 @@ export interface UnmeasuredEntry {
    * request (one the step opened, or one opened before the step that the
    * step wrote to), or what an upgraded connection or a CONNECT tunnel
    * carried after its recorded handshake. `files`: a scratch directory
-   * that could not be compared. */
+   * that could not be compared, a path the step wrote whose identity
+   * could not be read, or a step past the path limit. */
   readonly kind: "child_process" | "worker_thread" | "socket" | "files";
   /** One line that names it: the program and its argument count (never
    * its arguments), the script, the address or URL, or the directory and

@@ -43,7 +43,9 @@ just until 0.1.
   redacted text of at most 16 KiB each; headers are never written.
   `files` lists the paths the step changed in a scratch directory or
   wrote through `node:fs`, with their content after the step, at most
-  8 KiB per file and 64 KiB per step. A `fetch` body is read only to
+  8 KiB per file and 64 KiB per step; a path whose identity cannot be
+  read is named in `unmeasured` instead, and reading it never throws
+  into the step or ends the run. A `fetch` body is read only to
   just past 32 KiB, so recording a body of any length costs about that
   much memory, and a body nukadoko stopped reading has `bytes_read`
   instead of `bytes`. A request with no response when the step ends is

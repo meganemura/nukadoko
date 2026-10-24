@@ -1,4 +1,4 @@
-import { closeSync, lstatSync, openSync, readSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readSync, type Stats } from "node:fs";
 import path from "node:path";
 import type { FileChange, UnmeasuredEntry } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -25,6 +25,14 @@ import { FILE_CAP, keepText, STEP_FILES_CAP, windowFor } from "./kept-text.js";
 // created and removed within the step is not reported either: nothing
 // changed on disk.
 //
+// Reading an identity never throws. The first read runs inside the step's
+// own write call, before the original, so a throw there would replace the
+// error the call gives with one of the recorder's, and the read at the
+// step's end would end the run. ENOENT and ENOTDIR say the path does not
+// exist, which is an identity. Any other error (EACCES, ELOOP,
+// ENAMETOOLONG) leaves the path uninspected, and the record names it as
+// unmeasured instead of guessing.
+//
 // Contents are read once, after the step, so a file written in several
 // calls is kept as it ended up. Each file keeps at most FILE_CAP bytes of
 // text and the step at most STEP_FILES_CAP, so a step that writes a
@@ -42,8 +50,24 @@ export interface PathChange {
  * directory, otherwise its kind and stat. */
 export type Identity = string | null;
 
-export function identityOf(target: string): Identity {
-  const info = lstatSync(target, { bigint: true, throwIfNoEntry: false });
+/** A path whose identity could not be read: the code of the error. */
+export interface Uninspected {
+  readonly error: string;
+}
+
+export function isUninspected(inspection: Identity | Uninspected): inspection is Uninspected {
+  return typeof inspection === "object" && inspection !== null;
+}
+
+export function identityOf(target: string): Identity | Uninspected {
+  let info;
+  try {
+    info = lstatSync(target, { bigint: true, throwIfNoEntry: false });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOTDIR") return null;
+    return { error: code ?? "an error with no code" };
+  }
   if (info === undefined) return null;
   if (info.isDirectory()) return "dir";
   const kind = info.isSymbolicLink() ? "link" : "file";
@@ -55,21 +79,38 @@ export function asDirectory(target: string): string {
   return `${target.replace(/[\\/]+$/, "")}/`;
 }
 
+/** A path the patch saw written whose identity could not be read, at the
+ * first write call or at the step's end. */
+export interface UninspectedPath {
+  readonly path: string;
+  readonly error: string;
+}
+
 /** The changes the patch's first-touch identities imply, given each
- * path's identity now. Sorted by path. */
+ * path's identity now, sorted by path, and the paths whose identity could
+ * not be read on either side, which are no change of either kind. */
 export function changesFromTouches(
-  touched: ReadonlyMap<string, Identity>,
-  now: (target: string) => Identity,
-): PathChange[] {
+  touched: ReadonlyMap<string, Identity | Uninspected>,
+  now: (target: string) => Identity | Uninspected,
+): { readonly changes: PathChange[]; readonly uninspected: UninspectedPath[] } {
   const changes: PathChange[] = [];
+  const uninspected: UninspectedPath[] = [];
   for (const [target, before] of touched) {
+    if (isUninspected(before)) {
+      uninspected.push({ path: target, error: before.error });
+      continue;
+    }
     const after = now(target);
+    if (isUninspected(after)) {
+      uninspected.push({ path: target, error: after.error });
+      continue;
+    }
     if (before === after) continue;
     const change: Change = before === null ? "added" : after === null ? "removed" : "changed";
     const isDirectory = before === "dir" || after === "dir";
     changes.push({ path: isDirectory ? asDirectory(target) : target, change });
   }
-  return changes.sort(byPath);
+  return { changes: changes.sort(byPath), uninspected: uninspected.sort(byPath) };
 }
 
 /** Both sources as one list, one entry per path, sorted by path. Where
@@ -83,7 +124,7 @@ export function mergeFileChanges(fromScratch: readonly PathChange[], fromWrites:
   return [...merged.values()].sort(byPath);
 }
 
-function byPath(a: PathChange, b: PathChange): number {
+function byPath(a: { readonly path: string }, b: { readonly path: string }): number {
   return a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
 }
 
@@ -131,7 +172,7 @@ export function describeChanges(changes: readonly PathChange[], secrets: SecretS
   let budget = STEP_FILES_CAP;
   return changes.map((entry) => {
     if (entry.change === "removed" || entry.path.endsWith("/")) return { path: entry.path, change: entry.change };
-    const info = lstatSync(entry.path, { throwIfNoEntry: false });
+    const info = fileInfo(entry.path);
     if (info === undefined || !info.isFile()) return { path: entry.path, change: entry.change };
     if (budget <= 0) {
       return { path: entry.path, change: entry.change, bytes: info.size, content: { text: "", bytes: info.size, truncated: true } };
@@ -142,6 +183,17 @@ export function describeChanges(changes: readonly PathChange[], secrets: SecretS
     if ("text" in kept) budget -= Buffer.byteLength(kept.text, "utf8");
     return { path: entry.path, change: entry.change, bytes: info.size, content: { ...kept, bytes: info.size } };
   });
+}
+
+/** `target`'s lstat, or `undefined` when it is gone or cannot be read:
+ * the change is measured either way, and only its size and content are
+ * then unknown. */
+function fileInfo(target: string): Stats | undefined {
+  try {
+    return lstatSync(target, { throwIfNoEntry: false });
+  } catch {
+    return undefined;
+  }
 }
 
 /** The first `size` bytes of a file, or `undefined` for a file that
