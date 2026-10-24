@@ -1,10 +1,11 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import type { ProgramRecipe, TimedCommand } from "../src/config/program-schema.js";
+import { urlPort, type ProgramRecipe, type TimedCommand } from "../src/config/program-schema.js";
 import {
   fillPlaceholders,
   PLACEHOLDER_NAMES,
+  placeholderGapFix,
   placeholderGaps,
   placeholderRefusal,
   type PlaceholderName,
@@ -14,7 +15,8 @@ import {
 // Responsibility: src/program/placeholders.ts, the one rule that fills
 // `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, and `{token}` in a
 // program file's commands and env, and names each one a world has no
-// value for from its recipe alone.
+// value for from its recipe alone: every world with a URL has `{port}`,
+// the one `serve` got or the URL's.
 
 // Literal text, braces included. Its alphabet cannot spell a placeholder
 // name, so two pieces side by side never spell one between them.
@@ -74,7 +76,7 @@ const timed = (command: string | readonly string[]): TimedCommand => ({ command,
 // The values a running world of `kind` fills, and a build's.
 function valuesFor(kind: "serve" | "url" | "none" | "build"): PlaceholderValues {
   if (kind === "build") return { root: "/r" };
-  return { root: "/r", dir: "/d", world: "w", token: "t", ...(kind === "serve" ? { port: "1" } : {}), ...(kind === "none" ? {} : { url: "u" }) };
+  return { root: "/r", dir: "/d", world: "w", token: "t", ...(kind === "none" ? {} : { port: "1", url: "u" }) };
 }
 const word = gs.tuples(literal, gs.arrays(placeholder, { maxSize: 2 })).map(([text, names]) => `${text}${names.map((name) => `{${name}}`).join("")}`);
 const command = gs.arrays(word, { minSize: 1, maxSize: 3 });
@@ -105,23 +107,49 @@ describe("placeholderGaps", () => {
       expect(gaps.every((gap) => fields.some(([where]) => where === gap.where))).toBe(true);
     }));
 
-  it("names each gap of a program that serves nothing, and the refusal names every world's", () => {
+  it("names each gap of a program with no URL, and the refusal names every world's", () => {
     const recipe = { build: [timed(["node", "-e", "{root} {port}"])], prepare: [timed(["node", "-e", "x"]), timed("echo {port}")], reach: reachOf("url"), env: { BASE: "{url}" } };
-    expect(placeholderGaps(recipe)).toEqual([
-      { where: "build[0]", name: "port", why: "build runs once per tree, before any world exists" },
-      { where: "prepare[1]", name: "port", why: "this world does not serve" },
-    ]);
+    // A url world has a port: only the build lacks one.
+    expect(placeholderGaps(recipe)).toEqual([{ where: "build[0]", name: "port", why: "build runs once per tree, before any world exists" }]);
     expect(placeholderGaps({ ...recipe, build: [], reach: reachOf("none") })).toEqual([
-      { where: "prepare[1]", name: "port", why: "this world does not serve" },
+      { where: "prepare[1]", name: "port", why: "this world has neither serve nor url" },
       { where: "env.BASE", name: "url", why: "this world has neither serve nor url" },
     ]);
-    expect(placeholderRefusal([{ name: "default", recipe }, { name: "local", recipe: { ...recipe, reach: reachOf("serve") } }], "nukadoko.program.ts")).toEqual({
+    expect(placeholderRefusal([{ name: "default", recipe: { ...recipe, reach: reachOf("none") } }, { name: "local", recipe: { ...recipe, reach: reachOf("serve") } }], "nukadoko.program.ts")).toEqual({
       message:
         "world default: build[0] names {port}, which has no value here: build runs once per tree, before any world exists; " +
-        "world default: prepare[1] names {port}, which has no value here: this world does not serve; " +
+        "world default: prepare[1] names {port}, which has no value here: this world has neither serve nor url; " +
+        "world default: env.BASE names {url}, which has no value here: this world has neither serve nor url; " +
         "world local: build[0] names {port}, which has no value here: build runs once per tree, before any world exists; nothing ran",
       fix: "Write only {root} in build[0] of nukadoko.program.ts, or move the command to prepare, which runs once per world.",
     });
     expect(placeholderRefusal([{ name: "local", recipe: { ...recipe, build: [], reach: reachOf("serve") } }], "nukadoko.program.ts")).toBeUndefined();
   });
+
+  it("fixes a gap by naming only what the world lacks, for each kind of world", () =>
+    hegel.test((tc) => {
+      const kind = tc.draw(reachKind);
+      const name = tc.draw(placeholder);
+      const recipe = { build: [timed(`make {${name}}`)], prepare: [timed(`seed {${name}}`)], reach: reachOf(kind), env: {} };
+      const fixes = placeholderGaps(recipe).map((gap) => placeholderGapFix(gap, "w", "nukadoko.program.ts"));
+      for (const fix of fixes) {
+        if (fix.includes("build[0]")) expect(fix).toBe("Write only {root} in build[0] of nukadoko.program.ts, or move the command to prepare, which runs once per world.");
+        else expect(fix).toBe(`Remove {${name}} from prepare[0] of nukadoko.program.ts, or give world w serve or url.`);
+      }
+      // A world that serves or has a url is never told to add the other,
+      // which the file refuses beside it.
+      expect(fixes.some((fix) => fix.includes("prepare[0]"))).toBe(kind === "none" && (name === "port" || name === "url"));
+    }));
+});
+
+describe("urlPort", () => {
+  it("is the port a URL writes, or its scheme's", () =>
+    hegel.test((tc) => {
+      const scheme = tc.draw(gs.sampledFrom(["http", "https"] as const));
+      const host = tc.draw(gs.sampledFrom(["localhost", "127.0.0.1", "a.example", "[::1]"]));
+      const port = tc.draw(gs.oneOf<number | undefined>(gs.just(undefined), gs.integers({ minValue: 1, maxValue: 65_535 })));
+      const rest = tc.draw(gs.sampledFrom(["", "/", "/app?x=1"]));
+      const url = `${scheme}://${host}${port === undefined ? "" : `:${port}`}${rest}`;
+      expect(urlPort(url)).toBe(port ?? (scheme === "https" ? 443 : 80));
+    }));
 });

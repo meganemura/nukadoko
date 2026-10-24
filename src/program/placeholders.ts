@@ -8,15 +8,21 @@ import { commandWords, type ProgramRecipe } from "../config/program-schema.js";
 //
 // Only the six names below are placeholders. Any other text in braces is
 // left as written, so a command that passes JSON or a shell brace needs no
-// escape. A placeholder this world has no value for (`{port}` in a world
-// that does not serve, anything but `{root}` in a build command) is
-// refused by name instead of becoming an empty string, which would start
-// a server on no port or point a database at no directory.
+// escape. A placeholder this world has no value for (`{port}` or `{url}`
+// in a world with neither `serve` nor `url`, anything but `{root}` in a
+// build command) is refused by name instead of becoming an empty string,
+// which would start a server on no port or point a database at no
+// directory.
+//
+// Every world with a URL has a port: the one nukadoko gave `serve`, or the
+// port of the `url` (written, or the scheme's), so an environment that
+// swaps `serve` for `url` keeps the top level's `PORT: "{port}"`.
 //
 // Which placeholders a world has follows from its recipe alone, so the
 // refusal does not wait for a world to start: `placeholderGaps` names
 // each one from the recipe, and `nuka check`, `nuka run`, and `nuka do`
-// refuse before a build or a prepare command has run.
+// refuse, for the worlds they resolve, before a build or a prepare
+// command has run.
 
 export const PLACEHOLDER_NAMES = ["port", "url", "dir", "root", "world", "token"] as const;
 
@@ -52,13 +58,13 @@ export interface PlaceholderGap {
 }
 
 const BUILD_WHY = "build runs once per tree, before any world exists";
+const NO_URL_WHY = "this world has neither serve nor url";
 
 /** Why a world of `reach` has no value for `name`, or `undefined` when it
  * has one. A build has `{root}` alone. */
 export function placeholderAbsence(name: PlaceholderName, reach: ProgramRecipe["reach"]["kind"] | "build"): string | undefined {
   if (reach === "build") return name === "root" ? undefined : BUILD_WHY;
-  if (name === "port" && reach !== "serve") return "this world does not serve";
-  if (name === "url" && reach === "none") return "this world has neither serve nor url";
+  if ((name === "port" || name === "url") && reach === "none") return NO_URL_WHY;
   return undefined;
 }
 
@@ -111,11 +117,14 @@ export function placeholderRefusal(
   };
 }
 
-/** The edit that closes `gap` in world `world` of `programFile`. */
+/** The edit that closes `gap` in world `world` of `programFile`: it names
+ * only what the world lacks. Outside a build, only a world with neither
+ * `serve` nor `url` lacks a value (`placeholderAbsence`), so the edit
+ * offers either one; a world that has one of them is never told to add
+ * the other, which the file refuses beside it. */
 export function placeholderGapFix(gap: PlaceholderGap, world: string, programFile: string): string {
   if (gap.where.startsWith("build")) {
     return `Write only {root} in ${gap.where} of ${programFile}, or move the command to prepare, which runs once per world.`;
   }
-  const reach = gap.name === "port" ? "serve" : "serve or url";
-  return `Remove {${gap.name}} from ${gap.where} of ${programFile}, or give world ${world} ${reach}.`;
+  return `Remove {${gap.name}} from ${gap.where} of ${programFile}, or give world ${world} serve or url.`;
 }

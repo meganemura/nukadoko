@@ -8,6 +8,7 @@ import { loadProgram, type LoadedProgram } from "../config/load-program.js";
 import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import { isPlaywrightInstalled } from "../context/load-playwright.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
+import { resolveEnvironment } from "../environment/resolve-environment.js";
 import {
   attachStepLines,
   findOutlinesThatDoNotRun,
@@ -156,7 +157,7 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
 
 /** The report a `nuka check` with no target gives: every feature under
  * featuresDir and additionalFeatureDirs. */
-export async function analyzeProject(rootDir: string): Promise<CheckReport> {
+export async function analyzeProject(rootDir: string, envs: readonly string[] = []): Promise<CheckReport> {
   // additionalFeatureDirs joins featuresDir here: a no-target `nuka check`
   // scans it, while `nuka run`'s default scan does not. A config
   // mistake in additionalFeatureDirs itself is config-check.ts's own
@@ -166,6 +167,7 @@ export async function analyzeProject(rootDir: string): Promise<CheckReport> {
     rootDir,
     (config) => loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs),
     false,
+    envs,
   );
   return report;
 }
@@ -197,8 +199,9 @@ export async function analyzeRunSelection(
   rootDir: string,
   selected: readonly SelectedFeatureForCheck[],
   parseErrors: LoadFeaturesResult["parseErrors"] = [],
+  envs: readonly string[] = [],
 ): Promise<CheckReport> {
-  const { report } = await analyze(rootDir, runSelectionFeatures(selected, parseErrors), true);
+  const { report } = await analyze(rootDir, runSelectionFeatures(selected, parseErrors), true, envs);
   return report;
 }
 
@@ -246,8 +249,9 @@ export interface RunSelectionAnalysis {
 export async function analyzeRunSelectionKeepingSteps(
   rootDir: string,
   selected: readonly SelectedFeatureForCheck[],
+  envs: readonly string[] = [],
 ): Promise<RunSelectionAnalysis> {
-  return analyze(rootDir, runSelectionFeatures(selected, []), true);
+  return analyze(rootDir, runSelectionFeatures(selected, []), true, envs);
 }
 
 type Config = Awaited<ReturnType<typeof loadConfig>>;
@@ -256,18 +260,24 @@ async function analyze(
   rootDir: string,
   loadFeatures: (config: Config) => LoadFeaturesResult,
   selection: boolean,
+  /** The `--env` names, which choose the worlds whose placeholders are
+   * checked (src/check/config-check.ts). */
+  envs: readonly string[],
 ): Promise<RunSelectionAnalysis> {
   const config = await loadConfig(rootDir);
   // A program file that does not load is refused the way a config file
   // that does not load is, before any step file is read.
   const program = await loadProgram(rootDir);
+  // An `--env` name the program file does not define is refused by name,
+  // as `nuka run` refuses it, instead of checking no world for it.
+  for (const name of envs) resolveEnvironment(config, program?.program ?? null, name, true);
   // Tolerant mode: a broken step file
   // becomes a report entry (`importFailures`, handled below) instead of
   // rejecting this whole call the way `run --no-check`/`do`/`steps`/`init`
   // still do via their own plain `discoverSteps(rootDir, config.featuresDir)`
   // calls.
   const discovery = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true });
-  return { ...(await reportFor(rootDir, config, program, discovery, loadFeatures, selection)), discovery };
+  return { ...(await reportFor(rootDir, config, program, discovery, loadFeatures, selection, envs)), discovery };
 }
 
 async function reportFor(
@@ -277,6 +287,7 @@ async function reportFor(
   discovery: DiscoveryResult,
   loadFeatures: (config: Config) => LoadFeaturesResult,
   selection: boolean,
+  envs: readonly string[],
 ): Promise<{ report: CheckReport; undefinedSteps: readonly UndefinedStepLine[] }> {
   const {
     vocabulary,
@@ -413,7 +424,7 @@ async function reportFor(
     });
   }
 
-  const configResult = await checkConfig(rootDir, config, program);
+  const configResult = await checkConfig(rootDir, config, program, envs);
   errors.push(...configResult.errors);
   warnings.push(...configResult.warnings);
 

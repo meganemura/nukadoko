@@ -86,7 +86,9 @@ export interface ProgramWorldPlace {
 export interface ProgramWorld extends ProgramWorldPlace {
   /** The world's base URL, `undefined` for a world with neither `serve` nor `url`. */
   readonly url: string | undefined;
-  /** The port nukadoko gave `serve`, `undefined` without `serve`. */
+  /** The world's port, the value of `{port}`: the one nukadoko gave
+   * `serve`, or the port of `url` (written, or 443 for `https:` and 80 for
+   * `http:`); `undefined` for a world with neither. */
   readonly port: number | undefined;
   /** `env` with its placeholders filled: what the program's processes and the steps' process get. */
   readonly env: Readonly<Record<string, string>>;
@@ -116,6 +118,15 @@ export function programUrlProblem(url: string): string | undefined {
     return "must not hold a user or a password: fetch refuses such a URL, and every record names the world's URL; a step sends credentials itself, from an env file";
   }
   return undefined;
+}
+
+/** The port a request to `url` goes to: the one it writes, or its
+ * scheme's, 443 for `https:` and 80 for `http:`. `url` is one
+ * `programUrlProblem` accepts. Pure. */
+export function urlPort(url: string): number {
+  const parsed = new URL(url);
+  if (parsed.port !== "") return Number(parsed.port);
+  return parsed.protocol === "https:" ? 443 : 80;
 }
 
 // Any origin serves as the world's here: `ready` is checked before the

@@ -362,7 +362,7 @@ describe("a program nukadoko serves", () => {
     expect(existsSync(path.join(stepRecordDir(rootDir, id!), "record.json"))).toBe(false);
   });
 
-  it("refuses a placeholder a world has no value for before any command runs, in check, run, run --no-check, and do", async () => {
+  it("refuses a placeholder a world it starts has no value for before any command runs, in check, run, run --no-check, and do", async () => {
     await writeFile(
       path.join(rootDir, "nukadoko.program.ts"),
       [
@@ -370,14 +370,13 @@ describe("a program nukadoko serves", () => {
         "export default defineProgram({",
         '  build: [["node", "-e", "require(\'fs\').writeFileSync(\'build-ran\', \'\')"]],',
         '  prepare: ["echo {port}"],',
-        '  url: "http://127.0.0.1:9",',
         '  environments: { local: { serve: { command: "node app/server.mjs" }, env: { PORT: "{port}" } } },',
         "});",
         "",
       ].join("\n"),
     );
-    const gap = "world default: prepare[0] names {port}, which has no value here: this world does not serve";
-    const fix = "  fix: Remove {port} from prepare[0] of nukadoko.program.ts, or give world default serve.\n";
+    const gap = "world default: prepare[0] names {port}, which has no value here: this world has neither serve nor url";
+    const fix = "  fix: Remove {port} from prepare[0] of nukadoko.program.ts, or give world default serve or url.\n";
 
     const check = await cli(rootDir, ["check"]);
     expect(check.exitCode).toBe(1);
@@ -391,12 +390,20 @@ describe("a program nukadoko serves", () => {
     }
     expect((await cli(rootDir, ["run"])).stderr).toContain("program-placeholder-unfilled");
     expect(existsSync(path.join(rootDir, "build-ran"))).toBe(false);
-    // nuka check reports every world the file can start, so the gap stops a
-    // checked run of any environment; a run refuses only for the worlds it
-    // starts, and the world that serves has every value.
-    expect((await cli(rootDir, ["run", "--env", "local"])).exitCode).toBe(2);
-    const local = await cli(rootDir, ["run", "--env", "local", "--no-check"]);
+    // The check and the run cover only the worlds the invocation starts:
+    // the world that serves has every value, so naming it alone neither
+    // reports nor refuses the default world's gap.
+    const checkLocal = await cli(rootDir, ["check", "--env", "local"]);
+    expect(checkLocal.stdout).not.toContain("program-placeholder-unfilled");
+    expect((await cli(rootDir, ["check", "--env", "local", "--env", "default"])).stdout).toContain(`${gap}\n${fix}`);
+    const local = await cli(rootDir, ["run", "--env", "local"]);
+    // Not refused (2): the scenarios ran in the world that serves.
+    expect(local.exitCode).not.toBe(2);
+    expect(local.stderr).not.toContain("program-placeholder-unfilled");
     expect(local.stderr).toMatch(/^world local: build \S+, prepare \S+, serve \S+, http:\/\/localhost:\d+ /m);
+    const unknown = await cli(rootDir, ["check", "--env", "nope"]);
+    expect(unknown.exitCode).toBe(2);
+    expect(unknown.stderr).toMatch(/^refused\tunknown-environment\t-\tUnknown environment "nope"/);
   });
 
   it("nuka check refuses a program file that does not parse, naming the file", async () => {

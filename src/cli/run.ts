@@ -439,7 +439,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       selected = selection;
       let analysis;
       try {
-        analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features);
+        analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features, envs);
       } catch (error) {
         return refused(error);
       }

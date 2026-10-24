@@ -34,15 +34,20 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 
 export const DEFAULT_ENVIRONMENT_NAME = "default";
 
-/** Every world `program` can start, each with its recipe: the implicit
- * default world, unless the file names `default` itself, and each named
- * environment's. */
-export function programWorlds(program: Program): { readonly name: string; readonly recipe: ProgramRecipe }[] {
+/** The worlds a `nuka run` with these `--env` names starts, each with its
+ * recipe, once per name: the default world when `envs` is empty. A name
+ * the program file does not define, other than `default`, is left out:
+ * `resolveEnvironment` refuses it by name for the command that named it.
+ * `nuka check` checks these worlds and no others, so a world no command
+ * of this invocation starts never refuses a program for a placeholder. */
+export function worldsToStart(program: Program, envs: readonly string[]): { readonly name: string; readonly recipe: ProgramRecipe }[] {
   const environments = program.environments ?? {};
-  return [
-    ...(Object.hasOwn(environments, DEFAULT_ENVIRONMENT_NAME) ? [] : [{ name: DEFAULT_ENVIRONMENT_NAME, recipe: layerProgram(program, undefined) }]),
-    ...Object.entries(environments).map(([name, environment]) => ({ name, recipe: layerProgram(program, environment) })),
-  ];
+  const names = envs.length === 0 ? [DEFAULT_ENVIRONMENT_NAME] : [...new Set(envs)];
+  return names.flatMap((name) => {
+    const environment = Object.hasOwn(environments, name) ? environments[name] : undefined;
+    if (environment === undefined && name !== DEFAULT_ENVIRONMENT_NAME) return [];
+    return [{ name, recipe: layerProgram(program, environment) }];
+  });
 }
 
 export interface ResolvedEnvironment {

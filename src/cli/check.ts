@@ -61,6 +61,9 @@ export interface RunCheckOptions {
   codes?: boolean;
   /** Feature files or directories; empty checks the whole project. */
   targets?: readonly string[];
+  /** `--env`: the worlds whose placeholders are checked are the ones a
+   * `nuka run` with the same names starts; empty for the default world. */
+  envs?: readonly string[];
   /** `--fail-on`: codes whose presence turns the exit code to 1. Empty by
    * default, so a note stays a note. */
   failOn?: readonly string[];
@@ -184,6 +187,7 @@ function failOnRefusal(codes: readonly string[]): string {
 export async function runCheck(options: RunCheckOptions): Promise<number> {
   const { rootDir, json, codes, stdout, stderr } = options;
   const targets = options.targets ?? [];
+  const envs = options.envs ?? [];
   const failOn = options.failOn ?? [];
   const notices = options.notices ?? [];
   const sinks = { json, stdout, stderr, command: "check" };
@@ -210,7 +214,7 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
 
   let report;
   try {
-    report = targets.length === 0 ? await analyzeProject(rootDir) : await analyzeTargets(rootDir, targets);
+    report = targets.length === 0 ? await analyzeProject(rootDir, envs) : await analyzeTargets(rootDir, targets, envs);
   } catch (error) {
     return refuse(sinks, error, "unexpected-error", undefined, notices);
   }
@@ -232,9 +236,9 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   return exitCode;
 }
 
-async function analyzeTargets(rootDir: string, targets: readonly string[]): Promise<CheckReport> {
+async function analyzeTargets(rootDir: string, targets: readonly string[], envs: readonly string[]): Promise<CheckReport> {
   const selected = await readCheckTargets(rootDir, targets);
-  return analyzeRunSelection(rootDir, selected.features, selected.parseErrors);
+  return analyzeRunSelection(rootDir, selected.features, selected.parseErrors, envs);
 }
 
 /** The feature files `nuka check <targets>` reads, and the ones of them

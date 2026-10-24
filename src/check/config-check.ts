@@ -5,7 +5,7 @@ import { skippedEnvFileLines } from "../env/parse-env-file.js";
 import { resolveConfigFileName } from "../config/load-config.js";
 import { PROGRAM_FILE_NAME, type LoadedProgram } from "../config/load-program.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import { programWorlds } from "../environment/resolve-environment.js";
+import { worldsToStart } from "../environment/resolve-environment.js";
 import { describePlaceholderGap, placeholderGapFix, placeholderGaps } from "../program/placeholders.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
@@ -97,6 +97,10 @@ export async function checkConfig(
   rootDir: string,
   config: NukadokoConfig,
   program: LoadedProgram | null,
+  /** The `--env` names the invocation gave, empty for none: the worlds
+   * whose placeholders are checked are the ones a `nuka run` with these
+   * names starts. */
+  envs: readonly string[] = [],
 ): Promise<ConfigCheckResult> {
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
@@ -156,11 +160,14 @@ export async function checkConfig(
     }
   }
 
-  // Every world the program file can start, not only the one a run picks:
-  // a placeholder with no value fails the world before its server starts,
-  // and the recipe alone says so.
+  // The worlds a `nuka run` with the same `--env` names starts: a
+  // placeholder with no value fails such a world before its server
+  // starts, and the recipe alone says so. A world nothing in this
+  // invocation resolves is not checked, so an environment written for
+  // another use (a url world, or one that only runs `build`) never refuses
+  // a run of the others.
   if (program !== null) {
-    for (const world of programWorlds(program.program)) {
+    for (const world of worldsToStart(program.program, envs)) {
       for (const gap of placeholderGaps(world.recipe)) {
         errors.push({
           code: "program-placeholder-unfilled",

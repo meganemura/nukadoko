@@ -2780,7 +2780,7 @@ placeholder:
 
 | Placeholder | Its value |
 | --- | --- |
-| `{port}` | the port nukadoko gave `serve` |
+| `{port}` | the world's port: the one nukadoko gave `serve`, or the port of `url`, as written or the scheme's (443 for `https:`, 80 for `http:`) |
 | `{url}` | the world's URL: `http://localhost:{port}`, or the `url` the file names |
 | `{dir}` | the world's directory, `.nukadoko/runs/<run_id>/worlds/<environment>/`, as an absolute path |
 | `{root}` | the root of the tree the program is built from, as an absolute path |
@@ -2789,14 +2789,21 @@ placeholder:
 
 `build` runs once per tree, before any world exists, so a `build` command
 may name `{root}` alone.
+Every world with a URL has a port, so an environment that swaps `serve`
+for a `url` keeps a top-level `PORT: "{port}"`.
 A placeholder the world has no value for is refused by name before
-anything runs: `{port}` in a world that does not serve, or `{url}` in one
-with neither `serve` nor `url`.
+anything runs: `{port}` or `{url}` in a world with neither `serve` nor
+`url`.
+The fix names only what the world lacks: `{root}` alone, or a move to
+`prepare`, for a `build` command, and `serve` or `url` for a world with
+neither.
 The recipe alone says which placeholders a world has, so the refusal does
 not wait for the world.
 `nuka check` reports `program-placeholder-unfilled`, an error, for each
-gap of each world the file can start: the default world, unless
-`environments` names `default`, and each environment.
+gap of each world a `nuka run` with the same `--env` flags would start:
+the default world without `--env`, and each environment `--env` names.
+A world nothing in the invocation starts is not checked, so an
+environment written for another use does not refuse a run of the others.
 `nuka run` and `nuka do` refuse with the same code for the worlds they
 start, before any `build`, `prepare`, or version probe runs, so a
 `build` shared by a later world does not run either.
@@ -6053,7 +6060,7 @@ nuka scaffold --feature <path>
                               name, --pattern, --then, --command, --from,
                               --cwd, --argv, --request, --body,
                               --description, or --replace
-nuka check [feature..] [--json] [--fail-on <code>]
+nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
                               static checks: pattern/schema mismatches, a
                               Then bound to a step that runs, a claim step
                               bound outside Then position, a claim whose
@@ -6122,7 +6129,10 @@ nuka check [feature..] [--json] [--fail-on <code>]
                               comma-separated) exits 1 when a finding with
                               that code is reported, and the finding keeps its
                               severity; a code a check report never contains
-                              is refused;
+                              is refused; --env <name> (repeatable) checks
+                              the placeholders of the worlds a nuka run with
+                              the same --env flags would start, the default
+                              world without it, and no other world;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
                               files), so the errors

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { commandWords, programUrlProblem, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
+import { commandWords, programUrlProblem, urlPort, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
@@ -329,7 +329,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         }
 
         const reach = recipe.reach;
-        const port =
+        let port =
           reach.kind !== "serve" ? undefined : reach.serve.port === "auto" ? await freePort() : await portNobodyAnswers(reach.serve.port);
         const place = { name, root: options.rootDir, dir };
         if (reach.kind === "serve") {
@@ -344,6 +344,8 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           // is checked here, by the same rule, without quoting it.
           const problem = programUrlProblem(String(url));
           if (problem !== undefined) throw new WorldStartError(`the url function's answer ${problem}`);
+          // Every world with a URL has a port (src/program/placeholders.ts).
+          port = urlPort(url);
         }
         const values: PlaceholderValues = {
           root: options.rootDir,

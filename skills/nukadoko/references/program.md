@@ -36,16 +36,17 @@ no user or password in it.
 
 | Placeholder | Its value |
 | --- | --- |
-| `{port}`, `{url}` | the port `serve` got, and the world's URL |
+| `{port}`, `{url}` | the world's port (the one `serve` got, or the `url`'s, 443 or 80 when it names none) and URL |
 | `{dir}` | the world's own directory under the run: its database, its pid file |
 | `{root}` | the tree's root, the one placeholder `build` may name |
 | `{world}` | the environment's name |
 | `{token}` | random per world, redacted as `{{secret.WORLD_TOKEN}}` in every record |
 
-A placeholder a world has no value for (`{port}` without `serve`, `{url}`
-with neither `serve` nor `url`, anything but `{root}` in `build`) is
-`program-placeholder-unfilled`: `nuka check` reports it for every world,
-and `nuka run` and `nuka do` refuse it before any command runs.
+A placeholder a world has no value for (`{port}` or `{url}` with neither
+`serve` nor `url`, anything but `{root}` in `build`) is
+`program-placeholder-unfilled`: `nuka check` reports it for the worlds a
+`nuka run` with the same `--env` flags would start, and `nuka run` and
+`nuka do` refuse it before any command runs.
 
 One world serves every scenario of an environment, so what one scenario
 writes is there for the next: a scenario creates what it reads and claims

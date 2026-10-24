@@ -214,8 +214,8 @@ describe("a world that does not start", () => {
     expect(build.ok ? null : build.message).toBe(
       "the program did not start for world default: build[0] names {port}, which has no value here: build runs once per tree, before any world exists",
     );
-    const env = await starter().start("default", recipe({ url: "http://a.example", env: { PORT: "{port}" } }), []);
-    expect(env.ok ? null : env.message).toBe("the program did not start for world default: env.PORT names {port}, which has no value here: this world does not serve");
+    const env = await starter().start("default", recipe({ env: { PORT: "{port}" } }), []);
+    expect(env.ok ? null : env.message).toBe("the program did not start for world default: env.PORT names {port}, which has no value here: this world has neither serve nor url");
   });
 
   it("fails when setup throws, after stopping the server", async () => {
@@ -351,6 +351,37 @@ describe("a world nukadoko does not serve", () => {
     expect(world.ok ? null : world.message).not.toContain("hunter2");
   });
 
+
+  it("fills {port} with the url's port, as written or the scheme's, in env, in prepare, and for setup", async () => {
+    const seen: (number | undefined)[] = [];
+    const cases = [
+      ["https://a.example", "443"],
+      ["http://a.example", "80"],
+      ["http://127.0.0.1:9/app", "9"],
+      ["https://a.example:8443", "8443"],
+    ] as const;
+    for (const [url, port] of cases) {
+      const world = await startOk(
+        await starter().start(
+          "default",
+          recipe({
+            url: () => url,
+            env: { PORT: "{port}" },
+            prepare: [["node", "-e", "console.log(`prepared on ${process.argv[1]}`)", "{port}"]],
+            setup: (given) => {
+              seen.push(given.port);
+            },
+          }),
+          [],
+        ),
+      );
+      expect(world.view.env).toEqual({ PORT: port });
+      expect(readFileSync(path.join(runDir, "worlds", "default", "program.log"), "utf8")).toContain(`prepared on ${port}\n`);
+      await world.stop();
+      rmSync(path.join(runDir, "worlds", "default"), { recursive: true, force: true });
+    }
+    expect(seen).toEqual(cases.map(([, port]) => Number(port)));
+  });
 
   it("reaches a url, a function of the world, and starts nothing", async () => {
     const progress = createCaptureSink();

@@ -144,6 +144,8 @@ interface CheckArgs {
   feature?: string[];
   /** `--fail-on`; yargs collects a repeated flag into an array. */
   "fail-on"?: string[];
+  /** `--env`, a string once and an array when repeated. */
+  env?: string | string[];
 }
 
 interface CleanArgs {
@@ -861,6 +863,12 @@ export async function runCli(
           default: false,
           describe: "machine-readable output",
         })
+        .option("env", {
+          type: "string",
+          describe:
+            "check the placeholders of the worlds a nuka run with the same --env flags would start (repeatable; " +
+            'without it, the "default" environment\'s world); no other world is checked',
+        })
         .option("fail-on", {
           type: "string",
           array: true,
@@ -884,6 +892,7 @@ export async function runCli(
         json: args.json ?? false,
         codes: args.codes ?? false,
         targets: args.feature ?? [],
+        envs: args.env === undefined ? [] : typeof args.env === "string" ? [args.env] : args.env,
         failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
         stdout,
         stderr,

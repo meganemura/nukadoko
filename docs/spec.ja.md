@@ -2268,7 +2268,7 @@ world はそれを待たずに失敗し、`program.log` は、関数が持ち時
 
 | プレースホルダー | 値 |
 | --- | --- |
-| `{port}` | nukadoko が `serve` に与えたポート |
+| `{port}` | world のポート。nukadoko が `serve` に与えたポート、または `url` のポート(書かれたもの、無ければスキームのもの。`https:` は 443、`http:` は 80) |
 | `{url}` | world の URL。`http://localhost:{port}`、またはファイルが名指す `url` |
 | `{dir}` | world のディレクトリ `.nukadoko/runs/<run_id>/worlds/<environment>/` の絶対パス |
 | `{root}` | プログラムを build する tree のルートの絶対パス |
@@ -2276,11 +2276,15 @@ world はそれを待たずに失敗し、`program.log` は、関数が持ち時
 | `{token}` | その world のために作った 32 文字のランダムな 16 進数 |
 
 `build` は tree ごとに 1 回、どの world よりも前に実行するので、`build` のコマンドが名指せるのは `{root}` だけです。
+URL を持つ world はどれもポートを持つので、`serve` を `url` に替える environment も、トップレベルの `PORT: "{port}"` をそのまま使えます。
 world が値を持たないプレースホルダーは、何かを実行する前に名前を挙げて拒否されます。
-serve しない world の `{port}` や、`serve` も `url` も無い world の `{url}` です。
+`serve` も `url` も無い world の `{port}` や `{url}` です。
+fix は world に欠けているものだけを挙げます。
+`build` のコマンドには `{root}` だけにするか `prepare` に移すことを、どちらも無い world には `serve` か `url` を挙げます。
 world がどのプレースホルダーを持つかはレシピだけで決まるので、この拒否は world を待ちません。
-`nuka check` は、ファイルが起動しうる各 world のそれぞれの欠けについて、error `program-placeholder-unfilled` を報告します。
-起動しうる world とは、`environments` が `default` を名指さないときの default の world と、各 environment です。
+`nuka check` は、同じ `--env` フラグの `nuka run` が起動する各 world のそれぞれの欠けについて、error `program-placeholder-unfilled` を報告します。
+その world とは、`--env` が無いときは default の world、あるときは `--env` が名指す各 environment です。
+その呼び出しで何も起動しない world は確かめないので、別の用途のために書いた environment が、ほかの environment の run を拒否することはありません。
 `nuka run` と `nuka do` は、起動する world について、どの `build`、`prepare`、version の probe よりも前に、同じコードで拒否します。
 そのため、あとの world と共有する `build` も実行されません。
 波括弧で囲まれたそれ以外のテキストは書いたまま残るので、コマンドの中の JSON の値や shell の波括弧はエスケープ不要です。
@@ -4944,7 +4948,7 @@ nuka scaffold --feature <path>
                               name, --pattern, --then, --command, --from,
                               --cwd, --argv, --request, --body,
                               --description, or --replace
-nuka check [feature..] [--json] [--fail-on <code>]
+nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
                               static checks: pattern/schema mismatches, a
                               Then bound to a step that runs, a claim step
                               bound outside Then position, a claim whose
@@ -5013,7 +5017,10 @@ nuka check [feature..] [--json] [--fail-on <code>]
                               comma-separated) exits 1 when a finding with
                               that code is reported, and the finding keeps its
                               severity; a code a check report never contains
-                              is refused;
+                              is refused; --env <name> (repeatable) checks
+                              the placeholders of the worlds a nuka run with
+                              the same --env flags would start, the default
+                              world without it, and no other world;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
                               files), so the errors

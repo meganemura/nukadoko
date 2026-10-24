@@ -319,10 +319,13 @@ just until 0.1.
   password, refused when the file is read, and a url function's answer
   is held to the same rule when the world starts. Step files load before
   any world's env is set, at every `--concurrency`, and a step reads the
-  world's env when it runs. A placeholder a world has
-  no value for is the check error `program-placeholder-unfilled`, for
-  every world the file can start, and `nuka run` and `nuka do` refuse it
-  with that code before any command runs. `nuka run` starts one world
+  world's env when it runs. `{port}` has a value in every world with a
+  URL: in a `url` world it is the URL's port, as written or the
+  scheme's. A placeholder a world has no value for is the check error
+  `program-placeholder-unfilled`, for the worlds a `nuka run` with the
+  same `--env` flags would start (`nuka check --env`), and `nuka run`
+  and `nuka do` refuse it with that code, for the worlds they start,
+  before any command runs. `nuka run` starts one world
   per environment, in `.nukadoko/runs/<run_id>/worlds/<env>/`, before the
   BeforeAll hooks, and stops it after the scenarios; under `--concurrency`
   the parent process owns it. `nuka do` starts one for its execution. The
