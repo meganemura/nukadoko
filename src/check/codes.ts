@@ -63,7 +63,7 @@ const CHECK_CODES = {
   },
   "claim-compares-itself": {
     description:
-      "A claim's actual value and its expected value resolve to the same place: the same path of the same earlier line's result, or the same observe path, with a view and an at counted as steps of the path. Such a claim holds whatever the behaviour is. Also reported for a claim step whose observe receives a from value that an expected from reads, or one that holds it or that it holds, so observe could return the expected value as the actual one.",
+      "A claim's actual value and its expected value resolve to the same place: the same path of the same earlier line's result, or the same observe path, with a view and an at counted as steps of the path. Such a claim holds whatever the behaviour is. Also reported for a claim step whose observe receives a from value that an expected from reads, or one that holds it or that it holds, so observe could return the expected value as the actual one. nuka run and nuka do break such a claim at run time too, so --no-check does not let it hold.",
     severity: "error",
     fix: "Take the expected value from the sentence (a capture, the docstring, or the table), or from another step's result, so the two sides can differ. For observe, give it values from another step, or none from the step the expected value comes from.",
   },
