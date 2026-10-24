@@ -250,7 +250,7 @@ function kindFromMessageRegex(messageRegex: string | RegExp | undefined): string
  * (`src/report/allure/categories.ts`), the same source of truth
  * `examples/allure/allurerc.mjs` is checked against
  * (tests/allure-config-drift.test.ts) — never a second, hand-typed copy of
- * the seven category names.
+ * the category names.
  *
  * `historyPath` is written unconditionally alongside `categories`: without
  * it, Allure 3's own `generate`/`watch`/`report` never build history at

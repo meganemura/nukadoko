@@ -284,15 +284,25 @@ rather than a bag. A promoted step gains a typed contract, a validated
 `result`, and single-step execution via `nuka do`, none of which a compat
 step has.
 
+A `Then` is promoted to a claim step, not to a step with `run`. Its
+`expect` calls become `claims`: each one reads its value through `from`
+or an `observe`, and takes its expected value from the sentence, so a
+sentence such as `the command succeeds` is reworded to state the value
+(`it exits with 0`). See docs/spec.md "Claims". Until then a compat `Then`
+stays a compat `Then`: a compat step cannot declare claims, and nothing
+in the compat door changes what it does. Promote a `Then` after its
+producer, since its claims read the producer's `returns`.
+
 ## The dashboard is `nuka check`
 
 `nuka check` is the running meter of how much migration is left:
 
 - `then-compat-step` warns when a compat step is bound in `Then` position:
-  compat steps have no declared `mutates` for nukadoko to trust there (see
-  docs/spec.md "Keyword semantics"), so this flags a step with no static
-  signal at all in that spot, not one the tool has caught doing anything.
-  Promoting it to `defineStep` is how it gains a declaration to check.
+  a compat step cannot declare claims, so nukadoko cannot see what it
+  judges there (see docs/spec.md "Claims"). This flags a step with no
+  static signal at all in that spot, not one the tool has caught doing
+  anything. Promoting it to a claim step (`defineStep` with `claims`) is
+  how it gains claims to check.
 - `step-file-import-failed` errors on a step file whose import threw: an
   unsupported name used as a value, a CommonJS `require`, or a deep subpath
   import (the first three gaps in "What the switch does not carry" above),

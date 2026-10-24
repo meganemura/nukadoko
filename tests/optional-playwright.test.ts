@@ -555,9 +555,13 @@ describe("the shipped declarations under the project's own tsc", () => {
     const result = await tsc(emitting, "tsconfig.json");
     expect(result.output).toBe("");
     expect(result.code).toBe(0);
-    const emitted = await readFile(path.join(emitting, "out", "features", "steps", "output-is-empty.d.ts"), "utf8");
+    const emitted = await readFile(path.join(emitting, "out", "features", "steps", "plain-stub.d.ts"), "utf8");
     expect(emitted).toContain('import("nukadoko").DefaultReturns');
     expect(emitted).not.toContain("node_modules");
+    // A claim step's inferred type reaches a name the package entry exports too.
+    const claimStep = await readFile(path.join(emitting, "out", "features", "steps", "output-is-empty.d.ts"), "utf8");
+    expect(claimStep).toContain('import("nukadoko").ClaimStep');
+    expect(claimStep).not.toContain("node_modules");
   }, 60_000);
 
   it("types page as Playwright's Page when playwright is installed", async () => {

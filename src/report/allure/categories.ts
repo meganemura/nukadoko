@@ -24,15 +24,18 @@ const ERROR_KINDS: readonly ErrorKind[] = [
   "world_invalid",
   "timeout",
   "unsupported",
+  "claim_broken",
+  "unobserved",
   "step_error",
 ];
 
 // One human-readable classification name per kind. Only the first four carry
-// the "Contract: ..." register — they are failures the contract layer
-// itself can name; the remaining three are not: a
-// timeout/unsupported-shape/step_error is a vocabulary or execution defect
-// the contract layer never got to judge, so each gets its own distinct name
-// instead of the same "Contract: ..." register.
+// the "Contract: ..." register: they are failures the contract layer
+// itself can name; the rest are not: a timeout/unsupported-shape/step_error
+// is a vocabulary or execution defect the contract layer never got to
+// judge, and a broken claim or a claim step that observed nothing is a
+// judgment nukadoko made (docs/spec.md "Claims"), so each gets its own
+// distinct name instead of the same "Contract: ..." register.
 const NAME_BY_KIND: Readonly<Record<ErrorKind, string>> = {
   args_invalid: "Contract: args failed the step's schema",
   result_invalid: "Contract: result failed the step's schema",
@@ -40,6 +43,8 @@ const NAME_BY_KIND: Readonly<Record<ErrorKind, string>> = {
   world_invalid: "Contract: a World key's write failed its schema",
   timeout: "Timeout",
   unsupported: "Compat: unsupported step shape",
+  claim_broken: "Claim broken",
+  unobserved: "Claim step did not observe",
   step_error: "Step error",
 };
 

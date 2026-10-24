@@ -110,12 +110,12 @@ test in "a short password" and the setup in "sign in before confirming".
 A step that can be refused returns the outcome instead of throwing, so a
 Then can claim the refusal (`examples/workflow.md`).
 
-The one place the keyword meets a step's contract is `mutates`. A step
-declaring `mutates: true` bound in Then position is a `nuka check`
-**warning**, not an error, and warnings do not fail `check`. That is
-deliberate: a Then line that changes state is usually a Then doing the
-When's job, and occasionally it is legitimate, so the tool draws a
-person's attention instead of deciding.
+The keyword meets a step's contract in one place: a Then binds a claim
+step, and only a Then does. A Then bound to a step that runs is the
+`then-without-claims` error, and a claim step in Given or When position
+the `claims-outside-then` error. A Then line that acts is a Then doing
+the When's job, and a Given that judges would make a broken setup read as
+a failed criterion.
 
 `And` and `But` take the position of the primary keyword above them,
 which is gherkin's own rule rather than a nukadoko choice, so an `And`

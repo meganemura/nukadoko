@@ -36,13 +36,12 @@ describe("nuka check: a finding on a line repeated across pickles", () => {
     expect(shape(report.errors)).toEqual([
       { code: "ambiguous-step", line: 4, step: undefined },
       { code: "unfillable-required-key", line: 5, step: "title-set" },
+      { code: "then-without-claims", line: 11, step: "item-saved" },
       { code: "table-docstring-key-mismatch", line: 12, step: "note-added" },
+      { code: "then-without-claims", line: 23, step: "item-saved" },
       { code: "undefined-step", line: 24, step: undefined },
       { code: "undefined-step", line: 25, step: undefined },
     ]);
-    expect(shape(report.warnings)).toEqual([
-      { code: "then-mutates", line: 11, step: "item-saved" },
-      { code: "then-mutates", line: 23, step: "item-saved" },
-    ]);
+    expect(shape(report.warnings)).toEqual([]);
   });
 });

@@ -59,8 +59,9 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
     table
   - `complete-todo.ts` — resolves a title to an id via `GET /todos`, then
     `PATCH /todos/:id`
-  - `todo-list-includes.ts` / `todo-is-marked-done.ts` — read-only
-    (`mutates: false`) assertions bound in `Then` position
+  - `todo-list-includes.ts` / `todo-is-marked-done.ts`: claim steps
+    bound in `Then` position. Each reads `GET /todos` in `observe` and
+    claims that the sentence's title is in the list it read. Neither has a `run`.
 
 ## Part 1 — adaptive authoring
 

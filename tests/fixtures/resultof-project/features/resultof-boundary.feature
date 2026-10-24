@@ -4,4 +4,4 @@ Feature: resultOf never crosses a scenario boundary and never sees a failed resu
     Given a listing "boom" is created
 
   Scenario: a fresh scenario never sees another scenario's chain
-    Then that listing is closed
+    When that listing is closed

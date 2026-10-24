@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { z } from "zod";
-import { defineStep, type Step } from "../src/step/define-step.js";
+import { defineStep, type RunStep } from "../src/step/define-step.js";
 import type { FixtureDefinition, FixtureFn } from "../src/step/fixture-types.js";
 import { formatFixtureIssues, validateFixtureDefinitions, validateStepFixtures } from "../src/fixture/validate-fixtures.js";
 
@@ -15,7 +15,7 @@ import { formatFixtureIssues, validateFixtureDefinitions, validateStepFixtures }
 // that is precisely what this runtime check exists to catch independently
 // of the type layer.
 
-function stepWithRun(run: Step["run"]): Step {
+function stepWithRun(run: RunStep["run"]): RunStep {
   return {
     ...defineStep({
       description: "test step",
@@ -62,7 +62,7 @@ describe("validateStepFixtures", () => {
     const step = stepWithRun((async ({ bogus }: any) => {
       void bogus;
       return {};
-    }) as Step["run"]);
+    }) as RunStep["run"]);
     const issues = validateStepFixtures("unknown-fixture-step", step);
     expect(issues).toHaveLength(1);
     expect(issues[0]).toMatchObject({ step: "unknown-fixture-step" });
@@ -78,7 +78,7 @@ describe("validateStepFixtures", () => {
       }),
       run: (({ sum }: any) => {
         void sum;
-      }) as Step["run"],
+      }) as RunStep["run"],
     };
     const [issue] = validateStepFixtures("sum-is", step);
     expect(issue?.message).toBe(
@@ -86,7 +86,7 @@ describe("validateStepFixtures", () => {
         '"sum" is an args key, and args are run()\'s second parameter: run({}, { sum })',
     );
 
-    const bogus = { ...step, run: (({ bogus }: any) => void bogus) as Step["run"] };
+    const bogus = { ...step, run: (({ bogus }: any) => void bogus) as RunStep["run"] };
     expect(validateStepFixtures("sum-is", bogus)[0]?.message).toBe(
       'run() destructures unknown fixture "bogus": known fixtures are baseURL, call, context, env, evidence, page, pageAs, poll, request, requireEnv, resultOf, scratch, section ' +
         "(a project-defined name must be declared under nukadoko.config.ts's own `fixtures`)",
@@ -97,7 +97,7 @@ describe("validateStepFixtures", () => {
     const step = stepWithRun((async ({ baseURL = "unused" }: any) => {
       void baseURL;
       return {};
-    }) as Step["run"]);
+    }) as RunStep["run"]);
     const issues = validateStepFixtures("default-value-step", step);
     expect(issues).toHaveLength(1);
     expect(issues[0]?.message).toContain("default value");
@@ -107,7 +107,7 @@ describe("validateStepFixtures", () => {
     const step = stepWithRun((async ({ ...rest }: any) => {
       void rest;
       return {};
-    }) as Step["run"]);
+    }) as RunStep["run"]);
     const issues = validateStepFixtures("rest-step", step);
     expect(issues).toHaveLength(1);
     expect(issues[0]?.message).toContain("rest property");
@@ -117,7 +117,7 @@ describe("validateStepFixtures", () => {
     const step = stepWithRun((async (fixtures: any) => {
       void fixtures;
       return {};
-    }) as Step["run"]);
+    }) as RunStep["run"]);
     const issues = validateStepFixtures("not-destructured-step", step);
     expect(issues).toHaveLength(1);
     expect(issues[0]?.message).toContain("destructure");
@@ -184,7 +184,7 @@ describe("validateFixtureDefinitions", () => {
         gs.arrays(gs.sampledFrom([...STEP_BUILTINS]), { minSize: 0, maxSize: 4, unique: true }),
       );
       const names = ["call", ...also.filter((name) => name !== "call")];
-      const step = stepWithRun(destructuring(names) as unknown as Step["run"]);
+      const step = stepWithRun(destructuring(names) as unknown as RunStep["run"]);
       expect(validateStepFixtures("uses-call", step)).toEqual([]);
     }));
 });

@@ -2,6 +2,6 @@ Feature: mixed typed and compat steps share one context
 
   Scenario: typed and compat steps interoperate in one pickle
     Given a thing is created
-    Then the created thing id is read via resultOf
+    Then the created thing id is "t1" via resultOf
     When a legacy cookie is set
-    Then the cookie is visible to a typed request
+    Then the cookie "sid=abc123" is visible to a typed request

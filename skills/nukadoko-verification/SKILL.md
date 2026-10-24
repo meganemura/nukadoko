@@ -38,6 +38,10 @@ implementation against itself.
   becomes a question for a person. It never becomes a Then.
 - The map's own "what you see" lines may be corrected from what the app
   does. A Then may not.
+- A Then declares claims, and its step record names where each expected
+  value came from (`sentence:`, `from:`, `literal:`, or `observe:`).
+  Every `sentence:` and `literal:` value traces to one of the sources
+  above.
 - One exception: when the requirement is "behave exactly as before" (a
   migration that must keep every behavior, bugs included), the earlier
   behavior is the source. Say so in the `Feature:` description, so a
@@ -66,6 +70,8 @@ in `additionalFeatureDirs` until someone decides it is core.
 Write each action and each read once, as a function in a library the steps
 already import (for example `features/steps/lib/`). A step declares its
 contract and calls one function; the control CLI calls the same function.
+A Then's `observe` calls a read, and its claims judge what the read
+returned; the CLI prints what the same read returns.
 Keep the library under the features tree and let the CLI import it: steps
 that import from the agent's skill directory make the acceptance suite
 depend on it.

@@ -1,7 +1,7 @@
 import type { GherkinDocument, Pickle, Step as GherkinStep } from "@cucumber/messages";
-import type { RunScenario, RunStep, RunUsed } from "../record/run-result.js";
+import { CLAIM_VALUE_MAX_BYTES, type RunClaim, type RunScenario, type RunStep, type RunUsed } from "../record/run-result.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
-import type { ObservedCounts, StepRecord } from "../record/types.js";
+import type { ClaimRecord, ObservedCounts, StepRecord } from "../record/types.js";
 
 // Responsibility: one scenario's entry in run.json, built from the scenario
 // as it ran and the step records it wrote. Pure: the caller reads the step
@@ -101,6 +101,43 @@ function usedOf(stepRecord: StepRecord, recordPath: (id: string) => string): Run
   return stepRecord.used.map((entry) => ({ step: entry.step, record: recordPath(entry.step_record_id), ...boundUsedResult(entry.result) }));
 }
 
+/** A claim value whose JSON fits `CLAIM_VALUE_MAX_BYTES` as it is, or the
+ * start of its JSON text and the whole value's size. Pure. */
+function boundClaimValue(value: unknown): { readonly value: unknown; readonly bytes?: number } {
+  const text = JSON.stringify(value) ?? "null";
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes <= CLAIM_VALUE_MAX_BYTES) return { value };
+  return { value: text.slice(0, CLAIM_VALUE_MAX_BYTES), bytes };
+}
+
+function boundComparison<T extends { readonly actual?: unknown; readonly expected?: unknown }>(claim: T): T {
+  let bounded: T = claim;
+  if (Object.hasOwn(claim, "actual")) {
+    const actual = boundClaimValue(claim.actual);
+    bounded = { ...bounded, actual: actual.value, ...(actual.bytes === undefined ? {} : { actual_bytes: actual.bytes }) };
+  }
+  if (Object.hasOwn(claim, "expected")) {
+    const expected = boundClaimValue(claim.expected);
+    bounded = { ...bounded, expected: expected.value, ...(expected.bytes === undefined ? {} : { expected_bytes: expected.bytes }) };
+  }
+  return bounded;
+}
+
+/** The claims of a step record, as run.json carries them. Pure. */
+export function claimsForRun(claims: readonly ClaimRecord[]): RunClaim[] {
+  return claims.map((claim) =>
+    "each" in claim
+      ? {
+          ...claim,
+          each: {
+            ...claim.each,
+            results: claim.each.results.map((item) => ({ ...item, claims: item.claims.map((entry) => boundComparison(entry)) })),
+          },
+        }
+      : boundComparison(claim),
+  );
+}
+
 /** `observed` without the content of each changed file. */
 function observedForRun(observed: ObservedCounts): ObservedCounts {
   if (!Array.isArray(observed.files)) return observed;
@@ -127,6 +164,13 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
       ...(entry.error === undefined ? {} : { error: { kind, message: entry.error.message } }),
       ...(used === undefined ? {} : { used }),
       ...(entry.after_step_end === undefined ? {} : { after_step_end: entry.after_step_end }),
+      ...(stepRecord?.claims === undefined
+        ? {}
+        : {
+            claims: claimsForRun(stepRecord.claims),
+            ...(stepRecord.observation === undefined ? {} : { observation: stepRecord.observation }),
+            ...(stepRecord.attempts === undefined ? {} : { attempts: stepRecord.attempts }),
+          }),
     };
   });
   return {

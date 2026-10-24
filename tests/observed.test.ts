@@ -17,10 +17,10 @@ import {
 // observed-project — a real local http server, exercised through both
 // `nuka do` and `nuka run`: `observed` landing on a
 // step record, and that a declared `mutates: false` step's own occurrence
-// is never failed by what it actually observed writing — the declaration is
-// trusted, whether it is bound in Then
-// position or run under a `policy: "read-only"` environment; `observed`
-// still records the write either way, only `status` stopped reacting to it.
+// is never failed by what it actually observed writing: the declaration is
+// trusted, in any position and under a `policy: "read-only"` environment;
+// `observed` still records the write either way, and `status` does not
+// react to it.
 // Page-side (chromium) observation has its own test in
 // browser-evidence.test.ts, following that file's existing convention for
 // browser-path evidence.
@@ -106,11 +106,11 @@ describe("measured mutates: request-side observed counts", () => {
     ]);
   });
 
-  it("nuka run: a Then-position step observing only reads passes", async () => {
+  it("nuka run: a step declared mutates: false observing only reads passes", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "--records", "features/then-position.feature:3"],
+      ["run", "--records", "features/declared-reads.feature:3"],
       { rootDir, stdout, stderr },
     );
 
@@ -123,16 +123,16 @@ describe("measured mutates: request-side observed counts", () => {
     expect(record.steps[1].status).toBe("passed");
   });
 
-  // A Then-position step's own measured write does not demote its step
-  // record when the step declares `mutates: false` (tests/fixtures/
-  // observed-project/features/steps/a-write-happens.ts) — nukadoko trusts
+  // A step's own measured write does not demote its step record when the
+  // step declares `mutates: false` (tests/fixtures/
+  // observed-project/features/steps/a-write-happens.ts): nukadoko trusts
   // that declaration instead of the measurement, so the whole scenario
   // passes and the following step, which would otherwise be skipped,
   // actually runs.
-  it("nuka run: a Then-position step declared mutates: false passes even though it observes a write, and the rest of the scenario keeps running", async () => {
+  it("nuka run: a step declared mutates: false passes even though it observes a write, and the rest of the scenario keeps running", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
-      ["run", "--records", "features/then-position.feature:7"],
+      ["run", "--records", "features/declared-reads.feature:7"],
       { rootDir, stdout, stderr: createCaptureSink() },
     );
 

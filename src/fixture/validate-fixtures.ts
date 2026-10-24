@@ -15,7 +15,7 @@ import {
   fixtureParameterNames,
   type FixtureConsumer,
 } from "../step/fixture-names.js";
-import type { Step } from "../step/define-step.js";
+import { fixtureSourceOf, type Step } from "../step/define-step.js";
 import { asObjectShape } from "../binding/schema-shape.js";
 
 // Responsibility: the one judgment "does this step's run() ask for fixtures
@@ -233,7 +233,7 @@ export function validateStepFixtures(
   knownNames: ReadonlySet<string> = KNOWN_BUILTIN_FIXTURE_NAMES,
 ): FixtureIssue[] {
   const argsKeys = new Set(Object.keys(asObjectShape(step.args) ?? {}));
-  return validateFixtureConsumer(step.run, knownNames, argsKeys).map((message) => ({ step: stepName, message }));
+  return validateFixtureConsumer(fixtureSourceOf(step), knownNames, argsKeys).map((message) => ({ step: stepName, message }));
 }
 
 /** Renders `issues` as one line per issue, `"<step>: <message>"` — matches

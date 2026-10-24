@@ -17,4 +17,4 @@ Feature: Migrating a legacy todo suite onto nukadoko, one step at a time
 
   Scenario: a promoted producer feeds a typed consumer via resultOf
     Given a todo titled "Read a book" is created
-    Then the created todo id is read back via resultOf
+    Then the created todo is titled "Read a book"

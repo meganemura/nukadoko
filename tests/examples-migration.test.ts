@@ -144,12 +144,13 @@ describe("examples/migration", () => {
     expect(countStepRecord.world).toBeUndefined();
 
     // Scenario 2 (the promoted pair): the producer's validated result is
-    // what the consumer reads back through ctx.resultOf.
+    // what the consumer, a claim step, reads back through resultOf in its
+    // observe.
     const scenario2 = records[1];
     const createStep = scenario2.steps[0];
     const resultOfStep = scenario2.steps[1];
     expect(createStep.text).toContain("is created");
-    expect(resultOfStep.text).toContain("resultOf");
+    expect(resultOfStep.text).toBe('the created todo is titled "Read a book"');
 
     const createStepRecord = await readStepRecord(rootDir, createStep.step_record_id);
     expect(createStepRecord.result).toMatchObject({ title: "Read a book", done: false });
@@ -160,7 +161,19 @@ describe("examples/migration", () => {
     expect(resultOfStepRecord.used).toEqual([
       { step_record_id: createStep.step_record_id, step: createStepRecord.step },
     ]);
-    expect(resultOfStepRecord.result).toEqual({ id: (createStepRecord.result as { id: string }).id });
+    expect(resultOfStepRecord.claims).toEqual([
+      {
+        actual: "Read a book",
+        actual_from: "observe:created.title",
+        compare: "equal",
+        expected: "Read a book",
+        expected_from: "sentence:title",
+        outcome: "held",
+        measured: null,
+      },
+    ]);
+    expect(resultOfStepRecord.observation).toBe("observed");
+    expect(resultOfStepRecord.attempts).toBe(1);
     expect(resultOfStepRecord.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
     expect(resultOfStepRecord.world).toBeUndefined();
   });

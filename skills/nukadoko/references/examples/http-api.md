@@ -1,7 +1,8 @@
 # Worked example: an HTTP API
 
 A finished project for an API on `node:http`, built with nukadoko 0.16.1
-on Node 24.22.0. Every output block below is copied from a real run of
+on Node 24.22.0, with its Thens moved to claims in the release after
+0.21.0. Every output block below is copied from a real run of
 that project, which is `examples/acceptance/http-api/` in the nukadoko
 repository; CI runs it. The rules it follows are in
 `../scenario-rules.md`.
@@ -96,7 +97,10 @@ Feature: items API
 - `get-item` (When): reads `id` from `an-item-exists` through `from`.
 - `get-item-by-id`, `list-items` (When): a literal id, and the list.
 - `status-is`, `body-is` (Then): each lists all four request steps in
-  `from`, so exactly one of them runs before it in each scenario.
+  `from`, so exactly one of them runs before it in each scenario, and
+  declares one `equal` claim. `body-is` parses the docstring in `args`
+  (`.transform(JSON.parse)`), so the claim compares two JSON values and
+  key order does not count.
 
 The two steps that POST keep the default `mutates: true`: they change the
 API's state. They need no go-ahead before `nuka do`, because the only
@@ -151,7 +155,6 @@ export default defineStep({
 
 ```ts
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import createItem from "./create-item.ts";
 import getItem from "./get-item.ts";
 import getItemById from "./get-item-by-id.ts";
@@ -165,10 +168,7 @@ export default defineStep({
     status: z.number().describe("The status the last request got"),
   }),
   from: { status: [[createItem, "status"], [getItem, "status"], [getItemById, "status"], [listItems, "status"]] },
-  mutates: false,
-  run({}, { expected, status }) {
-    assert.equal(status, expected, `status: expected ${expected}, got ${status}`);
-  },
+  claims: [{ actual: "status", compare: "equal", expected: "expected" }],
 });
 ```
 
@@ -201,16 +201,17 @@ scenarios read items an earlier scenario created (S8):
 
 ```
   step 4/4  failed  0.0s  the response body is
-      body: got {"id":2,"name":"lamp"}
+      claim broken: {"id":2,"name":"lamp"} (from:get-item@22.body) equal {"id":1,"name":"lamp"} (sentence:expected)
 ...
   step 5/5  failed  0.0s  the response body is
-      body: got [{"id":1,"name":"lamp"},{"id":2,"name":"lamp"},{"id":3,"name":"lamp"},{"id":4,"name":"desk"}]
+      claim broken: [{"id":1,"name":"lamp"},{"id":2,"name":"lamp"},{"id":3,"name":"lamp"},{"id":4,"name":"desk"}] (from:list-items@57.body) equal [{"id":1,"name":"lamp"},{"id":2,"name":"desk"}] (sentence:expected)
 ...
 7 scenarios: 5 passed, 2 failed  (1s)
 ```
 
-That message also names only the actual value, so `body-is` now names
-both (S11).
+The claim line names both values and the step each came from (S11): the
+body is the one `get-item` on line 22 got, and the id the server assigned
+is 2.
 
 The run that passed, scoped per scenario:
 
@@ -247,3 +248,4 @@ so, because the step keeps the default `mutates: true`.
 | 2026-10-16 | The whole body against a docstring, or one claim per field | the whole body | the ticket names the body's fields; a scenario per field would repeat the request | none |
 | 2026-10-17 | Acting on `repeated-scenario-prefix` | not acted on | the shared Given writes state the scenario reads | S8 |
 | 2026-10-17 | `mutates` on the POST steps | the default `true`, no go-ahead | they change the API's state, but only on the server the fixture started | SKILL.md "Before the first command" |
+| 2026-10-24 | How the body compares with the docstring | `args` parses the docstring, and one `equal` claim compares the two values | key order and spacing in the docstring do not count; the claim record keeps both values | none |

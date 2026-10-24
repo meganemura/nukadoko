@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { stripCaptureNames } from "../binding/pattern.js";
+import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
 import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
+import { claimsProblem, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
@@ -297,25 +300,13 @@ export type StepRunResult<TReturns extends z.ZodTypeAny> = TReturns extends Defa
   ? z.input<TReturns> | void
   : z.infer<TReturns>;
 
-export interface StepDefinitionInput<
-  TArgs extends z.ZodTypeAny = z.ZodTypeAny,
-  TReturns extends z.ZodTypeAny = z.ZodTypeAny,
-  TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
-> {
+/** The options a step that runs and a step that claims share. */
+export interface StepDefinitionCommon<TArgs extends z.ZodTypeAny, TFrom> {
   /** Binds the step to Gherkin text (cucumber-expressions syntax). */
   pattern?: string;
   /** Aliases for `pattern`. Either or both may be given; omit both for CLI-only vocabulary. */
   patterns?: string[];
-  /** What this step does — the information an agent uses to pick which step
-   * to call. Shown in `nuka steps`' one-line-per-step listing. */
-  description: string;
   args: TArgs;
-  /** What `run` returns. Omit it for a step that returns nothing a later
-   * step cites or a failure is diagnosed from: it defaults to an empty
-   * object, and `run` may then return nothing. */
-  returns?: TReturns;
-  /** Whether the step changes state anywhere it touches. Defaults to `true`. */
-  mutates?: boolean;
   /** Where an args key's value comes from when a pickle line doesn't capture
    * it (docs/spec.md "Chaining steps") — omit it
    * entirely, or omit any key of it, for a step that only ever takes that key
@@ -334,15 +325,32 @@ export interface StepDefinitionInput<
    * finite number of milliseconds greater than 0 and at most 2147483647
    * (the largest delay `setTimeout` keeps). Anything else is refused here,
    * because Node clamps it to 1ms and the step would be recorded as timed
-   * out immediately. */
+   * out immediately. On a claim step it bounds `observe`, polls included. */
   timeout?: number;
+}
+
+/** A step that acts: a Given or a When. */
+export interface RunStepDefinition<
+  TArgs extends z.ZodTypeAny = z.ZodTypeAny,
+  TReturns extends z.ZodTypeAny = z.ZodTypeAny,
+  TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
+> extends StepDefinitionCommon<TArgs, TFrom> {
+  /** What this step does: the information an agent uses to pick which step
+   * to call. Shown in `nuka steps`' one-line-per-step listing. */
+  description: string;
+  /** What `run` returns. Omit it for a step that returns nothing a later
+   * step cites or a failure is diagnosed from: it defaults to an empty
+   * object, and `run` may then return nothing. */
+  returns?: TReturns;
+  /** Whether the step changes state anywhere it touches. Defaults to `true`. */
+  mutates?: boolean;
   /** Other steps this step's own `run` may call through the `call` fixture
    * (docs/spec.md "Parts") — a step that calls a part it did not list here
    * is refused at the call site, never at the call's own body: `call` reads
    * fixture bags before `run` executes, the same static-declaration reason
    * `from` and a step's own fixture destructuring both already have (this
    * file's own header). Omit it entirely for a step that calls no parts. */
-  parts?: readonly Step[];
+  parts?: readonly RunStep[];
   /** `fixtures` is a `FixtureBag` (src/step/context.ts), named by destructuring
    * (`run({ page, section }, args) => ...`) —
    * only the names actually destructured get built at all (docs/spec.md
@@ -358,14 +366,76 @@ export interface StepDefinitionInput<
     fixtures: FixtureBag,
     args: z.infer<TArgs>,
   ): Promise<StepRunResult<TReturns>> | StepRunResult<TReturns>;
+  claims?: never;
+  observe?: never;
+  poll?: never;
 }
 
-export interface Step<
+type HeadOfPath<P extends string> = P extends `${infer Head}.${string}` ? Head : P;
+
+type ExpectedKeyOf<E> = E extends string
+  ? E
+  : E extends { readonly from: infer P extends string }
+    ? HeadOfPath<P>
+    : never;
+
+type ItemExpectedKeys<I> = I extends { readonly expected: infer E } ? ExpectedKeyOf<E> : never;
+
+/** The args keys a claim list names as an expected value: what `observe`
+ * never receives. */
+export type ClaimExpectedKeys<C> = C extends { readonly expected: infer E }
+  ? ExpectedKeyOf<E>
+  : C extends { readonly each: { readonly claims: readonly (infer I)[] } }
+    ? ItemExpectedKeys<I> | (C extends { readonly each: { readonly where: readonly (infer W)[] } } ? ItemExpectedKeys<W> : never)
+    : never;
+
+/** What `observe` receives: every args key except the ones a claim names
+ * as its expected value, so the code that reads the world cannot pick what
+ * to read, or what to return, by the value it will be compared with. */
+export type ObserveInputs<TArgs extends z.ZodTypeAny, TClaims extends readonly Claim[]> = Readonly<
+  Omit<z.infer<TArgs>, ClaimExpectedKeys<TClaims[number]>>
+>;
+
+/** A step that judges: a Then (docs/spec.md "Claims"). It declares what it
+ * compares instead of running code that compares. */
+export interface ClaimStepDefinition<
+  TArgs extends z.ZodTypeAny = z.ZodTypeAny,
+  TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
+  TClaims extends readonly Claim[] = readonly Claim[],
+> extends StepDefinitionCommon<TArgs, TFrom> {
+  /** Optional: `nuka steps` and `nuka describe` print the claims, which
+   * say exactly what the step checks. */
+  description?: string;
+  /** What the step checks, judged in order; at least one. */
+  claims: TClaims;
+  /** Reads the world when no earlier step returned the value a claim
+   * compares. Fixtures are named by destructuring, as for `run`. It
+   * returns an object whose keys a claim's `actual` names: the thing
+   * measured (a count, a text, a list), never a verdict. */
+  observe?(
+    fixtures: FixtureBag,
+    inputs: ObserveInputs<TArgs, TClaims>,
+  ): unknown;
+  /** `{ timeout_ms }` re-runs `observe` until every claim holds on two
+   * consecutive readings; `false` reads once. `nuka check` requires it to
+   * be stated when `observe` names `page`, `context`, or `pageAs`. */
+  poll?: ClaimPoll;
+  run?: never;
+  returns?: never;
+  mutates?: never;
+  parts?: never;
+}
+
+/** Either definition `defineStep` takes. */
+export type StepDefinitionInput<
   TArgs extends z.ZodTypeAny = z.ZodTypeAny,
   TReturns extends z.ZodTypeAny = z.ZodTypeAny,
-> {
+  TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
+> = RunStepDefinition<TArgs, TReturns, TFrom> | ClaimStepDefinition<TArgs, TFrom>;
+
+/** What every step has, whether it runs or claims. */
+export interface StepBase<TArgs extends z.ZodTypeAny, TReturns extends z.ZodTypeAny> {
   readonly patterns: readonly string[];
-  readonly description: string;
   readonly args: TArgs;
   readonly returns: TReturns;
   readonly mutates: boolean;
@@ -383,15 +453,57 @@ export interface Step<
   /** Empty (`[]`) when the step declares no `parts` at all — the same
    * "default fills the gap" convention `from`'s own `{}` default already
    * follows (this file's own header on `Step.from`), so every reader can
-   * iterate it unconditionally rather than checking for `undefined` first. */
-  readonly parts: readonly Step[];
+   * iterate it unconditionally rather than checking for `undefined` first.
+   * A part is always a step that runs: a claim step judges, and only a
+   * Then line judges. */
+  readonly parts: readonly RunStep[];
+  readonly [STEP_BRAND]: true;
+  /** Optional because a Step built by hand, not by `defineStep`, has none. */
+  readonly [STEP_DECLARATION]?: StepDeclaration;
+}
+
+/** A step that acts. */
+export interface RunStep<
+  TArgs extends z.ZodTypeAny = z.ZodTypeAny,
+  TReturns extends z.ZodTypeAny = z.ZodTypeAny,
+> extends StepBase<TArgs, TReturns> {
+  readonly description: string;
   readonly run: (
     fixtures: FixtureBag,
     args: z.infer<TArgs>,
   ) => Promise<StepRunResult<TReturns>> | StepRunResult<TReturns>;
-  readonly [STEP_BRAND]: true;
-  /** Optional because a Step built by hand, not by `defineStep`, has none. */
-  readonly [STEP_DECLARATION]?: StepDeclaration;
+  readonly claims?: undefined;
+}
+
+/** What `observe` is once stored: the runner hands it inputs without the
+ * expected keys, whatever the declaration's own types were. */
+export type ObserveFn = (fixtures: FixtureBag, inputs: Readonly<Record<string, unknown>>) => unknown;
+
+/** A step that judges. `mutates` is `false` by construction: it has no
+ * action, and `returns` is the empty default, so no later step cites it. */
+export interface ClaimStep<TArgs extends z.ZodTypeAny = z.ZodTypeAny> extends StepBase<TArgs, DefaultReturns> {
+  readonly description: string | undefined;
+  readonly claims: readonly Claim[];
+  readonly observe: ObserveFn | undefined;
+  readonly poll: ClaimPoll | undefined;
+  readonly run?: undefined;
+}
+
+export type Step<
+  TArgs extends z.ZodTypeAny = z.ZodTypeAny,
+  TReturns extends z.ZodTypeAny = z.ZodTypeAny,
+> = RunStep<TArgs, TReturns> | ClaimStep<TArgs>;
+
+export function isClaimStep(step: Step): step is ClaimStep {
+  return step.claims !== undefined;
+}
+
+const NO_FIXTURES = (): undefined => undefined;
+
+/** The function whose first parameter names a step's fixtures: `run`, or
+ * `observe`, or one that names none for a claim step without `observe`. */
+export function fixtureSourceOf(step: Step): (...args: never[]) => unknown {
+  return step.claims === undefined ? step.run : (step.observe ?? NO_FIXTURES);
 }
 
 /** What `defineStep` saw in a definition that the Step's own fields do not
@@ -408,9 +520,9 @@ export interface StepDeclaration {
   readonly ignoredOptions: readonly string[];
 }
 
-// A Record over the interface's own keys, so adding an option to
-// `StepDefinitionInput` without listing it here fails to compile.
-const STEP_OPTIONS: Record<keyof StepDefinitionInput, true> = {
+// A Record over both definitions' own keys, so adding an option to either
+// without listing it here fails to compile.
+const STEP_OPTIONS: Record<keyof RunStepDefinition | keyof ClaimStepDefinition, true> = {
   pattern: true,
   patterns: true,
   description: true,
@@ -421,6 +533,9 @@ const STEP_OPTIONS: Record<keyof StepDefinitionInput, true> = {
   timeout: true,
   parts: true,
   run: true,
+  claims: true,
+  observe: true,
+  poll: true,
 };
 
 /** The options `defineStep` reads, in the order its reference lists them. */
@@ -493,15 +608,22 @@ function isZodSchema(value: unknown): value is z.ZodTypeAny {
 // (the same reason `resolvePatterns` takes a `Pick`), so a real `defineStep`
 // call whose `from` is not the default would fail to type-check here even
 // though this function never looks at `from`.
-function validateStepDefinition(definition: {
+interface DefinitionFields {
   pattern?: unknown;
   patterns?: unknown;
   args: unknown;
   returns?: unknown;
-  run: unknown;
+  run?: unknown;
   timeout?: unknown;
   parts?: unknown;
-}): void {
+  mutates?: unknown;
+  from?: unknown;
+  claims?: unknown;
+  observe?: unknown;
+  poll?: unknown;
+}
+
+function validateStepDefinition(definition: DefinitionFields): void {
   if (definition.pattern !== undefined && typeof definition.pattern !== "string") {
     throw new InvalidStepDefinitionError(
       "defineStep pattern must be a string. Pass several wordings as patterns, an array of strings.",
@@ -518,6 +640,23 @@ function validateStepDefinition(definition: {
       "defineStep args must be a zod schema. A missing or plain value is read later as if it were one, which aborts nuka check with a TypeError.",
     );
   }
+  if (definition.timeout !== undefined && !isHonoredStepTimeout(definition.timeout)) {
+    throw new InvalidStepDefinitionError(
+      `defineStep timeout must be a finite number of milliseconds greater than 0 and at most ${MAX_STEP_TIMEOUT_MS}. ` +
+        `${String(definition.timeout)} is not a deadline Node's timer will keep: a non-finite, non-positive, or larger delay is clamped to 1ms.`,
+    );
+  }
+  if (definition.claims !== undefined) {
+    validateClaimStepDefinition(definition);
+    return;
+  }
+  for (const option of ["observe", "poll"] as const) {
+    if (definition[option] !== undefined) {
+      throw new InvalidStepDefinitionError(
+        `defineStep ${option} belongs to a claim step, and this definition has no claims. A step that acts uses run; a step that judges declares claims.`,
+      );
+    }
+  }
   if (definition.returns !== undefined && !isZodSchema(definition.returns)) {
     throw new InvalidStepDefinitionError(
       "defineStep returns must be a zod schema, or omitted for a step that returns nothing. A plain value is only noticed after the step body has already run.",
@@ -525,13 +664,7 @@ function validateStepDefinition(definition: {
   }
   if (typeof definition.run !== "function") {
     throw new InvalidStepDefinitionError(
-      "defineStep run must be a function. nukadoko reads fixture names from that function's source text and then calls it.",
-    );
-  }
-  if (definition.timeout !== undefined && !isHonoredStepTimeout(definition.timeout)) {
-    throw new InvalidStepDefinitionError(
-      `defineStep timeout must be a finite number of milliseconds greater than 0 and at most ${MAX_STEP_TIMEOUT_MS}. ` +
-        `${String(definition.timeout)} is not a deadline Node's timer will keep: a non-finite, non-positive, or larger delay is clamped to 1ms.`,
+      "defineStep run must be a function. nukadoko reads fixture names from that function's source text and then calls it. A Then step declares claims instead.",
     );
   }
   if (definition.parts !== undefined) {
@@ -541,6 +674,63 @@ function validateStepDefinition(definition: {
         "defineStep parts must be an array of steps, each produced by defineStep.",
       );
     }
+    if (parts.some((part) => isClaimStep(part))) {
+      throw new InvalidStepDefinitionError(
+        "defineStep parts must be steps that run. A claim step judges, and only a Then line judges.",
+      );
+    }
+  }
+}
+
+// What a claim step must not declare, and why: each is a part of acting.
+const RUN_ONLY_OPTIONS = {
+  run: "a step either acts (run) or judges (claims), never both",
+  returns: "a claim step returns nothing a later step cites",
+  mutates: "a claim step is mutates: false by construction, since it has no action",
+  parts: "a claim step has no run body to call parts from",
+} as const;
+
+/** The keys the patterns capture. A pattern that does not scan names none
+ * here; `nuka check` reports it as a pattern error. */
+function patternCaptureKeys(patterns: readonly string[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const pattern of patterns) {
+    try {
+      for (const capture of stripCaptureNames(pattern).captures) keys.add(capture.key);
+    } catch {
+      // Reported by the pattern checks.
+    }
+  }
+  return keys;
+}
+
+function validateClaimStepDefinition(definition: DefinitionFields): void {
+  for (const [option, reason] of Object.entries(RUN_ONLY_OPTIONS)) {
+    if (definition[option as keyof typeof RUN_ONLY_OPTIONS] !== undefined) {
+      throw new InvalidStepDefinitionError(`defineStep ${option} is not an option of a claim step: ${reason}.`);
+    }
+  }
+  if (definition.observe !== undefined && typeof definition.observe !== "function") {
+    throw new InvalidStepDefinitionError(
+      "defineStep observe must be a function. nukadoko reads fixture names from that function's source text and then calls it.",
+    );
+  }
+  const patterns = resolvePatterns(definition as Pick<StepDefinitionInput, "pattern" | "patterns">);
+  const shape = asObjectShape(definition.args as z.ZodTypeAny);
+  const fromKeys =
+    typeof definition.from === "object" && definition.from !== null ? Object.keys(definition.from) : [];
+  const problem =
+    claimsProblem(definition.claims, {
+      patterns,
+      argsKeys: shape === undefined ? null : new Set(Object.keys(shape)),
+      requiredArgsKeys:
+        shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isRequiredField(field)).map(([key]) => key)),
+      fromKeys: new Set(fromKeys),
+      captureKeys: patternCaptureKeys(patterns),
+      hasObserve: definition.observe !== undefined,
+    }) ?? pollProblem(definition.poll, definition.observe !== undefined, MAX_STEP_TIMEOUT_MS);
+  if (problem !== null) {
+    throw new InvalidStepDefinitionError(`defineStep ${problem}.`);
   }
 }
 
@@ -548,21 +738,27 @@ function isHonoredStepTimeout(timeout: unknown): timeout is number {
   return typeof timeout === "number" && Number.isFinite(timeout) && timeout > 0 && timeout <= MAX_STEP_TIMEOUT_MS;
 }
 
+// The claim overload comes first: TypeScript reports a call that matches
+// neither against the last one, and most steps run.
+/** Defines a step that judges: its `claims` say what it compares
+ * (docs/spec.md "Claims"). */
+export function defineStep<
+  TArgs extends z.ZodTypeAny,
+  const TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
+  const TClaims extends readonly Claim[] = readonly Claim[],
+>(definition: ClaimStepDefinition<TArgs, TFrom, TClaims>): ClaimStep<TArgs>;
+/** Defines a step that acts: `run` does the work, and its result is what
+ * a later step's `from` reads. */
 export function defineStep<
   TArgs extends z.ZodTypeAny,
   TReturns extends z.ZodTypeAny = DefaultReturns,
   const TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
->(definition: StepDefinitionInput<TArgs, TReturns, TFrom>): Step<TArgs, TReturns> {
+>(definition: RunStepDefinition<TArgs, TReturns, TFrom>): RunStep<TArgs, TReturns>;
+export function defineStep(definition: StepDefinitionInput): Step {
   validateStepDefinition(definition);
-  return {
+  const common = {
     patterns: resolvePatterns(definition),
-    description: definition.description,
     args: definition.args,
-    // The cast names what an omitted `returns` means at the type level:
-    // `TReturns` falls back to `DefaultReturns` exactly when there is no
-    // `returns` to infer it from.
-    returns: definition.returns ?? (defaultReturns() as unknown as TReturns),
-    mutates: definition.mutates ?? true,
     // Cast is the one place `TFrom`'s validated-literal type (checked against
     // this exact step's `args`) gets widened to `Step.from`'s own loose,
     // uniform runtime shape (`StepFromMap`, this file's own header) — safe
@@ -571,9 +767,30 @@ export function defineStep<
     // to begin with.
     from: (definition.from ?? {}) as StepFromMap,
     timeout: definition.timeout,
+    [STEP_BRAND]: true as const,
+  };
+  if (definition.claims !== undefined) {
+    return {
+      ...common,
+      description: definition.description,
+      returns: defaultReturns(),
+      mutates: false,
+      parts: [],
+      claims: definition.claims,
+      observe: definition.observe as ObserveFn | undefined,
+      poll: definition.poll,
+      [STEP_DECLARATION]: { declaresReturns: false, ignoredOptions: ignoredOptions(definition) },
+    };
+  }
+  return {
+    ...common,
+    description: definition.description,
+    // An omitted `returns` is the default schema, which is what
+    // `TReturns` falls back to when there is no `returns` to infer it from.
+    returns: definition.returns ?? defaultReturns(),
+    mutates: definition.mutates ?? true,
     parts: definition.parts ?? [],
     run: definition.run,
-    [STEP_BRAND]: true,
     [STEP_DECLARATION]: {
       declaresReturns: definition.returns !== undefined,
       ignoredOptions: ignoredOptions(definition),

@@ -1,7 +1,14 @@
 import { SCHEMA_VERSIONS } from "../record/schema-version.js";
 import { readOwnVersion } from "../version.js";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
-import { argOrigins, executeTypedStep } from "../run/execute-typed-step.js";
+import {
+  argOrigins,
+  channelsOfStepRecord,
+  claimSourceLabel,
+  executeTypedStep,
+  recordedChannels,
+  withMeasured,
+} from "../run/execute-typed-step.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { createStepContext, finalizeOpenRequests, installChannelPatches, type DisposeResult } from "../context/create-context.js";
@@ -519,6 +526,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       scenarioCache: fixtureScenarioCache,
       processCache: fixtureProcessCache,
       config,
+      // No feature line produced a `--use` value, so its record id names
+      // the producer instead.
+      argLabel: (key) => claimSourceLabel(key, origins.get(key), () => null),
     });
     const { status, fixtureUsage } = outcome;
     const recordedArgs = outcome.args;
@@ -605,6 +615,29 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // (src/context/evidence.ts) for why this is one shared function rather
     // than two independent spreads.
     const truncated = mergeTruncated(traceEvidence.truncated, evidenceSnapshot.truncatedCount);
+    // A claim step's claims, each with the channel its raw actual value was
+    // measured on: this execution's own channels, read after dispose()
+    // closed them, or the record a `--use` value came from.
+    const claimFields =
+      outcome.claims === undefined
+        ? {}
+        : {
+            claims: withMeasured(outcome.claims.judged, {
+              ownRecordId: recordId,
+              ownChannels: recordedChannels({ observed, dir: evidenceDir, ...(evidence.http === undefined ? {} : { http: evidence.http }) }),
+              fromRecordOf: (key) => {
+                const origin = argsOrigin?.[key];
+                return typeof origin === "object" ? origin.from.step_record_id : null;
+              },
+              channelsOf: (id) => {
+                const record = readStepRecordById(rootDir, config.stateDir, id);
+                return record === null ? [] : channelsOfStepRecord(rootDir, record);
+              },
+              secrets,
+            }),
+            observation: outcome.claims.observation,
+            attempts: outcome.claims.attempts,
+          };
 
     const stepRecord: StepRecord =
       status === "passed"
@@ -646,6 +679,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
+            ...claimFields,
           }
         : {
             schema_version: SCHEMA_VERSIONS.step_record,
@@ -691,6 +725,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
+            ...claimFields,
           };
 
     // Redacted once, as one object — args/result/error.message and every

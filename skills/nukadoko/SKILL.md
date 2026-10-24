@@ -80,10 +80,10 @@ If none is true, ask what this is supposed to do before writing anything.
    and the Thens that read it, from those lines with `--description`,
    `--command <entry point>` (`--cwd`, `--argv`) or `--request "<METHOD>
    <path>"`, and `--from <step>.<key>` per value an earlier step returns
-   (its producer has to return that key already). Run each alone with
-   `nuka do <step> --args '<json>'` (`references/writing-steps.md`, its
-   references: the file, assertions, parts, fixtures). Finished projects:
-   `references/examples/` (`cli.md`, `http-api.md`, `workflow.md`).
+   (its producer has to return that key already). A Then declares
+   `claims`, never `run` (`references/checking-steps.md`). Run each
+   alone with `nuka do <step> --args '<json>'` (`references/writing-steps.md`
+   and its references). Finished projects: `references/examples/`.
 3. **`nuka check <feature>`.** Fix every error and read every warning: a
    warning is a question about intent, not noise. Each finding names its
    file, a `fix:` (an edit) or `do:` (a command) line; apply or run it.
@@ -115,6 +115,6 @@ code (`references/scenario-rules.md`, "How this file grows").
   don't keep fixing one step past three cycles: report where it stands. A
   prompt that gives a different budget overrides the three.
 - Don't hand-edit a step record or a run summary: it was measured, and
-  editing it turns it back into a claim.
+  editing it turns it back into an unmeasured account.
 - Don't act on the notes `nuka check` prints unasked: report them
   (`references/maintenance.md`).

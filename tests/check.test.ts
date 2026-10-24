@@ -41,7 +41,7 @@ describe("nuka check", () => {
     expect(stdout.text()).toContain("ok: no issues found");
   });
 
-  it("exits 0 with warnings only: env-file-missing, environment-env-file-missing, then-mutates", async () => {
+  it("exits 0 with warnings only: env-file-missing, environment-env-file-missing, scenario-without-then", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
       rootDir: fixture("check-warnings-project"),
@@ -61,7 +61,7 @@ describe("nuka check", () => {
           code: "environment-env-file-missing",
           fix: 'Create .env.staging-missing, or remove ".env.staging-missing" from environments.staging.envFiles in nukadoko.config.ts.',
         }),
-        expect.objectContaining({ code: "then-mutates" }),
+        expect.objectContaining({ code: "scenario-without-then", file: "features/no-then.feature" }),
         // The config names a secrets.public key that no envFile defines.
         expect.objectContaining({
           code: "secrets-public-key-unknown",
@@ -71,24 +71,6 @@ describe("nuka check", () => {
       ]),
     );
     expect(report.warnings).toHaveLength(4);
-    expect(exitCode).toBe(0);
-  });
-
-  it("then-mutates is a warning (declaration/position tension), not an error: check still exits 0", async () => {
-    const stdout = createCaptureSink();
-    const exitCode = await runCli(["check", "--json"], {
-      rootDir: fixture("check-warnings-project"),
-      stdout,
-      stderr: createCaptureSink(),
-    });
-
-    const report = bySeverity(stdout.text());
-    const thenMutates = report.warnings.find(
-      (issue: { code: string }) => issue.code === "then-mutates",
-    );
-    expect(thenMutates).toBeDefined();
-    expect(thenMutates.message).toContain("bound in Then position");
-    expect(thenMutates.message).toContain("tension");
     expect(exitCode).toBe(0);
   });
 

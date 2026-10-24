@@ -3,6 +3,7 @@ import path from "node:path";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
 import type { RunDocument, RunScenario, RunVerdict } from "../record/run-result.js";
+import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { scenarioKey } from "./criteria-since.js";
 import {
@@ -382,6 +383,40 @@ function renderUnmeasured(document: RunDocument): string[] {
   ];
 }
 
+// One entry per Then that declared claims, and under it one line per claim
+// (src/report/summary/claim-line.ts): what was compared, with what, where
+// each value came from, and whether it held. A reader approving the run
+// reads what each criterion measured here without opening a record. Under
+// `--repeat`, a Then whose claims came out the same is one entry.
+function renderClaims(document: RunDocument): string[] {
+  const named = document.environments.length > 1;
+  const entries = new Map<string, { readonly sortKey: [string, number]; readonly lines: readonly string[] }>();
+  for (const scenario of document.scenarios) {
+    for (const step of scenario.steps) {
+      if (step.claims === undefined) continue;
+      const where = `${scenario.feature}:${step.line ?? scenario.line}`;
+      const environment = named ? ` (${cellText(scenario.environment)})` : "";
+      const attempts = step.attempts !== undefined && step.attempts > 1 ? `, ${step.attempts} readings` : "";
+      const observation = step.observation === "unobserved" ? ", observed nothing" : "";
+      const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${observation}`;
+      const lines = [head, ...step.claims.map((claim) => `  - ${cellText(claimLine(claim))}`)];
+      const key = lines.join("\n");
+      if (entries.has(key)) continue;
+      entries.set(key, { sortKey: [scenario.feature, step.line ?? scenario.line], lines });
+    }
+  }
+  if (entries.size === 0) return [];
+  const sorted = [...entries.values()].sort((a, b) => a.sortKey[0].localeCompare(b.sortKey[0]) || a.sortKey[1] - b.sortKey[1]);
+  return [
+    "",
+    "## Claims",
+    "",
+    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, and whether it held.",
+    "",
+    ...sorted.flatMap((entry) => entry.lines),
+  ];
+}
+
 function renderFindings(document: RunDocument): string[] {
   const findings = runFindings(document);
   if (findings.length === 0) return [];
@@ -410,6 +445,7 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderCondition(document),
     ...renderCriteriaSince(document),
     ...renderFeatures(document),
+    ...renderClaims(document),
     ...renderUnmeasured(document),
     ...renderFindings(document),
     ...renderRerun(document),

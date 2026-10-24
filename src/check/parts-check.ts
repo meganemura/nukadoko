@@ -111,7 +111,9 @@ export interface PartMutatesContradictionIssue {
  * on purpose: this runs over *every* step in the vocabulary, so a
  * contradiction buried two parts down is caught by this same check running
  * against the step in between, not by this function walking further down
- * (docs/spec.md "Parts": "That check is what keeps `then-mutates` local").
+ * (docs/spec.md "Parts": one flag on one step already accounts for every
+ * part, so a reader of that flag, such as a read-only environment's
+ * refusal, reads one flag and never walks the parts).
  * An unregistered/non-Step part is left alone here too, for the same reason
  * `findPartCycles` above skips it: `part-structural-violation` already owns
  * that finding.

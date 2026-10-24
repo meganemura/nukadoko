@@ -1,4 +1,4 @@
-// What this is: maps nukadoko's seven ErrorKind values to Allure 3
+// What this is: maps nukadoko's nine ErrorKind values to Allure 3
 // categories via the `nukadoko.failure` label every failed/broken result
 // already carries — Allure 3's own generate/report tooling never reads a
 // results directory's categories.json (unlike Allure 2), so without this
@@ -29,7 +29,7 @@
 // `matchedStatuses`/`messageRegex` keys in the same rule throws at
 // generate time (see `@allurereport/core-api/dist/categories.js`).
 //
-// The seven `name` values below are copied verbatim from
+// The nine `name` values below are copied verbatim from
 // `src/report/allure/categories.ts`'s own `NAME_BY_KIND`: that file is
 // the source of truth; a drift test (tests/allure-config-drift.test.ts)
 // keeps this file's copy honest against it, `historyPath` included.
@@ -59,6 +59,14 @@ export default {
     {
       name: "Compat: unsupported step shape",
       matchers: [{ labels: { "nukadoko.failure": "unsupported" } }],
+    },
+    {
+      name: "Claim broken",
+      matchers: [{ labels: { "nukadoko.failure": "claim_broken" } }],
+    },
+    {
+      name: "Claim step did not observe",
+      matchers: [{ labels: { "nukadoko.failure": "unobserved" } }],
     },
     {
       name: "Step error",

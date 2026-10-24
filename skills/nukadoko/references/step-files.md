@@ -61,14 +61,14 @@ pass one of its own schemas into a step, that schema needs to be zod 4.
 more than one line, and omit both for a step only ever reached by name.
 
 `returns` can be left out. It then defaults to an empty object, and `run`
-may return nothing. That fits a Then step whose observed values arrived
-as args through `from`, which is what `nuka scaffold --then` writes: the
-producer's step record already holds those values. A step that observes
-something itself (a page, a response, a file) returns what it observed
-(`checking-steps.md` says why), and declares `returns` for it: without
-one, a returned key fails the step as `result_invalid`, naming the key.
+may return nothing, which fits a Given that only sets something up. A
+Then has no `run` at all: it declares `claims`, and an `observe` when
+no earlier step returned the value (`checking-steps.md`). A Given or When
+that observes something (a page, a response, a file) returns what it
+observed, and declares `returns` for it: without one, a returned key
+fails the step as `result_invalid`, naming the key.
 
-`run`'s first argument has to be written as an object destructuring
+`run`'s first argument, and `observe`'s, has to be written as an object destructuring
 pattern, every time, because nukadoko reads which fixtures to build from
 that pattern's source text without ever calling `run`. A step needing no
 fixtures at all writes `run({}, args)`, and one needing neither writes

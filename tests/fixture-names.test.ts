@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { discoverSteps } from "../src/discover/discover-steps.js";
+import { fixtureSourceOf } from "../src/step/define-step.js";
 import {
   FixtureDefaultValueError,
   FixtureNotDestructuredError,
@@ -86,6 +87,6 @@ describe("fixtureParameterNames: discovery-loaded regression", () => {
     // Guards against the loader's transform silently changing
     // fn.toString()'s own shape out from under src/step/fixture-names.ts —
     // this is the one place that dependency is actually exercised.
-    expect(fixtureParameterNames(entry.step.run)).toEqual(["page", "env"]);
+    expect(fixtureParameterNames(fixtureSourceOf(entry.step))).toEqual(["page", "env"]);
   });
 });

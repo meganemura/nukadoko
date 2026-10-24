@@ -129,8 +129,7 @@ describe("config.parameterTypes: from-dir folds the with/without location-clause
     const records = lines.map((line) => JSON.parse(line));
     for (const record of records) {
       expect(record.status).toBe("passed");
-      expect(record.steps).toHaveLength(1);
-      expect(record.steps[0].status).toBe("passed");
+      expect(record.steps.map((step: { status: string }) => step.status)).toEqual(["passed", "passed"]);
     }
 
     const withoutClause = records.find((r) => r.scenario === "list items with no location clause");

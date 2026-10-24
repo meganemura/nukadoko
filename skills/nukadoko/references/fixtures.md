@@ -177,10 +177,11 @@ e2e: async ({ e2eHost }, use) => {
 
 A step reads `e2e.fixtures.app`, `screen`, and `agent`. Then:
 
-- **Then claims through `screen` and `expect`**, never `agent.assert`: a
-  model's judgment is not a value the scenario stated (S1). `agent.act`
-  can be a Given or a When; declare `mutates` for what it submits.
-- **Fold the error into one line.** e2e's first line names only the
+- **A Then claims what `screen` reads**, never `agent.assert`: its
+  `observe` returns the text or count, and a claim compares it; a model's
+  judgment is not a value the scenario stated (S1). `agent.act` can be a
+  Given or a When; declare `mutates` for what it submits.
+- **Fold the error into one line.** In a Given or a When, e2e's first line names only the
   matcher (`expect.toHaveText failed`) and `nuka run` prints the first
   line (S11). Catch, and rethrow
   `message.replaceAll("\n", "; ")` with the error as `cause`.

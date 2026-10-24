@@ -1,5 +1,4 @@
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import runTally from "./run-tally.ts";
 
 export default defineStep({
@@ -12,9 +11,5 @@ export default defineStep({
   from: {
     stderr: [runTally, "stderr"],
   },
-  mutates: false,
-  run({}, { text, stderr }) {
-    const actual = stderr.split("\n")[0] ?? "";
-    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);
-  },
+  claims: [{ actual: "stderr", view: "lines", at: "0", compare: "equal", expected: "text" }],
 });

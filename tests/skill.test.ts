@@ -259,7 +259,7 @@ describe("scenario-rules.md rule shape", () => {
       "## S1. one",
       "",
       "Bad: x",
-      "Checked by: `then-mutates` and `then-reads-nothing`.",
+      "Checked by: `then-without-claims` and `then-reads-nothing`.",
       "",
       "## S3. two",
       "",

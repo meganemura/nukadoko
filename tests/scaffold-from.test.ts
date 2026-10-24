@@ -112,7 +112,7 @@ describe("nuka scaffold --from", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes the import, the args field from the producer's schema, the from entry, and the key in run", async () => {
+  it("writes the import, the args field from the producer's schema, the from entry, and the key in a claim", async () => {
     const result = await cli(rootDir, [
       "scaffold",
       "output-says",
@@ -128,7 +128,6 @@ describe("nuka scaffold --from", () => {
     expect(await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
-        'import assert from "node:assert/strict";',
         'import runGreet from "./run-greet.ts";',
         "",
         "export default defineStep({",
@@ -142,12 +141,8 @@ describe("nuka scaffold --from", () => {
         "  from: {",
         '    stdout: [runGreet, "stdout"],',
         "  },",
-        "  mutates: false,",
-        "  run({}, { text, stdout }) {",
-        "    // The program ends its output with a newline that the feature line does not show.",
-        '    const actual = stdout.replace(/\\r?\\n$/, "");',
-        "    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);",
-        "  },",
+        "  // The program ends its output with a newline that the feature line does not show.",
+        '  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: "text" }],',
         "});",
         "",
       ].join("\n"),
@@ -173,11 +168,8 @@ describe("nuka scaffold --from", () => {
         "  from: {",
         '    stdout: [runGreet, "stdout"],',
         "  },",
-        "  mutates: false,",
-        "  run({}, { docstring, stdout }) {",
-        "    // The program ends its output with a newline that the feature line does not show.",
-        '    const actual = stdout.replace(/\\r?\\n$/, "");',
-        "    assert.equal(actual, docstring, `docstring: expected ${JSON.stringify(docstring)}, got ${JSON.stringify(actual)}`);",
+        "  // The program ends its output with a newline that the feature line does not show.",
+        '  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: "docstring" }],',
       ].join("\n"),
     );
     expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
@@ -218,10 +210,13 @@ describe("nuka scaffold --from", () => {
         '    cwd: [makeDir, "cwd"],',
         '    exitCode: [runGreet, "exitCode"],',
         "  },",
-        "  mutates: false,",
-        "  run({}, { stdout, cwd, exitCode }) {",
+        "  // TODO: state the value this line checks in the pattern, as a capture, and name it in expected.",
+        "  // TODO: read the value this line checks and return it as { actual }, or take it",
+        "  // from an earlier step's returns through `from` and remove observe.",
+        "  observe({}, { stdout, cwd, exitCode }) {",
         "    throw new Error(`not implemented: greet-wrote; args ${JSON.stringify({ stdout, cwd, exitCode })}`);",
         "  },",
+        '  claims: [{ actual: "actual", compare: "equal", expected: { observe: "expected" } }],',
         "});",
         "",
       ].join("\n"),
@@ -246,7 +241,6 @@ describe("nuka scaffold --from", () => {
     expect(await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
-        'import assert from "node:assert/strict";',
         'import runGreet from "./run-greet.ts";',
         'import runShout from "./run-shout.ts";',
         "",
@@ -261,12 +255,8 @@ describe("nuka scaffold --from", () => {
         "  from: {",
         '    stdout: [[runGreet, "stdout"], [runShout, "stdout"]],',
         "  },",
-        "  mutates: false,",
-        "  run({}, { text, stdout }) {",
-        "    // The program ends its output with a newline that the feature line does not show.",
-        '    const actual = stdout.replace(/\\r?\\n$/, "");',
-        "    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);",
-        "  },",
+        "  // The program ends its output with a newline that the feature line does not show.",
+        '  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: "text" }],',
         "});",
         "",
       ].join("\n"),
@@ -416,8 +406,8 @@ describe("nuka scaffold --from in a project whose tsconfig.json accepts no .ts i
     const written = await readFile(path.join(rootDir, "features", "steps", "output-says.ts"), "utf8");
     expect(written.split("\n").slice(0, 3)).toEqual([
       'import { defineStep, z } from "nukadoko";',
-      'import assert from "node:assert/strict";',
       'import runGreet from "./run-greet.js";',
+      "",
     ]);
     const check = await cli(rootDir, ["check"]);
     expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");

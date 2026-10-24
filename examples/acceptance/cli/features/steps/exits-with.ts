@@ -1,5 +1,4 @@
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import runTally from "./run-tally.ts";
 
 export default defineStep({
@@ -13,9 +12,5 @@ export default defineStep({
   from: {
     exitCode: [runTally, "exitCode"],
   },
-  mutates: false,
-  run({}, { code, exitCode }) {
-    const actual = exitCode;
-    assert.equal(actual, code, `code: expected ${JSON.stringify(code)}, got ${JSON.stringify(actual, (_key, value) => (typeof value === "bigint" ? String(value) : value))}`);
-  },
+  claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
 });

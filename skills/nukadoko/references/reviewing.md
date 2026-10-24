@@ -90,8 +90,8 @@ says. Expect one of four answers, each citing the field it rests on:
 
 - **matches**: the record shows the sentence happening, and nothing else.
 - **does less**: part of the sentence has no trace in the record (a Then
-  that reads a value but asserts nothing about it, a When whose process
-  exited before it did the work).
+  whose claims read something other than what the sentence names, a When
+  whose process exited before it did the work).
 - **does more**: the record shows work the sentence does not name (a
   write under a `mutates: false` declaration, a file the sentence never
   mentions, a request to another endpoint).
@@ -101,13 +101,13 @@ says. Expect one of four answers, each citing the field it rests on:
 
 Without a subagent, judge it yourself from the record alone and say so.
 
-A Then that reads a file or a process output and asserts on it often
-comes back as cannot tell when the step only read a file: the record
-keeps what a process printed and the files it changed, and nothing of a
-file the step read itself. That is a gap in the evidence, not a wrong
-step. Have the step
-attach what it asserted on with `evidence.attach` (`evidence.md`), run
-again, and the next walk can show it.
+A claim's `measured` names the channel in the record that holds the raw
+value it compared. A Then whose `observe` reads a file and claims on it
+often comes back as cannot tell, with `measured: null`: the record keeps
+what a process printed and the files it changed, and nothing of a file
+the step read itself. That is a gap in the evidence, not a wrong step.
+Have `observe` attach what it read with `evidence.attach`
+(`evidence.md`), run again, and the next walk can show it.
 
 ## 4. Show one step, then wait
 

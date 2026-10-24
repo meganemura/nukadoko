@@ -57,8 +57,8 @@ import { shellWord } from "../shell/shell-word.js";
 // the lesson itself: `returns` carries the values a failure is diagnosed
 // from, not only what later steps cite, and an absence (`false`, `0`) needs
 // proof the read was valid beside it (docs/spec.md "Typed steps" has the
-// reasoning). `run` (outside `--command` and a one-capture `--then`) throws
-// `not implemented: <name>`, so the step is discoverable (`nuka steps`) the moment it is scaffolded but fails every
+// reasoning). `run` (outside `--command`), and a `--then` step's `observe`,
+// throw `not implemented: <name>`, so the step is discoverable (`nuka steps`) the moment it is scaffolded but fails every
 // `nuka do`/`nuka run` call until someone replaces the body: "fails until
 // implemented" (docs/spec.md "CLI summary"), enforced by the template
 // itself rather than by a separate check.
@@ -80,20 +80,16 @@ import { shellWord } from "../shell/shell-word.js";
 // lists the registered names, and for `number`, the word a zod schema uses,
 // names `int` and `float`, the Gherkin ones.
 //
-// `--then` is for an assertion step. It writes `mutates: false`, which a
-// step bound to a Then line must declare (`then-mutates`), and no `returns`,
-// so the body can throw on a failed assertion and otherwise return nothing.
-// It is a flag rather than a default because whether a step changes state
-// is the author's declaration: nukadoko does not guess it.
-// With one capture, the expected value, the body is an assertion rather
-// than the stub: `node:assert/strict` (a CLI or API project has no
-// Playwright `expect` installed) compares `actual` against it, with a
-// message that names both, because a failed step keeps no `result` and
-// its message is where the observed value survives. `actual` is the one
-// `--from` value, or `undefined` under a TODO until someone reads it, so
-// the step still fails until it is implemented. More captures or more
-// chained values leave which one is expected to the author, so they keep
-// the stub.
+// `--then` is for a Then step, which declares claims instead of `run`
+// (docs/spec.md "Claims"): a step bound to a Then line must
+// (`then-without-claims`). It is a flag rather than a default because
+// whether a line acts or judges is the author's choice: nukadoko does not
+// guess it. With one captured value and one `--from` value, the claims are
+// whole: the chained value is the actual, the captured one the expected,
+// compared with `equal`, so the file needs no edit. With one captured value
+// and no `--from`, `observe` throws until someone writes the reading. Any
+// other shape leaves which value is expected to the author, so `observe`
+// throws and a TODO says what to state.
 //
 // `--from <step>.<key>` writes the chain to an earlier step: the import of
 // the producer's file, an args field, the `from` entry, and the key in
@@ -245,15 +241,6 @@ const VARIANTS: Readonly<Record<Variant, VariantShape>> = {
     moduleNames: new Set(["cli", "runCommand", "resolve", "process"]),
   },
 };
-
-// The assertion body reads these, so no args key may take them and no
-// import may shadow `assert`.
-const ASSERT_BODY_NAMES: readonly string[] = ["assert", "actual"];
-
-/** Whether a Then step's body asserts, rather than throwing the stub. */
-function assertsInBody(variant: Variant, captureCount: number, chainedCount: number): boolean {
-  return variant === "then" && captureCount === 1 && chainedCount <= 1;
-}
 
 /** One args field: its key and the class of the value it holds. */
 interface Field {
@@ -543,39 +530,58 @@ function stubBody(name: string, fields: readonly Field[]): string {
   return `    throw new Error(\`not implemented: ${name}; args \${JSON.stringify({ ${keys} }${replacer})}\`);`;
 }
 
-/** The expression that writes one compared value into the message. */
-function messageText(key: string, valueClass: PrimitiveClass): string {
-  if (valueClass === "bigint") return `\${${key}}`;
-  if (valueClass === "other") return `\${JSON.stringify(${key}, ${BIGINT_REPLACER})}`;
-  return `\${JSON.stringify(${key})}`;
-}
-
 /** The keys a `--command` step returns a program's text in. Neither a
  * capture nor a docstring can end with the newline a program prints last,
  * so comparing them as they are fails for every program that ends its
  * output the usual way. */
 const OUTPUT_STREAMS: ReadonlySet<string> = new Set(["stdout", "stderr"]);
 
-/** The Then body that compares the one chained value, or a TODO
- * placeholder, against the one captured value. A custom type may produce
- * an object, so its value is compared by structure. */
-function assertBody(expected: Field, chained: Field | undefined): string[] {
-  const actualClass = chained?.valueClass ?? expected.valueClass;
-  const method = expected.valueClass === "other" ? "deepEqual" : "equal";
-  const message = `${expected.key}: expected ${messageText(expected.key, expected.valueClass)}, got ${messageText("actual", actualClass)}`;
-  const actualLines =
-    chained === undefined
-      ? [
-          "    // TODO: read the value this line checks, for example from an earlier step's returns through `from`.",
-          "    const actual: unknown = undefined;",
-        ]
-      : OUTPUT_STREAMS.has(chained.key) && chained.valueClass === "string" && expected.valueClass === "string"
-        ? [
-            "    // The program ends its output with a newline that the feature line does not show.",
-            `    const actual = ${chained.key}.replace(/\\r?\\n$/, "");`,
-          ]
-        : [`    const actual = ${chained.key};`];
-  return [...actualLines, `    assert.${method}(actual, ${expected.key}, \`${message}\`);`];
+/** A Then step's claims, and its `observe` while it has none to read from
+ * (docs/spec.md "Claims"). One value the line states and at most one
+ * chained value make a whole claim: the chained value is the actual, the
+ * stated one the expected, compared with `equal`; with no chained value,
+ * `observe` throws until someone writes the reading, so the step records
+ * as unobserved instead of passing. Any other shape leaves which value is
+ * expected to the author, so `observe` throws, and with no stated value the
+ * claim compares two observe paths, under a TODO to put the value in the
+ * sentence. */
+function thenLines(name: string, stated: readonly Field[], chained: readonly Field[]): string[] {
+  const expected = stated[0];
+  if (expected !== undefined && stated.length === 1 && chained.length === 1) {
+    const actual = chained[0]!;
+    const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string" && expected.valueClass === "string";
+    return [
+      ...(text ? ["  // The program ends its output with a newline that the feature line does not show."] : []),
+      `  claims: [{ actual: ${JSON.stringify(actual.key)},${text ? ' view: "text",' : ""} compare: "equal", expected: ${JSON.stringify(expected.key)} }],`,
+    ];
+  }
+  const inputs = [...stated.slice(1), ...chained];
+  const parameter = inputs.length === 0 ? "" : `{}, { ${inputs.map((field) => field.key).join(", ")} }`;
+  // observe's key must not be an args key: a claim's actual never names a
+  // value the sentence fills, and defineStep refuses one that does.
+  const taken = new Set([...stated, ...chained].map((field) => field.key));
+  const actualKey = freeKey("actual", taken);
+  const expectedValue = expected === undefined ? `{ observe: ${JSON.stringify(freeKey("expected", new Set([...taken, actualKey])))} }` : JSON.stringify(expected.key);
+  return [
+    ...(expected === undefined
+      ? ["  // TODO: state the value this line checks in the pattern, as a capture, and name it in expected."]
+      : []),
+    `  // TODO: read the value this line checks and return it as { ${actualKey} }, or take it`,
+    "  // from an earlier step's returns through `from` and remove observe.",
+    `  observe(${parameter}) {`,
+    stubBody(name, inputs),
+    "  },",
+    `  claims: [{ actual: ${JSON.stringify(actualKey)}, compare: "equal", expected: ${expectedValue} }],`,
+  ];
+}
+
+/** `base`, or `base` with the first number that makes it a key no field
+ * has. */
+function freeKey(base: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}${n}`)) n += 1;
+  return `${base}${n}`;
 }
 
 /** Stands for the 1-based number of the line that holds it, filled in
@@ -649,7 +655,6 @@ export function stepTemplate({
       : [`  pattern: ${JSON.stringify(pattern)},`];
   const command = variant === "command";
   const sends = variant === "request" && request !== null;
-  const asserts = assertsInBody(variant, captures.length + attached.length, chained.length);
   const headerLines = command
     ? [
         'import { defineStep, runCommand, z } from "nukadoko";',
@@ -660,7 +665,6 @@ export function stepTemplate({
       ]
     : [
         'import { defineStep, z } from "nukadoko";',
-        ...(asserts ? ['import assert from "node:assert/strict";'] : []),
         ...importLines(chained),
       ];
   // The `cli` line is the last header line, so its 1-based number is the header's length.
@@ -683,7 +687,7 @@ export function stepTemplate({
         : `${DESCRIPTION_TODO_PREFIX} ${name}`);
   const outcomeLines =
     variant === "then"
-      ? ["  mutates: false,"]
+      ? thenLines(name, [...fieldsOf(captures, []), ...attached], fieldsOf([], chained))
       : variant === "command"
         ? [
             "  returns: z.object({",
@@ -733,7 +737,7 @@ export function stepTemplate({
       ]
     : [
         `  run(${argsParameter === "" ? "" : `{}, ${argsParameter}`}) {`,
-        ...(asserts ? assertBody(fields[0]!, fields[1]) : [stubBody(name, fields)]),
+        stubBody(name, fields),
       ];
   const lines = [
     ...headerLines,
@@ -745,8 +749,8 @@ export function stepTemplate({
     ...argsLines(captures, attachment, chained),
     ...fromLines(chained),
     ...outcomeLines,
-    ...runLines,
-    "  },",
+    // A Then step judges through claims and has no run.
+    ...(variant === "then" ? [] : [...runLines, "  },"]),
     "});",
     "",
   ];
@@ -1206,7 +1210,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   }
 
   if (command && then) {
-    return refuse(sinks, "Refusing to scaffold: --command and --then together; a step that runs a program changes state, and a Then step declares mutates: false", "invalid-arguments");
+    return refuse(sinks, "Refusing to scaffold: --command and --then together; a step that runs a program acts, and a Then step judges through claims", "invalid-arguments");
   }
   let request: RequestShape | null = null;
   if (options.request !== null) {
@@ -1254,13 +1258,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
       ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, "Error", "JSON"]) }
       : command && guardNames.length > 0
       ? { ...variantShape, bodyNames: new Set([...variantShape.bodyNames, ...guardNames]) }
-      : // Several --from for one key fill one field, so the count is of keys.
-        assertsInBody(variant, read.captures.length, fromKeys.size)
-        ? {
-            bodyNames: new Set([...variantShape.bodyNames, ...ASSERT_BODY_NAMES]),
-            moduleNames: new Set([...variantShape.moduleNames, "assert"]),
-          }
-        : variantShape;
+      : variantShape;
   const fromFlags = readFromFlags(from, read.captures, shape.bodyNames);
   if ("refusal" in fromFlags) {
     return refuse(sinks, `Refusing to scaffold: ${fromFlags.refusal}`, "invalid-value");

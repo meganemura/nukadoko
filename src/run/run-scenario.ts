@@ -29,7 +29,6 @@ import {
   setActiveDeclaredCollector,
   type DeclaredCollector,
 } from "../compat/declared.js";
-import { CompatTimeoutError, isWorldWriteValidationError } from "../compat/errors.js";
 import type { HookParameter, HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
@@ -44,7 +43,6 @@ import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import {
   createFixtureCache,
-  resolveFixtures,
   teardownFixtureCache,
   type CachedFixture,
   type FixtureCache,
@@ -54,17 +52,20 @@ import {
 
 export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
+import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import type { ArgOrigin, ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
+import { readStepRecord } from "../record/read-step-record.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
-import { parseStepReturns } from "../step/parse-returns.js";
-import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
-import { argOrigins } from "./arg-origins.js";
+import { argOrigins, claimSourceLabel } from "./arg-origins.js";
+import { runValidatedStep, type ClaimExecution } from "./execute-typed-step.js";
+import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
+import { gherkinStepLines, pickleStepLines } from "./run-document.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
@@ -601,27 +602,6 @@ function fromInjectionHint(
 // a typed step's `run(fixtures, args)` has a fixed arity and a zod-validated
 // return, so none of these three checks apply to one). ---
 
-/** This function's own failure message: names which timeout fired (a step's own
- * `{ timeout }` vs a hook's), on what, and the configured value. Not
- * exported — only `runWithTimeout` below builds one, and that function
- * itself is what cli/run.ts's own BeforeAll/AfterAll reuses (see this
- * file's own header). */
-function timeoutMessage(kind: "Step" | "Hook", name: string, timeoutMs: number, source: TimeoutSource = "registered"): string {
-  const where =
-    source === "registered"
-      ? "its own registered timeout"
-      : source === "step"
-        ? "the step's own timeout"
-        : "stepTimeout in nukadoko.config.ts; raise it, or give this step its own timeout";
-  return `${kind} "${name}" timed out after ${timeoutMs}ms (${where})`;
-}
-
-/** Which knob produced the limit that fired, so the message can name the
- * one to turn. `"registered"` is the compat path's own wording, unchanged:
- * there the limit came from the glue's `{ timeout }` or `setDefaultTimeout`,
- * neither of which nukadoko owns. */
-type TimeoutSource = "registered" | "step" | "config";
-
 /** cucumber-js interprets the string returns `"pending"`/`"skipped"`
  * as their own outcomes; nukadoko's step/scenario record schema has no such status
  * (implementing it for real is out of scope here), so
@@ -642,91 +622,9 @@ export function pendingOrSkippedMessage(kind: "Step" | "Hook", name: string, val
 // arity rule, which `nuka check` reports under the same words.
 export { doneCallbackMessage };
 
-/**
- * Races `run()` against `timeoutMs` (when given) and returns whichever
- * settles first. Honest limit, spelled out here because it is easy to miss:
- * JavaScript cannot cancel an in-flight
- * Promise — a timed-out call's own body keeps executing to completion in
- * the background no matter what this function returns. All this actually
- * guarantees is that the step/hook that started it is recorded as failed
- * and `runScenario` moves on to whatever comes next; it does not stop the
- * timed-out work itself.
- *
- * `run()`'s own promise is given a no-op `.catch` up front regardless of
- * which side of the race wins: if it eventually rejects *after* losing to
- * the timeout, that rejection would otherwise be "unhandled" from Node's
- * point of view (Node terminates the whole process for an unhandled
- * rejection by default since Node 15) — precisely the kind of hard crash a
- * per-step timeout must never cause.
- *
- * The timer itself is always cleared, on every path, so a step/hook that
- * finishes in time never leaks a pending Node timer.
- *
- * Exported so cli/run.ts's own
- * BeforeAll/AfterAll execution races against the exact same logic a
- * scenario's own compat step/hook already does, rather than a second,
- * potentially-drifting copy of it — a run-scope hook is still "a compat
- * hook with a `{ timeout }`" as far as this function is concerned, it is
- * only *where* it runs (once per `nuka run`, not once per pickle) that
- * differs, and that difference lives entirely in the caller.
- *
- * A negative `timeoutMs` on the compat source (`"registered"`, the default
- * every compat step and hook passes) means no timeout. cucumber-js arms a
- * timer only when the value is zero or greater, and `setDefaultTimeout(-1)`
- * plus a step or hook `{ timeout: -1 }` are how a suite turns the limit
- * off. Typed steps pass `"step"` or `"config"` and have no such idiom, so
- * a negative number there is still a limit. Zero still arms a timer on
- * every source: cucumber-js times out at zero too.
- */
-export async function runWithTimeout<T>(
-  run: () => Promise<T>,
-  timeoutMs: number | undefined,
-  kind: "Step" | "Hook",
-  name: string,
-  source: TimeoutSource = "registered",
-): Promise<T> {
-  const limit =
-    source === "registered" && timeoutMs !== undefined && timeoutMs < 0 ? undefined : timeoutMs;
-  if (limit === undefined) {
-    return run();
-  }
-  const inFlight = run();
-  inFlight.catch(() => {});
-  let timer: ReturnType<typeof setTimeout>;
-  const timedOut = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () => reject(new CompatTimeoutError(timeoutMessage(kind, name, limit, source))),
-      limit,
-    );
-  });
-  try {
-    return await Promise.race([inFlight, timedOut]);
-  } finally {
-    clearTimeout(timer!);
-  }
-}
-
-
-/** Classifies a compat step's/hook's own thrown value into the closed
- * `error.kind` enum — identified by type, never by matching the thrown
- * value's own message text. Only
- * `CompatTimeoutError` (`runWithTimeout`, above, always constructed by this
- * very module) and a `WorldWriteValidationError` (a declared World key's
- * write, src/compat/world-instrumentation.ts — checked via
- * `isWorldWriteValidationError`'s own brand, not `instanceof`, since that
- * error is reached through discovery's own namespaced import and
- * `instanceof` would silently miss it there; see that function's own header)
- * are identifiable this way; anything else — including a non-`Error` thrown
- * value — falls back to `"step_error"`, the default whenever classification
- * is uncertain. A typed step's own catch site calls through here too: it
- * cannot produce a `WorldWriteValidationError` (no `this`), but it does run
- * under `runWithTimeout` now, so a `CompatTimeoutError` reaches it and has
- * to classify as `"timeout"` rather than as the step's own throw. */
-export function classifyCaughtError(error: unknown): ErrorKind {
-  if (error instanceof CompatTimeoutError) return "timeout";
-  if (isWorldWriteValidationError(error)) return "world_invalid";
-  return "step_error";
-}
+// The deadline and the error classification live in step-deadline.ts, so
+// the typed-step executor shares them without importing this module.
+export { classifyCaughtError, runWithTimeout };
 
 /** Builds this hook invocation's own `HookParameter`. `result` is included
  * only when `resultStatus` is set: cucumber-js never sets it for Before,
@@ -814,6 +712,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // (this file's own header, just above) — built once per pickle, the same
   // "cheap, rebuilt per call" convention `stepNameOf` below already follows.
   const stepKeywords = collectGherkinStepKeywords(gherkinDocument);
+  // The feature line of each step record this pickle wrote, so a claim that
+  // reads a `from` value names the line that produced it
+  // (`from:<step>@<line>.<key>`).
+  const lineOfStep = pickleStepLines(pickle, gherkinStepLines(gherkinDocument));
+  const recordLines = new Map<string, number>();
 
   const startedAt = new Date();
 
@@ -1057,6 +960,35 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
 
   /**
+   * A claim step's record fields (docs/spec.md "Claims"): each claim with
+   * the channel its raw actual value was measured on, read from this
+   * step's own channels for a value `observe` returned, or from the record
+   * of the step that returned a `from` value.
+   */
+  function claimRecordFields(
+    execution: ClaimExecution,
+    begun: { readonly recordId: string; readonly recordDir: string },
+    observed: StepRecord["observed"],
+    httpLogExists: boolean,
+    argsOrigin: Record<string, ArgOrigin> | undefined,
+  ): Pick<StepRecord, "claims" | "observation" | "attempts"> {
+    const claims = withMeasured(execution.judged, {
+      ownRecordId: begun.recordId,
+      ownChannels: recordedChannels({ observed, dir: begun.recordDir, ...(httpLogExists ? { http: "http.jsonl" } : {}) }),
+      fromRecordOf: (key) => {
+        const origin = argsOrigin?.[key];
+        return typeof origin === "object" ? origin.from.step_record_id : null;
+      },
+      channelsOf: (id) => {
+        const record = readStepRecord(path.join(rootDir, stepRecordRelativeDir(config.stateDir, runId, id)));
+        return record === null ? [] : channelsOfStepRecord(rootDir, record);
+      },
+      secrets,
+    });
+    return { claims, observation: execution.observation, attempts: execution.attempts };
+  }
+
+  /**
    * Shared by the typed and compat branches below: records this
    * step in `chain` when `chainKey` is given and the final status is `"passed"`
    * (typed only — `undefined` for a compat step, since
@@ -1105,6 +1037,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // `[]` for a compat step, which has no
     // fixture bag at all.
     fixtureUsage: FixtureUsageEntry[],
+    // What a claim step read and judged; `undefined` for any other step,
+    // and for a claim step that failed before it ran (binding or args).
+    claimExecution: ClaimExecution | undefined = undefined,
   ): Promise<number> {
     const status = initialStatus;
     const errorMessage = initialErrorMessage;
@@ -1205,6 +1140,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
     const stepFinishedAt = new Date();
     const httpLogExists = existsSync(path.join(begun.recordDir, "http.jsonl"));
+    const claimFields = claimExecution === undefined ? {} : claimRecordFields(claimExecution, begun, observed, httpLogExists, argsOrigin);
 
     const stepRecord: StepRecord =
       status === "passed"
@@ -1252,6 +1188,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
+            ...claimFields,
           }
         : {
             schema_version: SCHEMA_VERSIONS.step_record,
@@ -1304,6 +1241,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             ...(traceEvidence.actions !== undefined ? { actions: traceEvidence.actions } : {}),
             ...(truncated !== undefined ? { truncated } : {}),
             ...(fixtureUsage.length > 0 ? { fixtures: fixtureUsage } : {}),
+            ...claimFields,
           };
 
     // Redacted once, as one object, same as `nuka do`: record.json must
@@ -1854,6 +1792,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           rawArgs: undefined,
           originOf: undefined,
         };
+        const producedAt = lineOfStep(stepIndex);
+        if (producedAt !== null) recordLines.set(recordId, producedAt);
 
         const bindResult = bindStepArgs(
           outcome.stepName,
@@ -1883,6 +1823,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
         let thrown: unknown;
+        let claimExecution: ClaimExecution | undefined;
         const rawArgs: unknown = bindResult.ok ? bindResult.value : bindResult.partialValue;
         began.rawArgs = rawArgs;
         // Defaults to the same raw/merged value as `began.rawArgs`;
@@ -1921,76 +1862,36 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             errorKind = "args_invalid";
           } else {
             recordedArgs = argsResult.data;
-            try {
-              // Bag construction sits inside this same try (this also
-              // resolves `config.fixtures`
-              // entries, not just builtins) — a step whose `run` destructures `page` opens the
-              // browser (and this step's own trace chunk, already pending
-              // from `beginStep` above) right here, not before args
-              // validated and not lazily from inside the step's own body
-              // any more; a launch failure, a fixture setup failure, or a
-              // fixture use()-contract violation are all a step failure
-              // ("step_error") this same way, the same outcome a step's own
-              // `ctx.page()` throwing used to produce when that call lived
-              // inside `run()`. `stepFixtureNames` (src/step/step-fixture-
-              // names.ts) is `fixtureParameterNames` closed transitively
-              // over `entry.step.parts` (docs/spec.md "Parts") — a part
-              // that reaches for `page` gets the browser open here too,
-              // before `run()` starts, the same declared-before-either-
-              // function-runs timing a step's own destructuring already
-              // has. Memoized and already validated by `nuka run`'s own
-              // setup phase (cli/run.ts), so it is not expected to throw
-              // here.
-              const resolved = await resolveFixtures({
-                names: stepFixtureNames(entry.step),
-                graph: fixtureGraph,
-                ctx: contextHandle.ctx,
-                scenarioCache: fixtureScenarioCache,
-                processCache: fixtureProcessCache,
-                defaultTimeoutMs: config.fixtureTimeout,
-              });
-              fixtureUsage = resolved.usage;
-              const fixtures = resolved.fixtures;
-              // Opens this step's own root call frame and hands `ctx.call`
-              // the exact bag any part it calls (direct or nested) subsets
-              // from (docs/spec.md "Parts") — must run before `entry.step.
-              // run` so `ctx.call` is ready the moment the step's own body
-              // could reach for it.
-              contextHandle.beginStepRun(entry.step, fixtures);
-              // `Promise.resolve(...)`: `Step.run`'s own return type
-              // (`Promise<z.infer<TReturns>> | z.infer<TReturns>`, define-
-              // step.ts) allows a step to return its value synchronously,
-              // never wrapped in a Promise of its own. `runWithTimeout`
-              // races a real `Promise<T>`, the same normalization the
-              // compat branch below needs for the same reason.
-              const runResult = await runWithTimeout(
-                () => contextHandle.recordingProcesses(() => Promise.resolve(entry.step.run(fixtures, argsResult.data))),
-                entry.step.timeout ?? config.stepTimeout,
-                "Step",
-                outcome.stepName,
-                entry.step.timeout === undefined ? "config" : "step",
-              );
-              const returnsResult = parseStepReturns(entry.step, runResult);
-              if (!returnsResult.success) {
-                status = "failed";
-                errorMessage = returnsResult.message;
-                errorKind = "result_invalid";
-              } else {
-                status = "passed";
-                result = returnsResult.data;
-              }
-            } catch (error) {
-              // Routed through `classifyCaughtError` for the one kind that
-              // can reach here: a typed step's `run` now executes under
-              // `runWithTimeout`, so the limit firing arrives as a
-              // `CompatTimeoutError` and must record as `"timeout"`, not as
-              // the step's own throw. A `WorldWriteValidationError` still
-              // cannot reach here (a typed step receives no `this`), and the
-              // classifier's own fallback covers everything else.
+            // Fixture resolution, the step's own body or its claims, and the
+            // deadline all run in execute-typed-step.ts, the one place
+            // `nuka do` runs a step through too, so a claim is judged the
+            // same way on both paths. A launch failure, a fixture setup
+            // failure, or a fixture use()-contract violation fails the step
+            // the same way the step's own throw does. `stepFixtureNames`
+            // closes the names over `parts` (docs/spec.md "Parts"), so a part
+            // that reaches for `page` gets the browser open before `run()`
+            // starts.
+            const executed = await runValidatedStep({
+              name: outcome.stepName,
+              step: entry.step,
+              args: argsResult.data,
+              handle: contextHandle,
+              fixtureGraph,
+              scenarioCache: fixtureScenarioCache,
+              processCache: fixtureProcessCache,
+              config,
+              argLabel: (key) => claimSourceLabel(key, originOf(key), (id) => recordLines.get(id) ?? null),
+            });
+            fixtureUsage = executed.fixtureUsage;
+            claimExecution = executed.claims;
+            if (executed.status === "passed") {
+              status = "passed";
+              result = executed.result;
+            } else {
               status = "failed";
-              errorMessage = error instanceof Error ? error.message : String(error);
-              errorKind = classifyCaughtError(error);
-              thrown = error;
+              errorMessage = executed.error.message;
+              errorKind = executed.error.kind;
+              thrown = executed.thrown;
             }
           }
         }
@@ -2009,6 +1910,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           entry.step,
           entry.step.mutates,
           fixtureUsage,
+          claimExecution,
         );
         await runAfterStepHooks(stepIndex, {
           pickleStep,

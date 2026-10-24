@@ -5,4 +5,4 @@ Feature: scratch directories
 
   Scenario: a scenario that fails
     Given a copy of "seed" is made
-    Then the step fails
+    When the step fails

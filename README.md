@@ -147,17 +147,16 @@ npx nuka scaffold output-says --pattern "the output says {text:string}" --then -
 features/steps/output-says.ts
 ```
 
-The body it writes is already an assertion: `actual` is the `stdout` the
-When step returned, and `node:assert/strict` compares it with the `text`
-the feature line supplies, with a message that names both values. greet
-ends its line with a newline that the feature line does not show, so the
-body drops that one newline before it compares, and the file needs no
-edit:
+A Then step has no body to write. It declares a claim, and nukadoko does
+the comparing: the actual value is the `stdout` the When step returned,
+the expected value is the `text` the feature line states, and the record
+keeps both, with where each came from. greet ends its line with a newline
+that the feature line does not show, so the claim reads `stdout` through
+`view: "text"`, which trims the end, and the file needs no edit:
 
 ```ts
 // features/steps/output-says.ts
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import runGreet from "./run-greet.ts";
 
 export default defineStep({
@@ -171,12 +170,8 @@ export default defineStep({
   from: {
     stdout: [runGreet, "stdout"],
   },
-  mutates: false,
-  run({}, { text, stdout }) {
-    // The program ends its output with a newline that the feature line does not show.
-    const actual = stdout.replace(/\r?\n$/, "");
-    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);
-  },
+  // The program ends its output with a newline that the feature line does not show.
+  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: "text" }],
 });
 ```
 
@@ -215,19 +210,21 @@ for those scenarios and stops on an error, so a line no step matches never
 reaches a run. `nuka check` alone is the same check, in seconds.
 
 When a scenario fails, stderr names the step, its error, its step record,
-and the command that reruns it. Here the feature expects `"Hi, Ada!"`:
+and the command that reruns it. Here the feature expects `"Hi, Ada!"`,
+and the broken claim names both values and where each came from: the
+`stdout` of the step on line 5, and the `text` the sentence states:
 
 ```text
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  failed  0.0s  the output says "Hi, Ada!"
-      text: expected "Hi, Ada!", got "Hello, Ada!"
-      record  .nukadoko/runs/run-20261016-123950-zrhr/steps/step-20261016-123950-kjs1
-steps     .nukadoko/runs/run-20261016-123950-zrhr/steps/  2
-summary   .nukadoko/runs/run-20261016-123950-zrhr/summary.md
-run       .nukadoko/runs/run-20261016-123950-zrhr/run.json
-1 scenario: 0 passed, 1 failed  (1s)
-failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
+      claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
+      record  .nukadoko/runs/run-20261024-094618-elk5/steps/step-20261024-094618-bwp3
+steps     .nukadoko/runs/run-20261024-094618-elk5/steps/  2
+summary   .nukadoko/runs/run-20261024-094618-elk5/summary.md
+run       .nukadoko/runs/run-20261024-094618-elk5/run.json
+1 scenario: 0 passed, 1 failed  (0s)
+failed	scenario-failed	features/greet.feature:4	greets by name: claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
   do: nuka run features/greet.feature:4
 ```
 
@@ -238,18 +235,26 @@ lands on the job's summary page by itself. Its first part:
 <!-- nukadoko:run -->
 # nukadoko run failed: 1 scenario, 0 passed, 1 failed
 
-- commit: `507dc66`
+- commit: `d94f697`
 - environment: default
 - browser: none launched
-- nukadoko: 0.15.0
-- run: run-20261016-123950-zrhr
-- started 2026-10-16T12:39:48.835Z, finished 2026-10-16T12:39:50.265Z (1s)
+- selection: full
+- nukadoko: 0.21.0
+- run: run-20261024-094618-elk5
+- started 2026-10-24T09:46:18.258Z, finished 2026-10-24T09:46:18.693Z (0s)
 
 ## features/greet.feature
 
 | scenario | line | default | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `steps/step-20261016-123950-kjs1` |
+| greets by name | 4 | failed | 0.2s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-094618-bwp3` |
+
+## Claims
+
+Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, and whether it held.
+
+- `features/greet.feature:6` the output says "Hi, Ada!"
+  - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken
 ```
 
 In CI it is one more line beside the unit tests
@@ -389,7 +394,8 @@ export default defineStep({
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way
 `output-says` came from `run-greet`. The message carries no newline, so
-its assertion runs as scaffolded, with no edit. The feature:
+its claim needs no `view` and runs as scaffolded, with no edit. The
+feature:
 
 ```gherkin
 # features/greet.feature
@@ -487,7 +493,8 @@ features/steps/the-exit-code-is.ts
 
 The pattern is the line as cucumber-expressions reads it: a quoted value
 becomes `{value:string}`, an integer `{value:int}`, a decimal
-`{value:float}`, and a Then line gets `mutates: false`. A docstring below
+`{value:float}`, and a Then line gets a claim step whose `observe` is a
+TODO. A docstring below
 the line becomes a `docstring: z.string()` key, and a table a `table` key
 of rows. Rename `value` in the pattern and in `args` together. When a line reads more than one way
 (a registered type and a built-in both fit), or its reading would also
@@ -581,8 +588,10 @@ to an execution that either happened or did not. That mapping must be rigid
 enough to prevent it from quietly agreeing with whatever was built.
 
 That is what this is. Every step is a typed contract (schemas validated at
-the boundary, dependencies declared and checked before anything runs), and
-every execution leaves a record the tool wrote rather than the agent. The
+the boundary, dependencies declared and checked before anything runs),
+every `Then` declares what it compares and where its expected value comes
+from, and every execution leaves a record the tool wrote rather than the
+agent. The
 natural-language side stays soft, because that is where people think. The
 mapping underneath it is deliberately rigid, because that is the only part
 that can carry a guarantee.
@@ -826,10 +835,11 @@ they are most familiar, not because it is the only layer that has them.
 | `this.foo`: an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name: a dependency that shows up as an import in the diff, a read that lands on the receiving step's step record, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
 | A report that only says `passed` | Every execution writes a step record: validated result, the HTTP calls with their bodies, the processes, and the files the tool itself recorded, what it saw but could not measure, evidence, environment, target version |
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
-| A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the step record for review |
+| A `Then` that judges in code, or quietly acts | A typed `Then` declares claims instead of code: which value it reads, how it compares it, and where the expected value comes from, which is the sentence unless the step says otherwise. nukadoko compares, and the record and the run summary name both values. `nuka check` refuses a `Then` bound to a step that runs, and a claim step bound in `Given` or `When` (see [Claims](docs/spec.md#claims)) |
+| A step that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment; what actually ran is still recorded on the step record for review |
 
 The last row requires precision because the tool once failed on a count
-instead of the promise. That behavior made a claim the measurement could
+instead of the promise. That behavior stated what the measurement could
 not support. The count used the HTTP method as a proxy for a write. This
 proxy fails for GraphQL, RPC-over-POST, and vendor query APIs that perform
 a pure read over POST. A truthful `mutates: false` step that calls one of
@@ -856,7 +866,10 @@ Under each step sits a timeline of what happened inside it, built from
 absolute timestamps: the stages it reached, every wait with its real
 duration and how many attempts it took, and every Playwright call it made
 including the assertions. One attempt and forty attempts ask for opposite
-fixes, and nothing else in a report tells them apart. Counts of what the
+fixes, and nothing else in a report tells them apart. Each claim of a
+`Then` follows the timeline as a child step of its own, named by its claim
+line and passed or failed, with both values and where each came from as
+parameters. Counts of what the
 page itself said (console errors, uncaught errors, failed requests) sit
 beside the step, so a step that passed while the page threw three
 uncaught errors says so without anyone opening an attachment. The trace
@@ -912,7 +925,7 @@ report artifact and opens `index.html` locally. Serve the report with
 `nuka init --allure` writes `allurerc.mjs` at the project root (skipped, with a
 message, if a project already has one under any name Allure auto-detects);
 without it, every nukadoko failure lands in Allure 3's one built-in
-"Product errors" category instead of one of the seven `error.kind` ones. A
+"Product errors" category instead of one of the nine `error.kind` ones. A
 project not using `init` can copy
 [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs)
 by hand.
@@ -965,8 +978,9 @@ an agent workflow (the bundled skills, below), not engine magic. See
 
 This loop does **not** catch another way a suite can become hollow. A
 scenario can remain intact while its `Then` becomes weaker. A step record
-shows what the execution did, but it cannot show whether an assertion still
-has meaning. Review must catch that problem, as
+shows what the execution did, and a claim shows what a `Then` compared,
+but neither can show whether that comparison still means what the
+criterion says. Review must catch that problem, as
 [What this does not do](#what-this-does-not-do) explains.
 
 ## Skills for coding agents
@@ -1117,8 +1131,9 @@ for this project's end-to-end / acceptance tests.
    steps, promoting the hottest existing step to a typed one).
 4. Risks and costs: an estimate of vocabulary size (how many distinct
    typed steps this suite would need), how much of the existing `Then`
-   usage is hygienic (assertion only, nothing chained that mutates) versus
-   not, whether the suite is CommonJS, and where secrets currently live
+   usage only reads and compares (a typed `Then` declares claims, and its
+   sentence states the expected value) versus acts or keeps the expected
+   value in code, whether the suite is CommonJS, and where secrets currently live
    relative to where nukadoko expects them.
 5. Verdict: adopt / trial / not-yet, with the reasoning.
 
@@ -1162,7 +1177,8 @@ one JSON line per scenario as it finishes, and `nuka run --json` prints
 run's fields beside `findings`: the commit and whether the tree was dirty,
 each environment it ran in, whether a `:line` target made the run
 `partial`, the counts, one verdict per scenario and environment, and each
-scenario's steps with their line, status, step record,
+scenario's steps with their line, status, step record, a claim step's
+claims,
 and, for a failure, its error, the results it read, and the command that
 reruns it. Under `--json` stderr is empty, and a warning is a finding in
 the document, so the document is the only thing an agent's shell shows.
@@ -1173,16 +1189,16 @@ A failed step prints the first line of its error and the path of its step
 record under its progress line, so a CI log says why it failed. When the
 failed step read from a step whose program exited nonzero, a `used` line
 between the two names that step, its exit code, and the first line of its
-stderr: a Then step that got an empty stdout usually failed there. After the
+stderr: a Then that claimed against an empty stdout usually broke there. After the
 summary, each failed scenario is a `scenario-failed` finding whose `do:`
 line runs it again.
 
 ```text
   step 2/2  failed  0.0s  the sum is 5
-      expected 5, got 4
+      claim broken: 4 (from:add@4.sum) equal 5 (sentence:expected)
       record  .nukadoko/runs/<run_id>/steps/<id>
 ...
-failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
+failed	scenario-failed	features/sum.feature:3	two and two: claim broken: 4 (from:add@4.sum) equal 5 (sentence:expected)
   do: nuka run features/sum.feature:3
 ```
 
@@ -1274,11 +1290,14 @@ whatever their env files and `baseURL` say.
   nukadoko removes is the need to trust an agent's *account* of a run:
   execution and measurement stay with the tool, not with the agent
   describing them.
-- **It does not check that an assertion asserts anything.** Whether a step
-  truthfully does what its description claims rests on PR review. The tool
-  guarantees the shape of inputs and outputs and the fact of execution. A
-  typed contract makes an empty assertion easier to spot in review, but
-  nothing rejects one automatically.
+- **It does not check that a claim means what its sentence says.** A typed
+  `Then` declares its claims, so the expected value comes from the sentence
+  or is labelled, and `nuka check` refuses a claim that compares a value
+  with itself. Whether `contains-text` is strong enough for a criterion
+  that meant `equal`, or whether an `observe` reads the thing the
+  sentence names, rests on PR review. Whether any other step truthfully
+  does what its description claims rests on PR review too. The tool
+  guarantees the shape of inputs and outputs and the fact of execution.
 - **`mutates` is trusted, not re-derived from what the network shows.**
   The HTTP method is a proxy for write semantics, not the semantics
   itself: purely client-side state and a server that mutates on GET are
@@ -1345,7 +1364,8 @@ Everything under
 `.nukadoko/` and every `nuka` verb belongs to the agent or to CI. Every
 `nuka run` writes that summary as Markdown: the commit, each environment,
 the browser, one table per feature with each scenario's verdict in each
-environment, its duration, and its failing step, a closing section naming any step that declared
+environment, its duration, and its failing step, a Claims section listing
+every claim of every Then with `held` or `broken`, a closing section naming any step that declared
 `mutates: false` while measured making a write, and the command that reruns
 each failed scenario. On GitHub Actions it lands on the job's summary page
 with no configuration, and `nuka report --format markdown --out <path>`

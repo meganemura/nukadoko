@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { defineStep, type Step } from "../../nukadoko-shim.js";
+import { defineStep, type RunStep } from "../../nukadoko-shim.js";
 
-// `parts` is typed `readonly Step[]`, so producing a non-Step entry needs
+// `parts` is typed `readonly RunStep[]`, so producing a non-Step entry needs
 // the same `as` cast bad-returns-key-step.ts (check-from-structural-project
 // fixture) uses to defeat `from`'s own type-level check — the one way a
 // step author can still get this wrong at runtime.
@@ -12,7 +12,7 @@ export default defineStep({
   description: "parts names something that is not a Step, on purpose",
   args: z.object({}),
   returns: z.object({}),
-  parts: [notAStep as unknown as Step],
+  parts: [notAStep as unknown as RunStep],
   async run() {
     return {};
   },

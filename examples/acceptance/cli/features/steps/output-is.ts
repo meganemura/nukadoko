@@ -1,5 +1,4 @@
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import runTally from "./run-tally.ts";
 
 export default defineStep({
@@ -12,9 +11,6 @@ export default defineStep({
   from: {
     stdout: [runTally, "stdout"],
   },
-  mutates: false,
-  run({}, { expected, stdout }) {
-    const actual = stdout.trimEnd();
-    assert.equal(actual, expected.trimEnd(), `stdout: expected ${JSON.stringify(expected.trimEnd())}, got ${JSON.stringify(actual)}`);
-  },
+  // The program ends its output with a newline that the feature line does not show.
+  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: "expected" }],
 });

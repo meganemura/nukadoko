@@ -216,14 +216,24 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
 これは `this` がかつて答えていたのと同じ読みであり、違いはいまやバリデーション済みの result に対して行われる点だけです。
 昇格した step は、型付きの契約、バリデーション済みの `result`、`nuka do` による単体実行を得ます(そのどれも compat の step にはありません)。
 
+`Then` は、`run` を持つ step ではなく claim step に昇格させます。
+その `expect` の呼び出しは `claims` になります。
+各 claim は値を `from` か `observe` を通して読み、期待値を文から取ります。
+そのため `the command succeeds` のような文は、値を述べるように書き直します(`it exits with 0`)。
+docs/spec.ja.md の「Claims」を参照してください。
+それまでは、compat の `Then` は compat の `Then` のままです。
+compat の step は claim を宣言できず、compat の扉はその動作を何も変えません。
+`Then` は、その producer の後に昇格させます。
+その claim が producer の `returns` を読むからです。
+
 ## ダッシュボードは `nuka check`
 
 `nuka check` は、移行がどれだけ残っているかを示す走行メーターです:
 
 - `then-compat-step` は、compat の step が `Then` の位置に結び付けられていると警告します。
-  compat の step には、そこで nukadoko が信頼できる宣言済みの `mutates` がありません(docs/spec.ja.md の「キーワードの意味論」を参照)。
+  compat の step は claim を宣言できないので、nukadoko にはそこで何を判定しているのかが見えません(docs/spec.ja.md の「Claims」を参照)。
   そのためこの警告が示しているのは、その位置に静的な手掛かりが何もないという事実であり、ツールが何かを捕まえたわけではありません。
-  `defineStep` に昇格させることが、チェックできる宣言を得る方法です。
+  claim step(`claims` を持つ `defineStep`)に昇格させることが、チェックできる claim を得る方法です。
 - `step-file-import-failed` は、import が例外を投げた step ファイルにエラーを出します。
   未サポートの名前を値として使っている、CommonJS の `require`、深い subpath の import(上の「切り替えで引き継がれないもの」の最初の 3 つの gap です)のいずれかで、Node 自身のエラーメッセージとファイルパスを運びます。
   プロジェクトの残りはそれと並行して引き続き discovery され報告されます。

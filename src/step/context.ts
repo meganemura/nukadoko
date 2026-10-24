@@ -1,6 +1,6 @@
 import type { APIRequestContext, BrowserContext, BrowserContextOptions, Page } from "playwright";
 import type { z } from "zod";
-import type { Step } from "./define-step.js";
+import type { RunStep, Step } from "./define-step.js";
 
 // Responsibility: two related shapes, both types only — no implementation
 // (the harness that actually launches a browser
@@ -236,7 +236,7 @@ export interface StepFixtures {
    * `Step` discovery registered (this file's own header). Recorded on the
    * calling step's own step record under `calls`, nested when a part calls
    * a part of its own. */
-  readonly call: <S extends Step>(part: S, args: z.input<S["args"]>) => Promise<z.infer<S["returns"]>>;
+  readonly call: <S extends RunStep>(part: S, args: z.input<S["args"]>) => Promise<z.infer<S["returns"]>>;
   /** The application-specific evidence fixture (this file's
    * own header) — `attach(name, body)` writes `body` (`string | Uint8Array`)
    * to this execution's own evidence directory and records
@@ -392,7 +392,7 @@ export interface StepContext {
   /** The same fixture as `StepFixtures.call` above, reached the older,
    * function-based way every other member of this interface is — see that
    * member's own doc comment for the full contract. */
-  call<S extends Step>(part: S, args: z.input<S["args"]>): Promise<z.infer<S["returns"]>>;
+  call<S extends RunStep>(part: S, args: z.input<S["args"]>): Promise<z.infer<S["returns"]>>;
   /** The application-specific evidence fixture — see
    * `StepFixtures.evidence`'s own doc comment above for the full contract;
    * this is the same object, reached the older, function-based way every

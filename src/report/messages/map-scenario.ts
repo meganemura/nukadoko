@@ -148,15 +148,47 @@ function statusForHook(status: "passed" | "failed"): TestStepResultStatus {
 // construction (step-timeline.ts), but a real step record's own
 // started_at/finished_at pair is operator-authored input this module has no
 // way to fully trust.
-function buildResult(status: TestStepResultStatus, message: string | undefined, startMs: number, stopMs: number): TestStepResult {
+function buildResult(
+  status: TestStepResultStatus,
+  message: string | undefined,
+  startMs: number,
+  stopMs: number,
+  claimBroken = false,
+): TestStepResult {
   return {
     status,
     duration: TimeConversion.millisecondsToDuration(Math.max(stopMs - startMs, 0)),
     ...(message !== undefined ? { message } : {}),
-    // `exception` is never set: `Exception.
-    // type` is required and record/step record only ever carry a message, never
-    // a type string worth reporting as fact.
+    // `exception` is set for a broken claim only: `Exception.type` is
+    // required, and a broken claim is the one failure whose type is a
+    // fact nukadoko decided (docs/spec.md "Claims"). Any other failure
+    // carries a message alone.
+    ...(claimBroken && message !== undefined ? { exception: { type: CLAIM_BROKEN_EXCEPTION, message } } : {}),
   };
+}
+
+/** `Exception.type` of a step whose claim did not hold. */
+export const CLAIM_BROKEN_EXCEPTION = "nukadoko.ClaimBroken";
+
+/** The media type of the attachment that carries a claim step's claims,
+ * so a consumer can find it among the step's other attachments. */
+export const CLAIMS_MEDIA_TYPE = "application/vnd.nukadoko.claims+json";
+
+function claimsAttachment(stepRecord: StepRecord, testCaseStartedId: string, testStepId: string): MessagesAttachmentPlan[] {
+  if (stepRecord.claims === undefined) return [];
+  return [
+    {
+      kind: "built",
+      attachment: {
+        body: JSON.stringify({ claims: stepRecord.claims, observation: stepRecord.observation, attempts: stepRecord.attempts }),
+        contentEncoding: AttachmentContentEncoding.IDENTITY,
+        mediaType: CLAIMS_MEDIA_TYPE,
+        fileName: "claims.json",
+        testCaseStartedId,
+        testStepId,
+      },
+    },
+  ];
 }
 
 export interface MappedTestStep {
@@ -193,7 +225,10 @@ function mapPickleSteps(
     const testStepId = newId();
     const pickleStepId = pickleSteps[index]?.id;
     const attachments = stepRecord
-      ? declaredAttachmentPlans(stepRecord.declared, stepRecord.evidence.dir, testCaseStartedId, testStepId)
+      ? [
+          ...declaredAttachmentPlans(stepRecord.declared, stepRecord.evidence.dir, testCaseStartedId, testStepId),
+          ...claimsAttachment(stepRecord, testCaseStartedId, testStepId),
+        ]
       : [];
 
     return {
@@ -216,7 +251,13 @@ function mapPickleSteps(
         timestamp: TimeConversion.millisecondsSinceEpochToTimestamp(stopMs),
         testStepResult: unreadable[index]
           ? buildResult(TestStepResultStatus.UNKNOWN, unreadableStepMessage(step), startMs, stopMs)
-          : buildResult(statusForStep(step.status), step.error?.message, startMs, stopMs),
+          : buildResult(
+              statusForStep(step.status),
+              step.error?.message,
+              startMs,
+              stopMs,
+              stepRecord?.status === "failed" && stepRecord.error.kind === "claim_broken",
+            ),
       },
       attachments,
     };

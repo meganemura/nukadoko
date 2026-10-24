@@ -38,6 +38,112 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.21.0 から次のリリースへ
 
+- **型付きの Then は claim を宣言し、コードを実行する Then はエラーになります。**
+  `nuka check` は、Then の位置に結び付いた、実行する型付きの step を `then-without-claims` として報告し、それが報告されている間 `nuka run` は始まりません。
+  それぞれについて、`run` を `claims` に置き換え、`returns` と `mutates` を削除します。
+  `defineStep` は claim step でのそれらを拒否します。
+  step が `from` を通して読んでいた値は `from` のキーのままです。
+  step が自分で読んでいた値は `observe` に移し、`observe` は読んだものを返します。
+  そのうえで、各期待値の出所を選びます(docs/spec.ja.md の「Claims」)。
+  文が値を述べる場合:
+
+  ```ts
+  export default defineStep({
+    pattern: "it exits with {code:int}",
+    description: "The process exit code is exactly this",
+    args: z.object({ code: z.number(), exitCode: runTally.returns.shape.exitCode }),
+    from: { exitCode: [runTally, "exitCode"] },
+    mutates: false,
+    run({}, { code, exitCode }) {
+      assert.equal(exitCode, code, `exitCode: expected ${code}, got ${exitCode}`);
+    },
+  });
+  ```
+
+  ```ts
+  export default defineStep({
+    pattern: "it exits with {code:int}",
+    description: "The process exit code is exactly this",
+    args: z.object({ code: z.number(), exitCode: runTally.returns.shape.exitCode }),
+    from: { exitCode: [runTally, "exitCode"] },
+    claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
+  });
+  ```
+
+  前の step が値を返した場合は `{ from: "<from のキー>" }` です。
+
+  ```ts
+  // Before: run({ request }, { before }) { ...; expect(items.length).toBe(before); }
+  args: z.object({ before: countItems.returns.shape.count }),
+  from: { before: [countItems, "count"] },
+  async observe({ request }) {
+    const res = await request.get("/items");
+    return { count: ((await res.json()) as unknown[]).length };
+  },
+  claims: [{ actual: "count", compare: "equal", expected: { from: "before" } }],
+  ```
+
+  pattern の固定の語が値を述べる場合は `{ literal }` です。
+  pattern が述べないリテラルは import 時に拒否されます。
+  そのため、値を step のコードに持っていた文は、値を述べるように書き直します。
+
+  ```gherkin
+  # Before: Then the command succeeds
+  Then the command exits 0
+  ```
+
+  ```ts
+  // Before: pattern "the command succeeds", run: expect(exitCode).toBe(0)
+  pattern: "the command exits 0",
+  claims: [{ actual: "exitCode", compare: "equal", expected: { literal: 0 } }],
+  ```
+
+  2 つ目の読み取りの場合は `{ observe: "<path>" }` です。
+  `page`、`context`、`pageAs` に届く `observe` は `poll` を述べます(`claim-poll-unstated`)。
+
+  ```ts
+  // Before: run({ page }, ...) { ...; expect(firstAt).toBeLessThan(secondAt); }
+  async observe({ page }, { first, second }) {
+    const titles = await page.locator(".result h2").allTextContents();
+    const at = (title: string) => (titles.includes(title) ? titles.indexOf(title) : undefined);
+    return { firstAt: at(first), secondAt: at(second) };
+  },
+  poll: { timeout_ms: 5000 },
+  claims: [{ actual: "firstAt", compare: "less-than", expected: { observe: "secondAt" } }],
+  ```
+
+- **真偽値は、文が使う語か、その背後の計測値になります。**
+  `observe` が計算した値に対する真偽値のリテラルは拒否され、文が言うのは `true` ではなく `accepted` です。
+  `accepted: boolean` を返していた producer は結果を語として返し、Then は自分の文が述べる語を claim します:
+
+  ```ts
+  // Before: returns { accepted: z.boolean() }, and the Then: expect(accepted).toBe(true)
+  returns: z.object({ outcome: z.enum(["accepted", "refused"]), reason: z.string().nullable() }),
+  // The Then "the sign-in is accepted":
+  claims: [{ actual: "outcome", compare: "equal", expected: { literal: "accepted" } }],
+  ```
+
+  `{ visible: true }` を返していた `observe` は、見たもの(件数、テキスト、リスト)を返し、claim がそれを比べます。
+
+- **値を読むか記録するだけの Then は When に移すか、読むものに対する claim にします。**
+  `examples/migration` では、`Then the created todo id is read back via resultOf` が `Then the created todo is titled "Read a book"` になりました。
+  Given や When の位置に結び付いた claim step は `claims-outside-then` で、`*` の行にあるものも同じです。
+  キーワードを書いてください。
+
+- **`then-mutates` はなくなりました。**
+  `nuka check --fail-on then-mutates` はそのコードを `fail-on-unknown-code` で拒否するので、外してください。
+  エラーの `then-without-claims` は、フラグなしで check を失敗させます。
+
+- **以前に `nuka scaffold --then` が書いた Then は、実行する step です。**
+  それはいまの scaffold が書くものではないので、`--replace` はそれを拒否します。
+  上のとおり書き直すか、ファイルを削除して scaffold し直してください。
+
+- **error kind と Allure の category が 2 つずつ増えました。**
+  `error.kind` で分岐する読み手は、`claim_broken` と `unobserved` を加えます。
+  以前のリリースの `allurerc.mjs` を持つプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) から新しい 2 つの rule をコピーします。
+  それがないと、Allure 3 は両方の kind を「Product errors」に入れます。
+  Allure 2 の `categories.json` は、`nuka report --format allure` が 9 つすべてを含めて自分で書きます。
+
 - **`nuka tend` は削除され、その findings は `nuka check` が報告します。**
   `nuka tend` はいま `removed-command` で拒否します。
   `nuka tend --json` を読んでいたジョブは、プロジェクト全体に対して(feature の対象を指定せずに) `nuka check --json` を実行し、`severity` が `"note"` の findings を残します。

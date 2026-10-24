@@ -25,14 +25,19 @@ its step `record`, and the `used` results it read (a large one cut to a
 preview marked `truncated`; the producer's `record` holds it whole).
 When the failed step read from a step whose program exited nonzero, a
 `used    <step>  exit <code>  <first stderr line>` line sits between the
-two: a Then step that got an empty stdout usually failed there, because
+two: a Then that claimed against an empty stdout usually broke there, because
 the program did not start (a missing build, a missing dependency, a `.js`
 import of a `.ts` file under `node`), and the step that ran it passed.
 When that program was Node and it crashed, the line shows the `Error:`
 line, not the location Node printed above it. A program that wrote its
 refusal on stdout and nothing on stderr (as under `--json`) shows
 `stdout: ` and what it printed there.
-Open that path's `record.json` rather than
+A Then that failed with `claim_broken` prints its claim line: both
+values and where each came from. Check that the actual value's source is
+the thing the criterion means before you suspect the implementation; the
+step record's `claims` give each claim's `measured`, the channel that
+holds the raw value. `unobserved` means `observe` threw, so no claim was
+judged. Open that path's `record.json` rather than
 searching the records directory.
 
 Before repeating `nuka run <feature>`, read the failed step's own step

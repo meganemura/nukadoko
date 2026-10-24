@@ -33,6 +33,7 @@ import {
   SCENARIO_HOOK_ARG_COUNT,
 } from "./done-callback.js";
 import { findDescriptionTodos } from "./description-todo.js";
+import { findUnstatedPolls } from "./claim-check.js";
 import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
@@ -613,6 +614,7 @@ async function reportFor(
     return unboundPatternedSuffix(findUnboundPatternedEntries(vocabulary, bound), rootDir);
   });
   errors.push(...findPlaywrightMissing(featureResult.boundSteps, vocabulary, fixtureGraph, isPlaywrightInstalled));
+  errors.push(...findUnstatedPolls(featureResult.boundSteps, vocabulary, fixtureGraph));
 
   // A broken glue file's own missing steps otherwise resurface here as a
   // flood of `undefined-step` errors (empirically, a

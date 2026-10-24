@@ -1,23 +1,18 @@
 import { defineStep, z } from "nukadoko";
 
-// GET /todos, bound in Then position: read-only (mutates: false), and, unlike
-// a step that only answers a question, this one asserts. It throws when the
-// title is absent, because a Then step that always returns ok with no way to
-// fail proves nothing. Returning `found` as well keeps the record readable
-// without opening the HTTP log.
+// GET /todos, read in a Then. observe returns every title the list holds,
+// and the claim says the title the sentence names is one of them, so the
+// title to look for stays in the feature file and the judging stays with
+// nukadoko. The claim record keeps the whole list it read, so a broken
+// claim shows what the list held instead of only that the title was absent.
 export default defineStep({
   pattern: "the todo list includes {title:string}",
-  description: "Assert a todo with this title is present in GET /todos",
+  description: "A todo with this title is present in GET /todos",
   args: z.object({ title: z.string().describe("The title expected to be present") }),
-  returns: z.object({ found: z.boolean().describe("Always true when the step returns; absence throws") }),
-  mutates: false,
-  async run({ request }, args) {
+  async observe({ request }) {
     const res = await request.get("/todos");
     const todos = (await res.json()) as Array<{ title?: string }>;
-    const found = todos.some((todo) => todo.title === args.title);
-    if (!found) {
-      throw new Error(`no todo titled "${args.title}" in GET /todos`);
-    }
-    return { found };
+    return { titles: todos.map((todo) => todo.title) };
   },
+  claims: [{ actual: "titles", compare: "has-item", expected: "title" }],
 });

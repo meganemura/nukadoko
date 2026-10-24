@@ -103,7 +103,8 @@ describe("nuka check: from's scenario-order check", () => {
     const FROM_ORDER_FIX = 'Put a line that runs step "next-page-read" earlier in the scenario.';
     const { exitCode, report } = await checkReport(fixture("from-self-project"));
     expect(exitCode).toBe(1);
-    expect(report.warnings).toEqual([]);
+    // The fixture's scenarios only read pages, so they hold no Then line.
+    expect((report.warnings as { code: string }[]).filter((issue) => issue.code !== "scenario-without-then")).toEqual([]);
     const message =
       'Step "next-page-read"\'s from.cursor needs step "next-page-read" to have already run earlier in this scenario, but "next-page-read" is bound in this scenario, but only at or after this line, never before it. This line would fail args validation with certainty';
     expect(report.errors).toEqual([

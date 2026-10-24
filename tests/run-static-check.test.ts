@@ -9,9 +9,9 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 
 // Responsibility: `nuka run` performs the static check before it executes,
 // `--no-check` skips it, and `nuka run` with no target runs featuresDir.
-// run-check-project has one mutating step and one read-only step, so a
-// feature can be clean, bind a mutating step in Then position, or name no
-// step at all.
+// run-check-project has one step that runs and one claim step, so a
+// feature can be clean, bind the step that runs in Then position, or name
+// no step at all.
 
 function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
@@ -109,9 +109,9 @@ describe("nuka run checks before it executes", () => {
   });
 });
 
-// A generated scenario line is one of: a clean Given, a clean Then, a
-// mutating step in Then position (`then-mutates`), or a line no step
-// matches (`undefined-step`).
+// A generated scenario line is one of: a clean Given, a claim Then (which
+// needs a Given before it), a step that runs in Then position
+// (`then-without-claims`), or a line no step matches (`undefined-step`).
 const stepLine = gs.sampledFrom([
   'Given a thing "a" exists',
   'Then the thing "a" is there',

@@ -55,14 +55,9 @@ const consumer = (specifier: string, pattern: string) =>
     "export default defineStep({",
     `  pattern: ${JSON.stringify(pattern)},`,
     '  description: "Reads the number",',
-    "  args: z.object({ n: z.number() }),",
-    "  returns: z.object({}),",
-    "  mutates: false,",
+    "  args: z.object({ n: z.number(), expected: z.number() }),",
     '  from: { n: [makeNumber, "n"] },',
-    "  async run({}, { n }) {",
-    '    if (n !== 7) throw new Error(`got ${n}`);',
-    "    return {};",
-    "  },",
+    '  claims: [{ actual: "n", compare: "equal", expected: "expected" }],',
     "});",
     "",
   ].join("\n");
@@ -75,16 +70,16 @@ describe("a step file that imports another by its .ts name", () => {
     await writeFile(path.join(dir, "package.json"), '{ "type": "module" }\n');
     await writeFile(path.join(dir, "nukadoko.config.ts"), 'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n');
     await writeFile(path.join(dir, "features", "steps", "make-number.ts"), producer);
-    await writeFile(path.join(dir, "features", "steps", "by-ts.ts"), consumer("./make-number.ts", "the ts import reads it"));
-    await writeFile(path.join(dir, "features", "steps", "by-js.ts"), consumer("./make-number.js", "the js import reads it"));
+    await writeFile(path.join(dir, "features", "steps", "by-ts.ts"), consumer("./make-number.ts", "the ts import reads {expected:int}"));
+    await writeFile(path.join(dir, "features", "steps", "by-js.ts"), consumer("./make-number.js", "the js import reads {expected:int}"));
     await writeFile(
       path.join(dir, "features", "number.feature"),
       [
         "Feature: number",
         "  Scenario: both spellings",
         "    When I make a number",
-        "    Then the ts import reads it",
-        "    And the js import reads it",
+        "    Then the ts import reads 7",
+        "    And the js import reads 7",
         "",
       ].join("\n"),
     );

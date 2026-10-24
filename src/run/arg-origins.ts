@@ -21,3 +21,21 @@ export function argOrigins(
   if (keys.length === 0) return undefined;
   return Object.fromEntries(keys.map((key) => [key, originOf(key) ?? "schema"]));
 }
+
+/** The source a claim record names for an args key (docs/spec.md
+ * "Claims"): `sentence:<key>` for a value the line wrote (a capture, the
+ * docstring, or the table), `from:<step>@<line>.<key>` for a value an
+ * earlier step returned, with the producing line when the caller knows it
+ * and the producing record's id otherwise, and the origin's own name for a
+ * value given another way. Pure. */
+export function claimSourceLabel(
+  key: string,
+  origin: ArgOrigin | undefined,
+  lineOfRecord: (stepRecordId: string) => number | null,
+): string {
+  if (origin === undefined || origin === "schema") return `schema:${key}`;
+  if (origin === "capture" || origin === "docstring" || origin === "table") return `sentence:${key}`;
+  if (origin === "command_line") return `command_line:${key}`;
+  const line = lineOfRecord(origin.from.step_record_id);
+  return `from:${origin.from.step}@${line ?? origin.from.step_record_id}.${origin.from.key}`;
+}

@@ -2,7 +2,7 @@
 
 A finished project for a program run from the command line, built with
 nukadoko 0.16.1 and rescaffolded with the releases after it (which added
-`nuka scaffold --cwd` and then `--argv`) on Node 24.22.0. Every output block below is copied
+`nuka scaffold --cwd` and then `--argv`, and moved its Thens to claims) on Node 24.22.0. Every output block below is copied
 from a real run of that project, which is `examples/acceptance/cli/` in
 the nukadoko repository; CI runs it. The rules it follows are in
 `../scenario-rules.md`.
@@ -84,10 +84,13 @@ Feature: tally sums amounts per category
   `runCommand`. The scaffold wrote both `from` candidates, `cwd: dir`,
   and the split of `argv` on whitespace (`--argv argv`).
 - `exits-with`, `output-is`, `error-says` (Then): each reads one key of
-  `run-tally` through `from` and compares it with `node:assert/strict`.
+  `run-tally` through `from` and declares one claim on it, with no `run`.
+  `error-says` claims the first line of stderr (`view: "lines"`,
+  `at: "0"`).
 
-Every step is `mutates: false`: the Givens write only inside the
-scenario's scratch directory, and `tally` writes nothing.
+Every step that runs is `mutates: false`: the Givens write only inside the
+scenario's scratch directory, and `tally` writes nothing. A Then runs
+nothing, so it has no `mutates` to declare.
 
 `features/steps/run-tally.ts`. The scaffold wrote the imports, the `from`
 entry, `cwd: dir`, the split of `argv`, and `returns`; the descriptions
@@ -125,12 +128,11 @@ export default defineStep({
 ```
 
 `features/steps/output-is.ts`. The scaffold wrote the import, the `from`
-entry, the key for the docstring, the assertion, and `mutates: false`;
-the key's name `expected` and `trimEnd()` on both sides are by hand:
+entry, the key for the docstring, and the claim with `view: "text"` and
+its comment; the key's name `expected` and the descriptions are by hand:
 
 ```ts
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import runTally from "./run-tally.ts";
 
 export default defineStep({
@@ -143,11 +145,8 @@ export default defineStep({
   from: {
     stdout: [runTally, "stdout"],
   },
-  mutates: false,
-  run({}, { expected, stdout }) {
-    const actual = stdout.trimEnd();
-    assert.equal(actual, expected.trimEnd(), `stdout: expected ${JSON.stringify(expected.trimEnd())}, got ${JSON.stringify(actual)}`);
-  },
+  // The program ends its output with a newline that the feature line does not show.
+  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: "expected" }],
 });
 ```
 
@@ -176,7 +175,7 @@ features/steps/run-tally.ts
 ```
 
 Every `the output is` line in the feature carries a docstring, so the
-Then step got a `docstring` key beside the chained `stdout`, and its body
+Then step got a `docstring` key beside the chained `stdout`, and its claim
 compares the two:
 
 ```
@@ -185,12 +184,12 @@ features/steps/output-is.ts
 ```
 
 A red run, with `rent: 101` in the docstring for the first scenario. The
-first line of the message carries both values:
+first line of the message carries both values and where each came from:
 
 ```
   step 4/4  failed  0.0s  the output is
-      stdout: expected "food: 5.5\nrent: 101", got "food: 5.5\nrent: 100"
-      record  .nukadoko/runs/run-20261018-135515-h7mq/steps/step-20261018-135515-rux7
+      claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+      record  .nukadoko/runs/run-20261024-091044-63n9/steps/step-20261024-091044-kjjx
 ```
 
 The run that passed:
@@ -225,7 +224,7 @@ error	from-order-violation	probe/given-run.feature:4	Step "run-tally"'s from.dir
 | 2026-10-16 | How the input file reaches the program's working directory | the Given returns `dir`, the When reads it through `from` and runs there (`--cwd dir`) | each `scratch.dir()` call is a new directory, so the program has to run in the one the Given wrote to | Shapes: a program's input file |
 | 2026-10-16 | One capture per argument, or one for all | `{argv:string}`, split on whitespace (`--argv argv` since 2026-10-18) | one When step serves every flag and the missing-file path | Shapes: arguments |
 | 2026-10-16 | `mutates` on the `--command` step | `false`, with a comment | the scaffold writes the default `true`; `tally` writes nothing and runs in a scratch directory | SKILL.md "Before the first command" |
-| 2026-10-16 | Which assertion, with no Playwright installed | `node:assert/strict`, with both values in the message | `playwright/test` does not resolve in this project | S11 |
+| 2026-10-24 | How a Then compares | one claim per Then, with no `run` | the claim record carries both values and where each came from, so no message has to be written by hand | S11 |
 | 2026-10-16 | Does `--json` also claim the exit code | yes, `Then it exits with 0` | a program that crashed after printing would pass without it | S1 |
-| 2026-10-16 | Does the output compare the trailing newline | no, both sides are trimmed at the end, and the description says so | the program ends its output with a newline that the docstring does not show | none |
+| 2026-10-16 | Does the output compare the trailing newline | no: `view: "text"` trims the end of stdout, and the description says so | the program ends its output with a newline that the docstring does not show | none |
 | 2026-10-17 | Order of scaffolding | Givens first, then the When, then the Thens | `--from` refuses a producer that does not return the key yet | SKILL.md "The loop" |

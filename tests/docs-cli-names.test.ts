@@ -187,6 +187,7 @@ const RETIRED_CODES: ReadonlySet<string> = new Set([
   "signoff-record-unreadable",
   "signoff-result-invalid",
   "signoff-step-missing",
+  "then-mutates",
 ]);
 const citableCodes = new Set([...allCodes, ...RETIRED_CODES]);
 const familyOf = (code: string): string => code.split("-")[0]!;

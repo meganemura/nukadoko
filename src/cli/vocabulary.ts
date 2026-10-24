@@ -16,7 +16,8 @@ import { checkCodeFix } from "../check/codes.js";
 import { playwrightImportMissing } from "../check/playwright-check.js";
 import type { Finding } from "../finding/finding.js";
 import { buildFixtureGraph, type FixtureGraph } from "../fixture/graph.js";
-import { malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
+import { describeClaim, type Claim, type ClaimPoll } from "../step/claims.js";
+import { fixtureSourceOf, malformedFromEntryMessage, tryFromCandidates, type Step, type StepFromMap } from "../step/define-step.js";
 import { FixtureNotDestructuredError } from "../step/fixture-names.js";
 import { inferNeeds } from "../step/infer-needs.js";
 import { strictArgsSchema } from "../step/strict-args.js";
@@ -437,6 +438,11 @@ export interface StepSummary {
    * step's, so this field only names *which* steps are called, not what
    * they need. */
   readonly parts?: readonly string[];
+  /** A claim step's claims, as the step file declares them (docs/spec.md
+   * "Claims"). Absent for a step that runs, and for a compat entry. */
+  readonly claims?: readonly Claim[];
+  /** A claim step's `poll`, present only when it declares one. */
+  readonly poll?: ClaimPoll;
 }
 
 /** The fixture names `needs_inferred` is allowed
@@ -491,7 +497,7 @@ function needsFields(
     // guess reads as no guess, never as an empty one.
     const inferred =
       error instanceof FixtureNotDestructuredError
-        ? inferNeeds(step.run, error.firstArgumentText, knownFixtureNamesFor(graph))
+        ? inferNeeds(fixtureSourceOf(step), error.firstArgumentText, knownFixtureNamesFor(graph))
         : undefined;
     return {
       needs: null,
@@ -533,8 +539,15 @@ export function summarize(
     from: fromResult.rendered,
     from_errors: fromResult.errors,
     parts: partsSummary(entry.step, stepNames),
+    ...claimFields(entry.step),
     ...needsFields(entry.step, graph),
   };
+}
+
+/** `claims` and `poll` for a claim step; nothing for a step that runs. */
+function claimFields(step: Step): { readonly claims?: readonly Claim[]; readonly poll?: ClaimPoll } {
+  if (step.claims === undefined) return {};
+  return { claims: step.claims, ...(step.poll === undefined ? {} : { poll: step.poll }) };
 }
 
 /**
@@ -567,7 +580,7 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
     // declaration to read one from.
     return `${s.name}  compat`;
   }
-  const mutatesLabel = s.mutates ? "mutates" : "read-only";
+  const mutatesLabel = s.claims !== undefined ? "claims" : s.mutates ? "mutates" : "read-only";
   // `needs` itself (the full destructured-name list) stays out of this
   // text rendering on purpose: the full enumeration is a `--json`
   // concern, `--json` is where a reader gets the list; `needs_browser`
@@ -601,6 +614,9 @@ function formatVocabularyEntry(s: StepSummary, width: number): string {
   }
   if (s.description !== undefined) {
     lines.push(...wrapIndented(s.description, width));
+  }
+  for (const claim of s.claims ?? []) {
+    lines.push(...wrapIndented(`claim: ${describeClaim(claim)}`, width));
   }
   if (s.needs_error !== undefined) {
     lines.push(...wrapIndented(`needs: ${s.needs_error}`, width));
@@ -653,8 +669,14 @@ export interface TypedStepContract {
   /** Same field as `StepSummary.file`. */
   readonly file: string;
   readonly patterns: readonly string[];
-  readonly description: string;
+  /** Absent for a claim step that declares none: `claims` says what it
+   * checks. */
+  readonly description?: string;
   readonly mutates: boolean;
+  /** Same field and presence rule as `StepSummary.claims`. */
+  readonly claims?: readonly Claim[];
+  /** Same field and presence rule as `StepSummary.poll`. */
+  readonly poll?: ClaimPoll;
   /** Same field and presence rule as `StepSummary.timeout`. */
   readonly timeout?: number;
   /** The same shape as `StepSummary.from`, so a reader of `nuka steps
@@ -781,6 +803,7 @@ export function describeContract(
     patterns: entry.step.patterns,
     description: entry.step.description,
     mutates: entry.step.mutates,
+    ...claimFields(entry.step),
     timeout: entry.step.timeout,
     from: fromResult.rendered,
     from_errors: fromResult.errors,

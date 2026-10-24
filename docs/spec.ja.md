@@ -38,7 +38,7 @@ unit test には、このようなコストがありません。
 agent の場合、これは安価なコマンドから成るループが自らの作業を正す速さを直接決めます。
 この仕様が求める各宣言は、そのコストを減らします。
 `pattern` と `args` により、`check` はブラウザを開く前に行を拒否できます。
-`mutates` により、Then に疑問を示せます。
+`claims` により、コードで判定する Then を拒否できます。
 `from` により、step の順序では失敗するしかない scenario を拒否できます。
 したがって、`nuka check` が判定できる範囲を広げることは、便宜ではなく一級の目標です。
 失敗した run の後には、check がその失敗を先に検出できたかを常に問います。
@@ -79,7 +79,7 @@ nukadoko は意図的に、所有する範囲を最小限にとどめていま�
 | **型付き step の契約** | **nukadoko** |
 | **実行と計測(record)** | **nukadoko** |
 | **Environment、secret** | **nukadoko** |
-| **キーワードの意味論(Then は mutate してはならない)** | **nukadoko** |
+| **キーワードの意味論(判定するのは Then だけで、Then は claim で判定する)** | **nukadoko** |
 | **run サマリ: 何が走ったかの証跡と、承認された基点からどの受け入れ基準と step ファイルが変わったか(比較が届く範囲で)** | **nukadoko** |
 
 ## 課題
@@ -374,12 +374,17 @@ export default defineStep({
   それこそがその隙間です。
 - `mutates`(デフォルトは `true`)は、その step が触れる範囲のどこかで状態を変更するかどうかを表します。
   読み取り専用の step は `mutates: false` を宣言します。
+- step は、実行するか claim を宣言するかのどちらかです。
+  上の例は実行する step で、`run` が操作して結果を返します。
+  Then は `run` の代わりに `claims` を宣言し、世界を読む省略可能な `observe` と、省略可能な `poll` を添えます。
+  各 claim は nukadoko が判定します(「Claims」を参照)。
+  claim step には `returns`、`mutates`、`parts` がなく、claim step に結び付くのは Then の行だけです。
 - `parts`(デフォルトは `[]`)は、この step 自身の `run` が `call` fixture を通じて呼び出すことがある step を列挙します(「Parts」を参照)。
   どれも呼ばない step はこれを省略でき、`from` と同じ慣習です。
 - `returns` は省略できます。
   省略すると空のオブジェクトの schema がデフォルトになり、何も返さない `run` は `{}` として記録されます。
   これは、後の step が引用するものも、失敗の診断に使うものも持たない step に向いています。
-  典型的には、観測した値がすでに `from` を通じて args として届いている Then の step です。
+  たとえば、フラグを立てるだけの Given です。
   何かを観測する step は、それを返すことに変わりありません(前述)。
   キーを持つオブジェクトを返す `run` は、そのキーを挙げる `result_invalid` で step を失敗させます。
   そうしなければ record には `{}` が残り、step が通る一方で値が失われるからです。
@@ -592,8 +597,9 @@ green な scenario は待ちが正しく置かれている証拠にはならず�
 `page` と `request` は、nukadoko 自身の型ではなく Playwright 自身の `Page` と `APIRequestContext` をそのまま返します。
 これは代償を伴う選択であり、その代償ごと「Out of scope」に明記してあります。
 
-`expect` は fixture ではありません。
-step は `import { expect } from "playwright/test"` で直接インポートします。
+`expect` は fixture ではなく、Then は `expect` を呼びません。
+Then は claim を宣言します(「Claims」を参照)。
+実行する step は、操作の前にある状態を待つために、`import { expect } from "playwright/test"` で直接インポートすることはできます。
 matcher が Playwright のテストと同じようにアサーションするかどうかは呼び出し対象だけでは決まらず、`toMatchAriaSnapshot`(locator)、`toHaveScreenshot`(`page`)、`toMatchSnapshot`(値そのもの)は、`toBeVisible`、`toBe`、`expect.poll` と同じ 3 種類の対象を取りますが、runner の外ではいずれも `"<name>() must be called during the test"` を投げます(Playwright 1.61.1 で計測)。
 違いを決めるのは matcher が runner の現在のテストに紐づく snapshot ファイルを読み書きするかであり、step には現在のテストがありません。
 これは他の fixture と同じ規則から生じます: fixture は executor が注入する必要のあるものだけを運び、`expect` は executor が所有するものを必要とせず、アサーションの証跡はすでに trace の `actions` を通じて step record に届くため(「Records」を参照)、fixture にすると Playwright が公開済みの export の裏に何もないメンバーを追加するだけです。
@@ -1226,9 +1232,11 @@ part が scenario の行としても実行される場合、その出現は part
 この循環からは、閉じた fixture bag も終了する run も作れません。
 2 つ目は、宣言した part が `mutates: true` なのに、step が `mutates: false` を宣言することです。
 `mutates` は、part を含めて step が到達できるすべての場所での状態変更を扱います。
-このチェックによって `then-mutates` は局所的なままです。
-`Then` の行は、1 つの step にある 1 つのフラグを引き続き読みます。
+このチェックによってフラグは局所的なままです。
+読み取り専用 environment の拒否は、1 つの step にある 1 つのフラグを引き続き読みます。
 そのフラグは、すでにすべての part を考慮しています。
+claim step は part を宣言しません。
+part を呼ぶための `run` がないからです。
 
 本体が一度も呼ばない宣言済みの part を報告するチェックはありません。
 呼び出しは `run` にありますが、宣言は `Step` オブジェクトを名指します。
@@ -1266,6 +1274,224 @@ step ファイルは、named export を使って複数の step を export でき
 CLI は、named export があるファイルを import しなければ、その export を認識できません。
 part ごとにファイルを分けると、step の名前とファイル名が一致したままになり、ファイルが 1 つ増えます。
 
+### Claims
+
+Then は scenario が判定する場所であり、型付きの Then はコードで判定しません。
+Then は自分の claim を宣言します。
+claim は、どの値を読むか、その値をどう比較するか、比較の相手の値がどこから来るかを述べます。
+比較するのは nukadoko であり、nukadoko は claim を一つずつ記録するので、何を確かめたかを record が述べます。
+
+0.21.0 までは、Then は何かを読んで `expect` を呼ぶコードでした。
+feature と record だけを読む人には、次の 3 つの失敗が見えないままでした。
+
+1. 期待値が文ではなく step のコードにありました。
+   nukadoko を使う小さなプロジェクト 10 個では、35 個の Then のうち 32 個が期待値をコードに置いていました。
+   たとえば `Then the command succeeds` の下に `expect(code).toBe(0)` がありました。
+   feature の読み手には受け入れ基準が見えませんでした。
+2. step は何も計測せずに通ることができました。
+   値をそれ自身と比べる、定数と比べる、前の読み取りで残った変数と比べる、のどれでも通ります。
+   record だけを読むレビュアーは、そのように仕込んだ 10 件をすべて見逃しました。
+3. Given や When も、終了コードが悪いときに throw することで判定できました。
+   そのため、失敗した受け入れ基準と壊れた準備が同じに見えました。
+
+以下の規則は、それぞれこのどれかを塞ぎます。
+
+#### 形
+
+型付き step は、実行する(`run`)か、claim を宣言する(`claims`)かのどちらかであり、両方はしません。
+`defineStep` の 2 つのオーバーロードが、この 2 つを排他にします。
+`defineStep` は、`run`、`returns`、`mutates`、`parts` のどれかも宣言する claim step と、`observe` や `poll` を宣言する実行する step を拒否します。
+
+```ts
+import { defineStep, z } from "nukadoko";
+import runTally from "./run-tally.ts";
+
+export default defineStep({
+  pattern: "it exits with {code:int}",
+  description: "The process exit code is exactly this",
+  args: z.object({
+    code: z.number().describe("The expected exit code"),
+    exitCode: runTally.returns.shape.exitCode,
+  }),
+  from: { exitCode: [runTally, "exitCode"] },
+  claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
+});
+```
+
+claim は `{ actual, view?, at?, compare, expected }` か、`{ actual, view?, at?, each }`(後述)です。
+`claims: []` は import の時点で拒否されます。
+claim を持たない claim step は、何も判定せずに通るからです。
+claim step では `description` は省略できます。
+`nuka steps` と `nuka describe` が claim を表示し、claim はその step が何を確かめるかを正確に述べるからです。
+
+#### 期待値の出所
+
+`expected` は次の 4 つの出所のどれかであり、record は `expected_from` でそれを名指しします。
+
+- **文が埋めるキー**: キャプチャ、docstring、table のどれかで、キーそのものを書きます(`expected: "code"`)。
+  record は `sentence:code` と述べます。
+  このキーは `args` で required でなければなりません。
+  デフォルト値や省略可能なキーだと、行が値を述べないときに step のコードにあるスキーマが値を補えてしまうからです。
+- **前の step の結果**: `{ from: "<key>.<path>" }` で、最初の要素はこの step の `from` のキーです(「凍結した件数が変わらない」など)。
+  record は `from:<step>@<line>.<path>` と述べます。
+  `<line>` は値を返した step の feature 行で、`nuka do` ではその step record の id です。
+  `from` のキーを指す素の文字列は拒否されます。
+  そのため record が、前の step の値を文の値と呼ぶことはありません。
+- **リテラル**: `{ literal: v }` で、文そのものがその値を述べているときに限ります。
+  そのテキストが pattern の固定の語の並びであるか(pattern `the command exits 0` は `0` を claim できます)、短い表にある語の固定の値であることが条件です。
+  表では、`no`、`none`、`nothing` が `0`、`""`、`[]` を、`empty` が `""` と `[]` を固定します。
+  キャプチャ、省略可能なグループ、選択肢の中にある語は固定ではありません。
+  行がその語を言わないことがあるからです。
+  pattern を複数持つ step では、すべての pattern がそのリテラルを述べている必要があります。
+  それ以外は import の時点で拒否され、その pattern が名指しされます。
+  したがって `Then the command succeeds` は `0` を claim できず、文に `exits 0` と書く必要があります。
+  こうして値は、誰も step ファイルを読まなくても、機械的に受け入れ基準の中に入ります。
+  record は `literal:<その語>` と述べます。
+- **2 つ目の読み取り**: `{ observe: "<path>" }` で、`observe` が実際の値と並べて返した値です(「A は B の左にある」など)。
+  record は `observe:<path>` と述べます。
+  世界の 2 つの読み取りを比べる claim は自分の値を述べないので、許可したうえでラベルを付けます。
+
+実際の値が `observe` から来るとき、真偽値のリテラルは拒否されます。
+`observe` が計算した真偽値は、コードで下した判定だからです。
+`observe` は計測したもの(件数、テキスト、リスト)を返し、claim がそれを判定します。
+
+#### 実際の値
+
+`actual` はパスです。
+最初の要素は `from` のキーであるか、そうでなければ `observe` が返すオブジェクトのキーです。
+最初の要素が文の埋めるキーであるパスは拒否されます。
+claim が計測する値は、行から来ることはありません。
+そのあと、次の順に適用されます。
+
+- `view` が値を正規化します。
+  `text` は末尾を切り詰め、`lines` は末尾を切り詰めて行に分け(空のテキストには行がありません)、`json` はパースします。
+  view は文字列にだけ適用され、それ以外の値では claim は成り立たず、その旨を述べます。
+- `at` は view を通した値の中のパスを取ります(`actual: "result.stdout", view: "json", at: "sections.git.0.dirty_count"`)。
+  そのためパースは、コードではなく宣言されたデータです。
+  配列に対するパスの要素は 10 進のインデックスです。
+
+`undefined` に解決される実際の値では、claim は必ず成り立たず、record はそのパスを名指しします。
+`nuka check` は、各 `from` のパスを値を返す step の `returns` スキーマと照らし合わせ、スキーマが宣言していないパスを報告します(`claim-path-unknown`)。
+そのような claim は、成り立たないことしかありえないからです。
+
+#### 比較
+
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`has-item`(配列に期待値と等しい要素がある)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+等しさは JSON の値の構造で判断します。
+オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
+大小の比較は、2 つの number か 2 つの bigint を読みます。
+
+JSON の型が違う 2 つの値の比較では、claim は成り立たず、両方の型を名指しします。
+文字列が数値と等しくなることは、claim が述べる理由ではありえないからです。
+`contains-text` と `matches` で期待するテキストが空のとき、claim は成り立ちません。
+どの文字列もそれを含むからです。
+
+#### each
+
+`{ actual, each: { where?, claims } }` は、配列のすべての要素に要素の claim を適用します。
+中のパスは要素からの相対パスであり、`actual` を持たない要素の claim は要素そのものを読みます。
+`where` は claim を適用する要素を選びます。
+配列が空のとき、または `where` が何も選ばないとき、claim は成り立ちません。
+何もない集合についての「すべての要素」は計測ではないからです。
+record は、要素の数、選ばれた数、最大 20 件の要素の結果を残し、成り立たなかった要素を先に並べます。
+
+#### observe
+
+`observe(fixtures, args)` は省略できます。
+前の step が値を返していないときに世界を読み、claim が読むキーを持つオブジェクトを返します。
+その fixture の袋は step の袋と同じなので(「Context API」を参照)、`request`、`page`、`resultOf`、プロジェクトの fixture を使えます。
+また、claim が期待値として名指しするキー(文から来るものと `from` から来るもの)を除く、すべての args キーを受け取ります。
+前の step が返したパスのように `observe` に届くキーは入力です。
+`observe` に届かないキーは比較の相手なので、`observe` はそれを見て何を読むかを選べません。
+届かないキーを読むと throw し、型が届かない JavaScript の step ファイルにも同じ規則が働きます。
+
+throw した `observe` は、その step をエラーとともに `unobserved` として記録し、claim を一つも判定しません。
+これは成り立たない claim とは別の結果です。
+`observe` の中で throw するガードは、計測しなかったこととして見え、成り立った claim や成り立たなかった claim としては見えません。
+step の締め切りが先に来た場合は、どの step とも同じく `timeout` です。
+
+#### poll
+
+`poll: { timeout_ms }` は、すべての claim が連続する 2 回の読み取りで成り立つか、タイムアウトが過ぎるまで、100 ミリ秒の間を空けて `observe` を実行し直します。
+そのあと最後の読み取りを一度だけ判定し、読み取りの回数とともに記録します。
+成り立つ読み取りが 1 回だけでは足りません。
+2 回の描画の間のページは、1 フレームだけ期待どおりの状態を見せることがあるからです。
+`poll: false`、または `poll` がないときは、一度だけ読みます。
+前の step の値は読み取りの間に変わらないので、`poll` には `observe` が必要です。
+タイムアウトは step の締め切りの上限を超えられません。
+
+`observe` が `page`、`context`、`pageAs` の fixture に、直接またはプロジェクトの fixture を通して届く claim step には、`nuka check` が `poll` を述べることを求めます(`claim-poll-unstated`)。
+述べ方は `poll: { timeout_ms }` か `poll: false` です。
+そのような step が一度だけ読むのか、ページが落ち着くまで読むのかは、step ファイルが見える形で選ぶべきことだからです。
+
+#### 自分自身との比較
+
+`nuka check` は、結び付いた claim の両辺がどこから来るか(文のキー、値を返した行とパス、`observe` のパス)を解決します。
+両辺が同じ場所に解決される claim は報告されます(`claim-compares-itself`)。
+そのような claim は、振る舞いがどうであっても成り立つからです。
+チェックせずに実行するプロジェクトのために、実行は同じ場合を、理由付きの成り立たない claim として記録します。
+
+#### mutates
+
+claim step は、構造上 `mutates: false` です。
+操作を持たないので、`defineStep` は claim step の `mutates` キーを拒否し、record は `false` と述べます。
+これは、置き換えられた `then-mutates` 警告の理由を覆すものではありません。
+その警告は、状態を変える文が Then の位置にあると、その位置と緊張関係にあり、どちらが誤りかを人が決める必要がある、と述べていました。
+その緊張関係は今もあり、答えも同じです。
+操作する文は、When の位置にある実行する step に属します。
+変わったのは、その問いが step ファイルの述べる事実(step が `run` を持つか `claims` を持つか)になったことです。
+そのため `nuka check` は、Then の位置にある実行する step を、信頼するしかない宣言についての警告ではなく、確定したエラーとして報告します(`then-without-claims`)。
+書き込む `observe` も隠れません。
+step record は、他の step の書き込みと同じようにそれを計測します(「Records」を参照)。
+
+#### claim を置ける位置
+
+- `then-without-claims`(エラー): Then の位置(`Then`、および Then のあとの `And` と `But`)にある feature 行が、実行する型付き step に結び付いています。
+  値を読むか記録するだけの step は、Given か When に属します。
+- `claims-outside-then`(エラー): claim step が Given か When の位置、または Gherkin が位置を与えない `*` の行に結び付いています。
+  判定するのは Then だけなので、そこで成り立たない claim は、失敗した受け入れ基準ではなく壊れた準備として読まれてしまいます。
+
+compat step は、この 2 つのコードの対象外です。
+compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)、claim を宣言できません。
+そのため compat の Then は compat の Then のままで、これまでどおり `then-compat-step` 警告が報告します。
+それを型付き step に移すことは、その claim を書くことを意味します。
+
+#### record
+
+claim step の record には、固有のフィールドが 3 つあります(「Records」を参照)。
+
+- `claims`: step が宣言した順の、各 claim です。
+  比較は、`actual`(`view` と `at` を適用したあとの値で、パスに何もなかったときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`、`expected_from`、`outcome`(`held`、`broken`、`unobserved`)、比較そのもの以外の理由(undefined の値、2 つの JSON の型、空の期待するテキスト、適用できなかった view)で成り立たなかったときの `reason`、そして `measured` を持ちます。
+  `each` の claim は、`actual_from`、`each` の数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
+- `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
+  そのとき step の `error` が理由を述べます。
+- `attempts`: step が値を読んだ回数です。
+  `observe` の呼び出しを 1 回ずつ数え、`observe` のない step は `from` の値を一度だけ読みます。
+
+`measured` は、`view` と `at` を通す前の生の実際の値と内容が等しい、記録されたチャネルを名指しします。
+形は `{ "step_record_id", "channel" }` で、チャネルはその step record の中のパスです(`observed.processes[0].stdout`、`http.jsonl[1].response_body`、`observed.files[0].content` など)。
+`from` の値を読む claim は値を返した step の record を探し、`observe` を読む claim は claim step 自身の record を探します。
+その値を持つチャネルがないときは `null` です。
+これは値がどこから来たかについての情報であり、claim の条件になることはありません。
+
+成り立たない claim は、`error.kind` が `claim_broken` の失敗として step を落とし、メッセージがその claim を名指しします。
+
+```text
+claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+```
+
+成り立たない claim ごとに 1 行で、`each` では最初に成り立たなかった要素がその下に続きます。
+run サマリは、すべての Then のすべての claim を「Claims」の下に 1 行ずつ、同じ言葉に `held` か `broken` を続けて並べます。
+
+Allure results は、各 claim をその step の子 step として示します。
+名前は同じ行で、成り立ったときは passed、成り立たなかったときは failed、step が何も観測しなかったときは broken です。
+値とその出所はパラメータになります(「Allure results」を参照)。
+cucumber-messages のストリームは、claim を `claims.json`(メディアタイプ `application/vnd.nukadoko.claims+json`)として step に添付します。
+成り立たない claim を持つ step の結果は、同じメッセージを持つ、型が `nukadoko.ClaimBroken` の `exception` を運びます(「Messages stream」を参照)。
+
+`nuka do` も claim step を同じように実行します。
+値を読み、すべての claim を判定し、同じ record を書きます。
+
 ### キーワードの意味論
 
 Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` の宣言**を信頼するためです。
@@ -1278,20 +1504,25 @@ Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` �
 
 - `mutates` は step の**宣言された意図**を示します。
   デフォルトは `true` であり、読み取り専用の step は `false` を宣言します。
-- **静的解析では**、宣言上 mutate する step が Then の位置に結び付けられていると、`nuka check` が警告します。
-  エラーは報告しません。
-  宣言だけでは矛盾を解決できないため、人がレビューする必要があります。
+  claim step は構造上 `false` です(「Claims」を参照)。
+- **静的解析では**、位置は `mutates` ではなく step が何であるかで確かめます。
+  Then は claim step に結び付き、claim step は Then の位置にだけ立ちます(`then-without-claims` と `claims-outside-then`、どちらもエラー)。
+  step が実行するか claim を宣言するかは、そのファイルが述べる事実なので、このチェックは信頼すべき宣言を必要としません。
+  Then の位置で `mutates` を読んでいた `then-mutates` 警告はなくなりました。
+  そこにある実行する step はすべてエラーとして報告されるからです。
+  その理由が今も成り立つわけは「Claims」が述べます。
 - **読み取り専用の environment は、宣言上 mutate する step を実行前に拒否します。**
   この規則には、`call` を経由して到達した part も含まれます(「Parts」を参照)。
   宣言が実行をゲートする場所は、ここだけです。
 - **実行時には**、step record が実行内容を、ツールが正確に計測できる範囲で保存します(「Records」を参照)。
   書き込みについての断定は保存しません。
-  保存したものは、Then の位置も、読み取り専用 environment のポリシーも決めません。
+  保存したものは、読み取り専用 environment のポリシーを決めません。
   nukadoko は、step record が何を持っていても `mutates: false` を信頼します。
 - Gherkin は、`And` または `But` の step を、直前の主要キーワード(Given、When、Then)の pickle step type で分類します。
   Gherkin の pickle コンパイラが、この挙動を定義します。
-  したがって、`Then` のあとの操作は、その位置にある他の step と同じ Then 位置の観測を受けます。
-  その位置は、操作をゲートしません。
+  したがって、`Then` のあとに `And` で書いた操作は Then の位置にあり、そこで実行する step は `then-without-claims` です。
+  claim のあとに続く操作は、新しい `When` の下に書きます。
+  `*` の行には位置がまったくないので、そこにある claim step は `claims-outside-then` です。
 - 計測では、この事実を決められません。
   HTTP メソッドは、書き込みの意味論そのものではなく、そのプロキシです。
   GraphQL、RPC-over-POST、多くのベンダー query API は、意味的に純粋な読み取りに POST を使い、サーバは GET で状態を変えることもあります。
@@ -1311,9 +1542,9 @@ Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` �
   GraphQL の読み取り、RPC-over-POST の読み取り、ベンダー API の POST による読み取りを、すべて偽陽性として報告します。
   同じ理由で、nukadoko は実行時に mutation の意味論を強制しません。
   pull request をレビューする人が、宣言と step record を並べて読みます。
-- Compat(型のない)step には、`mutates` の宣言がありません(「Compat steps(移行の扉)」を参照)。
+- Compat(型のない)step には、`mutates` の宣言がなく(「Compat steps(移行の扉)」を参照)、claim も宣言できません。
   `nuka check` の `then-compat-step` 警告は、compat step が Then の位置に結び付けられたときに、このカバレッジの欠落を示します。
-  mutation の矛盾は示しません。
+  nukadoko には、そのような step が何を判定するのかが見えません。
   実行時の観測は他の step と同じ計測を記録しますが、それは何もゲートしません。
 
 ## Compat steps(移行の扉)
@@ -1847,9 +2078,10 @@ JSON の stdout は 1 行に詰めて 200 文字で切ります。
 それ以外の文字列では、その最初の行を取ります。
 `init exited 1:` のようにコロンで終わる最初の行は後に続くものの前置きにすぎないので、次の目に見える行と一度だけつなぎます(`init exited 1: Error: ...`)。
 つなぐ行でも同じヘッダを飛ばします。
-この行は、Then step が空の stdout を読んだ理由を示します。
+この行は、Then が空の stdout に対して claim した理由を示します。
 実行したプログラムが起動しなかったか失敗したのに、それを実行した step は passed のままです。
 exit code は結果であって、失敗ではないからです。
+成り立たない claim のエラー行はその claim の行であり(「Claims」を参照)、両方の値とそれぞれの出所をすでに運んでいます。
 文字列は step record から取るので、そこに含まれる secret はすでに redact されています。
 サマリ行の後では、失敗した各 scenario を所見 `failed\tscenario-failed\t<feature>:<line>\t<name>: <エラーの 1 行目>` として stderr に表示します。
 その各所見に `  do:` 行が続きます。
@@ -1879,7 +2111,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
       "code": "scenario-failed",
       "file": "features/greet.feature",
       "line": 4,
-      "message": "greets by name: text: expected \"Hi, Ada!\", got \"Hello, Ada!\"",
+      "message": "greets by name: claim broken: \"Hello, Ada!\" (from:run-greet@5.stdout as text) equal \"Hi, Ada!\" (sentence:text)",
       "do": "nuka run features/greet.feature:4"
     }
   ],
@@ -1925,14 +2157,28 @@ run が終わったとき、最後の step record と run サマリの後に、�
           "record": "steps/step-20260801-143023-g7h8",
           "mutates": false,
           "observed": { "processes": null, "http": null, "files": null, "unmeasured": [] },
-          "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
+          "error": { "kind": "claim_broken", "message": "claim broken: \"Hello, Ada!\" (from:run-greet@5.stdout as text) equal \"Hi, Ada!\" (sentence:text)" },
           "used": [
             {
               "step": "run-greet",
               "record": "steps/step-20260801-143023-e5f6",
               "result": { "exitCode": 0, "stdout": "Hello, Ada!\n", "stderr": "" }
             }
-          ]
+          ],
+          "claims": [
+            {
+              "actual": "Hello, Ada!",
+              "actual_from": "from:run-greet@5.stdout",
+              "view": "text",
+              "compare": "equal",
+              "expected": "Hi, Ada!",
+              "expected_from": "sentence:text",
+              "outcome": "broken",
+              "measured": { "step_record_id": "step-20260801-143023-e5f6", "channel": "observed.processes[0].stdout" }
+            }
+          ],
+          "observation": "observed",
+          "attempts": 1
         }
       ],
       "hooks": [],
@@ -1972,6 +2218,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
   step record を読み戻せなかった step は、その代わりに `record_unreadable: true` を持ち、`step-record-unreadable` の警告がそのファイルを名指します。
   失敗した step、または理由があって始まらなかった step(`undefined`、`ambiguous`)は、step record の `kind`(step record が言わなければ `null`)と最初のメッセージを持つ `error` を持ちます。
   `from` で前の結果を読んで失敗した step は `used` を持ち、各 producer の step、record、読んだ結果を載せます。
+  claim step は、その step record と同じ `claims`、`observation`、`attempts` を持ちます(「Claims」を参照)。
+  そのため、成り立たない claim は step record を開かずに読めます。
   JSON が 4096 バイトを超える結果は、代わりにプレビューになり、`truncated: true` と、値全体の大きさである `result_bytes` を持ちます。
   object のプレビューは、収まるかぎり、最上位の数、真偽値、null と、最上位の各文字列の先頭 1024 文字を残すので、process の `exitCode` と `stderr` の始まりは残ります。
   値全体は producer の `record` にあります。
@@ -2191,10 +2439,13 @@ scenario record は独立したファイルではなく、その run の `run.js
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに別のファイルを開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
-- `error.kind` は閉じた集合を使い、人が読むメッセージの隣に置かれます: `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`step_error`。
+- `error.kind` は閉じた集合を使い、人が読むメッセージの隣に置かれます: `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`claim_broken`、`unobserved`、`step_error`。
   閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
   最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
   確信が持てない分類器が `step_error` を返すのは、契約違反を誤って主張するほうが、主張しないより悪いからです。
+  `claim_broken` は、受け入れ基準が失敗したことを述べる唯一の種別です。
+  claim step が値を読み、ある claim が成り立たなかったことを表します。
+  値を読めなかった claim step は `unobserved` なので、壊れた準備と失敗した受け入れ基準が同じ種別になることはありません(「Claims」を参照)。
   scenario record の中の hook record も同じフィールドを持ちます。
 
   | `error.kind` | step が失敗した理由 |
@@ -2205,10 +2456,18 @@ scenario record は独立したファイルではなく、その run の `run.js
   | `world_invalid` | 宣言された World のキーへの書き込みが `defineWorld` のスキーマに合わなかった |
   | `timeout` | step または hook が決着する前に期限が来た |
   | `unsupported` | nukadoko が実装していない compat の形(`done` コールバック、または `"pending"` や `"skipped"` を返した) |
+  | `claim_broken` | claim step が値を読み、少なくとも 1 つの claim が成り立たなかった |
+  | `unobserved` | claim step が値を読めず(`observe` が throw した、または名指しする fixture を用意できなかった)、claim を一つも判定しなかった |
   | `step_error` | それ以外で、step または hook 自身のコードが throw した |
 
 - `mutates` は step 自身の宣言を保持します(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)。
   step record が計測したものと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
+  claim step は、宣言すべき操作を持たないので `false` を記録します。
+- `claims`、`observation`、`attempts` は claim step の record にだけ現れます。
+  比較した値とそれぞれの出所を持つ各 claim、step が値を読めたかどうか、値を何回読んだかです。
+  各フィールドは「Claims」が述べます。
+  claim step の `result` は `{}` です。
+  後の step が読めるものを何も返さないからです。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
   ブラウザが使われるときは Playwright の trace とスクリーンショット、`request` fixture の呼び出し、`page.request` と `context.request` の呼び出し、page 自身の document/XHR/fetch の通信はすべて http.jsonl に記録され、step record 自体が一次記録になります。
 - `evidence.screenshots` は browser context ごとに 1 つのエントリを持ちます。
@@ -3012,7 +3271,7 @@ agent は、チケットの受け入れ基準に対して次の手順を実行�
 3. feature を書きます。
    tag と `Feature:` の下の説明文が、チケットの id とレビュアーの言葉による基準を運びます。
    scenario は、その基準を語彙に翻訳したものです。
-4. 何かが実行される前に、`nuka check <feature>` を行います(未定義の step、pattern と schema の不一致、mutate する step に結び付いた Then)。
+4. 何かが実行される前に、`nuka check <feature>` を行います(未定義の step、pattern と schema の不一致、実行する step に結び付いた Then)。
    feature が置かれているディレクトリが `additionalFeatureDirs` に列挙されていない限り、パスを渡します。
    引数なしの `nuka check` は `featuresDir` とそのリストを歩くため、`featuresDir` の外に意図的に置かれ、どこにも名指しされていない feature こそが、まさにそれが届かない対象だからです。
 5. green になるまで `nuka run <feature>` します。
@@ -3199,6 +3458,15 @@ action は自分の開始点から `ms` 後まで幅を持ち、名前は自分�
 親 step entry 自身の start/stop の範囲にクランプすることは決してありません。
 その範囲の外に出た timeline entry は実際に起きたことであり、隠せば読めなくなるだけで、起きなかったことにはなりません。
 
+claim は assertion であり、Allure で assertion を表す単位は自分の status を持つ step です。
+そのため claim step の各 claim は、タイムラインの後に置かれる幅ゼロの child step 1 つになります(「Claims」を参照)。
+名前は claim の行で、run サマリが出力するのと同じ言葉です(例: `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`)。
+status は、claim が成り立ったときは passed、成り立たなかったときは failed、step が何も観測できなかったときは broken です。
+parameter は `actual`、`actual from`、`expected`、`expected from` で、生の actual 値を持つ channel があれば `measured` も加わります。
+読み手は `record.json` を開かずに両方の値を確認できます。
+`claim_broken` で失敗した step は、`step_error` や `result_invalid` と同じく failed です。
+成り立たなかった claim は基準が満たされなかったことであり、それが Allure の failed の意味だからです。
+
 `page_events` は最大 3 つの parameter になります(「Records」を参照)。
 parameter は `console errors (observed)`、`page errors (observed)`、`failed requests (observed)` です。
 1 件以上の entry を持つ種類だけに parameter が加わるため、読み手は `record.json` を開かずに件数を確認できます。
@@ -3216,13 +3484,13 @@ marker は、失敗した step の step record(hook が scenario を止めた場
 2 つの Allure 世代は、それを別々の経路で category に変換し、利用者に求めるものも異なります。
 
 - **Allure 2** には result ごとの category フィールドが無いため、`nuka report` は描き出すたびに `categories.json` も書きます。
-  このファイルは `error.kind` ごとに 1 つ、合計 7 つの rule を持ち、メッセージの接頭辞を正規表現で照合します。
+  このファイルは `error.kind` ごとに 1 つ、合計 9 つの rule を持ち、メッセージの接頭辞を正規表現で照合します。
   メッセージの接頭辞と category rule は同じ分類を表すため、利用者は追加の設定を必要としません。
 - **Allure 3** は `allure generate` または `allure report` の実行時に、results directory の `categories.json` を読みません。
   Allure 3 は category を config だけから取得し、result の label と照合します。
   `nukadoko.failure` がその label を供給します。
-  `nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出し、`error.kind` ごとに 1 つ、7 個の label-matcher rule を持たせます。
-  この 7 個の名前は `NAME_BY_KIND`(`src/report/allure/categories.ts`)から組み立てられるため、result 自身が使う名前と決してずれません。
+  `nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出し、`error.kind` ごとに 1 つ、9 個の label-matcher rule を持たせます。
+  この 9 個の名前は `NAME_BY_KIND`(`src/report/allure/categories.ts`)から組み立てられるため、result 自身が使う名前と決してずれません。
   プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
   `nuka init` はこの 6 つの拡張子すべてを先にチェックし、プロジェクトに既にどれか 1 つあれば何も書かず、見つけたファイル名を stderr に出します。
   そのどれも置かないと、すべての nukadoko の失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまいます。
@@ -3291,14 +3559,16 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
 - このストリームは Allure の result と逆の役割を持ちます。
   Allure は nukadoko の計測の余剰を公開し、このストリームは compat の忠実さを保ちます。
   唯一の仕事は、移行したスイートの既存フォーマッタと JUnit ベースの CI が、nukadoko の run を従来の cucumber-js の run と同じように読み続けられるようにすることです。
-- step record の内部情報はストリームに入りません。
+- step record の内部情報は、claim step の claim(後述)を除いて、ストリームに入りません。
   対象はバリデーション済みの result、`mutates`、`observed`、`error.kind`、`calls` です。
   `TestStepResult` と `TestStepFinished` は closed schema(`additionalProperties: false`)であり、そのどれにもフィールドがなく、Allure 自身の `[nukadoko.failure=<kind>]` label のような marker を通じてこっそり忍び込ませることもできません。
   `calls` には、それに加えてもう 1 つの理由があります。
   この形式には step の中の step という概念がそもそもありません。
   そのためスキーマが開いていたとしても、part がここで取る形はありません(「Parts」を参照)。
   Allure がそれを入れ子にできるのは、Allure 自身のモデルがそうしているからです。
-- Attachment は step が自分自身について宣言したものだけを含みます: `declared` の attachment とログの行です。
+- Attachment は step が自分自身について宣言したものだけを含みます: `declared` の attachment、ログの行、claim step の claim です。
+  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` を持ちます(「Claims」を参照)。
+  claim は、step ファイルが確かめると宣言したものであり、比べた値を伴います。
   ログの行は cucumber-js の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)を使います。
   trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。
   その計測の余剰にはすでに置き場所があり、ここで trace を base64 で埋め込んでも、それを望む消費者がいないままストリームを太らせるだけだからです。
@@ -3315,7 +3585,7 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   このストリームを `@cucumber/junit-xml-formatter@0.14.0`(envelope ストリームの上で `@cucumber/query` を駆動するもの)に通してもエラーは投げられず、解決が必要なすべての id(pickle から testCase、testStepFinished へ、そして `pickleStepId` から gherkin の step へ)は解決できます。
   失敗した scenario の `<failure>` は step 自身のエラーメッセージを運び、`<system-out>` は step ごとの passed/failed/skipped の trace を運び、`<testsuite tests="...">` は実際の scenario 数と一致します。
   `<failure>` 自体には `type` も `message` の属性も付きません。
-  `TestStepResult.exception` が決してセットされないからです(後述)。
+  `TestStepResult.exception` がセットされるのは成り立たなかった claim だけだからです(後述)。
   この確認ができているのは junit-xml の経路だけです。
   公式の HTML レポートやサードパーティの formatter はまだこのストリームに対して試されていません。
   確認できているのは、これが実際の消費者がエラーなく読める well-formed な cucumber messages ストリームであるということであり、既存のあらゆる formatter がこれをレンダリングできるということではありません。
@@ -3330,9 +3600,9 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
 `declared` の label、link、parameter はプロトコルの closed schema に入れる場所が無く、落とされます。
 `stepDefinition` の envelope は出力されません。
 record は step 自身の定義の位置情報を保持しておらず、それでも出力すればでっち上げの事実になってしまうからです。
-そして `TestStepResult.exception` は決してセットされません。
-プロトコルが `Exception.type` を要求する一方、step record が運ぶのは常にメッセージだけだからです。
-これが、失敗した step の JUnit `<failure>` が body だけになる理由です。
+そして `TestStepResult.exception` がセットされるのは `claim_broken` で失敗した step だけで、type は `nukadoko.ClaimBroken`、message は claim のメッセージです。
+プロトコルは `Exception.type` を要求し、成り立たなかった claim は nukadoko 自身が type を決めた唯一の失敗です。
+それ以外の失敗した step はメッセージだけを運び、それが JUnit `<failure>` が body だけになる理由です。
 
 ## Self-healing(監査付き)
 
@@ -3362,7 +3632,7 @@ nukadoko はすべての段階を記録します。
   スキーマに合わない pattern、どの step にも一致しない feature の行、config の誤りがそうです。
   `nuka run` は、選んだ scenario のエラーがあれば実行を拒否します。
 - **警告**(`warning`)は、人が見るべき緊張関係ですが、run を止めません。
-  `mutates: true` を宣言する step に結び付いた Then、Then のない scenario、どの envFile も定義していないキーを名指す `secrets` のエントリがそうです。
+  compat step に結び付いた Then、Then のない scenario、どの envFile も定義していないキーを名指す `secrets` のエントリがそうです。
 - **注記**(`note`)は、壊れていることではなく腐っていることです。
   プロジェクトはあらゆる check を通過していても、それでも腐ることがあります。
   宣言は、何年も行使されないまま残ることがあります。
@@ -3578,6 +3848,8 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               (report-out-invalid)
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
+                              A claim step reads its values, judges every
+                              claim, and records them as in a run.
                               --env as on nuka run; each call starts clean.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
@@ -3588,7 +3860,9 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout
-                              when the step declared one, which
+                              when the step declared one, a claim step's
+                              claims and poll (text: one claim: line per
+                              claim), which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
                               can't read), and where each chained args key
@@ -3607,7 +3881,7 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
-                              one, plus
+                              one, a claim step's claims and poll, plus
                               the envelope's findings beside it (the same
                               findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null
@@ -3630,23 +3904,27 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               refuses a pattern check would refuse in
                               this project, a type it does not register
                               included, with the registered type names.
-                              --then writes mutates: false and no
-                              returns, for a step a Then line binds.
-                              With exactly one capture and at most one
-                              --from, its body asserts instead of the
-                              stub: node:assert/strict compares actual
-                              (the --from value, or undefined under a
-                              TODO) with the capture, and the message
-                              is "<key>: expected <value>, got
-                              <actual>"; a custom type compares with
-                              deepEqual. A chained stdout or stderr
-                              string loses one trailing newline before
-                              the comparison, the one a program prints
-                              last. When every feature line the
+                              --then writes a claim step, for a step a
+                              Then line binds: claims in place of run,
+                              and no returns or mutates. With exactly one
+                              value the line states (a capture, the
+                              docstring, or the table) and exactly one
+                              --from, the claim compares the two with
+                              equal; a chained stdout or stderr string
+                              against a stated string gets view: "text",
+                              which trims the trailing newline a program
+                              prints last. Otherwise it writes an observe
+                              stub that throws "not implemented: <name>"
+                              and one claim on what observe returns
+                              against the first stated value, or, with
+                              none stated, against { observe } under a
+                              TODO to state the value in the pattern.
+                              observe's key is actual, or actual2, ...
+                              past a key args holds. When every feature line the
                               pattern matches carries a docstring, args
                               gets docstring: z.string(), and for a
                               table, table: z.array(z.array(z.string()));
-                              --then compares it as it would a capture.
+                              --then claims it as it would a capture.
                               With no such line, or lines that disagree,
                               the key is left out. --command never gets
                               one.
@@ -3654,7 +3932,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               earlier step's returns: the import of that
                               step's file, an args field typed by its
                               schema (producer.returns.shape.key), the
-                              from entry, and the key in run. It refuses a
+                              from entry, and the key in run (in the
+                              claim, under --then). It refuses a
                               producer that does not return the key and
                               names the keys it does return. The same key
                               given for several steps writes one from
@@ -3754,8 +4033,7 @@ nuka scaffold --feature <path>
                               integer {value:int}, a decimal
                               {value:float}, keyed value, value2, ... A
                               Then line (and its And/But) gets --then's
-                              mutates: false, and with one capture
-                              --then's assertion body. A line with a
+                              claim step. A line with a
                               docstring gets a docstring: z.string()
                               key, and one with a table a table key of
                               rows, which a Then compares. The name is the pattern's
@@ -3782,8 +4060,13 @@ nuka scaffold --feature <path>
                               --cwd, --argv, --request, --body,
                               --description, or --replace
 nuka check [feature..] [--json] [--fail-on <code>]
-                              static checks: pattern/schema mismatches, Then
-                              binding to mutating steps, undefined steps per
+                              static checks: pattern/schema mismatches, a
+                              Then bound to a step that runs, a claim step
+                              bound outside Then position, a claim whose
+                              from path the producer's returns does not
+                              declare or whose two sides are the same
+                              value, a claim step that observes a page and
+                              does not state poll, undefined steps per
                               feature (each naming the patterned steps no
                               scanned feature line binds), ambiguous steps (one line two patterns
                               both match), duplicate patterns, a pattern

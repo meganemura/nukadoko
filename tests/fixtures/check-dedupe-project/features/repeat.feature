@@ -5,7 +5,7 @@ Feature: a finding on a repeated line is reported once
     And a title is set
 
   Scenario: first
-    Then the count is checked
+    Then the count is 0
 
   Scenario Outline: row <n>
     Then the item is saved

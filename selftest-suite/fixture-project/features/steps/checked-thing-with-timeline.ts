@@ -10,10 +10,12 @@ import { defineStep } from "nukadoko";
 // looking at this step's own test result finds a "section:"-named and a
 // "poll:"-named child step nested one level under it, not two (docs/spec.md
 // "Allure results": sections/polls/actions "nested directly under that
-// step's own test, one level shallower than before").
+// step's own test, one level shallower than before"). It is bound as a When:
+// a Then declares claims and has no run, so it has no section or poll to
+// record.
 export default defineStep({
-  pattern: "the thing {name:string} exists after a section and a poll",
-  description: "Check a thing exists, recording a section and a poll along the way",
+  pattern: "the thing {name:string} is looked up after a section and a poll",
+  description: "Look a thing up, recording a section and a poll along the way",
   args: z.object({ name: z.string() }),
   returns: z.object({ found: z.boolean() }),
   mutates: false,

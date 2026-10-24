@@ -2,4 +2,5 @@ Feature: Projects
 
   Scenario: create and close a project
     Given a project "acme" exists
-    Then the project is closed
+    When the project is closed
+    Then the project is named "acme"

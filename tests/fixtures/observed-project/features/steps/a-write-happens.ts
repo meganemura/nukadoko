@@ -1,13 +1,12 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Then-position step that writes while declaring `mutates: false`:
-// the declaration is what nukadoko trusts
-// now, not what execution measures, so this occurrence must pass — the
-// write still lands on the step record's `observed`, just no longer fails it.
+// A step that writes while declaring `mutates: false`: the declaration is
+// what nukadoko trusts, not what execution measures, so this occurrence
+// must pass; the write still lands on the step record's `observed`.
 export default defineStep({
   pattern: "a write happens",
-  description: "POST, in Then position, declared mutates: false — must pass, measured anyway",
+  description: "POST, declared mutates: false; must pass, measured anyway",
   args: z.object({}),
   returns: z.object({ ok: z.boolean() }),
   mutates: false,

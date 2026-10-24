@@ -7,9 +7,10 @@ import { defineStep } from "nukadoko";
 // step's own record tells the two rows apart. Always passes: this fixture
 // exists to prove the two rows are recognised as two distinct scenarios by
 // nukadoko's own scenario-level identity, not to exercise pass/fail
-// behavior (toggle.feature already does that).
+// behavior (toggle.feature already does that). Bound as a When: it claims
+// nothing, and a Then declares claims.
 export default defineStep({
-  pattern: "a row that always passes",
+  pattern: "a row that always passes runs",
   description: "Always passes; only the Examples table tells the two rows apart",
   args: z.object({}),
   returns: z.object({}),

@@ -30,6 +30,19 @@ function stepSource(pattern: string, extra: string): string {
   ].join("\n");
 }
 
+// The Then line binds a claim step, which declares no option to leave over.
+const CLEAN_CLAIM_STEP = [
+  'import { defineStep, z } from "nukadoko";',
+  "export default defineStep({",
+  '  pattern: "the clean step",',
+  '  description: "A step.",',
+  "  args: z.object({}),",
+  '  observe: () => ({ state: "clean" }),',
+  '  claims: [{ actual: "state", compare: "equal", expected: { literal: "clean" } }],',
+  "});",
+  "",
+].join("\n");
+
 const FEATURE = [
   "Feature: options",
   "",
@@ -54,7 +67,7 @@ describe("nuka check: step-option-ignored", () => {
       stepSource("the old step", '  rationale: "the fixture directory must be mode 0700",'),
     );
     await writeFile(path.join(steps, "misspelled.ts"), stepSource("the misspelled step", "  timeOut: 5000,"));
-    await writeFile(path.join(steps, "clean.ts"), stepSource("the clean step", ""));
+    await writeFile(path.join(steps, "clean.ts"), CLEAN_CLAIM_STEP);
     await writeFile(path.join(rootDir, "features", "options.feature"), FEATURE);
   });
 
@@ -75,7 +88,7 @@ describe("nuka check: step-option-ignored", () => {
         message: 'Step "misspelled" passes timeOut, which is not a defineStep option, so it has no effect',
         file: "features/steps/misspelled.ts",
         step: "misspelled",
-        fix: "Delete timeOut from the defineStep call in features/steps/misspelled.ts, or rename it to an option defineStep reads: pattern, patterns, description, args, returns, mutates, from, timeout, parts, run.",
+        fix: "Delete timeOut from the defineStep call in features/steps/misspelled.ts, or rename it to an option defineStep reads: pattern, patterns, description, args, returns, mutates, from, timeout, parts, run, claims, observe, poll.",
       },
       {
         code: "step-option-ignored",

@@ -10,7 +10,8 @@ import type {
   TableRow,
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
-import type { ActionEntry, CallEntry, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
+import type { ActionEntry, CallEntry, ClaimRecord, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
+import { claimLine } from "../summary/claim-line.js";
 import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
 import { ownStepSpan, placeSteps, type StepSpan } from "../step-timeline.js";
@@ -236,7 +237,10 @@ export interface MapGwtStepInput {
 // return value itself violated the step's own schema) are the tested
 // system's own fault; every other kind is the contract layer failing to
 // reach a verdict at all.
-const FAILED_KINDS: ReadonlySet<ErrorKind> = new Set(["step_error", "result_invalid"]);
+// A broken claim is the one kind that is a criterion failing, which is
+// what Allure's failed means; an unobserved claim step measured nothing,
+// so it reads as broken with every other kind.
+const FAILED_KINDS: ReadonlySet<ErrorKind> = new Set(["step_error", "result_invalid", "claim_broken"]);
 
 export function statusForKind(kind: ErrorKind): "failed" | "broken" {
   return FAILED_KINDS.has(kind) ? "failed" : "broken";
@@ -884,6 +888,39 @@ function mapCalls(calls: readonly CallEntry[] | undefined): MappedChildStep[] {
   );
 }
 
+// --- claims -> child steps ---
+//
+// A claim is an assertion (docs/spec.md "Claims"), and Allure's unit of an
+// assertion is a step with its own status. Each claim becomes one
+// zero-width child step after the step's other child steps, named by the
+// claim's own line (src/report/summary/claim-line.ts), so a reader sees
+// what was compared without opening record.json. The values themselves
+// are parameters of that child step.
+
+function claimStatus(outcome: ClaimRecord["outcome"]): MappedStatus {
+  return outcome === "held" ? "passed" : outcome === "broken" ? "failed" : "broken";
+}
+
+function claimParameters(claim: ClaimRecord): MappedParameter[] {
+  const parameters: MappedParameter[] = [];
+  if ("actual" in claim && claim.actual !== undefined) parameters.push({ name: "actual", value: JSON.stringify(claim.actual) });
+  parameters.push({ name: "actual from", value: claim.actual_from });
+  if ("expected" in claim && claim.expected !== undefined) parameters.push({ name: "expected", value: JSON.stringify(claim.expected) });
+  if ("expected_from" in claim) parameters.push({ name: "expected from", value: claim.expected_from });
+  if (claim.measured !== null) parameters.push({ name: "measured", value: `${claim.measured.step_record_id} ${claim.measured.channel}` });
+  return parameters;
+}
+
+function mapClaims(claims: readonly ClaimRecord[] | undefined, atMs: number): MappedChildStep[] {
+  return (claims ?? []).map((claim) => ({
+    name: claimLine(claim),
+    startMs: atMs,
+    stopMs: atMs,
+    status: claimStatus(claim.outcome),
+    parameters: claimParameters(claim),
+  }));
+}
+
 // --- one pickle step -> one steps[] entry ---
 
 export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
@@ -911,6 +948,7 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
   let declared: MappedDeclared = EMPTY_DECLARED;
   let timelineChildSteps: MappedChildStep[] = [];
   let callChildSteps: MappedChildStep[] = [];
+  let claimChildSteps: MappedChildStep[] = [];
 
   if (stepRecord) {
     parameters.push({ name: "step record id", value: stepRecord.step_record_id });
@@ -1033,6 +1071,7 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
     parameters.push(...declared.parameters);
     timelineChildSteps = mapTimelineChildSteps(stepRecord, Date.parse(stepRecord.started_at));
     callChildSteps = mapCalls(stepRecord.calls);
+    claimChildSteps = mapClaims(stepRecord.claims, stopMs);
   }
 
   // `record.steps[i]` mirrors `pickle.steps[i]` (src/record/scenario-record.ts:
@@ -1056,7 +1095,8 @@ export function mapGwtStep(input: MapGwtStepInput): MappedGwtStepOutcome {
     // (this section's own header explains why `calls` gets its own
     // trailing, nested group instead of folding into the `at`-ordered
     // timeline).
-    childSteps: [...declared.childSteps, ...timelineChildSteps, ...callChildSteps],
+    // A claim step's claims last: they are judged after its reading ends.
+    childSteps: [...declared.childSteps, ...timelineChildSteps, ...callChildSteps, ...claimChildSteps],
   };
 
   return {

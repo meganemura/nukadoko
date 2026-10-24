@@ -61,6 +61,30 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Make the capture type and the args field type agree: change the {key:type} in the pattern, or declare the field with z.coerce.",
   },
+  "claim-compares-itself": {
+    description:
+      "A claim's actual value and its expected value resolve to the same place: the same path of the same earlier line's result, or the same observe path. Such a claim holds whatever the behaviour is.",
+    severity: "error",
+    fix: "Take the expected value from the sentence (a capture, the docstring, or the table), or from another step's result, so the two sides can differ.",
+  },
+  "claim-path-unknown": {
+    description:
+      "A claim reads a path into a value an earlier step returned, and that step's returns schema has nothing at the path, so the value is undefined and the claim always breaks.",
+    severity: "error",
+    fix: "Correct the path to one the producing step's returns declares, or add the key to that step's returns.",
+  },
+  "claim-poll-unstated": {
+    description:
+      "A claim step's observe reaches a browser page and the step does not state poll. A page between two renders can show any state for one frame, so the step has to say whether it reads once or until the claims hold.",
+    severity: "error",
+    fix: "Add poll: { timeout_ms } to read until every claim holds on two consecutive readings, or poll: false to read once.",
+  },
+  "claims-outside-then": {
+    description:
+      "A claim step is bound in Given or When position, or on a * line, which Gherkin gives no position. Only a Then judges, so a broken claim there would read as a setup that broke instead of a criterion that failed.",
+    severity: "error",
+    fix: "Move the line to Then position, or bind a step that runs (defineStep with run) at this line.",
+  },
   "duplicate-capture-key": {
     description:
       "A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value.",
@@ -297,14 +321,15 @@ const CHECK_CODES = {
   },
   "then-compat-step": {
     description:
-      "A compat step is bound in Then position; compat has no mutates declaration to check that position against.",
+      "A compat step is bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges.",
     severity: "warning",
-    fix: "Promote the step to defineStep with mutates: false, or move the line out of Then position.",
+    fix: "Move the step to defineStep with claims, or move the line out of Then position.",
   },
-  "then-mutates": {
-    description: "A step bound in Then position declares mutates: true, so its declaration and its position are in tension.",
-    severity: "warning",
-    fix: "Declare mutates: false if the step only reads, or move the line to Given or When.",
+  "then-without-claims": {
+    description:
+      "A typed step that runs is bound in Then position. A Then judges through claims; a step that only reads or records a value belongs in a Given or When.",
+    severity: "error",
+    fix: "Bind a claim step (defineStep with claims) at this line, or move the line to Given or When.",
   },
   "tracked-secret-looking-key": {
     description:

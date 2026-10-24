@@ -41,7 +41,7 @@ how much of a scenario can be judged wrong **without running it**. For an
 agent, this directly determines how quickly its loop of cheap commands can
 correct its work. Each declaration in this spec helps pay that cost.
 `pattern` and `args` let `check` reject a line before a browser opens.
-`mutates` lets it question a Then. `from` lets it reject a scenario when the
+`claims` lets it refuse a Then that judges in code. `from` lets it reject a scenario when the
 step order can only fail. Expanding what `nuka check` can settle is therefore
 a first-class goal, not a convenience. After each failed run, the standing
 question is whether a check could have caught the failure first. Honesty sets
@@ -81,7 +81,7 @@ nukadoko deliberately owns as little as possible:
 | **Typed step contracts** | **nukadoko** |
 | **Execution and measurement (records)** | **nukadoko** |
 | **Environments and secrets** | **nukadoko** |
-| **Keyword semantics (Then must not mutate)** | **nukadoko** |
+| **Keyword semantics (only a Then judges, and it judges through claims)** | **nukadoko** |
 | **The run summary: the evidence of what ran, and which criteria and step files changed since the approved base, as far as its comparison reaches** | **nukadoko** |
 
 ## Problem
@@ -457,15 +457,19 @@ export default defineStep({
   gap.
 - `mutates` (default `true`): whether the step changes state anywhere it
   touches. Read-only steps declare `mutates: false`.
+- A step either runs or claims. The example above runs: `run` acts and
+  returns a result. A Then declares `claims` instead of `run`, with an
+  optional `observe` that reads the world and an optional `poll`, and
+  nukadoko judges each claim (see "Claims"). A claim step has no
+  `returns`, `mutates`, or `parts`, and only a Then line binds it.
 - `parts` (default `[]`) lists the steps this step's own `run` may call
   through the `call` fixture (see "Parts"). A step that calls none of
   them omits it, the same convention `from` follows.
 - `returns` may be omitted. It then defaults to an empty object schema,
   and a `run` that returns nothing is recorded as `{}`. This fits a step
   with nothing a later step cites and nothing a failure would be diagnosed
-  from: typically a Then step whose observed values already arrived as
-  args through `from`. A step that observes something still returns it
-  (see above). A `run` that returns an object with keys fails the step
+  from, such as a Given that only sets a flag. A step that observes
+  something still returns it (see above). A `run` that returns an object with keys fails the step
   with `result_invalid`, whose message names the keys: the record would
   otherwise hold `{}` and the value would be lost while the step passed.
   A declared `returns` keeps its meaning: `run` returns the
@@ -699,8 +703,9 @@ can show where they actually belong.
 `APIRequestContext` rather than types of nukadoko's own. That is a choice
 with a cost, and it is stated as one (see "Out of scope").
 
-`expect` is not a fixture. A step imports it directly, `import { expect }
-from "playwright/test"`. Whether a matcher asserts exactly as it would in
+`expect` is not a fixture, and a Then does not call it: a Then declares
+claims (see "Claims"). A step that runs may still import it, `import {
+expect } from "playwright/test"`, to wait for a state before it acts. Whether a matcher asserts exactly as it would in
 a Playwright test does not follow from what it is called on:
 `toMatchAriaSnapshot` (a locator), `toHaveScreenshot` (`page`), and
 `toMatchSnapshot` (a plain value) each throw `"<name>() must be called
@@ -1481,9 +1486,10 @@ One caller's inputs do not affect other callers.
 a step reach itself. Such a cycle cannot produce a closed fixture bag or
 a terminating run. Second, a step cannot declare `mutates: false` when a
 declared part has `mutates: true`. `mutates` covers state changes anywhere
-the step can reach, including its parts. This check keeps `then-mutates`
-local. A `Then` line still reads one flag on one step because that flag
-already accounts for all parts.
+the step can reach, including its parts. This check keeps the flag local.
+A read-only environment's refusal still reads one flag on one step because
+that flag already accounts for all parts. A claim step declares no parts:
+it has no `run` to call them from.
 
 No check reports a declared part that the body never calls. `run` contains
 the call, while the declaration names a `Step` object. It does not name
@@ -1521,6 +1527,266 @@ composite step. However, a typed step's name is its file's basename. The CLI
 cannot see a named export without importing its file. A separate file for each part keeps the step name equal to the file name
 and adds one file.
 
+### Claims
+
+A Then is where a scenario judges, and a typed Then does not judge in
+code. It declares its claims: which value it reads, how it compares that
+value, and where the value it compares with comes from. nukadoko does the
+comparing and records each claim, so the record says what was checked.
+
+Until 0.21.0 a Then was code that read something and called `expect`.
+Three failures stayed invisible to whoever read only the feature and the
+record:
+
+1. The expected value lived in step code, not in the sentence. In ten
+   small projects that use nukadoko, 32 of 35 Thens kept it in code: `Then
+   the command succeeds` over `expect(code).toBe(0)`. A reader of the
+   feature could not see the criterion.
+2. A step could pass without measuring anything: a value compared with
+   itself, a constant, a variable left over from an earlier read.
+   Reviewers who read only the record missed all ten cases seeded that way.
+3. A Given or a When could judge, by throwing on a bad exit code, so a
+   criterion that failed and a setup that broke looked the same.
+
+Each rule below closes one of these.
+
+#### The shape
+
+A typed step either runs (`run`) or claims (`claims`), never both. The two
+`defineStep` overloads make the options exclusive, and `defineStep`
+refuses a claim step that also declares `run`, `returns`, `mutates`, or
+`parts`, and a step that runs and declares `observe` or `poll`.
+
+```ts
+import { defineStep, z } from "nukadoko";
+import runTally from "./run-tally.ts";
+
+export default defineStep({
+  pattern: "it exits with {code:int}",
+  description: "The process exit code is exactly this",
+  args: z.object({
+    code: z.number().describe("The expected exit code"),
+    exitCode: runTally.returns.shape.exitCode,
+  }),
+  from: { exitCode: [runTally, "exitCode"] },
+  claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
+});
+```
+
+A claim is `{ actual, view?, at?, compare, expected }`, or `{ actual,
+view?, at?, each }` (below). `claims: []` is refused at import: a claim
+step with no claim passes without judging anything. `description` is
+optional on a claim step, because `nuka steps` and `nuka describe` print
+the claims, and the claims say exactly what the step checks.
+
+#### Where the expected value comes from
+
+`expected` is one of four sources, and the record names it in
+`expected_from`:
+
+- **A key the sentence fills**: a capture, the docstring, or the table,
+  written as the key itself (`expected: "code"`). The record says
+  `sentence:code`. The key must be required in `args`: a default or an
+  optional key would let the schema in step code supply the value when
+  the line states none.
+- **An earlier step's result**: `{ from: "<key>.<path>" }`, where the
+  first segment is a key of this step's `from` ("the frozen count is
+  unchanged"). The record says `from:<step>@<line>.<path>`, with the
+  feature line of the producing step, or its step record id under `nuka
+  do`. A plain string that names a `from` key is refused, so the record
+  can never call an earlier step's value a sentence value.
+- **A literal**: `{ literal: v }`, only when the sentence itself states
+  the value. Its text is a run of the pattern's fixed words (the pattern
+  `the command exits 0` may claim `0`), or it is the fixed value of a word
+  in a short table: `no`, `none`, and `nothing` fix `0`, `""`, and `[]`;
+  `empty` fixes `""` and `[]`. A word inside a capture, an optional group,
+  or an alternation is not fixed, since a line may not say it, and a step
+  with several patterns needs every pattern to state the literal. Anything
+  else is refused at import, naming the pattern. `Then the command
+  succeeds` therefore cannot claim `0`: the sentence has to say `exits 0`.
+  This puts the value into the criterion mechanically, with nobody
+  reading the step file. The record says `literal:<the words>`.
+- **A second reading**: `{ observe: "<path>" }`, a value `observe`
+  returned beside the actual one ("A sits left of B"). The record says
+  `observe:<path>`. It is allowed and labelled, because a claim that
+  compares two readings of the world states no value of its own.
+
+A boolean literal is refused when the actual value comes from `observe`.
+A boolean that `observe` computed is a judgment made in code: `observe`
+returns the thing it measured (a count, a text, a list), and the claim
+judges it.
+
+#### The actual value
+
+`actual` is a path. Its first segment is a key of `from`, or else a key of
+the object `observe` returns. A path whose first segment is a key the
+sentence fills is refused: the value a claim measures never comes from the
+line. Then, in order:
+
+- `view` normalizes the value: `text` trims its end, `lines` trims its end
+  and splits it into lines (an empty text has no lines), and `json` parses
+  it. A view applies to a string only; on any other value the claim breaks
+  and says so.
+- `at` takes a path inside the viewed value (`actual: "result.stdout",
+  view: "json", at: "sections.git.0.dirty_count"`), so parsing is declared
+  data, not code. A path segment on an array is a decimal index.
+
+An actual value that resolves to `undefined` always breaks, and the record
+names the path. `nuka check` reads each `from` path against the producing
+step's `returns` schema and reports a path that schema does not declare
+(`claim-path-unknown`), because such a claim could only ever break.
+
+#### The compares
+
+`equal`, `not-equal`, `contains-text` (the expected text is a substring),
+`has-item` (the array has an item equal to the expected value), `matches`
+(the expected text, as a regular expression, matches), `greater-than`,
+`at-least`, `less-than`, and `at-most`. Equality is structural over JSON
+values: object key order does not count, and `0` equals `-0`. The order
+compares read two numbers or two bigints.
+
+A comparison across two JSON types breaks and names both types, because a
+string is never equal to a number for the reason the claim states. An
+empty expected text under `contains-text` or `matches` breaks, because
+every string holds it.
+
+#### Each
+
+`{ actual, each: { where?, claims } }` applies item claims to every item of
+an array. Paths inside are relative to the item, and an item claim with no
+`actual` reads the item itself. `where` selects the items the claims apply
+to. When the array is empty, or `where` selects nothing, the claim breaks:
+"every item" over nothing is not a measurement. The record keeps the
+number of items, the number selected, and at most 20 item results, the
+broken ones first.
+
+#### Observe
+
+`observe(fixtures, args)` is optional. It reads the world when no earlier
+step returned the value, and returns an object whose keys the claims read.
+Its fixture bag is a step's bag (see "Context API"), so it may use
+`request`, `page`, `resultOf`, or a project fixture, and it receives every
+args key except the ones a claim names as its expected value, from the
+sentence or from `from`. A key that reaches it, such as a path an earlier
+step returned, is an input; a key withheld from it is what it will be
+compared with, so `observe` cannot choose what to read by it. Reading a
+withheld key throws, and a JavaScript step file, which the types do not
+reach, is held to the same rule.
+
+An `observe` that throws records the step as `unobserved`, with the error,
+and judges no claim. That is a different result from a broken claim: a
+guard inside `observe` that throws is visible as not having measured,
+never as a claim that held or broke. A step deadline that passes first is
+`timeout`, as for any step.
+
+#### Poll
+
+`poll: { timeout_ms }` runs `observe` again, 100 milliseconds apart, until
+every claim holds on two consecutive readings, or the timeout passes. The
+last reading is then judged once and recorded with the number of
+readings. One reading that holds is never enough: a page between two
+renders can show the expected state for one frame. `poll: false`, or no
+`poll`, reads once. `poll` needs an `observe`, since values from earlier
+steps do not change between readings, and its timeout cannot exceed the
+step deadline's limit.
+
+`nuka check` requires a claim step whose `observe` reaches the `page`,
+`context`, or `pageAs` fixture, directly or through a project fixture, to
+state `poll`, as `poll: { timeout_ms }` or `poll: false`
+(`claim-poll-unstated`). Whether such a step reads once or until the page
+settles is a choice the step file has to make visibly.
+
+#### Self-comparison
+
+`nuka check` resolves where each side of a bound claim comes from: the
+sentence key, the producing line and path, or the `observe` path. It
+reports a claim whose two sides resolve to the same place
+(`claim-compares-itself`), because such a claim holds whatever the
+behaviour is. The run records the same case as a broken claim with a
+reason, for a project that runs without checking first.
+
+#### mutates
+
+A claim step is `mutates: false` by construction: it has no action, so
+`defineStep` refuses a `mutates` key on one, and the record says `false`.
+This does not overturn the reasoning of the `then-mutates` warning it
+replaces. That warning said a sentence in Then position that changes
+state is in tension with its position, and a person had to decide which
+was wrong. The tension is still there, and its answer is the same: a
+sentence that acts belongs to a step that runs, in When position. What
+changed is that the question is now a fact the step file states (whether
+the step has `run` or `claims`), so `nuka check` reports a step that runs
+in Then position as a definite error (`then-without-claims`) instead of a
+warning about a declaration it had to trust. An `observe` that writes is
+not hidden either: the step record measures it like any other step's
+writes (see "Records").
+
+#### Where a claim may stand
+
+- `then-without-claims` (error): a feature line in Then position (`Then`,
+  and `And` or `But` after a Then) binds a typed step that runs. A step
+  that only reads or records a value belongs in a Given or a When.
+- `claims-outside-then` (error): a claim step is bound in Given or When
+  position, or on a `*` line, which Gherkin gives no position. Only a Then judges, so a broken claim there would
+  read as a setup that broke instead of a criterion that failed.
+
+Compat steps are not covered by these two codes. They are the migration
+door (see "Compat steps (the migration door)"), and a compat step cannot
+declare claims, so a compat Then stays a compat Then, still reported by
+the `then-compat-step` warning. Moving it to a typed step means writing
+its claims.
+
+#### The record
+
+A claim step's record has three fields of its own (see "Records"):
+
+- `claims`: each claim in the order the step declares it. A comparison
+  carries `actual` (after `view` and `at`; absent when the path held
+  nothing), `actual_from`, `view` and `at` when the claim names them,
+  `compare`, `expected`, `expected_from`, `outcome` (`held`, `broken`, or
+  `unobserved`), a `reason` when it broke for something other than the
+  comparison itself (an undefined value, two JSON types, an empty expected
+  text, a view that could not apply), and `measured`. An `each` claim
+  carries `actual_from`, the `each` counts and item results, and the same
+  `outcome`, `reason`, and `measured`.
+- `observation`: `observed` when the step read its values, `unobserved`
+  when it could not. The step's `error` then says why.
+- `attempts`: how many times the step read its values. Each `observe` call
+  counts; a step with no `observe` reads its `from` values once.
+
+`measured` names the recorded channel whose content equals the raw actual
+value, before `view` and `at`: `{ "step_record_id", "channel" }`, where the
+channel is a path inside that step record, such as
+`observed.processes[0].stdout`, `http.jsonl[1].response_body`, or
+`observed.files[0].content`. A claim that reads a `from` value looks in the
+producing step's record; a claim that reads `observe` looks in the claim
+step's own. It is `null` when no channel holds that value. It is
+information about where the value came from, never a condition of the
+claim.
+
+A broken claim fails the step with `error.kind` `claim_broken`, and the
+message names the claim:
+
+```text
+claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+```
+
+One line per broken claim, with the first item that broke under an `each`.
+The run summary lists every claim of every Then under "Claims", one line
+each, in the same words with `held` or `broken` after them.
+
+The Allure results show each claim as a child step of its step, named by
+the same line, passed when it held, failed when it broke, and broken when
+the step observed nothing, with the values and their sources as
+parameters (see "Allure results"). The cucumber-messages stream attaches
+the claims to the step as `claims.json`, with media type
+`application/vnd.nukadoko.claims+json`, and a broken claim's step result
+carries an `exception` of type `nukadoko.ClaimBroken` with the same
+message (see "Messages stream").
+
+`nuka do` runs a claim step the same way: it reads its values, judges
+every claim, and writes the same record.
+
 ### Keyword semantics
 
 Gherkin keywords carry a fact because nukadoko trusts the **`mutates`
@@ -1533,23 +1799,30 @@ for every occurrence. Therefore, a per-step Boolean cannot describe a
 per-occurrence fact:
 
 - `mutates` states the step's **declared intent**. Its default is `true`,
-  and read-only steps declare `false`.
-- **During static analysis**, `nuka check` warns when a declared-mutating
-  step is bound in Then position. It does not report an error. A person
-  must review the conflict because the declaration alone cannot resolve it.
+  and read-only steps declare `false`. A claim step is `false` by
+  construction (see "Claims").
+- **During static analysis**, position is checked by what a step is, not
+  by `mutates`: a Then binds a claim step, and a claim step stands only
+  in Then position (`then-without-claims` and `claims-outside-then`,
+  both errors). Whether a step runs or claims is a fact its file states,
+  so the check needs no declaration to trust. The `then-mutates` warning
+  that read `mutates` in Then position is gone, because every step that
+  runs is now reported there as an error; "Claims" says why its reasoning
+  still holds.
 - **Read-only environments refuse a declared-mutating step before it
   runs.** This rule includes a part reached through `call` (see "Parts").
   This is the only place where the declaration gates execution.
 - **At run time**, the step record stores what the execution did, as far
   as the tool can measure it exactly (see "Records"). It stores no verdict
-  about writes. What it stores does not decide Then position or a
-  read-only environment's policy. Nukadoko trusts `mutates: false`
-  whatever the step record holds.
+  about writes. What it stores does not decide a read-only environment's
+  policy. Nukadoko trusts `mutates: false` whatever the step record holds.
 - Gherkin classifies an `And` or `But` step with the pickle step type of
   the preceding primary keyword (Given, When, or Then). Gherkin's pickle
-  compiler defines this behavior. Therefore, an action after `Then` gets
-  the same Then-position observation as other steps in that position. The
-  position does not gate the action.
+  compiler defines this behavior. Therefore, an action written as `And`
+  after `Then` is in Then position, and a step that runs there is
+  `then-without-claims`. An action that follows a claim goes under a new
+  `When`. A `*` line has no position at all, so a claim step there is
+  `claims-outside-then`.
 - Measurement cannot decide this fact. The HTTP method is a proxy for
   write semantics, not the semantics itself. GraphQL, RPC-over-POST, and
   many vendor query APIs use POST for a semantically pure read, and a
@@ -1573,9 +1846,9 @@ per-occurrence fact:
   enforce mutation semantics at run time. A person reviewing the pull
   request reads the declaration and the step record side by side.
 - Compat (untyped) steps have no `mutates` declaration (see "Compat steps (the
-  migration door)"). The `then-compat-step` warning from `nuka check` identifies
-  this coverage gap when a compat step is bound in Then position. It does
-  not identify a mutation conflict. Run-time observation records the same
+  migration door)"), and they cannot declare claims. The `then-compat-step` warning from `nuka check` identifies
+  this coverage gap when a compat step is bound in Then position: nukadoko
+  cannot see what such a step judges. Run-time observation records the same
   measurements as it does for any step, but they gate nothing.
 
 ## Compat steps (the migration door)
@@ -2213,9 +2486,11 @@ crashed Node program is named by its error. Text before the location and
 a `: ` is kept. Any other text keeps its own first line. A first line that
 ends in a colon, such as `init exited 1:`, only introduces what follows, so
 it is joined to the next visible line once (`init exited 1: Error: ...`),
-with the same header skipped there. It says why a Then step read an
+with the same header skipped there. It says why a Then claimed against an
 empty stdout: the program it ran did not start, or failed, and the step
 that ran it still passed, because an exit code is a result, not a failure.
+A broken claim's error line is its claim line (see "Claims"), which
+already carries both values and where each came from.
 The text comes from the step record, so a secret in it is already
 redacted. After the
 summary line, stderr prints each failed scenario as a finding,
@@ -2250,7 +2525,7 @@ to act on the run without opening another file:
       "code": "scenario-failed",
       "file": "features/greet.feature",
       "line": 4,
-      "message": "greets by name: text: expected \"Hi, Ada!\", got \"Hello, Ada!\"",
+      "message": "greets by name: claim broken: \"Hello, Ada!\" (from:run-greet@5.stdout as text) equal \"Hi, Ada!\" (sentence:text)",
       "do": "nuka run features/greet.feature:4"
     }
   ],
@@ -2297,14 +2572,28 @@ to act on the run without opening another file:
           "record": "steps/step-20260801-143023-g7h8",
           "mutates": false,
           "observed": { "processes": null, "http": null, "files": null, "unmeasured": [] },
-          "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
+          "error": { "kind": "claim_broken", "message": "claim broken: \"Hello, Ada!\" (from:run-greet@5.stdout as text) equal \"Hi, Ada!\" (sentence:text)" },
           "used": [
             {
               "step": "run-greet",
               "record": "steps/step-20260801-143023-e5f6",
               "result": { "exitCode": 0, "stdout": "Hello, Ada!\n", "stderr": "" }
             }
-          ]
+          ],
+          "claims": [
+            {
+              "actual": "Hello, Ada!",
+              "actual_from": "from:run-greet@5.stdout",
+              "view": "text",
+              "compare": "equal",
+              "expected": "Hi, Ada!",
+              "expected_from": "sentence:text",
+              "outcome": "broken",
+              "measured": { "step_record_id": "step-20260801-143023-e5f6", "channel": "observed.processes[0].stdout" }
+            }
+          ],
+          "observation": "observed",
+          "attempts": 1
         }
       ],
       "hooks": [],
@@ -2353,7 +2642,10 @@ to act on the run without opening another file:
   for a reason (`undefined`, `ambiguous`), has an `error` with the step
   record's `kind` (`null` when no step record says) and its first message.
   A failed step that read earlier results through `from` has `used`, each
-  producer's step, record, and the result it read. A result whose JSON is
+  producer's step, record, and the result it read. A claim step has its
+  `claims`, `observation`, and `attempts`, the same values its step
+  record holds (see "Claims"), so a broken claim is read without opening
+  the step record. A result whose JSON is
   over 4096 bytes is a preview instead, with `truncated: true` and
   `result_bytes`, the whole value's size: an object keeps its top-level
   numbers, booleans, and nulls and the first 1024 characters of each
@@ -2645,13 +2937,16 @@ its scenario record's id, so either record leads to the other.
   it already answers everything else about what this one execution did.
 - `error.kind` uses a closed set and sits beside the message a person reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
-  `timeout`, `unsupported`, `step_error`. Closed because a report has to
+  `timeout`, `unsupported`, `claim_broken`, `unobserved`, `step_error`. Closed because a report has to
   classify against it: an open one, extended per step, would classify
   nothing. The first four name failures that exist only because there is a
   contract to violate, which is the part a report built on a runner that
   discards return values cannot fill in; a classifier that isn't sure says
   `step_error`, since claiming a contract failure wrongly is worse than not
-  claiming one. Hook records in the scenario record carry the same field.
+  claiming one. `claim_broken` is the one kind that says a criterion
+  failed: a claim step read its values and a claim did not hold. A claim
+  step that could not read them is `unobserved`, so a broken setup and a
+  failed criterion never share a kind (see "Claims"). Hook records in the scenario record carry the same field.
 
   | `error.kind` | The step failed because |
   | --- | --- |
@@ -2661,12 +2956,19 @@ its scenario record's id, so either record leads to the other.
   | `world_invalid` | a write to a declared World key failed its `defineWorld` schema |
   | `timeout` | a deadline fired before the step or hook settled |
   | `unsupported` | a compat shape nukadoko does not implement: a `done` callback, or a `"pending"` or `"skipped"` return value |
+  | `claim_broken` | a claim step read its values and at least one claim did not hold |
+  | `unobserved` | a claim step could not read its values (its `observe` threw, or a fixture it names could not be set up), so no claim was judged |
   | `step_error` | anything else: the step's or hook's own code threw |
 
 - `mutates` contains the step's declaration (`null` for a compat step, which
   has none to record, not `false`), sitting beside what the step record
   measured so declared and measured can be compared without a second
-  artifact.
+  artifact. A claim step records `false`: it has no action to declare.
+- `claims`, `observation`, and `attempts` appear on a claim step's
+  record only: each claim with the values it compared and where each came
+  from, whether the step read its values, and how many times it read them.
+  "Claims" describes each field. A claim step's `result` is `{}`: it
+  returns nothing a later step can read.
 - The harness collects evidence; the step never reports it: Playwright
   tracing and screenshots when the browser is used, every `request` fixture
   call, every `page.request` or `context.request` call, and the page's own
@@ -3755,7 +4057,7 @@ An agent follows this process for a ticket's acceptance criteria:
    ticket id and the criteria in the reviewer's words; the scenarios are
    those criteria translated into the vocabulary.
 4. `nuka check <feature>` (undefined steps, pattern/schema mismatches, a
-   Then bound to a mutating step) before anything runs. Pass the path
+   Then bound to a step that runs) before anything runs. Pass the path
    unless the directory the feature lives in is listed in
    `additionalFeatureDirs`: a bare `nuka check` walks `featuresDir` and that
    list, so a feature deliberately kept outside `featuresDir` and named
@@ -3897,6 +4199,12 @@ Neither `ms` nor `timeout_ms` ever lands in the name: `ms` is already visible as
 When `actions` itself was capped at 100 entries (see "Records", `truncated.actions`), the timeline gets one more child step at its own tail, zero-width and passed, naming the cut (e.g. `... 4113 more actions not shown`), so a reader scanning only the timeline never mistakes a capped list for everything that happened.
 Never clamped to the parent step entry's own start/stop range: a timeline entry outside that range already happened, and hiding it would make it unreadable rather than making it not true.
 
+A claim is an assertion, and Allure's unit of an assertion is a step with its own status, so each claim of a claim step becomes one zero-width child step after the timeline (see "Claims").
+Its name is the claim's line, the same words the run summary prints (e.g. `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`).
+Its status is passed when the claim held, failed when it broke, and broken when the step observed nothing.
+Its parameters are `actual`, `actual from`, `expected`, `expected from`, and, when a channel holds the raw actual value, `measured`, so a reader sees both values without opening `record.json`.
+A step that failed with `claim_broken` is failed, like `step_error` and `result_invalid`: a broken claim is a criterion failing, which is what Allure's failed means.
+
 `page_events` becomes up to three parameters (see "Records"): `console errors (observed)`, `page errors (observed)`, and `failed requests (observed)`. It adds a parameter only when that category has an entry, so readers can see the count without opening `record.json`.
 A category the collector truncated reports its true total beside the shown count, e.g. `100 of 4213`: the shown count alone would understate what actually happened.
 
@@ -3908,12 +4216,12 @@ The marker names the same `error.kind` a failed step's step record (or, when a h
 The two Allure generations turn that into a category by different paths, and they need different things from a user.
 
 - **Allure 2** has no category field for each result, so `nuka report` also writes `categories.json` on every render.
-  It contains all seven rules, one for each `error.kind`, and matches the message prefix by regular expression.
+  It contains all nine rules, one for each `error.kind`, and matches the message prefix by regular expression.
   The message prefix and category rule represent the same classification, so users do not need extra configuration.
 - **Allure 3** does not read `categories.json` from a results directory during `allure generate` or `allure report`.
   Allure 3 gets categories only from its configuration and matches them against result labels.
   `nukadoko.failure` supplies that label.
-  `nuka init --allure` writes `allurerc.mjs` at the project root with seven label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the results themselves use.
+  `nuka init --allure` writes `allurerc.mjs` at the project root with nine label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the results themselves use.
   Dropped at a project's root it is picked up automatically (Allure 3 auto-detects `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory, no `--config` flag needed).
   `nuka init` checks all six extensions first and writes nothing, naming the file it found on stderr, when a project already has one.
   Without any of them, every nukadoko failure lands in Allure 3's one built-in "Product errors" category instead.
@@ -3991,7 +4299,8 @@ manifest, so retention and `nuka clean` remove it with the run.
   fidelity. Its only job is to ensure that a migrated suite's existing
   formatters and JUnit-based CI keep reading a nukadoko-produced run the
   way they read a classic cucumber-js one.
-- Step record internals do not enter the stream. This excludes the validated
+- Step record internals do not enter the stream, apart from a claim step's
+  claims (below). This excludes the validated
   result, `mutates`, `observed`, `error.kind`, and `calls`.
   `TestStepResult` and
   `TestStepFinished` are closed schemas (`additionalProperties: false`)
@@ -4002,7 +4311,12 @@ manifest, so retention and `nuka clean` remove it with the run.
   the schemas were open (see "Parts"). Allure nests one because Allure's
   own model does.
 - Attachments contain only what a step declared about itself: `declared`
-  attachments and log lines. Log lines use cucumber-js's
+  attachments and log lines, and a claim step's claims. The claims are a
+  `claims.json` attachment of media type
+  `application/vnd.nukadoko.claims+json`, holding `claims`,
+  `observation`, and `attempts` as the step record has them (see
+  "Claims"): a claim is what the step file declared it checks, with the
+  values it compared. Log lines use cucumber-js's
   `text/x.cucumber.log+plain` media type (the one `this.log()` produces).
   Trace, screenshots, the HTTP log, and the validated result stay
   Allure-only: that measurement surplus already has a home, and
@@ -4030,7 +4344,8 @@ manifest, so retention and `nuka clean` remove it with the run.
   the step's own error message, `<system-out>` carries a per-step
   passed/failed/skipped trace, and `<testsuite tests="...">` matches the
   real scenario count; `<failure>` itself gets no `type` or `message`
-  attribute, because `TestStepResult.exception` is never set (below).
+  attribute, because `TestStepResult.exception` is set only for a broken
+  claim (below).
   Only the junit-xml path has been run this way: an official HTML report
   or a third-party formatter has not been exercised against this stream,
   so what's confirmed is that this is a well-formed cucumber messages
@@ -4046,9 +4361,12 @@ the same limit the Allure results carry; `declared` labels, links, and
 parameters have no slot in the protocol's closed schema and are dropped;
 no `stepDefinition` envelope is emitted, because the record keeps no
 location for a step's own definition and emitting one anyway would be a
-fabricated fact; and `TestStepResult.exception` is never set, since the
-protocol requires `Exception.type` and a step record only ever carries a
-message: the reason a failed step's JUnit `<failure>` is body-only.
+fabricated fact; and `TestStepResult.exception` is set only for a step
+that failed with `claim_broken`, with type `nukadoko.ClaimBroken` and the
+claim message. The protocol requires `Exception.type`, and a broken claim
+is the one failure whose type nukadoko decided itself; any other failed
+step carries only a message, the reason its JUnit `<failure>` is
+body-only.
 
 ## Self-healing, audited
 
@@ -4079,8 +4397,8 @@ running it, and each finding carries one of three severities:
   does not match its schema, a feature line no step matches, a config
   mistake. `nuka run` refuses over the errors of the scenarios it selected.
 - A **warning** is a tension a person should look at that does not stop a
-  run: a Then bound to a step that declares `mutates: true`, a scenario with
-  no Then, a `secrets` entry that names a key no envFile defines.
+  run: a Then bound to a compat step, a scenario with no Then, a `secrets`
+  entry that names a key no envFile defines.
 - A **note** is rot rather than breakage. A project can pass every check
   and still rot. A declaration can remain unexercised for years. A contract
   can be unreadable to the agent that must select it. These problems do not
@@ -4306,6 +4624,8 @@ nuka report [<run dir>] --format markdown|allure|messages [--out <path>] [--json
                               (report-out-invalid)
 nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
+                              A claim step reads its values, judges every
+                              claim, and records them as in a run.
                               --env as on nuka run; each call starts clean.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
@@ -4316,7 +4636,9 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
 nuka steps [--json]           list the whole vocabulary, typed and compat:
                               name, file (the step file, relative to the
                               project root), patterns, description, mutates, timeout
-                              when the step declared one, which
+                              when the step declared one, a claim step's
+                              claims and poll (text: one claim: line per
+                              claim), which
                               fixtures each step needs (needs, needs_browser,
                               or needs: null plus needs_error for the one it
                               can't read), and where each chained args key
@@ -4335,7 +4657,7 @@ nuka steps [--json]           list the whole vocabulary, typed and compat:
 nuka describe <step>          full contract, the step file as file,
                               schemas as JSON Schema, plus
                               timeout when the step declared
-                              one, plus
+                              one, a claim step's claims and poll, plus
                               the envelope's findings beside it (the same
                               findings as nuka steps'). When args or returns cannot be
                               represented as JSON Schema, that side is null
@@ -4358,23 +4680,27 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               refuses a pattern check would refuse in
                               this project, a type it does not register
                               included, with the registered type names.
-                              --then writes mutates: false and no
-                              returns, for a step a Then line binds.
-                              With exactly one capture and at most one
-                              --from, its body asserts instead of the
-                              stub: node:assert/strict compares actual
-                              (the --from value, or undefined under a
-                              TODO) with the capture, and the message
-                              is "<key>: expected <value>, got
-                              <actual>"; a custom type compares with
-                              deepEqual. A chained stdout or stderr
-                              string loses one trailing newline before
-                              the comparison, the one a program prints
-                              last. When every feature line the
+                              --then writes a claim step, for a step a
+                              Then line binds: claims in place of run,
+                              and no returns or mutates. With exactly one
+                              value the line states (a capture, the
+                              docstring, or the table) and exactly one
+                              --from, the claim compares the two with
+                              equal; a chained stdout or stderr string
+                              against a stated string gets view: "text",
+                              which trims the trailing newline a program
+                              prints last. Otherwise it writes an observe
+                              stub that throws "not implemented: <name>"
+                              and one claim on what observe returns
+                              against the first stated value, or, with
+                              none stated, against { observe } under a
+                              TODO to state the value in the pattern.
+                              observe's key is actual, or actual2, ...
+                              past a key args holds. When every feature line the
                               pattern matches carries a docstring, args
                               gets docstring: z.string(), and for a
                               table, table: z.array(z.array(z.string()));
-                              --then compares it as it would a capture.
+                              --then claims it as it would a capture.
                               With no such line, or lines that disagree,
                               the key is left out. --command never gets
                               one.
@@ -4382,7 +4708,8 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               earlier step's returns: the import of that
                               step's file, an args field typed by its
                               schema (producer.returns.shape.key), the
-                              from entry, and the key in run. It refuses a
+                              from entry, and the key in run (in the
+                              claim, under --then). It refuses a
                               producer that does not return the key and
                               names the keys it does return. The same key
                               given for several steps writes one from
@@ -4482,8 +4809,7 @@ nuka scaffold --feature <path>
                               integer {value:int}, a decimal
                               {value:float}, keyed value, value2, ... A
                               Then line (and its And/But) gets --then's
-                              mutates: false, and with one capture
-                              --then's assertion body. A line with a
+                              claim step. A line with a
                               docstring gets a docstring: z.string()
                               key, and one with a table a table key of
                               rows, which a Then compares. The name is the pattern's
@@ -4510,8 +4836,13 @@ nuka scaffold --feature <path>
                               --cwd, --argv, --request, --body,
                               --description, or --replace
 nuka check [feature..] [--json] [--fail-on <code>]
-                              static checks: pattern/schema mismatches, Then
-                              binding to mutating steps, undefined steps per
+                              static checks: pattern/schema mismatches, a
+                              Then bound to a step that runs, a claim step
+                              bound outside Then position, a claim whose
+                              from path the producer's returns does not
+                              declare or whose two sides are the same
+                              value, a claim step that observes a page and
+                              does not state poll, undefined steps per
                               feature (each naming the patterned steps no
                               scanned feature line binds), ambiguous steps (one line two patterns
                               both match), duplicate patterns, a pattern

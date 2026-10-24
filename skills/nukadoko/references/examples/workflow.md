@@ -1,7 +1,8 @@
 # Worked example: a stateful workflow
 
 A finished project for a sign-up flow whose steps call the module under
-test directly, built with nukadoko 0.16.1 on Node 24.22.0. Every output
+test directly, built with nukadoko 0.16.1 on Node 24.22.0, with its Thens
+moved to claims in the release after 0.21.0. Every output
 block below is copied from a real run of that project, which is
 `examples/acceptance/workflow/` in the nukadoko repository; CI runs it.
 The rules it follows are in `../scenario-rules.md`.
@@ -59,15 +60,18 @@ Feature: sign-up
 
 - `store` (a config fixture, scoped per scenario): a new, empty user store.
 - `register` (Given in four scenarios, When in two): submits a
-  registration and returns `accepted`, `token`, and `reason`. It does not
-  throw on a refusal, so a Then can claim the reason (S6, S10).
+  registration and returns `outcome` (`"accepted"` or `"refused"`),
+  `token`, and `reason`. It does not throw on a refusal, so a Then can
+  claim the reason (S6, S10).
 - `confirm` (Given): opens the link, reading `token` from `register`
   through `from`.
-- `sign-in` (When): returns `accepted` and `reason`, and does not throw on
+- `sign-in` (When): returns `outcome` and `reason`, and does not throw on
   a refusal.
 - `sign-in-is-accepted`, `sign-in-is-refused`,
   `registration-is-refused` (Then): read the outcome through `from` and
-  compare it with `node:assert/strict`, with both values in the message.
+  declare claims on it. The word `accepted` or `refused` in the sentence
+  states the outcome, so a `literal` claim may name it; the reason is a
+  capture.
 
 `features/steps/register.ts`:
 
@@ -82,13 +86,15 @@ export default defineStep({
     password: z.string().describe("The password chosen"),
   }),
   returns: z.object({
-    accepted: z.boolean().describe("Whether the registration was accepted"),
+    outcome: z.enum(["accepted", "refused"]).describe("Whether the registration was accepted or refused"),
     token: z.string().nullable().describe("The confirmation token issued, when accepted"),
     reason: z.string().nullable().describe("Why it was refused, when refused"),
   }),
   run({ store }, { email, password }) {
     const r = store.register(email, password);
-    return r.ok ? { accepted: true, token: r.token, reason: null } : { accepted: false, token: null, reason: r.reason };
+    return r.ok
+      ? { outcome: "accepted" as const, token: r.token, reason: null }
+      : { outcome: "refused" as const, token: null, reason: r.reason };
   },
 });
 ```
@@ -97,7 +103,6 @@ export default defineStep({
 
 ```ts
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import register from "./register.ts";
 
 export default defineStep({
@@ -105,15 +110,14 @@ export default defineStep({
   pattern: "the registration is refused because {expected:string}",
   args: z.object({
     expected: z.string().describe("The expected reason"),
-    accepted: register.returns.shape.accepted,
+    outcome: register.returns.shape.outcome,
     reason: register.returns.shape.reason,
   }),
-  from: { accepted: [register, "accepted"], reason: [register, "reason"] },
-  mutates: false,
-  run({}, { expected, accepted, reason }) {
-    assert.equal(accepted, false, `registration: expected refused because "${expected}", got accepted`);
-    assert.equal(reason, expected, `reason: expected "${expected}", got "${reason}"`);
-  },
+  from: { outcome: [register, "outcome"], reason: [register, "reason"] },
+  claims: [
+    { actual: "outcome", compare: "equal", expected: { literal: "refused" } },
+    { actual: "reason", compare: "equal", expected: "expected" },
+  ],
 });
 ```
 
@@ -142,8 +146,8 @@ confirmation link is opened` showed which token `from` picked, read from
 the step records:
 
 ```
-register {"email":"a@example.com","password":"correct horse"} {"accepted":true,"token":"tok-1","reason":null}
-register {"email":"b@example.com","password":"correct horse"} {"accepted":true,"token":"tok-2","reason":null}
+register {"email":"a@example.com","password":"correct horse"} {"outcome":"accepted","token":"tok-1","reason":null}
+register {"email":"b@example.com","password":"correct horse"} {"outcome":"accepted","token":"tok-2","reason":null}
 confirm {"token":"tok-2"} {"email":"b@example.com"}
 ```
 
@@ -162,8 +166,8 @@ reads, so a process-scope fixture does not fit either, as the note says
 | Date | Decision | Chosen | Why | Became |
 | --- | --- | --- | --- | --- |
 | 2026-10-16 | The same action as a Given in one scenario and the When in another | one step, `register` | the keyword says what the line does in this scenario | S10 |
-| 2026-10-16 | A step that is refused: throw, or return the outcome | return `accepted` and `reason` | a thrown refusal leaves the Then nothing to read | S6 |
+| 2026-10-16 | A step that is refused: throw, or return the outcome | return the outcome and `reason` | a thrown refusal leaves the Then nothing to read | S6 |
 | 2026-10-16 | A refusal reason in the sentence, or a bare `is refused` | in the sentence | the ticket gives the message, and two refusals differ only by it | S6 |
 | 2026-10-16 | `from` when the producer ran twice | the most recent result | measured with the probe above | Shapes: the same producer twice |
 | 2026-10-16 | Two shared Given lines: Background, or repeat them | repeat | they are not shared by every scenario of the file | Shapes: Outline or scenarios |
-| 2026-10-17 | Messages for an outcome that was not refused | name the expected reason and `got accepted` | the first line is all `nuka run` prints | S11 |
+| 2026-10-24 | The outcome as a boolean `accepted`, or as the word | `outcome: "accepted" \| "refused"` | a claim may name a value only when the sentence states it, and the sentence says `accepted` or `refused`, not `true` or `false` | S1 |

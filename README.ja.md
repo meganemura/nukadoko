@@ -136,15 +136,15 @@ npx nuka scaffold output-says --pattern "the output says {text:string}" --then -
 features/steps/output-says.ts
 ```
 
-書かれる本体は、すでに assertion になっています。
-`actual` は When の step が返した `stdout` で、`node:assert/strict` がそれを feature の行が与える `text` と比べ、メッセージには両方の値が入ります。
+Then の step には書くべき本体がありません。
+step は claim を宣言し、比べるのは nukadoko です。
+actual の値は When の step が返した `stdout`、expected の値は feature の行が述べる `text` で、record は両方の値をそれぞれの出どころとともに残します。
 greet は行を改行で終えますが、feature の行にその改行はありません。
-そのため本体は比べる前にその改行を 1 つ取り除き、このファイルに編集は要りません:
+そのため claim は末尾を削る `view: "text"` を通して `stdout` を読み、このファイルに編集は要りません:
 
 ```ts
 // features/steps/output-says.ts
 import { defineStep, z } from "nukadoko";
-import assert from "node:assert/strict";
 import runGreet from "./run-greet.ts";
 
 export default defineStep({
@@ -158,12 +158,8 @@ export default defineStep({
   from: {
     stdout: [runGreet, "stdout"],
   },
-  mutates: false,
-  run({}, { text, stdout }) {
-    // The program ends its output with a newline that the feature line does not show.
-    const actual = stdout.replace(/\r?\n$/, "");
-    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);
-  },
+  // The program ends its output with a newline that the feature line does not show.
+  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: "text" }],
 });
 ```
 
@@ -202,19 +198,21 @@ run       .nukadoko/runs/run-20261016-123947-b4q6/run.json
 `nuka check` を単独で実行すると、同じ check が数秒で済みます。
 
 scenario が失敗すると、stderr は step、そのエラー、その step record、再実行するコマンドを示します。
-次の例では、feature が `"Hi, Ada!"` を期待しています:
+次の例では、feature が `"Hi, Ada!"` を期待しています。
+成り立たなかった claim は、両方の値とそれぞれの出どころを示します。
+5 行目の step の `stdout` と、文が述べる `text` です:
 
 ```text
 scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  failed  0.0s  the output says "Hi, Ada!"
-      text: expected "Hi, Ada!", got "Hello, Ada!"
-      record  .nukadoko/runs/run-20261016-123950-zrhr/steps/step-20261016-123950-kjs1
-steps     .nukadoko/runs/run-20261016-123950-zrhr/steps/  2
-summary   .nukadoko/runs/run-20261016-123950-zrhr/summary.md
-run       .nukadoko/runs/run-20261016-123950-zrhr/run.json
-1 scenario: 0 passed, 1 failed  (1s)
-failed	scenario-failed	features/greet.feature:4	greets by name: text: expected "Hi, Ada!", got "Hello, Ada!"
+      claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
+      record  .nukadoko/runs/run-20261024-094618-elk5/steps/step-20261024-094618-bwp3
+steps     .nukadoko/runs/run-20261024-094618-elk5/steps/  2
+summary   .nukadoko/runs/run-20261024-094618-elk5/summary.md
+run       .nukadoko/runs/run-20261024-094618-elk5/run.json
+1 scenario: 0 passed, 1 failed  (0s)
+failed	scenario-failed	features/greet.feature:4	greets by name: claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
   do: nuka run features/greet.feature:4
 ```
 
@@ -226,18 +224,26 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 <!-- nukadoko:run -->
 # nukadoko run failed: 1 scenario, 0 passed, 1 failed
 
-- commit: `507dc66`
+- commit: `d94f697`
 - environment: default
 - browser: none launched
-- nukadoko: 0.15.0
-- run: run-20261016-123950-zrhr
-- started 2026-10-16T12:39:48.835Z, finished 2026-10-16T12:39:50.265Z (1s)
+- selection: full
+- nukadoko: 0.21.0
+- run: run-20261024-094618-elk5
+- started 2026-10-24T09:46:18.258Z, finished 2026-10-24T09:46:18.693Z (0s)
 
 ## features/greet.feature
 
 | scenario | line | default | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `text: expected "Hi, Ada!", got "Hello, Ada!"`<br>record `steps/step-20261016-123950-kjs1` |
+| greets by name | 4 | failed | 0.2s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-094618-bwp3` |
+
+## Claims
+
+Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, and whether it held.
+
+- `features/greet.feature:6` the output says "Hi, Ada!"
+  - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken
 ```
 
 CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.ja.md](docs/ci.ja.md) に workflow 全体があります):
@@ -374,7 +380,7 @@ export default defineStep({
 
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。
-メッセージには改行がないので、その assertion は scaffold が書いたまま、編集なしで動きます。
+メッセージには改行がないので、その claim は `view` を必要とせず、scaffold が書いたまま、編集なしで動きます。
 feature は次のとおりです:
 
 ```gherkin
@@ -468,7 +474,7 @@ features/steps/the-exit-code-is.ts
 ```
 
 pattern は、cucumber-expressions がその行を読んだとおりのものです。
-引用符で囲んだ値は `{value:string}`、整数は `{value:int}`、小数は `{value:float}` になり、Then の行には `mutates: false` が付きます。
+引用符で囲んだ値は `{value:string}`、整数は `{value:int}`、小数は `{value:float}` になり、Then の行には `observe` が TODO の claim step が書かれます。
 行の下の docstring は `docstring: z.string()` のキーに、table は行の配列を持つ `table` のキーになります。
 `value` の名前を変えるときは、pattern と `args` を一緒に変えてください。
 行が 2 通り以上に読めるとき(登録した型と組み込みの型の両方が当てはまるとき)や、その読み方がプロジェクトの別の行にも一致するときは、stub は行そのものを キャプチャなしの pattern にし、stderr の `note:` 行がそのことを伝えます。
@@ -552,7 +558,7 @@ step がその種類のことを何もしなかったキーは `null` です。
 その対応づけは、出来上がったものへ黙って同意するようにはずれない強度が必要です。
 
 それが、これの正体である。
-あらゆる step は型付きの契約であり(境界でバリデーションされるスキーマ、宣言され実行前に検査される依存関係)、あらゆる実行は、agent ではなくツールが書いた記録を残す。
+あらゆる step は型付きの契約であり(境界でバリデーションされるスキーマ、宣言され実行前に検査される依存関係)、あらゆる `Then` は何を比べ、expected の値がどこから来るかを宣言し、あらゆる実行は、agent ではなくツールが書いた記録を残す。
 自然言語の側は柔らかいままにしてある。
 人がそこで考える場所だからだ。
 その下にあるマッピングは意図的に硬くしてある。
@@ -775,7 +781,8 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 | `this.foo`(型のない袋) | step は `returns` スキーマに対して値を返し、後続の step はそのうち 1 つのキーを名前で読むために `from` を宣言します。この依存関係は diff 上で見える import として現れ、読んだ事実は読み手側 step の step record に記録され、束縛の順序が壊れていれば `nuka check` が実行前に検出します(参照: [step の連鎖](docs/spec.ja.md#step-の連鎖)) |
 | `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が記録した HTTP の呼び出しとその本文、プロセス、ファイル、見えたが計測できなかった操作、evidence、environment、target version を記録した step record を書きます |
 | 実行時に見つかる undefined な step | `nuka check <feature>` はそれらを実行前に静的に検出して失敗し、何にも一致しなかったテキストの名前を挙げます |
-| 黙って状態を変える `Then` | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否され、`Then` に結び付けられていれば `nuka check` が警告します。実際に何が起きたかは、レビューのためにいまも step record に記録されます。 |
+| コードで判定する、あるいは黙って操作する `Then` | 型付きの `Then` はコードではなく claim を宣言します。どの値を読み、どう比べ、expected の値がどこから来るか(step が別の出どころを述べない限り文)です。比べるのは nukadoko で、record と run サマリは両方の値を名指しします。`nuka check` は、実行する step に結び付いた `Then` と、`Given` や `When` に結び付いた claim step を拒否します([Claims](docs/spec.md#claims) を参照)。 |
+| 黙って状態を変える step | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否されます。実際に何が起きたかは、レビューのためにいまも step record に記録されます。 |
 
 最後の項目には、正確な説明が必要です。
 このツールはかつて、約束ではなく回数に対して失敗していました。
@@ -803,6 +810,8 @@ Cucumber が step の返り値を捨てるためです。
 各 step の下には、絶対時刻から組み立てられた、その内部で何が起きたかのタイムラインが置かれます。
 到達した段階、それぞれの待ちの実際の所要時間と試行回数、そして assertion を含めて実行された Playwright の呼び出しのすべてです。
 1 回の試行と 40 回の試行では直し方が正反対になりますが、それを見分けられるのはレポートの中でここだけです。
+`Then` の各 claim は、タイムラインの後にそれ自身の child step として続きます。
+名前はその claim の行で、passed か failed になり、両方の値とそれぞれの出どころが parameter に入ります。
 ページ自身が述べたこと(console error、捕捉されないエラー、失敗したリクエスト)の件数が step のそばに置かれるので、ページが 3 件の捕捉されないエラーを投げながら通った step は、誰も attachment を開かなくてもそれを語ります。
 添付される trace はその step 自身のものであり scenario 全体のものではないため、失敗した step はさがし回らずに直接開けます。
 同じ `trace.zip` は step record の下にも単体で置かれており、Allure を介さずに `npx playwright show-trace <evidence.dir>/trace.zip` で直接開けます。
@@ -845,7 +854,7 @@ npx allure open .nukadoko/allure-report                  # serve one already gen
 代わりに、上の `npx allure open` または `npx allure watch` でレポートを配信します。
 
 `nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出します(Allure が自動検出するいずれかの名前で既にあれば、書かずにその旨を伝えます)。
-これを置かないと、nukadoko のあらゆる失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまい、7 個の `error.kind` のどれにも分類されません。
+これを置かないと、nukadoko のあらゆる失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまい、9 個の `error.kind` のどれにも分類されません。
 `init` を使わないプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーして置くこともできます。
 
 各コマンドに `--output` を渡してください。
@@ -892,7 +901,8 @@ nukadoko の貢献は、すべての段階が記録を残すことです。
 
 このループは、スイートが空洞化する別の経路を**捕まえられません**。
 scenario を保ったまま、その `Then` が弱くなることがあります。
-step record は実行が何をしたかを示しますが、assertion がいまも意味を持つかは示せません。
+step record は実行が何をしたかを示し、claim は `Then` が何を比べたかを示します。
+しかしどちらも、その比較がいまも受け入れ基準の言うとおりの意味を持つかは示せません。
 この問題はレビューで捕まえる必要があり、[What this does not do](#what-this-does-not-do) でも説明しています。
 
 ## Skills for coding agents
@@ -1025,8 +1035,9 @@ for this project's end-to-end / acceptance tests.
    steps, promoting the hottest existing step to a typed one).
 4. Risks and costs: an estimate of vocabulary size (how many distinct
    typed steps this suite would need), how much of the existing `Then`
-   usage is hygienic (assertion only, nothing chained that mutates) versus
-   not, whether the suite is CommonJS, and where secrets currently live
+   usage only reads and compares (a typed `Then` declares claims, and its
+   sentence states the expected value) versus acts or keeps the expected
+   value in code, whether the suite is CommonJS, and where secrets currently live
    relative to where nukadoko expects them.
 5. Verdict: adopt / trial / not-yet, with the reasoning.
 
@@ -1065,7 +1076,7 @@ stdout には、求めたときだけ出力されます。
 `nuka run --records` は、scenario が終わるたびに、その scenario の `run.json` のエントリを 1 行 1 件の JSON として stdout に出力します。
 `nuka run --json` は、代わりに `run.json` そのものを出力します。
 それはすべての `--json` が出力する envelope で、`findings` の隣に run のフィールドが入ります。
-そこにはコミットと作業ツリーが dirty だったかどうか、実行した各 environment、`:line` の対象が run を `partial` にしたかどうか、件数、scenario と environment の組ごとに 1 つの断定、各 scenario の step(行、status、step record、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
+そこにはコミットと作業ツリーが dirty だったかどうか、実行した各 environment、`:line` の対象が run を `partial` にしたかどうか、件数、scenario と environment の組ごとに 1 つの断定、各 scenario の step(行、status、step record、claim step ならその claim、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
 `--json` のときは stderr は空で、警告は文書の中の finding になるので、エージェントのシェルに見えるのはその文書だけです。
 `run.json` と step record は、フラグにかかわらず run 自身のディレクトリ `.nukadoko/runs/<run_id>/` に書かれ、run サマリは `run.json` だけから描画されます。
 stdout や stderr が端末かどうかで変わる出力はありません。
@@ -1073,15 +1084,15 @@ stdout や stderr が端末かどうかで変わる出力はありません。
 そのため、CI のログだけで失敗の理由が分かります。
 失敗した step が、プログラムが 0 以外で終わった step から値を読んでいたときは、その 2 行の間に `used` 行が入ります。
 その行は、その step、exit code、stderr の最初の行を示します。
-空の stdout を受け取った Then step は、たいていそこで失敗しています。
+空の stdout に対して claim した Then は、たいていそこで成り立たなくなっています。
 サマリの後では、失敗した各 scenario が `scenario-failed` の finding になり、その `do:` 行が scenario を再実行します。
 
 ```text
   step 2/2  failed  0.0s  the sum is 5
-      expected 5, got 4
+      claim broken: 4 (from:add@4.sum) equal 5 (sentence:expected)
       record  .nukadoko/runs/<run_id>/steps/<id>
 ...
-failed	scenario-failed	features/sum.feature:3	two and two: expected 5, got 4
+failed	scenario-failed	features/sum.feature:3	two and two: claim broken: 4 (from:add@4.sum) equal 5 (sentence:expected)
   do: nuka run features/sum.feature:3
 ```
 
@@ -1152,10 +1163,12 @@ environment はそれでも設定にすぎません。
   これは secrets と同じ、正直な限界です。
   nukadoko がなくすのは、agent の **説明** を信頼する必要そのものです。
   実行と計測はツール側にとどまり、それを語る agent 側にはありません。
-- **assertion が何かを本当に assert しているかは検査しません。**
-  ある step がその description の主張どおりに正直に動くかどうかは、PR レビューに委ねられます。
+- **claim がその文の言うとおりの意味を持つかは検査しません。**
+  型付きの `Then` は claim を宣言するので、expected の値は文から来るか、出どころのラベルが付きます。
+  また `nuka check` は、値をそれ自身と比べる claim を拒否します。
+  基準が `equal` を意味していたのに `contains-text` で十分か、`observe` が文の名指すものを読んでいるかは、PR レビューに委ねられます。
+  それ以外の step がその description の主張どおりに正直に動くかどうかも、PR レビューに委ねられます。
   ツールが保証するのは入出力の形と実行された事実だけです。
-  型付きの契約は、空の assertion をレビューで見つけやすくしますが、それを自動的に拒むものは何もありません。
 - **`mutates` は信頼される宣言であり、network が示す内容から導き直されるものではありません。**
   HTTP メソッドは書き込みの意味論そのものではなく、そのためのプロキシです。
   純粋にクライアント側だけの状態や、GET で mutate してしまうサーバは、これでは見えません。
@@ -1204,7 +1217,7 @@ step が結び付いているかどうかは、プロジェクトがスキャン
 run サマリを読んで、何がどの commit で走ったか、そして自分が承認した基点からどの受け入れ基準と step ファイルが変わったかを、その比較が届く範囲で確かめます。
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
 `nuka run` は毎回そのサマリを Markdown で書きます。
-commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
+commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、各 Then のすべての claim を `held` か `broken` とともに挙げる Claims の節、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
 GitHub Actions では設定なしでジョブのサマリページに載り、`nuka report --format markdown --out <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
 
 nukadoko が記録するのは証跡であり、承認ではありません。

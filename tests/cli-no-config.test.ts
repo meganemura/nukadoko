@@ -15,11 +15,13 @@ import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDi
 const STEP = `import { defineStep, z } from "nukadoko";
 
 export default defineStep({
-  description: "Do nothing",
+  description: "Observe that nothing happened",
   pattern: "nothing happens",
   args: z.object({}),
-  mutates: false,
-  async run() {},
+  async observe() {
+    return { happened: [] };
+  },
+  claims: [{ actual: "happened", compare: "equal", expected: { literal: [] } }],
 });
 `;
 

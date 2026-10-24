@@ -1,8 +1,8 @@
 # Writing a step
 
 Finding a step, scaffolding it, running it alone, and chaining it. The
-file's shape and its pattern: `step-files.md`. A step that checks
-something: `checking-steps.md`. Helpers, parts, and splitting: `parts.md`.
+file's shape and its pattern: `step-files.md`. A Then, which claims:
+`checking-steps.md`. Helpers, parts, and splitting: `parts.md`.
 Fixtures, `scratch`, and `poll`: `fixtures.md`.
 
 ## Reading the vocabulary
@@ -44,9 +44,9 @@ When the feature already holds the lines, `nuka scaffold --feature
 filled in) writes one stub for each line `nuka check <file>` calls
 undefined, with the pattern read from the line: a quoted value is
 `{value:string}`, an integer `{value:int}`, a decimal `{value:float}`, and
-a Then line gets `mutates: false`. A Then line with one value also gets
-an assertion body, with `actual` left `undefined` under a TODO: read the
-observed value into it. Rename `value`, `value2` to what the
+a Then line gets a claim step: an `observe` that throws under a TODO and a
+claim on the `actual` it returns. Return the observed value, or take it
+through `from` and drop `observe`. Rename `value`, `value2` to what the
 values mean, in the pattern and in `args` together. A `note:` line on
 stderr names each line whose reading was not the only one, or would also
 match another line: that stub's pattern is the line as written, with no
@@ -61,13 +61,13 @@ each stub's own single scaffold with `--replace`; add `--command` or
    names listed: a number is `{key:int}` or `{key:float}`, not
    `{key:number}`. A pattern that is not a valid Cucumber Expression is
    refused too ("Writing the pattern" in `step-files.md`).
-   Add `--then` for a step a Then line binds: it writes `mutates: false`
-   and no `returns`. With one capture, the expected value, the body asserts
-   with `node:assert/strict`: `actual` is the one `--from` value (or
-   `undefined` under a TODO), and the message names the expected and the
-   actual value. A chained `stdout` or `stderr` is compared without the
-   newline the program printed last. A step whose feature lines carry a docstring or a table
-   gets a `docstring` or `table` key, which a Then compares like a
+   Add `--then` for a step a Then line binds: it writes a claim step,
+   `claims` in place of `run`, with no `returns` and no `mutates`. With
+   one value the line states and one `--from`, the claim compares the two
+   with `equal`, and a chained `stdout` or `stderr` is read through `view:
+   "text"`, without the newline the program printed last; otherwise it
+   writes an `observe` stub to fill in. A step whose feature lines carry a docstring or a table
+   gets a `docstring` or `table` key, which a Then claims like a
    capture; write the feature line first, or add the key by hand, or
    `nuka check` reports `table-docstring-key-mismatch`.
    Add `--from <step>.<key>` for each value the step reads from an
@@ -125,8 +125,8 @@ the project (a real service, a shared database, a file outside
 `scratch`), tell the user what it is about to change and get their
 go-ahead, once per step, not on every retry while fixing it, or
 trial-and-error stops being possible. A step that writes only under
-`scratch`, or only to a server a fixture started for the scenario, needs
-no go-ahead (`examples/http-api.md`). A `mutates: false` step needs none.
+`scratch`, or to a server a fixture started for the scenario, needs no
+go-ahead (`examples/http-api.md`), nor does a claim or `mutates: false` step.
 
 With nobody to ask mid-task, because the caller handed the task over
 rather than sitting in the conversation, the go-ahead has to exist before

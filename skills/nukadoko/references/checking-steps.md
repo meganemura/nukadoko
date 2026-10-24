@@ -1,141 +1,188 @@
-# A step that checks something
+# A Then that claims
 
-## Writing a step that checks something
+## The shape
 
-A step fails when its `run` throws and passes when it does not. There is
-no assertion API of nukadoko's own and none is re-exported. In a project
-with no browser (a CLI, an API), `node:assert/strict` is what `nuka
-scaffold --then` writes, and it needs nothing installed:
-`import("playwright/test")` fails with `ERR_MODULE_NOT_FOUND` where
-Playwright is not installed. `examples/cli.md` has a finished Then step of
-that kind. Where Playwright is installed, because a step already needs
-`page`, `context`, `pageAs`, or `request`, `expect` comes from it, imported
-directly. Most of what `expect` offers works the same as it would in a
-Playwright test; a few matchers need something a step does not have (see
-"What `expect` needs from the runner" below).
+A Then judges, and it does not judge in code. Its step declares `claims`
+in place of `run`: which value it reads, how it compares that value, and
+where the value it compares with comes from. nukadoko compares, and the
+step record keeps each claim with both values and where each came from.
+A typed Then never calls `expect` or `node:assert`. `defineStep` refuses a
+claim step that also declares `run`, `returns`, `mutates`, or `parts`.
+`nuka check` refuses a Then bound to a step that runs
+(`then-without-claims`) and a claim step bound in a Given or a When
+(`claims-outside-then`): a step that reads a value for a later Then is a
+When.
 
 ```ts
-// A step that already needs `request`, so Playwright is installed.
-import { expect } from "playwright/test";
 import { defineStep, z } from "nukadoko";
+import runTally from "./run-tally.ts";
 
 export default defineStep({
-  pattern: "the customer {id:string} is in trial",
-  description: "Check that a customer's trial has not ended",
-  args: z.object({ id: z.string().describe("Customer id") }),
-  returns: z.object({
-    trialEndsAt: z
-      .string()
-      .nullable()
-      .describe("The trial end date the service reported"),
+  pattern: "it exits with {code:int}",
+  description: "The process exit code is exactly this",
+  args: z.object({
+    code: z.number().describe("The expected exit code"),
+    exitCode: runTally.returns.shape.exitCode,
   }),
-  mutates: false,
-  async run({ request }, args) {
-    const res = await request.get(`/customers/${args.id}`);
-    const customer = await res.json();
-    expect(customer.trialEndsAt, "trialEndsAt").not.toBeNull();
-    return { trialEndsAt: customer.trialEndsAt };
-  },
+  from: { exitCode: [runTally, "exitCode"] },
+  claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
 });
 ```
 
-Two habits make that record worth reading afterwards, and they cover
-opposite outcomes.
+A claim is `{ actual, view?, at?, compare, expected }`. `nuka scaffold
+--then --from <step>.<key>` writes this shape when the line states one
+value; `examples/` has a finished Then for a CLI, an API, and a workflow.
 
-**Assert with `expect` or `node:assert/strict` rather than a bare
-`throw`.** A step that failed has no `result` at all, only `error`, so its
-message is the one place the observed value can still survive. `expect`
-writes actual and expected into that message for you, and the scaffolded
-`assert.equal(actual, text, ...)` passes a message that starts with both
-(`text: expected "Hi, Ada!", got "Hello, Ada!"`), which is the line
-`nuka run` prints; `throw new Error("mismatch")` throws the evidence away
-at the exact moment someone needs it.
+## Where the expected value comes from
 
-**Return what you observed, never a verdict.** This is for a step that
-observes something itself; a Then whose values arrived through `from`
-returns nothing, because the producer's step record already holds them.
-`{ matches: true }` tells a later reader nothing they did not already
-know from the step passing.
-`{ trialEndsAt: "2026-09-01" }` tells them what was actually true, which
-is what makes a green record worth keeping. Describe those fields: on the
-Then side, a field with no `.describe()` breaks the link between an
-acceptance criterion's wording and what was actually observed.
+Pick the source from the sentence; the record names it in `expected_from`.
 
-The same discipline applies to `args`, not only `returns`: give every
-field a `.describe()` so `nuka describe` can connect a criterion's own
-wording to the field that answers it, wherever in the step that wording
-actually lands.
+- **The sentence states it** (a capture, the docstring, or the table):
+  `expected: "code"`, the key itself, recorded as `sentence:code`. The key
+  has to be required in `args`, with no default.
+- **An earlier step returned it** ("the item count is unchanged"):
+  `expected: { from: "<from key>.<path>" }`, recorded as
+  `from:<step>@<line>.<key>`.
+- **The pattern's fixed words state it** ("is refused", "exits 0", "holds
+  no items"): `expected: { literal: "refused" }`. The literal is the
+  pattern's own words, or `0`, `""`, or `[]` for `no`, `none`, or
+  `nothing` (`""` or `[]` for `empty`); any other literal is refused at
+  import. `Then the command succeeds` cannot claim `0`: write `exits 0`.
+- **A second reading** ("A is listed before B"): `expected: { observe:
+  "<path>" }`, a value `observe` returned beside the actual one.
+
+```ts
+import { defineStep, z } from "nukadoko";
+import countItems from "./count-items.ts";
+
+export default defineStep({
+  pattern: "the item count is unchanged",
+  description: "The API lists as many items as the earlier count found",
+  args: z.object({ before: countItems.returns.shape.count }),
+  from: { before: [countItems, "count"] },
+  async observe({ request }) {
+    const res = await request.get("/items");
+    return { count: ((await res.json()) as unknown[]).length };
+  },
+  claims: [{ actual: "count", compare: "equal", expected: { from: "before" } }],
+});
+```
+
+```ts
+import { defineStep, z } from "nukadoko";
+
+export default defineStep({
+  pattern: "{first:string} is listed before {second:string}",
+  description: "The first title renders above the second",
+  args: z.object({
+    first: z.string().describe("The title expected first"),
+    second: z.string().describe("The title expected after it"),
+  }),
+  async observe({ page }, { first, second }) {
+    const titles = await page.locator(".result h2").allTextContents();
+    // A title that is not there is undefined, and an undefined value breaks the claim.
+    const at = (title: string) => (titles.includes(title) ? titles.indexOf(title) : undefined);
+    return { firstAt: at(first), secondAt: at(second) };
+  },
+  poll: { timeout_ms: 5000 },
+  claims: [{ actual: "firstAt", compare: "less-than", expected: { observe: "secondAt" } }],
+});
+```
+
+A literal sits beside the other sources: `examples/workflow.md` claims
+`{ literal: "refused" }` on `outcome` and the sentence's reason on
+`reason`, in one step.
+
+## The actual value
+
+`actual` is a path whose first segment is a `from` key or a key `observe`
+returns, never a key the sentence fills. `view: "text"` trims the end (the
+newline a program prints last), `"lines"` also splits it into lines, and
+`"json"` parses it; `at` then takes a path inside the viewed value, so
+parsing is data: `{ actual: "stdout", view: "json", at:
+"sections.git.0.dirty_count", compare: "equal", expected: "count" }`.
+`{ actual, each: { where?, claims } }` applies item claims to every item
+of an array (paths inside are relative to the item), and breaks when the
+array, or what `where` selects, is empty.
+
+The compares: `equal` (structural; key order does not count), `not-equal`,
+`contains-text`, `has-item`, `matches`, `greater-than`, `at-least`,
+`less-than`, `at-most`. Two values of different JSON types break the
+claim. `nuka check` reads each `from` path against the producer's
+`returns` (`claim-path-unknown`), and reports a claim whose two sides are
+one value (`claim-compares-itself`).
+
+## Observe, poll, and a boolean
+
+`observe(fixtures, args)` reads the world when no earlier step returned
+the value. It gets every args key except the ones a claim names as its
+expected value, and reading one of those throws: `observe` cannot pick
+what to read by what it will be compared with. An `observe` that throws
+records `unobserved`, never a broken claim.
+
+Return what you measured, never a verdict: a count, a text, a list. A
+boolean literal is refused when the actual value comes from `observe`,
+since `{ visible: true }` is the judgment made in code. For a yes or no in
+the sentence, return the word it uses (`outcome: "accepted" | "refused"`,
+`examples/workflow.md`), or the measurement behind it. Give every `args`
+and `returns` field a `.describe()`, so `nuka describe` connects a
+criterion's wording to the field that answers it.
+
+`poll: { timeout_ms }` runs `observe` again every 100 ms until every claim
+holds on two readings in a row, then judges the last reading once. A claim
+step whose `observe` reaches `page`, `context`, or `pageAs` states `poll`,
+as `{ timeout_ms }` or `false` (`claim-poll-unstated`).
+
+## Reading a broken claim
+
+```text
+claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101" (sentence:expected)
+```
+
+The actual value and its source, the compare, the expected value and its
+source. The step fails with `claim_broken`, and the run summary lists
+every claim under "Claims", `held` or `broken`. A broken claim is fixed in
+the implementation or by asking the person, never by a weaker compare.
 
 **One step per claim, or one step with the expected value in the line?**
 Let the sentence decide, since the sentence is what a non-engineer agreed
 to. "the total is {expected:int}" carries its expected value naturally, so
 that is one step. "is in trial" and "is not in trial" read as two
-different claims, so they are two steps, and whatever they share goes into
-a part they both call.
+different claims, so they are two steps.
 
-## What `expect` needs from the runner
+## `expect` in a step that runs
 
-A step runs outside `playwright test`, so any matcher that depends on the
-runner's own per-test state fails, and the rest do not. What follows was
-measured against Playwright 1.61.1, calling `expect` from a plain script
-with no runner around it.
-
-The call shape does not tell you which matchers depend on the runner:
-`toMatchAriaSnapshot` is called on a locator, `toHaveScreenshot` is called
-on `page`, and `toMatchSnapshot` is called on a plain value, the same
-three shapes several working matchers also take. What actually
-discriminates is whether the matcher reads or writes a snapshot file keyed
-to the runner's current test.
-
-Works the same as inside a Playwright test: `toBeVisible`, `toHaveText`,
-and the other locator assertions that do not compare against a stored
-snapshot; `toBe` and the other plain-value assertions; `expect.poll` (it
-keeps polling on its own schedule, not the runner's). `expect.soft` also
-asserts correctly, but loses the one thing that makes it "soft": with no
-runner to collect into, a failing `expect.soft` throws right away, same as
-a plain `expect` would, rather than letting the step continue and
-reporting every failure at the end.
-
-Does not work: `toMatchAriaSnapshot`, `toHaveScreenshot`, and
-`toMatchSnapshot` each throw `"<name>() must be called during the
-test"` the moment they run, because a step has no current test to key a
-snapshot file to.
-
-Reach for a different check instead of one of these three. In place of
-`toMatchAriaSnapshot`'s comparison of a whole accessibility tree, capture
-the one property the scenario actually cares about, ordered rendered
-titles, say, and assert it directly against an expected order carried in
-a docstring rather than against a serialized snapshot:
+A When may still wait with Playwright's `expect` before it acts. A step
+runs outside `playwright test`, so measured against Playwright 1.61.1:
+`toBeVisible`, `toHaveText`, the other locator and plain-value matchers,
+and `expect.poll` work as in a Playwright test; a failing `expect.soft`
+throws at once, since no runner collects it; `toMatchAriaSnapshot`,
+`toHaveScreenshot`, and `toMatchSnapshot` throw `"<name>() must be called
+during the test"`, because a step has no current test to key a snapshot
+file to. In place of a snapshot, a Then observes the one property the
+scenario cares about and claims it against the docstring:
 
 ```ts
-import { expect } from "playwright/test";
 import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "the results are titled, in this order",
-  description: "Check the rendered result titles against an expected order",
+  description: "The rendered result titles, in render order",
   args: z.object({
-    expectedTitles: z
+    expected: z
       .string()
+      .transform((text) => text.split("\n"))
       .describe("Expected titles, one per line, in render order"),
   }),
-  returns: z.object({
-    titles: z
-      .array(z.string())
-      .describe("The titles actually rendered, in order"),
-  }),
-  mutates: false,
-  async run({ page }, args) {
-    const titles = await page.locator(".result h2").allTextContents();
-    expect(titles.join("\n")).toBe(args.expectedTitles.trim());
-    return { titles };
+  async observe({ page }) {
+    return { titles: await page.locator(".result h2").allTextContents() };
   },
+  poll: { timeout_ms: 5000 },
+  claims: [{ actual: "titles", compare: "equal", expected: "expected" }],
 });
 ```
 
-The pattern captures nothing, so the docstring binds to `expectedTitles`,
-the one required `args` key it leaves unfilled (see "Typed steps" in
-`docs/spec.md` for how a table or docstring binds to an `args` key). A key
-the step declares `from` for is spoken for the same way a captured key is,
-so a step can read one key from an earlier step and the other from the
-docstring on the same line.
+The pattern captures nothing, so the docstring binds to `expected`, the
+one required `args` key it leaves unfilled (see "Typed steps" in
+`docs/spec.md`). A key the step declares `from` for is spoken for the same
+way a captured key is.

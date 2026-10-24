@@ -60,6 +60,7 @@ interface StoredStepRecord {
   evidence: { dir: string; trace?: string; screenshots: unknown[] };
   actions?: Array<{ method: string; url?: string; selector?: string; ms: number; outcome: string; at: string }>;
   result: { ok?: boolean; cookie?: string | null };
+  claims?: Array<{ actual?: unknown; outcome: string }>;
 }
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<StoredStepRecord> {
@@ -152,7 +153,7 @@ describe("nuka run (Background + browser)", () => {
 
     // The whoami step's own step record proves the *same* browser context (and
     // therefore the same cookie jar) as the Background step's.
-    expect(whoamiStepRecord.result.cookie).toContain("sid=abc123");
+    expect(whoamiStepRecord.claims).toMatchObject([{ actual: expect.stringContaining("sid=abc123"), outcome: "held" }]);
 
     // Second scenario: its own Background step still runs (and still gets a
     // trace, launching a brand new browser for this new scenario's own

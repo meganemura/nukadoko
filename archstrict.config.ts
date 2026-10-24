@@ -223,8 +223,10 @@ export default {
       name: "step",
       glob: "src/step/**",
       surface: [
+        "claims.ts",
         "context.ts",
         "define-step.ts",
+        "evaluate-claims.ts",
         "fixture-names.ts",
         "fixture-types.ts",
         "infer-needs.ts",
@@ -280,6 +282,7 @@ export default {
         "load-run.ts",
         "messages/write-stream.ts",
         "step-records.ts",
+        "summary/claim-line.ts",
         "summary/hook-label.ts",
       ],
     },

@@ -20,7 +20,7 @@ import type {
 } from "../record/types.js";
 import type { SecretSet } from "../secrets/types.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
-import type { Step } from "../step/define-step.js";
+import { fixtureSourceOf, type RunStep, type Step } from "../step/define-step.js";
 import { parseStepReturns } from "../step/parse-returns.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { launchBrowser, type BrowserHandle, type TracedContextHandle } from "./browser-evidence.js";
@@ -763,7 +763,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     }
     const bag = currentFixtures as unknown as Record<string, unknown>;
     const subset: Record<string, unknown> = {};
-    for (const name of fixtureParameterNames(part.run)) {
+    for (const name of fixtureParameterNames(fixtureSourceOf(part))) {
       if (!(name in bag)) {
         throw new Error(
           `internal: ctx.call() needed fixture "${name}" for a part, but it was not in the current ` +
@@ -809,7 +809,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // the part's own `run` never starts, so there is nothing to attest to
   // (the same "an execution that never began must not be citable" rule a
   // step's own undefined/ambiguous match already follows).
-  async function call<S extends Step>(part: S, args: z.input<S["args"]>): Promise<z.infer<S["returns"]>> {
+  async function call<S extends RunStep>(part: S, args: z.input<S["args"]>): Promise<z.infer<S["returns"]>> {
     const caller = calls.currentStep();
     if (caller === undefined) {
       throw new Error(

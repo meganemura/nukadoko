@@ -752,7 +752,7 @@ export async function runCli(
         .option("then", {
           type: "boolean",
           default: false,
-          describe: "an assertion for a Then line: mutates: false and no returns",
+          describe: "a claim step for a Then line: claims in place of run",
         })
         .option("command", {
           type: "string",

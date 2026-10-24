@@ -1,15 +1,10 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Triggers the `then-mutates` *warning*:
-// bound in Then position (see features/then-position.feature) while
-// declaring the default `mutates: true`. No longer an error — the
-// declaration alone can't settle whether a given occurrence's execution
-// actually writes, so `nuka check` warns and leaves the judgment to review
-// plus run-time observation (docs/spec.md "Keyword semantics"). This is why
-// this fixture — otherwise about config-coherence warnings only — belongs to
-// this project: proving "warnings only still exits 0" needs a warning from
-// every category that can appear alongside the others.
+// Bound in features/no-then.feature, a scenario with no Then line, so
+// `nuka check` reports the `scenario-without-then` warning. This fixture is
+// otherwise about config-coherence warnings: proving "warnings only still
+// exits 0" needs a warning from a feature file beside the config ones.
 export default defineStep({
   pattern: "a mutating outcome {x:string}",
   description: "d",

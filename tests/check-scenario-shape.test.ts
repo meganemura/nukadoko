@@ -24,6 +24,22 @@ const STEP = [
   "",
 ].join("\n");
 
+// The Then lines bind a claim step: a step that runs belongs in a Given or
+// a When (docs/spec.md "Claims").
+const CLAIM_STEP = [
+  'import { defineStep, z } from "nukadoko";',
+  "export default defineStep({",
+  '  pattern: "the word should be {word:string}",',
+  '  description: "A word the scenario expects.",',
+  "  args: z.object({ word: z.string() }),",
+  "  observe() {",
+  '    return { seen: "a" };',
+  "  },",
+  '  claims: [{ actual: "seen", compare: "equal", expected: "word" }],',
+  "});",
+  "",
+].join("\n");
+
 const FEATURE = [
   "Feature: shapes",
   "",
@@ -33,28 +49,28 @@ const FEATURE = [
   "",
   "  Scenario: an And under Then",
   '    When the word is "a"',
-  '    Then the word is "b"',
-  '    And the word is "c"',
+  '    Then the word should be "b"',
+  '    And the word should be "c"',
   "",
   "  Scenario: only stars",
   '    * the word is "a"',
   "",
   "  Scenario Outline: words",
-  '    Then the word is "<word>"',
+  '    Then the word should be "<word>"',
   "    Examples:",
   "      | word |",
   "      | a    |",
   "      | b    |",
   "",
   "  Scenario Outline: word <word>",
-  '    Then the word is "<word>"',
+  '    Then the word should be "<word>"',
   "    Examples:",
   "      | word |",
   "      | a    |",
   "      | b    |",
   "",
   "  Scenario Outline: one word",
-  '    Then the word is "<word>"',
+  '    Then the word should be "<word>"',
   "    Examples:",
   "      | word |",
   "      | a    |",
@@ -70,6 +86,7 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
     await mkdir(path.join(rootDir, "features", "steps"), { recursive: true });
     await writeFile(path.join(rootDir, "nukadoko.config.ts"), CONFIG);
     await writeFile(path.join(rootDir, "features", "steps", "word.ts"), STEP);
+    await writeFile(path.join(rootDir, "features", "steps", "word-should-be.ts"), CLAIM_STEP);
     await writeFile(path.join(rootDir, "features", "shapes.feature"), FEATURE);
   });
 

@@ -165,7 +165,7 @@ beforeAll(async () => {
   expect(scaffold.stdout, scaffold.stderr).toBe("features/steps/message-is.ts\n");
   const thenPath = path.join(projectDir, "features", "steps", "message-is.ts");
   expect(await readFile(thenPath, "utf8")).toContain(
-    "    const actual = message;\n    assert.equal(actual, text, `text: expected ${JSON.stringify(text)}, got ${JSON.stringify(actual)}`);\n",
+    '  claims: [{ actual: "message", compare: "equal", expected: "text" }],\n',
   );
 }, 120_000);
 

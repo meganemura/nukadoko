@@ -29,14 +29,10 @@ import made from "./large-made.js";
 
 export default defineStep({
   pattern: "the large result is refused",
-  description: "Fails after reading the large result",
+  description: "Claims the large result is the word refused, which it is not",
   args: z.object({ output: z.string() }),
   from: { output: [made, "output"] },
-  returns: z.object({}),
-  mutates: false,
-  async run() {
-    throw new Error("refused");
-  },
+  claims: [{ actual: "output", compare: "equal", expected: { literal: "refused" } }],
 });
 `;
 

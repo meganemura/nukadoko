@@ -28,6 +28,8 @@ const ALL_KINDS: readonly ErrorKind[] = [
   "world_invalid",
   "timeout",
   "unsupported",
+  "claim_broken",
+  "unobserved",
   "step_error",
 ];
 
@@ -75,9 +77,9 @@ function escapeForTest(value: string): string {
 }
 
 describe("examples/allure/allurerc.mjs vs src/report/allure/categories.ts", () => {
-  it("has exactly seven rules, same count as buildCategories()", async () => {
+  it("has exactly nine rules, same count as buildCategories()", async () => {
     const config = await loadExampleConfig();
-    expect(config.categories).toHaveLength(7);
+    expect(config.categories).toHaveLength(9);
     expect(config.categories).toHaveLength(buildCategories().length);
   });
 
@@ -94,7 +96,7 @@ describe("examples/allure/allurerc.mjs vs src/report/allure/categories.ts", () =
     }
   });
 
-  it("each rule's nukadoko.failure label value is one of ErrorKind's seven, no duplicates, none missing", async () => {
+  it("each rule's nukadoko.failure label value is one of ErrorKind's nine, no duplicates, none missing", async () => {
     const config = await loadExampleConfig();
     const kinds = config.categories.map((rule) => rule.matchers?.[0]?.labels?.["nukadoko.failure"]);
     for (const kind of kinds) {

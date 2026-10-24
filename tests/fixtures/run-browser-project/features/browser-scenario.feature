@@ -4,7 +4,7 @@ Feature: Browser background sharing
     Given the browser logs in
 
   Scenario: whoami after background login
-    Then the browser sees who is logged in
+    Then the browser sends the cookie "sid=abc123"
 
   Scenario: a step that never touches the browser itself
-    Then the step does nothing with the browser
+    When the step does nothing with the browser

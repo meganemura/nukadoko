@@ -1,5 +1,5 @@
 import { fixtureParameterNames } from "./fixture-names.js";
-import type { Step } from "./define-step.js";
+import { fixtureSourceOf, type Step } from "./define-step.js";
 
 // Responsibility: a step's full fixture-name closure — its own destructured
 // names union every part it declares, closed transitively over `parts`
@@ -46,7 +46,7 @@ export function stepFixtureNames(step: Step): readonly string[] {
       return;
     }
     visited.add(current);
-    for (const name of fixtureParameterNames(current.run)) {
+    for (const name of fixtureParameterNames(fixtureSourceOf(current))) {
       names.add(name);
     }
     for (const part of current.parts) {

@@ -71,13 +71,16 @@ terminal, in this same directory.
   count.ts`, `features/steps/legacy-note-stash.ts` -- still-compat glue: a
   table read via `.hashes()`, a `RegExp` pattern, and the World stash,
   respectively.
-- `features/steps/create-todo.ts` / `features/steps/read-created-todo-
-  id.ts` -- the one promoted producer/consumer pair (Stage 2), wired
-  through the `resultOf` fixture instead of a World write.
+- `features/steps/create-todo.ts` / `features/steps/created-todo-is-
+  titled.ts` -- the one promoted producer/consumer pair (Stage 2), wired
+  through the `resultOf` fixture instead of a World write. The consumer is
+  a claim step: it reads the producer's result and declares what it
+  claims, with no `run`.
 
 `nuka steps --json` lists the whole mixed vocabulary, typed and compat side
-by side (real captured output, `description`/`mutates` only present for the
-2 typed entries):
+by side (real captured output, trimmed to each entry's `name`, `kind`,
+`patterns`, and, for the 2 typed entries only, `description`, `mutates`,
+and the claim step's `claims`):
 
 ```json
 [
@@ -87,6 +90,14 @@ by side (real captured output, `description`/`mutates` only present for the
     "patterns": ["a todo titled {title:string} is created"],
     "description": "Create a todo via POST /todos and return the created record",
     "mutates": true
+  },
+  {
+    "name": "created-todo-is-titled",
+    "kind": "typed",
+    "patterns": ["the created todo is titled {title:string}"],
+    "description": "The todo the previous step created, read through resultOf, has this title",
+    "mutates": false,
+    "claims": [{ "actual": "created.title", "compare": "equal", "expected": "title" }]
   },
   {
     "name": "compat: a legacy note {string} is stashed",
@@ -102,13 +113,6 @@ by side (real captured output, `description`/`mutates` only present for the
     "name": "compat: /^the todo list has (\\d+) todos?$/",
     "kind": "compat",
     "patterns": ["/^the todo list has (\\d+) todos?$/"]
-  },
-  {
-    "name": "read-created-todo-id",
-    "kind": "typed",
-    "patterns": ["the created todo id is read back via resultOf"],
-    "description": "Read the previous step's validated result through resultOf",
-    "mutates": false
   },
   {
     "name": "compat: the following legacy todos are seeded:",
@@ -214,10 +218,10 @@ and `hooks`; ids and timestamps will differ on your own run):
   "scenario": "legacy glue seeds todos, stashes a note, and asserts the count",
   "status": "passed",
   "steps": [
-    { "text": "a legacy note \"seed run\" is stashed", "status": "passed", "step_record_id": "step-...-2mxm" },
-    { "text": "the following legacy todos are seeded:", "status": "passed", "step_record_id": "step-...-hkkk" },
-    { "text": "the todo list has 2 todos", "status": "passed", "step_record_id": "step-...-i8jo" },
-    { "text": "the stashed note reads \"seed run\"", "status": "passed", "step_record_id": "step-...-zpj1" }
+    { "text": "a legacy note \"seed run\" is stashed", "status": "passed", "step_record_id": "step-...-56kd" },
+    { "text": "the following legacy todos are seeded:", "status": "passed", "step_record_id": "step-...-bo9s" },
+    { "text": "the todo list has 2 todos", "status": "passed", "step_record_id": "step-...-tpl6" },
+    { "text": "the stashed note reads \"seed run\"", "status": "passed", "step_record_id": "step-...-glhe" }
   ],
   "hooks": [{ "type": "before", "status": "passed" }]
 }
@@ -225,8 +229,8 @@ and `hooks`; ids and timestamps will differ on your own run):
   "scenario": "a promoted producer feeds a typed consumer via resultOf",
   "status": "passed",
   "steps": [
-    { "text": "a todo titled \"Read a book\" is created", "status": "passed", "step_record_id": "step-...-4kfn" },
-    { "text": "the created todo id is read back via resultOf", "status": "passed", "step_record_id": "step-...-9x9l" }
+    { "text": "a todo titled \"Read a book\" is created", "status": "passed", "step_record_id": "step-...-x9fp" },
+    { "text": "the created todo is titled \"Read a book\"", "status": "passed", "step_record_id": "step-...-f602" }
   ],
   "hooks": [{ "type": "before", "status": "passed" }]
 }
@@ -241,12 +245,12 @@ shared World, outside any step's own boundary).
 ## Measured for free
 
 Nothing above asked for measurement -- it came from switching the import.
-The seeding step's own step record (`step-...-hkkk` above), real captured
+The seeding step's own step record (`step-...-bo9s` above), real captured
 output (`evidence`/`environment`/timestamps trimmed for space):
 
 ```json
 {
-  "step_record_id": "step-20260802-141751-hkkk",
+  "step_record_id": "step-20261024-091719-bo9s",
   "step": "compat: the following legacy todos are seeded:",
   "kind": "run",
   "result": null,
@@ -334,36 +338,33 @@ export default defineStep({
 });
 ```
 
-and [`features/steps/read-created-todo-id.ts`](features/steps/read-created-todo-id.ts):
+and [`features/steps/created-todo-is-titled.ts`](features/steps/created-todo-is-titled.ts),
+a claim step: `observe` reads the producer's result, and the claim says
+its title is the one the sentence names:
 
 ```ts
 import createTodo from "./create-todo.ts";
 
 export default defineStep({
-  pattern: "the created todo id is read back via resultOf",
-  args: z.object({}),
-  returns: z.object({ id: z.string() }),
-  mutates: false,
-  run({ resultOf }) {
-    const created = resultOf(createTodo);
-    if (!created) {
-      throw new Error('expected a prior "a todo titled ... is created" result to read via resultOf');
-    }
-    return { id: created.id };
+  pattern: "the created todo is titled {title:string}",
+  args: z.object({ title: z.string() }),
+  observe({ resultOf }) {
+    return { created: resultOf(createTodo) ?? null };
   },
+  claims: [{ actual: "created.title", compare: "equal", expected: "title" }],
 });
 ```
 
 Producer before consumer, deliberately -- migration-knowhow's own
 recommended order: a consumer can only read a validated result once one
-exists. The two step records from the same `nuka run` above (`step-...-4kfn`
-and `step-...-9x9l`), trimmed the same way:
+exists. The two step records from the same `nuka run` above (`step-...-x9fp`
+and `step-...-f602`), trimmed the same way:
 
 ```json
 {
-  "step_record_id": "step-20260802-141751-4kfn",
+  "step_record_id": "step-20261024-091719-x9fp",
   "step": "create-todo",
-  "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90", "title": "Read a book", "done": false },
+  "result": { "id": "2335564f-1516-418c-8dc8-ef2dd8afc233", "title": "Read a book", "done": false },
   "status": "passed",
   "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
 }
@@ -371,22 +372,36 @@ and `step-...-9x9l`), trimmed the same way:
 
 ```json
 {
-  "step_record_id": "step-20260802-141751-9x9l",
-  "step": "read-created-todo-id",
-  "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90" },
+  "step_record_id": "step-20261024-091719-f602",
+  "step": "created-todo-is-titled",
   "status": "passed",
   "observed": { "processes": null, "http": null, "files": null, "unmeasured": [] },
-  "used": [{ "step_record_id": "step-20260802-141751-4kfn", "step": "create-todo" }]
+  "used": [{ "step_record_id": "step-20261024-091719-x9fp", "step": "create-todo" }],
+  "claims": [
+    {
+      "actual": "Read a book",
+      "actual_from": "observe:created.title",
+      "compare": "equal",
+      "expected": "Read a book",
+      "expected_from": "sentence:title",
+      "outcome": "held",
+      "measured": null
+    }
+  ],
+  "observation": "observed",
+  "attempts": 1
 }
 ```
 
 `used` is the proof: the consumer made no network call of its own
-(its step record has no `http.jsonl`) and never touched a World -- there is no World
-field here at all, for either step record, because a typed step's `run`
-never receives `this` -- it read the producer's own validated `id`
+(its step record has no `http.jsonl`) and never touched a World. There is
+no World field here at all, for either step record, because a typed step
+never receives `this`. It read the producer's own validated title
 straight through the `resultOf` fixture, and that read is recorded by the
-tool, not declared by either step. This pair is this suite's fully-migrated
-end state: no stash, no compat glue, no `this` at all.
+tool, not declared by either step. The claim record says where each side
+of the comparison came from: the actual value from what `observe`
+returned, the expected one from the sentence. This pair is this suite's
+fully-migrated end state: no stash, no compat glue, no `this` at all.
 
 ## Going back
 

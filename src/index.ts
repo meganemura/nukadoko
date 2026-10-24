@@ -69,13 +69,31 @@ export type {
   StepRecordPassed,
 } from "./record/types.js";
 export type {
+  ClaimComparisonRecord,
+  ClaimCompare,
+  ClaimEachRecord,
+  ClaimItemRecord,
+  ClaimOutcome,
+  ClaimRecord,
+  ClaimView,
+  MeasuredChannel,
+} from "./record/types.js";
+export type {
+  ClaimStep,
+  ClaimStepDefinition,
   DefaultReturns,
   FromCandidate,
   FromMap,
+  ObserveInputs,
+  RunStep,
+  RunStepDefinition,
   Step,
+  StepBase,
+  StepDefinitionCommon,
   StepDefinitionInput,
   StepRunResult,
 } from "./step/define-step.js";
+export type { Claim, ClaimExpected, ClaimLiteral, ClaimPoll, ComparisonClaim, EachClaim, ItemClaim } from "./step/claims.js";
 export { defineStep, InvalidStepDefinitionError } from "./step/define-step.js";
 // `z` itself, not merely its type: `vocabulary.ts` calls
 // `z.toJSONSchema(entry.step.args)` and `strict-args.ts` reads a schema's

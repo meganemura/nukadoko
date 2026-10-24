@@ -122,8 +122,8 @@ shapes, redo it with an option instead of editing it:
   an empty directory and returns `exitCode`, `stdout`, and `stderr`.
 - `--request "<METHOD> <path>"` makes a When step that sends one HTTP
   request and returns `status` and `body`.
-- `--then --from <step>.<key>` makes a Then step that compares a value an
-  earlier step returned with the capture on its line.
+- `--then --from <step>.<key>` makes a Then step with one claim: a value
+  an earlier step returned, compared with the capture on its line.
 
 Rename a capture in the pattern to name what it holds:
 

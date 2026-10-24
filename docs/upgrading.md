@@ -45,6 +45,119 @@ This part does not change release to release.
 
 ## 0.21.0 to the next release
 
+- **A typed Then declares claims, and a Then that runs code is an
+  error.** `nuka check` reports each typed step that runs and is bound in
+  Then position as `then-without-claims`, and `nuka run` refuses to
+  start while one is reported. For each one, replace `run` with
+  `claims`, and drop `returns` and `mutates`, which `defineStep` refuses
+  on a claim step. A value the step read through `from` stays a `from`
+  key; a value it read itself moves into `observe`, which returns what it
+  read. Then pick where each expected value comes from (docs/spec.md
+  "Claims"). The sentence states it:
+
+  ```ts
+  export default defineStep({
+    pattern: "it exits with {code:int}",
+    description: "The process exit code is exactly this",
+    args: z.object({ code: z.number(), exitCode: runTally.returns.shape.exitCode }),
+    from: { exitCode: [runTally, "exitCode"] },
+    mutates: false,
+    run({}, { code, exitCode }) {
+      assert.equal(exitCode, code, `exitCode: expected ${code}, got ${exitCode}`);
+    },
+  });
+  ```
+
+  ```ts
+  export default defineStep({
+    pattern: "it exits with {code:int}",
+    description: "The process exit code is exactly this",
+    args: z.object({ code: z.number(), exitCode: runTally.returns.shape.exitCode }),
+    from: { exitCode: [runTally, "exitCode"] },
+    claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
+  });
+  ```
+
+  An earlier step returned it: `{ from: "<from key>" }`.
+
+  ```ts
+  // Before: run({ request }, { before }) { ...; expect(items.length).toBe(before); }
+  args: z.object({ before: countItems.returns.shape.count }),
+  from: { before: [countItems, "count"] },
+  async observe({ request }) {
+    const res = await request.get("/items");
+    return { count: ((await res.json()) as unknown[]).length };
+  },
+  claims: [{ actual: "count", compare: "equal", expected: { from: "before" } }],
+  ```
+
+  The pattern's fixed words state it: `{ literal }`. A literal the pattern
+  does not state is refused at import, so a sentence that keeps its value
+  in step code is reworded to state it.
+
+  ```gherkin
+  # Before: Then the command succeeds
+  Then the command exits 0
+  ```
+
+  ```ts
+  // Before: pattern "the command succeeds", run: expect(exitCode).toBe(0)
+  pattern: "the command exits 0",
+  claims: [{ actual: "exitCode", compare: "equal", expected: { literal: 0 } }],
+  ```
+
+  A second reading: `{ observe: "<path>" }`. An `observe` that reaches
+  `page`, `context`, or `pageAs` states `poll` (`claim-poll-unstated`).
+
+  ```ts
+  // Before: run({ page }, ...) { ...; expect(firstAt).toBeLessThan(secondAt); }
+  async observe({ page }, { first, second }) {
+    const titles = await page.locator(".result h2").allTextContents();
+    const at = (title: string) => (titles.includes(title) ? titles.indexOf(title) : undefined);
+    return { firstAt: at(first), secondAt: at(second) };
+  },
+  poll: { timeout_ms: 5000 },
+  claims: [{ actual: "firstAt", compare: "less-than", expected: { observe: "secondAt" } }],
+  ```
+
+- **A boolean becomes the word the sentence uses, or the measurement
+  behind it.** A boolean literal is refused against a value `observe`
+  computed, and a sentence says `accepted`, not `true`. A producer that
+  returned `accepted: boolean` returns the outcome as a word, and the Then
+  claims the word its sentence states:
+
+  ```ts
+  // Before: returns { accepted: z.boolean() }, and the Then: expect(accepted).toBe(true)
+  returns: z.object({ outcome: z.enum(["accepted", "refused"]), reason: z.string().nullable() }),
+  // The Then "the sign-in is accepted":
+  claims: [{ actual: "outcome", compare: "equal", expected: { literal: "accepted" } }],
+  ```
+
+  An `observe` that returned `{ visible: true }` returns what it saw (a
+  count, a text, a list) and the claim compares it.
+
+- **A Then that only reads or records a value moves to When**, or becomes
+  a claim on what it reads: `Then the created todo id is read back via
+  resultOf` became `Then the created todo is titled "Read a book"` in
+  `examples/migration`. A claim step bound in Given or When position is
+  `claims-outside-then`, and so is one on a `*` line: write its keyword.
+
+- **`then-mutates` is gone.** `nuka check --fail-on then-mutates`
+  refuses the code with `fail-on-unknown-code`; drop it. The error
+  `then-without-claims` fails the check with no flag.
+
+- **A Then that `nuka scaffold --then` wrote earlier is a step that
+  runs.** `--replace` refuses it, because it is not what scaffold writes
+  now. Rewrite it as above, or delete the file and scaffold it again.
+
+- **Two error kinds and two Allure categories are new.** A reader that
+  switches on `error.kind` adds `claim_broken` and `unobserved`. A
+  project with an `allurerc.mjs` from an earlier release copies the two
+  new rules from [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs);
+  without them, Allure 3 files both kinds under "Product errors".
+  `nuka report --format allure` writes Allure 2's `categories.json` with
+  all nine on its own.
+
 - **`nuka tend` is removed; `nuka check` reports its findings.** `nuka
   tend` now refuses with `removed-command`. A job that read
   `nuka tend --json` runs `nuka check --json` on the whole project (no

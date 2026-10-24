@@ -116,7 +116,8 @@ stub は、中身を書くまで `not implemented` を投げます。
 
 - `--command <entry point>` は、プログラムを空のディレクトリで実行し、`exitCode`、`stdout`、`stderr` を返す When の step を作ります。
 - `--request "<METHOD> <path>"` は、HTTP request を 1 つ送り、`status` と `body` を返す When の step を作ります。
-- `--then --from <step>.<key>` は、前の step が返した値を、その行のキャプチャと比べる Then の step を作ります。
+- `--then --from <step>.<key>` は、claim を 1 つ持つ Then の step を作ります。
+  その claim は、前の step が返した値をその行のキャプチャと比べます。
 
 pattern のキャプチャは、中身を表す名前に変えます:
 

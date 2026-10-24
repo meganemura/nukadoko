@@ -9,6 +9,43 @@ just until 0.1.
 
 ### Changed
 
+- **A typed Then declares claims instead of running code.** A step
+  either runs (`run`) or claims (`claims`), and `defineStep` refuses a
+  claim step that also declares `run`, `returns`, `mutates`, or
+  `parts`. A claim names the value it reads (`actual`, a path into a
+  `from` value or into what `observe` returns, with an optional `view`
+  of `text`, `lines`, or `json` and an `at` path), one of nine
+  compares, and where the expected value comes from: a key the sentence
+  fills, an earlier step's result (`{ from }`), a literal the pattern's
+  fixed words state (`{ literal }`), or a second reading (`{ observe }`).
+  A literal that is not the pattern's own words, or `0`, `""`, or `[]`
+  for `no`, `none`, `nothing`, or `empty`, is refused at import, and
+  so is a boolean literal against a value `observe` computed. `observe`
+  receives every args key except the ones a claim compares with, and
+  `poll: { timeout_ms }` reads again until every claim holds on two
+  readings in a row. nukadoko compares and records each claim. Before
+  this, a Then was code that called `expect`: in ten small projects that
+  use nukadoko, 32 of 35 Thens kept the expected value in step code, where
+  a reader of the feature could not see it, and a value compared with
+  itself or with a constant passed unnoticed. A Then that calls `expect`
+  now fails `nuka check` with `then-without-claims`; docs/upgrading.md
+  says how to move one across.
+
+- **The `then-mutates` warning is retired.** It read a declaration it
+  had to trust; whether a step in Then position acts is now a fact of the
+  step file (`run` or `claims`), so `nuka check` reports a Then bound
+  to a step that runs as the error `then-without-claims`. The
+  `then-compat-step` warning now says that a compat step cannot declare
+  claims, so nukadoko cannot see what it judges.
+
+- **`nuka scaffold --then` writes a claim step.** With one value the line
+  states and one `--from`, it writes one `equal` claim, with `view:
+  "text"` for a chained `stdout` or `stderr`; otherwise it writes an
+  `observe` stub that throws `not implemented: <name>` and one claim on
+  what `observe` returns. `nuka scaffold --feature` writes the same
+  claim step for a Then line. Neither writes `mutates: false` or an
+  `assert` body any more.
+
 - **`nuka check` reports notes, and `--fail-on` gates on any code.** A
   check report has three severities: errors, warnings, and notes. The
   notes are the findings `nuka tend` reported (`fixture-unused`,
@@ -147,11 +184,49 @@ just until 0.1.
 
 ### Added
 
+- **Five check codes for claims.** `then-without-claims`: a Then bound
+  to a typed step that runs. `claims-outside-then`: a claim step bound in
+  Given or When position, or on a `*` line. `claim-compares-itself`: a
+  claim whose two sides resolve to the same place. `claim-path-unknown`:
+  a `from` path the producer's `returns` does not declare.
+  `claim-poll-unstated`: a claim step whose `observe` reaches `page`,
+  `context`, or `pageAs` and does not state `poll`. All five are
+  errors.
+
+- **A claim step's record holds its claims.** `claims` lists each claim
+  with its `actual` and `expected` values, `actual_from` and
+  `expected_from` (`sentence:<key>`, `from:<step>@<line>.<key>`,
+  `literal:<words>`, or `observe:<path>`), the compare, its `outcome`
+  (`held`, `broken`, or `unobserved`), a `reason` when it broke for
+  something other than the comparison, and `measured`, the recorded
+  channel that holds the raw actual value, or `null`. `observation` and
+  `attempts` say whether and how many times the step read its values.
+  run.json's step entries carry the same three fields, and the run
+  summary lists every claim under "Claims", `held` or `broken`. The
+  fields are additive, so no `schema_version` changes.
+
+- **Two error kinds: `claim_broken` and `unobserved`.** A broken claim
+  fails the step with `claim_broken` and the message `claim broken:
+  <actual> (<actual_from>) <compare> <expected> (<expected_from>)`; an
+  `observe` that throws is `unobserved`, and no claim is judged. Allure
+  has nine categories, one per kind, and `nuka init --allure` writes
+  nine rules.
+
+- **Reports show each claim.** An Allure step gets one zero-width child
+  step per claim, named by its claim line, passed, failed, or broken,
+  with `actual`, `actual from`, `expected`, `expected from`, and
+  `measured` as parameters. The messages stream attaches the claims as
+  `claims.json` (`application/vnd.nukadoko.claims+json`), and a step
+  that failed with `claim_broken` carries an `exception` of type
+  `nukadoko.ClaimBroken`. `nuka steps` prints one `claim:` line per
+  claim, and `nuka steps --json` and `nuka describe` include `claims`
+  and `poll`.
+
 - **The skill says how to drive an app through an e2e session.** A project
   already on e2e (`tester-army/e2e`) opens its sessions from nukadoko
   fixtures through `e2e/runner`'s `openHost`, with no dependency added to
-  nukadoko. `references/fixtures.md` shows the two fixtures, keeps Then
-  claims on `screen` and `expect` rather than `agent.assert`, folds e2e's
+  nukadoko. `references/fixtures.md` shows the two fixtures, keeps a
+  Then's claims on what `screen` reads rather than `agent.assert`, folds e2e's
   multi-line error into the one line `nuka run` prints, and attaches the
   session's steps as evidence.
 

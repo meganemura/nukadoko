@@ -17,7 +17,7 @@ export const DESCRIPTION_TODO_PREFIX = "TODO: describe";
 export function findDescriptionTodos(vocabulary: Vocabulary, rootDir: string): CheckIssue[] {
   const issues: CheckIssue[] = [];
   for (const entry of vocabulary.values()) {
-    if (entry.kind !== "typed" || !entry.step.description.startsWith(DESCRIPTION_TODO_PREFIX)) continue;
+    if (entry.kind !== "typed" || entry.step.description?.startsWith(DESCRIPTION_TODO_PREFIX) !== true) continue;
     issues.push({
       code: "step-description-todo",
       message: `Step "${entry.name}" still has the description nuka scaffold wrote (${JSON.stringify(entry.step.description)}); nuka steps and nuka describe show it to whoever picks a step, so say what the step does.`,

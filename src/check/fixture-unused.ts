@@ -1,5 +1,6 @@
 import type { Vocabulary } from "../discover/discover-steps.js";
 import { closeFixtureNames, type FixtureGraph } from "../fixture/graph.js";
+import { fixtureSourceOf } from "../step/define-step.js";
 import { fixtureParameterNames } from "../step/fixture-names.js";
 import type { CheckIssue } from "./types.js";
 
@@ -35,7 +36,7 @@ export function findUnusedFixtures(vocabulary: Vocabulary, graph: FixtureGraph):
     }
     let names: readonly string[];
     try {
-      names = fixtureParameterNames(entry.step.run);
+      names = fixtureParameterNames(fixtureSourceOf(entry.step));
     } catch {
       continue; // Reported as fixture-structural-violation by `nuka check`.
     }

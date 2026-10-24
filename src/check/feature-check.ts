@@ -14,6 +14,8 @@ import { shellWord } from "../shell/shell-word.js";
 import { checkFromOrder, fromOrderFix, fromOrderHold, isHeldBackByUndefinedLine } from "./from-order.js";
 import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
+import { checkClaimSources } from "./claim-check.js";
+import { isClaimStep } from "../step/define-step.js";
 
 // Responsibility: match every pickle step (from src/feature/load-features.ts)
 // against the vocabulary's patterns (already built once by
@@ -28,26 +30,25 @@ import { checkUnfillableKeys } from "./unfillable-key.js";
 // match anything here, which is the right behavior: this module must not
 // report the same root cause a second time under a different code.
 //
-// `then-mutates` is a *warning*, not an error (superseding this module's
-// earlier classification): a
-// declared-mutating step bound in Then position is a tension worth a
-// reviewer's eyes, but `mutates` is a declaration nukadoko trusts, not a
-// fact the tool re-derives from what ran — nothing at run time settles this
-// tension anymore (docs/spec.md "Keyword semantics"). Every other issue
-// this module reports stays an error.
+// Position is checked by kind, not by `mutates`: a Then binds a claim
+// step, and a claim step stands only in Then position
+// (`then-without-claims`, `claims-outside-then`, docs/spec.md "Claims"). A
+// claim step is `mutates: false` by construction, so a declared-mutating
+// step in Then position is a step that runs, which `then-without-claims`
+// already reports. Every issue this module reports is an error except the
+// two compat and suppression warnings.
 //
 // A compat pattern participates in
 // undefined-step and ambiguous-match detection on equal footing with a typed
 // one (both live in the one `patterns` array binding-check.ts already built,
 // matched through `checkedPatternMatches` below regardless of whether the
 // candidate is cucumber-expression- or RegExp-based). Once a pickle step
-// resolves to exactly one compat entry, this module's two typed-only checks
-// — the mutates/Then tension and the table/docstring key rule — do not
-// apply (compat has no declared `mutates` and no args schema to check a
-// table/docstring against); Then-position compat instead gets its own soft
-// warning, since compat has no declaration to trust here at all — a static
-// coverage gap, not a run-time finding (docs/spec.md "Compat steps",
-// "Keyword semantics").
+// resolves to exactly one compat entry, this module's typed-only checks
+// (the claim position rules and the table/docstring key rule) do not
+// apply: compat cannot declare claims and has no args schema to check a
+// table/docstring against. Then-position compat instead gets its own soft
+// warning, since compat has no claims to read: a static coverage gap, not a
+// run-time finding (docs/spec.md "Compat steps", "Claims").
 //
 // `StepTextMatcher`/`MatchResult` are exported so `./from-order.ts`'s own
 // scenario-order check can use the same per-text resolution as undefined-
@@ -326,11 +327,15 @@ export function checkFeatures(
           });
         }
 
+        // Only a Then judges (docs/spec.md "Claims"), so a broken claim is
+        // always a criterion failing and never a setup that broke. A compat
+        // step cannot declare claims, so it keeps its own warning instead
+        // of either error.
         if (step.type === PickleStepType.OUTCOME) {
-          if (entry.kind === "typed" && entry.step.mutates) {
-            warnings.push({
-              code: "then-mutates",
-              message: `Step "${stepName}" is bound in Then position but declares mutates: true. Declaration and position are in tension here (docs/spec.md "Keyword semantics")`,
+          if (entry.kind === "typed" && !isClaimStep(entry.step)) {
+            errors.push({
+              code: "then-without-claims",
+              message: `Step "${stepName}" is bound in Then position and runs instead of declaring claims. A Then judges through claims (docs/spec.md "Claims"); a step that only reads or records a value belongs in a Given or When`,
               file: feature.relativePath,
               line,
               step: stepName,
@@ -338,12 +343,20 @@ export function checkFeatures(
           } else if (entry.kind === "compat") {
             warnings.push({
               code: "then-compat-step",
-              message: `Step "${stepName}" is a compat step bound in Then position. Compat steps have no mutates declaration to trust here; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Keyword semantics")`,
+              message: `Step "${stepName}" is a compat step bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Claims")`,
               file: feature.relativePath,
               line,
               step: stepName,
             });
           }
+        } else if (entry.kind === "typed" && isClaimStep(entry.step)) {
+          errors.push({
+            code: "claims-outside-then",
+            message: `Step "${stepName}" declares claims and is bound in ${gherkinKeyword(step.type)} position. Only a Then judges, so a broken claim here would read as a setup that broke (docs/spec.md "Claims")`,
+            file: feature.relativePath,
+            line,
+            step: stepName,
+          });
         }
 
         // Compat only. A typed step's `run(fixtures, args)` has a fixed
@@ -453,6 +466,18 @@ export function checkFeatures(
       for (const issue of checkUnfillableKeys(pickle, vocabulary, match)) {
         errors.push({
           code: "unfillable-required-key",
+          message: issue.message,
+          file: feature.relativePath,
+          line: pickle.steps[issue.stepIndex]?.line,
+          step: issue.stepName,
+        });
+      }
+
+      // Where each side of a claim comes from depends on the line that
+      // produced a from value, so this runs per pickle too.
+      for (const issue of checkClaimSources(pickle, vocabulary, match, (index) => pickle.steps[index]?.line)) {
+        errors.push({
+          code: issue.code,
           message: issue.message,
           file: feature.relativePath,
           line: pickle.steps[issue.stepIndex]?.line,

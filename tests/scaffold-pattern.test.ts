@@ -6,13 +6,14 @@ import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { stepTemplate } from "../src/cli/scaffold.js";
+import { claimsProblem } from "../src/step/claims.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot, withoutCheckNotes } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka scaffold <name> --pattern <text> [--then]`. The
 // file it writes has to pass `nuka check` against a feature line as
-// written, and with `--then` it has to run green once the body only
-// asserts, with no `returns` and no `return`.
+// written, and with `--then` it is a claim step that runs green once
+// observe returns the value it reads.
 
 async function initProject(): Promise<string> {
   const rootDir = await createEmptyTempDir();
@@ -53,14 +54,13 @@ describe("nuka scaffold --pattern", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes the pattern, one args field per capture, and with --then mutates: false and no returns", async () => {
+  it("writes the pattern, one args field per capture, and with --then observe and a claim in place of run", async () => {
     const result = await cli(rootDir, ["scaffold", "sum-is", "--pattern", "the sum is {sum:int} \\(exactly\\)", "--then"]);
 
     expect(result.exitCode).toBe(0);
     expect(await readFile(path.join(rootDir, "features", "steps", "sum-is.ts"), "utf8")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
-        'import assert from "node:assert/strict";',
         "",
         "export default defineStep({",
         '  description: "TODO: describe sum-is",',
@@ -69,12 +69,12 @@ describe("nuka scaffold --pattern", () => {
         "  args: z.object({",
         "    sum: z.number(),",
         "  }),",
-        "  mutates: false,",
-        "  run({}, { sum }) {",
-        "    // TODO: read the value this line checks, for example from an earlier step's returns through `from`.",
-        "    const actual: unknown = undefined;",
-        "    assert.equal(actual, sum, `sum: expected ${JSON.stringify(sum)}, got ${JSON.stringify(actual)}`);",
+        "  // TODO: read the value this line checks and return it as { actual }, or take it",
+        "  // from an earlier step's returns through `from` and remove observe.",
+        "  observe() {",
+        '    throw new Error("not implemented: sum-is");',
         "  },",
+        '  claims: [{ actual: "actual", compare: "equal", expected: "sum" }],',
         "});",
         "",
       ].join("\n"),
@@ -244,7 +244,7 @@ describe("nuka scaffold --pattern", () => {
     expect(existsSync(path.join(rootDir, "features", "steps", "run-sum.ts"))).toBe(false);
   });
 
-  it("passes nuka check against the feature as written, fails until implemented, and runs green with an assertion-only body", async () => {
+  it("passes nuka check against the feature as written, fails until implemented, and runs green once observe returns the value", async () => {
     await cli(rootDir, ["scaffold", "add-numbers", "--pattern", "I add {a:int} and {b:int}"]);
     await cli(rootDir, ["scaffold", "sum-is", "--pattern", "the sum is {sum:int}", "--then"]);
     await writeFile(
@@ -268,10 +268,7 @@ describe("nuka scaffold --pattern", () => {
     const sumIs = path.join(rootDir, "features", "steps", "sum-is.ts");
     await writeFile(
       sumIs,
-      (await readFile(sumIs, "utf8")).replace(
-        "const actual: unknown = undefined;",
-        "const actual: unknown = 4;",
-      ),
+      (await readFile(sumIs, "utf8")).replace('throw new Error("not implemented: sum-is");', "return { actual: 4 };"),
     );
 
     const green = await cli(rootDir, ["run", "--records", "features/sum.feature"]);
@@ -425,61 +422,54 @@ describe("nuka scaffold --pattern: any text", () => {
     ), 300_000);
 });
 
-// Property: the Then body that `--then` writes for one capture runs for any
-// value the capture and the chained value can hold, a bigint included, and
-// its message names both values; a custom type compares by structure.
-describe("nuka scaffold --then: the assertion body", () => {
-  const CLASS_OF_TYPE = { string: "string", int: "number", biginteger: "bigint", colour: "other" } as const;
-  type CaptureType = keyof typeof CLASS_OF_TYPE;
-  type ValueClass = (typeof CLASS_OF_TYPE)[CaptureType];
+// Property: the claim `--then` writes is one defineStep accepts, whatever
+// the capture and chained keys are called, so the stub fails at observe's
+// TODO and never at import. A key named like observe's own key ("actual")
+// is the case an example would miss.
+describe("nuka scaffold --then: the claim it writes", () => {
+  const keyNames = ["want", "actual", "actual2", "expected", "got", "stdout"] as const;
+  const types = ["string", "int", "biginteger", "colour"] as const;
+  const classes = ["string", "number", "bigint", "other"] as const;
 
-  function valueOf(valueClass: ValueClass) {
-    if (valueClass === "string") return gs.text();
-    if (valueClass === "number") return gs.integers();
-    if (valueClass === "bigint") return gs.bigIntegers();
-    return gs.oneOf<unknown>(gs.text(), gs.integers(), gs.bigIntegers(), gs.arrays(gs.bigIntegers(), { maxSize: 3 }));
-  }
-
-  // A bigint capture reads as its digits; any other value as JSON, a bigint inside it as a string.
-  function rendered(value: unknown, valueClass: ValueClass): string {
-    if (valueClass === "bigint") return String(value);
-    return String(JSON.stringify(value, (_key, inner) => (typeof inner === "bigint" ? String(inner) : inner)));
-  }
-
-  it("calls assert once with the actual value, the expected value, and a message that names both", () =>
+  it("is a claim defineStep accepts, whatever the keys are called", () =>
     hegel.test((tc) => {
-      const type = tc.draw(gs.sampledFrom(Object.keys(CLASS_OF_TYPE) as CaptureType[]));
-      const chainedClass = tc.draw(gs.optional(gs.sampledFrom<ValueClass>(["string", "number", "bigint", "other"])));
-      const expected = tc.draw(valueOf(CLASS_OF_TYPE[type]));
-      const got = chainedClass === null ? undefined : tc.draw(valueOf(chainedClass));
+      const keys = tc.draw(gs.sets(gs.sampledFrom(keyNames), { minSize: 0, maxSize: 4 }));
+      const ordered = [...keys];
+      const captureCount = tc.draw(gs.integers({ minValue: 0, maxValue: ordered.length }));
+      const captureKeys = ordered.slice(0, captureCount);
+      const chainedKeys = ordered.slice(captureCount);
+      const captures = captureKeys.map((key) => ({ key, type: tc.draw(gs.sampledFrom(types)) }));
+      const pattern = ["it is", ...captures.map((capture) => `{${capture.key}:${capture.type}}`)].join(" ");
       const file = stepTemplate({
         name: "it-is",
-        pattern: `it is {want:${type}}`,
-        captures: [{ key: "want", type }],
-        chained:
-          chainedClass === null
-            ? []
-            : [{ key: "got", producers: [{ step: "producer", identifier: "producer", specifier: "./producer.ts" }], valueClass: chainedClass }],
+        pattern,
+        captures,
+        chained: chainedKeys.map((key) => ({
+          key,
+          producers: [{ step: "producer", identifier: "producer", specifier: "./producer.ts" }],
+          valueClass: tc.draw(gs.sampledFrom(classes)),
+        })),
         variant: "then",
         entryPoint: null,
         cwd: null,
         description: null,
         relativeFilePath: "features/steps/it-is.ts",
       });
-      expect(file).toContain('\nimport assert from "node:assert/strict";\n');
-      const lines = file.split("\n");
-      const body = lines
-        .slice(lines.findIndex((line) => line.startsWith("  run(")) + 1, lines.lastIndexOf("  },"))
-        .join("\n")
-        .replace("const actual: unknown =", "const actual =");
-      const calls: unknown[][] = [];
-      const recorder = {
-        equal: (...args: unknown[]) => calls.push(["equal", ...args]),
-        deepEqual: (...args: unknown[]) => calls.push(["deepEqual", ...args]),
-      };
-      new Function("assert", "want", "got", body)(recorder, expected, got);
-      expect(calls).toEqual([
-        [type === "colour" ? "deepEqual" : "equal", got, expected, `want: expected ${rendered(expected, CLASS_OF_TYPE[type])}, got ${rendered(got, chainedClass ?? CLASS_OF_TYPE[type])}`],
-      ]);
+      expect(file).not.toContain("run(");
+      expect(file).not.toContain("mutates");
+      const claimsLine = file.split("\n").find((line) => line.startsWith("  claims: "));
+      expect(claimsLine).toBeDefined();
+      const claims = new Function(`return ${claimsLine!.slice("  claims: ".length).replace(/,$/, "")};`)() as unknown;
+      const all = new Set([...captureKeys, ...chainedKeys]);
+      expect(
+        claimsProblem(claims, {
+          patterns: [pattern],
+          argsKeys: all,
+          requiredArgsKeys: all,
+          fromKeys: new Set(chainedKeys),
+          captureKeys: new Set(captureKeys),
+          hasObserve: file.includes("  observe("),
+        }),
+      ).toBeNull();
     }));
 });

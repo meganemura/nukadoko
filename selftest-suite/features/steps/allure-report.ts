@@ -425,12 +425,12 @@ Then(
 
 Then("the timeline step's section and poll appear as its own child steps", async function (this: SelftestWorld) {
   const records = parseRunRecords(this.nukaStdout);
-  const scenario = scenarioContainingStep(records, (step) => step.text.includes("exists after a section and a poll"));
+  const scenario = scenarioContainingStep(records, (step) => step.text.includes("is looked up after a section and a poll"));
   const page = await openScenarioDetail(this, scenario.scenario);
 
   // "test-result-step-title" reaches every nesting level on this one
-  // page now -- this scenario's own two Given/Then steps, and, under the
-  // second one, the section/poll timeline entries its own step record
+  // page now -- this scenario's own Given, When, and Then steps, and, under the
+  // When, the section/poll timeline entries its own step record
   // carries (map-scenario.ts's own `mapTimelineChildSteps`) -- so no
   // deeper scoping is needed to find them.
   const stepTitles = page.getByTestId("test-result-step-title");

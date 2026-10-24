@@ -58,7 +58,7 @@ describe("nuka run over several environments", () => {
         code: "scenario-failed",
         file: "features/banner.feature",
         line: 3,
-        message: "the banner is on (flag-off): the banner reads off, not on",
+        message: 'the banner is on (flag-off): claim broken: "off" (observe:banner) equal "on" (sentence:state)',
         do: "nuka run features/banner.feature:3 --env flag-off",
       },
     ]);
@@ -120,7 +120,7 @@ describe("nuka run over several environments", () => {
         code: "scenario-failed",
         file: "features/banner.feature",
         line: 3,
-        message: "the banner is on: the banner reads off, not on",
+        message: 'the banner is on: claim broken: "off" (observe:banner) equal "on" (sentence:state)',
         do: "nuka run features/banner.feature:3 --env flag-off",
       },
     ]);

@@ -17,7 +17,43 @@ import { ENVELOPE_SCHEMA_VERSION } from "../record/schema-version.js";
 // reads are not checked: a later release may add fields, and an added
 // field does not move the version.
 
-const errorKind = z.enum(["args_invalid", "result_invalid", "binding_invalid", "world_invalid", "timeout", "unsupported", "step_error"]);
+const errorKind = z.enum([
+  "args_invalid",
+  "result_invalid",
+  "binding_invalid",
+  "world_invalid",
+  "timeout",
+  "unsupported",
+  "claim_broken",
+  "unobserved",
+  "step_error",
+]);
+
+// What the summary reads of one claim (src/report/summary/claim-line.ts).
+const comparisonClaim = z.looseObject({
+  actual: z.unknown().optional(),
+  actual_from: z.string(),
+  view: z.string().optional(),
+  at: z.string().optional(),
+  compare: z.string(),
+  expected: z.unknown().optional(),
+  expected_from: z.string(),
+  outcome: z.enum(["held", "broken", "unobserved"]),
+  reason: z.string().optional(),
+});
+
+const eachClaim = z.looseObject({
+  actual_from: z.string(),
+  view: z.string().optional(),
+  at: z.string().optional(),
+  each: z.looseObject({
+    items: z.number().int(),
+    selected: z.number().int(),
+    results: z.array(z.looseObject({ index: z.number().int(), outcome: z.enum(["held", "broken"]), claims: z.array(comparisonClaim) })),
+  }),
+  outcome: z.enum(["held", "broken", "unobserved"]),
+  reason: z.string().optional(),
+});
 
 const process = z.looseObject({
   command: z.array(z.string()),
@@ -63,6 +99,9 @@ const step = z.looseObject({
   error: z.looseObject({ kind: errorKind.nullable(), message: z.string() }).optional(),
   used: z.array(z.looseObject({ step: z.string(), record: z.string(), result: z.unknown() })).optional(),
   after_step_end: z.looseObject({ requests: z.number().int(), processes: z.number().int(), http: z.literal("http.jsonl").optional() }).optional(),
+  claims: z.array(z.union([eachClaim, comparisonClaim])).optional(),
+  observation: z.enum(["observed", "unobserved"]).optional(),
+  attempts: z.number().int().optional(),
 });
 
 const declared = z.looseObject({

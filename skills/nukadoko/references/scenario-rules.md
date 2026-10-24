@@ -12,11 +12,13 @@ every rule, with the output of real runs.
 
 Bad: `Then the command succeeds`, `Then the output contains "food"`.
 Good: `Then it exits with 0`, then `And the output is` with the exact
-lines in a docstring.
-Checked by: review. A Then that captures nothing, takes no table or
-docstring, and reads nothing through `from` compares nothing the scenario
-stated; `Then the list is empty` is the one shape where that is still a
-claim.
+lines in a docstring. The step declares claims, and each expected value
+is a key the sentence fills or a literal its fixed words state:
+`defineStep` refuses `{ literal: 0 }` under "the command succeeds", and
+`Then the list is empty` may claim `[]`.
+Checked by: `then-without-claims` for a Then bound to a step that runs,
+and `claim-compares-itself` for a claim whose two sides are one value;
+whether the sentence says enough is review.
 
 ## S2. Every scenario has a Then, after the When
 
@@ -58,8 +60,9 @@ pattern and `args` together; a literal inside `run()` is review.
 
 Bad: `Then the registration fails`.
 Good: `Then the registration is refused because "email already
-registered"`. The When step returns the outcome (`accepted`, `reason`)
-and does not throw on a refusal, so the Then reads it through `from`.
+registered"`. The When step returns the outcome (`outcome: "refused"`,
+`reason`) and does not throw on a refusal, so the Then claims both
+through `from`.
 Checked by: review.
 
 ## S7. Each Outline row is told apart by its name
@@ -97,20 +100,23 @@ The same step can be the When of one scenario and a Given of another: a
 registration is the action in "a short password" and the setup in "sign
 in before confirming". The keyword says which it is in this scenario.
 Checked by: `from-order-violation` when the action written as a Given has
-no Given before it to read from (`examples/cli.md`), and `then-mutates`
-for a step declared `mutates: true` in Then position; the rest is review.
+no Given before it to read from (`examples/cli.md`),
+`claims-outside-then` for a claim step in Given or When position, and
+`then-without-claims` for a step that runs in Then position; the rest is
+review.
 
 ## S11. A failing step says what it saw on its first line
 
 `nuka run` prints the first line of the error beside the failed step; the
-rest is in the step record.
-Bad: `assert.equal(actual, expected, "stdout")`, which prints only
-`stdout`.
-Good: a message that names both values, the shape `nuka scaffold --then`
-writes: ``assert.equal(actual, expected, `stdout: expected ${e}, got
-${a}`)``. Measured in `examples/cli.md`, it printed
-`stdout: expected "food: 5.5\nrent: 101", got "food: 5.5\nrent: 100"`.
-With Playwright installed, `expect` writes both values itself.
+rest is in the step record. A Then gets this from its claims: a broken
+claim's line names both values and where each came from. Measured in
+`examples/cli.md`: `claim broken: "food: 5.5\nrent: 100"
+(from:run-tally@16.stdout as text) equal "food: 5.5\nrent: 101"
+(sentence:expected)`.
+Bad: a Given or a When that throws `new Error("setup failed")`, which
+prints nothing it saw.
+Good: a message that names what it saw, such as the exit code and the
+first line of stderr of the program the Given ran.
 Checked by: review.
 
 ## S12. The criteria sit under `Feature:`, verbatim, and each scenario proves one

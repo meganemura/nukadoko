@@ -15,4 +15,4 @@ Feature: a step's channels are recorded on its step record
 
   Scenario: actions started after their step ended
     Given a step leaves a request and a command for later
-    Then a step waits
+    When a step waits

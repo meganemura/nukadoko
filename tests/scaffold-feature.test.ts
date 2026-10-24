@@ -87,7 +87,7 @@ describe("nuka scaffold --feature", () => {
     expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
   });
 
-  it("writes a When stub with its captures, and a Then stub with mutates: false and an assertion", async () => {
+  it("writes a When stub with its captures, and a Then stub with observe and a claim", async () => {
     const feature = await writeFeature(rootDir, "greet.feature", GREET);
 
     await cli(rootDir, ["scaffold", "--feature", feature]);
@@ -117,7 +117,6 @@ describe("nuka scaffold --feature", () => {
     expect(await stepFile(rootDir, "the-exit-code-is")).toBe(
       [
         'import { defineStep, z } from "nukadoko";',
-        'import assert from "node:assert/strict";',
         "",
         "export default defineStep({",
         '  description: "TODO: describe the-exit-code-is",',
@@ -126,12 +125,12 @@ describe("nuka scaffold --feature", () => {
         "  args: z.object({",
         "    value: z.number(),",
         "  }),",
-        "  mutates: false,",
-        "  run({}, { value }) {",
-        "    // TODO: read the value this line checks, for example from an earlier step's returns through `from`.",
-        "    const actual: unknown = undefined;",
-        "    assert.equal(actual, value, `value: expected ${JSON.stringify(value)}, got ${JSON.stringify(actual)}`);",
+        "  // TODO: read the value this line checks and return it as { actual }, or take it",
+        "  // from an earlier step's returns through `from` and remove observe.",
+        "  observe() {",
+        '    throw new Error("not implemented: the-exit-code-is");',
         "  },",
+        '  claims: [{ actual: "actual", compare: "equal", expected: "value" }],',
         "});",
         "",
       ].join("\n"),
@@ -175,9 +174,9 @@ describe("nuka scaffold --feature", () => {
       ].join("\n"),
     );
     expect(await stepFile(rootDir, "the-headers-are")).toContain(
-      ["  args: z.object({", "    table: z.array(z.array(z.string())),", "  }),", "  mutates: false,", "  run({}, { table }) {"].join("\n"),
+      ["  args: z.object({", "    table: z.array(z.array(z.string())),", "  }),"].join("\n"),
     );
-    expect(await stepFile(rootDir, "the-headers-are")).toContain("    assert.deepEqual(actual, table, ");
+    expect(await stepFile(rootDir, "the-headers-are")).toContain('  claims: [{ actual: "actual", compare: "equal", expected: "table" }],');
     expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
   });
 

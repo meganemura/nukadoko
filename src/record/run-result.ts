@@ -4,7 +4,7 @@ import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
 import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
-import type { ErrorKind, ObservedCounts } from "./types.js";
+import type { ClaimRecord, ErrorKind, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
 // own directory, `<stateDir>/runs/<run_id>/`, and what `nuka run --json`
@@ -76,7 +76,24 @@ export interface RunStep {
   /** The step record's scenario entry's `after_step_end`: actions the step
    * started after its record was written. */
   readonly after_step_end?: AfterStepEndCounts;
+  /** A claim step's claims, as its step record holds them, with each value
+   * whose JSON is longer than `CLAIM_VALUE_MAX_BYTES` cut (`RunClaim`). */
+  readonly claims?: readonly RunClaim[];
+  /** A claim step's `observation`, copied from its step record. */
+  readonly observation?: "observed" | "unobserved";
+  /** A claim step's `attempts`, copied from its step record. */
+  readonly attempts?: number;
 }
+
+/** A claim as run.json carries it. A value whose JSON is longer than
+ * `CLAIM_VALUE_MAX_BYTES` becomes the start of that JSON text, and
+ * `actual_bytes` or `expected_bytes` holds the whole value's size; the
+ * step record keeps the value whole. An item claim of `each` is cut the
+ * same way. */
+export type RunClaim = ClaimRecord & { readonly actual_bytes?: number; readonly expected_bytes?: number };
+
+/** The longest claim value, as JSON, that run.json carries whole. */
+export const CLAIM_VALUE_MAX_BYTES = 1024;
 
 export interface RunScenario {
   readonly scenario_record_id: string;

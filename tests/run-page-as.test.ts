@@ -49,6 +49,7 @@ function startServer(): Promise<{ server: Server; baseURL: string }> {
 interface StepRecord {
   readonly status: string;
   readonly result: { readonly who: string; readonly script?: string };
+  readonly claims?: readonly { readonly actual: unknown; readonly outcome: string }[];
   readonly evidence: {
     readonly dir: string;
     readonly trace?: string;
@@ -131,7 +132,7 @@ describe("nuka run: pageAs gives each person a browser context of their own", ()
     // Different cookie jars: ben signing in did not replace aki's cookie.
     expect(akiSignsIn!.result.who).toBe("aki");
     expect(benSignsIn!.result.who).toBe("ben");
-    expect(akiAgain!.result.who).toBe("aki");
+    expect(akiAgain!.claims).toMatchObject([{ actual: "aki", outcome: "held" }]);
     // Per-context options: scripts ran for aki and not for ben.
     expect(akiSignsIn!.result.script).toBe("on");
     expect(benSignsIn!.result.script).toBe("off");

@@ -8,12 +8,14 @@ export default defineStep({
     password: z.string().describe("The password chosen"),
   }),
   returns: z.object({
-    accepted: z.boolean().describe("Whether the registration was accepted"),
+    outcome: z.enum(["accepted", "refused"]).describe("Whether the registration was accepted or refused"),
     token: z.string().nullable().describe("The confirmation token issued, when accepted"),
     reason: z.string().nullable().describe("Why it was refused, when refused"),
   }),
   run({ store }, { email, password }) {
     const r = store.register(email, password);
-    return r.ok ? { accepted: true, token: r.token, reason: null } : { accepted: false, token: null, reason: r.reason };
+    return r.ok
+      ? { outcome: "accepted" as const, token: r.token, reason: null }
+      : { outcome: "refused" as const, token: null, reason: r.reason };
   },
 });

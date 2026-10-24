@@ -617,6 +617,11 @@ export type FixtureScope = "scenario" | "process";
  *     (or the run's `setDefaultTimeout`).
  *   - `unsupported` — a compat-only shape nukadoko doesn't implement: a
  *     `done()`-callback arity, or a `"pending"`/`"skipped"` return value.
+ *   - `claim_broken`: a claim step read its values and at least one of its
+ *     claims did not hold: the one kind that is a criterion failing.
+ *   - `unobserved`: a claim step could not read its values (its `observe`
+ *     threw, or a fixture it names could not be set up), so no claim was
+ *     judged. A deadline that passes first is `timeout`, as for any step.
  *   - `step_error` — anything else: the step's/hook's own code threw. Also
  *     the default whenever classification is uncertain. */
 export type ErrorKind =
@@ -626,7 +631,91 @@ export type ErrorKind =
   | "world_invalid"
   | "timeout"
   | "unsupported"
+  | "claim_broken"
+  | "unobserved"
   | "step_error";
+
+/** How a claim compares its actual value with its expected value
+ * (docs/spec.md "Claims"). */
+export type ClaimCompare =
+  | "equal"
+  | "not-equal"
+  | "contains-text"
+  | "has-item"
+  | "matches"
+  | "greater-than"
+  | "at-least"
+  | "less-than"
+  | "at-most";
+
+/** How a claim normalizes its actual value before `at` and the compare. */
+export type ClaimView = "text" | "lines" | "json";
+
+/** `unobserved` when the step could not read its values, so nothing was
+ * judged. */
+export type ClaimOutcome = "held" | "broken" | "unobserved";
+
+/** A recorded channel whose content equals a claim's raw actual value:
+ * `channel` is a path inside that step record, such as
+ * `observed.processes[0].stdout`, `http.jsonl[1].response_body`, or
+ * `observed.files[0].content`. Information about where the value came
+ * from, never a condition of the claim. */
+export interface MeasuredChannel {
+  readonly step_record_id: string;
+  readonly channel: string;
+}
+
+/** One comparison as the step judged it. `actual` is the value after
+ * `view` and `at`, absent when that path held nothing (then `reason` says
+ * which). `*_from` names where each side came from: `sentence:<key>`,
+ * `from:<step>@<line or step record id>.<path>`, `literal:<the pattern
+ * words that state it>`, or `observe:<path>`. `reason` is present only
+ * when the claim broke for something other than the comparison itself: an
+ * undefined value, two JSON types, an empty expected value, a side
+ * compared with itself. */
+export interface ClaimComparisonRecord {
+  readonly actual?: unknown;
+  readonly actual_from: string;
+  readonly view?: ClaimView;
+  readonly at?: string;
+  readonly compare: ClaimCompare;
+  readonly expected?: unknown;
+  readonly expected_from: string;
+  readonly outcome: ClaimOutcome;
+  readonly reason?: string;
+}
+
+/** One `each` item the step judged: the claims on that item, in order. */
+export interface ClaimItemRecord {
+  readonly index: number;
+  readonly outcome: "held" | "broken";
+  readonly claims: readonly ClaimComparisonRecord[];
+}
+
+/** A claim over every item of an array, or every item `where` selects.
+ * `items` is the array's length and `selected` how many items the claims
+ * applied to. `results` holds at most 20 items, the broken ones first,
+ * and `results_truncated` is then the number of items judged. */
+export interface ClaimEachRecord {
+  readonly actual_from: string;
+  readonly view?: ClaimView;
+  readonly at?: string;
+  readonly each: {
+    readonly items: number;
+    readonly selected: number;
+    readonly results: readonly ClaimItemRecord[];
+    readonly results_truncated?: number;
+  };
+  readonly outcome: ClaimOutcome;
+  readonly reason?: string;
+}
+
+/** A claim as the step record carries it (docs/spec.md "Claims"):
+ * a comparison, or a claim over each item of an array, with the channel
+ * the raw actual value was measured on. */
+export type ClaimRecord = (ClaimComparisonRecord | ClaimEachRecord) & {
+  readonly measured: MeasuredChannel | null;
+};
 
 /** One `ctx.section` call's own record (docs/spec.md
  * "Records") — a label alone said only *that* execution
@@ -935,6 +1024,18 @@ export interface StepRecordBase {
    * lets a reader tell "reused, hence fast" apart from "measured 0ms" —
    * see `FixtureUsageEntry`'s own doc comment (src/fixture/resolver.ts). */
   fixtures?: FixtureUsageEntry[];
+  /** A claim step only (docs/spec.md "Claims"): each claim in the order
+   * the step declares it, with what it compared and how it ended. */
+  claims?: ClaimRecord[];
+  /** A claim step only: `observed` when the step read the values its
+   * claims compare, `unobserved` when it could not (its `observe` threw or
+   * ran past the deadline, or a fixture it names could not be set up); the
+   * step's `error` then says why. */
+  observation?: "observed" | "unobserved";
+  /** A claim step only: how many times the step read those values. Each
+   * `observe` call counts; a step with no `observe` reads its `from`
+   * values once. */
+  attempts?: number;
 }
 
 export interface StepRecordPassed extends StepRecordBase {
