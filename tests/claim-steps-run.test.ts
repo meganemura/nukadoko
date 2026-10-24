@@ -696,6 +696,71 @@ export default valid;
     expect(checked.stdout + checked.stderr).toContain("Cannot assign to read only property 'expected'");
   });
 
+  it("refuses a change after defineStep below claims the step file froze itself", async () => {
+    // Freezing in place stopped at an object that was frozen already, so the
+    // claim inside stayed writable and could gain a where nothing validated.
+    const rootDir = await project({
+      "features/steps/every-item-is-titled.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+const each = { where: undefined as unknown, claims: [{ actual: "title", compare: "equal", expected: "title" }] };
+const step = defineStep({
+  pattern: "every item is titled {title:string}",
+  args: z.object({ title: z.string(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: Object.freeze([{ actual: "cart.items", each }]) as any,
+});
+each.where = [{ actual: "title", compare: "equal", expected: "title" }];
+export default step;
+`,
+      "features/t.feature": feature("When the app answers", 'Then every item is titled "a"'),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain("Cannot assign to read only property 'where'");
+  });
+
+  it("refuses a getter in a claim, which could answer validation one way and the run another", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-has-no-items.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+let reads = 0;
+const claim = { actual: "cart.count", get compare() { reads += 1; return reads === 1 ? "equal" : "at-least"; }, expected: { literal: 0 } };
+export default defineStep({
+  pattern: "the cart has no items",
+  args: z.object({ cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [claim as any],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart has no items"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain(
+      "defineStep claims[0].compare is a getter or a setter. defineStep validates one frozen copy of the definition and the run reads only that copy, so the definition has to be plain data that can be copied without running code of its own.",
+    );
+  });
+
+  it("refuses a change to a step's patterns after defineStep checked the literal against them", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-looks-right.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+const step = defineStep({
+  pattern: "the cart count is 1",
+  args: z.object({ cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.count", compare: "equal", expected: { literal: 1 } }],
+});
+(step.patterns as string[])[0] = "the cart looks right";
+export default step;
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart looks right"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain("Cannot assign to read only property '0'");
+  });
+
   it.each([
     ["the same claim", `{ actual: "title", compare: "equal", expected: "title" }`, "the item at title"],
     ["the same path through at", `{ at: "title", compare: "equal", expected: "title" }`, "the item at title"],

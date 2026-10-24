@@ -32,8 +32,10 @@ export default defineStep({
 A claim is `{ actual, view?, at?, compare, expected, expected_view? }`.
 `nuka scaffold --then --from <step>.<key>` writes this shape when the
 line states one value; `examples/` has a finished Then for a CLI, an API,
-and a workflow. Export what `defineStep` returned, unchanged: it freezes
-the step, and a copy (`{ ...step, claims }`) fails to import.
+and a workflow. Write the claims as plain data (no getter, no Proxy, no
+class instance) and export what `defineStep` returned, unchanged: it
+validates and freezes one copy of the definition, and a copy of the step
+(`{ ...step, claims }`) fails to import.
 
 ## Where the expected value comes from
 

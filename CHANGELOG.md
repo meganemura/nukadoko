@@ -34,10 +34,14 @@ just until 0.1.
   that still changes a value a claim reads breaks the claim. A `Date`, a
   bigint, `NaN`, a `Proxy`, or a value nested deeper than 256 levels
   leaves the claim `unjudged`, and the reason names it.
-  `defineStep` freezes what it validated, and discovery runs only the
-  step `defineStep` returned, not a copy of it. A `where` claim that
-  reads the path an item claim reads (`actual` then `at`, with or
-  without a `view`) is refused, whatever its compare. `matches` runs on
+  `defineStep` validates one copy of the claims, `from`, `parts`,
+  `poll`, and patterns, frozen at every level, and the run reads only
+  that copy: a getter, a setter, a Proxy, or a class instance in them is
+  refused with its path, and a change to the step file's objects after
+  the call throws at import. Discovery runs only the step `defineStep`
+  returned, not a copy of it. A `where` claim that reads the path an
+  item claim reads (`actual` then `at`, with or without a `view`) is
+  refused, whatever its compare. `matches` runs on
   a worker thread, and judging as a whole is bounded by the step's
   deadline: a pattern still running when it passes is stopped, and each
   claim and item not judged by then is `unjudged`, with how many. `observe` receives every

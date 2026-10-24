@@ -1,9 +1,11 @@
+import { types } from "node:util";
 import { z } from "zod";
 import { stripCaptureNames } from "../binding/pattern.js";
 import { argsSchemaRewrite, asObjectShape, isPlainString, isRequiredField, schemaRewrite } from "../binding/schema-shape.js";
 import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 import { claimsProblem, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
+import { freezeInPlace, frozenCopy } from "./frozen-copy.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
@@ -762,10 +764,11 @@ export function defineStep<
   TReturns extends z.ZodTypeAny = DefaultReturns,
   const TFrom extends FromMap<TFrom, TArgs> = Record<string, never>,
 >(definition: RunStepDefinition<TArgs, TReturns, TFrom>): RunStep<TArgs, TReturns>;
-export function defineStep(definition: StepDefinitionInput): Step {
+export function defineStep(input: StepDefinitionInput): Step {
+  const definition = copiedDefinition(input);
   validateStepDefinition(definition);
   const common = {
-    patterns: resolvePatterns(definition),
+    patterns: Object.freeze(resolvePatterns(definition)) as string[],
     args: definition.args,
     // Cast is the one place `TFrom`'s validated-literal type (checked against
     // this exact step's `args`) gets widened to `Step.from`'s own loose,
@@ -784,9 +787,9 @@ export function defineStep(definition: StepDefinitionInput): Step {
       returns: defaultReturns(),
       mutates: false,
       parts: [],
-      claims: deepFrozen(definition.claims),
+      claims: definition.claims,
       observe: definition.observe as ObserveFn | undefined,
-      poll: definition.poll === undefined || definition.poll === false ? definition.poll : Object.freeze({ ...definition.poll }),
+      poll: definition.poll,
       [STEP_DECLARATION]: { declaresReturns: false, ignoredOptions: ignoredOptions(definition) },
     });
   }
@@ -810,10 +813,13 @@ export function defineStep(definition: StepDefinitionInput): Step {
 //
 // defineStep validates a definition once, and discovery runs what it
 // returned. A step file could otherwise export a copy with other claims
-// (`{ ...step, claims }`) or change a claim after the call, and run
-// claims nothing ever validated. So the claims, `from`, and the step
-// itself are frozen, and every step defineStep returns is kept in one
-// WeakSet; discovery accepts a default export only when it is in the set.
+// (`{ ...step, claims }`), change a claim after the call, or answer a
+// second read differently through a getter or a Proxy, and run claims
+// nothing ever validated. So defineStep reads the definition once, into a
+// copy frozen at every level that the step file holds no reference into
+// (`copiedDefinition`), validates that copy, and returns a frozen step
+// built from it. Every step defineStep returns is kept in one WeakSet;
+// discovery accepts a default export only when it is in the set.
 // The set lives on globalThis under a registry symbol because step files
 // load in a module graph of their own (brand.ts says why), so a set local
 // to this module would be a different set in each graph.
@@ -826,20 +832,51 @@ function definedSteps(): WeakSet<object> {
   return holder[DEFINED_KEY];
 }
 
-/** `value` with every object and array it holds frozen. A function is left
- * as it is, since a claim holds none. */
-function deepFrozen<T>(value: T): T {
-  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  for (const key of Reflect.ownKeys(value)) {
-    deepFrozen((value as Record<PropertyKey, unknown>)[key]);
+/** The fields of a definition that hold data a step file could change or
+ * answer differently on a second read: each is copied once, frozen at
+ * every level, and the copy is what defineStep validates and returns. */
+const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll"] as const;
+
+/**
+ * `input` read once: each own field taken by its descriptor, so a getter on
+ * the definition never runs, and each data field replaced by a frozen
+ * copy (`frozenCopy`), so what is validated is what runs and nothing the
+ * step file still holds reaches it. The step file's own objects are frozen
+ * too, so a write to one after the call throws instead of doing nothing.
+ * Steps (in `from` and `parts`) and functions are kept by reference.
+ * Throws `InvalidStepDefinitionError` naming the path of a getter, a
+ * setter, a Proxy, or an object of a class.
+ */
+function copiedDefinition(input: StepDefinitionInput): StepDefinitionInput {
+  const refused = (path: string, problem: string): never => {
+    throw new InvalidStepDefinitionError(
+      `defineStep ${path} ${problem}. defineStep validates one frozen copy of the definition and the run reads only that copy, so the definition has to be plain data that can be copied without running code of its own.`,
+    );
+  };
+  if (typeof input !== "object" || input === null) return input;
+  if (types.isProxy(input)) refused("was given a Proxy as its definition, which", "is not plain data");
+  const fields: Record<string, unknown> = {};
+  for (const key of Object.keys(input)) {
+    const descriptor = Object.getOwnPropertyDescriptor(input, key)!;
+    if (!("value" in descriptor)) refused(key, "is a getter or a setter");
+    fields[key] = descriptor.value;
   }
-  return Object.freeze(value);
+  for (const key of COPIED_FIELDS) {
+    if (!(key in fields)) continue;
+    const copied = frozenCopy(fields[key], key, isStep);
+    if ("refused" in copied) refused(copied.refused.path, copied.refused.problem);
+    else {
+      freezeInPlace(fields[key], isStep);
+      fields[key] = copied.value;
+    }
+  }
+  return fields as unknown as StepDefinitionInput;
 }
 
 function defined<T extends Step>(step: T): T {
-  // `from` holds other steps, which are frozen by their own defineStep
-  // call, so only the map and its tuples are frozen here.
-  for (const entry of Object.values(step.from)) Object.freeze(entry);
+  // `from` and `parts` are the frozen copies when the definition had
+  // them; these freeze the empty defaults a step gets otherwise. The steps
+  // they hold are frozen by their own defineStep call.
   Object.freeze(step.from);
   Object.freeze(step.parts);
   const frozen = Object.freeze(step);

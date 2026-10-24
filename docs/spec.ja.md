@@ -1359,11 +1359,16 @@ claim を持たない claim step は、何も判定せずに通るからです�
 claim step では `description` は省略できます。
 `nuka steps` と `nuka describe` が claim を表示し、claim はその step が何を確かめるかを正確に述べるからです。
 
-`defineStep` は検証したものを凍結します。
-対象は claim とその中のすべてのオブジェクト、`from`、`parts`、そして返す step です。
-呼び出しのあとで claim を変える step ファイルは import の時点で throw します。
+`defineStep` は定義を一度だけ読みます。
+`pattern`、`patterns`、claim、`from`、`parts`、`poll` を、すべての階層で凍結した新しいオブジェクトにコピーし、そのコピーを検証して、コピーだけを持つ凍結した step を返します。
+したがって、step ファイルは実行されるものへの参照を持ちません。
+これらのフィールドのどこかにある getter や setter、Proxy、クラスのオブジェクトは、呼び出しの時点でパスを名指しして拒否されます(`defineStep claims[0].compare is a getter or a setter`)。
+検証と実行に別々の答えを返せるからです。
+関数と、`from` と `parts` の中の step は、そのまま保持されます。
+step ファイル自身のオブジェクトも、step ファイルが自分で凍結したオブジェクトの下まで凍結されます。
+したがって、呼び出しのあとで claim やパターンを変える step ファイルは、何も読まないオブジェクトを変えるのではなく、import の時点で throw します。
 discovery は、`defineStep` が返したオブジェクトそのものである default export だけを実行するので、コピー(`{ ...step, claims }`)を export するファイルも拒否されます。
-`nuka check` はどちらも `step-file-import-failed` として報告します。
+`nuka check` はどれも `step-file-import-failed` として報告します。
 そうしないと、実行される claim が、何も検証していない claim になってしまうからです。
 
 #### 期待値の出所

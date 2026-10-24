@@ -197,7 +197,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 - **step ファイルは `defineStep` が返した step を、そのまま export します。**
   `defineStep` は返す step を、その claim、`from`、`parts` とともに凍結するようになり、discovery はコピー(`{ ...step }`、`Object.assign({}, step)`)である default export を拒否します。
-  どちらも `step-file-import-failed` として現れます。
+  `defineStep` は定義のデータのコピーを検証するので、claim、`from`、`parts`、`poll`、パターンの中にある getter や setter、Proxy、クラスのインスタンスは、呼び出しの時点で拒否されます。
+  これらは素のオブジェクトと配列で書きます。
+  どれも `step-file-import-failed` として現れます。
   オプションを変えるために step をコピーしていたファイルは、そのオプションを `defineStep` に渡します。
   `parts` に並べる step も、`defineStep` が返したものです。
   呼び出しのあとで別の step の `parts` を変えていたファイルは import の時点で throw するため、`nuka check` は `part-cycle` を報告していた場所で `step-file-import-failed` を報告します。

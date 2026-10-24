@@ -1626,13 +1626,22 @@ import: a claim step with no claim passes without judging anything.
 `nuka describe` print the claims, and the claims say exactly what the
 step checks.
 
-`defineStep` freezes what it validated: the claims and every object
-inside them, `from`, `parts`, and the step it returns. A step file that changes a
-claim after the call throws at import, and discovery runs a default
-export only when it is the object `defineStep` returned, so a file that
-exports a copy (`{ ...step, claims }`) is refused too. `nuka check`
-reports both as `step-file-import-failed`: otherwise the claims that run
-would be ones nothing validated.
+`defineStep` reads the definition once. It copies `pattern`,
+`patterns`, the claims, `from`, `parts`, and `poll` into new objects
+frozen at every level, validates that copy, and returns a frozen step
+that holds only the copy, so the step file keeps no reference into what
+runs. A getter or a setter, a Proxy, or an object of a class anywhere in
+those fields is refused at the call with its path
+(`defineStep claims[0].compare is a getter or a setter`): it could
+answer validation one way and the run another. Functions and the steps in `from` and
+`parts` are kept as they are. The step file's own objects are frozen
+too, below an object it froze itself as well, so a step file that changes
+a claim or the patterns after the call throws at import instead of
+changing an object nothing reads. Discovery runs a default export only
+when it is the object `defineStep` returned, so a file that exports a
+copy (`{ ...step, claims }`) is refused too. `nuka check` reports each of
+these as `step-file-import-failed`: otherwise the claims that run would be
+ones nothing validated.
 
 #### Where the expected value comes from
 
