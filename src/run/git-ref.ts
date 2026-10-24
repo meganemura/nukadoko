@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
+import path from "node:path";
 import { promisify } from "node:util";
 
 // Responsibility: what `nuka run --base <ref>` asks git: the commit a ref
@@ -11,7 +13,16 @@ import { promisify } from "node:util";
 // Read-only in the project's own tree: `rev-parse` and `ls-files`, never
 // a command that moves HEAD or touches the index. The one write is the
 // worktree, which git keeps under the repository's own metadata and the
-// run removes when it ends.
+// run removes when it ends. A run a SIGKILL ended cannot remove its own,
+// so the next `nuka run --base` and `nuka clean` remove each registration
+// whose directory is under the state directory's runs and no longer exists,
+// and touch no other.
+//
+// Every command runs with `core.hooksPath` set to `/dev/null`, so making
+// a tree never runs the repository's hooks (a `post-checkout` hook sees
+// the tree as a checkout of its own and could act on it). Checkout filters
+// (`.gitattributes` filters, Git LFS) stay on: they are how the repository
+// turns its objects into the files its code is.
 //
 // The C locale keeps git's own messages in English, so the one message
 // that is matched (`not a git repository`) reads the same everywhere. A
@@ -19,6 +30,9 @@ import { promisify } from "node:util";
 // guess that a file is new.
 
 const execFileAsync = promisify(execFile);
+
+/** Leads every git command nukadoko runs against a tree (module header). */
+export const NO_HOOKS: readonly string[] = ["-c", "core.hooksPath=/dev/null"];
 
 /** A git command `--base` needs that did not answer. */
 export class GitRefError extends Error {
@@ -39,7 +53,7 @@ function describeFailure(error: unknown): string {
 
 async function git(cwd: string, args: readonly string[]): Promise<string> {
   try {
-    const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], {
+    const { stdout } = await execFileAsync("git", [...NO_HOOKS, "-C", cwd, ...args], {
       encoding: "utf8",
       maxBuffer: 256 * 1024 * 1024,
       env: { ...process.env, LC_ALL: "C" },
@@ -168,4 +182,44 @@ export async function addWorktree(top: string, dir: string, commit: string): Pro
 /** Removes the worktree at `dir`, with what the run wrote into it. */
 export async function removeWorktree(top: string, dir: string): Promise<void> {
   await git(top, ["worktree", "remove", "--force", "--force", dir]);
+}
+
+function inside(dir: string, file: string): boolean {
+  const relative = path.relative(dir, file);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+/** Removes each worktree registration of the repository holding `rootDir`
+ * whose directory lies under `runsDir` and no longer exists: what a run
+ * that could not remove its tree left behind (module header). Every other
+ * registration stays, a missing one included. Returns the directories it
+ * removed; a project outside git has none. */
+export async function removeStaleTreeRegistrations(rootDir: string, runsDir: string): Promise<string[]> {
+  let listing: string;
+  try {
+    listing = await git(rootDir, ["worktree", "list", "--porcelain"]);
+  } catch {
+    return [];
+  }
+  // git names a worktree by the path it was given or by its real path, so
+  // either spelling of the runs directory counts.
+  const roots = [path.resolve(runsDir)];
+  try {
+    roots.push(realpathSync(path.dirname(path.resolve(runsDir))) + path.sep + path.basename(runsDir));
+  } catch {
+    // The state directory is gone too: the resolved spelling is all there is.
+  }
+  const removed: string[] = [];
+  for (const field of listing.split("\n")) {
+    if (!field.startsWith("worktree ")) continue;
+    const dir = field.slice("worktree ".length);
+    if (!roots.some((root) => inside(root, dir)) || existsSync(dir)) continue;
+    try {
+      await git(rootDir, ["worktree", "remove", "--force", "--force", dir]);
+      removed.push(dir);
+    } catch {
+      // Another process removed it first: nothing is left to remove.
+    }
+  }
+  return removed;
 }

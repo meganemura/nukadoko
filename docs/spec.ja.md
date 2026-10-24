@@ -3332,6 +3332,13 @@ tree の scenario は、`--concurrency` にかかわらず、その tree で始�
 起動中ならすぐに止め、動いている world には SIGTERM と 5 秒を与えます(「テスト対象のプログラム」を参照)。
 tree は nukadoko が終了する前に取り除かれます。
 
+nukadoko が tree に対して走らせる git のコマンドは、どれもリポジトリの hook を止めて(`core.hooksPath=/dev/null`)走るので、`post-checkout` の hook が base の tree に手を出すことはありません。
+Git LFS や `.gitattributes` のフィルタのようなチェックアウトのフィルタは止めません。
+リポジトリがコードであるファイルを作る方法だからです。
+base の tree は、run のあいだ git が登録しておく worktree です。
+run は、終わるとき、失敗したとき、シグナルを受けたときにそれを取り除きます。
+SIGKILL で止められた run はそれができないので、次の `nuka run --base` と `nuka clean` が、state ディレクトリの `runs/` の下にあってもう存在しないディレクトリの登録を取り除き、ほかの登録には触れません。
+
 行が world を必要とするのは、断定を変えうるところだけで、head が通ったあとだけです:
 
 - `new` か `changed` の行は、head のセルが必須で通った各 environment で、base の world で走ります。
@@ -4376,6 +4383,8 @@ retention はそこに決して触れません。
 `cache/sessions/` は、各 session のブラウザの storage state を、cookie も含めて持っていました。
 `--json` の計画は、それらを `legacy` に挙げます。
 state directory の外へ `--out` で書いたレポートは呼び出し側のファイルであり、`nuka clean` は読みも消しもしません。
+run ディレクトリを消したあと、`runs/` の下にあった git の worktree の登録も取り除きます。
+自分の tree を取り除く前に止められた `nuka run --base` の base の tree です。
 あった results ディレクトリは空の状態で作り直すので、そこを指す `allure watch` は見失いません。
 空の results ディレクトリは一覧に出さないので、clean の直後の clean は `ok: nothing to clean` を出します。
 なかった results ディレクトリは作りません。

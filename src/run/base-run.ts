@@ -9,8 +9,9 @@ import type { Program } from "../config/program-schema.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { parseFeatureSource, walkFeatureFiles } from "../feature/load-features.js";
 import type { RunMappingChanges } from "../record/run-result.js";
+import { runsRelativeDir } from "../record/state-layout.js";
 import { compareCriteria, criteriaOfFeature, criterionKey, type CriteriaComparison, type Criterion, type CriterionChange } from "./criteria.js";
-import { addWorktree, removeWorktree, repositoryPlace, trackedFiles, workingTreeFiles } from "./git-ref.js";
+import { addWorktree, NO_HOOKS, removeStaleTreeRegistrations, removeWorktree, repositoryPlace, trackedFiles, workingTreeFiles } from "./git-ref.js";
 import { compareMapping, configMappingText, programMappingOf, type MappingComparison, type MappingSnapshot } from "./mapping.js";
 import { runOnce } from "./process-signal.js";
 import { overlayBaseTree, within, writeOldTree, type TreeInput, type TreeSide } from "./trees.js";
@@ -18,7 +19,7 @@ export { projectRelativeText } from "./trees.js";
 
 export { criterionKey, type CriteriaComparison, type Criterion, type CriterionChange, type CriterionPlace } from "./criteria.js";
 export type { MappingComparison } from "./mapping.js";
-export { fetchCommandFor, GitRefError, resolveRef, type RefResolution } from "./git-ref.js";
+export { fetchCommandFor, GitRefError, removeStaleTreeRegistrations, resolveRef, type RefResolution } from "./git-ref.js";
 
 // Responsibility: what `nuka run --base <ref>` knows before head's pass
 // runs (docs/spec.md "Verdicts"): the ref's criteria and how each selected
@@ -176,6 +177,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     );
   }
   const { top, prefix } = await repositoryPlace(rootDir);
+  await removeStaleTreeRegistrations(rootDir, path.join(rootDir, runsRelativeDir(config.stateDir)));
   const inRepo = (relativePath: string): string => path.posix.join(prefix, toPosix(relativePath));
   const treesDir = path.join(input.runDir, "trees");
   const baseTop = path.join(treesDir, "base");
@@ -202,7 +204,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
   // the trees go then too, synchronously, the one way an `exit` listener
   // can.
   const removeTreesNow = (): void => {
-    if (worktree) spawnSync("git", ["-C", top, "worktree", "remove", "--force", "--force", baseTop], { stdio: "ignore" });
+    if (worktree) spawnSync("git", [...NO_HOOKS, "-C", top, "worktree", "remove", "--force", "--force", baseTop], { stdio: "ignore" });
     rmSync(baseTop, { recursive: true, force: true });
     rmSync(oldTop, { recursive: true, force: true });
     try {

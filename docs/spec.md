@@ -4172,6 +4172,16 @@ a tree's world as it stops head's: it stops a start at once, and gives a
 running world SIGTERM and its 5 seconds (see "Program"), and the trees
 are removed before nukadoko exits.
 
+Every git command nukadoko runs against a tree runs with the repository's
+hooks off (`core.hooksPath=/dev/null`), so a `post-checkout` hook never
+acts on the base tree. Checkout filters, such as Git LFS or a
+`.gitattributes` filter, stay on: they are how the repository makes the
+files its code is. The base tree is a worktree git keeps registered while
+the run lasts; the run removes it when it ends, when it fails, and on a
+signal. A run killed with SIGKILL cannot, so the next `nuka run --base`
+and `nuka clean` remove each registration whose directory is under the
+state directory's `runs/` and no longer exists, and touch no other.
+
 A row needs a world only where it can change the verdict, and only once
 head passed:
 
@@ -5593,6 +5603,9 @@ which nothing reads any more; `cache/sessions/` held each session's
 browser storage state, cookies included. Its `--json` plan names them in
 `legacy`. A report written with `--out` outside the state
 directory is the caller's file, and `nuka clean` does not read or remove it.
+Once the run directories are gone, it removes each git worktree
+registration whose directory was under `runs/`: the base tree of a
+`nuka run --base` that was killed before it could remove its own.
 A results directory that existed is recreated empty, so an `allure watch`
 pointed at it keeps finding it; an empty one is not listed, so a clean
 right after a clean prints `ok: nothing to clean`; and a results directory

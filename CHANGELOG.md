@@ -347,7 +347,10 @@ just until 0.1.
   approved with), and the gate is red on the last three. The base world
   builds the ref's program file, a `url` function receives `tree` to say
   where the base is deployed, and neither tree installs anything: both
-  resolve packages from head's project. run.json's `table` gains `base`,
+  resolve packages from head's project. git runs against a tree with the
+  repository's hooks off, and the next `nuka run --base` and `nuka clean`
+  remove a worktree registration a killed run left under `runs/` once its
+  directory is gone. run.json's `table` gains `base`,
   `mapping_changed`, and `mapping_changes`, a row gains `change`,
   `renamed_from`, and, removed, `lines`, and a base or old execution
   names its `world` and its `row`. The summary opens with what was

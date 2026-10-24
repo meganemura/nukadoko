@@ -2,6 +2,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { readOwnedExports } from "../record/run-exports.js";
+import { removeStaleTreeRegistrations } from "../run/base-run.js";
 import { allureResultsRelativeDir, doRelativeDir, isInsideDir, runsRelativeDir } from "../record/state-layout.js";
 import type { Finding } from "../finding/finding.js";
 import { formatEnvelope, refuse } from "./refusal.js";
@@ -206,6 +207,10 @@ export async function runClean(options: RunCleanOptions): Promise<number> {
   for (const relativePath of [...plan.records, ...plan.export, ...plan.legacy]) {
     await rm(path.join(rootDir, relativePath), { recursive: true, force: true });
   }
+  // A run of `nuka run --base` that was killed leaves its base tree
+  // registered with git; once its run directory is gone, so is the
+  // registration (src/run/git-ref.ts).
+  await removeStaleTreeRegistrations(rootDir, path.join(rootDir, runsRelativeDir(config.stateDir)));
   // Recreated empty, not just removed: this file's own header explains why
   // (an `allure watch` already pointed at this directory must keep finding
   // it). A directory that was not there is not created.
