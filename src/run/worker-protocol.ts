@@ -27,7 +27,7 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // both a finished scenario's own record *and* its progress text ride the
 // worker's stdout, as typed envelope lines, never the worker's real stderr.
 // stdout already needs exact line reassembly the moment more than one
-// worker exists (src/run/line-buffer.ts's own header: a chunk boundary has
+// worker exists (src/sink/line-buffer.ts's own header: a chunk boundary has
 // no relation to a JSON object's own boundary), so every worker-to-parent
 // signal reuses that one reassembly point instead of building a second one
 // against the worker's stderr, which is exactly as vulnerable to

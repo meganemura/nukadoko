@@ -19,7 +19,7 @@ import {
 } from "./progress-log.js";
 import type { SelectedFeature, SelectedScenarios } from "./select-pickles.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
-import { createLineBuffer } from "./line-buffer.js";
+import { createLineBuffer } from "../sink/line-buffer.js";
 import { exitCodeForSignal, HANDLED_SIGNALS } from "./process-signal.js";
 import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 
@@ -47,7 +47,7 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // cannot tell it apart from one `--concurrency 1` would have written), while a `"note"`
 // envelope is everything a worker would otherwise have written straight to
 // stderr. Both ride the worker's stdout, reassembled into whole lines by
-// src/run/line-buffer.ts before either is ever touched, so a NDJSON record
+// src/sink/line-buffer.ts before either is ever touched, so a NDJSON record
 // can never end up spliced together from two workers' own overlapping
 // writes — the exact corruption this whole module exists to rule out.
 //

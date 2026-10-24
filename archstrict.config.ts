@@ -164,7 +164,7 @@ export default {
       glob: "src/secrets/**",
       surface: ["build-secret-set.ts", "classify-env-files.ts", "redact.ts", "types.ts"],
     },
-    { name: "sink", glob: "src/sink/**", surface: ["writable-sink.ts"] },
+    { name: "sink", glob: "src/sink/**", surface: ["line-buffer.ts", "writable-sink.ts"] },
     {
       name: "config",
       glob: "src/config/**",

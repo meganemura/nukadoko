@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { createLineBuffer } from "../src/run/line-buffer.js";
+import { createLineBuffer } from "../src/sink/line-buffer.js";
 
 // Responsibility: src/run/run-concurrent.ts reads a worker's own stdout as
 // chunks, never lines — a pipe has no notion of where one JSON envelope
