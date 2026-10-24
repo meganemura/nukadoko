@@ -3044,8 +3044,14 @@ A hook gets a trace id of its own, so its lines belong to no step.
 - A request that sets its own `traceparent` keeps it, and so does a
   request context whose `extraHTTPHeaders` set one
   (`config.requestContext`, `config.browserContext`).
+  A `node:http` request gets the header at the moment its headers are
+  sent (its first `write`, its `end`, or `flushHeaders`), so a
+  `traceparent` the step sets after creating the request is the one that
+  goes out.
   A `node:http` request whose headers were given as an array is sent as
   the call returns, so it goes without one.
+  A step's `stamped` count holds only the requests that went out with
+  nukadoko's value.
 - A redirect to another origin does not take the header there, with one
   exception.
   `fetch` follows a redirect itself, so nukadoko adds the header to each
@@ -3061,12 +3067,20 @@ A hook gets a trace id of its own, so its lines belong to no step.
   `page.request`, `context.request`): Playwright follows the redirect
   inside its own process and sends the call's headers on, and nothing
   lets nukadoko change a hop.
-  The call's http.jsonl line then names the origin its response came
-  from, `"traceparent_sent_to": ["https://sso.example"]`, so the record
-  shows where the id went; an origin between the first hop and the last
-  is not known.
-- A line of http.jsonl names the value nukadoko added, as `traceparent`.
-  A page's line does not: the browser added it.
+  The call's http.jsonl line then names both origins,
+  `"traceparent_sent_to": ["http://localhost:41873",
+  "https://sso.example"]`, so the record shows where the id went; an
+  origin between the first hop and the last is not known.
+- A line of http.jsonl names the value the request went out with, as
+  `traceparent`, whoever set it: nukadoko's starts with the world's eight
+  characters, and a step's own is written as it was sent.
+  Every line that has `traceparent` also has `traceparent_sent_to`, the
+  origins that received it: for `fetch` each hop that carried it, for
+  `node:http` and `node:https` the request's own origin, and for a
+  Playwright request context the first hop's origin and the response's.
+  A redirected request's `url` is where its response came from, never by
+  itself where the id went.
+  A page's line has neither: the browser added the header.
 - A page's requests are stamped through the Chrome DevTools Protocol, so
   only on Chromium.
   Firefox and WebKit have no such protocol through Playwright, and their
@@ -4427,12 +4441,10 @@ its scenario record's id, so either record leads to the other.
   arrived or it had no body, as for HEAD, a 204, a 304, or
   `content-length: 0`, from every client, whose line is written at the
   status), kept as text of at most 16 KiB each (below).
-  A line of a request nukadoko sent to the world with a `traceparent` has
-  `"traceparent"`, the value it added (see "Program"); a page's line does
-  not, since the browser added it. A request context's line whose
-  response came from another origin, after a redirect, has
-  `"traceparent_sent_to"`, that origin in a list: Playwright sent the
-  header on with the redirect.
+  A line of a request that went out with a `traceparent` has
+  `"traceparent"`, the value that went out, nukadoko's or the step's own,
+  and `"traceparent_sent_to"`, the origins that received it (see
+  "Program"); a page's line has neither, since the browser added it.
   No header is written: headers carry cookies and credentials, and the
   trace holds a page's. A page line has no bodies: the trace already holds
   the page's traffic. A call the step itself made is logged whatever its outcome,

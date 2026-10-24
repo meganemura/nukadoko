@@ -350,14 +350,21 @@ just until 0.1.
   EventSources. For a `localhost` world, a name below `localhost` at the
   same port counts as the world's origin. A request that sets its own
   `traceparent`, or whose request context's `extraHTTPHeaders` set one,
-  keeps it. A request to another origin gets no header, and neither does
+  keeps it; a `node:http` request is stamped as its headers are sent, so
+  one the step sets after creating the request is the one kept. A
+  request to another origin gets no header, and neither does
   a redirect to one: `fetch` is stamped on each hop as undici sends it,
   through the `undici:request:create` diagnostics channel, only on a hop
   to the world, and with the step's arguments untouched, so a `fetch`
   given a Request or a non-plain `init` is stamped too. The exception is
   a Playwright request context, which follows a redirect inside
-  Playwright and sends the call's headers on; its http.jsonl line then
-  names that origin in `traceparent_sent_to`. A page's requests are stamped through the DevTools Protocol,
+  Playwright and sends the call's headers on. Every http.jsonl line
+  that names the `traceparent` a request went out with, nukadoko's or
+  the step's own, also names in `traceparent_sent_to` the origins that
+  received it, so a redirected request's final URL is never taken for
+  where the id went, and a step's `stamped` counts only the requests
+  that went out with nukadoko's value. A page's requests are stamped
+  through the DevTools Protocol,
   since `setExtraHTTPHeaders` sent the header to other origins and broke
   a CORS request with a preflight, and `context.route` turned the HTTP
   cache off; Firefox and WebKit pages, a popup's first requests, and a
@@ -375,8 +382,7 @@ just until 0.1.
   A line that arrives after the step's record was written goes to its
   `program-log-late.txt` when the world stops, run.json's step gains
   `program_log_late`, and the run summary names it on the step's line;
-  `nuka do` names it in a `program-log-late` note. http.jsonl names the
-  value nukadoko added as `traceparent`, run.json's `worlds` entries
+  `nuka do` names it in a `program-log-late` note. run.json's `worlds` entries
   gain `program_log: { stamped, lines, late, tagged }`, and the run
   summary says once per world, decided from the whole log, when the log
   carries no trace ids, when the steps' lines all arrived after the steps

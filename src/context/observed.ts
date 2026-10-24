@@ -250,8 +250,25 @@ export function createObservedCollector(
   ): StepRecorder & {
     readonly unwatchedDirs: readonly string[];
     traceparentFor(url: string, base?: string): string | undefined;
+    draftTraceparent(url: string, base?: string): { readonly value: string; sent(): void } | undefined;
     isWorldUrl(url: string, base?: string): boolean;
   } {
+    // A request counts as stamped once nukadoko's value went out with it,
+    // in the boundary the value was made for.
+    const draftTraceparent = (url: string, base?: string): { readonly value: string; sent(): void } | undefined => {
+      const state = current();
+      if (trace === undefined || state.traceId === undefined || !stampsUrl(trace.origin, url, base)) return undefined;
+      let counted = false;
+      return {
+        value: traceparentOf(state.traceId, newSpanId()),
+        sent() {
+          if (counted) return;
+          counted = true;
+          state.stamped += 1;
+          state.lastStampAt = Date.now();
+        },
+      };
+    };
     return {
       unwatchedDirs,
       startProcess(): (entry: ProcessEntry, output?: ProcessOutput) => void {
@@ -315,12 +332,11 @@ export function createObservedCollector(
         if (!state.sockets.has(use)) state.sockets.set(use, how);
       },
       traceparentFor(url: string, base?: string): string | undefined {
-        const state = current();
-        if (trace === undefined || state.traceId === undefined || !stampsUrl(trace.origin, url, base)) return undefined;
-        state.stamped += 1;
-        state.lastStampAt = Date.now();
-        return traceparentOf(state.traceId, newSpanId());
+        const draft = draftTraceparent(url, base);
+        draft?.sent();
+        return draft?.value;
       },
+      draftTraceparent,
       isWorldUrl(url: string, base?: string): boolean {
         return trace !== undefined && stampsUrl(trace.origin, url, base);
       },

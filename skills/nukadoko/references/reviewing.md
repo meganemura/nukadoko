@@ -53,8 +53,10 @@ What each part of `observed` says:
   body. A line marked `after_step_end` started after the record was
   written, so the record does not count it; the run summary names it and
   its file. A body marked `incomplete` was still arriving when nukadoko
-  stopped waiting; one with an `error` failed on its own. A line with a
-  `traceparent` went to the world, and names the ids its log lines carry.
+  stopped waiting; one with an `error` failed on its own. A line's
+  `traceparent` is the value the request went out with, nukadoko's or
+  the step's own, and `traceparent_sent_to` the origins that received
+  it; nukadoko's value names the id the program's log lines carry.
 - `program_log` counts the lines of the program's log that carry the
   step's trace id, in `program-log.txt` beside the record: what the
   server did for this step. Lines that arrived after the step ended are

@@ -2473,7 +2473,10 @@ hook は専用の trace id を持つので、その行はどの step のもの�
   プロジェクトは、scenario の人ごとの cookie を分けるために、そこで人ごとにホスト名を与えます。
 - 自分で `traceparent` を設定したリクエストは、それを保ちます。
   `extraHTTPHeaders` で設定した request context(`config.requestContext`、`config.browserContext`)も同じです。
+  `node:http` のリクエストには、ヘッダが送られる時点(最初の `write`、`end`、`flushHeaders`)でヘッダを付けます。
+  そのため、リクエストを作ったあとに step が設定した `traceparent` が、送られるものになります。
   ヘッダを配列で渡した `node:http` のリクエストは呼び出しが戻るときに送られるので、ヘッダなしで送られます。
+  step の `stamped` の数は、nukadoko の値を持って出ていったリクエストだけを数えます。
 - ほかのオリジンへのリダイレクトは、ヘッダをそこへ持っていきません。
   例外が 1 つあります。
   `fetch` はリダイレクトを自分でたどるので、nukadoko は undici の `undici:request:create` diagnostics channel を通して、undici が送る各ホップにヘッダを足し、足すのは world へのホップだけです。
@@ -2483,10 +2486,14 @@ hook は専用の trace id を持つので、その行はどの step のもの�
   DevTools Protocol の接続は world のオリジンにだけ合うからです。
   例外は Playwright の request context(`request` fixture、`page.request`、`context.request`)です。
   Playwright はリダイレクトを自分のプロセスの中でたどり、呼び出しのヘッダをそのまま送るので、nukadoko はホップを変えられません。
-  そのとき呼び出しの http.jsonl の行は、レスポンスが来たオリジンを `"traceparent_sent_to": ["https://sso.example"]` として名指すので、id がどこへ行ったかを record が示します。
+  そのとき呼び出しの http.jsonl の行は、両方のオリジンを `"traceparent_sent_to": ["http://localhost:41873", "https://sso.example"]` として名指すので、id がどこへ行ったかを record が示します。
   最初のホップと最後のホップの間のオリジンはわかりません。
-- http.jsonl の行は、nukadoko が足した値を `traceparent` として名指します。
-  page の行は名指しません。
+- http.jsonl の行は、リクエストが持って出ていった値を、誰が設定したものでも `traceparent` として名指します。
+  nukadoko の値は world の 8 文字で始まり、step 自身の値は送られたとおりに書きます。
+  `traceparent` を持つ行はどれも、それを受け取ったオリジンを `traceparent_sent_to` として持ちます。
+  `fetch` ではそれを運んだ各ホップのオリジン、`node:http` と `node:https` ではリクエスト自身のオリジン、Playwright の request context では最初のホップのオリジンとレスポンスのオリジンです。
+  リダイレクトされたリクエストの `url` はレスポンスが来た場所で、それだけでは id がどこへ行ったかを示しません。
+  page の行はどちらも持ちません。
   ヘッダを足したのはブラウザだからです。
 - page のリクエストには Chrome DevTools Protocol を通してヘッダを付けるので、付くのは Chromium だけです。
   Firefox と WebKit には Playwright を通したそうしたプロトコルが無く、その page のリクエストはヘッダなしで送られます。
@@ -3514,11 +3521,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   どのエントリにも必ず付くため、読み手はその行がどの経路から来たかを形だけから推測せずに済みます。
   `"page"` 以外のどの行にも `"request_body"`(リクエストが何も送らなかったときはありません)と `"response_body"`(レスポンスが届かなかったか、HEAD、204、304、`content-length: 0` のように本文がなかったときは、どのクライアントでもありません)があり、それぞれ 16 KiB までのテキストとして残します(下記)。
   本文がない行は、ステータスの時点で書かれます。
-  nukadoko が `traceparent` を付けて world へ送ったリクエストの行は、足した値を `"traceparent"` として持ちます(「テスト対象のプログラム」を参照)。
-  page の行は持ちません。
+  `traceparent` を持って出ていったリクエストの行は、出ていった値(nukadoko のものか step 自身のもの)を `"traceparent"` として、それを受け取ったオリジンを `"traceparent_sent_to"` として持ちます(「テスト対象のプログラム」を参照)。
+  page の行はどちらも持ちません。
   ヘッダを足したのはブラウザだからです。
-  リダイレクトのあと、ほかのオリジンからレスポンスが来た request context の行は、そのオリジンをリストにして `"traceparent_sent_to"` として持ちます。
-  Playwright がリダイレクトと一緒にヘッダを送ったからです。
   それ以外のヘッダは書きません。
   ヘッダは cookie と資格情報を運び、page のヘッダは trace が持つからです。
   page の行は本文を持ちません。

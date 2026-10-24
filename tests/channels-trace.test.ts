@@ -13,7 +13,9 @@ import { createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
 // `fetch` and `node:http`, only to the world's origin, never over the
 // caller's own header, never by changing what the caller passed, one
 // trace id per boundary under the world's prefix and one span id per
-// request, counted only when the header was added.
+// request, counted only when nukadoko's value went out. A line names the
+// value the request went out with, whoever set it, and the origins that
+// received it.
 
 const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-01$/;
 const OWN = "00-11111111111111111111111111111111-2222222222222222-01";
@@ -60,12 +62,12 @@ function inStep<T>(fn: () => Promise<T>): Promise<T> {
   return withProcessRecording(observed.openRun([]), fn);
 }
 
-function httpLines(): { url: string; traceparent?: string }[] {
+function httpLines(): { url: string; traceparent?: string; traceparent_sent_to?: string[] }[] {
   try {
     return readFileSync(path.join(dir, "record", "http.jsonl"), "utf8")
       .split("\n")
       .filter((line) => line !== "")
-      .map((line) => JSON.parse(line) as { url: string; traceparent?: string });
+      .map((line) => JSON.parse(line) as { url: string; traceparent?: string; traceparent_sent_to?: string[] });
   } catch {
     return [];
   }
@@ -89,19 +91,25 @@ describe("fetch", () => {
     expect(trace.traceId.startsWith(PREFIX)).toBe(true);
     expect([a?.[1], b?.[1]]).toEqual([trace.traceId, trace.traceId]);
     expect(a?.[2]).not.toBe(b?.[2]);
-    expect(httpLines().map((line) => line.traceparent)).toEqual([received.get("/a"), received.get("/b")]);
+    expect(httpLines().map((line) => [line.traceparent, line.traceparent_sent_to])).toEqual([
+      [received.get("/a"), [base]],
+      [received.get("/b"), [base]],
+    ]);
     expect(trace.stamped).toBe(2);
     expect(trace.lastStampAt).toEqual(expect.any(Number));
   });
 
-  it("keeps the caller's own traceparent, and leaves another origin unstamped", async () => {
+  it("keeps the caller's own traceparent and names it on the line, and leaves another origin unstamped", async () => {
     await inStep(async () => {
       await (await fetch(`${base}/own`, { headers: { TraceParent: OWN } })).text();
       await fetch("http://127.0.0.1:9/elsewhere").catch(() => undefined);
     });
     await observed.flush();
     expect(received.get("/own")).toBe(OWN);
-    expect(httpLines().every((line) => line.traceparent === undefined)).toBe(true);
+    expect(httpLines().map((line) => [new URL(line.url).pathname, line.traceparent, line.traceparent_sent_to])).toEqual([
+      ["/own", OWN, [base]],
+      ["/elsewhere", undefined, undefined],
+    ]);
     expect(observed.boundaryTrace()!.stamped).toBe(0);
   });
 
@@ -145,10 +153,49 @@ describe("node:http", () => {
     expect(received.get("/own")).toBe(OWN);
     expect(received.get("/array")).toBeUndefined();
     expect(trace.stamped).toBe(1);
-    expect(httpLines().map((line) => [new URL(line.url).pathname, line.traceparent])).toEqual([
-      ["/plain", received.get("/plain")],
-      ["/own", undefined],
-      ["/array", undefined],
+    expect(httpLines().map((line) => [new URL(line.url).pathname, line.traceparent, line.traceparent_sent_to])).toEqual([
+      ["/plain", received.get("/plain"), [base]],
+      ["/own", OWN, [base]],
+      ["/array", undefined, undefined],
+    ]);
+  });
+
+  it("records the traceparent that went out when the caller sets its own after creating the request, and counts nothing", async () => {
+    await inStep(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const req = http.request(`${base}/after`, (res) => res.resume().on("end", resolve));
+          req.on("error", reject);
+          req.setHeader("traceparent", OWN);
+          req.end();
+        }),
+    );
+    await observed.flush();
+    expect(received.get("/after")).toBe(OWN);
+    expect(observed.boundaryTrace()!.stamped).toBe(0);
+    expect(httpLines().map((line) => [line.traceparent, line.traceparent_sent_to])).toEqual([[OWN, [base]]]);
+  });
+
+  it("stamps when the headers go out, at the first write or at flushHeaders", async () => {
+    const send = (pathname: string, start: (req: http.ClientRequest) => void): Promise<void> =>
+      new Promise<void>((resolve, reject) => {
+        const req = http.request(`${base}${pathname}`, { method: "POST" }, (res) => res.resume().on("end", resolve));
+        req.on("error", reject);
+        start(req);
+        req.end();
+      });
+    await inStep(async () => {
+      await send("/written", (req) => req.write("x"));
+      await send("/flushed", (req) => req.flushHeaders());
+    });
+    await observed.flush();
+    const trace = observed.boundaryTrace()!;
+    expect(TRACEPARENT.exec(received.get("/written") ?? "")?.[1]).toBe(trace.traceId);
+    expect(TRACEPARENT.exec(received.get("/flushed") ?? "")?.[1]).toBe(trace.traceId);
+    expect(trace.stamped).toBe(2);
+    expect(httpLines().map((line) => [line.traceparent, line.traceparent_sent_to])).toEqual([
+      [received.get("/written"), [base]],
+      [received.get("/flushed"), [base]],
     ]);
   });
 

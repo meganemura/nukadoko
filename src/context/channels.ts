@@ -15,7 +15,7 @@ import type { UnmeasuredEntry } from "../record/types.js";
 import { childProcessDetail } from "./child-process-detail.js";
 import { BODY_CAP, type RawBody, rawBodyOf, windowFor } from "./kept-text.js";
 import type { Identity } from "./step-files.js";
-import { TRACEPARENT } from "./trace-context.js";
+import { originOf, TRACEPARENT } from "./trace-context.js";
 import { writeMadeByPlaywrightServer } from "./write-origin.js";
 
 // Responsibility: measure, inside a step's own `run`, the channels a step
@@ -87,7 +87,12 @@ import { writeMadeByPlaywrightServer } from "./write-origin.js";
 // A request to the world's origin also gets a `traceparent` header here,
 // the recorder's (observed.ts, trace-context.ts), so the program's log can
 // say which step sent it, and only where adding it changes nothing else
-// the caller passed. A caller's own `traceparent` is kept.
+// the caller passed. A caller's own `traceparent` is kept. A request's
+// line names the value it went out with, read from what was sent, whoever
+// set it, and the origins that received it (`traceparent_sent_to`), so a
+// redirected request's final URL is never taken for where the id went.
+// The recorder counts a request as stamped only when nukadoko's value
+// went out.
 //
 // `fetch` follows a redirect itself, and a header put in the caller's
 // `init` would follow the redirect to whatever origin it names, a third
@@ -105,8 +110,10 @@ import { writeMadeByPlaywrightServer } from "./write-origin.js";
 // sent, in the `fetch` call's async context, and `addHeader` exists.
 //
 // `node:http` and `node:https` do not follow a redirect, so a
-// `ClientRequest` is one hop; it gets the header while its headers are
-// not sent yet.
+// `ClientRequest` is one hop. It gets the header at the moment its
+// headers are sent (its first `write`, its `end`, or `flushHeaders`),
+// not when it is created: a caller can still set its own `traceparent`
+// between the two, and that is the one that goes out.
 //
 // What no patch reaches: a Worker's own globals, a native addon, a child
 // process's own traffic, a function copied before installation, a
@@ -127,11 +134,11 @@ export interface ChannelHttpLine {
   readonly error?: string;
   readonly request_body?: RawBody;
   readonly response_body?: RawBody;
-  /** The `traceparent` nukadoko added to the request, when it added one. */
+  /** The `traceparent` the request went out with, nukadoko's or the
+   * caller's own; absent when it went out with none. */
   readonly traceparent?: string;
-  /** The origins other than the world's that the added `traceparent`
-   * reached: a Playwright request context sends a call's headers on to
-   * the origin a redirect names (http-log.ts). */
+  /** The origins that received `traceparent`, present exactly when it
+   * is (this file's header). */
   readonly traceparent_sent_to?: readonly string[];
 }
 
@@ -193,6 +200,10 @@ export interface ChannelRecorder {
    * the world's or the run has no world. Called only once the caller knows
    * it will add the header. */
   traceparentFor?(url: string, base?: string): string | undefined;
+  /** The `traceparent` for a request to `url`, counted only once
+   * `sent` is called: for a client that learns whether the value went out
+   * only after handing it over. `undefined` as for `traceparentFor`. */
+  draftTraceparent?(url: string, base?: string): { readonly value: string; sent(): void } | undefined;
   /** Whether a request to `url` goes to the world, counting nothing. */
   isWorldUrl?(url: string, base?: string): boolean;
 }
@@ -438,11 +449,14 @@ function fetchMethod(args: FetchArgs): string {
   return String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 }
 
-/** One `fetch` call's stamp: the recorder that hands out the value, and
- * the value once a hop to the world was given it (this file's header). */
+/** One `fetch` call's stamp: the recorder that hands out the value, the
+ * value once a hop to the world was given it, and what went out on the
+ * hops, whoever set it (this file's header). */
 interface FetchStamp {
   readonly rec: ChannelRecorder;
-  traceparent: string | undefined;
+  ours: string | undefined;
+  sent: string | undefined;
+  readonly sentTo: Set<string>;
 }
 
 const fetchStamps = new AsyncLocalStorage<FetchStamp>();
@@ -455,17 +469,18 @@ interface UndiciRequest {
   addHeader?(name: string, value: string): unknown;
 }
 
-/** Whether undici's request headers, a flat `[name, value, ...]` array
- * or the `name: value\r\n` text an older undici keeps, hold a
- * `traceparent`. */
-export function carriesTraceparent(headers: unknown): boolean {
+/** The first `traceparent` in a list of headers: undici's flat
+ * `[name, value, ...]` array, or `name: value\r\n` text, which an older
+ * undici keeps and a sent `ClientRequest`'s header block is. */
+export function traceparentIn(headers: unknown): string | undefined {
   if (Array.isArray(headers)) {
     for (let index = 0; index < headers.length; index += 2) {
-      if (String(headers[index]).toLowerCase() === TRACEPARENT) return true;
+      if (String(headers[index]).toLowerCase() === TRACEPARENT) return String(headers[index + 1]);
     }
-    return false;
+    return undefined;
   }
-  return typeof headers === "string" && /(?:^|\n)traceparent[ \t]*:/i.test(headers);
+  if (typeof headers !== "string") return undefined;
+  return /(?:^|\n)traceparent[ \t]*:[ \t]*([^\r\n]*)/i.exec(headers)?.[1]?.trimEnd();
 }
 
 /** Adds the `fetch` call's `traceparent` to one hop that goes to the
@@ -475,15 +490,27 @@ function stampFetchHop(message: unknown): void {
   if (stamp === undefined) return;
   try {
     const request = (message as { readonly request?: UndiciRequest } | null)?.request;
-    if (request === undefined || typeof request.addHeader !== "function" || carriesTraceparent(request.headers)) return;
+    if (request === undefined) return;
     const url = new URL(String(request.path), String(request.origin)).href;
-    if (stamp.traceparent === undefined) {
-      stamp.traceparent = stamp.rec.traceparentFor?.(url);
-      if (stamp.traceparent === undefined) return;
+    const went = (value: string): void => {
+      stamp.sent ??= value;
+      const origin = originOf(url);
+      if (origin !== undefined) stamp.sentTo.add(origin);
+    };
+    const own = traceparentIn(request.headers);
+    if (own !== undefined) {
+      went(own);
+      return;
+    }
+    if (typeof request.addHeader !== "function") return;
+    if (stamp.ours === undefined) {
+      stamp.ours = stamp.rec.traceparentFor?.(url);
+      if (stamp.ours === undefined) return;
     } else if (stamp.rec.isWorldUrl?.(url) !== true) {
       return;
     }
-    request.addHeader(TRACEPARENT, stamp.traceparent);
+    request.addHeader(TRACEPARENT, stamp.ours);
+    went(stamp.ours);
   } catch {
     // A hop nukadoko cannot read goes as undici made it.
   }
@@ -495,7 +522,7 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
   let method = "GET";
   let declared = "";
   let request: FetchBody;
-  const stamp: FetchStamp = { rec, traceparent: undefined };
+  const stamp: FetchStamp = { rec, ours: undefined, sent: undefined, sentTo: new Set() };
   try {
     method = fetchMethod(args);
     declared = fetchTarget(args[0]);
@@ -507,7 +534,8 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
     request = { body: undefined };
   }
   // Read when the line is made: the value is known once a hop was sent.
-  const stampField = (): { traceparent?: string } => (stamp.traceparent === undefined ? {} : { traceparent: stamp.traceparent });
+  const stampField = (): { traceparent?: string; traceparent_sent_to?: readonly string[] } =>
+    stamp.sent === undefined ? {} : { traceparent: stamp.sent, traceparent_sent_to: [...stamp.sentTo] };
   let requestBody: RawBody | undefined = request.body instanceof Promise ? undefined : request.body;
   const requestBodyRead = Promise.resolve(request.body).then(
     (body) => (requestBody = body),
@@ -613,15 +641,39 @@ function clientRequestUrl(req: http.ClientRequest): string {
   return req.method === "CONNECT" ? req.path : `${req.protocol}//${String(req.getHeader("host") ?? req.host)}${req.path}`;
 }
 
-/** Adds a `traceparent` header to `req` when it goes to the world and
- * its headers can still change (this file's own header), and returns the
- * value. Headers given as an array are already sent when the call
- * returns, so such a request goes as it was. */
-function stampClientRequest(req: http.ClientRequest, rec: ChannelRecorder): string | undefined {
-  if (typeof rec.traceparentFor !== "function" || req.headersSent || req.method === "CONNECT" || req.hasHeader(TRACEPARENT)) return undefined;
-  const traceparent = rec.traceparentFor(clientRequestUrl(req));
-  if (traceparent !== undefined) req.setHeader(TRACEPARENT, traceparent);
-  return traceparent;
+/** The `traceparent` `req` went out with, read from the header block it
+ * sent, or `undefined` before its headers are sent or when they held
+ * none. */
+function sentTraceparent(req: http.ClientRequest): string | undefined {
+  if (!req.headersSent) return undefined;
+  const block = (req as { readonly _header?: unknown })._header;
+  if (typeof block === "string") return traceparentIn(block);
+  const value = req.getHeader(TRACEPARENT);
+  return value === undefined ? undefined : Array.isArray(value) ? value.join(", ") : String(value);
+}
+
+/** The hook `req`'s `write`, `end`, and `flushHeaders` call before the
+ * original: the moment its headers are sent, a request to the world that
+ * carries no `traceparent` gets nukadoko's, counted once it went out
+ * (this file's header). Headers given as an array are already sent when
+ * the request is created, so such a request goes as it was. */
+function stampAtSend(req: http.ClientRequest, rec: ChannelRecorder): { before(): void; after(): void } {
+  let draft: { readonly value: string; sent(): void } | undefined;
+  return {
+    before() {
+      if (draft !== undefined || req.headersSent || req.method === "CONNECT" || req.hasHeader(TRACEPARENT)) return;
+      const url = clientRequestUrl(req);
+      if (typeof rec.draftTraceparent === "function") draft = rec.draftTraceparent(url);
+      else if (typeof rec.traceparentFor === "function") {
+        const value = rec.traceparentFor(url);
+        if (value !== undefined) draft = { value, sent: () => {} };
+      }
+      if (draft !== undefined) req.setHeader(TRACEPARENT, draft.value);
+    },
+    after() {
+      if (draft !== undefined && sentTraceparent(req) === draft.value) draft.sent();
+    },
+  };
 }
 
 /** Records one `ClientRequest` passively: it listens to what the request
@@ -632,34 +684,61 @@ function stampClientRequest(req: http.ClientRequest, rec: ChannelRecorder): stri
  * `readable` listener, never resumed or piped) is idle: the flush writes
  * its line at once, saying the step did not read the body, instead of
  * waiting for a body nothing will read. */
-function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:https", rec: ChannelRecorder, traceparent: string | undefined): void {
+function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:https", rec: ChannelRecorder): void {
   const startedAt = performance.now();
   const requestBody = new BodyBuffer();
   const responseBody = new BodyBuffer();
   let status = 0;
   let durationMs: number | undefined;
+  const stamp = stampAtSend(req, rec);
+  // A stamp that fails leaves the request as it was.
+  const sending = <T>(send: () => T): T => {
+    try {
+      stamp.before();
+    } catch {
+      // As above.
+    }
+    try {
+      return send();
+    } finally {
+      try {
+        stamp.after();
+      } catch {
+        // As above.
+      }
+    }
+  };
 
   const originalWrite = req.write;
   req.write = function (this: http.ClientRequest, chunk: unknown, ...rest: unknown[]): boolean {
     const bytes = chunkBytes(chunk, rest[0]);
     if (bytes !== undefined) requestBody.add(bytes);
-    return (originalWrite as (...a: unknown[]) => boolean).call(this, chunk, ...rest);
+    return sending(() => (originalWrite as (...a: unknown[]) => boolean).call(this, chunk, ...rest));
   } as typeof req.write;
   const originalEnd = req.end;
   req.end = function (this: http.ClientRequest, chunk?: unknown, ...rest: unknown[]): http.ClientRequest {
     const bytes = chunkBytes(chunk, rest[0]);
     if (bytes !== undefined) requestBody.add(bytes);
-    return (originalEnd as (...a: unknown[]) => http.ClientRequest).call(this, chunk, ...rest);
+    return sending(() => (originalEnd as (...a: unknown[]) => http.ClientRequest).call(this, chunk, ...rest));
   } as typeof req.end;
+  const originalFlushHeaders = req.flushHeaders;
+  req.flushHeaders = function (this: http.ClientRequest): void {
+    sending(() => originalFlushHeaders.call(this));
+  };
 
   const url = (): string => clientRequestUrl(req);
+  const sentField = (): { traceparent?: string; traceparent_sent_to?: readonly string[] } => {
+    const sent = sentTraceparent(req);
+    const origin = originOf(url());
+    return sent === undefined ? {} : { traceparent: sent, traceparent_sent_to: origin === undefined ? [] : [origin] };
+  };
   const line = (fields: { readonly error?: string; readonly response?: RawBody }): ChannelHttpLine => ({
     method: req.method,
     url: url(),
     status,
     duration_ms: durationMs ?? Math.round(performance.now() - startedAt),
     via,
-    ...(traceparent === undefined ? {} : { traceparent }),
+    ...sentField(),
     ...(fields.error !== undefined ? { error: fields.error } : {}),
     ...(requestBody.total > 0 ? { request_body: requestBody.ended() } : {}),
     ...(fields.response !== undefined ? { response_body: fields.response } : {}),
@@ -741,14 +820,8 @@ function installNodeHttp(): void {
       // through the request, never an unmeasured one.
       const req = insideSyncCall(() => (original as (...a: unknown[]) => http.ClientRequest).apply(this, args));
       if (rec !== undefined) {
-        let traceparent: string | undefined;
         try {
-          traceparent = stampClientRequest(req, rec);
-        } catch {
-          // A header that cannot be set leaves the request as it was.
-        }
-        try {
-          tapClientRequest(req, via, rec, traceparent);
+          tapClientRequest(req, via, rec);
         } catch {
           // A tap that fails leaves the request as it was.
         }

@@ -86,12 +86,12 @@ describe("trace context and the program's log", () => {
     const requestStep = only(steps.get("request-program"));
     const pageStep = only(steps.get("page-program"));
 
-    // http.jsonl names the traceparent of each request nukadoko stamped:
-    // the world's, and not the caller's own or another origin's.
+    // http.jsonl names the traceparent each request went out with: the
+    // world's, the caller's own as it was, and none to another origin.
     const fetchLines = httpLogLines(rootDir, path.basename(fetchStep.dir)) as { url: string; traceparent?: string }[];
     const byPath = new Map(fetchLines.map((line) => [new URL(line.url).pathname, line.traceparent]));
     expect([...byPath.keys()].sort()).toEqual(["/elsewhere", "/fetch", "/own"]);
-    expect(byPath.get("/own")).toBeUndefined();
+    expect(byPath.get("/own")).toBe(OWN_TRACEPARENT);
     expect(byPath.get("/elsewhere")).toBeUndefined();
     const traceOf = (step: StepFacts): string => step.observed.program_log!.trace_id;
     expect(TRACEPARENT.exec(byPath.get("/fetch") ?? "")?.[1]).toBe(traceOf(fetchStep));

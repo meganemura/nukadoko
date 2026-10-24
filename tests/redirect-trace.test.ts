@@ -8,7 +8,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { NukadokoConfig } from "../src/config/schema.js";
-import { carriesTraceparent, installChannelPatches } from "../src/context/channels.js";
+import { installChannelPatches, traceparentIn } from "../src/context/channels.js";
 import { createStepContext } from "../src/context/create-context.js";
 import { createObservedCollector, type ObservedCollector } from "../src/context/observed.js";
 import { withProcessRecording } from "../src/context/run-command.js";
@@ -105,9 +105,26 @@ describe("fetch across a redirect", () => {
     expect(inner!.traceparent).toBe(final!.traceparent);
     expect(TRACEPARENT.exec(away!.traceparent!)?.[1]).toBe(observed.boundaryTrace()!.traceId);
     expect(observed.boundaryTrace()!.stamped).toBe(2);
-    expect(linesIn(path.join(dir, "record", "http.jsonl")).map((line) => [new URL(line.url).pathname, line.traceparent])).toEqual([
-      ["/landing", away!.traceparent],
-      ["/final", inner!.traceparent],
+    // The line names where the id went: the world's hops, never the final
+    // URL's origin when the id did not reach it.
+    expect(linesIn(path.join(dir, "record", "http.jsonl")).map((line) => [new URL(line.url).pathname, line.traceparent, line.traceparent_sent_to])).toEqual([
+      ["/landing", away!.traceparent, [world.origin]],
+      ["/final", inner!.traceparent, [world.origin]],
+    ]);
+  });
+
+  it("names the caller's own traceparent and every origin it reached on a redirect", async () => {
+    await withProcessRecording(observed.openRun([]), async () => {
+      await (await fetch(`${world.origin}/away`, { headers: { traceparent: OWN } })).text();
+    });
+    await observed.flush();
+    expect(hits.map((hit) => [hit.server, hit.traceparent])).toEqual([
+      ["world", OWN],
+      ["other", OWN],
+    ]);
+    expect(observed.boundaryTrace()!.stamped).toBe(0);
+    expect(linesIn(path.join(dir, "record", "http.jsonl")).map((line) => [line.traceparent, line.traceparent_sent_to])).toEqual([
+      [OWN, [world.origin, other.origin]],
     ]);
   });
 
@@ -141,20 +158,21 @@ describe("fetch across a redirect", () => {
   });
 });
 
-describe("carriesTraceparent", () => {
+describe("traceparentIn", () => {
   const name = gs.sampledFrom(["accept", "x-a", "traceparent", "TraceParent", "tracestate", "traceparent-x"]);
 
-  it("finds a traceparent among a flat array of header pairs, in any case, and in an older undici's header text", () =>
+  it("finds the first traceparent's value among a flat array of header pairs, in any case, and in header text", () =>
     hegel.test((tc) => {
       const pairs = tc.draw(gs.arrays(gs.tuples(name, gs.sampledFrom(["1", "traceparent", OWN])), { maxSize: 5 }));
-      const expected = pairs.some(([key]) => key.toLowerCase() === "traceparent");
-      expect(carriesTraceparent(pairs.flat())).toBe(expected);
-      expect(carriesTraceparent(pairs.map(([key, value]) => `${key}: ${value}\r\n`).join(""))).toBe(expected);
+      const expected = pairs.find(([key]) => key.toLowerCase() === "traceparent")?.[1];
+      expect(traceparentIn(pairs.flat())).toBe(expected);
+      expect(traceparentIn(pairs.map(([key, value]) => `${key}: ${value}\r\n`).join(""))).toBe(expected);
+      expect(traceparentIn(`GET / HTTP/1.1\r\n${pairs.map(([key, value]) => `${key}: ${value}\r\n`).join("")}\r\n`)).toBe(expected);
     }));
 
   it("finds none in what is not a header list", () => {
-    expect(carriesTraceparent(undefined)).toBe(false);
-    expect(carriesTraceparent({ traceparent: OWN })).toBe(false);
+    expect(traceparentIn(undefined)).toBeUndefined();
+    expect(traceparentIn({ traceparent: OWN })).toBeUndefined();
   });
 });
 
@@ -196,8 +214,8 @@ describe("a Playwright request context across a redirect", () => {
       await stamped.observedSnapshot();
       const lines = linesIn(path.join(dir, "one", "http.jsonl"));
       expect(lines.map((line) => [line.url, TRACEPARENT.test(line.traceparent ?? ""), line.traceparent_sent_to])).toEqual([
-        [`${other.origin}/landing`, true, [other.origin]],
-        [`${world.origin}/plain`, true, undefined],
+        [`${other.origin}/landing`, true, [world.origin, other.origin]],
+        [`${world.origin}/plain`, true, [world.origin]],
       ]);
       // Playwright sent the header on with the redirect; the line says so.
       expect(hits.find((hit) => hit.server === "other")?.traceparent).toBe(lines[0]!.traceparent);
@@ -207,7 +225,8 @@ describe("a Playwright request context across a redirect", () => {
       await own.recordingProcesses(async () => (await own.ctx.request()).get("/plain"));
       await own.observedSnapshot();
       expect(hits.map((hit) => hit.traceparent)).toEqual([OWN]);
-      expect(linesIn(path.join(dir, "two", "http.jsonl"))[0]!.traceparent).toBeUndefined();
+      const [ownLine] = linesIn(path.join(dir, "two", "http.jsonl"));
+      expect([ownLine!.traceparent, ownLine!.traceparent_sent_to]).toEqual([OWN, [world.origin]]);
     } finally {
       await stamped.dispose();
       await own.dispose();

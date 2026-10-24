@@ -46,19 +46,20 @@ import { originOf, TRACEPARENT } from "./trace-context.js";
 //
 // Inside a step, a call to the world's origin gets a `traceparent` header
 // from the recorder (trace-context.ts), added to the call's own
-// `headers` option, and its line names the value. A relative URL is
-// resolved against the request context's base URL to find its origin. A
-// call that sets its own `traceparent`, or whose request context sets one
-// in its `extraHTTPHeaders`, keeps it, and a call given a Playwright
-// `Request` (`route.fetch()`) goes as it was: that request came from a
-// page, which browser-trace.ts stamps already.
+// `headers` option. A relative URL is resolved against the request
+// context's base URL to find its origin. A call that sets its own
+// `traceparent`, or whose request context sets one in its
+// `extraHTTPHeaders`, keeps it, and a call given a Playwright `Request`
+// (`route.fetch()`) goes as it was: that request came from a page, which
+// browser-trace.ts stamps already. The line names the value the call went
+// out with, nukadoko's or its own, and the origins that received it in
+// `traceparent_sent_to`.
 //
 // Playwright follows a redirect inside its own process and sends the
 // call's headers on to the origin the redirect names, and nothing lets a
-// caller see or change a hop. So a stamped call whose response comes from
-// another origin says so: its line names that origin in
-// `traceparent_sent_to`, so the record shows where the id went. An origin
-// between the first hop and the last is not known.
+// caller see or change a hop. So `traceparent_sent_to` names the first
+// hop's origin and the final response's, so the record shows where the id
+// went. An origin between the first hop and the last is not known.
 //
 // A call is logged whatever its outcome, from a `finally`: a call that
 // throws (a refused connection, `failOnStatusCode` on a 4xx/5xx) still
@@ -122,11 +123,12 @@ export interface HttpLogEntry {
   /** The request started after its step's record was written, so the
    * record does not count it (docs/spec.md "Records"). */
   after_step_end?: true;
-  /** Not `"page"`: the `traceparent` nukadoko added to a request to the
-   * world (docs/spec.md "Program"). Absent when it added none. */
+  /** Not `"page"`: the `traceparent` the request went out with,
+   * nukadoko's or the step's own (docs/spec.md "Program"). Absent when it
+   * went out with none. */
   traceparent?: string;
-  /** `via: "request"` only: the origin other than the world's that a
-   * redirect took the added `traceparent` to (this file's header). */
+  /** The origins that received `traceparent`, present exactly when it is
+   * (this file's header). */
   traceparent_sent_to?: readonly string[];
 }
 
@@ -187,8 +189,11 @@ interface Call {
   readonly requestBody: () => Promise<RawBody | undefined>;
 }
 
-function hasHeader(headers: { readonly [name: string]: string } | undefined, name: string): boolean {
-  return headers !== undefined && Object.keys(headers).some((key) => key.toLowerCase() === name);
+/** The value of header `name` in `headers`, in any case. */
+function headerValue(headers: { readonly [name: string]: string } | undefined, name: string): string | undefined {
+  if (headers === undefined) return undefined;
+  const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === name);
+  return key === undefined ? undefined : String(headers[key]);
 }
 
 /** `options` with a `traceparent` header added, or `options` itself when
@@ -205,15 +210,19 @@ async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
   const startedAt = performance.now();
   const elapsed = (): number => Math.round(performance.now() - startedAt);
   const rec = channelRecorder();
+  // The call's own headers win over the request context's, as Playwright
+  // sends them.
+  const own = call.headers === null ? undefined : (headerValue(call.headers, TRACEPARENT) ?? headerValue(target.extraHeaders, TRACEPARENT));
   const traceparent =
-    rec === undefined ||
-    typeof rec.traceparentFor !== "function" ||
-    call.headers === null ||
-    hasHeader(call.headers, TRACEPARENT) ||
-    hasHeader(target.extraHeaders, TRACEPARENT)
+    rec === undefined || typeof rec.traceparentFor !== "function" || call.headers === null || own !== undefined
       ? undefined
       : rec.traceparentFor(url, target.baseURL);
-  const stampField = traceparent === undefined ? {} : { traceparent };
+  const went = own ?? traceparent;
+  const sentTo = (finalUrl: string | undefined): readonly string[] => [
+    ...new Set([originOf(url, target.baseURL), originOf(finalUrl)].filter((origin): origin is string => origin !== undefined)),
+  ];
+  const stampField = (finalUrl?: string): { traceparent?: string; traceparent_sent_to?: readonly string[] } =>
+    went === undefined ? {} : { traceparent: went, traceparent_sent_to: sentTo(finalUrl) };
   const failed = (error: string, sent?: RawBody): ChannelHttpLine => ({
     method,
     url,
@@ -222,7 +231,7 @@ async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
     via: "request",
     error,
     ...(as !== undefined ? { as } : {}),
-    ...stampField,
+    ...stampField(),
     ...(sent !== undefined ? { request_body: sent } : {}),
   });
   const write = rec === undefined ? undefined : recordRequest(rec, (end) => failed(noResponse(end, elapsed())));
@@ -238,7 +247,6 @@ async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
   } finally {
     const sent = await call.requestBody().catch((): RawBody => ({ unread: "the request body could not be read" }));
     const received = response === undefined ? undefined : await responseBodyOf(response);
-    const sentTo = response === undefined || traceparent === undefined || rec?.isWorldUrl?.(response.url()) !== false ? undefined : originOf(response.url());
     const line: ChannelHttpLine = response
       ? {
           method,
@@ -248,8 +256,7 @@ async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
           duration_ms: elapsed(),
           via: "request",
           ...(as !== undefined ? { as } : {}),
-          ...stampField,
-          ...(sentTo !== undefined ? { traceparent_sent_to: [sentTo] } : {}),
+          ...stampField(response.url()),
           ...(sent !== undefined ? { request_body: sent } : {}),
           ...(received !== undefined ? { response_body: received } : {}),
         }

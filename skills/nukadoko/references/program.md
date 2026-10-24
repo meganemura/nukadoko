@@ -113,7 +113,8 @@ with `RAILS_LOG_TO_STDOUT: "1"` in the program file's `env`. A Node
 server prints `req.headers.traceparent` at the start of each line it
 writes for a request. A world at a `url` has no log nukadoko reads:
 `observed.program_log` is `null`, and the server's own log finds a
-step's requests by the `traceparent` on its `http.jsonl` lines.
+step's requests by the `traceparent` on its `http.jsonl` lines, each
+with `traceparent_sent_to`, the origins that received it.
 
 ## Environments and programs nukadoko does not start
 
