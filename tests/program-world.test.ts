@@ -85,7 +85,10 @@ describe("a world nukadoko serves", () => {
     expect(world.view.log).toBe(path.join(dir, "program.log"));
     expect(await (await fetch(`${world.view.url}/hello`)).json()).toEqual({ path: "/hello", db: `${dir}/db.sqlite3`, token: world.view.env.TOKEN });
     expect(progress.text()).toMatch(
-      new RegExp(`^world default: serve \\d+\\.\\ds, http://localhost:${port} {2}\\(log project/worlds/default/program\\.log\\)\\n$`),
+      new RegExp(
+        `^world default: serve started: node server\\.mjs, waiting for http://localhost:${port}/\\n` +
+          `world default: serve \\d+\\.\\ds, http://localhost:${port} {2}\\(log project/worlds/default/program\\.log\\)\\n$`,
+      ),
     );
 
     expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map() });
@@ -205,8 +208,108 @@ describe("a world that does not start", () => {
       }),
       [],
     );
-    expect(world.ok ? null : world.message).toBe("the program did not start for world default: setup threw: no admin user. The end of project/worlds/default/program.log:\n$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}");
+    expect(world.ok ? null : world.message).toBe("the program did not start for world default: setup threw: no admin user. The end of project/worlds/default/program.log:\n$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}\n# setup");
     expect(await answers(port)).toBe(false);
+  });
+});
+
+// Whether a process is alive, by pid: `kill(pid, 0)` throws once it is
+// gone. A process just killed can stay for a moment until it is reaped,
+// so this waits up to 2 seconds for it to go.
+async function alive(pid: number): Promise<boolean> {
+  const until = Date.now() + 2_000;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return false;
+    }
+    if (Date.now() > until) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+describe("the limit and the process group of each phase", () => {
+  it("stops a build command past its timeout_ms and fails the world, naming the phase and the log", async () => {
+    writeFileSync(path.join(rootDir, "hang.mjs"), 'import { writeFileSync } from "node:fs"; writeFileSync("pid", String(process.pid)); console.log("building"); setInterval(() => {}, 1000);\n');
+    const progress = createCaptureSink();
+    const begun = Date.now();
+    const world = await starter(progress).start("default", recipe({ build: [{ command: "node hang.mjs", timeout_ms: 300 }] }), []);
+    expect(world.ok ? null : world.message).toBe(
+      "the program did not start for world default: build command node hang.mjs did not finish within 300 ms (timeout_ms). " +
+        "The end of project/worlds/default/program.log:\n$ node hang.mjs\nbuilding",
+    );
+    expect(Date.now() - begun).toBeLessThan(6_000);
+    expect(await alive(Number(readFileSync(path.join(rootDir, "pid"), "utf8")))).toBe(false);
+    expect(progress.text()).toBe("world default: build started: node hang.mjs\n");
+  });
+
+  it.runIf(process.platform !== "win32")("ends a prepare command whose child holds its output, and stops that child", async () => {
+    writeFileSync(
+      path.join(rootDir, "leave.mjs"),
+      [
+        'import { spawn } from "node:child_process";',
+        'import { writeFileSync } from "node:fs";',
+        "const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'inherit' });",
+        "child.unref();",
+        'writeFileSync("pid", String(child.pid));',
+        'console.log("prepared");',
+        "",
+      ].join("\n"),
+    );
+    const world = await startOk(await starter().start("default", recipe({ ...SERVE, prepare: ["node leave.mjs"] }), []));
+    expect(world.record().commands.map((command) => command.phase)).toEqual(["prepare", "serve"]);
+    expect(await alive(Number(readFileSync(path.join(rootDir, "pid"), "utf8")))).toBe(false);
+  });
+
+  it("fails a setup and a url function past their timeout_ms", async () => {
+    const setup = await starter().start("default", recipe({ ...SERVE, setup: { run: () => new Promise(() => {}), timeout_ms: 200 } }), []);
+    expect(setup.ok ? null : setup.message).toMatch(/^the program did not start for world default: setup did not finish within 200 ms \(timeout_ms\)\. The end of /);
+    const url = await starter().start("default", recipe({ url: { resolve: () => new Promise<string>(() => {}), timeout_ms: 200 } }), []);
+    expect(url.ok ? null : url.message).toBe("the program did not start for world default: the url function did not finish within 200 ms (timeout_ms)");
+  });
+
+  it("prints a line as each phase starts, and what setup prints, redacted, on the progress sink and in the log", async () => {
+    const progress = createCaptureSink();
+    const world = await startOk(
+      await starter(progress).start(
+        "default",
+        recipe({
+          ...SERVE,
+          build: [["node", "-e", "0"]],
+          prepare: [["node", "-e", "0"], ["node", "-e", "1", "{token}"]],
+          setup: (world) => {
+            console.log(`seeding admin with ${world.env.TOKEN}`);
+          },
+        }),
+        [],
+      ),
+    );
+    const token = world.view.env.TOKEN!;
+    const lines = progress.text().split("\n");
+    expect(lines.slice(0, 5)).toEqual([
+      "world default: build started: node -e 0",
+      "world default: prepare started: node -e 0; node -e 1 {{secret.WORLD_TOKEN}}",
+      `world default: serve started: node server.mjs, waiting for ${world.view.url}/`,
+      "world default: setup started",
+      "seeding admin with {{secret.WORLD_TOKEN}}",
+    ]);
+    expect(lines[5]).toMatch(/^world default: build \d+\.\ds, prepare \d+\.\ds, serve \d+\.\ds, setup \d+\.\ds, http:\/\/localhost:\d+ {2}\(log /);
+    expect(progress.text()).not.toContain(token);
+    expect(readFileSync(path.join(runDir, "worlds", "default", "program.log"), "utf8")).toContain("# setup\nseeding admin with {{secret.WORLD_TOKEN}}\n");
+  });
+
+  it("stops a start that is waiting for ready at once when it is aborted, and reports it as aborted", async () => {
+    writeFileSync(path.join(rootDir, "slow.mjs"), 'import { writeFileSync } from "node:fs"; writeFileSync("pid", String(process.pid)); setInterval(() => {}, 1000);\n');
+    const abort = new AbortController();
+    setTimeout(() => abort.abort(), 300);
+    const begun = Date.now();
+    const world = await starter().start("default", recipe({ ...SERVE, serve: { command: "node slow.mjs", timeout_ms: 60_000 } }), [], abort.signal);
+    expect(world.ok).toBe(false);
+    if (world.ok) return;
+    expect(world.aborted).toBe(true);
+    expect(Date.now() - begun).toBeLessThan(3_000);
+    expect(await alive(Number(readFileSync(path.join(rootDir, "pid"), "utf8")))).toBe(false);
   });
 });
 

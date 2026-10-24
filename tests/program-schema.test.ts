@@ -5,7 +5,15 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfigError } from "../src/config/errors.js";
 import { loadProgram } from "../src/config/load-program.js";
-import { commandWords, layerProgram, programSchema, type ProgramEnvironment } from "../src/config/program-schema.js";
+import {
+  commandWords,
+  DEFAULT_COMMAND_TIMEOUT_MS,
+  DEFAULT_SETUP_TIMEOUT_MS,
+  DEFAULT_URL_TIMEOUT_MS,
+  layerProgram,
+  programSchema,
+  type ProgramEnvironment,
+} from "../src/config/program-schema.js";
 import { copyFixtureToTempDir, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: nukadoko.program.ts's shape (src/config/program-schema.ts)
@@ -70,6 +78,10 @@ describe("programSchema", () => {
     [{ environments: { staging: { policy: "readonly" } } }, "policy"],
     [{ environments: { staging: { version: "1.0.0" } } }, "must be a function returning string | Promise<string>"],
     [{ setup: "seed" }, "must be a function"],
+    [{ setup: { run: "seed" } }, "must be a function"],
+    [{ build: [{ command: "make", timeout_ms: 0 }] }, "timeout_ms"],
+    [{ prepare: [{ command: "make", timeout: 5 }] }, "timeout"],
+    [{ url: { resolve: () => "http://a.example", timeout_ms: 1.5 } }, "timeout_ms"],
     [{ baseURL: "http://a.example" }, "baseURL"],
   ])("refuses %j", (input, needle) => {
     const result = programSchema.safeParse(input);
@@ -95,17 +107,40 @@ describe("layerProgram", () => {
         : undefined;
       const recipe = layerProgram(top, environment);
 
-      expect(recipe.build).toEqual(environment?.build ?? top.build ?? []);
-      expect(recipe.prepare).toEqual(environment?.prepare ?? top.prepare ?? []);
+      const timed = (commands: unknown[]): unknown[] => commands.map((command) => ({ command, timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS }));
+      expect(recipe.build).toEqual(timed(environment?.build ?? top.build ?? []));
+      expect(recipe.prepare).toEqual(timed(environment?.prepare ?? top.prepare ?? []));
       for (const [key, value] of Object.entries(recipe.env)) {
         expect(value).toBe(environment?.env?.[key] ?? top.env?.[key]);
       }
       expect(Object.keys(recipe.env).sort()).toEqual([...new Set([...Object.keys(top.env ?? {}), ...Object.keys(environment?.env ?? {})])].sort());
       const own = environment?.serve !== undefined || environment?.url !== undefined ? environment : top;
       if (own?.serve !== undefined) expect(recipe.reach).toEqual({ kind: "serve", serve: own.serve });
-      else if (own?.url !== undefined) expect(recipe.reach).toEqual({ kind: "url", url: own.url });
+      else if (own?.url !== undefined) expect(recipe.reach).toEqual({ kind: "url", url: own.url, timeout_ms: DEFAULT_URL_TIMEOUT_MS });
       else expect(recipe.reach).toEqual({ kind: "none" });
     }));
+});
+
+describe("the limit of each phase", () => {
+  it("fills each limit the file leaves out, and keeps each one it names", () => {
+    const run = (): void => {};
+    const resolve = (): string => "http://a.example";
+    expect(layerProgram(programSchema.parse({ build: ["make", { command: ["npm", "ci"], timeout_ms: 5 }], setup: run, url: resolve }), undefined)).toMatchObject({
+      build: [
+        { command: "make", timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS },
+        { command: ["npm", "ci"], timeout_ms: 5 },
+      ],
+      setup: { run, timeout_ms: DEFAULT_SETUP_TIMEOUT_MS },
+      reach: { kind: "url", url: resolve, timeout_ms: DEFAULT_URL_TIMEOUT_MS },
+    });
+    expect(
+      layerProgram(programSchema.parse({ prepare: [{ command: "seed" }], setup: { run, timeout_ms: 7 }, url: { resolve, timeout_ms: 8 } }), undefined),
+    ).toMatchObject({
+      prepare: [{ command: "seed", timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS }],
+      setup: { run, timeout_ms: 7 },
+      reach: { kind: "url", url: resolve, timeout_ms: 8 },
+    });
+  });
 });
 
 describe("loadProgram", () => {

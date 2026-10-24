@@ -2508,7 +2508,7 @@ with `runCommand`: such a project needs nothing new.
 | `serve` | `{ command, port, ready, timeout_ms }`: the server nukadoko starts, waits for, and stops (below) |
 | `url` | a URL, or a function of the world that returns one, for a program nukadoko does not start (below) |
 | `env` | the variables the world's processes and the steps' process get, with placeholders (below) |
-| `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, url, port, env }` |
+| `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, url, port, env }` (`{ run, timeout_ms }` to give it a limit of its own, below) |
 | `environments` | named overrides of any field above, plus `policy`, `envFiles`, and `version` (below) |
 
 `serve` and `url` are two ways to reach the program, so writing both is
@@ -2528,6 +2528,8 @@ and `PATHEXT`, and a `.cmd` or `.bat` file runs through `cmd.exe`, the
 same way `runCommand` starts one.
 A `build` or `prepare` command that exits with a code other than 0 stops
 the world before anything after it runs.
+An entry of `build` or `prepare` is a command, or `{ command, timeout_ms }`
+for a command that needs a limit other than the default (see "Limits").
 
 The file is `nukadoko.program.ts`, or `nukadoko.program.mts`.
 Both at once are refused, since nukadoko cannot tell which one to read.
@@ -2562,18 +2564,26 @@ world's requests there, and stops the program after the world's pass.
 - `timeout_ms` is how long the program has to answer `ready`, 60,000 by
   default.
 
-The program runs in a process group of its own on POSIX.
+The program runs in a process group of its own on POSIX, as every
+command of a world does.
 Stopping it sends SIGTERM to the group, waits up to 5 seconds, and then
 sends SIGKILL to the group, so a child the program started (`npm start`
 starts the server as one) does not keep the port.
+A `build` or `prepare` command's group gets SIGKILL as soon as the
+command exits, so a child the command left running neither outlives it
+nor keeps its output open, which would keep the phase from ending.
+A service that has to outlive its `prepare` command, such as a database
+server, starts in a session of its own (`setsid`), as a daemon does;
+nukadoko does not stop such a service.
 On Windows a signal ends only the process it names, so the whole tree
 ends with `taskkill /t /f`.
 A program nukadoko started does not outlive nukadoko: when the process
 exits by any path, a signal or a crash included, every program still
 running is killed.
 
-The world fails when the program exits before `ready` answers, when
-`ready` does not answer in time, or when `setup` throws.
+The world fails when a `build` or `prepare` command fails, when the
+program exits before `ready` answers, when `ready` does not answer in
+time, when `setup` throws, or when a phase passes its limit.
 nukadoko stops what it started, and the message names the command, how
 it ended, and the last 20 lines of the world's `program.log`.
 The message, the `program-exited` warning, and the line a ready world
@@ -2582,6 +2592,38 @@ nukadoko prints does; `run.json` names it from the run directory.
 When the program exits during the pass, the world's stop reports
 `program-exited`, a warning: the requests after that found nothing
 listening, and the failed steps alone would not say why.
+
+### Limits
+
+Every phase of a world has a limit, so a phase that never ends fails the
+world and names itself, where a run would otherwise wait with nothing on
+the terminal to say on what.
+
+| Phase | Limit by default | To give it another |
+| --- | --- | --- |
+| each `build` or `prepare` command | 600,000 ms | `{ command, timeout_ms }` in place of the command |
+| `serve`, until `ready` answers | 60,000 ms | `serve.timeout_ms` |
+| `setup` | 60,000 ms | `setup: { run, timeout_ms }` |
+| a `url` function | 60,000 ms | `url: { resolve, timeout_ms }` |
+
+```ts
+export default defineProgram({
+  build: [{ command: "bundle install", timeout_ms: 1_200_000 }],
+  prepare: ["bin/rails db:prepare"],
+  serve: { command: "bin/rails server -p {port}", ready: "/up" },
+  setup: { run: (world) => seedAdmin(world.url), timeout_ms: 120_000 },
+});
+```
+
+A phase past its limit fails the world with `program-start-failed`, and
+the message names the phase, its command, the limit, and the end of the
+world's `program.log`, as any other failure to start does.
+A command past its limit is stopped as `serve` is: SIGTERM to its process
+group, and SIGKILL after 5 seconds.
+`setup` and a `url` function run in nukadoko's own process, where
+nothing can stop a function from outside, so the world fails without
+waiting for one, and what it started goes on until it ends or nukadoko
+exits.
 
 ### Placeholders
 
@@ -2662,12 +2704,33 @@ reads state creates it first and claims only on what it created.
   hook in that environment, and exits 1.
   `nuka do` reports the same finding, exits 1, and writes no
   `record.json`; the record's directory keeps the world's `program.log`.
-- A world that ran a command or `setup` prints one line on stderr once it
-  is ready, with what each phase took, the URL, and the log:
+- A signal (SIGINT, SIGTERM, or SIGHUP) while a world starts stops the
+  start at once.
+  `nuka run` and `nuka do` exit through their signal handling, which
+  kills every program still running, so a server that has not answered
+  yet is not left behind.
+  Under `--concurrency` the parent, which starts the world, kills what
+  the start is running, starts no worker, and reports `run-incomplete`
+  instead of `program-start-failed`: the program did not fail.
+- A world prints one line on stderr as each `build`, `prepare`,
+  `serve`, and `setup` phase starts, so a long wait says what it waits
+  on.
+  A world that ran a command or `setup` prints one more once it is
+  ready, with what each phase took, the URL, and the log:
 
 ```text
+world default: build started: npm run build
+world default: prepare started: node dist/migrate.js
+world default: serve started: node dist/server.js, waiting for http://localhost:41873/
 world default: build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (log .nukadoko/runs/run-20261024-101500-a1b2/worlds/default/program.log)
 ```
+
+What `setup` and a `url` function print, through `console` or straight
+to stdout or stderr, goes to stderr and to `program.log`, after a
+`# setup` line for `setup`.
+Every one of these lines is redacted first, `{token}` included, since
+these functions run in nukadoko's own process and would otherwise write
+to the terminal as they are.
 
 The world's URL is the base URL of `page`, `context`, `pageAs`, and
 `request`, and it is the `baseURL` fixture.

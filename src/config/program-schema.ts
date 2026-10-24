@@ -35,6 +35,31 @@ const commandSchema = z
   .union([z.string(), z.array(z.string())])
   .refine((command) => (commandWords(command)[0] ?? "") !== "", { message: "must name a program to run" });
 
+/** How long a `build` or `prepare` command may run, a `setup` take, and
+ * a `url` function take, unless the program file says otherwise. A phase
+ * with no limit left a run waiting on a command that never ended, with
+ * nothing on the terminal to say which. */
+export const DEFAULT_COMMAND_TIMEOUT_MS = 600_000;
+export const DEFAULT_SETUP_TIMEOUT_MS = 60_000;
+export const DEFAULT_URL_TIMEOUT_MS = 60_000;
+
+const timeoutSchema = z.number().int().positive();
+
+/** A `build` or `prepare` entry: a command, or a command with a
+ * `timeout_ms` of its own. */
+const stepCommandSchema = z.union([commandSchema, z.object({ command: commandSchema, timeout_ms: timeoutSchema.optional() }).strict()]);
+
+/** A command with its limit, as a world runs it. */
+export interface TimedCommand {
+  readonly command: Command;
+  readonly timeout_ms: number;
+}
+
+function timedCommand(entry: z.infer<typeof stepCommandSchema>): TimedCommand {
+  if (typeof entry === "string" || Array.isArray(entry)) return { command: entry, timeout_ms: DEFAULT_COMMAND_TIMEOUT_MS };
+  return { command: entry.command, timeout_ms: entry.timeout_ms ?? DEFAULT_COMMAND_TIMEOUT_MS };
+}
+
 /** What a `url` function and the placeholders know before the program is
  * reached. */
 export interface ProgramWorldPlace {
@@ -77,16 +102,23 @@ const serveSchema = z
 
 const functionSchema = <T>(message: string) => z.custom<T>((value) => typeof value === "function", { message });
 
+const urlFunctionSchema = functionSchema<(world: ProgramWorldPlace) => string | Promise<string>>("must be a URL or a function returning one");
+const setupFunctionSchema = functionSchema<ProgramSetup>("must be a function");
+
 const programFields = {
   /** Run once per tree per run, in the tree's root, before any world. */
-  build: z.array(commandSchema).optional(),
+  build: z.array(stepCommandSchema).optional(),
   /** Run once per world, in the tree's root, with the world's env. */
-  prepare: z.array(commandSchema).optional(),
+  prepare: z.array(stepCommandSchema).optional(),
   serve: serveSchema.optional(),
-  /** A program nukadoko does not start: a remote server, a deployed preview. */
-  url: z.union([z.string().min(1), functionSchema<(world: ProgramWorldPlace) => string | Promise<string>>("must be a URL or a function returning one")]).optional(),
+  /** A program nukadoko does not start: a remote server, a deployed
+   * preview. A function may take `timeout_ms` beside it as `resolve`. */
+  url: z
+    .union([z.string().min(1), urlFunctionSchema, z.object({ resolve: urlFunctionSchema, timeout_ms: timeoutSchema.optional() }).strict()])
+    .optional(),
   env: z.record(z.string(), z.string()).optional(),
-  setup: functionSchema<ProgramSetup>("must be a function").optional(),
+  /** A function, or one with a `timeout_ms` of its own as `run`. */
+  setup: z.union([setupFunctionSchema, z.object({ run: setupFunctionSchema, timeout_ms: timeoutSchema.optional() }).strict()]).optional(),
 };
 
 function serveOrUrl(value: { serve?: unknown; url?: unknown }, ctx: z.RefinementCtx): void {
@@ -132,23 +164,33 @@ export type ProgramServe = z.infer<typeof serveSchema>;
  * both a server to start and a URL that ignores it. */
 export type ProgramReach =
   | { readonly kind: "serve"; readonly serve: ProgramServe }
-  | { readonly kind: "url"; readonly url: ProgramUrl }
+  | { readonly kind: "url"; readonly url: ProgramUrl; readonly timeout_ms: number }
   | { readonly kind: "none" };
 
 /** One environment's program, its layer over the top level already
- * applied (src/environment/resolve-environment.ts). */
+ * applied (src/environment/resolve-environment.ts), each limit filled. */
 export interface ProgramRecipe {
-  readonly build: readonly Command[];
-  readonly prepare: readonly Command[];
+  readonly build: readonly TimedCommand[];
+  readonly prepare: readonly TimedCommand[];
   readonly reach: ProgramReach;
   readonly env: Readonly<Record<string, string>>;
-  readonly setup: ProgramSetup | undefined;
+  readonly setup: { readonly run: ProgramSetup; readonly timeout_ms: number } | undefined;
 }
 
-function reachOf(fields: { serve?: ProgramServe | undefined; url?: ProgramUrl | undefined }): ProgramReach | undefined {
+type UrlField = NonNullable<Program["url"]>;
+type SetupField = NonNullable<Program["setup"]>;
+
+function reachOf(fields: { serve?: ProgramServe | undefined; url?: UrlField | undefined }): ProgramReach | undefined {
   if (fields.serve !== undefined) return { kind: "serve", serve: fields.serve };
-  if (fields.url !== undefined) return { kind: "url", url: fields.url };
-  return undefined;
+  if (fields.url === undefined) return undefined;
+  if (typeof fields.url === "string" || typeof fields.url === "function") return { kind: "url", url: fields.url, timeout_ms: DEFAULT_URL_TIMEOUT_MS };
+  return { kind: "url", url: fields.url.resolve, timeout_ms: fields.url.timeout_ms ?? DEFAULT_URL_TIMEOUT_MS };
+}
+
+function setupOf(setup: SetupField | undefined): ProgramRecipe["setup"] {
+  if (setup === undefined) return undefined;
+  if (typeof setup === "function") return { run: setup, timeout_ms: DEFAULT_SETUP_TIMEOUT_MS };
+  return { run: setup.run, timeout_ms: setup.timeout_ms ?? DEFAULT_SETUP_TIMEOUT_MS };
 }
 
 /** `environment`'s fields over the top level's. A field the environment
@@ -158,10 +200,10 @@ function reachOf(fields: { serve?: ProgramServe | undefined; url?: ProgramUrl | 
  * writes either replaces the top level's. Pure. */
 export function layerProgram(program: Program, environment: ProgramEnvironment | undefined): ProgramRecipe {
   return {
-    build: environment?.build ?? program.build ?? [],
-    prepare: environment?.prepare ?? program.prepare ?? [],
+    build: (environment?.build ?? program.build ?? []).map(timedCommand),
+    prepare: (environment?.prepare ?? program.prepare ?? []).map(timedCommand),
     reach: (environment === undefined ? undefined : reachOf(environment)) ?? reachOf(program) ?? { kind: "none" },
     env: { ...(program.env ?? {}), ...(environment?.env ?? {}) },
-    setup: environment?.setup ?? program.setup,
+    setup: setupOf(environment?.setup ?? program.setup),
   };
 }

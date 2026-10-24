@@ -424,6 +424,11 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       }
     }
 
+    // Installed before the world starts: a signal while it starts then
+    // exits through this listener, and the exit kills what the start
+    // spawned (src/program/world.ts), where the default action would end
+    // this process and leave the program running.
+    processSignal = installProcessSignalHandlers();
     let world: StartedWorld | null = null;
     if (resolvedEnv.program !== null) {
       const started = await createWorldStarter({
@@ -539,7 +544,6 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         disposeResult = { evidence: { screenshots: [] } };
       }
     });
-    processSignal = installProcessSignalHandlers();
     processSignal.setScenarioCleanup(tearDownFixtures);
     if (stopWorld !== undefined) processSignal.setProcessCleanup(stopWorld);
     const startedAt = new Date();

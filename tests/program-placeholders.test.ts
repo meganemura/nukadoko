@@ -1,7 +1,7 @@
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
-import type { ProgramRecipe } from "../src/config/program-schema.js";
+import type { ProgramRecipe, TimedCommand } from "../src/config/program-schema.js";
 import {
   fillPlaceholders,
   PLACEHOLDER_NAMES,
@@ -67,8 +67,10 @@ const reachOf = (kind: "serve" | "url" | "none"): ProgramRecipe["reach"] =>
   kind === "serve"
     ? { kind, serve: { command: "node server.js", port: "auto", ready: "/", timeout_ms: 60_000 } }
     : kind === "url"
-      ? { kind, url: "http://a.example" }
+      ? { kind, url: "http://a.example", timeout_ms: 60_000 }
       : { kind };
+// A command as a recipe holds it, with its limit.
+const timed = (command: string | readonly string[]): TimedCommand => ({ command, timeout_ms: 600_000 });
 // The values a running world of `kind` fills, and a build's.
 function valuesFor(kind: "serve" | "url" | "none" | "build"): PlaceholderValues {
   if (kind === "build") return { root: "/r" };
@@ -85,7 +87,7 @@ describe("placeholderGaps", () => {
       const prepare = tc.draw(gs.arrays(command, { maxSize: 2 }));
       const env = Object.fromEntries(tc.draw(gs.arrays(gs.tuples(gs.sampledFrom(["A", "B", "C"]), word), { maxSize: 3 })));
       const reach = reachOf(kind);
-      const gaps = placeholderGaps({ build, prepare, reach, env });
+      const gaps = placeholderGaps({ build: build.map(timed), prepare: prepare.map(timed), reach, env });
 
       const fields: [string, readonly string[], "serve" | "url" | "none" | "build"][] = [
         ...build.map((words, index): [string, readonly string[], "build"] => [`build[${index}]`, words, "build"]),
@@ -104,7 +106,7 @@ describe("placeholderGaps", () => {
     }));
 
   it("names each gap of a program that serves nothing, and the refusal names every world's", () => {
-    const recipe = { build: [["node", "-e", "{root} {port}"]], prepare: [["node", "-e", "x"], "echo {port}"], reach: reachOf("url"), env: { BASE: "{url}" } };
+    const recipe = { build: [timed(["node", "-e", "{root} {port}"])], prepare: [timed(["node", "-e", "x"]), timed("echo {port}")], reach: reachOf("url"), env: { BASE: "{url}" } };
     expect(placeholderGaps(recipe)).toEqual([
       { where: "build[0]", name: "port", why: "build runs once per tree, before any world exists" },
       { where: "prepare[1]", name: "port", why: "this world does not serve" },

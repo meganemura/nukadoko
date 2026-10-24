@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { commandWords, type Command, type ProgramRecipe, type ProgramWorld } from "../config/program-schema.js";
+import { format } from "node:util";
+import { commandWords, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
@@ -11,6 +12,7 @@ import type { RunWorld, RunWorldCommand } from "../record/run-result.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
+import { createLineBuffer } from "../sink/line-buffer.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { describePlaceholderGap, fillPlaceholders, placeholderGaps, type PlaceholderValues } from "./placeholders.js";
 import { openProgramLog, type ProgramLog } from "./program-log.js";
@@ -32,14 +34,35 @@ import type { WorldView } from "./world-view.js";
 // end of the log, so the caller reports why the program did not start and
 // still records the world.
 //
-// The server runs in a process group of its own on POSIX, and stopping it
-// signals the whole group: `npm start` or `bin/rails server` start the
+// Every command runs in a process group of its own on POSIX, and stopping
+// it signals the whole group: `npm start` or `bin/rails server` start the
 // program as a child, and stopping only the process nukadoko spawned left
 // that child holding the port. A group of its own also keeps a terminal's
-// Ctrl-C from reaching it before nukadoko stops it in order. On Windows a
-// signal ends only the process it names, so the whole tree ends with
-// `taskkill /t /f`, the way `runCommand` already starts programs there
-// (src/context/windows-command.ts).
+// Ctrl-C from reaching it before nukadoko stops it in order. A `build` or
+// `prepare` command's group is killed once the command exits, so a child
+// it left behind neither outlives the phase nor holds its output pipe
+// open, which would keep the phase from ending at all. On Windows a signal
+// ends only the process it names, so the whole tree ends with `taskkill /t
+// /f`, the way `runCommand` already starts programs there
+// (src/context/windows-command.ts); a process whose parent already exited
+// is out of that tree's reach there.
+//
+// Every phase has a limit: a `build` or `prepare` command its
+// `timeout_ms`, `serve` its `timeout_ms` to answer `ready`, and `setup`
+// and a `url` function theirs (src/config/program-schema.ts). A phase past
+// its limit is stopped and fails the world, naming the phase. A function
+// cannot be stopped from outside, so a `setup` past its limit is left to
+// finish on its own while the world fails. Each phase prints one line as
+// it starts, so a terminal says what a long wait is waiting on.
+//
+// A start the caller aborts (a signal under `--concurrency`, where the
+// parent waits for the world) kills the running phase's group at once and
+// returns a failed world marked `aborted`, which no finding reports.
+//
+// `setup` and a `url` function run in nukadoko's own process, so what
+// they print would reach the terminal unredacted, a `{token}` included.
+// While one runs, what this process writes to stdout and stderr goes to
+// the progress sink and to program.log instead, redacted.
 //
 // When the world stops, after the program has, one pass over its log finds
 // the lines of each step that arrived after the step's record was written
@@ -85,6 +108,8 @@ export interface FailedWorld {
   readonly ok: false;
   /** Why the program did not start, with the end of its log. */
   readonly message: string;
+  /** The caller aborted the start; nothing failed on the program's side. */
+  readonly aborted: boolean;
   record(): RunWorld;
 }
 
@@ -103,7 +128,9 @@ export interface WorldStarterOptions {
 }
 
 export interface WorldStarter {
-  start(name: string, recipe: ProgramRecipe, secrets: SecretSet): Promise<StartedWorld | FailedWorld>;
+  /** Starts world `name`. `abort` stops the start at once (module
+   * header). */
+  start(name: string, recipe: ProgramRecipe, secrets: SecretSet, abort?: AbortSignal): Promise<StartedWorld | FailedWorld>;
 }
 
 const READY_POLL_MS = 100;
@@ -112,6 +139,84 @@ const STOP_GRACE_MS = 5_000;
 const STREAMS_CLOSE_MS = 1_000;
 
 class WorldStartError extends Error {}
+
+/** The caller aborted the start. */
+class WorldStartAborted extends Error {}
+
+/** Rejects with WorldStartAborted once `abort` fires. */
+function abortedBy(abort: AbortSignal | undefined): Promise<never> {
+  return new Promise((_, reject) => {
+    if (abort === undefined) return;
+    const fire = (): void => reject(new WorldStartAborted("the start was aborted"));
+    if (abort.aborted) fire();
+    else abort.addEventListener("abort", fire, { once: true });
+  });
+}
+
+/** `work`, or a WorldStartError that names `what` once `timeoutMs`
+ * passes first, or WorldStartAborted once `abort` fires first. */
+async function withinLimit<T>(work: Promise<T>, timeoutMs: number, what: string, abort: AbortSignal | undefined): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new WorldStartError(`${what} did not finish within ${timeoutMs} ms (timeout_ms)`)), timeoutMs);
+  });
+  const aborted = abortedBy(abort);
+  // Neither loser may surface as an unhandled rejection.
+  limit.catch(() => {});
+  aborted.catch(() => {});
+  try {
+    return await Promise.race([work, limit, aborted]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
+
+/** Runs `fn` with what this process writes to stdout and stderr, and
+ * through `console`, sent to `into` (module header). Both, since a host
+ * such as a test runner can replace `console` with one that never reaches
+ * the streams. Restored however `fn` ends.
+ *
+ * `into` itself writes to the terminal, through a sink that can be
+ * `process.stderr`, so a write made while `into` runs goes to the stream
+ * as before; capturing it too would feed the line back to `into` without
+ * end. */
+async function capturingOutput<T>(fn: () => Promise<T>, into: (text: string) => void): Promise<T> {
+  const streams = [process.stdout, process.stderr];
+  const originalWrites = streams.map((stream) => stream.write);
+  const originalConsole = CONSOLE_METHODS.map((method) => console[method]);
+  let forwarding = false;
+  const capture = (text: string): void => {
+    forwarding = true;
+    try {
+      into(text);
+    } finally {
+      forwarding = false;
+    }
+  };
+  streams.forEach((stream, index) => {
+    const original = originalWrites[index]!;
+    stream.write = ((chunk: string | Uint8Array, ...rest: unknown[]): boolean => {
+      if (forwarding) return (original as (...args: unknown[]) => boolean).call(stream, chunk, ...rest);
+      capture(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      const callback = rest.find((arg): arg is () => void => typeof arg === "function");
+      callback?.();
+      return true;
+    }) as typeof stream.write;
+  });
+  for (const method of CONSOLE_METHODS) console[method] = (...args: unknown[]) => capture(`${format(...args)}\n`);
+  try {
+    return await fn();
+  } finally {
+    streams.forEach((stream, index) => {
+      stream.write = originalWrites[index]!;
+    });
+    CONSOLE_METHODS.forEach((method, index) => {
+      console[method] = originalConsole[index]!;
+    });
+  }
+}
 
 const killedOnExit = new Map<ChildProcess, () => void>();
 let exitListenerAdded = false;
@@ -144,7 +249,7 @@ function killOnExit(child: ChildProcess, group: boolean): () => void {
 export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
   const builds = new Map<string, { world: string; done: Promise<void> }>();
   return {
-    async start(name, recipe, secrets) {
+    async start(name, recipe, secrets, abort) {
       const dir = options.worldDir(name);
       mkdirSync(dir, { recursive: true });
       const token = randomBytes(16).toString("hex");
@@ -168,9 +273,27 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         error: error === null ? null : redactString(error, allSecrets),
         ...(programLog === undefined ? {} : { program_log: programLog }),
       });
-      const run = (phase: RunWorldCommand["phase"], argv: readonly string[], env: NodeJS.ProcessEnv): Promise<void> => {
+      const run = (phase: RunWorldCommand["phase"], argv: readonly string[], timeoutMs: number, env: NodeJS.ProcessEnv): Promise<void> => {
         commands.push({ phase, argv });
-        return runToEnd(phase, argv, env, options.rootDir, log);
+        return runToEnd(phase, argv, timeoutMs, env, options.rootDir, log, abort);
+      };
+      // One line per phase as it starts, redacted: a `{token}` can be in a
+      // command's words.
+      const announce = (text: string): void => {
+        options.progress.write(`${redactString(`world ${name}: ${text}`, allSecrets)}\n`);
+      };
+      // What `setup` or a `url` function prints, redacted, on the
+      // terminal and in the log.
+      const printed = createLineBuffer((line) => {
+        log.note(line);
+        options.progress.write(`${redactString(line, allSecrets)}\n`);
+      });
+      const inProcess = async <T>(fn: () => Promise<T>): Promise<T> => {
+        try {
+          return await capturingOutput(fn, (text) => printed.push(text));
+        } finally {
+          printed.flush();
+        }
       };
 
       try {
@@ -179,23 +302,34 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         // earlier still, for every world they start (src/cli/run.ts).
         const gap = placeholderGaps(recipe)[0];
         if (gap !== undefined) throw new WorldStartError(describePlaceholderGap(gap));
-        const buildArgvs = recipe.build.map((command, index) => filledArgv(command, { root: options.rootDir }, `build[${index}]`));
-        if (buildArgvs.length > 0) {
-          const key = JSON.stringify(buildArgvs);
+        const buildCommands = recipe.build.map((entry, index) => ({
+          argv: filledArgv(entry.command, { root: options.rootDir }, `build[${index}]`),
+          timeoutMs: entry.timeout_ms,
+        }));
+        if (buildCommands.length > 0) {
+          const key = JSON.stringify(buildCommands.map((command) => command.argv));
           const earlier = builds.get(key);
           if (earlier === undefined) {
             const started = Date.now();
+            announce(`build started: ${buildCommands.map((command) => display(command.argv)).join("; ")}`);
             const done = (async () => {
-              for (const argv of buildArgvs) await run("build", argv, process.env);
+              for (const command of buildCommands) await run("build", command.argv, command.timeoutMs, process.env);
             })();
             builds.set(key, { world: name, done });
             await done;
             timings.build_ms = Date.now() - started;
           } else {
             log.note(`# build: the same commands already ran for world ${earlier.world}`);
-            await earlier.done.catch(() => {
-              throw new WorldStartError(`the build failed in world ${earlier.world}`);
-            });
+            // The earlier world's build has its own limit; this world
+            // waits for it, or for its own abort.
+            const aborted = abortedBy(abort);
+            aborted.catch(() => {});
+            await Promise.race([
+              earlier.done.catch(() => {
+                throw new WorldStartError(`the build failed in world ${earlier.world}`);
+              }),
+              aborted,
+            ]);
           }
         }
 
@@ -203,14 +337,20 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         const port =
           reach.kind !== "serve" ? undefined : reach.serve.port === "auto" ? await freePort() : await portNobodyAnswers(reach.serve.port);
         const place = { name, root: options.rootDir, dir };
-        url =
-          reach.kind === "serve"
-            ? `http://localhost:${port}`
-            : reach.kind === "url"
-              ? typeof reach.url === "string"
-                ? reach.url
-                : await reach.url(place)
-              : undefined;
+        if (reach.kind === "serve") {
+          url = `http://localhost:${port}`;
+        } else if (reach.kind === "url") {
+          const reachUrl = reach.url;
+          url =
+            typeof reachUrl === "string"
+              ? reachUrl
+              : await withinLimit(
+                  inProcess(async () => reachUrl(place)),
+                  reach.timeout_ms,
+                  "the url function",
+                  abort,
+                );
+        }
         const values: PlaceholderValues = {
           root: options.rootDir,
           dir,
@@ -225,7 +365,12 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
 
         if (recipe.prepare.length > 0) {
           const started = Date.now();
-          for (const [index, command] of recipe.prepare.entries()) await run("prepare", filledArgv(command, values, `prepare[${index}]`), childEnv);
+          const prepareCommands = recipe.prepare.map((entry: TimedCommand, index) => ({
+            argv: filledArgv(entry.command, values, `prepare[${index}]`),
+            timeoutMs: entry.timeout_ms,
+          }));
+          announce(`prepare started: ${prepareCommands.map((command) => display(command.argv)).join("; ")}`);
+          for (const command of prepareCommands) await run("prepare", command.argv, command.timeoutMs, childEnv);
           timings.prepare_ms = Date.now() - started;
         }
 
@@ -233,25 +378,35 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           const argv = filledArgv(reach.serve.command, values, "serve.command");
           commands.push({ phase: "serve", argv });
           const started = Date.now();
+          const readyUrl = new URL(reach.serve.ready, url).href;
+          announce(`serve started: ${display(argv)}, waiting for ${readyUrl}`);
           server = startServe(argv, childEnv, options.rootDir, log);
-          await waitUntilReady(server, new URL(reach.serve.ready, url).href, reach.serve.timeout_ms);
+          await waitUntilReady(server, readyUrl, reach.serve.timeout_ms, abort);
           timings.serve_ms = Date.now() - started;
         }
 
-        if (recipe.setup !== undefined) {
+        const setup = recipe.setup;
+        if (setup !== undefined) {
           const started = Date.now();
           const world: ProgramWorld = { ...place, url, port, env: { ...worldEnv } };
-          try {
-            await recipe.setup(world);
-          } catch (error) {
-            throw new WorldStartError(`setup threw: ${error instanceof Error ? error.message : String(error)}`);
-          }
+          announce("setup started");
+          log.note("# setup");
+          await withinLimit(
+            inProcess(async () => {
+              try {
+                await setup.run(world);
+              } catch (error) {
+                throw new WorldStartError(`setup threw: ${error instanceof Error ? error.message : String(error)}`);
+              }
+            }),
+            setup.timeout_ms,
+            "setup",
+            abort,
+          );
           timings.setup_ms = Date.now() - started;
         }
 
-        if (commands.length > 0 || recipe.setup !== undefined) {
-          options.progress.write(`${readyLine(name, timings, url, log.written ? options.displayPath(log.path) : null)}\n`);
-        }
+        if (commands.length > 0 || recipe.setup !== undefined) announce(readyLine(timings, url, log.written ? options.displayPath(log.path) : null));
         const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix };
         const running = server;
         // A world at a URL has a log nukadoko cannot read; a world with no
@@ -286,15 +441,21 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           record: () => record(null),
         };
       } catch (error) {
+        const aborted = error instanceof WorldStartAborted || abort?.aborted === true;
+        if (aborted) server?.kill();
         await server?.stop();
-        const cause = error instanceof WorldStartError ? error.message : `nukadoko could not start it: ${error instanceof Error ? error.message : String(error)}`;
+        const cause = aborted
+          ? "the start was stopped before the program was ready"
+          : error instanceof WorldStartError
+            ? error.message
+            : `nukadoko could not start it: ${error instanceof Error ? error.message : String(error)}`;
         const tail = log.tail();
         log.close();
         const message = redactString(
           `the program did not start for world ${name}: ${cause}${tail === "" ? "" : `. The end of ${options.displayPath(log.path)}:\n${tail}`}`,
           allSecrets,
         );
-        return { ok: false, message, record: () => record(cause) };
+        return { ok: false, message, aborted, record: () => record(cause) };
       }
     },
   };
@@ -320,28 +481,101 @@ function spawnPlan(argv: readonly string[], env: NodeJS.ProcessEnv): { file: str
   return process.platform === "win32" ? windowsSpawnPlan(file, args, env) : { file, args, verbatim: false };
 }
 
-/** Runs one build or prepare command to its end; a start failure or a
- * non-zero exit is a WorldStartError naming the command. */
-function runToEnd(phase: string, argv: readonly string[], env: NodeJS.ProcessEnv, cwd: string, log: ProgramLog): Promise<void> {
+/** Runs one build or prepare command to its end, in a process group of
+ * its own, and kills what is left of the group once the command exits
+ * (module header). A start failure, a non-zero exit, or `timeoutMs`
+ * passing is a WorldStartError naming the command; `abort` kills the group
+ * at once. */
+function runToEnd(
+  phase: string,
+  argv: readonly string[],
+  timeoutMs: number,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  log: ProgramLog,
+  abort: AbortSignal | undefined,
+): Promise<void> {
   log.note(`$ ${display(argv)}`);
   const plan = spawnPlan(argv, env);
+  const groupOfItsOwn = process.platform !== "win32";
   return new Promise((resolve, reject) => {
-    const child = spawn(plan.file, plan.args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], windowsVerbatimArguments: plan.verbatim });
-    const unlist = killOnExit(child, false);
-    child.once("close", unlist);
-    child.once("error", unlist);
+    const child = spawn(plan.file, plan.args, {
+      cwd,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsVerbatimArguments: plan.verbatim,
+      detached: groupOfItsOwn,
+    });
+    const unlist = killOnExit(child, true);
+    const group = processGroup(child, groupOfItsOwn);
     const out = log.stream();
     const err = log.stream();
     child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
-    child.once("error", (error) => reject(new WorldStartError(`${phase} command ${display(argv)} could not start: ${error.message}`)));
-    child.once("close", (code, signal) => {
+    let settled = false;
+    let failure: WorldStartError | WorldStartAborted | undefined;
+    let timer: NodeJS.Timeout | undefined;
+    const onAbort = (): void => {
+      failure ??= new WorldStartAborted("the start was aborted");
+      group.kill();
+    };
+    const finish = (outcome: Error | undefined): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      abort?.removeEventListener("abort", onAbort);
+      unlist();
       out.flush();
       err.flush();
-      if (code === 0) resolve();
-      else reject(new WorldStartError(`${phase} command ${display(argv)} exited ${signal === null ? `with code ${code}` : `on ${signal}`}`));
+      if (outcome === undefined) resolve();
+      else reject(outcome);
+    };
+    timer = setTimeout(() => {
+      failure ??= new WorldStartError(`${phase} command ${display(argv)} did not finish within ${timeoutMs} ms (timeout_ms)`);
+      void group.stop();
+    }, timeoutMs);
+    if (abort?.aborted === true) onAbort();
+    else abort?.addEventListener("abort", onAbort, { once: true });
+    child.once("error", (error) => finish(failure ?? new WorldStartError(`${phase} command ${display(argv)} could not start: ${error.message}`)));
+    child.once("exit", (code, signal) => {
+      // What the command left in its group goes with it, or a child that
+      // holds the output pipe keeps `close` from ever coming.
+      group.kill();
+      const closed = new Promise<void>((done) => child.once("close", () => done()));
+      void Promise.race([closed, delay(STREAMS_CLOSE_MS)]).then(() => {
+        if (failure !== undefined) finish(failure);
+        else if (code === 0) finish(undefined);
+        else finish(new WorldStartError(`${phase} command ${display(argv)} exited ${signal === null ? `with code ${code}` : `on ${signal}`}`));
+      });
     });
   });
+}
+
+/** Signals a child's process group on POSIX, or its tree on Windows. */
+function processGroup(child: ChildProcess, groupOfItsOwn: boolean): { signal(signal: NodeJS.Signals): void; kill(): void; stop(): Promise<void> } {
+  const signal = (name: NodeJS.Signals): void => {
+    if (child.pid === undefined) return;
+    try {
+      if (process.platform === "win32") {
+        spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" }).on("error", () => child.kill());
+      } else if (groupOfItsOwn) {
+        process.kill(-child.pid, name);
+      } else {
+        child.kill(name);
+      }
+    } catch {
+      // The group is gone already: nothing is left to signal.
+    }
+  };
+  return {
+    signal,
+    kill: () => signal("SIGKILL"),
+    async stop() {
+      signal("SIGTERM");
+      await delay(STOP_GRACE_MS);
+      signal("SIGKILL");
+    },
+  };
 }
 
 interface ServeProcess {
@@ -350,6 +584,8 @@ interface ServeProcess {
   readonly exit: { code: number | null; signal: NodeJS.Signals | null; error?: string } | null;
   /** Resolves once the program has exited, however it went. */
   readonly exited: Promise<void>;
+  /** Kills the group at once, before `stop`, for a start that was aborted. */
+  kill(): void;
   stop(): Promise<void>;
 }
 
@@ -404,6 +640,13 @@ function startServe(argv: readonly string[], env: NodeJS.ProcessEnv, cwd: string
       return exit;
     },
     exited,
+    kill() {
+      if (process.platform === "win32") {
+        if (exit === null && child.pid !== undefined) spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" }).on("error", () => child.kill());
+      } else {
+        signalGroup("SIGKILL");
+      }
+    },
     stop() {
       stopping ??= (async () => {
         if (process.platform === "win32") {
@@ -429,9 +672,12 @@ function startServe(argv: readonly string[], env: NodeJS.ProcessEnv, cwd: string
   };
 }
 
-async function waitUntilReady(server: ServeProcess, readyUrl: string, timeoutMs: number): Promise<void> {
+async function waitUntilReady(server: ServeProcess, readyUrl: string, timeoutMs: number, abort: AbortSignal | undefined): Promise<void> {
   const deadline = Date.now() + timeoutMs;
+  const aborted = abortedBy(abort);
+  aborted.catch(() => {});
   for (;;) {
+    if (abort?.aborted === true) throw new WorldStartAborted("the start was aborted");
     if (server.exit !== null) {
       throw new WorldStartError(`serve command ${display(server.argv)} ${describeExit(server)} before ${readyUrl} answered`);
     }
@@ -440,13 +686,14 @@ async function waitUntilReady(server: ServeProcess, readyUrl: string, timeoutMs:
       throw new WorldStartError(`serve command ${display(server.argv)} did not answer ${readyUrl} with a 2xx status within ${timeoutMs} ms`);
     }
     try {
-      const response = await fetch(readyUrl, { signal: AbortSignal.timeout(Math.min(READY_REQUEST_MS, remaining)) });
+      const signals = [AbortSignal.timeout(Math.min(READY_REQUEST_MS, remaining)), ...(abort === undefined ? [] : [abort])];
+      const response = await fetch(readyUrl, { signal: AbortSignal.any(signals) });
       await response.body?.cancel();
       if (response.ok) return;
     } catch {
       // Not listening yet, or not answering in time: the next poll asks again.
     }
-    await Promise.race([delay(READY_POLL_MS), server.exited]);
+    await Promise.race([delay(READY_POLL_MS), server.exited, aborted]);
   }
 }
 
@@ -490,11 +737,12 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms).unref());
 }
 
-/** `world default: build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (log <path>)` */
-function readyLine(name: string, timings: RunWorld["timings"], url: string | undefined, log: string | null): string {
+/** `build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (log <path>)`,
+ * after `world <name>: `. */
+function readyLine(timings: RunWorld["timings"], url: string | undefined, log: string | null): string {
   const phases = (["build", "prepare", "serve", "setup"] as const).flatMap((phase) => {
     const ms = timings[`${phase}_ms`];
     return ms === undefined ? [] : [`${phase} ${(ms / 1000).toFixed(1)}s`];
   });
-  return `world ${name}: ${[...phases, ...(url === undefined ? [] : [url])].join(", ")}${log === null ? "" : `  (log ${log})`}`;
+  return `${[...phases, ...(url === undefined ? [] : [url])].join(", ")}${log === null ? "" : `  (log ${log})`}`;
 }

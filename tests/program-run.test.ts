@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { copyFile, writeFile } from "node:fs/promises";
 import net from "node:net";
@@ -10,6 +11,8 @@ import {
   latestRunDir,
   latestRunJson,
   removeTempDir,
+  repoRoot,
+  sourceNodeArgs,
   stepRecordDir,
   stepRecordIds,
   stripRunProgressLines,
@@ -36,6 +39,16 @@ async function cli(rootDir: string, args: string[]): Promise<{ exitCode: number;
   const stderr = createCaptureSink();
   const exitCode = await runCli(args, { rootDir, stdout, stderr });
   return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+}
+
+/** The CLI in a process of its own, for what only the real
+ * `process.stderr` shows: in process, `stderr` is a capture sink. */
+function spawnedCli(rootDir: string, args: string[]): Promise<{ exitCode: number; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile(process.execPath, [...sourceNodeArgs, path.join(repoRoot, "src", "cli.ts"), ...args], { cwd: rootDir, timeout: 60_000 }, (error, _stdout, stderr) => {
+      resolve({ exitCode: error === null ? 0 : typeof error.code === "number" ? error.code : -1, stderr });
+    });
+  });
 }
 
 function stepResult(rootDir: string, id: string): Record<string, unknown> {
@@ -170,6 +183,63 @@ describe("a program nukadoko serves", () => {
     expect(run.counts.passed).toBe(0);
   });
 
+  it("stops a build that does not finish within its timeout_ms, says so when it starts and when it stops, and runs no scenario", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      [
+        'import { defineProgram } from "./nukadoko-shim.js";',
+        "export default defineProgram({",
+        '  build: [{ command: ["node", "-e", "console.log(\'building\'); setInterval(() => {}, 1000)"], timeout_ms: 500 }],',
+        '  serve: { command: "node app/server.mjs", ready: "/whoami" },',
+        '  env: { PORT: "{port}" },',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const startedAt = Date.now();
+    const { exitCode, stderr } = await cli(rootDir, ["run"]);
+
+    expect(exitCode).toBe(1);
+    // The default limit is 600 s; this one stops in well under a minute.
+    expect(Date.now() - startedAt).toBeLessThan(60_000);
+    const run = latestRunJson(rootDir);
+    expect(stderr).toContain("world default: build started: node -e 'console.log('\\''building'\\''); setInterval(() => {}, 1000)'\n");
+    expect(stderr).toContain(
+      "failed\tprogram-start-failed\t-\tthe program did not start for world default: build command node -e 'console.log('\\''building'\\''); setInterval(() => {}, 1000)' " +
+        `did not finish within 500 ms (timeout_ms). The end of ${run.run_dir}/worlds/default/program.log: `,
+    );
+    expect(stderr).not.toContain("serve started");
+    expect(stepRecordIds(rootDir)).toEqual([]);
+  });
+
+  it("shows what setup prints once each, redacted, on the terminal and in the log", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      [
+        'import { defineProgram } from "./nukadoko-shim.js";',
+        "export default defineProgram({",
+        '  serve: { command: "node app/server.mjs", ready: "/whoami" },',
+        '  env: { PORT: "{port}", DB: "{dir}/db.sqlite3", TOKEN: "{token}", ADMIN_PASSWORD: "{token}" },',
+        "  setup(world) {",
+        "    console.log(`seeding admin with ${world.env.ADMIN_PASSWORD}`);",
+        "    process.stderr.write(`and with ${world.env.ADMIN_PASSWORD} again\\n`);",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const { exitCode, stderr } = await spawnedCli(rootDir, ["run", "--no-check"]);
+
+    expect(exitCode, stderr).toBe(0);
+    const lines = stderr.split("\n");
+    expect(lines.filter((line) => line.startsWith("seeding admin"))).toEqual(["seeding admin with {{secret.WORLD_TOKEN}}"]);
+    expect(lines.filter((line) => line.startsWith("and with"))).toEqual(["and with {{secret.WORLD_TOKEN}} again"]);
+    expect(lines.filter((line) => line.startsWith("world default: setup"))).toEqual(["world default: setup started"]);
+    expect(stderr).not.toMatch(/[0-9a-f]{32}/);
+    const log = readFileSync(path.join(latestRunDir(rootDir), "worlds", "default", "program.log"), "utf8");
+    expect(log).toContain("# setup\nseeding admin with {{secret.WORLD_TOKEN}}\nand with {{secret.WORLD_TOKEN}} again\n");
+  });
+
   it("names the log from the project root when the program exits during the pass", async () => {
     await writeFile(
       path.join(rootDir, "nukadoko.program.ts"),
@@ -195,7 +265,10 @@ describe("a program nukadoko serves", () => {
     const { exitCode, stdout, stderr } = await cli(rootDir, ["do", "ask-program", "--args", "{}"]);
 
     expect(exitCode).toBe(0);
-    expect(stderr).toMatch(/^world default: serve \d+\.\ds, http:\/\/localhost:\d+ {2}\(log \.nukadoko\/do\/[^/]+\/world\/program\.log\)\n$/);
+    // One line when serve starts, and the ready line.
+    expect(stderr).toMatch(
+      /^world default: serve started: node app\/server\.mjs, waiting for http:\/\/localhost:(\d+)\/whoami\nworld default: serve \d+\.\ds, http:\/\/localhost:\1 {2}\(log \.nukadoko\/do\/[^/]+\/world\/program\.log\)\n$/,
+    );
     const record = JSON.parse(stdout) as { step_record_id: string; world_name: string; result: { db: string; token: string } };
     const worldDir = path.join(stepRecordDir(rootDir, record.step_record_id), "world");
     expect(record.world_name).toBe("default");
@@ -238,7 +311,7 @@ describe("a program nukadoko serves", () => {
     expect(stdout).toBe("");
     expect(stderr).toMatch(
       // A finding is one line, so the log's lines are joined with spaces.
-      /^failed\tprogram-start-failed\t-\tthe program did not start for world default: prepare command node -e 'process\.exit\(5\)' exited with code 5\. The end of \.nukadoko\/do\/[^/]+\/world\/program\.log: \$ node -e 'process\.exit\(5\)'\n {2}fix: /,
+      /^world default: prepare started: node -e 'process\.exit\(5\)'\nfailed\tprogram-start-failed\t-\tthe program did not start for world default: prepare command node -e 'process\.exit\(5\)' exited with code 5\. The end of \.nukadoko\/do\/[^/]+\/world\/program\.log: \$ node -e 'process\.exit\(5\)'\n {2}fix: /,
     );
     // The record's directory holds the world's log, and no record.
     const [id] = stepRecordIds(rootDir);

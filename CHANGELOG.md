@@ -264,7 +264,17 @@ just until 0.1.
   `ready`, `timeout_ms`) or `url`, `env` with the placeholders
   `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, and `{token}`,
   `setup(world)`, and `environments`. A command is an argv array or a
-  string split on whitespace, never a shell. A placeholder a world has
+  string split on whitespace, never a shell. Every phase has a limit:
+  600 s for each `build` or `prepare` command, and 60 s for `setup`
+  and a `url` function, each changed with `timeout_ms` (`{ command,
+  timeout_ms }`, `setup: { run, timeout_ms }`, `url: { resolve,
+  timeout_ms }`). Every command runs in a process group of its own, and a
+  `build` or `prepare` command's group is killed when the command exits,
+  so nothing it left running outlives it. Each phase prints one line on
+  stderr as it starts, and what `setup` prints reaches stderr and
+  `program.log` redacted. A signal while a world starts stops it at once
+  and leaves no program running, in `nuka do` and under `--concurrency`
+  as well. A placeholder a world has
   no value for is the check error `program-placeholder-unfilled`, for
   every world the file can start, and `nuka run` and `nuka do` refuse it
   with that code before any command runs. `nuka run` starts one world

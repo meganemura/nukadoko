@@ -68,8 +68,8 @@ export function placeholderAbsence(name: PlaceholderName, reach: ProgramRecipe["
  * gap. */
 export function placeholderGaps(recipe: Pick<ProgramRecipe, "build" | "prepare" | "reach" | "env">): PlaceholderGap[] {
   const fields: { readonly where: string; readonly texts: readonly string[]; readonly reach: ProgramRecipe["reach"]["kind"] | "build" }[] = [
-    ...recipe.build.map((command, index) => ({ where: `build[${index}]`, texts: commandWords(command), reach: "build" as const })),
-    ...recipe.prepare.map((command, index) => ({ where: `prepare[${index}]`, texts: commandWords(command), reach: recipe.reach.kind })),
+    ...recipe.build.map(({ command }, index) => ({ where: `build[${index}]`, texts: commandWords(command), reach: "build" as const })),
+    ...recipe.prepare.map(({ command }, index) => ({ where: `prepare[${index}]`, texts: commandWords(command), reach: recipe.reach.kind })),
     ...(recipe.reach.kind === "serve" ? [{ where: "serve.command", texts: commandWords(recipe.reach.serve.command), reach: recipe.reach.kind }] : []),
     ...Object.entries(recipe.env).map(([key, value]) => ({ where: `env.${key}`, texts: [value], reach: recipe.reach.kind })),
   ];

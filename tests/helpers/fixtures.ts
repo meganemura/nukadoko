@@ -266,7 +266,8 @@ const FAILED_SCENARIO_LINE = /^failed\tscenario-failed\t/;
 // each failed scenario finding is followed by its rerun command.
 const STEP_FAILURE_LINE = /^ {6}\S/;
 const RERUN_LINE = /^ {2}do: nuka run /;
-// The line a world writes once its program is ready (src/program/world.ts).
+// The lines a world writes as each phase starts, and once its program is
+// ready (src/program/world.ts).
 const WORLD_READY_LINE = /^world \S+: /;
 // The run's repeated-opening note. Whether it fires depends on what each
 // step took on this machine, against a 2% floor, so a test that asserts

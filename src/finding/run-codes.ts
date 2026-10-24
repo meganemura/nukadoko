@@ -43,7 +43,8 @@ const RUN_CODES = {
   },
   "program-start-failed": {
     severity: "failed",
-    description: "The program in nukadoko.program.ts did not start for a world: a build or prepare command failed, the server did not answer its ready path in time, or setup threw. The world's scenarios did not run.",
+    description:
+      "The program in nukadoko.program.ts did not start for a world: a build or prepare command failed or did not finish within its timeout_ms, the server did not answer its ready path in time, or setup or the url function threw or did not finish within its timeout_ms. The world's scenarios did not run.",
     fix: "Correct what the message names; the end of the world's program.log is in the message, and the whole file is in the world's directory.",
   },
   "record-unmatched": {

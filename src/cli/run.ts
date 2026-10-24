@@ -678,12 +678,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const worlds: RunWorld[] = [];
     // Starts the pass's world, or reports why it did not start. `null`
     // when the tree has no program file: the pass runs with no world.
-    const startWorld = async (condition: Condition): Promise<StartedWorld | "failed" | null> => {
+    // A start a signal aborted is no failure of the program's, and the
+    // run that follows is incomplete, so it reports nothing here.
+    const startWorld = async (condition: Condition, abort?: AbortSignal): Promise<StartedWorld | "failed" | null> => {
       if (condition.resolvedEnv.program === null) return null;
-      const started = await worldStarter.start(condition.resolvedEnv.name, condition.resolvedEnv.program, condition.secrets);
+      const started = await worldStarter.start(condition.resolvedEnv.name, condition.resolvedEnv.program, condition.secrets, abort);
       if (started.ok) return started;
       worlds.push(started.record());
-      warn({ severity: "failed", code: "program-start-failed", message: started.message });
+      if (!started.aborted) warn({ severity: "failed", code: "program-start-failed", message: started.message });
       return "failed";
     };
     // Stops the pass's world. Every scenario of the pass has its entry by
@@ -1084,8 +1086,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             environment: condition.resolvedEnv.name,
             targetVersion: condition.targetVersion,
             secrets: condition.secrets,
-            openWorld: async () => {
-              const world = await startWorld(condition);
+            openWorld: async (abort) => {
+              const world = await startWorld(condition, abort);
               if (world === null || world === "failed") return world;
               return { view: world.view, close: () => stopWorld(world) };
             },

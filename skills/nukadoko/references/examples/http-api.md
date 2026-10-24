@@ -238,9 +238,10 @@ scenario 6/7  features/items.feature:47  a bad request body: {"name":""} answers
 7 scenarios: 7 passed, 0 failed  (1s)
 ```
 
-The first line, cut above, is `world default: serve 0.3s,
-http://localhost:<port>` with the path of the world's `program.log`, which
-holds what the server printed. The first version's
+The first two lines, cut above, are `world default: serve started:` with
+the command and the ready URL it waits for, then `world default: serve
+0.3s, http://localhost:<port>` with the path of the world's `program.log`,
+which holds what the server printed. The first version's
 `repeated-scenario-prefix` note is gone: the two scenarios that create an
 item no longer begin with the same line.
 

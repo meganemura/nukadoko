@@ -58,7 +58,7 @@ describe("--env default", () => {
     const defined = programSchema.parse({ url: "http://top.example", environments: { default: { url: "http://own.example", envFiles: [".env.default"] } } });
     const resolved = resolveEnvironment(config, defined, "default", true);
     expect(resolved.envFiles).toEqual([".env", ".env.default"]);
-    expect(resolved.program?.reach).toEqual({ kind: "url", url: "http://own.example" });
+    expect(resolved.program?.reach).toEqual({ kind: "url", url: "http://own.example", timeout_ms: 60_000 });
     expect(() => resolveEnvironment(config, program, "staging", true)).toThrow('Unknown environment "staging": not defined in nukadoko.program.ts\'s "environments"');
   });
 

@@ -2072,7 +2072,7 @@ step が `runCommand` でコマンドを実行するコマンドラインツー�
 | `serve` | `{ command, port, ready, timeout_ms }`: nukadoko が起動し、待ち、止めるサーバ(下記) |
 | `url` | nukadoko が起動しないプログラムの URL、またはそれを返す world の関数(下記) |
 | `env` | world のプロセスと step のプロセスが受け取る変数。プレースホルダーを使える(下記) |
-| `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, url, port, env }` |
+| `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, url, port, env }`(専用の持ち時間を与えるには `{ run, timeout_ms }`、下記) |
 | `environments` | 上のどのフィールドも上書きする名前付きの設定。加えて `policy`、`envFiles`、`version`(下記) |
 
 `serve` と `url` はプログラムに届く 2 つの方法なので、両方を書くと拒否されます。
@@ -2090,6 +2090,7 @@ shell を通すと、実行されるものがホストの shell に左右され�
 Windows では、`npm` のような裸のプログラム名は `PATH` と `PATHEXT` から探され、`.cmd` や `.bat` のファイルは `cmd.exe` を通して動きます。
 `runCommand` がプログラムを起動するのと同じ方法です。
 `build` か `prepare` のコマンドが 0 以外のコードで終わると、world はそれより後を何も実行せずに止まります。
+`build` と `prepare` の各要素はコマンドか、既定と違う持ち時間が必要なコマンドのための `{ command, timeout_ms }` です(「持ち時間」を参照)。
 
 ファイルは `nukadoko.program.ts` か `nukadoko.program.mts` です。
 両方あると、nukadoko はどちらを読むか決められないので拒否します。
@@ -2120,19 +2121,53 @@ nukadoko は `serve.command` を起動し、`ready` が答えるまで待ち、w
   そのときに始まった scenario は、criteria が名指さない理由で失敗します。
 - `timeout_ms` は、プログラムが `ready` に答えるまでの持ち時間で、既定は 60,000 です。
 
-POSIX では、プログラムは専用のプロセスグループで動きます。
+POSIX では、world のどのコマンドとも同じく、プログラムは専用のプロセスグループで動きます。
 止めるときはグループに SIGTERM を送り、最大 5 秒待ち、それからグループに SIGKILL を送ります。
 そのため、プログラムが起動した子(`npm start` はサーバをそうして起動します)がポートを持ち続けることはありません。
+`build` か `prepare` のコマンドのグループには、コマンドが終わった時点で SIGKILL を送ります。
+そのため、コマンドが動かしたまま残した子は、コマンドより長く生き残らず、その出力を開いたままにもしません。
+出力が開いたままだと、その段階が終わらなくなります。
+データベースのサーバのように `prepare` のコマンドより長く動く必要があるサービスは、daemon がするように専用のセッション(`setsid`)で起動します。
+nukadoko はそのようなサービスを止めません。
 Windows ではシグナルが名指したプロセスしか終わらせないので、ツリー全体を `taskkill /t /f` で終わらせます。
 nukadoko が起動したプログラムは nukadoko より長く生き残りません。
 シグナルやクラッシュを含め、どの経路でプロセスが終わっても、まだ動いているプログラムはすべて kill されます。
 
-`ready` が答える前にプログラムが終わったとき、`ready` が時間内に答えないとき、`setup` が throw したとき、world は失敗します。
+`build` か `prepare` のコマンドが失敗したとき、`ready` が答える前にプログラムが終わったとき、`ready` が時間内に答えないとき、`setup` が throw したとき、段階が持ち時間を過ぎたとき、world は失敗します。
 nukadoko は起動したものを止め、メッセージはコマンド、その終わり方、world の `program.log` の最後の 20 行を示します。
 このメッセージ、警告 `program-exited`、準備のできた world が出す行は、nukadoko が出すすべてのパスと同じく、ログをプロジェクトのルートからのパスで名指します。
 `run.json` は run ディレクトリからのパスで名指します。
 pass の途中でプログラムが終わったときは、world を止める時点で警告 `program-exited` を報告します。
 それ以降の request は待ち受ける相手を見つけられず、失敗した step だけではその理由が分からないからです。
+
+### 持ち時間
+
+world のどの段階にも持ち時間があります。
+そのため、終わらない段階は world を失敗させて自分を名指します。
+持ち時間が無いと、run は何を待っているのかを端末に何も出さないまま待ち続けます。
+
+| 段階 | 既定の持ち時間 | 別の持ち時間を与えるには |
+| --- | --- | --- |
+| `build` と `prepare` の各コマンド | 600,000 ms | コマンドの代わりに `{ command, timeout_ms }` |
+| `serve`、`ready` が答えるまで | 60,000 ms | `serve.timeout_ms` |
+| `setup` | 60,000 ms | `setup: { run, timeout_ms }` |
+| `url` の関数 | 60,000 ms | `url: { resolve, timeout_ms }` |
+
+```ts
+export default defineProgram({
+  build: [{ command: "bundle install", timeout_ms: 1_200_000 }],
+  prepare: ["bin/rails db:prepare"],
+  serve: { command: "bin/rails server -p {port}", ready: "/up" },
+  setup: { run: (world) => seedAdmin(world.url), timeout_ms: 120_000 },
+});
+```
+
+持ち時間を過ぎた段階は `program-start-failed` で world を失敗させます。
+メッセージは、起動のほかの失敗と同じく、段階、そのコマンド、持ち時間、world の `program.log` の最後を示します。
+持ち時間を過ぎたコマンドは `serve` と同じ方法で止めます。
+プロセスグループに SIGTERM を送り、5 秒後に SIGKILL を送ります。
+`setup` と `url` の関数は nukadoko 自身のプロセスで動き、そこでは関数を外から止める手段がありません。
+そのため world はそれを待たずに失敗し、その関数が始めたことは、終わるか nukadoko が終了するまで続きます。
 
 ### プレースホルダー
 
@@ -2197,11 +2232,26 @@ pass のすべての scenario は同じプログラムに届くので、ある s
 - world が起動しなかったとき、run は上のメッセージとともに `program-start-failed` を報告し、その environment ではどの scenario も、BeforeAll と AfterAll のどの hook も実行せず、1 で終わります。
   `nuka do` は同じ所見を報告し、1 で終わり、`record.json` を書きません。
   record のディレクトリには world の `program.log` が残ります。
-- コマンドか `setup` を実行した world は、準備ができた時点で stderr に 1 行を出し、各段階にかかった時間、URL、ログを示します:
+- world の起動中にシグナル(SIGINT、SIGTERM、SIGHUP)が来ると、起動はすぐに止まります。
+  `nuka run` と `nuka do` はシグナルの処理を通って終了し、その処理がまだ動いているプログラムをすべて kill します。
+  そのため、まだ答えていないサーバが残されることはありません。
+  `--concurrency` では、world を起動する親が、起動中に動いているものを kill し、worker を 1 つも起動せず、`program-start-failed` ではなく `run-incomplete` を報告します。
+  プログラムが失敗したわけではないからです。
+- world は、`build`、`prepare`、`serve`、`setup` の各段階が始まるときに stderr に 1 行を出します。
+  そのため、長い待ちは何を待っているのかを示します。
+  コマンドか `setup` を実行した world は、準備ができた時点でもう 1 行を出し、各段階にかかった時間、URL、ログを示します:
 
 ```text
+world default: build started: npm run build
+world default: prepare started: node dist/migrate.js
+world default: serve started: node dist/server.js, waiting for http://localhost:41873/
 world default: build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (log .nukadoko/runs/run-20261024-101500-a1b2/worlds/default/program.log)
 ```
+
+`setup` と `url` の関数が `console` を通して、または stdout や stderr へ直接出力したものは、stderr と `program.log` に行きます。
+`setup` の出力は `# setup` の行のあとに続きます。
+これらの関数は nukadoko 自身のプロセスで動き、何もしなければ出力が redact されないまま端末に書かれるので、これらの行はどれも先に redact されます。
+`{token}` も含みます。
 
 world の URL は `page`、`context`、`pageAs`、`request` の base URL であり、`baseURL` fixture です。
 `run.json` の `environments[].base_url` がそれを名指します。

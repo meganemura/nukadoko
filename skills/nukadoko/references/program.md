@@ -49,12 +49,23 @@ only on that (`scenario-rules.md`, S8, and `examples/http-api.md`).
 
 A step reads the same `env`: in `process.env` during the run and in the
 `env` fixture, after the config's env files. `setup(world)` runs once per
-world before the first scenario, to seed data.
+world before the first scenario, to seed data; what it prints reaches
+stderr and `program.log` redacted.
+
+Every phase has a limit: 600 s for each `build` or `prepare` command, 60 s
+for `serve` to answer `ready`, `setup`, and a `url` function. Write
+`{ command, timeout_ms }` for a command, `serve.timeout_ms`, `setup: {
+run, timeout_ms }`, or `url: { resolve, timeout_ms }` for another. Each
+phase prints `world <name>: <phase> started` on stderr, so a long
+wait names what it waits on. A `build` or `prepare` command's process
+group is killed when the command exits: a service that has to outlive
+`prepare`, such as a database, starts with `setsid`, as a daemon does.
 
 ## When it does not start
 
 A world that does not start fails the run with `program-start-failed`,
-which names the command, how it ended, and the end of the world's
+which names the command, how it ended (a phase past its limit
+included), and the end of the world's
 `program.log`: read that file first, at
 `.nukadoko/runs/<run_id>/worlds/<environment>/program.log`. No scenario
 runs in that environment. A fixed `port` something else already answers

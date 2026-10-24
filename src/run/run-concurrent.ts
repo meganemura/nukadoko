@@ -113,8 +113,9 @@ export interface ConcurrentCondition {
   readonly secrets: SecretSet;
   /** Starts the pass's world: `null` when the tree has no program file,
    * `"failed"` when the program did not start (the caller has reported
-   * why). `close` stops the program after the pass. */
-  readonly openWorld: () => Promise<{ readonly view: WorldView; close(): Promise<void> } | "failed" | null>;
+   * why). `close` stops the program after the pass. `abort` fires on the
+   * first signal, and stops a start that is still waiting at once. */
+  readonly openWorld: (abort: AbortSignal) => Promise<{ readonly view: WorldView; close(): Promise<void> } | "failed" | null>;
 }
 
 export interface RunConcurrentOptions {
@@ -386,12 +387,16 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
 
   const failedFiles = new Set<string>();
 
+  // The parent starts each world, and a signal while one is starting
+  // stops it at once instead of waiting for it to answer.
+  const startAbort = new AbortController();
   const onSignal = (signal: NodeJS.Signals): void => {
     if (process.platform !== "win32") {
       for (const child of liveWorkers) child.kill(signal);
     }
     if (interruptedBy !== null) process.exit(exitCodeForSignal(signal));
     interruptedBy = signal;
+    startAbort.abort();
   };
   for (const signal of HANDLED_SIGNALS) process.on(signal, onSignal);
   try {
@@ -400,8 +405,11 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       if (interruptedBy !== null) break;
       if (conditions.length > 1) progress.write(`environment ${condition.environment}\n`);
       currentEnvironment = condition.environment;
-      const world = hasPickles ? await condition.openWorld() : null;
+      const world = hasPickles ? await condition.openWorld(startAbort.signal) : null;
       if (world === "failed") {
+        // A start the signal stopped leaves this environment's scenarios
+        // without records, which is what makes the run incomplete.
+        if (interruptedBy !== null) break;
         expectedRecords -= flatPickles.length * repeat;
         allPassed = false;
         continue;
