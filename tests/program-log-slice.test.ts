@@ -99,6 +99,30 @@ describe("createProgramLogReader", () => {
     clearTimeout(timer);
   });
 
+  it("measures the quiet on the step's own lines, so a log other work keeps busy does not hold a stamped step for the whole wait", async () => {
+    const reader = createProgramLogReader(logPath, PREFIX, []);
+    const noise = setInterval(() => appendFileSync(logPath, `[${traceparentOf(HOOK, SPAN)}] a background job\nan untagged line\n`), 5);
+    try {
+      setTimeout(() => appendFileSync(logPath, `[${traceparentOf(MINE, SPAN)}] GET /mine\n`), 20);
+      const begun = Date.now();
+      const slice = await reader.slice(recordDir, trace({ stamped: 1, lastStampAt: begun }));
+      const waited = Date.now() - begun;
+      expect(slice.lines).toBe(1);
+      // The own line came at about 20 ms, so the wait ends about 30 ms
+      // later, well before the 300 ms the busy log used to cost.
+      expect(waited).toBeGreaterThanOrEqual(45);
+      expect(waited).toBeLessThan(200);
+    } finally {
+      clearInterval(noise);
+    }
+  });
+
+  it("counts the quiet from the step's end, so a request slower than the quiet still gets the line written as it answered", async () => {
+    const reader = createProgramLogReader(logPath, PREFIX, []);
+    setTimeout(() => appendFileSync(logPath, `[${traceparentOf(MINE, SPAN)}] GET /slow\n`), 15);
+    expect((await reader.slice(recordDir, trace({ stamped: 1, lastStampAt: Date.now() - 500 }))).lines).toBe(1);
+  });
+
   it("redacts the step's secrets in the slice", async () => {
     const reader = createProgramLogReader(logPath, PREFIX, [{ name: "API_KEY", value: "sk-invented-4410" }]);
     appendFileSync(logPath, `[${traceparentOf(MINE, SPAN)}] key=sk-invented-4410\n`);

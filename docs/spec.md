@@ -3140,10 +3140,16 @@ The lines go to `program-log.txt` beside the step record, redacted, and
 A line can reach the log after the step read its response, since the
 program writes it around the time it answers and it comes through a
 pipe.
-So a step that stamped a request waits until the log has been quiet for
-30 ms after the later of its last stamped request and the log's last
-write, and no longer than 300 ms in all, then writes its slice from the
-lines that carry its trace id so far.
+So a step that stamped a request reads the log as it waits, until no
+line carrying its own trace id has arrived for 30 ms after the later of
+the step's end and the last such line, and no longer than 300 ms in all,
+then writes its slice from the lines that carry its trace id so far.
+The quiet counts from the step's end, so a request that took longer than
+30 ms to answer still leaves time for the line the program wrote as it
+answered; each step that stamped a request takes at least those 30 ms.
+Only the step's own lines count, so a log that other work keeps busy, a
+hook's or another worker's requests or a background job, does not hold
+the step for the whole 300 ms.
 A step that stamped nothing does not wait.
 Under `--concurrency` the parent writes the log, and each worker reads
 it for its own steps.

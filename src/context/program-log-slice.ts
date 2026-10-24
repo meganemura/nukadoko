@@ -26,10 +26,16 @@ import { completeLines, traceIdIn } from "./trace-context.js";
 // A program writes its line for a request around the time it answers,
 // and the line reaches the log through a pipe and the parent's line
 // buffer, which can be after the step's code has read the answer. So a
-// step that stamped a request waits until the log has been quiet for
-// QUIET_MS after the later of its last write and the step's last stamped
-// request, and no longer than SETTLE_MS in all. A step that stamped
-// nothing does not wait.
+// step that stamped a request reads the log as it waits, until no line
+// carrying its own trace id has arrived for QUIET_MS after the later of
+// the last such line and the moment the step ended, and no longer than
+// SETTLE_MS in all. Only the step's own lines count: a log that other work
+// keeps busy (a hook, a background job, another worker's step) would
+// otherwise make every stamped step wait the whole SETTLE_MS. The quiet
+// counts from the step's end, not from the request: a request that took
+// longer than QUIET_MS to answer would otherwise leave no wait at all for
+// the line the program wrote as it answered. A step that stamped nothing
+// does not wait.
 //
 // A line that arrives after that is still the step's. The step's record
 // is already written and is not rewritten, so when the world stops, one
@@ -64,10 +70,9 @@ const READ_CHUNK_BYTES = 1024 * 1024;
  * their files. */
 const LATE_FLUSH_BYTES = 4 * 1024 * 1024;
 
-function stat(logPath: string): { readonly size: number; readonly mtimeMs: number } | undefined {
+function sizeOf(logPath: string): number | undefined {
   try {
-    const { size, mtimeMs } = statSync(logPath);
-    return { size, mtimeMs };
+    return statSync(logPath).size;
   } catch {
     // No line written yet.
     return undefined;
@@ -76,17 +81,6 @@ function stat(logPath: string): { readonly size: number; readonly mtimeMs: numbe
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Waits for the log to be quiet after `lastStampAt` (module header). */
-async function settle(logPath: string, lastStampAt: number): Promise<void> {
-  const deadline = Date.now() + SETTLE_MS;
-  for (;;) {
-    const quietSince = Math.max(lastStampAt, stat(logPath)?.mtimeMs ?? 0);
-    const now = Date.now();
-    if (now - quietSince >= QUIET_MS || now >= deadline) return;
-    await sleep(Math.min(POLL_MS, deadline - now));
-  }
 }
 
 /** Hands each complete line of `logPath` from byte `from` to its end to
@@ -144,27 +138,43 @@ export interface ProgramLogReader {
 /** A reader of the log at `logPath` for the world whose trace ids start
  * with `prefix`, from the log's size now. */
 export function createProgramLogReader(logPath: string, prefix: string, secrets: SecretSet): ProgramLogReader {
-  let offset = stat(logPath)?.size ?? 0;
+  let offset = sizeOf(logPath) ?? 0;
   return {
     async slice(dir: string, trace: BoundaryTrace): Promise<ProgramLogSlice> {
-      if (trace.lastStampAt !== undefined) await settle(logPath, trace.lastStampAt);
       const budget = new FileBudget();
       const kept: string[] = [];
       let lines = 0;
-      try {
-        offset = withoutChannelRecording(() =>
-          forEachLogLine(logPath, offset, (line) => {
-            if (traceIdIn(line, prefix) !== trace.traceId) return;
-            lines += 1;
-            // The log is redacted as the parent writes it; the step's own
-            // secrets are redacted again here, since the slice is a file
-            // of the step's record.
-            const redacted = redactString(line, secrets);
-            if (budget.take(redacted)) kept.push(redacted);
-          }),
-        );
-      } catch {
-        // A log that cannot be read gives no lines; the parent still has it.
+      let lastOwnLineAt: number | undefined;
+      const read = (): void => {
+        try {
+          offset = withoutChannelRecording(() =>
+            forEachLogLine(logPath, offset, (line) => {
+              if (traceIdIn(line, prefix) !== trace.traceId) return;
+              lines += 1;
+              lastOwnLineAt = Date.now();
+              // The log is redacted as the parent writes it; the step's own
+              // secrets are redacted again here, since the slice is a file
+              // of the step's record.
+              const redacted = redactString(line, secrets);
+              if (budget.take(redacted)) kept.push(redacted);
+            }),
+          );
+        } catch {
+          // A log that cannot be read gives no lines; the parent still has it.
+        }
+      };
+      read();
+      // The wait for the step's own lines still on their way (module header).
+      if (trace.lastStampAt !== undefined) {
+        const ended = Date.now();
+        const deadline = ended + SETTLE_MS;
+        for (;;) {
+          const quietSince = Math.max(ended, lastOwnLineAt ?? 0);
+          const now = Date.now();
+          if (now - quietSince >= QUIET_MS || now >= deadline) break;
+          await sleep(Math.min(POLL_MS, deadline - now));
+          read();
+        }
       }
       let file: string | null = null;
       if (kept.length > 0) {

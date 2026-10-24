@@ -375,6 +375,9 @@ just until 0.1.
   from an earlier step's request never lands in a later step. A step's
   lines go to `program-log.txt` beside its record, and
   `observed.program_log` counts them (`{ trace_id, lines, file, stamped }`).
+  A step that stamped a request waits for its lines up to 300 ms, until
+  none carrying its own trace id has arrived for 30 ms after the step
+  ended, so a log that other work keeps busy does not hold it longer.
   `ctx.evidence` refuses those two file names, and under `nuka do`
   `world`, the world's directory beside the record, with
   `ReservedEvidenceNameError`, so a step's attachment and the program's
