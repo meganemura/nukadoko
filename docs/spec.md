@@ -2716,15 +2716,32 @@ its scenario record's id, so either record leads to the other.
   error, as it would outside a step.
   nukadoko's own I/O inside a step is not recorded as the step's: a
   `runCommand` spawn, the browser launch, the send of a `request` fixture
-  call (its own line already records it), the writes under the state
-  directory, and the files Playwright writes for nukadoko (trace chunks,
-  network logs, resources, and HAR and video when a context asks for
-  them). Those go to the launch's `artifactsDir` and `tracesDir`: the
-  ones `config.browser` names, or otherwise a temporary directory
-  nukadoko creates and removes when the browser closes. Playwright's
-  server runs in the step's own process, so without this its trace
-  writes, which hold the context's options with its headers and
-  credentials, would read as the step's files. A module that copied `fetch` or `http.request` into a
+  call (its own line already records it), and the writes under the state
+  directory.
+  Neither is a write Playwright's server-side code makes, whichever code
+  launched the browser: trace chunks, network logs, resources, a HAR, and
+  a video. Playwright's server runs in the step's own process and async
+  context, so without this its trace writes, which hold the context's
+  options with its headers and credentials, would read as the step's
+  files. The `node:fs` patch tells
+  the two apart by the code that made the call, read from the call
+  stack, not by the directory written to. A write from Playwright's
+  client, or from the server code that carries out a client call with
+  the path the step passed, is the step's: `page.screenshot({ path })`,
+  `context.storageState({ path })`, `download.saveAs(path)`, and the zip
+  `tracing.stop({ path })` writes are listed. Any other write from
+  Playwright's server is left out, with what Node does to finish it (the
+  entries a recursive `rm` removes). When the launch names no
+  `tracesDir`, Playwright keeps a trace's call stacks in a temporary
+  directory of its own, and a `tracing.stop` in a step removes it as part
+  of the step's call, so the record lists that directory as removed. A
+  browser nukadoko launches writes to the launch's `artifactsDir` and
+  `tracesDir`, and a video to the context's `recordVideo.dir`: the
+  directories `config.browser` and `config.browserContext` name, or
+  otherwise a directory nukadoko creates inside the execution's evidence
+  directory and removes when the browser closes; inside the state
+  directory, retention and `nuka clean` remove it after an exit that
+  skipped that. A module that copied `fetch` or `http.request` into a
   variable before the patches existed keeps the original, so `nuka run`
   and `nuka do` install them before they load the config or a step file.
   An interceptor keeps working either way, since each patch passes every
@@ -2740,7 +2757,9 @@ its scenario record's id, so either record leads to the other.
   before they were installed, what a connection opened before the step
   carries when the step only reads from it, or work that runs outside the
   step's async context (a callback a server started by a fixture
-  invokes). None of these appears in `unmeasured`.
+  invokes, or a `download.saveAs` called before the download finished,
+  which Playwright carries out when the browser reports the end). None of
+  these appears in `unmeasured`.
 - `observed.processes` (`null` when the execution never called
   `runCommand`) lists each child process that `runCommand` started during the execution,
   in call order: `{ "command", "cwd", "exit_code", "duration_ms" }`, plus

@@ -185,9 +185,12 @@ export function createObservedCollector(
       track(capture: PendingCapture): void {
         current().pending.push(capture);
       },
-      touchFile(target: string, before?: Identity): void {
+      touchFile(target: string, before?: Identity, byPlaywrightServer?: () => boolean): void {
         const state = current();
-        if (state.touched.has(target) || isOwnPath(target)) return;
+        if (state.touched.has(target) || state.touchesOverflowed || isOwnPath(target)) return;
+        // Not remembered when it is the server's: the step's own later
+        // write to the same path is still the step's.
+        if (byPlaywrightServer?.() === true) return;
         if (state.touched.size >= MAX_ENTRIES) {
           state.touchesOverflowed = true;
           return;

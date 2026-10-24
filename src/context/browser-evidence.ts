@@ -1,5 +1,4 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
   Browser,
@@ -110,15 +109,18 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // the executable path it looked for.
 //
 // Playwright writes its own files while a step drives the page: trace
-// chunks, network logs, and resources (and HAR and video, when a context
-// asks for them) go to the launch's `artifactsDir` and `tracesDir`. Its
-// server runs in this process, in the step's own async context, so the
-// `node:fs` patch would read those writes as the step's, and a trace
-// chunk holds the context's options, credentials and headers included.
-// So the launch always names both directories: the config's own when it
-// sets them, otherwise one nukadoko creates and removes when the browser
-// closes. `outputDirs` names them, and create-context.ts leaves them out
-// of the step's files.
+// chunks, network logs, resources, and downloads go to the launch's
+// `artifactsDir` and `tracesDir` (a video goes to the context's
+// `recordVideo.dir`, a HAR to its `recordHar.path`). The `node:fs` patch
+// leaves out every write Playwright's server-side code makes, whichever
+// code launched the browser (write-origin.ts). The launch still names both
+// directories, so `runCommand`'s walk and the scratch comparison can skip
+// them too: the config's own when it sets them, otherwise one nukadoko
+// creates inside the execution's evidence directory and removes when the
+// browser closes. Inside the evidence directory, it is under the run's
+// state directory, so retention and `nuka clean` remove what an exit that
+// skipped `close` left behind. `outputDirs` names them, and
+// create-context.ts leaves them out of the step's files.
 //
 // One browser, several contexts. `launchBrowser` starts the engine once per
 // `ctx`, and `openTracedContext` gives each browser context its own
@@ -140,6 +142,10 @@ export interface LaunchBrowserOptions {
    * is named), for the one-line error a project without `playwright`
    * installed sees (load-playwright.ts). */
   neededBy: string;
+  /** Where the artifacts directory nukadoko creates goes when
+   * `config.browser` names none: the execution's evidence directory, which
+   * must exist. */
+  artifactsParent: string;
   /** `config.browser` (config/schema.ts) as a config author wrote it,
    * passed straight through to the selected engine's own `launch`.
    * `undefined` when a project sets no `browser` at all; passing `undefined`
@@ -229,11 +235,14 @@ export async function launchBrowser(options: LaunchBrowserOptions): Promise<Brow
   // never reaches this line.
   const playwright = await loadPlaywright(options.neededBy);
   const engine = playwright[options.browserType ?? "chromium"];
-  const created = options.browser?.artifactsDir === undefined ? await mkdtemp(path.join(tmpdir(), "nukadoko-playwright-")) : undefined;
+  const created =
+    options.browser?.artifactsDir === undefined ? await mkdtemp(path.join(options.artifactsParent, "playwright-artifacts-")) : undefined;
   const artifactsDir = options.browser?.artifactsDir ?? (created as string);
   const tracesDir = options.browser?.tracesDir ?? artifactsDir;
+  // Retried: on Windows a file the browser process has just closed can
+  // still refuse removal for a moment.
   const removeCreated = async (): Promise<void> => {
-    if (created !== undefined) await rm(created, { recursive: true, force: true }).catch(() => undefined);
+    if (created !== undefined) await rm(created, { recursive: true, force: true, maxRetries: 3 }).catch(() => undefined);
   };
   let browser: Browser;
   try {

@@ -53,7 +53,11 @@ What each part of `observed` says:
   body. A line marked `after_step_end` started after the record was
   written, so the record does not count it; the run summary names it.
 - `files` lists the paths the step changed in a scratch directory or
-  wrote through `node:fs`, each with its content after the step.
+  wrote through `node:fs`, each with its content after the step. A file
+  the step asked Playwright to write (a screenshot saved to a path, a
+  trace from `tracing.stop({ path })`) is listed; what Playwright's
+  server writes on its own (trace chunks, a HAR, a video) is not, whoever
+  launched the browser.
 - `unmeasured` lists what the step did that nukadoko saw but cannot
   measure: a process started without `runCommand` (its program and
   argument count only), a `Worker`, a connection that carries no recorded

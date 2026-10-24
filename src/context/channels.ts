@@ -13,6 +13,7 @@ import type { UnmeasuredEntry } from "../record/types.js";
 import { childProcessDetail } from "./child-process-detail.js";
 import { BODY_CAP, type RawBody, rawBodyOf, windowFor } from "./kept-text.js";
 import type { Identity } from "./step-files.js";
+import { writeMadeByPlaywrightServer } from "./write-origin.js";
 
 // Responsibility: measure, inside a step's own `run`, the channels a step
 // reaches without a nukadoko helper (docs/spec.md "Records"): requests
@@ -38,6 +39,10 @@ import type { Identity } from "./step-files.js";
 // spawn, Playwright's request send and browser launch, and the recorder's
 // own writes run under `withoutChannelRecording`, and the recorder drops
 // writes under the state directory and Playwright's output directories.
+// A write Playwright's server-side code makes is not the step's either,
+// whichever code launched the browser: the `node:fs` patch asks
+// write-origin.ts who made the call, and runs a server call with
+// recording off.
 //
 // The suppression is an AsyncLocalStorage and not a flag, so it covers
 // the asynchronous work a suppressed call starts (undici's connection for
@@ -126,8 +131,11 @@ export interface ChannelRecorder {
   startHttp(): (line: ChannelHttpLine) => void;
   track(capture: PendingCapture): void;
   /** Notes a path a write call names, before the call runs. `before` is
-   * given when the caller already knows the path did not exist. */
-  touchFile(absolutePath: string, before?: Identity): void;
+   * given when the caller already knows the path did not exist.
+   * `byPlaywrightServer` says whether Playwright's own server-side code
+   * made the call; the recorder asks it only for a path it would list, so
+   * the call stack is read once per new path, not once per write. */
+  touchFile(absolutePath: string, before?: Identity, byPlaywrightServer?: () => boolean): void;
   /** Notes an action nukadoko cannot measure. */
   markUnmeasured(entry: UnmeasuredEntry): void;
   /** Notes a socket the step connected, or wrote to after another context
@@ -726,18 +734,36 @@ function writesWith(flags: unknown): boolean {
 
 type Holder = Record<string, (...args: unknown[]) => unknown>;
 
+/** Who made one write call, read at most once, and only when the
+ * recorder asks. */
+function callOrigin(): { readonly ask: () => boolean; readonly answered: () => boolean | undefined } {
+  let byServer: boolean | undefined;
+  return {
+    ask: () => (byServer ??= writeMadeByPlaywrightServer()),
+    answered: () => byServer,
+  };
+}
+
+// A call Playwright's server made runs with recording off, the way
+// nukadoko's own I/O does: a recursive `rm`, `cp`, or a write stream
+// carries on through Node's own code, which calls these same patched
+// functions again on a stack that no longer holds Playwright's frames.
+function runAs(origin: ReturnType<typeof callOrigin>, call: () => unknown): unknown {
+  return origin.answered() === true ? withoutChannelRecording(call) : call();
+}
+
 function wrapWrite(holder: Holder, name: string, pathIndexes: readonly number[]): void {
   const original = holder[name];
   if (typeof original !== "function") return;
   holder[name] = sameShape(function (this: unknown, ...args: unknown[]): unknown {
     const rec = channelRecorder();
-    if (rec !== undefined) {
-      for (const index of pathIndexes) {
-        const target = pathOf(args[index]);
-        if (target !== undefined) rec.touchFile(target);
-      }
+    if (rec === undefined) return original.apply(this, args);
+    const origin = callOrigin();
+    for (const index of pathIndexes) {
+      const target = pathOf(args[index]);
+      if (target !== undefined) rec.touchFile(target, undefined, origin.ask);
     }
-    return original.apply(this, args);
+    return runAs(origin, () => original.apply(this, args));
   }, original);
 }
 
@@ -746,22 +772,24 @@ function wrapOpen(holder: Holder, name: string): void {
   if (typeof original !== "function") return;
   holder[name] = sameShape(function (this: unknown, ...args: unknown[]): unknown {
     const rec = channelRecorder();
-    if (rec !== undefined && writesWith(args[1])) {
-      const target = pathOf(args[0]);
-      if (target !== undefined) rec.touchFile(target);
-    }
-    return original.apply(this, args);
+    if (rec === undefined || !writesWith(args[1])) return original.apply(this, args);
+    const origin = callOrigin();
+    const target = pathOf(args[0]);
+    if (target !== undefined) rec.touchFile(target, undefined, origin.ask);
+    return runAs(origin, () => original.apply(this, args));
   }, original);
 }
 
 // A directory mkdtemp creates did not exist before the call, and its name
-// is known only after it, so it is noted from the result.
+// is known only after it, so it is noted from the result. Who made the
+// call is read at the call, since the result arrives on another stack.
 function wrapMkdtemp(holder: Holder, name: string, form: "sync" | "callback" | "promise"): void {
   const original = holder[name];
   if (typeof original !== "function") return;
   holder[name] = sameShape(function (this: unknown, ...args: unknown[]): unknown {
     const rec = channelRecorder();
     if (rec === undefined) return original.apply(this, args);
+    if (writeMadeByPlaywrightServer()) return withoutChannelRecording(() => original.apply(this, args));
     const note = (created: unknown): void => {
       const target = pathOf(created);
       if (target !== undefined) rec.touchFile(target, null);

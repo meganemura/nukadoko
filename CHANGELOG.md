@@ -78,8 +78,14 @@ just until 0.1.
   install once per process, record only inside a step, and keep each
   builtin's name, length, promise form, and synchronous throws, so msw
   and nock keep working (measured with msw 2.15.0 and nock 14.0.17), and
-  nukadoko's own I/O, Playwright's trace files included, is not
-  recorded as the step's.
+  nukadoko's own I/O is not recorded as the step's. Neither is a write
+  Playwright's server makes on its own (a trace chunk, a network log, a
+  HAR, a video), whichever code launched the browser, told apart by the
+  code that made the call; a file the step asked Playwright to write,
+  such as `page.screenshot({ path })` or `download.saveAs(path)`, is
+  listed. The directory Playwright writes to for a browser nukadoko
+  launches is now inside the execution's evidence directory, so
+  retention and `nuka clean` remove it after an exit that left it.
 
 ### Removed
 

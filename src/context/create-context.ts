@@ -1011,6 +1011,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // default).
       browserType: config.browserType,
       browser: config.browser,
+      artifactsParent: evidenceDir,
     })
       .then((launched) => {
         browserHandle = launched;

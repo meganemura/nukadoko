@@ -2244,11 +2244,20 @@ scenario record は独立したファイルではなく、その run の `run.js
   step の中でも、記録が step のコードへ throw したり run を終わらせたりすることはありません。
   元の関数が拒む引数(ホストを持つ file URL、Symbol)は元の関数に届き、step は step の外と同じく元の関数自身のエラーを受け取ります。
   step の中の nukadoko 自身の I/O は、step のものとして記録しません。
-  `runCommand` の起動、ブラウザの起動、`request` fixture の呼び出しの送信(その行がすでに記録します)、state ディレクトリの下への書き込み、Playwright が nukadoko のために書くファイル(trace のチャンク、ネットワークのログ、リソース、context が求めたときの HAR と動画)がそれです。
-  Playwright のファイルは、起動の `artifactsDir` と `tracesDir` に書かれます。
-  `config.browser` が名指せばそのディレクトリで、名指さなければ nukadoko が作り、ブラウザを閉じるときに消す一時ディレクトリです。
-  Playwright のサーバは step 自身のプロセスで動きます。
+  `runCommand` の起動、ブラウザの起動、`request` fixture の呼び出しの送信(その行がすでに記録します)、state ディレクトリの下への書き込みがそれです。
+  Playwright のサーバ側のコードが行う書き込みも、どのコードがブラウザを起動したかによらず、step のものとして記録しません。
+  trace のチャンク、ネットワークのログ、リソース、HAR、動画がそれです。
+  Playwright のサーバは step 自身のプロセスと非同期コンテキストで動きます。
   そのため、これがなければ、context のオプションをヘッダと資格情報ごと持つ trace の書き込みが、step のファイルとして読まれてしまいます。
+  `node:fs` の差し替えは、書き込み先のディレクトリではなく、呼び出しを行ったコードを呼び出しスタックから読んで、この 2 つを見分けます。
+  Playwright のクライアントからの書き込みと、step が渡したパスでクライアントの呼び出しを実行するサーバのコードからの書き込みは、step のものです。
+  そのため `page.screenshot({ path })`、`context.storageState({ path })`、`download.saveAs(path)`、`tracing.stop({ path })` が書く zip は載ります。
+  Playwright のサーバからのそれ以外の書き込みは載らず、それを仕上げるために Node が行うこと(再帰的な `rm` が消すエントリ)も載りません。
+  起動が `tracesDir` を名指さないとき、Playwright は trace の呼び出しスタックを自分の一時ディレクトリに置き、step の中の `tracing.stop` は step の呼び出しの一部としてそれを消します。
+  そのため record は、そのディレクトリを removed として載せます。
+  nukadoko が起動するブラウザは、起動の `artifactsDir` と `tracesDir` に書き、動画は context の `recordVideo.dir` に書きます。
+  `config.browser` と `config.browserContext` が名指せばそのディレクトリで、名指さなければ nukadoko が実行の evidence directory の中に作り、ブラウザを閉じるときに消すディレクトリです。
+  state ディレクトリの中にあるので、それを飛ばした終了のあとは、retention と `nuka clean` が消します。
   差し替えより前に `fetch` や `http.request` を変数に写したモジュールは元の関数を持ち続けます。
   そのため `nuka run` と `nuka do` は、config や step のファイルを読み込む前に差し替えを入れます。
   インターセプタは、どちらの順で入れても動き続けます。
@@ -2257,7 +2266,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   差し替えより前に入れた場合は、どちらのリクエストもモックのレスポンスを持つ行になりました。
   差し替えより後に入れた場合は、`node:http` のリクエストは行になり、`fetch` はなりませんでした。
   インターセプタの `fetch` が、自分が置き換えた `fetch` を呼ばずに答えるからです。
-  Worker 自身のグローバル、ネイティブアドオン、子プロセス自身の通信、差し替えより前に写された関数、差し替えより前に開いた接続、step より前に開いた接続を step が読むだけのときにその接続が運ぶもの、step の非同期コンテキストの外で動く処理(fixture が始めたサーバが呼ぶコールバックなど)には、どの差し替えも届きません。
+  Worker 自身のグローバル、ネイティブアドオン、子プロセス自身の通信、差し替えより前に写された関数、差し替えより前に開いた接続、step より前に開いた接続を step が読むだけのときにその接続が運ぶもの、step の非同期コンテキストの外で動く処理(fixture が始めたサーバが呼ぶコールバック、ダウンロードが終わる前に呼んだ `download.saveAs` など)には、どの差し替えも届きません。
+  ダウンロードが終わる前に呼んだ `download.saveAs` は、ブラウザが終わりを知らせたときに Playwright が実行します。
   これらは `unmeasured` に載りません。
 - `observed.processes`(実行が一度も `runCommand` を呼ばなかったときは `null`)は、その実行の間に `runCommand` が起動した子プロセスを、呼び出し順に並べます。
   各エントリは `{ "command", "cwd", "exit_code", "duration_ms" }` です。

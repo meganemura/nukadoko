@@ -608,9 +608,35 @@ describe("createStepContext / ctx.page(): console filtering", () => {
 // tested directly against `launchBrowser`'s own promise.
 describe("launchBrowser: browserType defaults to chromium when omitted", () => {
   it.skipIf(!chromiumAvailable)("launches chromium when browserType itself is undefined", async () => {
-    const handle = await launchBrowser({ neededBy: "ctx.page()" });
-    expect(handle.browserInfo.type).toBe("chromium");
-    await handle.close();
+    const parent = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-default-"));
+    try {
+      const handle = await launchBrowser({ neededBy: "ctx.page()", artifactsParent: parent });
+      expect(handle.browserInfo.type).toBe("chromium");
+      await handle.close();
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+});
+
+// Responsibility: where Playwright writes for a browser nukadoko launches
+// when `config.browser` names no directory (browser-evidence.ts's own
+// header): inside the execution's evidence directory, so retention and
+// `nuka clean` remove what an exit that skipped `close` left, and gone
+// once the browser closes.
+describe("launchBrowser: the artifacts directory it creates", () => {
+  it.skipIf(!chromiumAvailable)("is inside the given evidence directory while the browser runs, and removed when it closes", async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), "nukadoko-browser-artifacts-"));
+    try {
+      const handle = await launchBrowser({ neededBy: "ctx.page()", artifactsParent: parent });
+      expect(handle.outputDirs).toHaveLength(1);
+      expect(path.dirname(handle.outputDirs[0]!)).toBe(parent);
+      expect(await readdir(parent)).toEqual([path.basename(handle.outputDirs[0]!)]);
+      await handle.close();
+      expect(await readdir(parent)).toEqual([]);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
   });
 });
 
