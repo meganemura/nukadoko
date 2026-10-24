@@ -1473,6 +1473,39 @@ export default defineStep({
       'error\tclaim-expected-transformed\tfeatures/steps/it-costs.ts\tStep "it-costs"\'s claims[0].expected is args.price, and its pattern "it costs {price:money}" fills it with the parameter type {money}, whose transformer rewrites the line\'s text before the claim reads it, so code would decide what the claim compares. Capture price with a type that has no transformer, such as {price:string}, and read it with expected_view if it needs one\n',
     );
   });
+
+  it("leaves that claim unjudged under --no-check, in the check's words, and judges the step's other claims", async () => {
+    const rootDir = await project({
+      "nukadoko.config.ts":
+        'import { defineConfig } from "nukadoko";\nexport default defineConfig({ parameterTypes: [{ name: "money", regexp: /\\d+/, transformer: () => 1 }] });\n',
+      "features/steps/it-costs.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "it costs {price:money} for {count:int} items",
+  args: z.object({ price: z.number(), count: z.number(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [
+    { actual: "cart.count", compare: "equal", expected: "price" },
+    { actual: "cart.count", compare: "equal", expected: "count" },
+    { actual: "cart.items", each: { claims: [{ actual: "title", compare: "not-equal", expected: "price" }] } },
+  ],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then it costs 5 for 1 items"),
+    });
+    const refused = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(refused.exitCode).not.toBe(0);
+    const ran = await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    expect(ran.exitCode).toBe(1);
+    const step = lastClaimStep(rootDir);
+    const reason =
+      'the pattern "it costs {price:money} for {count:int} items" fills args.price with the parameter type {money}, whose transformer rewrites the line\'s text before the claim reads it, so code would decide what the claim compares, and the claim was not judged';
+    expect(step.error.kind).toBe("claim_unjudged");
+    expect(step.claims[0]).toMatchObject({ actual: 1, expected_from: "sentence:price", outcome: "unjudged", reason });
+    expect(step.claims[0]).not.toHaveProperty("expected");
+    expect(step.claims[1]).toMatchObject({ actual: 1, expected: 1, outcome: "held" });
+    expect(step.claims[2]).toMatchObject({ outcome: "unjudged", reason: `each.claims[0]: ${reason}`, each: { items: 2, selected: 0, results: [] } });
+  });
 });
 
 describe("a claim step with no observe judges every value its line states", () => {

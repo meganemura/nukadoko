@@ -1663,9 +1663,12 @@ ones nothing validated.
   parameter type does the same when it has a transformer
   (one in `config.parameterTypes`, or a compat `defineParameterType`):
   the transformer rewrites the line's text before the claim reads it.
-  Only `nuka check` knows which types a project registers, so it reports
-  a pattern that fills an expected key with such a type
-  (`claim-expected-transformed`, an error). A claim that needs the
+  `nuka check` reports a pattern that fills an expected key with such a
+  type (`claim-expected-transformed`, an error), and `nuka run` refuses to
+  start while it is reported. A run under `--no-check` applies the same
+  rule to the pattern each line matched: a claim that compares with such
+  a key is `unjudged`, with the reason in the check's words, and the
+  step's other claims are judged. A claim that needs the
   line's text as JSON or as lines names
   `expected_view` (`text`, `lines`, or `json`, applied as `view` is),
   on a plain `z.string()` key, and the record says `sentence:<key> as
@@ -2096,8 +2099,9 @@ A claim step's record has these fields of its own (see "Records"):
   itself, a value the line states that no claim reads) or when nukadoko
   could not judge it (a value that is not plain
   JSON, a `Proxy`, a value nested too deep, an input `observe` could
-  not receive as a copy, a value the args schema changed, the step's
-  deadline passing while it read), `measured`, and `expected_measured` when the expected value
+  not receive as a copy, a value the args schema changed, a value a
+  parameter type's transformer rewrote, the step's deadline passing
+  while it read), `measured`, and `expected_measured` when the expected value
   came from `from` or `observe`. An `each` claim carries `actual_from`,
   the `each` declarations (each with `expected_measured` on the same
   terms), counts (`items` is the array's length whenever the array was

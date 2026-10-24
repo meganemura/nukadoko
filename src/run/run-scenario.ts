@@ -66,6 +66,7 @@ import { strictArgsSchema } from "../step/strict-args.js";
 import { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
 import { runValidatedStep, snapshotClaimArgs, type ClaimExecution } from "./execute-typed-step.js";
 import { copyOf, type Refusal, type Snapshot } from "../step/snapshot.js";
+import { transformedFillReason } from "../step/claims.js";
 import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
 import { gherkinStepLines, pickleStepLines } from "./run-document.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
@@ -1933,6 +1934,13 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               ...(attachmentKey === null || (attachmentOrigin !== "docstring" && attachmentOrigin !== "table")
                 ? {}
                 : { attachment: { key: attachmentKey, kind: attachmentOrigin } }),
+              ...(outcome.transformed.size === 0
+                ? {}
+                : {
+                    transformed: new Map(
+                      [...outcome.transformed].map(([key, type]) => [key, transformedFillReason(outcome.pattern, key, type)] as const),
+                    ),
+                  }),
               sentenceText: sentenceTextOf(
                 outcome.captures,
                 outcome.texts,

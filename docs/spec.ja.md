@@ -1384,7 +1384,9 @@ discovery は、`defineStep` が返したオブジェクトそのものである
   実行はもう一度確かめます(「claim が判定する値」を参照)。
   transformer を持つ parameter type も同じことをします(`config.parameterTypes` にあるものか、compat の `defineParameterType`)。
   transformer は、claim が読む前に行のテキストを書き換えます。
-  プロジェクトがどの型を登録しているかを知るのは `nuka check` だけなので、期待値のキーをそのような型で埋める pattern を `nuka check` が報告します(`claim-expected-transformed`、エラー)。
+  期待値のキーをそのような型で埋める pattern は `nuka check` が報告し(`claim-expected-transformed`、エラー)、それが報告されている間は `nuka run` が始まりません。
+  `--no-check` の run は、各行が一致した pattern に同じ規則を当てはめます。
+  そのようなキーと比べる claim は、check と同じ言葉の理由とともに `unjudged` になり、step のほかの claim は判定されます。
   行のテキストを JSON や行として読む必要がある claim は、素の `z.string()` のキーに `expected_view`(`text`、`lines`、`json` で、`view` と同じように適用します)を名指しし、record は `sentence:<key> as <view>` と述べます。
 - **前の step の結果**: `{ from: "<key>.<path>" }` で、最初の要素はこの step の `from` のキーです(「凍結した件数が変わらない」など)。
   record は `from:<step>@<line>.<path>` と述べます。
@@ -1688,7 +1690,7 @@ claim step の record には、次の固有のフィールドがあります(「
 
 - `claims`: step が宣言した順の、各 claim です。
   比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
-  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値、読み取りの途中で過ぎた step の締め切り)にあります。
+  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値、parameter type の transformer が書き換えた値、読み取りの途中で過ぎた step の締め切り)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。

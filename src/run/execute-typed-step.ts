@@ -121,6 +121,10 @@ export interface RunValidatedStepInput {
   /** The args key the line's docstring or table filled, and which one;
    * absent when the line carries neither. Read only for a claim step. */
   readonly attachment?: { readonly key: string; readonly kind: "docstring" | "table" };
+  /** Each args key the matched pattern fills with a parameter type that
+   * has a transformer, with why a claim that compares with it is not
+   * judged (`transformedFillReason`). Read only for a claim step. */
+  readonly transformed?: ReadonlyMap<string, string>;
   /** Injected by tests; the wall clock otherwise. */
   readonly clock?: PollClock;
 }
@@ -344,6 +348,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     observeReceived,
     argSide: input.argSide,
     sentenceText: input.sentenceText,
+    transformed: (key) => input.transformed?.get(key) ?? null,
     patterns: step.patterns,
     testPattern,
     budget: budgetOf(),

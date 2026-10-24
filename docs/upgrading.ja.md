@@ -163,6 +163,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 - **transformer を持つ parameter type は、claim の期待値を埋められません。**
   `nuka check` はそのような pattern を `claim-expected-transformed` として報告し、それが報告されている間は `nuka run` が始まりません。
+  `--no-check` の下では、そのようなキーと比べる claim は `unjudged` になります。
   transformer を持たない型、たとえば `{key:string}` でキーをキャプチャし、テキストを JSON や行として読むときは claim に `expected_view` を名指ししてください。
 
 - **`scenario-without-then` が警告する scenario が増えました。**

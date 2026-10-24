@@ -155,6 +155,17 @@ export function samePlace(a: Pick<ClaimPlace, "origin" | "segments">, b: Pick<Cl
   return a.origin === b.origin && a.segments.length === b.segments.length && a.segments.every((segment, index) => sameSegment(segment, b.segments[index]!));
 }
 
+/** Why a claim does not judge an expected args key that `pattern` fills
+ * with `type`, a parameter type with a transformer: the transformer
+ * rewrites the line's text before the claim reads it. The run's half of
+ * `claim-expected-transformed`, in the check's words. Pure. */
+export function transformedFillReason(pattern: string, key: string, type: string): string {
+  return (
+    `the pattern "${pattern}" fills args.${key} with the parameter type {${type}}, whose transformer rewrites the line's text before the claim reads it, ` +
+    "so code would decide what the claim compares, and the claim was not judged"
+  );
+}
+
 /** Whether one place holds the other: the same origin, and one path is the
  * start of the other. Pure. */
 export function placesOverlap(a: Pick<ClaimPlace, "origin" | "segments">, b: Pick<ClaimPlace, "origin" | "segments">): boolean {

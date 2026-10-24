@@ -396,8 +396,9 @@ just until 0.1.
   `claim-poll-unstated`: a claim step whose `observe` reaches `page`,
   `context`, or `pageAs` and does not state `poll`.
   `claim-expected-transformed`: a pattern fills a claim's expected key
-  with a parameter type whose transformer rewrites the line's text. All
-  six are errors.
+  with a parameter type whose transformer rewrites the line's text; under
+  `--no-check`, a claim that compares with such a key on the line is
+  `unjudged`. All six are errors.
 
 - **A claim step's record holds its claims.** `claims` lists each claim
   with its `actual` and `expected` values, `actual_from` and

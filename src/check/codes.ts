@@ -69,7 +69,7 @@ const CHECK_CODES = {
   },
   "claim-expected-transformed": {
     description:
-      "A claim step names an args key as its expected value, and a pattern fills that key with a parameter type that config.parameterTypes or a compat defineParameterType registered with a transformer. The transformer rewrites the line's text before the claim reads it, so code would decide what the claim compares while the record labels the value as the sentence's.",
+      "A claim step names an args key as its expected value, and a pattern fills that key with a parameter type that config.parameterTypes or a compat defineParameterType registered with a transformer. The transformer rewrites the line's text before the claim reads it, so code would decide what the claim compares while the record labels the value as the sentence's. Under --no-check, nuka run leaves a claim that compares with such a key unjudged, so the run agrees with the check.",
     severity: "error",
     fix: "Capture the key with a type that has no transformer, such as {key:string}, and declare expected_view (text, lines, or json) on the claim if the text needs one.",
   },

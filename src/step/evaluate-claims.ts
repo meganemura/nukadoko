@@ -370,6 +370,12 @@ export interface ClaimInputs {
   /** The text the line states an args key as: a capture's text, the
    * docstring, or the table; `null` for a key the line does not fill. */
   readonly sentenceText: (key: string) => string | null;
+  /** Why a claim cannot compare with an args key, when the matched
+   * pattern fills it with a parameter type that has a transformer; `null`
+   * (or absent) when it does not. `nuka check` reports such a pattern
+   * (`claim-expected-transformed`); the run leaves the claim unjudged, so
+   * a run under `--no-check` agrees with the check. */
+  readonly transformed?: (key: string) => string | null;
   readonly patterns: readonly string[];
   readonly testPattern: PatternTester;
   readonly budget: JudgingBudget;
@@ -497,6 +503,10 @@ const expectedName = (place: ClaimPlace): string => `the expected value ${place.
 function expectedSide(claim: ItemClaim, inputs: ClaimInputs): ExpectedSide {
   const expected = claim.expected;
   if (typeof expected === "string") {
+    const transformed = inputs.transformed?.(expected) ?? null;
+    if (transformed !== null) {
+      return { place: argPlace(expected, inputs), unjudged: transformed, text: inputs.sentenceText(expected), fromObserve: false, segments: [expected] };
+    }
     const side = shaped(readArgSide([expected], inputs, expectedName), claim.expected_view, undefined);
     return { ...side, text: inputs.sentenceText(expected), fromObserve: false, segments: [expected] };
   }
@@ -807,6 +817,8 @@ function eachObserveReceived(claim: EachClaim, array: ClaimPlace, inputs: ClaimI
     ...claim.each.claims.map((entry, index) => [`each.claims[${index}]`, entry] as const),
   ];
   for (const [label, entry] of entries) {
+    const transformed = typeof entry.expected === "string" ? (inputs.transformed?.(entry.expected) ?? null) : null;
+    if (transformed !== null) return { unjudged: `${label}: ${transformed}` };
     const stop =
       observeReceived(expectedPlace(entry, inputs), inputs, `${label}'s expected value reads`) ??
       (typeof entry.expected === "object" && "observe" in entry.expected ? observeReceived(array, inputs, `${label} reads each item of`) : null);

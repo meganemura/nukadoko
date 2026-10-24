@@ -184,7 +184,8 @@ This part does not change release to release.
 - **A parameter type with a transformer cannot fill a claim's expected
   value.** `nuka check` reports such a pattern as
   `claim-expected-transformed`, and `nuka run` refuses to start while it
-  is reported. Capture the key with a type that has no transformer, such
+  is reported; under `--no-check`, a claim that compares with such a key
+  is `unjudged`. Capture the key with a type that has no transformer, such
   as `{key:string}`, and name `expected_view` on the claim when it reads
   the text as JSON or as lines.
 

@@ -53,6 +53,11 @@ export type StepBinding =
       readonly pattern: string;
       readonly captures: readonly Capture[];
       readonly expression: CucumberExpression;
+      /** Each capture key the pattern fills with a parameter type the
+       * project registered with a transformer, and that type's name: a
+       * claim that compares with such a key would compare what the
+       * transformer made of the text (`claim-expected-transformed`). */
+      readonly transformed?: ReadonlyMap<string, string>;
     }
   | {
       readonly matcherKind: "regexp";
@@ -84,6 +89,9 @@ export function buildStepBindings(
   compatParameterTypes: readonly CompatParameterTypeEntry[] = [],
 ): readonly StepBinding[] {
   const registry = createParameterTypeRegistry([...customTypes, ...compatParameterTypes]);
+  const transformedTypes = new Set(
+    [...customTypes, ...compatParameterTypes].filter((type) => type.transformer !== undefined).map((type) => type.name),
+  );
   const bindings: StepBinding[] = [];
   for (const entry of vocabulary.values()) {
     if (entry.kind === "typed") {
@@ -94,12 +102,14 @@ export function buildStepBindings(
         } catch {
           continue;
         }
+        const transformed = new Map(built.captures.filter((capture) => transformedTypes.has(capture.type)).map((capture) => [capture.key, capture.type]));
         bindings.push({
           matcherKind: "expression",
           stepName: entry.name,
           pattern,
           captures: built.captures,
           expression: built.expression,
+          ...(transformed.size === 0 ? {} : { transformed }),
         });
       }
       continue;
@@ -139,7 +149,12 @@ export type MatchOutcome =
   | {
       readonly kind: "matched";
       readonly stepName: string;
+      /** The pattern the text matched. */
+      readonly pattern: string;
       readonly captures: readonly Capture[];
+      /** The binding's `transformed`: each capture key a parameter type
+       * with a transformer fills, and the type. */
+      readonly transformed: ReadonlyMap<string, string>;
       readonly values: readonly unknown[];
       /** Each capture's text as the line has it, before its parameter
        * type turned it into a value (a claim record's `expected_text`). */
@@ -222,7 +237,15 @@ export async function matchPickleStep(
   }
   // Safe: exactly one key exists in `byStep` when `stepNames.length === 1`.
   const { binding, values, texts } = byStep.get(stepNames[0]!)!;
-  return { kind: "matched", stepName: binding.stepName, captures: binding.captures, values, texts };
+  return {
+    kind: "matched",
+    stepName: binding.stepName,
+    pattern: binding.pattern,
+    captures: binding.captures,
+    transformed: (binding.matcherKind === "expression" ? binding.transformed : undefined) ?? new Map(),
+    values,
+    texts,
+  };
 }
 
 function duplicateCaptureRefusal(stepName: string, keys: readonly string[]): string {
