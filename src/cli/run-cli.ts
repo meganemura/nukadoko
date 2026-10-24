@@ -218,16 +218,27 @@ const CLEAN_REMOVES_EVERY_CATEGORY =
 // left to `.strict()`: "Unknown argument: session" says what is wrong with
 // an older command but not what to write instead. Hidden, so --help lists
 // only what works. The message names the replacement, so the refusal has a
-// `fix` and no `do`: no one command is the right next step for every
-// caller, and a placeholder such as the command's help would read as one.
+// `fix`, and a `do` only where the flag's own value makes one command the
+// next step (`--since <ref>` is `--base <ref>`): otherwise no one command is
+// right for every caller, and a placeholder such as the command's help
+// would read as one.
 const REMOVED_FIX = "Use what the message names in its place.";
 
-function refuseRemovedFlags(y: Argv, removed: Readonly<Record<string, string>>): Argv {
+interface RemovedFlag {
+  readonly message: string;
+  /** The command that replaces the flag, from the value it was given. */
+  readonly do?: (value: unknown) => string | undefined;
+}
+
+function refuseRemovedFlags(y: Argv, removed: Readonly<Record<string, string | RemovedFlag>>): Argv {
   const withOptions = Object.keys(removed).reduce((acc, flag) => acc.option(flag, { hidden: true }), y);
   return withOptions.check((args) => {
     const record = args as unknown as Record<string, unknown>;
-    for (const [flag, message] of Object.entries(removed)) {
-      if (record[flag] !== undefined) throw new RefusalError("removed-flag", message, { fix: REMOVED_FIX });
+    for (const [flag, entry] of Object.entries(removed)) {
+      if (record[flag] === undefined) continue;
+      const { message, do: replacement } = typeof entry === "string" ? { message: entry, do: undefined } : entry;
+      const command = replacement?.(record[flag]);
+      throw new RefusalError("removed-flag", message, { fix: REMOVED_FIX, ...(command === undefined ? {} : { do: command }) });
     }
     return true;
   });
@@ -555,10 +566,14 @@ export async function runCli(
         probe:
           "nuka run --probe is removed: a Then is judged from its step record and its step file, not from a second run " +
           "with a changed value.",
-        since:
-          "nuka run --since is removed: nuka run --base <ref> compares with the commit the ref names, runs a new or " +
-          "changed scenario where the base's code runs, and an unchanged one under the base's steps when they changed, " +
-          "and the verdict table says what each criterion came to.",
+        since: {
+          message:
+            "nuka run --since is removed: nuka run --base <ref> compares with the commit the ref names, runs a new or " +
+            "changed scenario where the base's code runs, and an unchanged one under the base's steps when they changed, " +
+            "and the verdict table says what each criterion came to.",
+          // yargs reads an all-digit hash as a number.
+          do: (value) => (typeof value === "string" || typeof value === "number") && String(value).length > 0 ? `nuka run --base ${shellWord(String(value))}` : undefined,
+        },
       })
         .positional("feature", {
           type: "string",

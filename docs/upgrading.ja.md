@@ -417,6 +417,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka run --since` は `removed-flag` で拒否されます。
   同じ ref を `--base` に渡します。
   `npx nuka run --since "$(git merge-base HEAD origin/main)"` の代わりに `npx nuka run --base origin/main` です。
+  拒否の `do` の行は、`--since` に渡した ref を付けた `nuka run --base` です。
   `--since` は報告するだけで、run を失敗させませんでした。
   `--base` は、新しいか変わった受け入れ基準を基点のコードに対して走らせ、対応づけが変わったときは変わっていない受け入れ基準を基点の step のもとで走らせ、`unproven` か `moved` の行があれば 1 で終わります(docs/spec.ja.md の「断定」)。
   浅いクローンの CI のジョブは、先に基点を取ってきます。

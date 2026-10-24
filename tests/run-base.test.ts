@@ -328,7 +328,8 @@ describe("nuka run --base", () => {
     expect(refused.exitCode).toBe(2);
     expect(refused.stderr).toBe(
       "refused\tremoved-flag\t-\tnuka run --since is removed: nuka run --base <ref> compares with the commit the ref names, runs a new or changed scenario where the base's code runs, and an unchanged one under the base's steps when they changed, and the verdict table says what each criterion came to.\n" +
-        "  fix: Use what the message names in its place.\n",
+        "  fix: Use what the message names in its place.\n" +
+        "  do: nuka run --base base-branch\n",
     );
   });
 

@@ -490,7 +490,8 @@ This part does not change release to release.
   `--since` reported.** `nuka run --since` is refused with
   `removed-flag`. Replace it with `--base` and the same ref: `npx nuka
   run --base origin/main` in place of `npx nuka run --since "$(git
-  merge-base HEAD origin/main)"`. `--since` only reported and never
+  merge-base HEAD origin/main)"`; the refusal's `do` line is `nuka run
+  --base` with the ref `--since` was given. `--since` only reported and never
   failed a run; `--base` runs a new or changed criterion against the
   base's code and an unchanged one under the base's steps when the
   mapping changed, and exits 1 on an `unproven` or `moved` row

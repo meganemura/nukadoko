@@ -54,19 +54,50 @@ export type RefResolution =
   | { readonly commit: string }
   | { readonly problem: "outside-git" | "unknown-ref" | "shallow" | "git-failed"; readonly message: string; readonly fetch?: string };
 
+/** What fetches the history a shallow clone needs for a ref it cannot
+ * resolve, when the ref does not say which commit or branch to fetch. */
+export const UNSHALLOW_COMMAND = "git fetch --unshallow origin";
+
+/** A name git can fetch by: what `git check-ref-format` accepts, closely
+ * enough that a revision expression (`main~2`, `v1^{commit}`, `@{u}`)
+ * is never one. */
+function plainRefName(ref: string): boolean {
+  return (
+    /^[A-Za-z0-9._/-]+$/.test(ref) &&
+    !ref.startsWith("-") &&
+    !ref.startsWith("/") &&
+    !ref.endsWith("/") &&
+    !ref.endsWith(".") &&
+    !ref.endsWith(".lock") &&
+    !ref.includes("..") &&
+    !ref.includes("//")
+  );
+}
+
 /** The command that fetches `ref` into a shallow clone, so that the same
- * `--base` resolves afterwards: a remote-tracking name (`origin/main`)
- * fetches its branch into that name, a commit hash fetches the commit, and
- * a branch name fetches the branch from `origin` under its own name. */
+ * `--base` resolves afterwards. A full commit hash fetches that commit, a
+ * remote-tracking name (`origin/main`) its branch into that name, a
+ * branch name the branch from `origin` under its own name, and a full
+ * `refs/` name the same ref from `origin` (from its remote for
+ * `refs/remotes/`). A
+ * server fetches a commit only by its full hash, and a revision expression
+ * names no ref to fetch, so an abbreviated hash, or any name that is not one
+ * of those, fetches the whole history instead (`UNSHALLOW_COMMAND`). Pure. */
 export function fetchCommandFor(ref: string): string {
-  const slash = ref.indexOf("/");
-  if (slash > 0 && !ref.startsWith("refs/")) {
-    const remote = ref.slice(0, slash);
-    const name = ref.slice(slash + 1);
-    return `git fetch --no-tags --depth=1 ${remote} ${name}:refs/remotes/${remote}/${name}`;
+  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(ref)) return `git fetch --no-tags --depth=1 origin ${ref}`;
+  if (/^[0-9a-f]{7,63}$/.test(ref) || !plainRefName(ref)) return UNSHALLOW_COMMAND;
+  const branch = (name: string): string => `git fetch --no-tags --depth=1 origin ${name}:refs/heads/${name}`;
+  const tracking = (remote: string, name: string): string => `git fetch --no-tags --depth=1 ${remote} ${name}:refs/remotes/${remote}/${name}`;
+  if (ref.startsWith("refs/")) {
+    const heads = /^refs\/heads\/(.+)$/.exec(ref);
+    if (heads !== null) return branch(heads[1]!);
+    const remotes = /^refs\/remotes\/([^/]+)\/(.+)$/.exec(ref);
+    if (remotes !== null) return tracking(remotes[1]!, remotes[2]!);
+    return `git fetch --no-tags --depth=1 origin ${ref}:${ref}`;
   }
-  if (/^[0-9a-f]{7,64}$/.test(ref)) return `git fetch --no-tags --depth=1 origin ${ref}`;
-  return `git fetch --no-tags --depth=1 origin ${ref}:refs/heads/${ref}`;
+  const slash = ref.indexOf("/");
+  if (slash > 0) return tracking(ref.slice(0, slash), ref.slice(slash + 1));
+  return branch(ref);
 }
 
 /** The commit `ref` names in the repository that holds `rootDir`. A

@@ -258,7 +258,8 @@ just until 0.1.
   files behind them, and never failed a run, so a criterion approved at
   the base could change meaning under a rewritten step with nothing red.
   `nuka run --since` now refuses with `removed-flag` and names
-  `--base`. run.json's `since` and each scenario's `criteria` are gone,
+  `--base`, and its `do:` line is `nuka run --base` with the ref given
+  to `--since`. run.json's `since` and each scenario's `criteria` are gone,
   with the summary's "Criteria since" section and the refusal codes
   `since-ref-unknown`, `since-outside-git`, and `since-git-failed`.
 
@@ -352,7 +353,9 @@ just until 0.1.
   names its `world` and its `row`. The summary opens with what was
   compared, adds a `change` column and the base and old columns, and
   quotes each removed criterion. A shallow clone that lacks the base is
-  refused with `base-shallow` and the `git fetch` that gets it; a ref
+  refused with `base-shallow` and the `git fetch` that gets it (a full
+  hash or a branch by its name, and `git fetch --unshallow origin` for an
+  abbreviated hash or a revision expression, which no server fetches); a ref
   that names no commit, a project outside git, a git failure, and a
   `featuresDir` at the project root are refused too. A base feature file
   that does not parse is the warning `base-feature-unparsed`.

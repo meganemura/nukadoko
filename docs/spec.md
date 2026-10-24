@@ -4308,9 +4308,12 @@ commit. It is refused before anything runs when the project is not in a
 git repository (`base-outside-git`), when the ref names no commit
 (`base-ref-unknown`), or when git fails (`base-git-failed`). In a shallow
 clone that lacks the commit, the refusal is `base-shallow`, and its `do`
-is the `git fetch` that gets it: `origin/main` fetches `main` into
-`refs/remotes/origin/main`, a commit is fetched by its hash, and another
-name is fetched from `origin` under its own name.
+is the `git fetch` that gets it: a full commit hash is fetched by itself,
+`origin/main` fetches `main` into `refs/remotes/origin/main`, a branch
+name is fetched from `origin` under its own name, and a full `refs/` name
+under the same name. A server fetches a commit only by its full hash, so
+an abbreviated hash, or a revision expression such as `main~2`, gets
+`git fetch --unshallow origin`, which fetches the whole history.
 
 ### Single steps (the agent path)
 

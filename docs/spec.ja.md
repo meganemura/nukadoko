@@ -3434,7 +3434,10 @@ JUnit を読む CI がゲートにする messages ストリームは、対照を
 ブランチ、tag、`origin/main` のようなリモート追跡の名前、またはコミットです。
 プロジェクトが git のリポジトリの中に無いとき(`base-outside-git`)、ref がコミットを名指さないとき(`base-ref-unknown`)、git が失敗したとき(`base-git-failed`)は、何かを走らせる前に拒否します。
 そのコミットを持たない浅いクローンでは拒否は `base-shallow` で、その `do` はそれを取ってくる `git fetch` です。
-`origin/main` は `main` を `refs/remotes/origin/main` へ取ってきて、コミットはそのハッシュで取ってきて、ほかの名前は `origin` から同じ名前で取ってきます。
+完全なコミットのハッシュはそれだけを取ってきます。
+`origin/main` は `main` を `refs/remotes/origin/main` へ取ってきます。
+ブランチの名前は `origin` から同じ名前で取ってきて、完全な `refs/` の名前も同じ名前で取ってきます。
+サーバーがコミットを取らせるのは完全なハッシュのときだけなので、短くしたハッシュや `main~2` のようなリビジョンの式には `git fetch --unshallow origin` を出し、これは履歴全体を取ってきます。
 
 ### 単体 step(agent の経路)
 
