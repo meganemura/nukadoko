@@ -270,9 +270,10 @@ just until 0.1.
 
 - **run.json says what judged each scenario, and whether the check
   ran.** Each scenario entry has `claims`, its claims counted by
-  outcome, and a scenario that binds no claim step has `judged_by`,
-  `compat` or `nothing`; the run summary lists those under "Scenarios
-  with no claim". run.json has `check`, `ran` or `skipped`, and a run
+  outcome, and a scenario none of whose Then lines binds a claim step
+  has `judged_by`, `compat` or `nothing`, by the rule
+  `scenario-without-then` warns by; the run summary lists those under
+  "Scenarios with no claim". run.json has `check`, `ran` or `skipped`, and a run
   under `--no-check` says so in the summary's condition lines.
 
 - **Three error kinds: `claim_broken`, `unobserved`, and

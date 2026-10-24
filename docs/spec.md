@@ -2968,11 +2968,14 @@ to act on the run without opening another file:
   does not need them.
 - Every scenario has `claims`, the claims of its step records counted
   by outcome: `held` and `broken` always, and `unobserved` and `unjudged`
-  when there are any. A scenario that binds no claim step has
-  `judged_by`: `compat` when a compat step in Then position judged it,
-  by throwing or not, and `nothing` otherwise, when it passes whenever
-  its steps run without an error. A scenario that binds a claim step has
-  no `judged_by`.
+  when there are any. A scenario none of whose Then lines binds a claim
+  step has `judged_by`: `compat` when a compat step in Then position
+  judged it, by throwing or not, and `nothing` otherwise, when it passes
+  whenever its steps run without an error. A claim step on a Given, When,
+  or `*` line does not count, the same rule `scenario-without-then`
+  applies, so a run under `--no-check` that runs one still names the
+  scenario. A scenario with a claim step on a Then line has no
+  `judged_by`.
 - `check` is `ran` when `nuka check` ran before the scenarios and found
   no error that held the run back, and `skipped` under `nuka run
   --no-check`, so a run that started past the check says so.

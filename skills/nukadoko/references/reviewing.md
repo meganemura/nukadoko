@@ -109,12 +109,12 @@ key of a JSON response), so it is a place to look, not a verdict. An
 expected value that came from `from` or `observe` gets the same after
 it, `expected measured: <channel>` or `expected measured: none`, and
 `none` there is what a When step that returns the value its Then
-compares with looks like. A
-scenario under "Scenarios with no claim" passed without any claim, and a
-run with `check: skipped` started past `nuka check`. A Then whose `observe` reads a file and claims on it
-often comes back as cannot tell, with `measured: null`: the record keeps
-what a process printed and the files it changed, and nothing of a file
-the step read itself. That is a gap in the evidence, not a wrong step.
+compares with looks like. A scenario under "Scenarios with no claim"
+passed with no claim on a Then line, and a run with `check: skipped`
+started past `nuka check`. A Then whose `observe` reads a file and
+claims on it often comes back as cannot tell, with `measured: null`:
+the record keeps what a process printed and the files it changed, and
+nothing of a file the step read itself. That is a gap in the evidence, not a wrong step.
 Have `observe` attach what it read with `evidence.attach`
 (`evidence.md`), run again, and the next walk can show it.
 

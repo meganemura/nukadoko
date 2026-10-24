@@ -2437,9 +2437,11 @@ run が終わったとき、最後の step record と run サマリの後に、�
   大きくなりうるうえ、次の判断には要らないからです。
 - すべての scenario は `claims` を持ちます。
   その scenario の step record の claim を成否ごとに数えたもので、`held` と `broken` は常にあり、`unobserved` と `unjudged` は 1 つでもあるときにあります。
-  claim step に結び付かない scenario は `judged_by` を持ちます。
+  どの Then の行も claim step に結び付かない scenario は `judged_by` を持ちます。
   Then の位置にある compat step が throw するかどうかで判定したときは `compat`、それ以外は `nothing` で、step がエラーなく動けば必ず通ることを意味します。
-  claim step に結び付く scenario は `judged_by` を持ちません。
+  Given、When、`*` の行にある claim step は数えません。
+  `scenario-without-then` と同じ規則なので、そのような claim step を動かす `--no-check` の run でも、その scenario を挙げます。
+  Then の行に claim step が結び付く scenario は `judged_by` を持ちません。
 - `check` は、scenario の前に `nuka check` が動いて run を止めるエラーを見つけなかったときは `ran`、`nuka run --no-check` のときは `skipped` です。
   そのため check を飛ばして始まった run は、そのことを述べます。
 - 失敗した scenario は、それだけを走らせるコマンドである `do` を持ちます。

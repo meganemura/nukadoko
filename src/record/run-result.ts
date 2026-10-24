@@ -127,7 +127,8 @@ export interface RunScenario {
    * present only above 0. A claim step that did not run counts nothing.
    * Absent in a run.json an earlier build wrote. */
   readonly claims?: RunScenarioClaims;
-  /** Present only for a scenario that binds no claim step: `compat` when a
+  /** Present only for a scenario none of whose Then lines binds a claim
+   * step (a claim step on another line does not count): `compat` when a
    * compat step is bound in Then position, so a judgment nukadoko cannot
    * see may have been made by a throw, and `nothing` otherwise, so the
    * scenario passes whenever its steps run without an error. */

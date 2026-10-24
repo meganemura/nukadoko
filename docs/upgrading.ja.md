@@ -175,7 +175,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka scaffold --feature` は、そのような Then の行には stub を書かず、stderr に注記を出します。
 
 - **run.json のフィールドが 3 つ増えました。**
-  各 scenario の要素は `claims` を持ち、claim step に結び付かないものは `judged_by` も持ちます。
+  各 scenario の要素は `claims` を持ち、どの Then の行も claim step に結び付かないものは `judged_by` も持ちます。
   文書は `check` を持ちます。
   scenario の要素や文書を丸ごと比べる読み手はそれらを加えてください。
   キーを名前で読む読み手は何もしなくてかまいません。

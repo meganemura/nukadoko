@@ -956,6 +956,9 @@ describe("run.json and the summary say what judged each scenario", () => {
   }
 
   it("counts held and broken claims, names a scenario judged by compat or by nothing, and says a check was skipped", async () => {
+    // "claim off Then" binds a claim step on a When line, which nuka check
+    // refuses (claims-outside-then); under --no-check it runs, and its
+    // claim is counted, but no Then judged the scenario.
     const rootDir = await project({
       "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -977,6 +980,9 @@ export default defineStep({
         "    Then the receipt is correct",
         "  Scenario: nothing",
         "    When the app answers",
+        "  Scenario: claim off Then",
+        "    When the app answers",
+        "    And it counts 1",
         "",
       ].join("\n"),
     });
@@ -988,6 +994,7 @@ export default defineStep({
       ["claims", { held: 1, broken: 1 }, undefined],
       ["compat", { held: 0, broken: 0 }, "compat"],
       ["nothing", { held: 0, broken: 0 }, "nothing"],
+      ["claim off Then", { held: 1, broken: 0 }, "nothing"],
     ]);
     const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary).toContain("- check: skipped (`nuka run --no-check`), so no finding of `nuka check` held this run back\n");
@@ -995,10 +1002,11 @@ export default defineStep({
       [
         "## Scenarios with no claim",
         "",
-        "No line of each scenario below binds a claim step.",
+        "No Then line of each scenario below binds a claim step.",
         "",
         "- `features/t.feature:6` compat: only a compat step in Then position judged it, by throwing or not, and nukadoko cannot see what it checked",
-        "- `features/t.feature:9` nothing: nothing judged it, so it passes whenever its steps run without an error",
+        "- `features/t.feature:9` nothing: no Then line judged it, so it passes whenever its steps run without an error",
+        "- `features/t.feature:11` claim off Then: no Then line judged it, so it passes whenever its steps run without an error",
       ].join("\n"),
     );
 

@@ -174,16 +174,21 @@ export function scenarioClaims(stepRecords: readonly (StepRecord | null)[]): Run
   };
 }
 
-/** What judged a scenario that binds no claim step, or `undefined` for
- * one that binds one, run or not. Pure. */
+/** What judged a scenario none of whose Then lines binds a claim step, or
+ * `undefined` for one with a claim step on a Then line, run or not. This
+ * is the rule `nuka check` warns `scenario-without-then` by: a claim step
+ * on a Given, When, or `*` line is not the scenario's criterion
+ * (`claims-outside-then`), and a run under `--no-check` or a scenario
+ * that ran anyway must not read as judged because of one. Pure. */
 export function judgedBy(
   names: readonly (string | null)[],
   inThen: (index: number) => boolean,
   stepKind: RunScenarioInput["stepKind"],
 ): "compat" | "nothing" | undefined {
   const kinds = names.map((name) => (name === null ? null : stepKind(name)));
-  if (kinds.includes("claim")) return undefined;
-  return kinds.some((kind, index) => kind === "compat" && inThen(index)) ? "compat" : "nothing";
+  const thenBinds = (wanted: "claim" | "compat"): boolean => kinds.some((kind, index) => kind === wanted && inThen(index));
+  if (thenBinds("claim")) return undefined;
+  return thenBinds("compat") ? "compat" : "nothing";
 }
 
 export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput): RunScenario {
