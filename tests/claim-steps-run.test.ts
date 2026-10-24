@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -1343,6 +1343,66 @@ export default defineStep({
     expect(checked.stdout).toContain(
       'error\tclaim-expected-transformed\tfeatures/steps/it-costs.ts\tStep "it-costs"\'s claims[0].expected is args.price, and its pattern "it costs {price:money}" fills it with the parameter type {money}, whose transformer rewrites the line\'s text before the claim reads it, so code would decide what the claim compares. Capture price with a type that has no transformer, such as {price:string}, and read it with expected_view if it needs one\n',
     );
+  });
+});
+
+describe("a claim step with no observe judges every value its line states", () => {
+  it("refuses at defineStep a pattern capture no claim reads, and accepts it once observe receives it", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-is-not-empty-for.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart is not empty for {name:string}",
+  args: z.object({ name: z.string(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.items", compare: "not-equal", expected: { literal: [] } }],
+});
+`,
+      "features/steps/the-list-of-is-not-empty.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the list of {name:string} is not empty",
+  args: z.object({ name: z.string() }),
+  observe({}, { name }) { return { items: [name] }; },
+  claims: [{ actual: "items", compare: "not-equal", expected: { literal: [] } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", 'Then the cart is not empty for "alice"'),
+      "features/u.feature": feature('Then the list of "alice" is not empty'),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain(
+      'defineStep the pattern captures "name", and no claim reads it, and the step has no observe to receive it, so nothing checks the value the line states. Compare a claim with "name", or take it out of the pattern.',
+    );
+    await rm(path.join(rootDir, "features/steps/the-cart-is-not-empty-for.ts"));
+    expect((await cli(rootDir, ["run", "features/u.feature"])).exitCode).toBe(0);
+  });
+
+  it("reports a docstring no claim reads (claim-sentence-unread), and the run breaks the claims with the same reason", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-is-not-empty.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart is not empty",
+  args: z.object({ note: z.string(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.items", compare: "not-equal", expected: { literal: [] } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart is not empty", '  """', "  for alice", '  """'),
+    });
+    const reason = "the docstring of the line fills args.note, which no claim reads, and the step has no observe to receive it, so nothing checks the value the line states";
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout).toContain(`claim-sentence-unread`);
+    expect(checked.stdout).toContain(`Step "the-cart-is-not-empty": ${reason}. Compare a claim with "note", or take the docstring off the line`);
+    const ran = await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    expect(ran.exitCode).toBe(1);
+    const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("claim_broken");
+    expect(step.observation).toBe("unobserved");
+    expect(step.attempts).toBe(0);
+    expect(step.claims[0]).toMatchObject({ outcome: "broken", reason });
   });
 });
 

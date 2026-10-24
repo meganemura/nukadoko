@@ -5,6 +5,7 @@ import type { Generator } from "@hegeldev/hegel/generators";
 import type { ClaimCompare } from "../src/record/types.js";
 import {
   ANY_INDEX,
+  claimArgKeysRead,
   claimsProblem,
   LITERAL_WORDS,
   literalStatedBy,
@@ -719,6 +720,26 @@ describe("where", () => {
       const expected = selected.length > 0 && selected.every((n) => holds(pair.claim, n, pair.claimBound)) ? "held" : "broken";
       expect(record.outcome).toBe(expected);
       expect(record).toMatchObject({ each: { items: rows.length, selected: selected.length } });
+    }));
+});
+
+describe("a value the line states", () => {
+  it("refuses a claim step with no observe exactly when a capture is read by no claim, as an expected value or in where, and never one with observe", () =>
+    hegel.test((tc) => {
+      const keys = ["a", "b", "c"];
+      const captured = new Set(tc.draw(gs.arrays(gs.sampledFrom(keys), { maxSize: 3 })));
+      const named = tc.draw(gs.arrays(gs.sampledFrom(keys), { minSize: 1, maxSize: 3 }));
+      const inWhere = tc.draw(gs.booleans());
+      const hasObserve = tc.draw(gs.booleans());
+      const claims: Claim[] = inWhere
+        ? [{ actual: "result", each: { where: named.map((key) => ({ actual: "n", compare: "at-least" as const, expected: key })), claims: [{ actual: "m", compare: "at-least", expected: named[0]! }] } }]
+        : named.map((key) => ({ actual: "result", compare: "equal" as const, expected: key }));
+      const shape: ClaimStepShape = { ...literalShape(`the result is ${[...captured].map((key) => `{${key}}`).join(" ")}`), captureKeys: captured, hasObserve };
+      const problem = claimsProblem(claims, shape);
+      const unread = [...captured].find((key) => !named.includes(key));
+      if (hasObserve || unread === undefined) expect(problem).toBeNull();
+      else expect(problem).toBe(`the pattern captures "${unread}", and no claim reads it, and the step has no observe to receive it, so nothing checks the value the line states. Compare a claim with "${unread}", or take it out of the pattern`);
+      expect(claimArgKeysRead(claims)).toEqual(new Set(["result", ...named]));
     }));
 });
 

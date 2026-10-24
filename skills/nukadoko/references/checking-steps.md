@@ -43,11 +43,12 @@ Pick the source from the sentence; the record names it in `expected_from`.
 - **The sentence states it** (a capture, the docstring, or the table):
   `expected: "code"`, the key itself, recorded as `sentence:code`. The key
   has to be required in `args`, with no default, and its schema must not
-  rewrite the value (`z.coerce`, a transform, a pipe, `trim`, `catch`,
-  a default anywhere inside, or a refine on an object, an array, or the
-  args object are refused at import; the run breaks the claim if the
-  schema still changed the value). To read the line's text as JSON or as lines,
-  add `expected_view: "json"` or `"lines"` on a plain `z.string()` key.
+  rewrite the value (`z.coerce`, a transform, a pipe, `trim`, `catch`, a
+  default inside, or a refine on an object, an array, or the args object
+  is refused; a schema that still changes it leaves the claim `unjudged`).
+  Read it as JSON or lines with `expected_view` on a `z.string()` key.
+  With no `observe`, a claim reads each value the line states: an unread
+  capture is refused, an unread docstring or table `claim-sentence-unread`.
 - **An earlier step returned it** ("the item count is unchanged"):
   `expected: { from: "<from key>.<path>" }`, recorded as
   `from:<step>@<line>.<key>`.
@@ -130,10 +131,9 @@ type with a transformer on an expected key (`claim-expected-transformed`).
 ## Observe, poll, and a boolean
 
 `observe(fixtures, args)` reads the world when no earlier step returned
-the value. It gets every args key except the ones a claim compares with,
-and reading one of those, or calling `resultOf`, throws: an earlier
-step's value reaches a claim through `from` alone. An `observe` that
-throws records `unobserved`; a claim not judged is `claim_unjudged`.
+the value. It gets every args key but the ones a claim compares with, and
+reading one, or calling `resultOf`, throws: an earlier step's value
+reaches a claim through `from` alone. A throw records `unobserved`.
 
 Return what you measured, never a verdict: a count, a text, a list. A
 boolean literal is refused when the actual value comes from `observe`,

@@ -85,6 +85,12 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Add poll: { timeout_ms } to read until every claim holds on two consecutive readings, or poll: false to read once.",
   },
+  "claim-sentence-unread": {
+    description:
+      "A claim step with no observe is bound to a line whose docstring or table fills an args key, and no claim reads that key (as an actual, an expected value, or in where), so nothing checks the value the line states. defineStep refuses a pattern capture no claim reads; only the line says whether a docstring or a table fills a key, so this half is the check's, and nuka run breaks the step's claims for it too.",
+    severity: "error",
+    fix: "Compare a claim with the key (expected: \"<key>\"), or take the docstring or table off the line.",
+  },
   "claims-outside-then": {
     description:
       "A claim step is bound in Given or When position, or on a * line, which Gherkin gives no position. Only a Then judges, so a broken claim there would read as a setup that broke instead of a criterion that failed.",

@@ -1415,6 +1415,12 @@ discovery は、`defineStep` が返したオブジェクトそのものである
   record は `observe:<path>` と述べます。
   世界の 2 つの読み取りを比べる claim は自分の値を述べないので、許可したうえでラベルを付けます。
 
+`observe` のない claim step は、その行が述べるすべての値を判定します。
+どの claim も読まない(期待値としても、`where` の claim の中でも読まない)pattern のキャプチャは、行が step の判定より多くを述べることになるので、import の時点でそのキーを名指しして拒否されます。
+docstring や表がキーを埋めるかどうかは行ごとにしかわからないので、どの claim も読まないそのようなキーは `nuka check` が報告し(`claim-sentence-unread`、エラー)、実行は同じ理由で step のすべての claim を成り立たないものにします(`the docstring of the line fills args.note, which no claim reads, and the step has no observe to receive it, so nothing checks the value the line states`)。
+そのとき step は何も読みません(`observation: unobserved`、`attempts: 0`)。
+`observe` のある step は、そのような値を入力として受け取れます。
+
 実際の値が `observe` から来るとき、真偽値のリテラルは拒否されます。
 また、`{ observe }` が読む期待値が真偽値なら、実行時に claim は成り立ちません。
 `observe` が計算した真偽値は、コードで下した判定だからです。
@@ -1669,12 +1675,12 @@ claim step の record には、次の固有のフィールドがあります(「
 
 - `claims`: step が宣言した順の、各 claim です。
   比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
-  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値)にあります。
+  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。
 - `attempts`: step が値を読んだ回数です。
-  `observe` の呼び出しを 1 回ずつ数え、`observe` のない step は `from` の値を一度だけ読み、`observe` が一度も動かなかった step は `0` を記録します。
+  `observe` の呼び出しを 1 回ずつ数え、`observe` のない step は `from` の値を一度だけ読み、何も読まなかった step(`observe` が一度も動かなかったか、nukadoko が先に判定を断った step)は `0` を記録します。
 - `readings`: poll するときだけあり、step が残した読み取りです(「poll」を参照)。
   すべては残さなかったときは `readings_left_out` もあります。
 
@@ -4716,12 +4722,13 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               view: "text", which trims the trailing newline
                               a program prints last. When the two are of two
                               different JSON types (a {string} capture
-                              against a z.number()), the claim compares the
-                              chained value with the literal of its type a
-                              word of the line fixes ("no {thing:string} is
-                              shown" claims 0), and --then refuses when no
-                              word does. Otherwise it writes an observe stub
-                              that throws "not implemented: <name>" and one
+                              against a z.number()), --then refuses: a claim
+                              across them never holds, and a claim on a word
+                              of the line instead would leave the stated
+                              value read by nothing, which a step with no
+                              observe may not do. Otherwise it writes an
+                              observe stub that throws "not implemented:
+                              <name>" and one
                               claim on what observe returns against the
                               first stated value. A line that states no
                               value but holds a word that fixes one (no,

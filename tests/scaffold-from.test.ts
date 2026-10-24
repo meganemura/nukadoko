@@ -270,22 +270,25 @@ describe("nuka scaffold --from", () => {
     expect(empty.stderr).toContain('which fixes "" or [], and --from exitCode holds a number, a type no word of the line fixes a value of; a literal of another JSON type would never hold');
   });
 
-  it("compares a chained number with a word's 0 when the line's capture is a string, and refuses when no word of the line fixes a number", async () => {
-    expect((await cli(rootDir, ["scaffold", "no-greeting-is-shown", "--pattern", "no {greeting:string} is shown", "--then", "--from", "run-greet.exitCode"])).exitCode).toBe(0);
-    expect(await readFile(path.join(rootDir, "features", "steps", "no-greeting-is-shown.ts"), "utf8")).toContain(
-      [
-        "  // The line's greeting is a string and exitCode holds a number, which never compare equal, so the claim reads the line's word.",
-        '  // "no" states 0 for the type exitCode holds. A word\'s literal is compared with equal alone.',
-        '  claims: [{ actual: "exitCode", compare: "equal", expected: { literal: 0 } }],',
-      ].join("\n"),
-    );
+  it("refuses a chained number against a string the line captures, whether or not a word of the line fixes a number, and writes nothing", async () => {
+    // A claim on the word "no" would compare exitCode with 0 and leave
+    // {greeting} read by nothing, which defineStep refuses.
+    const word = await cli(rootDir, ["scaffold", "no-greeting-is-shown", "--pattern", "no {greeting:string} is shown", "--then", "--from", "run-greet.exitCode"]);
+    expect(word).toEqual({
+      exitCode: 2,
+      stdout: "",
+      stderr:
+        'refused\tinvalid-value\t-\tRefusing to scaffold: --then: the line states {greeting:string}, a string, and --from exitCode holds a number, so a claim could compare exitCode only with the word "no", and no claim would read {greeting:string}; a Then step with no observe checks every value its line states\n' +
+        "  fix: Capture the value with a parameter type of the JSON type the chained value holds ({int} or {float} for a number, {string} for a text), chain a value of the type the line states, or, when a word of the line states the value, take the capture out of --pattern, and scaffold again.\n",
+    });
+    expect(existsSync(path.join(rootDir, "features", "steps", "no-greeting-is-shown.ts"))).toBe(false);
     const refused = await cli(rootDir, ["scaffold", "greet-exits-with", "--pattern", "greet exits with {code:string}", "--then", "--from", "run-greet.exitCode"]);
     expect(refused).toEqual({
       exitCode: 2,
       stdout: "",
       stderr:
         "refused\tinvalid-value\t-\tRefusing to scaffold: --then: the line states {code:string}, a string, and --from exitCode holds a number, and no word of the line fixes a number; a claim across two JSON types would never hold\n" +
-        "  fix: Capture the value with a parameter type of the JSON type the chained value holds ({int} or {float} for a number, {string} for a text), or chain a value of the type the line states, and scaffold again.\n",
+        "  fix: Capture the value with a parameter type of the JSON type the chained value holds ({int} or {float} for a number, {string} for a text), chain a value of the type the line states, or, when a word of the line states the value, take the capture out of --pattern, and scaffold again.\n",
     });
     expect(existsSync(path.join(rootDir, "features", "steps", "greet-exits-with.ts"))).toBe(false);
     // The same line with an {int} capture compares the two.

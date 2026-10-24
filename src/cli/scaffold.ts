@@ -637,15 +637,11 @@ export function thenLiteralRefusal(
   return `the line states its value only with the word "${first.word}", which fixes ${values}, and ${why}; a literal of another JSON type would never hold`;
 }
 
-/** How `--then` compares a line's one stated value with its one chained
- * value: `compare` the two, or, when both JSON types are known and differ
- * (a value of one type never equals a value of another), compare the
- * chained value with the literal a `word` of the line fixes of its type
- * ("no {thing:string} is shown" against a count claims 0), or `refuse`
- * when no word does. Pure. */
-function statedAgainstChained(pattern: string | null, stated: ChainedJsonType, chained: ChainedJsonType): "compare" | "word" | "refuse" {
-  if (stated === null || chained === null || stated === chained) return "compare";
-  return wordLiteral(pattern, chained) === null ? "refuse" : "word";
+/** Whether `--then` can compare a line's one stated value with its one
+ * chained value: yes unless both JSON types are known and differ, since a
+ * value of one type never equals a value of another. Pure. */
+function statedComparesWithChained(stated: ChainedJsonType, chained: ChainedJsonType): boolean {
+  return stated === null || chained === null || stated === chained;
 }
 
 function withArticle(jsonType: Exclude<ChainedJsonType, null>): string {
@@ -654,12 +650,14 @@ function withArticle(jsonType: Exclude<ChainedJsonType, null>): string {
 
 /** The next step for a line `thenTypeRefusal` refuses, in words. */
 export const THEN_TYPE_FIX =
-  "Capture the value with a parameter type of the JSON type the chained value holds ({int} or {float} for a number, {string} for a text), or chain a value of the type the line states, and scaffold again.";
+  "Capture the value with a parameter type of the JSON type the chained value holds ({int} or {float} for a number, {string} for a text), chain a value of the type the line states, or, when a word of the line states the value, take the capture out of --pattern, and scaffold again.";
 
 /** Why `--then` writes no claim for a line that states one value and
- * chains one of another JSON type, with no word of the line that fixes a
- * value of the chained type (`statedAgainstChained`), or `null` when it
- * can: such a claim never holds. Pure. */
+ * chains one of another JSON type, or `null` when it can: a claim across
+ * the two never holds. A claim on a word of the line instead would leave
+ * the stated value read by nothing, which `defineStep` refuses in a step
+ * with no `observe` (a capture) and the run breaks (a docstring or a
+ * table), so that line is refused too. Pure. */
 export function thenTypeRefusal(
   pattern: string | null,
   captures: readonly Capture[],
@@ -673,7 +671,14 @@ export function thenTypeRefusal(
   if (stated.length !== 1 || chained.length !== 1) return null;
   const line = stated[0]!;
   const only = chained[0]!;
-  if (line.jsonType === null || only.jsonType === null || statedAgainstChained(pattern, line.jsonType, only.jsonType) !== "refuse") return null;
+  if (line.jsonType === null || only.jsonType === null || statedComparesWithChained(line.jsonType, only.jsonType)) return null;
+  const word = wordLiteral(pattern, only.jsonType);
+  if (word !== null) {
+    return (
+      `the line states ${line.what}, ${withArticle(line.jsonType)}, and --from ${only.key} holds ${withArticle(only.jsonType)}, ` +
+      `so a claim could compare ${only.key} only with the word "${word.word}", and no claim would read ${line.what}; a Then step with no observe checks every value its line states`
+    );
+  }
   return (
     `the line states ${line.what}, ${withArticle(line.jsonType)}, and --from ${only.key} holds ${withArticle(only.jsonType)}, ` +
     `and no word of the line fixes ${withArticle(only.jsonType)}; a claim across two JSON types would never hold`
@@ -695,13 +700,8 @@ function thenLines(name: string, pattern: string | null, stated: readonly Field[
   if (expected === undefined) return wordThenLines(pattern, chained);
   if (stated.length === 1 && chained.length === 1) {
     const actual = chained[0]!;
-    const against = statedAgainstChained(pattern, expected.jsonType ?? null, actual.jsonType ?? null);
-    if (against === "refuse") throw new Error("internal: the caller should have refused this Then (thenTypeRefusal)");
-    if (against === "word") {
-      return [
-        `  // The line's ${expected.key} is ${withArticle(expected.jsonType!)} and ${actual.key} holds ${withArticle(actual.jsonType!)}, which never compare equal, so the claim reads the line's word.`,
-        ...wordThenLines(pattern, chained),
-      ];
+    if (!statedComparesWithChained(expected.jsonType ?? null, actual.jsonType ?? null)) {
+      throw new Error("internal: the caller should have refused this Then (thenTypeRefusal)");
     }
     const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string" && expected.valueClass === "string";
     return [

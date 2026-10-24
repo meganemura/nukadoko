@@ -850,7 +850,7 @@ function expectedTextOf(claim: ItemClaim, inputs: ClaimInputs): string | null {
 /** Each claim's labels when nothing was compared: what each side would
  * have been named, with `outcome` and, for an unjudged claim, why. It
  * reads no value, so it cannot fail. */
-function notJudged(claim: Claim, inputs: ClaimInputs, outcome: "unobserved" | "unjudged", reason: string | undefined): ClaimComparisonRecord | ClaimEachRecord {
+function notJudged(claim: Claim, inputs: ClaimInputs, outcome: "unobserved" | "unjudged" | "broken", reason: string | undefined): ClaimComparisonRecord | ClaimEachRecord {
   const tail = { outcome, ...(reason === undefined ? {} : { reason }) };
   const base = {
     actual_from: actualPlace(claim, inputs).label,
@@ -928,12 +928,13 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
   return judged;
 }
 
-/** Each claim's record when nukadoko could not judge any of them for
- * `reason`, before anything was read: what each side would have been
- * named, nothing compared. */
-export function unjudgedClaims(claims: readonly Claim[], inputs: ClaimInputs, reason: string): readonly JudgedClaim[] {
+/** Each claim's record when the step ended for `reason` before anything
+ * was read: `unjudged` when nukadoko could not judge the claims, `broken`
+ * when the step as declared cannot judge what its line states. What each
+ * side would have been named, nothing compared. */
+export function claimsEndedEarly(claims: readonly Claim[], inputs: ClaimInputs, outcome: "unjudged" | "broken", reason: string): readonly JudgedClaim[] {
   return claims.map((claim): JudgedClaim => ({
-    record: notJudged(claim, inputs, "unjudged", reason),
+    record: notJudged(claim, inputs, outcome, reason),
     rawActual: undefined,
     fromKey: fromKeyOf(claim, inputs.fromKeys),
     expectedOrigins: expectedOriginsOf(claim, inputs.fromKeys),

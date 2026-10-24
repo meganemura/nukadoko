@@ -41,7 +41,11 @@ just until 0.1.
   `observe` receives a structured clone
   of its inputs, made again for each call; an input that cannot be
   cloned (a `Proxy`, a class instance that holds a function) leaves
-  every claim `unjudged`, naming the key, and `observe` does not run. A `Date`, a
+  every claim `unjudged`, naming the key, and `observe` does not run.
+  A claim step with no `observe` judges every value its line states: a
+  pattern capture no claim reads is refused at import, and a docstring
+  or table key no claim reads is the new `nuka check` error
+  `claim-sentence-unread`, and the run breaks the step's claims for it. A `Date`, a
   bigint, `NaN`, a `Proxy`, or a value nested deeper than 256 levels
   leaves the claim `unjudged`, and the reason names it. An expected
   value from `from` or `observe` gets `expected_measured`, the channel
@@ -105,10 +109,10 @@ just until 0.1.
   `--from`, several, or one whose type the word fixes no value of,
   `--then` refuses and `--feature` skips the line with a note. A stated
   value and a `--from` value of two different JSON types (a `{string}`
-  capture against a `z.number()`) are not compared: the claim takes the
-  literal of the chained value's type that a word of the line fixes ("no
-  {thing:string} is shown" claims `0`), and `--then` refuses when no
-  word does. Neither writes a claim across two JSON types.
+  capture against a `z.number()`) are refused: a claim across them never
+  holds, and a claim on a word of the line instead would leave the stated
+  value read by nothing. Neither writes a claim across two JSON types, or
+  a step with no `observe` whose line states a value no claim reads.
   `nuka scaffold --feature` writes the same claim step for a Then line.
   Neither writes `mutates: false` or an `assert` body any more.
 

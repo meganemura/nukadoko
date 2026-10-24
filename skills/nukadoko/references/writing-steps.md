@@ -64,11 +64,11 @@ each stub's own single scaffold with `--replace`; add `--command` or
    Add `--then` for a step a Then line binds: it writes a claim step,
    `claims` in place of `run`, with no `returns` and no `mutates`. With
    one value the line states and one `--from`, the claim compares the two
-   with `equal` (`view: "text"` for `stdout` or `stderr`), or the `--from`
-   value with a word's literal of its type when their JSON types differ;
-   otherwise it writes an `observe` stub. It refuses a line that states no
-   value, and a claim across two types. A step whose feature lines carry a
-   docstring or a table gets a `docstring` or `table` key, which a Then
+   with `equal` (`view: "text"` for `stdout` or `stderr`); otherwise it
+   writes an `observe` stub. It refuses a line that states no value, two
+   values of two JSON types, and a claim that leaves a stated value
+   unread. A step whose feature lines carry a docstring or a table gets
+   a `docstring` or `table` key, which a Then
    claims like a capture; write the feature line first, or add the key by
    hand, or `nuka check` reports `table-docstring-key-mismatch`.
    Add `--from <step>.<key>` for each value the step reads from an

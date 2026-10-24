@@ -16,6 +16,7 @@ import type { CheckIssue } from "./types.js";
 import { checkUnfillableKeys } from "./unfillable-key.js";
 import { checkClaimSources } from "./claim-check.js";
 import { isClaimStep } from "../step/define-step.js";
+import { sentenceUnreadReason } from "../step/claims.js";
 
 // Responsibility: match every pickle step (from src/feature/load-features.ts)
 // against the vocabulary's patterns (already built once by
@@ -410,6 +411,17 @@ export function checkFeatures(
               });
             } else {
               const key = unconsumedRequired[0]!;
+              const attached = attachment.docString !== undefined ? "docstring" : "table";
+              const unread = isClaimStep(entry.step) ? sentenceUnreadReason(entry.step.claims, entry.step.observe !== undefined, key, attached) : null;
+              if (unread !== null) {
+                errors.push({
+                  code: "claim-sentence-unread",
+                  message: `Step "${stepName}": ${unread}. Compare a claim with "${key}", or take the ${attached} off the line`,
+                  file: feature.relativePath,
+                  line,
+                  step: stepName,
+                });
+              }
               const typeMessage = attachmentTypeMismatch(stepName, key, attachment, shape[key]!);
               if (typeMessage !== undefined) {
                 errors.push({

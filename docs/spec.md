@@ -1707,6 +1707,18 @@ ones nothing validated.
   `observe:<path>`. It is allowed and labelled, because a claim that
   compares two readings of the world states no value of its own.
 
+A claim step with no `observe` judges every value its line states. A
+pattern capture that no claim reads (as an expected value, or in a
+`where` claim) is refused at import, naming the key, since the line
+would say more than the step judges. Whether a docstring or a table
+fills a key is known only per line, so `nuka check` reports such a key
+that no claim reads (`claim-sentence-unread`, an error), and the run
+breaks every claim of the step with the same reason: `the docstring of
+the line fills args.note, which no claim reads, and the step has no
+observe to receive it, so nothing checks the value the line states`. The
+step reads nothing then (`observation: unobserved`, `attempts: 0`). A
+step with `observe` may take such a value as an input instead.
+
 A boolean literal is refused when the actual value comes from `observe`,
 and an expected value `{ observe }` reads that is a boolean breaks the
 claim at run. A boolean that `observe` computed is a judgment made in
@@ -2063,7 +2075,8 @@ A claim step's record has these fields of its own (see "Records"):
   `unjudged`), a `reason` when it broke for something other than the
   comparison itself (an undefined value, two JSON types, an expected text
   every string holds, a view that could not apply, a side compared with
-  itself) or when nukadoko could not judge it (a value that is not plain
+  itself, a value the line states that no claim reads) or when nukadoko
+  could not judge it (a value that is not plain
   JSON, a `Proxy`, a value nested too deep, an input `observe` could
   not receive as a copy, a value the args schema changed), `measured`, and `expected_measured` when the expected value
   came from `from` or `observe`. An `each` claim carries `actual_from`,
@@ -2076,7 +2089,8 @@ A claim step's record has these fields of its own (see "Records"):
   when it could not. The step's `error` then says why.
 - `attempts`: how many times the step read its values. Each `observe` call
   counts; a step with no `observe` reads its `from` values once, and a
-  step whose `observe` never ran records `0`.
+  step that read nothing (its `observe` never ran, or nukadoko refused
+  to judge it first) records `0`.
 - `readings`, under `poll` only: the readings the step kept (see "Poll"),
   and `readings_left_out` when it did not keep them all.
 
@@ -5781,12 +5795,13 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               view: "text", which trims the trailing newline
                               a program prints last. When the two are of two
                               different JSON types (a {string} capture
-                              against a z.number()), the claim compares the
-                              chained value with the literal of its type a
-                              word of the line fixes ("no {thing:string} is
-                              shown" claims 0), and --then refuses when no
-                              word does. Otherwise it writes an observe stub
-                              that throws "not implemented: <name>" and one
+                              against a z.number()), --then refuses: a claim
+                              across them never holds, and a claim on a word
+                              of the line instead would leave the stated
+                              value read by nothing, which a step with no
+                              observe may not do. Otherwise it writes an
+                              observe stub that throws "not implemented:
+                              <name>" and one
                               claim on what observe returns against the
                               first stated value. A line that states no
                               value but holds a word that fixes one (no,

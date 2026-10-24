@@ -653,6 +653,53 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
       );
     });
   });
+  // A value the line states that no claim reads, in a step with no observe
+  // to receive it, is a value nothing checks: the line says more than the
+  // step judges. The docstring or table key is known only per line, so
+  // `nuka check` and the run report that half (`claim-sentence-unread`).
+  if (!shape.hasObserve) {
+    const read = claimArgKeysRead(claims as readonly Claim[]);
+    const unread = [...shape.captureKeys].find((key) => !read.has(key));
+    if (unread !== undefined) {
+      throw new InvalidClaimError(
+        `the pattern captures "${unread}", and no claim reads it, and the step has no observe to receive it, so nothing checks the value the line states. ` +
+          `Compare a claim with "${unread}", or take it out of the pattern`,
+      );
+    }
+  }
+}
+
+/** Why a claim step does not judge the value its line's docstring or
+ * table states: the attachment fills `key`, no claim reads it, and the
+ * step has no `observe` to receive it. `null` when something reads it.
+ * `nuka check` reports this reason (`claim-sentence-unread`) and the run
+ * breaks the step's claims with it, since only the line says whether a
+ * docstring or a table fills a key. Pure. */
+export function sentenceUnreadReason(claims: readonly Claim[], hasObserve: boolean, key: string, attachment: "docstring" | "table"): string | null {
+  if (hasObserve || claimArgKeysRead(claims).has(key)) return null;
+  return `the ${attachment} of the line fills args.${key}, which no claim reads, and the step has no observe to receive it, so nothing checks the value the line states`;
+}
+
+/** The args keys a step's claims read: the key an `actual` path starts
+ * with, a sentence key named as an expected value, and the key a
+ * `{ from }` expected path starts with, in every claim and in an
+ * `each`'s `where` and item claims. Pure. */
+export function claimArgKeysRead(claims: readonly Claim[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  const addPath = (path: string): void => {
+    const head = pathSegments(path)?.[0];
+    if (head !== undefined) keys.add(head);
+  };
+  const addExpected = (expected: ClaimExpected): void => {
+    if (typeof expected === "string") keys.add(expected);
+    else if ("from" in expected) addPath(expected.from);
+  };
+  for (const claim of claims) {
+    addPath(claim.actual);
+    if (!isEachClaim(claim)) addExpected(claim.expected);
+    else for (const item of [...(claim.each.where ?? []), ...claim.each.claims]) addExpected(item.expected);
+  }
+  return keys;
 }
 
 /** The compares a `where` clause may not use on a place that overlaps an

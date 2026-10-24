@@ -7,7 +7,7 @@ import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
 import type { ClaimReading, ErrorKind, FixtureUsageEntry } from "../record/types.js";
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
 import { types } from "node:util";
-import { pathSegments, type Claim } from "../step/claims.js";
+import { pathSegments, sentenceUnreadReason, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
 import { isClaimStep, type ClaimStep, type RunStep, type Step } from "../step/define-step.js";
 import {
@@ -21,7 +21,7 @@ import {
   readingOf,
   readKey,
   takeReads,
-  unjudgedClaims,
+  claimsEndedEarly,
   unobservedClaims,
   judgingBudget,
   type ArgSide,
@@ -117,6 +117,9 @@ export interface RunValidatedStepInput {
   /** The text the line states an args key as (`sentenceTextOf`), or
    * `null`. Read only for a claim step. */
   readonly sentenceText: (key: string) => string | null;
+  /** The args key the line's docstring or table filled, and which one;
+   * absent when the line carries neither. Read only for a claim step. */
+  readonly attachment?: { readonly key: string; readonly kind: "docstring" | "table" };
   /** Injected by tests; the wall clock otherwise. */
   readonly clock?: PollClock;
 }
@@ -377,6 +380,21 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       claims: { judged: unobservedClaims(step.claims, claimInputs(noObservation)), observation: "unobserved", attempts, ...readingsField() },
     };
   };
+  // Static, so before any fixture is set up: a line whose docstring or
+  // table states a value no claim reads is a criterion the step does not
+  // judge, as `nuka check` reports (`claim-sentence-unread`).
+  const unread =
+    input.attachment === undefined ? null : sentenceUnreadReason(step.claims, step.observe !== undefined, input.attachment.key, input.attachment.kind);
+  if (unread !== null) {
+    const judged = claimsEndedEarly(step.claims, claimInputs(noObservation), "broken", unread);
+    return {
+      status: "failed",
+      error: { message: brokenClaimsMessage(judged.map((entry) => entry.record)), kind: "claim_broken" },
+      thrown: undefined,
+      fixtureUsage,
+      claims: { judged, observation: "unobserved", attempts: 0 },
+    };
+  }
   if (testsPatterns(step.claims)) {
     try {
       startPatternWorker();
@@ -412,7 +430,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     const reason =
       `observe would receive args.${inputCopies.key}, which ${inputCopies.problem}, and observe receives only copies of its inputs, ` +
       "so observe did not run and no claim was judged";
-    const judged = unjudgedClaims(step.claims, claimInputs(noObservation), reason);
+    const judged = claimsEndedEarly(step.claims, claimInputs(noObservation), "unjudged", reason);
     return {
       status: "failed",
       error: { message: brokenClaimsMessage(judged.map((entry) => entry.record)), kind: "claim_unjudged" },

@@ -1930,6 +1930,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               processCache: fixtureProcessCache,
               config,
               argSide: (key) => claimArgSide(key, originOf(key), (id) => recordLines.get(id) ?? null),
+              ...(attachmentKey === null || (attachmentOrigin !== "docstring" && attachmentOrigin !== "table")
+                ? {}
+                : { attachment: { key: attachmentKey, kind: attachmentOrigin } }),
               sentenceText: sentenceTextOf(
                 outcome.captures,
                 outcome.texts,
