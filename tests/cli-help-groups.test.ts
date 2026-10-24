@@ -47,7 +47,6 @@ describe("nuka --help", () => {
       "Exploring:",
       "do",
       "Upkeep:",
-      "tend",
       "clean",
       "skill",
       "Options:",

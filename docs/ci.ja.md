@@ -41,15 +41,16 @@ jobs:
 それを書いていないプロジェクトにそれを必要とする step があれば、この job はどの scenario も実行する前に、check で `playwright-missing` として止まります。
 
 単独の `nuka check` には、まだ 2 つの使い道があります。
-1 つは `additionalFeatureDirs` で、これを辿るのは `nuka check` と `nuka tend` だけです。
+1 つは `additionalFeatureDirs` で、これを辿るのは `nuka check` だけです。
 もう 1 つは、run が数秒で終わらないときにも数秒で終わらなければならないゲートです。
 このゲートは run と同じ対象、つまりファイルやディレクトリ(`npx nuka check features/checkout`)を受け、それについて run が止まるはずの error を報告します。
 
 ## ブラウザのプロジェクト: そのままコピーできる workflow
 
 これは 1 つのファイル、`.github/workflows/nukadoko.yml` です。
-すべての push と pull request で `nuka check` を実行し(数秒、ブラウザ不要)、それが通ったら `nuka run` を実行し(実際に実行するゲート)、`nuka tend` を毎週のスケジュールで実行します。
-これを実行しろと思い出させるものが他に無いからです。
+すべての push と pull request で `nuka check` を実行し(数秒、ブラウザ不要)、それが通ったら `nuka run` を実行します(実際に実行するゲート)。
+対象を指定しない `nuka check` は、壊れているものではなく腐りつつあるものについての注記も出力します。
+注記は、`--fail-on` がその code を名指さない限り job を失敗させません。
 2 つのコマンドを 2 つの job に分けているので、check が失敗すればブラウザをインストールする前に止まります。
 `nuka run` も実行の前に自分の scenario を改めて check します。
 その費用は step の discovery 1 回分で、ブラウザは要りません。
@@ -65,14 +66,9 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    # Weekly is a starting point, not a rule: pick whatever cadence a
-    # human will actually read the output on.
-    - cron: "0 6 * * 1"
 
 jobs:
   check:
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -83,11 +79,12 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts
       # PR gate: static, seconds, no browser. Put this on every PR; it can
-      # fail before anything runs.
+      # fail before anything runs. Its notes (what is rotting rather than
+      # what is broken) leave the exit code alone; add `--fail-on <code>`
+      # for each note the team has agreed to gate on.
       - run: npx nuka check
 
   run:
-    if: github.event_name != 'schedule'
     needs: check
     runs-on: ubuntu-latest
     permissions:
@@ -123,24 +120,6 @@ jobs:
       # run summary appears on this job's summary page by itself, since
       # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
       - run: npx nuka run features/
-
-  tend:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      - run: npm ci --ignore-scripts
-      # `nuka tend` reports what is rotting rather than what is broken
-      # (docs/spec.md "Tending"); it never gates a PR, which is why it
-      # sits on its own schedule rather than beside `check`/`run` above.
-      # Every finding is a note, so it exits 0; `--fail-on <code>` turns
-      # a chosen note red for a team that wants one to gate.
-      - run: npx nuka tend
 ```
 
 ## 上の workflow が action を固定し、インストールスクリプトを止め、権限を絞る理由
@@ -203,14 +182,10 @@ jobs:
   セルフホストや、それ以外の理由で永続するランナーでは、それに対して手当てが 2 つあります。
   ジョブの先頭で `rm -rf .nukadoko` するか、`npx nuka clean`(自身の `--help` を参照)を叩くかです。
   後者は同じことをより狭く行います。
-- **`nuka tend` は自分自身のトリガーを必要とします。**
-  workflow が明示しない限り、これを定期的に走らせるものは何もありません。
-  上の `tend` job がそのトリガーで、`check`/`run` の経路からは意図的に外してあります(docs/spec.ja.md の「Tending(手入れ)」を参照)。
-  今日対処しなくてよい note が PR を遅くしないためです。
 
 ## チームがその上に足すもの
 
-上の workflow がチームに委ねているものが 5 つあります。
+上の workflow がチームに委ねているものが 4 つあります。
 どれも小さいものです。
 
 - **pull request のコメントとしての run サマリ。**
@@ -291,13 +266,9 @@ jobs:
   失敗した scenario ごとに issue を作る step や、それらを再実行する step は、stderr ではなく `run.json` を読みます。
   `nuka run features/ --json > run.json` がそれを出力し、run はどちらの場合も同じファイルを `.nukadoko/runs/<run_id>/run.json` に書きます。
   その `scenarios` のエントリは、各 scenario の status と、行、status、step record、エラーを持つ step を持ち、失敗した scenario はそれを再実行する `do` コマンドを持ちます(docs/spec.ja.md の「Scenario(スクリプト化された経路)」を参照)。
-- **`tend` のジョブへの通知 step。**
-  `tend` の finding はどれも note です。
-  出力が Actions のタブに留まる週次のジョブは、誰も読まないジョブです。
-  人が見る場所へ出力を投稿するか、チームが対処すると決めた note に `--fail-on <code>` を付けます。
 - **ランナー自身の速さに合わせた `retention.runs`。**
   既定は最新 20 回の run を残します。
-  merge のたびと毎晩に走る永続ランナーは数日で 20 に達し、`nuka tend` と `nuka do --use` は保持された run しか読みません。
+  merge のたびと毎晩に走る永続ランナーは数日で 20 に達し、`nuka report` と `nuka do --use` は保持された run しか読みません。
   数字を決める前に、1 週間の速さを測ってください。
 
 ## このページが主張しないこと

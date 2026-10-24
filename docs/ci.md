@@ -48,7 +48,7 @@ a project that does not list it stops this job at the check, as
 `playwright-missing`, before any scenario runs.
 
 `nuka check` on its own still has two uses: `additionalFeatureDirs`, which
-only `nuka check` and `nuka tend` walk, and a gate that has to stay seconds
+only `nuka check` walks, and a gate that has to stay seconds
 long when the run does not. That gate takes the targets the run takes,
 files or directories (`npx nuka check features/checkout`), and reports the
 errors the run would stop on for them.
@@ -57,9 +57,10 @@ errors the run would stop on for them.
 
 This is one file, `.github/workflows/nukadoko.yml`. It runs `nuka check` on
 every push and pull request (seconds, no browser), `nuka run` after it
-passes (the gate that actually executes), and `nuka tend` on a weekly
-schedule, since nothing else here reminds anyone to run it. The two
-commands sit in two jobs so a failed check stops the work before a browser
+passes (the gate that actually executes). With no target, `nuka check`
+also prints notes, what is rotting rather than what is broken; they never
+fail the job unless `--fail-on` names their code. The two commands sit in
+two jobs so a failed check stops the work before a browser
 is installed. `nuka run` checks its own scenarios again before it executes,
 which costs one more step discovery and no browser.
 
@@ -76,14 +77,9 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    # Weekly is a starting point, not a rule: pick whatever cadence a
-    # human will actually read the output on.
-    - cron: "0 6 * * 1"
 
 jobs:
   check:
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -94,11 +90,12 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts
       # PR gate: static, seconds, no browser. Put this on every PR; it can
-      # fail before anything runs.
+      # fail before anything runs. Its notes (what is rotting rather than
+      # what is broken) leave the exit code alone; add `--fail-on <code>`
+      # for each note the team has agreed to gate on.
       - run: npx nuka check
 
   run:
-    if: github.event_name != 'schedule'
     needs: check
     runs-on: ubuntu-latest
     permissions:
@@ -134,24 +131,6 @@ jobs:
       # run summary appears on this job's summary page by itself, since
       # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
       - run: npx nuka run features/
-
-  tend:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-      - run: npm ci --ignore-scripts
-      # `nuka tend` reports what is rotting rather than what is broken
-      # (docs/spec.md "Tending"); it never gates a PR, which is why it
-      # sits on its own schedule rather than beside `check`/`run` above.
-      # Every finding is a note, so it exits 0; `--fail-on <code>` turns
-      # a chosen note red for a team that wants one to gate.
-      - run: npx nuka tend
 ```
 
 ## Why the workflow above pins actions, skips install scripts, and limits permissions
@@ -236,15 +215,10 @@ of the above; these four are what changes.
   fixes for it: `rm -rf .nukadoko` at the start of the job, or
   `npx nuka clean` (see its own `--help`), which does the same thing more
   narrowly.
-- **`nuka tend` needs its own trigger.** Nothing runs it periodically
-  unless a workflow says so; the `tend` job above is that trigger, kept
-  off the `check`/`run` path on purpose (see "Tending" in
-  [docs/spec.md](spec.md#tending)) so a note nobody has to act on today
-  never slows down a PR.
 
 ## What a team adds on top
 
-Five things the workflow above leaves to the team, each small.
+Four things the workflow above leaves to the team, each small.
 
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
@@ -342,13 +316,9 @@ Five things the workflow above leaves to the team, each small.
   steps with their line, status, step record, and error, and for a failed
   one the `do` command that reruns it (see "Scenarios (the scripted
   path)" in [docs/spec.md](spec.md)).
-- **A notification step on the `tend` job.** Its findings are notes, and
-  a weekly job whose output stays in the Actions tab is a job nobody reads;
-  post its output somewhere a person looks, or add `--fail-on <code>` for
-  the notes the team has agreed to act on.
 - **`retention.runs` sized to the runner's own pace.** The default keeps
   the newest 20 runs. A persistent runner that runs every merge and every
-  night reaches 20 in days, and `nuka tend` and `nuka do --use` read only
+  night reaches 20 in days, and `nuka report` and `nuka do --use` read only
   the retained runs, so measure the pace for a week before deciding the
   number.
 

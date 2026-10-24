@@ -9,7 +9,6 @@ import { describe, expect, it } from "vitest";
 import { listCheckCodes } from "../src/check/codes.js";
 import { runCli } from "../src/cli/run-cli.js";
 import { listRunCodes } from "../src/finding/run-codes.js";
-import { TEND_CODES } from "../src/tend/types.js";
 import { createCaptureSink, createEmptyTempDir, removeTempDir, repoRoot, sourceNodeArgs } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -221,7 +220,6 @@ describe("nukadoko skill size budget", () => {
 const registeredCodes: ReadonlySet<string> = new Set([
   ...listCheckCodes().map((entry) => entry.code),
   ...listRunCodes().map((entry) => entry.code),
-  ...TEND_CODES,
 ]);
 
 function ruleShapeProblems(text: string): string[] {
@@ -237,7 +235,7 @@ function ruleShapeProblems(text: string): string[] {
     const checkedBy = /^Checked by:([\s\S]*?)(?:\n\n|$)/m.exec(section)?.[1] ?? "";
     const codes = [...checkedBy.matchAll(/`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`/g)].map((match) => match[1]!);
     for (const code of codes) {
-      if (!registeredCodes.has(code)) problems.push(`${id} names \`${code}\`, which is not a check, run, or tend code`);
+      if (!registeredCodes.has(code)) problems.push(`${id} names \`${code}\`, which is not a check or run code`);
     }
     if (codes.length === 0 && !/^\s*review\b/.test(checkedBy)) {
       problems.push(`${id}'s Checked by: names no code and does not say review`);
@@ -272,7 +270,7 @@ describe("scenario-rules.md rule shape", () => {
     ].join("\n");
     expect(ruleShapeProblems(text)).toEqual([
       "S1 has no Good: line",
-      "S1 names `then-reads-nothing`, which is not a check, run, or tend code",
+      "S1 names `then-reads-nothing`, which is not a check or run code",
       "S3 is not numbered S2",
       "S3's Checked by: names no code and does not say review",
     ]);

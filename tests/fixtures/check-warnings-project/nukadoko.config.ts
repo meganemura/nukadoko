@@ -5,11 +5,8 @@ import { defineConfig } from "./nukadoko-shim.js";
 // these are warnings only, not errors.
 //   - envFiles names a file that doesn't exist on disk.
 //   - environments.staging.envFiles names a file that doesn't exist either.
-//   - secrets.public names a key no configured envFile actually defines —
-//     `nuka check` used to warn about this (secrets-public-key-unknown);
-//     it moved to `nuka tend`, so this
-//     fixture is now shared with tests/tend-moved-findings.test.ts, which
-//     asserts the same key surfaces there instead.
+//   - secrets.public names a key no configured envFile actually defines
+//     (secrets-public-key-unknown).
 export default defineConfig({
   envFiles: [".env.missing"],
   secrets: { public: ["UNKNOWN_KEY"] },

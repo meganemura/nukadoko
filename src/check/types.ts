@@ -1,5 +1,5 @@
 // Responsibility: the one issue shape every check category (binding-check,
-// feature-check, config-check) produces, so `nuka check` can treat pattern/
+// feature-check, config-check, and the notes) produces, so `nuka check` can treat pattern/
 // schema mismatches, undefined steps, config coherence, etc. uniformly for
 // both the human-readable and `--json` outputs (docs/spec.md "CLI summary").
 // `code` is the stable, kebab-case identifier a script can match on, typed
@@ -19,6 +19,9 @@ export interface CheckIssue {
   readonly file?: string;
   readonly line?: number;
   readonly step?: string;
+  /** Set instead of `step` on a finding about a `config.fixtures` entry, so a
+   * fixture and a step of the same name stay distinguishable in `--json`. */
+  readonly fixture?: string;
   /** Set where the finding is raised only when that place knows a more
    * exact edit than the code's registry entry, such as the file to change. */
   readonly fix?: string;
@@ -35,4 +38,7 @@ export type CheckFinding = CheckIssue;
 export interface CheckReport {
   readonly errors: readonly CheckFinding[];
   readonly warnings: readonly CheckFinding[];
+  /** Empty unless the report covers the whole project: src/check/analyze.ts
+   * says why. */
+  readonly notes: readonly CheckFinding[];
 }

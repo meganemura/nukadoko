@@ -32,8 +32,16 @@ import {
   RUN_HOOK_ARG_COUNT,
   SCENARIO_HOOK_ARG_COUNT,
 } from "./done-callback.js";
+import { findDescriptionTodos } from "./description-todo.js";
 import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
+import { findUnusedFixtures } from "./fixture-unused.js";
+import { findUnusedFromDeclarations } from "./from-unused.js";
+import { findUndescribedFields } from "./missing-describe.js";
 import { missingTsSourceSentence } from "./missing-ts-source.js";
+import { findTypelessPackageJsons } from "./package-type-missing.js";
+import { findUnboundPatternedSteps } from "./pattern-unbound.js";
+import { resolveStepOccurrences } from "./step-bindings.js";
+import { findUnusedParameterTypes } from "./unused-parameter-type.js";
 import { findPartCycles, findPartMutatesContradictions } from "./parts-check.js";
 import { findPlaywrightMissing, playwrightImportMissing } from "./playwright-check.js";
 import { checkCodeFix } from "./codes.js";
@@ -114,7 +122,7 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
 // Responsibility: the one function `nuka check` runs — load the project the
 // same way `nuka steps`/`nuka do` already do (loadConfig, discoverSteps),
 // then run every check category and merge their issues into the single
-// `{ errors, warnings }` report docs/spec.md's "CLI summary" describes.
+// `{ errors, warnings, notes }` report docs/spec.md's "CLI summary" describes.
 //
 // A project's config failing to load, or discovery finding a duplicate step
 // name/pattern/`defineWorld`, is *not* one of this report's issues — it is
@@ -146,8 +154,7 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
  * featuresDir and additionalFeatureDirs. */
 export async function analyzeProject(rootDir: string): Promise<CheckReport> {
   // additionalFeatureDirs joins featuresDir here: a no-target `nuka check`
-  // is one of the two commands whose default scan includes it (`nuka tend`
-  // is the other), while `nuka run`'s default scan does not. A config
+  // scans it, while `nuka run`'s default scan does not. A config
   // mistake in additionalFeatureDirs itself is config-check.ts's own
   // `additional-feature-dir-missing`, not repeated here;
   // `missingAdditionalDirs` is intentionally unread.
@@ -315,9 +322,9 @@ async function reportFor(
 
   // Both findings below are
   // decidable from the walk alone (an extension check, a length check),
-  // never a guess about a file's contents — and both are things a run needs
-  // known beforehand, the same standard that sorts a finding into `check`
-  // rather than `tend`. Errors, not warnings: a `.cjs`
+  // never a guess about a file's contents, and both are things a run needs
+  // known beforehand, the standard that makes a finding an error or a
+  // warning rather than a note. Errors, not warnings: a `.cjs`
   // file is nukadoko's one already-documented go/no-go (docs/migration.md
   // "CommonJS glue"), the same certainty `step-file-import-failed` above
   // already gets error severity for, and a featuresDir with nothing loadable
@@ -595,7 +602,8 @@ async function reportFor(
   // says why), so only an undefined line pays for the wider read.
   const featureErrors = withUnboundSuffix(featureResult.errors, () => {
     // A target outside every scanned directory is not counted, the same as
-    // for tend: the suffix's own wording says which lines were read.
+    // for `pattern-unbound`: the suffix's own wording says which lines were
+    // read.
     const bound = selection
       ? boundStepNames(
           loadFeaturesFromDirs(rootDir, config.featuresDir, config.additionalFeatureDirs).features,
@@ -635,6 +643,13 @@ async function reportFor(
     errors.push(...featureErrors);
   }
 
+  // Notes are computed only for a whole-project report, a `nuka check` with
+  // no target. `pattern-unbound` and `from-unused` are judged on every
+  // feature the project scans, so a target's selection would call a step
+  // bound in a file it left out unbound, and `nuka run` refuses only over
+  // errors, so it would pay for findings it never reads.
+  const notes = selection ? [] : projectNotes(rootDir, config, vocabulary, bindingResult.patterns, features, fixtureGraph, walkedFiles);
+
   // A step-scoped finding is raised with the step's name only; the file
   // that defines the step is what an agent opens to fix it.
   const finish = (issue: CheckIssue): CheckFinding => {
@@ -649,7 +664,35 @@ async function reportFor(
   };
 
   return {
-    report: { errors: errors.map(finish), warnings: warnings.map(finish) },
+    report: { errors: errors.map(finish), warnings: warnings.map(finish), notes: notes.map(finish) },
     undefinedSteps: importFailures.length > 0 ? [] : featureResult.undefinedSteps,
   };
+}
+
+/** The notes of a whole-project report, grouped by kind. Every input was
+ * already loaded for the errors and warnings; only the per-line step
+ * occurrences are new, because `from-unused` needs each line's captures. */
+function projectNotes(
+  rootDir: string,
+  config: Config,
+  vocabulary: DiscoveryResult["vocabulary"],
+  patterns: ReturnType<typeof checkBindings>["patterns"],
+  features: LoadFeaturesResult["features"],
+  fixtureGraph: ReturnType<typeof buildFixtureGraph>,
+  walkedFiles: readonly string[],
+): CheckIssue[] {
+  const occurrences = resolveStepOccurrences(features, patterns);
+  // A finding about a config entry names the config file, the file to open.
+  const configFile = resolveConfigFileName(rootDir);
+  const inConfigFile = (issue: CheckIssue): CheckIssue => ({ ...issue, file: configFile });
+  const loadedFiles = existsSync(path.join(rootDir, configFile)) ? [configFile, ...walkedFiles] : walkedFiles;
+  return [
+    ...findUnusedFromDeclarations(vocabulary, occurrences),
+    ...findUnboundPatternedSteps(vocabulary, occurrences, rootDir, [config.featuresDir, ...config.additionalFeatureDirs]),
+    ...findDescriptionTodos(vocabulary, rootDir),
+    ...findUndescribedFields(vocabulary),
+    ...findUnusedParameterTypes(vocabulary, config.parameterTypes).map(inConfigFile),
+    ...findUnusedFixtures(vocabulary, fixtureGraph).map(inConfigFile),
+    ...findTypelessPackageJsons(rootDir, loadedFiles),
+  ];
 }

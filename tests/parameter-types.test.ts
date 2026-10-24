@@ -103,7 +103,8 @@ describe("config.parameterTypes: from-dir folds the with/without location-clause
 
     expect(stderr.text()).toBe("");
     const report = JSON.parse(stdout.text());
-    expect([report.verdict, report.findings]).toEqual(["passed", []]);
+    const notNotes = report.findings.filter((finding: { severity: string }) => finding.severity !== "note");
+    expect([report.verdict, notNotes]).toEqual(["passed", []]);
     expect(exitCode).toBe(0);
   });
 

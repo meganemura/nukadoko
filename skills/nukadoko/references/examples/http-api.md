@@ -233,11 +233,6 @@ $ npx nuka run --probe
 7 scenarios: 7 passed, 0 failed  (1s)
 note	repeated-scenario-prefix	features/items.feature	2 scenarios begin with the same 1 step, which took 0 seconds across them, 6.5% of this run's summed scenario time. The shared steps: "an item named "lamp" exists". "an item named "lamp" exists" does not declare mutates: false, so a later scenario may read what this opening writes: a "process"-scope fixture would share that state between scenarios. A Background keeps the shared steps in one place and still runs them for each scenario.
   fix: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
-$ npx nuka tend
-scanned: features
-bed: typed 7, compat 0, read-only 5
-declared: describe 18/18
-ok: nothing to tend
 ```
 
 `nuka run` reported one note, and it was not acted on.

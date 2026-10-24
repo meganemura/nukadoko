@@ -6,7 +6,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { stepTemplate } from "../src/cli/scaffold.js";
-import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot } from "./helpers/fixtures.js";
+import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot, withoutCheckNotes } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 
 // Responsibility: `nuka scaffold <name> --pattern <text> [--then]`. The
@@ -253,7 +253,7 @@ describe("nuka scaffold --pattern", () => {
     );
 
     const check = await cli(rootDir, ["check"]);
-    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
     expect(check.exitCode).toBe(0);
 
     const unimplemented = await cli(rootDir, ["run", "--records", "features/sum.feature"]);
@@ -416,7 +416,7 @@ describe("nuka scaffold --pattern: any text", () => {
           const listed = JSON.parse(steps.stdout).steps.find((step: { name: string }) => step.name === name);
           expect(listed?.patterns).toEqual([pattern]);
           const check = await cli(rootDir, ["check"]);
-          expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+          expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
         } finally {
           await rm(filePath, { force: true });
         }

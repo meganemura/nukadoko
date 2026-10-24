@@ -68,7 +68,7 @@ describe("repeated singular flags", () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
 
-    const exitCode = await runCli(["tend", "--fail-on", "a", "--fail-on", "b"], {
+    const exitCode = await runCli(["check", "--fail-on", "a", "--fail-on", "b"], {
       rootDir,
       stdout,
       stderr,
@@ -76,7 +76,7 @@ describe("repeated singular flags", () => {
 
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
-    expect(withoutNoConfigLine(stderr.text())).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "a", "b" are not codes nuka tend reports\n  fix: Name a code that nuka tend --codes lists.\n  do: nuka tend --codes\n');
+    expect(withoutNoConfigLine(stderr.text())).toBe('refused\tfail-on-unknown-code\t-\t--fail-on: "a", "b" are not codes nuka check reports\n  fix: Name an error, warning, or note code that nuka check --codes lists.\n  do: nuka check --codes\n');
   });
 
   it("treats a repeated boolean as that boolean", async () => {

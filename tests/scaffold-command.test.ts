@@ -17,6 +17,7 @@ import {
   removeTempDir,
   repoRoot,
   testsDir,
+  withoutCheckNotes,
 } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka scaffold <name> --command`, the When step that runs
@@ -280,7 +281,7 @@ describe("nuka scaffold --command", () => {
     );
 
     const check = await cli(rootDir, ["check"]);
-    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
 
     const message = "fill in the entry point: features/steps/run-greet.ts:4";
     const done = await cli(rootDir, ["do", "run-greet", "--args", '{"name":"Ada"}']);
@@ -549,7 +550,7 @@ describe("nuka scaffold --command --cwd", () => {
     );
 
     const check = await cli(rootDir, ["check"]);
-    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
     const run = await cli(rootDir, ["run", "--records", "features/show.feature"]);
     expect(run.stderr).toContain("2 scenarios: 2 passed, 0 failed");
     expect(run.exitCode).toBe(0);
@@ -845,7 +846,7 @@ describe("nuka scaffold --command: any pattern", () => {
           await writeFile(featurePath, `Feature: f\n  Scenario: s\n    When ${lineText}\n`);
           const check = await cli(rootDir, ["check"]);
           // The feature is the one When line, so its only finding is the missing Then.
-          expect(check.stdout + check.stderr).toBe(
+          expect(withoutCheckNotes(check.stdout + check.stderr)).toBe(
             `warning\tscenario-without-then\tfeatures/${name}.feature:2\tScenario "s" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\n`,
           );
           for (const key of ["stdout", "exitCode", "stderr"]) {

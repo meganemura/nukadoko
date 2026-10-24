@@ -45,23 +45,38 @@ This part does not change release to release.
 
 ## 0.21.0 to the next release
 
-- **`repeated-scenario-prefix` comes from `nuka run`.** `nuka tend` no
-  longer reports it. Every `nuka run` adds it to its own findings as a
-  note, measured from that run: it is in `run.json`'s `findings`, in
-  the `--json` document, and on stderr after the count line. It never
-  changes the exit code. A job that read it from `nuka tend --json` reads
-  the `findings` of the run instead, and filters by `code`. A `nuka tend`
-  job that lists the code in `--fail-on` drops it from the list: tend
-  refuses it with `fail-on-unknown-code`.
+- **`nuka tend` is removed; `nuka check` reports its findings.** `nuka
+  tend` now refuses with `removed-command`. A job that read
+  `nuka tend --json` runs `nuka check --json` on the whole project (no
+  feature targets) and keeps the findings whose `severity` is `"note"`,
+  for example `jq '.findings[] | select(.severity == "note")'`. A job that
+  ran `nuka tend --fail-on X` runs `nuka check --fail-on X`: the exit
+  code is 1 when the report contains `X`, and `--json` lists each hit in
+  `fail_on_hits`. `nuka check` with feature targets, and `nuka run`,
+  compute no notes, so a gate on a note runs a whole-project check.
+  `secrets-public-key-unknown` and `secrets-redact-key-unknown` are
+  warnings of every `nuka check`; neither changes the exit code unless
+  `--fail-on` lists it. The `scanned:` line and the field-description
+  totals of tend's summary have no replacement: `pattern-unbound` names
+  the directories it scanned in its own message.
+
+- **`repeated-scenario-prefix` comes from `nuka run`.** Every `nuka run`
+  adds it to its own findings as a note, measured from that run: it is
+  in `run.json`'s `findings`, in the `--json` document, and on stderr
+  after the count line. It never changes the exit code. A job that read
+  it from the removed `nuka tend --json` reads the `findings` of the run
+  instead, and filters by `code`. A gate on it drops the code: `nuka
+  check --fail-on` refuses it with `fail-on-unknown-code`, because a
+  check report never contains it.
 
 - **Four notes are gone.** `fixture-replaces-builtin`,
   `fixture-touches-app`, `parameter-type-support-origin`, and
   `post-navigation-read` are no longer reported. A job that gated on one
-  of them, or filtered `--json` for it, drops that gate: `nuka tend
-  --fail-on` refuses the four codes by name. Nothing replaces them. The
-  facts they named are still on disk for a person who looks: a fixture's
-  destructuring, a support-side `defineParameterType`, a step record's
-  `actions`.
+  of them, or filtered `--json` for it, drops that gate: `nuka check
+  --fail-on` refuses the four codes with `fail-on-unknown-code`. Nothing
+  replaces them. The facts they named are still on disk for a person who
+  looks: a fixture's destructuring, a support-side `defineParameterType`,
+  a step record's `actions`.
 
 ## 0.20.0 to 0.21.0
 

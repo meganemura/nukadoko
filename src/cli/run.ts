@@ -234,7 +234,7 @@ export interface RunRunOptions {
   rootDir: string;
   /** `<feature[:line]>` or directory targets. None means `featuresDir`,
    * the same default `nuka check` walks (without `additionalFeatureDirs`,
-   * which only `nuka check` and `nuka tend` read). */
+   * which only `nuka check` reads). */
   featureArgs: readonly string[];
   /** `false` under `--no-check`: skip the static check this run otherwise
    * performs over its own selection before it executes anything. */

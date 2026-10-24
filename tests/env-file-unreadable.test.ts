@@ -33,7 +33,6 @@ describe("an envFiles path that cannot be read", () => {
     [["run", "features/passing.feature"], "run"],
     [["run", "--no-check", "features/passing.feature"], "run"],
     [["do", "ambiguous-a", "--args", "{}"], "do"],
-    [["tend"], "tend"],
   ])("nuka %j refuses with env-file-unreadable", async (argv, command) => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(argv, { rootDir, stdout: createCaptureSink(), stderr });

@@ -110,7 +110,7 @@ export interface LoadFeaturesResult {
  * caller re-sorts what this returns by
  * rootDir-relative path in plain byte order of its own (see that file's own
  * header for why): the tree-order sort this function applies below is
- * `nuka check`/`nuka tend`'s own convention, not what a run's own
+ * `nuka check`'s own convention, not what a run's own
  * determinism needs. */
 export function walkFeatureFiles(dir: string, entered: Set<string> = new Set()): string[] {
   if (!enterOnce(dir, entered)) {
@@ -416,7 +416,7 @@ export function loadFeaturesFromDirs(
         // Inside the try: a dangling link reaches here as a file, and its
         // read failure is this file's entry, not the end of the report.
         const source = readFileSync(filePath, "utf8");
-        // This caller (src/check/*.ts, src/tend/*.ts) has no hook to run
+        // This caller (src/check/*.ts) has no hook to run
         // against, so it never keeps the `gherkinDocument`
         // `parseFeatureSource` also returns the way `nuka run`'s own path
         // (src/run/select-pickles.ts onward to src/run/run-scenario.ts)

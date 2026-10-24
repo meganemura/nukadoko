@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// Shares its name with the `loggedIn` fixture on purpose: `nuka tend --json`
+// Shares its name with the `loggedIn` fixture on purpose: `nuka check --json`
 // must keep the step's findings and the fixture's findings apart.
 export default defineStep({
   pattern: "same name as a fixture",

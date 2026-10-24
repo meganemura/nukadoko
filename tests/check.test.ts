@@ -24,6 +24,7 @@ describe("nuka check", () => {
       command: "check",
       verdict: "passed",
       findings: [],
+      fail_on_hits: [],
     });
     expect(exitCode).toBe(0);
   });
@@ -61,16 +62,15 @@ describe("nuka check", () => {
           fix: 'Create .env.staging-missing, or remove ".env.staging-missing" from environments.staging.envFiles in nukadoko.config.ts.',
         }),
         expect.objectContaining({ code: "then-mutates" }),
+        // The config names a secrets.public key that no envFile defines.
+        expect.objectContaining({
+          code: "secrets-public-key-unknown",
+          file: "nukadoko.config.ts",
+          message: expect.stringContaining("UNKNOWN_KEY"),
+        }),
       ]),
     );
-    // secrets-public-key-unknown moved to `nuka tend` — this fixture's
-    // config still names an undefined
-    // secrets.public key (tests/tend-moved-findings.test.ts's own fixture
-    // reuse), but `check` no longer reports it.
-    expect(report.warnings.some((issue: { code: string }) => issue.code === "secrets-public-key-unknown")).toBe(
-      false,
-    );
-    expect(report.warnings).toHaveLength(3);
+    expect(report.warnings).toHaveLength(4);
     expect(exitCode).toBe(0);
   });
 
@@ -188,9 +188,14 @@ describe("nuka check", () => {
     expect(exitCode).toBe(1);
     const lines = stdout.text().trimEnd().split("\n");
     expect(lines.length).toBeGreaterThan(0);
+    // Errors come first; the notes this whole-project check adds follow them.
+    const severities: string[] = [];
     for (const [index, line] of lines.entries()) {
-      expect(line).toMatch(index % 2 === 0 ? /^error\t/ : /^  (fix|do): \S/);
+      expect(line).toMatch(index % 2 === 0 ? /^(error|warning|note)\t/ : /^  (fix|do): \S/);
+      if (index % 2 === 0) severities.push(line.split("\t")[0]!);
     }
+    expect(severities[0]).toBe("error");
+    expect(severities).toEqual([...severities].sort((a, b) => ["error", "warning", "note"].indexOf(a) - ["error", "warning", "note"].indexOf(b)));
   });
 
   it("undefined-step hints at an escapable near-miss pattern (fineract-style bare parens)", async () => {

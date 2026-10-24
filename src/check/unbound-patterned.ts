@@ -6,9 +6,9 @@ import { createStepTextMatcher } from "./feature-check.js";
 
 // Responsibility: which typed steps declare a pattern that no feature line
 // in the project binds, and the sentence `undefined-step` appends to name
-// them. `nuka tend`'s `pattern-unbound` note (src/tend/pattern-unbound.ts)
-// and `nuka check`'s `undefined-step` suffix both read the list from here,
-// so the two commands name the same steps.
+// them. The `pattern-unbound` note (src/check/pattern-unbound.ts) and the
+// `undefined-step` suffix both read the list from here, so the two findings
+// name the same steps.
 //
 // The suffix exists because a renamed sentence or a renamed pattern leaves
 // one feature line undefined and one step unbound at the same time. Without
@@ -18,7 +18,7 @@ import { createStepTextMatcher } from "./feature-check.js";
 // stays beside it.
 //
 // The set is always judged on every feature the project scans (featuresDir,
-// and additionalFeatureDirs, the files `tend` reads), never on the
+// and additionalFeatureDirs), never on the
 // files a target selected. Judged on a selection, a step bound in a file
 // outside it would be called unbound, the same undefined line would read
 // differently under `nuka check a.feature` and `nuka check a.feature
@@ -53,8 +53,8 @@ export function rootRelativeStepFile(rootDir: string, entry: { readonly filePath
 export const UNBOUND_NAMED_LIMIT = 3;
 
 /** Names of the steps some line resolves to exactly one of. A line that
- * matches two patterns binds neither, the same rule `nuka tend` and `nuka
- * run` apply. */
+ * matches two patterns binds neither, the same rule the `pattern-unbound`
+ * note and `nuka run` apply. */
 export function boundStepNames(features: readonly FeatureFile[], patterns: readonly CheckedPattern[]): Set<string> {
   const match = createStepTextMatcher(patterns);
   const bound = new Set<string>();

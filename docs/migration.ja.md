@@ -310,7 +310,7 @@ pattern の無い step も完全な語彙であり、`nuka do` で実行でき�
   対象ごとに 1 回走らせていたスイート(シェルのループや、プロファイルごとの CI ジョブ)は、1 回の run になります。
   各対象を `environments` で名付け、`nuka run --env a --env b` を渡します。
 - `"type"` の無い `package.json` の下では、`.ts` ファイルは Node の警告つきで読み込まれます。
-  `nuka tend` はそれを `package-type-missing` として報告します。
+  `nuka check` はそれを注記 `package-type-missing` として報告します。
 - `nuka run` は自分のレポートを書きません。
   cucumber messages を読んでいたフォーマッタや JUnit ベースの CI は、各 run のあとに `nuka report --format messages --out <path>` で描きます。
   Allure なら `--format allure` で同じことをします。

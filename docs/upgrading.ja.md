@@ -38,19 +38,30 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 ## 0.21.0 から次のリリースへ
 
+- **`nuka tend` は削除され、その findings は `nuka check` が報告します。**
+  `nuka tend` はいま `removed-command` で拒否します。
+  `nuka tend --json` を読んでいたジョブは、プロジェクト全体に対して(feature の対象を指定せずに) `nuka check --json` を実行し、`severity` が `"note"` の findings を残します。
+  たとえば `jq '.findings[] | select(.severity == "note")'` です。
+  `nuka tend --fail-on X` を実行していたジョブは、`nuka check --fail-on X` を実行します。
+  レポートに `X` が含まれると終了コードは 1 になり、`--json` は各ヒットを `fail_on_hits` に並べます。
+  feature の対象を指定した `nuka check` と `nuka run` は注記を計算しないので、注記でゲートするジョブはプロジェクト全体の check を実行します。
+  `secrets-public-key-unknown` と `secrets-redact-key-unknown` は、どの `nuka check` でも警告として出ます。
+  どちらも、`--fail-on` に並べない限り終了コードを変えません。
+  tend の要約にあった `scanned:` の行と、フィールドの説明の集計には、代わりがありません。
+  `pattern-unbound` は、走査したディレクトリを自分のメッセージの中で名指します。
+
 - **`repeated-scenario-prefix` は `nuka run` が出します。**
-  `nuka tend` はもう報告しません。
   どの `nuka run` も、その run から計測した note として、自分の findings に加えます。
   `run.json` の `findings`、`--json` の文書、stderr の件数の行の後に出ます。
   終了コードは変えません。
-  `nuka tend --json` から読んでいたジョブは、代わりに run の `findings` を読み、`code` で絞り込みます。
-  `nuka tend` の `--fail-on` にこの code を並べていたジョブは、一覧から外します。
-  tend はこれを `fail-on-unknown-code` で拒否します。
+  削除された `nuka tend --json` から読んでいたジョブは、代わりに run の `findings` を読み、`code` で絞り込みます。
+  この code でゲートしていたジョブは、その code を外します。
+  check のレポートにこの code は含まれないので、`nuka check --fail-on` はこれを `fail-on-unknown-code` で拒否します。
 
 - **4 つの note がなくなります。**
   `fixture-replaces-builtin`、`fixture-touches-app`、`parameter-type-support-origin`、`post-navigation-read` は、もう報告されません。
   これらのどれかでゲートしていた、または `--json` をこれらで絞り込んでいたジョブは、そのゲートを外します。
-  `nuka tend --fail-on` は、この 4 つの code を名指しで拒否します。
+  `nuka check --fail-on` は、この 4 つの code を `fail-on-unknown-code` で拒否します。
   代わりになるものはありません。
   これらが名指していた事実は、見る人のためにいまもディスク上にあります。
   fixture の分割代入、support 側の `defineParameterType`、step record の `actions` です。

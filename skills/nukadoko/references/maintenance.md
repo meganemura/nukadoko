@@ -1,55 +1,52 @@
 # Keeping the vocabulary healthy over time
 
-## When to run it, and what to do with the answer
+## When the notes appear, and what to do with them
 
-`nuka check` answers whether the next run can proceed. `nuka tend` answers
-a different question: whether the vocabulary and the records behind it are
-rotting. A step nothing binds any more, a fixture nothing names, a field
-no description explains: none of that stops a run, so
-`nuka check` never mentions it. `nuka tend` is what finds it, and it is
-not a step of the acceptance loop.
+`nuka check` with no target reports errors, warnings, and notes. Its errors
+answer whether the next run can proceed. Its notes answer a different
+question: whether the vocabulary and the records behind it are rotting. A
+step nothing binds any more, a fixture nothing names, a field no
+description explains: none of that stops a run, so a note never changes the
+exit code, and acting on one is not a step of the acceptance loop.
 
-A step file that failed to import is `nuka check`'s report, not tend's.
-`nuka check` names it as `step-file-import-failed`, and `nuka tend` counts
-only the steps that imported, so its counts and findings leave that file's
-steps out. Fix that import first; the tend report is not complete until
+A `nuka check` with targets, and the check `nuka run` runs before it
+executes, print no notes: whether a step is bound depends on every feature
+the project scans, so only the whole-project check can say.
+
+A step file that failed to import is an error, `step-file-import-failed`,
+and the notes count only the steps that imported, so they leave that
+file's steps out. Fix that import first; the notes are not complete until
 it is. When the finding ends with `; <path>.js stands for
 <path>.ts, which does not exist; update the import in <file>`, a step file was
 renamed or deleted under an import that still names it: point the import
 in the file it names at the new file, or remove it.
 
-Do not run `nuka tend` on every pull request. It runs on a schedule, as
-its own CI job (`docs/ci.md` in the nukadoko package), so its notes reach
-the team on that schedule and not as part of each change. Run it yourself
-when the user asks, or when you are asked to act on what that job printed.
-
-Report what it found and stop there. Each finding is about something the
+Report what the notes say and stop there. Each note is about something the
 user chose, so acting on one without being asked replaces their choice
 with yours. Two shapes come up often enough to name here; the rest of
-this file is what each finding actually means. A step nothing binds any
+this file is what each note actually means. A step nothing binds any
 more is usually a deletion someone forgot to finish, and a fixture
 nothing names is usually setup that outlived the scenario that needed it.
-Say which findings you would act on and what each would change, then
-wait. Nothing here is urgent; a finding that has waited a week can wait
+Say which notes you would act on and what each would change, then
+wait. Nothing here is urgent; a note that has waited a week can wait
 for an answer.
 
 ## What it reports
 
-Every finding `nuka tend` reports is a note a project is allowed to carry
-rather than something blocking, so it exits 0 by default. A job that must
-block on one of them passes `--fail-on <code>` (for instance
-`pattern-unbound`); the finding stays a note in the output, and only that
-invocation's exit code turns red. The code to pass is the one printed
-beside each finding, or one from `nuka tend --codes`, which lists every
-code with a one-line meaning before any of them has fired. Each note also
-names a file and a `fix:` line: what to open, and the change to make if
-the note calls for one.
+A note is something a project is allowed to carry rather than something
+blocking, so notes alone exit 0. A job that must block on one passes
+`nuka check --fail-on <code>` (for instance `pattern-unbound`); the finding
+stays a note in the output, and only that invocation's exit code turns to
+1. The code to pass is the one printed beside each note, or one from
+`nuka check --codes`, which lists every code with its severity and a
+one-line meaning before any of them has fired. Each note also names a file
+and a `fix:` line: what to open, and the change to make if the note calls
+for one.
 
-Every run reports every code, `schema-field-undescribed` (a field with no
-`.describe()`) included. The `declared:` line counts the same gaps
-(`describe 7/9`). A gate that acts on some codes and not others filters
-the `--json` envelope's `findings` by `code`, or passes `--fail-on` for
-each code it acts on.
+Every whole-project check reports every note, `schema-field-undescribed` (a
+field with no `.describe()`) included. A gate that acts on some notes and
+not others filters the `--json` envelope's `findings` by `severity` and
+`code`, or passes `--fail-on` for each code it acts on.
 
 `step-description-todo` names a typed step whose description is still
 the `TODO: describe <name>` that `nuka scaffold` wrote without

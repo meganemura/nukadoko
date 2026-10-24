@@ -1,7 +1,7 @@
 ---
 name: nukadoko
 description: Use when turning a requirement into a Gherkin scenario and the run that is its evidence, for a person to review, starting from whatever is on hand, whether that is raw prose with no stated acceptance criteria yet (a ticket, a request, a conversation), acceptance criteria that still need concrete scenarios, a scenario ready to write, a path already explored one `nuka do` call at a time and now worth fixing in a scenario, a browser app whose state cannot be repeated and has to be explored through a Playwright MCP server first, or a run a person wants to check one step at a time with the agent explaining each step record.
-compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run, nuka tend).
+compatibility: Requires the nukadoko npm package installed in the project (a devDependency), whose nuka CLI is run as `npx nuka`; the loop below shells out to it (nuka init, nuka steps, nuka describe, nuka scaffold, nuka do, nuka check, nuka run).
 license: MIT
 ---
 
@@ -115,5 +115,5 @@ code (`references/scenario-rules.md`, "How this file grows").
   prompt that gives a different budget overrides the three.
 - Don't hand-edit a step record or a run summary: it was measured, and
   editing it turns it back into a claim.
-- Don't run `nuka tend` on every pull request, or act on its notes
-  unasked: report them (`references/maintenance.md`).
+- Don't act on the notes `nuka check` prints unasked: report them
+  (`references/maintenance.md`).

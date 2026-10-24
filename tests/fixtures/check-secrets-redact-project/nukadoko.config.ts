@@ -5,11 +5,8 @@ import { defineConfig } from "./nukadoko-shim.js";
 // configured envFile defines, `secrets-redact-key-too-short` for a value
 // under MIN_REDACTABLE_LENGTH. Neither is an error: build-secret-set.ts
 // already tolerates both (a redact entry that never matches anything, and
-// a value too short to ever actually be redacted). `nuka check` still
-// surfaces the too-short case (plaintext would reach a log the moment the
-// run starts); the unknown-key case moved to `nuka tend` — see
-// tests/check-secrets.test.ts and
-// tests/tend-moved-findings.test.ts, which both read this fixture.
+// a value too short to ever actually be redacted), so `nuka check` reports
+// both as warnings (tests/check-secrets.test.ts).
 export default defineConfig({
   envFiles: [".env.app"],
   secrets: { redact: ["SHORT_REDACT_KEY", "UNKNOWN_REDACT_KEY"] },

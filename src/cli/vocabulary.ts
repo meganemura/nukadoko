@@ -62,8 +62,7 @@ export interface LoadVocabularyOptions {
  * Also returns `importFailures` — always `[]` unless the caller passes
  * `{ tolerateImportFailures: true }`, in which case a broken step file is
  * collected here instead of rejecting this whole call, the same tolerant
- * mode `nuka check`/`nuka tend` already use (src/check/analyze.ts,
- * src/tend/analyze.ts). */
+ * mode `nuka check` already uses (src/check/analyze.ts). */
 export async function loadVocabulary(
   rootDir: string,
   options: LoadVocabularyOptions = {},
@@ -326,7 +325,7 @@ function partsSummary(step: Step, stepNames: StepNames): readonly string[] | und
  * whole vocabulary scanned, and `nuka describe` looks at one step's own
  * contract only (docs/spec.md "Parts": "An unused part is not decidable
  * at all" — the reverse listing has the same shape of problem, scoped to
- * a single `nuka describe` call rather than `nuka tend`). `undefined`
+ * a single `nuka describe` call rather than a whole-project `nuka check`). `undefined`
  * (hence omitted) under the same condition as `partsSummary` above. */
 function partsHumanReadable(
   step: Step,

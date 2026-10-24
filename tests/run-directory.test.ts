@@ -144,7 +144,7 @@ describe("nuka run <dir>", () => {
     // "features/order/a.feature" sorts before "features/order/a/x.feature"
     // in byte order ('.' is 0x2E, '/' is 0x2F) — a name-at-each-directory-
     // level walk (as src/feature/load-features.ts's own `walkFeatureFiles`
-    // uses for `nuka check`/`nuka tend`) would instead recurse into
+    // uses for `nuka check`) would instead recurse into
     // directory "a" before visiting sibling file "a.feature", producing the
     // opposite order. This is the one case that tells the two sorts apart.
     expect(records.map((r) => r.feature)).toEqual(["features/order/a.feature", "features/order/a/x.feature"]);

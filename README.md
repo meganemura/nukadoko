@@ -137,7 +137,7 @@ Scaffold the Then step from it. `--from run-greet.stdout` writes the
 import, an `args` field typed from the When step's `returns`, and the
 `from` entry that hands the Then step that value. `--description` writes
 what the step checks; without it the description is a TODO that `nuka
-tend` reports:
+check` reports as a note:
 
 ```sh
 npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
@@ -413,7 +413,7 @@ Everything past the loop above, one line each:
 - [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, and `--repeat`.
 - Environments and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Environments and secrets" in [docs/spec.md](docs/spec.md#environments-and-secrets)): named environments, redaction.
 - [Skills for coding agents](#skills-for-coding-agents): the two skills an agent loads to run this loop.
-- [The bed has to be tended](#the-bed-has-to-be-tended): `nuka tend`, for what is rotting rather than broken.
+- [The bed has to be tended](#the-bed-has-to-be-tended): the notes `nuka check` adds for what is rotting rather than broken.
 - [Setup details](#setup-details), [Upgrading](#upgrading), [Status](#status), and [Why this exists now](#why-this-exists-now).
 
 ## Wrong before it runs
@@ -548,9 +548,9 @@ import (see [The compat door](#the-compat-door) below). But a compat step
 has no typed contract, so `nuka check` has nothing here to hold a feature
 line against, and `nuka do` refuses to run one by name at all.
 
-`check` is the cheap static gate; `run` leaves the step record trail and
-the run summary that is the run's evidence; `tend` is the periodic one, and the
-only one you are meant to *not* run before every change.
+`check` is the cheap static gate, and its notes are where rot shows up;
+`run` leaves the step record trail and the run summary that is the run's
+evidence.
 
 ## Why this exists now
 
@@ -620,7 +620,7 @@ more of the roadmap has landed, not that the surface has frozen.
 
 Implemented and covered by tests: typed steps, step records,
 environments, secrets, `nukadoko/compat`, Allure and cucumber-messages
-output through `nuka report`, the Markdown run summary, tending (`nuka tend`), and two
+output through `nuka report`, the Markdown run summary, notes on what is rotting (`nuka check`), and two
 agent skills. Not implemented: an AI-assisted glue converter. See the [roadmap](docs/spec.md#roadmap).
 
 Maintenance is one person working in the open. Every claim below that
@@ -1313,18 +1313,15 @@ tool makes about a suite's step definitions (a living culture rather than
 a write-once asset), and it is not only a remark about the name.
 
 `nuka check` asks whether the project can run right now, and is meant to be
-read before every run. `nuka tend` asks the other question: is any of this
-rotting (see [Tending](docs/spec.md#tending)). A step file that failed to
-import, so every count silently leaves its steps out. A `from` declaration
-nothing exercises. A schema field with no
-description reads fine to a person looking at the file and tells the agent
-choosing between two steps nothing at all. None of those stop a run, which
-is exactly why they needed somewhere else to be said: printed before every
-run, they would train everyone to skim past the lines that do stop one.
-
-It opens with where the bed is (how much of the vocabulary is typed rather
-than still compat), because that number was previously only visible by
-reading a directory of step records, which nobody does.
+read before every run. Its notes ask the other question: is any of this
+rotting (see [Checks and notes](docs/spec.md#checks-and-notes)). A `from`
+declaration nothing exercises. A pattern no feature binds. A schema field
+with no description reads fine to a person looking at the file and tells
+the agent choosing between two steps nothing at all. None of those stop a
+run, so a note never changes the exit code; a job that wants one to gate
+names its code with `nuka check --fail-on`. Only a check with no target
+reports notes, because whether a step is bound depends on every feature the
+project scans.
 
 ## Who reads what
 

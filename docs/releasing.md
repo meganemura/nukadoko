@@ -112,7 +112,7 @@ registers the trusted publisher.
    devDependency, and a `dist/` that does not match `src/`.
    `skill-examples` installs the same tarball into a copy of each project
    under `examples/acceptance/`, runs `nuka check`, `nuka run`, and
-   `nuka tend` there, and compares the output with the transcripts in
+   `nuka run --probe` there, and compares the output with the transcripts in
    `skills/nukadoko/references/examples/`.
 
 3. When `skills/` changed since the previous tag

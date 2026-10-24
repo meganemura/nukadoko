@@ -197,6 +197,7 @@ describe("a project without playwright installed", () => {
           fix: "Add a Then line that checks the outcome the scenario is for.",
         },
       ],
+      fail_on_hits: [],
     });
   }, 60_000);
 

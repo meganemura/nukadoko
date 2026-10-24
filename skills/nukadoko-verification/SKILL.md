@@ -167,12 +167,11 @@ scenario reads `new`.
 
 ## 8. Keeping the map honest
 
-- `nuka check`: a step or a binding broke.
+- `nuka check`: a step or a binding broke, and, with no target, notes on
+  steps and fixtures that are rotting.
 - `nuka run`: a sub-feature with a scenario no longer does what the map
   says. Red is map drift or a product regression; decide which before
   editing anything, and never edit a Then to match the product.
-- `nuka tend`, on a schedule rather than per pull request: steps and
-  fixtures that are rotting.
 - `nuka run --since <ref>`: which criteria changed since the map was last
   checked.
 

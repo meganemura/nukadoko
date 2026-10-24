@@ -14,7 +14,7 @@ Two checks keep a project and its Markdown equal:
 - `npm run skill-examples` runs
   [`scripts/skill-examples.ts`](../../scripts/skill-examples.ts). It packs
   this checkout, installs the tarball into a copy of each project outside
-  the repository, runs `nuka check`, `nuka run`, and `nuka tend`, and
+  the repository, runs `nuka check`, `nuka run`, and `nuka run --probe`, and
   compares their output with the Markdown's transcript blocks. A `...`
   line in a transcript stands for any run of lines, durations are masked,
   and a finding line is compared up to its file. CI runs it.
@@ -28,5 +28,5 @@ npm run build
 npm pack --ignore-scripts --pack-destination /tmp
 cp -r examples/acceptance/cli /tmp/cli && cd /tmp/cli
 npm install --omit=peer --ignore-scripts /tmp/nukadoko-<version>.tgz
-npx nuka check && npx nuka run && npx nuka tend
+npx nuka check && npx nuka run
 ```

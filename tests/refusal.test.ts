@@ -183,7 +183,6 @@ describe("a --json command that cannot report prints a refused envelope on stdou
 
   it.each([
     ["check", "--json"],
-    ["tend", "--json"],
     ["clean", "--json", "--dry-run"],
   ])("nuka %s %s on an invalid config", async (...argv) => {
     const result = await cli(argv, fixture("invalid-config-project"));
@@ -198,12 +197,18 @@ describe("a --json command that cannot report prints a refused envelope on stdou
     expect(result.exitCode).toBe(2);
   });
 
-  it("nuka tend --json --fail-on bogus", async () => {
-    const result = await cli(["tend", "--json", "--fail-on", "bogus"], fixture("basic-project"));
+  it("nuka check --json --fail-on bogus", async () => {
+    const result = await cli(["check", "--json", "--fail-on", "bogus"], fixture("basic-project"));
 
     expect(result.stderr).toBe("");
     expect(refusedFindings(result.stdout)).toEqual([
-      { severity: "refused", code: "fail-on-unknown-code", message: '--fail-on: "bogus" is not a code nuka tend reports', fix: "Name a code that nuka tend --codes lists.", do: "nuka tend --codes" },
+      {
+        severity: "refused",
+        code: "fail-on-unknown-code",
+        message: '--fail-on: "bogus" is not a code nuka check reports',
+        fix: "Name an error, warning, or note code that nuka check --codes lists.",
+        do: "nuka check --codes",
+      },
     ]);
     expect(result.exitCode).toBe(2);
   });

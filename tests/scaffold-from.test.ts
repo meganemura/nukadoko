@@ -17,6 +17,7 @@ import {
   removeTempDir,
   repoRoot,
   testsDir,
+  withoutCheckNotes,
 } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka scaffold <name> --from <step>.<key>`. The file it
@@ -285,7 +286,7 @@ describe("nuka scaffold --from", () => {
       ].join("\n"),
     );
     const check = await cli(rootDir, ["check"]);
-    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
     const run = await cli(rootDir, ["run", "features/greet.feature"]);
     expect(run.stderr).toContain("2 scenarios: 2 passed, 0 failed");
     expect(run.exitCode).toBe(0);
@@ -363,7 +364,7 @@ describe("nuka scaffold --from", () => {
     );
 
     const check = await cli(rootDir, ["check"]);
-    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
 
     const described = await cli(rootDir, ["describe", "output-says"]);
     expect(JSON.parse(described.stdout).from).toEqual({ stdout: { step: "run-greet", key: "stdout" } });
@@ -419,7 +420,7 @@ describe("nuka scaffold --from in a project whose tsconfig.json accepts no .ts i
       'import runGreet from "./run-greet.js";',
     ]);
     const check = await cli(rootDir, ["check"]);
-    expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+    expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
 
     const typecheck = await typecheckSteps({ "run-greet.ts": RUN_GREET, "output-says.ts": written }, {});
     expect(typecheck.output).toBe("");
@@ -541,7 +542,7 @@ describe("nuka scaffold --from: any producer key", () => {
           expect(scaffold.stderr).toBe("");
           expect(scaffold.exitCode).toBe(0);
           const check = await cli(rootDir, ["check"]);
-          expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+          expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
           const described = await cli(rootDir, ["describe", consumer]);
           expect(JSON.parse(described.stdout).from).toEqual({ [key]: { step: producer, key } });
         } finally {

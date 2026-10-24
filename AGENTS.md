@@ -46,10 +46,14 @@ carries the same claim as evidence bound to its commit, while the approval
 is recorded wherever the team records approvals. M6 (chained arguments) is
 implemented too: `from` on `defineStep`, the binding-order check `nuka
 check` and `nuka run` share, `nuka do --use`, and `used` naming the step
-beside each step record. M7 (tending) is in: `nuka tend`, for what is rotting
-rather than what is broken — kept off `nuka check` so that command stays
-worth stopping for. M8 (fixtures) is in as well: `defineFixtures`, scope,
-`use()`-based teardown, and the `check`/`tend` findings that come with them.
+beside each step record. M7 (tending) was built and then folded into
+`nuka check`: a separate `tend` command reported what is rotting rather than
+what is broken, but no project ran it beyond one test gating on two codes,
+and a second command that loads the same project and prints the same
+finding grammar cost every agent that reads the tool. Its findings are
+`nuka check` notes now, and `nuka check --fail-on` chooses which of them
+gate. M8 (fixtures) is in as well: `defineFixtures`, scope,
+`use()`-based teardown, and the `check` findings that come with them.
 M9 (parts) is in: `parts` on `defineStep`, the `call` fixture, the `calls`
 entries a step record gains, and the three `check` findings that go with
 them. A step can be split without its feature file being rewritten, which

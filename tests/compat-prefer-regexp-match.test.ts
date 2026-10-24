@@ -58,17 +58,4 @@ describe("nuka run: preferForRegexpMatch", () => {
       'refused\tparameter-type-collision\t-\tCustom parameter type "codeB" sets preferForRegexpMatch on /[A-Z]+/, which {codeA} already prefers: only one parameter type can be preferred for a regexp, so set preferForRegexpMatch on one of them\n  fix: Rename the parameter type, or remove one of the two registrations.\n',
     );
   });
-
-  it("leaves nuka tend running when two types prefer one regexp", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--json"], {
-      rootDir: fixture("check-compat-preferential-regexp-project"),
-      stdout,
-      stderr,
-    });
-
-    expect(withoutNoConfigLine(stderr.text())).toBe("");
-    expect(exitCode).toBe(0);
-  });
 });

@@ -409,7 +409,7 @@ Facts a migration runs into:
   becomes one run: name each target in `environments` and pass
   `nuka run --env a --env b`.
 - A `package.json` with no `"type"` loads a `.ts` file with a Node
-  warning, and `nuka tend` reports it as `package-type-missing`.
+  warning, and `nuka check` notes it as `package-type-missing`.
 - `nuka run` writes no report of its own. A formatter or a JUnit-based CI
   that read cucumber messages renders them after each run with
   `nuka report --format messages --out <path>`, and `--format allure`

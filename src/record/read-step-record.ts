@@ -76,27 +76,3 @@ export function readStepRecordById(rootDir: string, stateDir: string, recordId: 
   }
   return null;
 }
-
-/** Every step record directory in the state directory, as absolute paths:
- * each `nuka do` record under `do/`, then each run's `steps/` in run-name
- * order. For a reader that looks across every execution, such as a `nuka
- * tend` note. A missing directory reads as none. */
-export function listStepRecordDirs(rootDir: string, stateDir: string): string[] {
-  const subdirectories = (dir: string): string[] => {
-    try {
-      return readdirSync(dir, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-        .sort()
-        .map((name) => path.join(dir, name));
-    } catch {
-      return [];
-    }
-  };
-  return [
-    ...subdirectories(path.join(rootDir, doRelativeDir(stateDir))),
-    ...subdirectories(path.join(rootDir, runsRelativeDir(stateDir))).flatMap((runDir) =>
-      subdirectories(path.join(runDir, "steps")),
-    ),
-  ];
-}

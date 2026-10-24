@@ -25,6 +25,34 @@ describe("nuka harvest, removed", () => {
   });
 });
 
+describe("nuka tend, removed", () => {
+  const TEND_REFUSAL =
+    "`nuka tend` was removed: `nuka check` reports its findings as notes, and `nuka check --fail-on <code>` turns one " +
+    "into a failing exit (see docs/upgrading.md in the nukadoko package)";
+  const TEND_FIX = "Run nuka check, and add --fail-on <code> for each note a job gates on.";
+
+  it("exits 2 and points at nuka check --fail-on, with any flag tend once took", async () => {
+    for (const argv of [["tend"], ["tend", "--fail-on", "pattern-unbound"], ["tend", "--codes"]]) {
+      const stdout = createCaptureSink();
+      const stderr = createCaptureSink();
+      const exitCode = await runCli(argv, { rootDir: fixture("basic-project"), stdout, stderr });
+
+      expect(exitCode).toBe(2);
+      expect(stderr.text()).toBe(`refused\tremoved-command\t-\t${TEND_REFUSAL}\n  fix: ${TEND_FIX}\n`);
+      expect(stdout.text()).toBe("");
+    }
+  });
+
+  it("answers in the envelope under --json", async () => {
+    const stdout = createCaptureSink();
+    const exitCode = await runCli(["tend", "--json"], { rootDir: fixture("basic-project"), stdout, stderr: createCaptureSink() });
+    expect(exitCode).toBe(2);
+    const envelope = JSON.parse(stdout.text()) as { command: string; verdict: string; findings: unknown[] };
+    expect(envelope).toMatchObject({ command: "tend", verdict: "refused" });
+    expect(envelope.findings).toEqual([{ severity: "refused", code: "removed-command", message: TEND_REFUSAL, fix: TEND_FIX }]);
+  });
+});
+
 describe("nuka session, nuka experimental explore and nuka explore, removed", () => {
   const REMOVED = [
     {

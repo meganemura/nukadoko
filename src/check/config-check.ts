@@ -28,15 +28,11 @@ import type { CheckIssue } from "./types.js";
 // instruction silently do nothing, is check's job because plaintext then
 // reaches a log the moment the run starts.
 //
-// `secrets-public-key-unknown` and `secrets-redact-key-unknown` — a
+// `secrets-public-key-unknown` and `secrets-redact-key-unknown`, a
 // `secrets.public`/`secrets.redact` entry naming a key no configured
-// envFile defines at all — used to live here too, as warnings. They moved
-// to src/tend/secrets-unknown-key.ts: neither
-// changes whether a run should happen, unlike their `-too-short` neighbor
-// above, which means plaintext reaches a log immediately. `collectDefinedEnvKeys`
-// below is exported so that module can answer "which keys does any envFile
-// define" the exact same way this file's own `secrets-redact-key-too-short`
-// check does, rather than re-deriving it.
+// envFile defines at all, are warnings too: a real instruction that reaches
+// nothing. They read the same `allDefinedKeys` the `-too-short` check reads,
+// so "which keys exist" cannot disagree between them.
 //
 // `tracked-secret-looking-key`: a tracked envFile defining a
 // secret-*looking* key (by name pattern) that isn't in `secrets.redact`.
@@ -62,11 +58,8 @@ export interface ConfigCheckResult {
  * itself. loadEnvFiles tolerates a missing file (contributes nothing) and
  * throws for any other read error, naming the path and the errno, so a
  * directory or an unreadable file is reported here rather than looking like
- * a file that defines no keys. Shared by this file's own
- * `secrets-redact-key-too-short` check and src/tend/secrets-unknown-key.ts's
- * `secrets-public-key-unknown`/`secrets-redact-key-unknown` findings, so
- * "which keys exist" can never quietly disagree between the two. */
-export function collectDefinedEnvKeys(
+ * a file that defines no keys. */
+function collectDefinedEnvKeys(
   rootDir: string,
   config: NukadokoConfig,
 ): {
@@ -115,7 +108,7 @@ export async function checkConfig(
 
   // Same error-level treatment as featuresDir above, one entry at a time:
   // additionalFeatureDirs is named
-  // specifically to widen what nuka check/tend scan, so an entry that
+  // specifically to widen what nuka check scans, so an entry that
   // doesn't exist is a config mistake to report, not an empty answer to
   // fail open on — src/feature/load-features.ts's loadFeaturesFromDirs
   // already treats it that way; this is check's own report of the same
@@ -184,11 +177,23 @@ export async function checkConfig(
     }
   }
 
+  for (const key of config.secrets.public) {
+    if (!allDefinedKeys.has(key)) {
+      warnings.push({
+        code: "secrets-public-key-unknown",
+        message: `secrets.public names "${key}", which is not defined in any configured envFile`,
+        file: configFile,
+      });
+    }
+  }
+
   for (const key of config.secrets.redact) {
     if (!allDefinedKeys.has(key)) {
-      // Undefined — src/tend/secrets-unknown-key.ts's
-      // secrets-redact-key-unknown reports it now; nothing about it
-      // changes whether this run should happen.
+      warnings.push({
+        code: "secrets-redact-key-unknown",
+        message: `secrets.redact names "${key}", which is not defined in any configured envFile`,
+        file: configFile,
+      });
       continue;
     }
     // Non-null: `key` just passed the allDefinedKeys.has check above, and

@@ -8,11 +8,11 @@
 // content of one project file, and every feature file is quoted. Run
 // directly (`npm run skill-examples`), this script runs the other one: it
 // packs this checkout, installs the tarball into a copy of each project
-// outside this repository, runs `nuka check`, `nuka run`, `nuka run
-// --probe`, and `nuka tend`,
-// and compares their output with the transcript blocks in the Markdown.
-// The comparison masks durations and reads a finding line only up to its
-// file, because a `tend` note's message quotes measured times.
+// outside this repository, runs `nuka check`, `nuka run`, and `nuka run
+// --probe`, and compares their output with the transcript blocks in the
+// Markdown. The comparison masks durations and reads a finding line only up
+// to its file, because a `repeated-scenario-prefix` note's message quotes
+// measured times.
 //
 // Run directly by Node (type stripping), so erasable syntax only and no
 // relative imports.
@@ -37,7 +37,7 @@ export const EXAMPLES: readonly Example[] = ["cli", "http-api", "workflow"].map(
  * every one, so a transcript cannot drop out of the check unnoticed. The
  * `--probe` run ends on its count line, so a Then that ignores its capture
  * adds a note line after it and fails the replay. */
-export const REPLAYED = ["npx nuka check", "npx nuka run", "npx nuka run --probe", "npx nuka tend"] as const;
+export const REPLAYED = ["npx nuka check", "npx nuka run", "npx nuka run --probe"] as const;
 
 /** The line that stands for any number of lines, none included. */
 export const GAP = "...";

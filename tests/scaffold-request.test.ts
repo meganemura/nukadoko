@@ -11,7 +11,7 @@ import {
   requestFlagText,
   requestPathExpression,
 } from "../src/cli/scaffold.js";
-import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, withoutCheckNotes } from "./helpers/fixtures.js";
 
 // Responsibility: `nuka scaffold <name> --request "<METHOD> <path>"`, the
 // When step that sends one request through Playwright's `request` and
@@ -94,7 +94,8 @@ describe("nuka scaffold --request", () => {
         '    const response = await request.fetch("/items", { method: "POST", data: docstring });\n',
     );
     expect(written.split("\n")[19]).toBe("    throw new Error(`pass name where the request reads them: features/steps/post-item.ts:20; args ${JSON.stringify({ name })}`);");
-    expect(await cli(rootDir, ["check"])).toEqual({
+    const check = await cli(rootDir, ["check"]);
+    expect({ ...check, stdout: withoutCheckNotes(check.stdout) }).toEqual({
       exitCode: 0,
       stdout:
         'warning\tscenario-without-then\tfeatures/items.feature:2\tScenario "one" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n' +

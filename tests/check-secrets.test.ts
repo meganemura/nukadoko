@@ -15,11 +15,8 @@ import { bySeverity } from "./helpers/envelope.js";
 // additions.
 //
 // Part A — secrets-redact-key-too-short: a pure config-coherence warning,
-// checked against a static fixture (no git state involved). Its sibling,
-// secrets-redact-key-unknown, moved to `nuka tend` —
-// tests/tend-moved-findings.test.ts reuses this same
-// check-secrets-redact-project fixture to prove it now surfaces there
-// instead, and that `check` no longer reports it.
+// checked against a static fixture (no git state involved), beside its
+// sibling secrets-redact-key-unknown, a key no envFile defines.
 //
 // Part B — tracked-secret-looking-key: only fires for a *tracked* envFile,
 // so each of its tests needs a real git repository with a real commit —
@@ -28,7 +25,7 @@ import { bySeverity } from "./helpers/envelope.js";
 // use for "this file is genuinely tracked" cases.
 
 describe("nuka check: secrets.redact config-coherence warnings", () => {
-  it("reports secrets-redact-key-too-short, no errors, and no longer reports secrets-redact-key-unknown", async () => {
+  it("reports secrets-redact-key-too-short and secrets-redact-key-unknown as warnings, and no errors", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json"], {
       rootDir: fixture("check-secrets-redact-project"),
@@ -42,6 +39,11 @@ describe("nuka check: secrets.redact config-coherence warnings", () => {
       expect.objectContaining({
         code: "secrets-redact-key-too-short",
         message: expect.stringContaining("SHORT_REDACT_KEY"),
+      }),
+      expect.objectContaining({
+        code: "secrets-redact-key-unknown",
+        file: "nukadoko.config.ts",
+        message: expect.stringContaining("UNKNOWN_REDACT_KEY"),
       }),
     ]);
     expect(exitCode).toBe(0);

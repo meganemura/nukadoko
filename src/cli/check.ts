@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 import { analyzeProject, analyzeRunSelection } from "../check/analyze.js";
-import { listCheckCodes } from "../check/codes.js";
+import { isCheckCode, listCheckCodes } from "../check/codes.js";
 import type { CheckFinding, CheckIssue, CheckReport } from "../check/types.js";
 import { loadConfig } from "../config/load-config.js";
 import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
@@ -28,8 +28,11 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // produce a report (config/discovery error) is a refusal (cli/refusal.ts):
 // `{ error, do }` on stdout under `--json`, the message and a `do:` line on
 // stderr otherwise.
-// Exit code is exactly "1 or more errors" (docs/spec.md "CLI summary":
-// warnings alone are exit 0).
+// Exit code is "1 or more errors, or a `--fail-on` code the report
+// contains" (docs/spec.md "CLI summary": warnings and notes alone are exit
+// 0). A project carries notes by design, so `--fail-on` is how a job
+// chooses which of them gate; the finding keeps its severity, since what
+// changed is the project's policy, not the finding.
 //
 // `targets` select files the way `nuka run`'s do (src/run/select-pickles.ts:
 // files, and directories walked for .feature files), so
@@ -58,6 +61,9 @@ export interface RunCheckOptions {
   codes?: boolean;
   /** Feature files or directories; empty checks the whole project. */
   targets?: readonly string[];
+  /** `--fail-on`: codes whose presence turns the exit code to 1. Empty by
+   * default, so a note stays a note. */
+  failOn?: readonly string[];
   /** Findings the invocation raised before the command ran, such as a
    * missing config file, which `--json` carries in the envelope. */
   notices?: readonly Finding[];
@@ -110,16 +116,34 @@ function importFailureGroupText(issue: CheckFinding, files: readonly string[]): 
 }
 
 /** A check finding as the envelope and the text lines carry it. */
-export function asFinding(severity: "error" | "warning", issue: CheckFinding): Finding {
+export function asFinding(severity: "error" | "warning" | "note", issue: CheckFinding): Finding {
   return { severity, ...issue };
 }
 
-/** The findings of a report, errors first, in report order. */
+/** The findings of a report, errors, then warnings, then notes, each in
+ * report order. */
 export function reportFindings(report: CheckReport): Finding[] {
   return [
     ...report.errors.map((issue) => asFinding("error", issue)),
     ...report.warnings.map((issue) => asFinding("warning", issue)),
+    ...report.notes.map((issue) => asFinding("note", issue)),
   ];
+}
+
+/** One `--fail-on` code the report contains, with how many findings carry
+ * it. A listed code with no finding is left out, so the list is exactly
+ * what turned the exit code to 1. */
+export interface FailOnHit {
+  readonly code: string;
+  readonly count: number;
+}
+
+export function failOnHits(report: CheckReport, failOn: readonly string[]): FailOnHit[] {
+  const findings = [...report.errors, ...report.warnings, ...report.notes];
+  return [...new Set(failOn)].flatMap((code) => {
+    const count = findings.filter((issue) => issue.code === code).length;
+    return count > 0 ? [{ code, count }] : [];
+  });
 }
 
 /** One finding per code, in the finding grammar: the code's severity, the
@@ -140,9 +164,27 @@ export function listAllCheckCodes(): Finding[] {
   return entries.sort((a, b) => a.code.localeCompare(b.code)).map(codeFinding);
 }
 
+function quoted(codes: readonly string[]): string {
+  return codes.map((code) => `"${code}"`).join(", ");
+}
+
+function failOnRefusal(codes: readonly string[]): string {
+  const listed = new Set(listAllCheckCodes().map((entry) => entry.code));
+  const elsewhere = codes.filter((code) => listed.has(code));
+  const unknown = codes.filter((code) => !listed.has(code));
+  const parts = [
+    ...(unknown.length > 0 ? [`${quoted(unknown)} ${unknown.length === 1 ? "is not a code" : "are not codes"} nuka check reports`] : []),
+    ...(elsewhere.length > 0
+      ? [`${quoted(elsewhere)} ${elsewhere.length === 1 ? "is a nuka run or refusal code" : "are nuka run or refusal codes"}, which a check report never contains`]
+      : []),
+  ];
+  return `--fail-on: ${parts.join("; ")}`;
+}
+
 export async function runCheck(options: RunCheckOptions): Promise<number> {
   const { rootDir, json, codes, stdout, stderr } = options;
   const targets = options.targets ?? [];
+  const failOn = options.failOn ?? [];
   const notices = options.notices ?? [];
   const sinks = { json, stdout, stderr, command: "check" };
 
@@ -156,6 +198,16 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
     return 0;
   }
 
+  // Refused before anything is analyzed: a code the report can never
+  // contain would be a gate that never fires, and a job gating on it would
+  // read that silence as "nothing to fail on". A run or refusal code is
+  // refused too, although `--codes` lists it: a check report never contains
+  // one, so the message says so rather than calling a listed code unknown.
+  const unknown = failOn.filter((code) => !isCheckCode(code));
+  if (unknown.length > 0) {
+    return refuse(sinks, failOnRefusal(unknown), "fail-on-unknown-code", { do: "nuka check --codes" }, notices);
+  }
+
   let report;
   try {
     report = targets.length === 0 ? await analyzeProject(rootDir) : await analyzeTargets(rootDir, targets);
@@ -163,14 +215,19 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
     return refuse(sinks, error, "unexpected-error", undefined, notices);
   }
 
-  const exitCode = report.errors.length > 0 ? 1 : 0;
+  const hits = failOnHits(report, failOn);
+  const exitCode = report.errors.length > 0 || hits.length > 0 ? 1 : 0;
   if (json) {
-    stdout.write(formatEnvelope("check", exitCode, [...notices, ...reportFindings(report)]));
-  } else {
-    writeCheckIssueLines(report.errors, report.warnings, stdout);
-    if (report.errors.length === 0 && report.warnings.length === 0) {
-      stdout.write("ok: no issues found\n");
-    }
+    stdout.write(formatEnvelope("check", exitCode, [...notices, ...reportFindings(report)], { fail_on_hits: hits }));
+    return exitCode;
+  }
+  writeCheckIssueLines(report.errors, report.warnings, stdout, report.notes);
+  if (report.errors.length === 0 && report.warnings.length === 0 && report.notes.length === 0) {
+    stdout.write("ok: no issues found\n");
+  }
+  // Said once per code, so the exit code never changes silently.
+  for (const hit of hits) {
+    stderr.write(`fail-on: ${hit.code} reported ${hit.count} ${hit.count === 1 ? "finding" : "findings"}\n`);
   }
   return exitCode;
 }
@@ -224,6 +281,7 @@ export function writeCheckIssueLines(
   errors: readonly CheckFinding[],
   warnings: readonly CheckFinding[],
   sink: WritableSink,
+  notes: readonly CheckFinding[] = [],
 ): void {
   const importFailureGroups = groupImportFailuresByMessage(errors);
   // Printed at the position of each message's first occurrence in
@@ -245,5 +303,8 @@ export function writeCheckIssueLines(
   }
   for (const issue of warnings) {
     sink.write(formatFinding(asFinding("warning", issue)));
+  }
+  for (const issue of notes) {
+    sink.write(formatFinding(asFinding("note", issue)));
   }
 }

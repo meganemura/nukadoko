@@ -12,8 +12,8 @@ import { boundStepNames, findUnboundPatternedEntries, unboundPatternedSuffix } f
 import type { Vocabulary, VocabularyEntry } from "../src/discover/discover-steps.js";
 import type { FeatureFile } from "../src/feature/load-features.js";
 import { defineStep } from "../src/step/define-step.js";
-import { findUnboundPatternedSteps } from "../src/tend/pattern-unbound.js";
-import { resolveStepOccurrences } from "../src/tend/step-bindings.js";
+import { findUnboundPatternedSteps } from "../src/check/pattern-unbound.js";
+import { resolveStepOccurrences } from "../src/check/step-bindings.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 
@@ -141,19 +141,19 @@ describe("nuka check: undefined-step names the patterned steps no line binds", (
   });
 });
 
-describe("nuka tend: pattern-unbound carries the step file", () => {
+describe("nuka check: pattern-unbound carries the step file", () => {
   it("sets file to the root-relative step file in --json and on the text line", async () => {
     const dir = await tracked(
       { "run-greet": "I run greet", "output-says": "the output says {text:string}" },
       { "greet.feature": "Feature: greet\n\n  Scenario: greet\n    When I run greet\n" },
     );
-    const report = await json(dir, ["tend", "--json"]);
+    const report = await json(dir, ["check", "--json"]);
     const unbound = report.notes.filter((issue) => issue.code === "pattern-unbound");
     expect(unbound).toEqual([
       {
         code: "pattern-unbound",
         message:
-          'Step "output-says" declares a pattern, but no feature line under the scanned directories binds it. It has no place in any scenario right now.',
+          'Step "output-says" declares a pattern, but no feature line under the scanned directories (features) binds it. It has no place in any scenario right now.',
         file: "features/steps/output-says.ts",
         step: "output-says",
         fix: "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
@@ -161,13 +161,13 @@ describe("nuka tend: pattern-unbound carries the step file", () => {
     ]);
 
     const stdout = createCaptureSink();
-    await runCli(["tend"], { rootDir: dir, stdout, stderr: createCaptureSink() });
+    await runCli(["check"], { rootDir: dir, stdout, stderr: createCaptureSink() });
     expect(stdout.text()).toContain("note\tpattern-unbound\tfeatures/steps/output-says.ts\tStep \"output-says\"");
   });
 });
 
 // Check builds its bound set from the lines checkFeatures resolved (or, for
-// a target, from boundStepNames over the scanned files), tend from
+// a target, from boundStepNames over the scanned files), the note from
 // resolveStepOccurrences; the three walks must agree on every input, or the
 // suffix and the note would name different steps on the same files.
 describe("the undefined-step suffix and pattern-unbound name the same steps", () => {
@@ -221,7 +221,7 @@ describe("the undefined-step suffix and pattern-unbound name the same steps", ()
     } as unknown as FeatureFile;
   }
 
-  it("for any vocabulary and feature lines, the suffix names exactly the steps tend reports", () =>
+  it("for any vocabulary and feature lines, the suffix names exactly the steps the note reports", () =>
     hegel.test((tc) => {
       const picked = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: wordings.length - 1 }), { maxSize: 5 }));
       const texts = tc.draw(gs.arrays(gs.sampledFrom([...lineTexts]), { maxSize: 6 }));
@@ -232,15 +232,15 @@ describe("the undefined-step suffix and pattern-unbound name the same steps", ()
       const bound = new Set(checkFeatures(features, vocab, patterns).boundSteps.map((line) => line.stepName));
       expect([...boundStepNames(features, patterns)].sort()).toEqual([...bound].sort());
       const fromCheck = findUnboundPatternedEntries(vocab, bound).map((entry) => entry.name);
-      const fromTend = findUnboundPatternedSteps(vocab, resolveStepOccurrences(features, patterns), "/project").map(
+      const fromNote = findUnboundPatternedSteps(vocab, resolveStepOccurrences(features, patterns), "/project", ["features"]).map(
         (note) => note.step,
       );
-      expect(fromCheck).toEqual(fromTend);
+      expect(fromCheck).toEqual(fromNote);
 
       const suffix = unboundPatternedSuffix(findUnboundPatternedEntries(vocab, bound), "/project");
       const named = [...suffix.matchAll(/(step-\d+) \(/g)].map((match) => match[1]);
-      expect(named).toEqual(fromTend.slice(0, 3));
-      expect(suffix === "").toBe(fromTend.length === 0);
-      expect(suffix.endsWith(`and ${fromTend.length - 3} more`)).toBe(fromTend.length > 3);
+      expect(named).toEqual(fromNote.slice(0, 3));
+      expect(suffix === "").toBe(fromNote.length === 0);
+      expect(suffix.endsWith(`and ${fromNote.length - 3} more`)).toBe(fromNote.length > 3);
     }));
 });

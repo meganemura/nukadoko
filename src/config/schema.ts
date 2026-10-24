@@ -204,8 +204,8 @@ const fixtureDefinitionSchema: z.ZodType<FixtureDefinition, FixtureDefinition> =
 export const configSchema = z
   .object({
     featuresDir: z.string().default("features"),
-    /** `featuresDir` is the set that runs with no argument (`nuka run`,
-     * `nuka check`, `nuka tend` all default to it); `additionalFeatureDirs`
+    /** `featuresDir` is the set that runs with no argument (`nuka run`
+     * and `nuka check` both default to it); `additionalFeatureDirs`
      * is a second, disjoint set that never runs on its own but still binds
      * vocabulary — a step's pattern is bound or unbound as a property of the
      * whole project, not just of what `nuka run` would execute today. This
@@ -214,7 +214,7 @@ export const configSchema = z
      * never picked up as a regression (skills/nukadoko/SKILL.md) — belongs
      * here: it must never run unattended, but a static check that doesn't
      * see it will wrongly call the steps it uses unbound. `nuka check`
-     * (no argument) and `nuka tend` read both sets; `nuka run` (no argument)
+     * (no argument) reads both sets; `nuka run` (no argument)
      * reads only `featuresDir`, unchanged — this asymmetry is the field's
      * whole point, not an oversight. Default `[]`: nothing extra is scanned
      * unless named. */

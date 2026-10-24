@@ -126,7 +126,7 @@ export default defineStep({
 それをもとに Then の step を scaffold します。
 `--from run-greet.stdout` は、import、When の step の `returns` から型を取った `args` のフィールド、そしてその値を Then の step に渡す `from` のエントリを書きます。
 `--description` は、その step が確かめる内容を書きます。
-省くと description は TODO になり、`nuka tend` がそれを報告します:
+省くと description は TODO になり、`nuka check` がそれを注記として報告します:
 
 ```sh
 npx nuka scaffold output-says --pattern "the output says {text:string}" --then --from run-greet.stdout --description "The CLI printed exactly this line"
@@ -400,7 +400,7 @@ Feature: greet API
 - [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`。
 - environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md) の「Environment、secret」): 名前付きの environment、redact。
 - [Skills for coding agents](#skills-for-coding-agents): agent がこのループを回すために読み込む 3 つの skill。
-- [The bed has to be tended](#the-bed-has-to-be-tended): 壊れているものではなく腐りつつあるもののための `nuka tend`。
+- [The bed has to be tended](#the-bed-has-to-be-tended): 壊れているものではなく腐りつつあるもののために `nuka check` が加える注記。
 - [Setup details](#setup-details)、[Upgrading](#upgrading)、[Status](#status)、[Why this exists now](#why-this-exists-now)。
 
 ## Wrong before it runs
@@ -518,7 +518,8 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
 ただし compat の step には型付きの契約がなく、`nuka check` にはここで feature の行を突き合わせる相手がありません。
 `nuka do` は、そうした step を名前で実行することを一切拒否します。
 
-`check` は安価な静的ゲートであり、`run` は step record の証跡と、run の証跡である run サマリを残し、`tend` は定期的に行うものであり、あらゆる変更の前に *run しない* ことが意図されている唯一のものです。
+`check` は安価な静的ゲートであり、その注記に腐敗が現れます。
+`run` は step record の証跡と、run の証跡である run サマリを残します。
 
 ## Why this exists now
 
@@ -585,7 +586,7 @@ agent にとっては、そのループが安価なコマンドでできてい�
 これは 0.x の全区間に当てはまるのであって、0.1 で終わる話ではありません。
 0.1 に到達するのは roadmap がより多く実現されたという意味であって、公開面が凍結されたという意味ではありません。
 
-テストで実装済みかつカバーされているのは、型付き step、step record、environment、secret、`nukadoko/compat`、`nuka report` による Allure と cucumber-messages の出力、Markdown の run サマリ、tending(`nuka tend`)、そして 2 つの agent skill です。
+テストで実装済みかつカバーされているのは、型付き step、step record、environment、secret、`nukadoko/compat`、`nuka report` による Allure と cucumber-messages の出力、Markdown の run サマリ、腐りつつあるものについての注記(`nuka check`)、そして 2 つの agent skill です。
 未実装なのは、AI 支援によるグルーの変換です(詳しくは [roadmap](docs/spec.ja.md#ロードマップ) を参照してください)。
 
 メンテナンスは 1 人が公開の場で行っています。
@@ -1176,17 +1177,15 @@ nukadoko は、きゅうりを漬ける発酵させた米糠の床です。
 そして、これは単に名前についての言い回しにとどまりません。
 
 `nuka check` が問うのは、プロジェクトがいますぐ run できるかであり、あらゆる run の前に読まれることを意図しています。
-`nuka tend` が問うのは別の問い、すなわちこれのどこかが腐りつつあるかです。
-詳しくは [Tending](docs/spec.ja.md#tending手入れ) を参照してください。
-import に失敗した step ファイル。
-そのせいで、あらゆる件数からその step が黙って抜け落ちます。
+その注記が問うのは別の問い、すなわちこれのどこかが腐りつつあるかです。
+詳しくは [check と注記](docs/spec.ja.md#check-と注記) を参照してください。
 何にも行使されない `from` 宣言。
+どの feature も結び付けない pattern。
 description のないスキーマフィールドは、ファイルを見る人にはそれで問題なく読めても、2 つの step のどちらかを選ぶ agent には何も伝えません。
-そのどれも run を止めはしませんが、だからこそどこか他の場所で言われる必要があったのです。
-あらゆる run の前に出力されていたら、本当に止めるべき行までみんなが読み飛ばすことを覚えてしまうでしょう。
-
-これは、床がいまどこにあるか(語彙のうちどれだけが、まだ compat のままではなく型付きになっているか)から始まります。
-それは、その数がこれまで step record のディレクトリを読むことでしか見えず、そんなことをする者は誰もいなかったからです。
+そのどれも run を止めないので、注記は exit code を変えません。
+注記でゲートを掛けたいジョブは、その code を `nuka check --fail-on` で名指します。
+注記を報告するのは対象を指定しない check だけです。
+step が結び付いているかどうかは、プロジェクトがスキャンするすべての feature で決まるからです。
 
 ## 誰が何を読むか
 

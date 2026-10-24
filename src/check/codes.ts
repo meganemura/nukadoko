@@ -15,11 +15,14 @@
 // that pointer true: the catalog is checked by the compiler, not
 // remembered by whoever adds the next code.
 //
-// Every code lands on one side of `{ errors, warnings }`, so `severity` is
-// required: a finding's first column is read from here, and a code that
-// could be either would make that column depend on where it was raised.
+// Every code lands in one of `{ errors, warnings, notes }`, so `severity`
+// is required: a finding's first column is read from here, and a code that
+// could be two of them would make that column depend on where it was raised.
+// An error stops the run, a warning is worth reading before it, and a note
+// is a fact about the project a team may carry; `nuka check --fail-on` is
+// how a job turns a chosen note or warning into a failing exit.
 
-export type CheckSeverity = "error" | "warning";
+export type CheckSeverity = "error" | "warning" | "note";
 
 export interface CheckCodeInfo {
   readonly description: string;
@@ -63,13 +66,13 @@ const CHECK_CODES = {
       "A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value.",
     severity: "error",
     fix: "Rename one of the captures, so that each key occurs once in the pattern.",
-  },
-  "done-callback-arity": {
+  },  "done-callback-arity": {
     description:
       "A compat hook or a matched compat step declares more parameters than nukadoko passes, which cucumber-js reads as a done() callback.",
     severity: "error",
     fix: "Remove the done callback parameter, and return a promise from the function instead.",
   },
+
   "duplicate-pattern": {
     description:
       "Two or more patterns, once capture names are stripped, normalize to the same text, so one step text could match more than one step.",
@@ -119,6 +122,11 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Give the function one object-destructuring parameter that names only known fixtures. The message names the name that is not known.",
   },
+  "fixture-unused": {
+    description: "No typed step requires a config.fixtures definition, directly or through another fixture.",
+    severity: "note",
+    fix: "Remove the fixture from config.fixtures, or keep it for nuka do.",
+  },
   "from-order-check-suppressed": {
     description:
       "A step's from names a producer that no earlier line runs, but a line before it matches no step and may be meant to run that producer, so the from-order-violation findings that line could explain are held back until it matches a step.",
@@ -135,6 +143,12 @@ const CHECK_CODES = {
     description: "A step's from names a value that is not a registered step, or is otherwise structurally malformed.",
     severity: "error",
     fix: "Make each from entry name a step that a step file registers.",
+  },
+  "from-unused": {
+    description:
+      "A step's from declaration never supplies a value, because every feature line that binds the step fills that key with a pattern capture.",
+    severity: "note",
+    fix: "Remove the from entry for the key, or keep it for nuka do --use.",
   },
   "invalid-capture-key": {
     description:
@@ -160,6 +174,12 @@ const CHECK_CODES = {
     severity: "warning",
     fix: "Add an Examples column to the outline's name, such as <column>, so that each row has its own name.",
   },
+  "package-type-missing": {
+    description:
+      "A package.json with no \"type\" field governs a .ts or .js file nukadoko loads, so Node parses the file twice and prints a MODULE_TYPELESS_PACKAGE_JSON warning on every load.",
+    severity: "note",
+    fix: "Add \"type\": \"module\" to the package.json, or rename the files to .mts if the project's own .js files are CommonJS.",
+  },
   "page-override-unowned": {
     description: "A config.fixtures definition overrides page, but owns none of page, context, and pageAs.",
     severity: "error",
@@ -170,6 +190,11 @@ const CHECK_CODES = {
       "A custom parameter type takes the name of a built-in type, two parameter types share the same name (from config.parameterTypes or a compat defineParameterType call), or a type sets preferForRegexpMatch on a regexp that another type, built-in or custom, already prefers.",
     severity: "error",
     fix: "Rename the parameter type, or remove the second registration or the second preferForRegexpMatch.",
+  },
+  "parameter-type-unused": {
+    description: "No typed or compat pattern names a config.parameterTypes entry.",
+    severity: "note",
+    fix: "Remove the entry from config.parameterTypes, or use it in a pattern.",
   },
   "part-cycle": {
     description: "A step's parts form a cycle: the step reaches itself, directly or through other steps' own parts.",
@@ -198,6 +223,11 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Correct the pattern at the position that the message names. Escape a literal ( ) or / as \\( \\) or \\/.",
   },
+  "pattern-unbound": {
+    description: "A typed step has a pattern, and no feature line resolves to that step alone.",
+    severity: "note",
+    fix: "Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
+  },
   "playwright-missing": {
     description:
       "A feature line binds a step whose fixtures build page, context, pageAs, or request, and playwright does not resolve from the installed nukadoko, so the step would fail when it runs; or a step file imports playwright, playwright-core, or @playwright/test, itself or through another project file that the message names, which the project has not installed, so the file does not import. A step is reported once, at the first line that binds it.",
@@ -210,17 +240,38 @@ const CHECK_CODES = {
     severity: "warning",
     fix: "Add a Then line that checks the outcome the scenario is for.",
   },
+  "schema-field-undescribed": {
+    description:
+      "A field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.",
+    severity: "note",
+    fix: "Add a .describe() that says what the field means to each field that the message names.",
+  },
+  "secrets-public-key-unknown": {
+    description: "A secrets.public entry names a key that no envFile defines.",
+    severity: "warning",
+    fix: "Define the key in an envFile, or remove it from secrets.public.",
+  },
   "secrets-redact-key-too-short": {
     description:
       "A secrets.redact key's value is shorter than the minimum length build-secret-set.ts will actually redact, so it never gets redacted.",
     severity: "warning",
     fix: "Use a longer value for the key, or remove the key from secrets.redact.",
   },
+  "secrets-redact-key-unknown": {
+    description: "A secrets.redact entry names a key that no envFile defines.",
+    severity: "warning",
+    fix: "Define the key in an envFile, or remove it from secrets.redact.",
+  },
   "serial-tag-on-scenario": {
     description:
       "A @nukadoko:serial tag is on a Scenario/Scenario Outline line; nuka run --concurrency only reads it from the Feature line, so it has no effect there.",
     severity: "error",
     fix: "Move @nukadoko:serial to the Feature line.",
+  },
+  "step-description-todo": {
+    description: "A typed step's description is still the placeholder nuka scaffold wrote.",
+    severity: "note",
+    fix: "Replace the description with one sentence that says what the step does.",
   },
   "step-file-import-failed": {
     description: "A step file under featuresDir failed to import, so any step it defines never reaches the vocabulary.",

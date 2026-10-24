@@ -6,8 +6,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { analyzeProject } from "../src/check/analyze.js";
 import { runCheck } from "../src/cli/check.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { runTend } from "../src/cli/tend.js";
-import { analyzeTend } from "../src/tend/analyze.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 import { parseFindings } from "../src/finding/finding.js";
@@ -60,7 +58,7 @@ describe("every finding carries file and do", () => {
     await removeTempDir(parent);
   });
 
-  it("names the defining step file and a next step for each check and tend finding", () =>
+  it("names the defining step file and a next step for each check finding", () =>
     hegel.testAsync(
       async (tc) => {
         const shapes = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: STEP_SHAPES.length - 1 }), { minSize: 1, maxSize: 4 }));
@@ -78,8 +76,7 @@ describe("every finding carries file and do", () => {
         }
 
         const check = await analyzeProject(rootDir);
-        const tend = await analyzeTend(rootDir);
-        const findings = [...check.errors, ...check.warnings, ...tend.notes];
+        const findings = [...check.errors, ...check.warnings, ...check.notes];
         for (const finding of findings) {
           const hint = (finding as { fix?: string }).fix ?? (finding as { do?: string }).do ?? "";
           expect(hint.length, `${finding.code} has a fix or a do`).toBeGreaterThan(0);
@@ -115,7 +112,7 @@ describe("the do line in text output", () => {
     await removeTempDir(rootDir);
   });
 
-  it("prints a do line under each nuka check finding", async () => {
+  it("prints a fix or do line under each nuka check finding, notes included", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCheck({ rootDir, json: false, stdout, stderr: createCaptureSink() });
 
@@ -126,6 +123,8 @@ describe("the do line in text output", () => {
         "  fix: Name the capture after the args key that it fills, as {key:type}.",
         'error\tundefined-step\tfeatures/greet.feature:3\tNo step definition matches "nothing defines this"; patterned steps no scanned feature line binds: broken ("an unnamed {int} thing", features/steps/broken.ts)',
         "  do: nuka scaffold --feature features/greet.feature",
+        'note\tpattern-unbound\tfeatures/steps/broken.ts\tStep "broken" declares a pattern, but no feature line under the scanned directories (features) binds it. It has no place in any scenario right now.',
+        "  fix: Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
         "",
       ].join("\n"),
     );
@@ -145,17 +144,6 @@ describe("the do line in text output", () => {
     });
   });
 
-  it("prints a do line under each nuka tend note", async () => {
-    const stdout = createCaptureSink();
-    await runTend({ rootDir, json: false, failOn: [], stdout, stderr: createCaptureSink() });
-
-    expect(stdout.text().split("\n").slice(3)).toEqual([
-      'note\tpattern-unbound\tfeatures/steps/broken.ts\tStep "broken" declares a pattern, but no feature line under the scanned directories binds it. It has no place in any scenario right now.',
-      "  fix: Write a feature line that matches the pattern, or remove the pattern if only nuka do runs the step.",
-      "",
-    ]);
-  });
-
   it("names the step file in nuka steps --json and nuka describe", async () => {
     const steps = createCaptureSink();
     await runCli(["steps", "--json"], { rootDir, stdout: steps, stderr: createCaptureSink() });
@@ -166,11 +154,11 @@ describe("the do line in text output", () => {
     expect(JSON.parse(describe.text()).file).toBe("features/steps/broken.ts");
   });
 
-  it("lists each code's general fix in nuka check --codes and nuka tend --codes", async () => {
+  it("lists each code's general fix in nuka check --codes, in --json and in text", async () => {
     const check = createCaptureSink();
     await runCheck({ rootDir, json: true, codes: true, stdout: check, stderr: createCaptureSink() });
-    const tend = createCaptureSink();
-    await runTend({ rootDir, json: false, codes: true, failOn: [], stdout: tend, stderr: createCaptureSink() });
+    const text = createCaptureSink();
+    await runCheck({ rootDir, json: false, codes: true, stdout: text, stderr: createCaptureSink() });
 
     expect(JSON.parse(check.text()).codes.find((entry: { code: string }) => entry.code === "serial-tag-on-scenario")).toEqual({
       code: "serial-tag-on-scenario",
@@ -179,7 +167,7 @@ describe("the do line in text output", () => {
       severity: "error",
       fix: "Move @nukadoko:serial to the Feature line.",
     });
-    expect(parseFindings(tend.text()).find((finding) => finding.code === "from-unused")).toEqual({
+    expect(parseFindings(text.text()).find((finding) => finding.code === "from-unused")).toEqual({
       severity: "note",
       code: "from-unused",
       where: "-",

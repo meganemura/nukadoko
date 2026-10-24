@@ -68,7 +68,6 @@ describe("a command run in a directory with no config", () => {
   const commands: Array<{ argv: string[]; code: number }> = [
     { argv: ["check"], code: 0 },
     { argv: ["steps"], code: 0 },
-    { argv: ["tend"], code: 0 },
   ];
 
   for (const { argv, code } of commands) {

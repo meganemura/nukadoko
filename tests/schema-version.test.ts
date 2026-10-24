@@ -36,8 +36,6 @@ describe("schema_version", () => {
     envelopes.set("check --codes", parse(await cli(runProject, ["check", "--codes", "--json"])));
     envelopes.set("steps", parse(await cli(runProject, ["steps", "--json"])));
     envelopes.set("describe", parse(await cli(runProject, ["describe", "thing-exists"])));
-    envelopes.set("tend", parse(await cli(runProject, ["tend", "--json"])));
-    envelopes.set("tend --codes", parse(await cli(runProject, ["tend", "--codes", "--json"])));
     envelopes.set("refused", parse(await cli(runProject, ["check", "--json", "features/nope.feature"])));
     envelopes.set("removed", parse(await cli(runProject, ["session", "list", "--json"])));
     documents.set("step_record", parse(await cli(runProject, ["do", "thing-exists", "--args", '{"name":"widget"}'])));
@@ -70,8 +68,6 @@ describe("schema_version", () => {
     ["check --codes", "check", "passed"],
     ["steps", "steps", "passed"],
     ["describe", "describe", "passed"],
-    ["tend", "tend", "passed"],
-    ["tend --codes", "tend", "passed"],
     ["refused", "check", "refused"],
     ["removed", "session", "refused"],
     ["run", "run", "passed"],

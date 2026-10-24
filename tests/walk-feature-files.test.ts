@@ -4,8 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { walkFeatureFiles } from "../src/feature/load-features.js";
 
-// Responsibility: the directory walk `nuka check`, `nuka tend`, and a
-// directory `nuka run` share. A `featuresDir` of "." is a real
+// Responsibility: the directory walk `nuka check` and a directory
+// `nuka run` share. A `featuresDir` of "." is a real
 // configuration, and the same walk is what `nuka run .` uses. Dependencies
 // and the state directory both contain `.feature` files that are not the
 // project's scenarios. The walk has to leave those directories alone, and

@@ -191,7 +191,8 @@ export interface DiscoveryResult {
    * This list is what lets `nuka check`'s `no-step-files-found` tell those
    * two apart and name every directory it
    * walked -- the same "so a reader can tell a finding isn't lying"
-   * reasoning as `nuka tend`'s own `scanned:` line (src/cli/tend.ts). */
+   * reasoning as the scanned directories the `pattern-unbound` note names
+   * (src/check/pattern-unbound.ts). */
   readonly walkedFiles: readonly string[];
 }
 

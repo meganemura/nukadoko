@@ -112,7 +112,7 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
 | 目的 | 成果物 | 書く | コミット | 寿命 | 読む |
 |---|---|---|---|---|---|
 | Contract | `.feature`、step 定義、`nukadoko.config.ts` | 人 | する | 永続 | 人、エンジン |
-| Measurement | `.nukadoko/runs/<run_id>/`、`nuka run` 1 回につき 1 つのディレクトリ(run の結果である `run.json`、その Markdown のサマリである `summary.md`、evidence を含む各 step record である `steps/<id>/`、scenario 自身の evidence を書いたときだけの `scenarios/<id>/`、run が parse した feature の本文である `sources.json`、`nuka report` がその run について書いた export ファイルの一覧である `exports`)と、`.nukadoko/do/<id>/`(`nuka do` の step record) | ツール | しない | 最新 `retention.runs` 回分の run。`nuka do` の record と終わっていない run は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、`nuka report`、`nuka do --use`、`nuka tend` |
+| Measurement | `.nukadoko/runs/<run_id>/`、`nuka run` 1 回につき 1 つのディレクトリ(run の結果である `run.json`、その Markdown のサマリである `summary.md`、evidence を含む各 step record である `steps/<id>/`、scenario 自身の evidence を書いたときだけの `scenarios/<id>/`、run が parse した feature の本文である `sources.json`、`nuka report` がその run について書いた export ファイルの一覧である `exports`)と、`.nukadoko/do/<id>/`(`nuka do` の step record) | ツール | しない | 最新 `retention.runs` 回分の run。`nuka do` の record と終わっていない run は `retention.adHocDays` 日 | run をレビューする人(そのサマリ)、`nuka report`、`nuka do --use` |
 | Export | `.nukadoko/export/allure-results/`、および `nuka report --out` が `.nukadoko/export/` の下に書くほかのファイル | ツール | しない | 描き出した run と同じ | 他のツール |
 
 この表が名指しているのはファイルです。
@@ -229,7 +229,7 @@ Node は型注釈を空白に置き換え、残りを実行します。
   その名前が `nukadoko`、`nukadoko/compat`、`nukadoko/matching` が export する型(`IWorldOptions` など)のとき、finding は `import type` と書くよう伝えます。
   それ以外のモジュールについては型と書き間違いを区別できないので、何も足しません。
 - `"type"` のない `package.json` のもとでは、Node は `.ts` や `.js` のファイルを 2 回解析し、読み込むたびに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
-  ファイルは読み込めるので、これを報告するのは `nuka tend` で、`package-type-missing` として、`"type": "module"` を追加すべき `package.json` を名指します。
+  ファイルは読み込めるので、`nuka check` はこれを注記 `package-type-missing` として報告し、`"type": "module"` を追加すべき `package.json` を名指します。
 
 discovery は 1 回ごとに、それ自身のモジュールグラフでファイルを読み込みます。
 そのため 2 回 discovery を行うプロセス(テスト、実行中のプロセスの下で編集された config)では、各ファイルのトップレベルのコードが再び実行され、2 回の discovery がモジュールを共有することはありません。
@@ -943,12 +943,12 @@ scenario record はすでに閉じている場合があり、stderr がその失
 所見はその fixture を名指し、fixture についての文言で述べます。
 既定値の変換後のソースは引用しません。
 
-`tend` は 1 つの事実を追加で報告します。
+`nuka check` は 1 つの事実を注記として追加で報告します。
 `fixture-unused` は、直接にも別の fixture 経由でも、どの typed step も要求しない `config.fixtures` エントリを特定します。
 そのエントリには `nuka do` から引き続き到達できます。
 `--json` では、この所見は fixture の名前を `fixture` フィールドに入れ、`step` は設定しません。
 同じ名前の fixture と step を区別するためです。
-`tend` は fixture を特定するだけであり、その fixture がそこに属するかは読み手が判断します。
+この注記は fixture を特定するだけであり、その fixture がそこに属するかは読み手が判断します。
 
 リストが空でない場合だけ、step record は `fixtures` を含みます。
 このリストには、その実行で fixture の解決が触れたすべての `config.fixtures` エントリが入ります。
@@ -1236,7 +1236,7 @@ part が scenario の行としても実行される場合、その出現は part
 したがって、チェックは名前が対応するかを推測する必要があります。
 また、本体は 1 つの分岐だけで part を呼ぶことがあります。
 使われていない `from` キーは、feature ファイルに判定可能な情報があるため別です。
-`nuka tend` はその場合を報告します。
+`nuka check` はその場合を注記として報告します。
 利用できる静的データからは、part が使われていないかを判定できません。
 
 矛盾チェックは、読み取り専用ポリシーを強制しません。
@@ -1483,7 +1483,8 @@ import { Given, When, Then } from "nukadoko/compat";
   その隣にはさらに 2 つの所見があり、どちらも 1 つのファイルの中身についてではなく discovery 自身が歩く範囲についてのものです。
   `.cjs` または `.cts` のファイルが `featuresDir` の下にあるときの `step-file-unsupported-extension`(nukadoko がそれを import しない理由は前述の「型付き step」を参照)と、歩いた結果として試せるものが何もなかったときの `no-step-files-found` です。
   どちらも、実際に何を見た結果なのかを名指しします。
-  これは、`nuka tend` 自身の `scanned:` 行が従っているのと同じ「所見が嘘のとき、それに気づけるように」という論拠です。
+  所見が嘘のとき、読み手がそれに気づけるようにするためです。
+  注記 `pattern-unbound` がスキャンしたディレクトリを名指すのも、同じ理由です。
   `undefined-step` の所見は、引用符の付け忘れも示せます。
   同じ位置に合う登録済み pattern が 1 つあり、その capture がすべて `{...:string}` parameter である場合、所見は step と pattern を名指しし、書き直した Gherkin の行を示します。
   その行を説明できる pattern が 2 つ以上ある場合、どれを選ぶかは書き手が決めるため、このヒントは表示されません。
@@ -1637,7 +1638,7 @@ nukadoko は各 pickle の step をコミットされた pattern と照合して
 `nuka run` は 0 個以上の対象を受け取ります。
 対象が無ければ `featuresDir` を実行します。
 これは `nuka check` が既定で辿るディレクトリです(`additionalFeatureDirs` は含みません。
-それを読むのは `nuka check` と `nuka tend` だけです)。
+それを読むのは `nuka check` だけです)。
 各対象には feature ファイル、`ファイル:行`、ディレクトリのいずれかを指定できます。
 `.md` で終わるパスは名指しで拒否されます。
 nukadoko は scenario を `.feature` ファイルからだけ読むからです。
@@ -2611,7 +2612,7 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   それが redact を決めることは決してありません。
   名前が secret に「見える」ことは、実際に redact されるものを増やしはしません。
   それを決めるのは git の分類(未追跡、ignore、HEAD と異なる追跡済みファイル、HEAD と一致する追跡済みファイル)と `secrets.redact` だけです。
-  残りの 2 つの指摘は `nuka tend` が note として報告します。
+  `nuka check` は、残りの 2 つの指摘も警告として報告します。
   `secrets-public-key-unknown` と `secrets-redact-key-unknown` は、`secrets.public` または `secrets.redact` が、設定されたどの envFile にも定義されていないキーを名指ししている場合です。
 
 Configuration は `nukadoko.config.ts` にあり、`defineConfig` を使います。
@@ -2631,7 +2632,7 @@ default export が無いファイル、または default export が Promise で�
 | キー | 内容 |
 | --- | --- |
 | `featuresDir` | feature ファイルと step のコード。`nuka run` が無人で実行する集合そのもの(デフォルトは `features`。Cucumber 流のやり方) |
-| `additionalFeatureDirs` | `nuka check`/`nuka tend` が語彙を結び付ける対象を広げる追加のディレクトリ。`featuresDir` そのものを広げることはない(デフォルトは `[]`。下記) |
+| `additionalFeatureDirs` | `nuka check` が語彙を結び付ける対象を広げる追加のディレクトリ。`featuresDir` そのものを広げることはない(デフォルトは `[]`。下記) |
 | `baseURL` | トップレベルの base URL。environment ごとに上書きされる(下記) |
 | `envFiles` | トップレベルの env file。environment ごとに追記される(下記) |
 | `environments` | environment ごとの `baseURL`、`envFiles`、`policy`、`version` プローブ(下記) |
@@ -2652,17 +2653,17 @@ default export が無いファイル、または default export が Promise で�
 `featuresDir` は無人で *実行される* 集合です。
 引数なしの `nuka run` はちょうどそのディレクトリだけを反復し、このキーがそれを広げることは決してありません。
 `featuresDir` と `additionalFeatureDirs` を合わせたものが、静的チェックが語彙を *結び付ける* 対象となる集合です。
-引数なしの `nuka check` と `nuka tend` はどちらもこの広い集合を歩きます。
+引数なしの `nuka check` はこの広い集合を歩きます。
 ある step の pattern が結び付けられているかどうかはプロジェクト全体の性質であり、今日の無人の run が何を実行するかの性質ではないからです。
 だからこそ、取り込み済みの変更のための feature(「レビュー」を参照)は、`featuresDir` の外に留まる限り `additionalFeatureDirs` に属します。
 `additionalFeatureDirs` にそのディレクトリを名指しすれば、その feature が結び付ける step は `pattern-unbound` として報告される代わりに結び付けられていると数えられ、それでいてなお無人では実行されません。
 プロダクト自身の中核の経路を述べる feature は `featuresDir` へ移り、ここへのエントリは要りません。
 ディスク上に存在しないエントリは config の誤りであり、空のスキャン結果として素通りさせてよいものではありません。
-`nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告し、`nuka tend` はそれを繰り返しません。
+`nuka check` はそれをエラー(`additional-feature-dir-missing`)として報告します。
 
 この feature の走査は、`featuresDir` でも、各 `additionalFeatureDirs` エントリでも、`nuka run` に渡したディレクトリでも、どの深さでも `node_modules` と `.` で始まるディレクトリをスキップします。
 step discovery も同じディレクトリをスキップします。
-その中にある `.feature` ファイルは `nuka check` にも `nuka tend` にも `nuka run` にも含まれず、このスキップは何も報告しません。
+その中にある `.feature` ファイルは `nuka check` にも `nuka run` にも含まれず、このスキップは何も報告しません。
 
 `browserType` は `page` fixture が起動する Playwright のエンジンを選びます: `"chromium"`(デフォルト)、`"firefox"`、`"webkit"` のいずれかです。
 これは `browser` の中のフィールドではなく、別のキーです。
@@ -2719,7 +2720,7 @@ dotenv のユーザーにはおなじみの、共通設定と上書きの重ね�
 ディスク上にないパスは、何も寄与しません。
 `nuka check` は `env-file-missing` で警告し、environment 自身のリストにあるパスは `environment-env-file-missing` で警告します。
 存在しているが読めないパス、またはそのパスにあるディレクトリは、setup を止めます。
-拒否は `env-file-unreadable` で、`nuka check`、`nuka run`（`--no-check` の有無を問わず）、`nuka do`、`nuka tend` のどれでも exit 2 です。
+拒否は `env-file-unreadable` で、`nuka check`、`nuka run`（`--no-check` の有無を問わず）、`nuka do` のどれでも exit 2 です。
 拒否は、設定されたパスと errno を名指しします。
 同じ読み取りが `env` fixture と secret の集合の両方を埋めるので、ファイルがロードされたかどうかは両者で一致します。
 `policy` と `version` は environment ごとにしか存在しません。
@@ -3229,71 +3230,63 @@ nukadoko はすべての段階を記録します。
 監査証跡がないと、self-healing によってテストスイートの検査対象が気づかないうちに消える可能性があります。
 逸脱の記録は、その消失が隠れたままになることを防ぎます。
 
-## Tending(手入れ)
+## check と注記
 
-`nuka check` が答える問いは一つだけです。
-今すぐこのプロジェクトを run できるか、です。
-プロジェクトはあらゆる check を通過していても、それでも腐ることがあります。
-宣言は、何年も行使されないまま残ることがあります。
-契約は、それを選ばなければならない agent にとって読めなくなることがあります。
-これらの問題は run を止めません。
-しかし、どれも時間とともに高くつくようになります。
-この失敗のパターンが、このツールの名前の由来です。
-ぬか床は毎日の手入れで熟成し、放置すると死にます。
+`nuka check` は、プロジェクトを実行せずに nukadoko が判断できることをすべて報告します。
+所見はそれぞれ、次の 3 つの severity のどれかを持ちます。
 
-`nuka tend` が答えるのはもう一つの問いです。
-この語彙と、それが生み出した記録は、いまも健全か、です。
+- **エラー**(`error`)は、プロジェクトと green な run の間に立ちはだかるものです。
+  スキーマに合わない pattern、どの step にも一致しない feature の行、config の誤りがそうです。
+  `nuka run` は、選んだ scenario のエラーがあれば実行を拒否します。
+- **警告**(`warning`)は、人が見るべき緊張関係ですが、run を止めません。
+  `mutates: true` を宣言する step に結び付いた Then、Then のない scenario、どの envFile も定義していないキーを名指す `secrets` のエントリがそうです。
+- **注記**(`note`)は、壊れていることではなく腐っていることです。
+  プロジェクトはあらゆる check を通過していても、それでも腐ることがあります。
+  宣言は、何年も行使されないまま残ることがあります。
+  契約は、それを選ばなければならない agent にとって読めなくなることがあります。
+  これらの問題は run を止めません。
+  しかし、どれも時間とともに高くつくようになります。
+  この失敗のパターンが、このツールの名前の由来です。
+  ぬか床は毎日の手入れで熟成し、放置すると死にます。
 
-`nuka tend --codes` は、tend の所見が持ちうるコードをすべて一覧にします。
-各コードには 1 行の説明と、そのコードの一般的な `do` が付きます。
+exit code は、報告にエラーが 1 つ以上あるか、`--fail-on`(後述)が名指す code があるときに 1 です。
+警告と注記だけなら 0 で終了します。
+テキストの出力は、エラー、警告、注記の順に並べます。
+`ok: no issues found` を出力するのは、3 つのどれもないときだけです。
+
+注記はプロジェクト全体についての事実です。
+step の pattern が結び付いているか、`from` 宣言が一度でも行使されるかは、プロジェクトがスキャンするすべての feature(`featuresDir` と、各 `additionalFeatureDirs` エントリ)で決まります。
+そのため、注記を計算するのは対象を指定しない `nuka check` だけです。
+対象を指定した `nuka check` と、`nuka run` が実行の前に走らせる check は、注記を計算しません。
+`nuka run` は、終わったばかりの run から自分自身の注記 `repeated-scenario-prefix` を 1 つ報告します(「実行」を参照)。
+
+注記は、かつては別の `tend` コマンドが出していました。
+nukadoko を使う 11 のプロジェクトを調べたところ、その 14 の code のうち 10 はどのプロジェクトでも発火せず、サマリーを読む人もおらず、使われていたのは 2 つの code でゲートを掛ける 1 つのテストだけでした。
+同じプロジェクトを読み込み、同じ文法で所見を出力するコマンドが 2 つあると、ツールを読むすべての agent に負担がかかります。
+そこで今は 1 つのコマンドが静的なものをすべて報告し、何でゲートを掛けるかはプロジェクトが `--fail-on` で選びます。
+
+`nuka check --codes` は、すべての code を、その severity、1 行の説明、その code の一般的な fix とともに一覧にします。
 `--json` を付けると、同じ一覧を `codes` の下に JSON で出力します。
 
-これが `check` への警告の追加ではなく別のコマンドである理由は、この 2 つが異なる瞬間に読まれ、異なる意味を持つからです。
-`check` はあらゆる run の前に、CI の中で、agent のループの中で実行されます。
-そこが出力する行はどれも、プロジェクトと green な run の間に立ちはだかるものです。
-だからこそ、そこでの所見は立ち止まる価値があるものでなければなりません。
-`tend` の所見はそうではありません。
-ここにあるものはどれも今日直す必要はありません。
-もしこれらの所見が毎回の `check` に現れたら、本当に直すべきだった行までみんなが読み飛ばすことを覚えてしまいます。
-ノイズは、check を読む価値のあるものにすることを主張の中心に据えたツールにとって、見た目だけの問題ではありません。
+次の注記は、`nuka check` が何をスタイルの問題ではなく腐敗として読むかを示します。
 
-所見を挙げる前に、`tend` はぬか床の現在の状態を示す 3 行のサマリーを出力します。
-この 3 行のどれも所見ではなく、exit code も変わりません(移行の途中にあるスイートはそれ自体が異常な状態ではなく通常の状態であり、毎回それについて警告すれば、本当に対応が必要な所見を埋もれさせてしまいます):
-
-- `scanned:` は、この run が実際に調べたすべてのディレクトリを名指しします。
-  `featuresDir` と、各 `additionalFeatureDirs` エントリです(「Environment、secret」を参照)。
-  最初に出力されるのは、件数はその範囲を読み手が知るまで何も意味しないからです。
-- `bed:` は、語彙のうちどれだけが compat ではなく型付けされているかを示します。
-  加えて、いくつの型付き step が `mutates: false`(読み取り専用)を宣言しているかも示します。
-- `declared:` は、型付き step のスキーマフィールドのうち、いくつが `.describe()` を持つかを示します。
-  `.describe()` を持たないフィールドは、それぞれ `schema-field-undescribed` の注記にもなります。
-
-`--json` では、同じサマリーが `summary` オブジェクトになり、nukadoko が出力するほかの文書と同じく snake_case です。
-キーは `typed_steps`、`compat_steps`、`compat_step_names`、`read_only_steps`、`scanned_feature_dirs` と、`{ declared, total }` の `describe` です。
-
-このサマリーが存在するのは、この情報がすでにあったのに読まれていなかったからです。
-step record の `world` と `declared` の件数は、スイートが昇格するにつれて確かに縮みます。
-それは正確ですが、進捗を示す手段としては無意味です。
-誰も、移行がどこまで進んだかを計算するために step record のディレクトリを読んだりしません。
-ぬか床の健全さそのものを扱うコマンドの中で一度だけ述べることが、この情報を可視化します。
-
-次の所見は、`tend` が何を調べているか、そしてそれぞれがなぜスタイルの問題ではなく腐敗なのかを示します。
-
-- **何にも行使されない `from` 宣言。**
+- **何にも行使されない `from` 宣言**(`from-unused`)。
   その step があらゆる feature 内で出現するたびに、そのキーは行から直接キャプチャされます。
   そのため、宣言された生産者は一度も何も供給しません。
   これはただの事実として報告されます(その宣言は `nuka do --use` を通じてなお到達可能です)。
   削除すべきだという指示としてではありません。
-- **どの feature からも束ねられていない pattern を持つ step。**
+- **どの feature からも束ねられていない pattern を持つ step**(`pattern-unbound`)。
   CLI 専用のつもりの step は pattern を一切持つべきではありません。
   pattern を持っている場合、それは自分が占めていない scenario 上の場所を主張していることになります。
-  この所見の `file` は、プロジェクトのルートからの相対パスで step ファイルを名指しします。
+  この注記の `file` は、プロジェクトのルートからの相対パスで step ファイルを名指しします。
+  メッセージは、スキャンしたディレクトリを名指しします。
+  `additionalFeatureDirs` から漏れたディレクトリでだけ結び付いている step は、結び付いていないように見えるからです。
   `nuka check` と `nuka run` も、同じ step を `undefined-step` のメッセージの末尾で名指しします。
   文や pattern の名前を変えると、1 つの行が未定義になり、1 つの step が結び付けられなくなることが同時に起きるからです。
-  対象がより少ないファイルを選んでいても、`tend` が読むのと同じ走査対象のディレクトリで判断します。
+  この末尾は、対象がより少ないファイルを選んでいても、同じスキャン対象のディレクトリで判断します。
   そのため、対象から外れたファイルで結び付けられている step を結び付けられていないと呼ぶことはなく、1 つの行のメッセージが対象によって変わることもありません。
-- **`.describe()` を持たないスキーマフィールド。**
-  これは agent にまっすぐ狙いを定めた tending の所見です。
+- **`.describe()` を持たないスキーマフィールド**(`schema-field-undescribed`)。
+  これは agent にまっすぐ狙いを定めた注記です。
   agent がフィールドの意味を知る手段は `nuka describe` です。
   description のないフィールドは、名前がすでに伝えていた以上のことを何も agent に伝えません。
   step ファイルを読む人間は周囲のコードを見られます。
@@ -3308,47 +3301,39 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   一方で `nuka steps` と `nuka describe` は、step を選ぶ人にその TODO を見せます。
   この注記はその文字どおりの接頭辞だけに一致します。
   そのため、scaffold が書いて誰も置き換えていないものだけを主張します。
-  step はそのまま実行できるので、`check` の所見ではなく注記です。
-- **どの pattern からも使われていない設定済みの parameter type。**
+  step はそのまま実行できるので、エラーではなく注記です。
+- **どの pattern からも使われていない設定済みの parameter type**(`parameter-type-unused`)。
   これは使われていない設定であり、他のものと同様に報告されます。
-- **`secrets.public` または `secrets.redact` のエントリが、どの envFile も定義していないキーを名指ししているもの。**
-  その指示は実在しますが、何にも届きません。
-  自分が記述している対象のファイルから設定がずれているということです。
-  これは `check` から移されました。
-  この run を実行すべきかどうかは、これによって何も変わらないからです。
-  その隣にある所見は `check` に残っており、対比する価値があります。
-  値が短すぎて redact されない `redact` エントリと、secret らしいキーを持つ追跡済みの env file は、どちらも run が始まった瞬間に平文がログに届くことを意味します。
-  それはまさに事前に知っておくべきことだからです。
+- **どの型付き step も必要としない `config.fixtures` のエントリ**(`fixture-unused`)。
+  直接にも、別の fixture を通しても必要とされないものです(「Fixtures」を参照)。
 - **nukadoko が読み込む `.ts` や `.js` のファイルを支配する、`"type"` のない `package.json`**(`package-type-missing`)。
   Node はそのようなファイルを CommonJS として読み、ES module の構文を見つけると解析し直し、`MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
   これは、そうしたファイルを読み込むたびに起きます。
   支配する `package.json` は Node 自身が使うもの、つまりそのファイルから見て最も近い `package.json` です。
-  note はそれを名指し、直し方を示します。
+  注記はそれを名指し、直し方を示します。
   `"type": "module"` を追加するか、プロジェクト自身の `.js` ファイルが CommonJS なら `.mts` の名前にすることです。
-  run は動くので、これは note です。
-- **設定された `additionalFeatureDirs` エントリがディスク上に存在しないもの。**
-  これは `nuka check`/`nuka tend` がスキャンする範囲を広げるためだけに存在します。
-  そのため、存在しないディレクトリは報告すべき config の誤りであり、それは `featuresDir` が欠けている場合と同じです。
-  ただし `tend` の所見はすべて注記です。
-  そのため、`nuka check` が同じ事実をエラーとして報告する一方で、ここでは注記になります。
-所見は、他の出力と同じく `--json` に対応します。
-所見はすべて注記であり、注記は exit code を変えません。
-プロジェクトはそれらを抱えたままでいることが許されているからです。
-`--fail-on <code>`(繰り返し指定、またはカンマ区切り)は、その code の所見が報告されたときに、その 1 回の呼び出しを非ゼロで終了させ、stderr にそう告げます。
-所見そのものは出力の中で note のままです。
-変わったのはそのジョブに対するチームの方針であって、所見の性質ではないからです。
-`tend` が報告しない code は最初に拒否されるので、打ち間違いが「決して発火しないフラグ」になることはありません。
-以前のリリースが報告していた code、たとえば `accept` コマンドとともに消えた sign-off の code は、名前を挙げて拒否され、何が置き換えたかが示されます(`docs/upgrading.ja.md` を参照)。
-未知の code を拒否するときは、すべての code を一覧する `nuka tend --codes` を案内します。
-これが、他の全員の `tend` を赤くせずに、PR のジョブが `pattern-unbound` でゲートを掛ける方法です。
+  run は動くので、これは注記です。
 
-どの run も、すべての code を報告します。
-フラグの陰に控えさせる code はありません。
-tend の所見はどれもすでに exit code を変えない注記なので、既定で外す code が減らせるのは出力の量だけです。
+どの envFile も定義していないキーを名指す `secrets.public` や `secrets.redact` のエントリ(`secrets-public-key-unknown`、`secrets-redact-key-unknown`)は、注記ではなく警告です。
+その指示は実在しますが、何にも届きません。
+自分が記述している対象のファイルから設定がずれているということです。
+その隣にある所見は対比する価値があります。
+値が短すぎて redact されない `redact` エントリと、secret らしいキーを持つ追跡済みの env file は、どちらも run が始まった瞬間に平文がログに届くことを意味します。
+
+`--fail-on <code>`(繰り返し指定、またはカンマ区切り)は、その code の所見が報告されたときに、その 1 回の呼び出しを 1 で終了させます。
+そのことを stderr に `fail-on: <code> reported <n> finding(s)` として告げます。
+`--json` では、エンベロープの `fail_on_hits` がそうした code をそれぞれの件数とともに並べます。
+所見そのものは、出力の中で自分の severity のままです。
+変わったのはそのジョブに対するプロジェクトの方針であって、所見の性質ではないからです。
+check の報告に決して含まれない code は、何も分析する前に拒否されるので、打ち間違いが「決して発火しないゲート」になることはありません。
+その拒否は `nuka check --codes` を案内します。
+これが、他の全員にとってその注記を赤くせずに、pull request のジョブが `pattern-unbound` でゲートを掛ける方法です。
+
+フラグの陰に控えさせる注記はありません。
+注記は exit code を変えないので、既定で外す code が減らせるのは出力の量だけです。
 その代わりに、素の `--json` を読むゲートは、一度も見ない所見を失います。
-チームは、素の run が何を出力するかではなく、`--fail-on` でゲートに掛けるものを選びます。
 
-`tend` は報告するだけで、修復はしません。
+`nuka check` は報告するだけで、修復はしません。
 直すということは、description を書くこと、step を削除すること、feature を移すことを意味します。
 どれも背後に書き手がいる判断です。
 
@@ -3627,7 +3612,7 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               description; without it the description
                               is "TODO: describe <name>" (with
                               --command, a sentence about running the
-                              program), which tend reports as
+                              program), which nuka check notes as
                               step-description-todo. A file already at
                               the step's path is refused. --replace
                               overwrites it only while it is, byte for
@@ -3679,7 +3664,7 @@ nuka scaffold --feature <path>
                               name, --pattern, --then, --command, --from,
                               --cwd, --argv, --request, --body,
                               --description, or --replace
-nuka check [feature..] [--json]
+nuka check [feature..] [--json] [--fail-on <code>]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature (each naming the patterned steps no
@@ -3724,9 +3709,22 @@ nuka check [feature..] [--json]
                               bound in Then position, an envFile that is missing or
                               has an unreadable line, a tracked envFile key that
                               looks secret but is not in secrets.redact, a
-                              secrets.redact key too short to redact; with no
-                              target, scans featuresDir plus
-                              additionalFeatureDirs;
+                              secrets.redact key too short to redact, a
+                              secrets.public or secrets.redact key no envFile
+                              defines; with no target, scans featuresDir plus
+                              additionalFeatureDirs and adds notes, none of
+                              which changes the exit code: a `from` nothing
+                              exercises, a patterned step no feature binds
+                              (naming the scanned directories), a schema field
+                              with no `.describe()`, a description still the
+                              scaffold's TODO, a configured parameter type no
+                              pattern uses, a fixture no typed step requires,
+                              and a package.json with no "type" over a file
+                              nukadoko loads; --fail-on <code> (repeatable, or
+                              comma-separated) exits 1 when a finding with
+                              that code is reported, and the finding keeps its
+                              severity; a code a check report never contains
+                              is refused;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
                               files), so the errors
@@ -3747,26 +3745,6 @@ nuka clean [--dry-run] [--json]
                               the contents of allure-results/; the cache/
                               and records/ directories earlier releases
                               left go too
-nuka tend [--json] [--fail-on <code>]
-                              scans featuresDir plus additionalFeatureDirs,
-                              then where the bed is, then what is rotting
-                              rather than what is broken: how much of the
-                              vocabulary is typed rather than compat, how
-                              many typed steps are read-only, and how much
-                              of it declares what it could, then notes, none
-                              of which changes the exit code (--fail-on
-                              <code> makes a named note exit non-zero, for
-                              that invocation; a removed code is
-                              refused by name): a `from` nothing
-                              exercises, a patterned step no
-                              feature binds, a
-                              configured parameter type no pattern uses, a
-                              secrets entry naming a key no envFile defines,
-                              a fixture no typed step requires, and a schema
-                              field with no `.describe()`
-nuka tend --codes [--json]    list every finding code nuka tend can report,
-                              a one-line description, and the code's
-                              general do, instead of tending a project
 nuka init [--allure] [--server "<command>" --server-url <url>]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
@@ -3799,7 +3777,7 @@ nuka skill path               where the bundled skill lives, for a project
 ```
 
 文字列または数値を 1 つ取るフラグを 2 回以上与えると、nuka はそのフラグを拒否し、そのコマンドは何も書き込みません。
-`nuka do` の `--use`、`nuka run` の `--env`、`nuka tend` の `--fail-on` は繰り返し可能で、与えた値をすべて与えた順に残します。
+`nuka do` の `--use`、`nuka run` の `--env`、`nuka check` の `--fail-on` は繰り返し可能で、与えた値をすべて与えた順に残します。
 
 テキスト出力(`--json` なし)は、それを読む人間向けに整形されます。
 `--json` が機械可読な契約です。
@@ -3849,7 +3827,7 @@ envelope は 2 です。
 `command` はコマンドのパス(`check`、`skill path`)で、argv がどのコマンドも名指さないときは `""` です。
 `verdict` は終了コードの断定で、0 なら `passed`、2 なら `refused`、それ以外は `failed` です。
 コマンド自身のフィールドは `findings` の後に置かれ、5 つのフィールドを置き換えることはありません。
-それは `steps`(`nuka steps`)、契約(`nuka describe`)、`summary` と `fail_on_hits`(`nuka tend`)、`run.json` のフィールド(`nuka run`)、計画(`nuka clean`)、`codes`(`--codes`、各エントリは場所を持たない所見)です。
+それは `steps`(`nuka steps`)、契約(`nuka describe`)、`fail_on_hits`(`nuka check`)、`run.json` のフィールド(`nuka run`)、計画(`nuka clean`)、`codes`(`--codes`、各エントリは場所を持たない所見)です。
 `nuka do` は step record を出力します。
 これは報告ではなく record なので、envelope も `--json` も持ちません。
 その拒否と警告は stderr の所見です。
@@ -3857,8 +3835,8 @@ envelope は 2 です。
 ### 所見
 
 所見、拒否、失敗した scenario は 1 つの形です。
-フィールドは `severity`、`code`、`message` で、わかっているときは `file`、`line`、`step` が続き(fixture についての tend の note では `fixture`)、その後に `fix` と `do` が続きます。
-severity は `error` か `warning`(`nuka check` と、あらゆるコマンドの警告)、`note`(`nuka tend`)、`refused`(「拒否」を参照)、`failed`(失敗した scenario、BeforeAll または AfterAll の hook)です。
+フィールドは `severity`、`code`、`message` で、わかっているときは `file`、`line`、`step` が続き(fixture についての注記では `fixture`)、その後に `fix` と `do` が続きます。
+severity は `error`、`warning`、`note`(`nuka check`、あらゆるコマンドの警告、`nuka run` が報告する注記)、`refused`(「拒否」を参照)、`failed`(失敗した scenario、BeforeAll または AfterAll の hook)です。
 `file` はプロジェクトのルートからの相対パスです。
 1 つの step についての所見では、その step を定義する step ファイルです。
 複数の step を挙げる `duplicate-pattern` では、最後に挙げた step のファイルです。
@@ -3880,7 +3858,7 @@ discovery は、どのファイルが hook を登録したかを記録しない�
 値の中の改行やタブは空白になります。
 その後に字下げした行が続くことがあります。
 まとめた所見が覆うファイル、次に `  fix: <text>`、次に `  do: <command>` です。
-`nuka check --codes` と `nuka tend --codes` は、各コードを同じ文法で出力します。
+`nuka check --codes` は、各コードを同じ文法で出力します。
 
 ### 拒否
 
@@ -3905,7 +3883,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | 終了コード | 意味 | 例 |
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
-| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka tend` が報告した `--fail-on` の code |
+| 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code |
 | 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
@@ -3913,7 +3891,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | --- | --- | --- |
 | `nuka run` | `--records` なら 1 行に 1 つの scenario の `run.json` のエントリ、`--json` なら `run.json`(envelope)、それ以外は何も出さない | 進捗、書き込んだ場所、summary の行、`scenario-failed` の所見、警告。`--json` なら何も出さない |
 | `nuka do` | step record(失敗した step でも) | 警告の所見 |
-| `nuka check`、`nuka tend` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`nuka tend` の `fail-on` の行を除く) |
+| `nuka check` | 報告、`--json` なら envelope | 何も出さない(`--json` なしの拒否と警告、`fail-on` の行を除く) |
 | `nuka steps`、`nuka describe` | vocabulary または契約(`steps` は `--json`、`describe` は常に envelope) | import に失敗した step ファイルの所見(`--json` のときは `findings` に入るので除く) |
 | `nuka clean` | パスごとに 1 行、`--json` なら envelope | 何も出さない(`--json` なしの拒否を除く) |
 
@@ -3926,13 +3904,12 @@ step record の `error.kind` は「Records」に一覧があります。
 壊れた step ファイルへの反応は、この一覧の中で 2 通りに分かれます。
 その分かれ目は 1 つの問いです。
 そのコマンドはこれから step を実行しようとしているのか、それとも語彙を報告するだけなのか、です。
-`nuka steps`、`nuka describe`、`nuka check`、`nuka tend` は報告する道具です。
+`nuka steps`、`nuka describe`、`nuka check` は報告する道具です。
 それぞれがファイル単位で step を発見します。
 そのため、import に失敗した 1 ファイルが、プロジェクトの残り全体がまだ見せられるはずのものまで空にしてしまうことはありません。
 `nuka check` はその失敗を `step-file-import-failed` として名指しします。
 原因が相対パスの `.js`、`.mjs`、`.cjs` の import で、それが指す `.ts`、`.mts`、`.cts` ファイルが存在しない場合は、Node 自身の文の後ろに、そのファイルと import を直すべきファイルを、どちらもプロジェクトのルートからの相対パスで付け足します。
 `nuka steps`/`nuka describe` は同じ所見を(前述のとおり)運びます。
-`nuka tend` は import できたものだけを数え、`nuka check` の所見を繰り返さないので、読み手は `nuka check` を並べて実行します(「Tending(手入れ)」を参照)。
 `nuka run`、`nuka do`、`nuka init` はこれから step を実行しよう、あるいはこれから実行するプロジェクトを立ち上げようとしている道具なので、fail-fast のままです。
 同じ壊れたファイルは呼び出し全体をそのまま拒否します。
 なぜなら、その先へ進むことはこれから実行しようとしている何かにとって危険であり、報告するだけとは違うからです。
@@ -4017,10 +3994,13 @@ step record の `error.kind` は「Records」に一覧があります。
   移行はスイートごとに一度しか起きないので、その決まりは docs/migration.ja.md(「進め方の決まり」)に移り、エージェントはそこを案内されたときに読みます。
 - **M6(chained arguments)**: `from`、`nuka check` と `nuka run` が共有する scenario 順序チェック、`do` の `--use`、そして引用する step record の隣に step 名を記す `used` のエントリです。
   step の入力がどこから来るかは、`run` の本体の中の散文であることをやめ、ツールが読む宣言になります(「step の連鎖」を参照)。
-- **M7(tending)**: `nuka tend`、壊れることではなく腐ることについての所見です(「Tending(手入れ)」を参照)。
-  意図的に `nuka check` には含めていません: `check` はあらゆる run の前に読まれるものであり、立ち止まる価値があり続けなければならないからです。
+- **M7(tending)**: 壊れることではなく腐ることについての所見を出す `tend` コマンドです。
+  `check` が立ち止まる価値を保てるよう、`nuka check` からは外していました。
+  のちに `nuka check` に統合されました。
+  2 つの code でゲートを掛ける 1 つのテストのほかにそれを実行するプロジェクトはなく、同じプロジェクトを読み込んで同じ所見を出力するコマンドが 2 つあると、ツールを読むすべての agent に負担がかかったからです。
+  その所見は `nuka check` の注記になり、どれでゲートを掛けるかは `--fail-on` で選びます(「check と注記」を参照)。
 - **M8(fixtures)**: `nukadoko.config.ts` 自身の `fixtures` の下に宣言するユーザー定義の資源です(「Fixtures」を参照)。
-  完全な型付けのための `defineFixtures`、scope、step や scenario 自身の成否を運ぶ `use()` ベースの teardown、fixture ごとのタイムアウト、そしてそれらに付随する `check`/`tend` の所見です。
+  完全な型付けのための `defineFixtures`、scope、step や scenario 自身の成否を運ぶ `use()` ベースの teardown、fixture ごとのタイムアウト、そしてそれらに付随する `check` の所見です。
   typed 側にあった、compat の After hook にはなかった 1 つの gap を塞ぎます。
   受け入れ条件そのものではない片付けを置く場所です。
 - **M9(parts)**: `defineStep` の `parts`、`call` fixture、step record が新たに持つ `calls` エントリ、そしてそれに伴う check です(「Parts」を参照)。

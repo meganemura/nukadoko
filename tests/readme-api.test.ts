@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { repoRoot, stepRecordDir } from "./helpers/fixtures.js";
+import { repoRoot, stepRecordDir, withoutCheckNotes } from "./helpers/fixtures.js";
 
 // Responsibility: README.md's two HTTP sections work as written.
 //
@@ -196,7 +196,7 @@ describe(`README.md: ${SELF_STARTED}`, () => {
       expect(without.stdout).toContain("Property 'server' does not exist on type 'FixtureBag'");
       // The section's claim: `nuka check` reads the names and needs no types.
       const check = await nuka(["check"]);
-      expect(check.stdout + check.stderr).toBe("ok: no issues found\n");
+      expect(withoutCheckNotes(check.stdout + check.stderr)).toBe("");
       expect(check.code).toBe(0);
     } finally {
       await writeFile(configPath, config);

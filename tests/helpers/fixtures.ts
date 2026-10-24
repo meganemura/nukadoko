@@ -334,3 +334,21 @@ export function stepRecordIds(rootDir: string, stateDir = ".nukadoko"): string[]
 export function latestRunDir(rootDir: string, stateDir = ".nukadoko"): string {
   return path.join(rootDir, stateDir, "runs", latestRunJson(rootDir, stateDir).run_id as string);
 }
+
+/**
+ * `nuka check`'s text output with every note, its indented lines, and the
+ * `ok: no issues found` line left out, so what is left is the errors and
+ * warnings alone. A test whose point is "this passes check" asserts that
+ * this is empty, rather than depending on the notes a whole-project check
+ * adds for a freshly scaffolded step.
+ */
+export function withoutCheckNotes(text: string): string {
+  let inNote = false;
+  return text
+    .split("\n")
+    .filter((line) => {
+      inNote = line.startsWith("note\t") || (inNote && FINDING_DETAIL_LINE.test(line));
+      return !inNote && line !== "ok: no issues found";
+    })
+    .join("\n");
+}

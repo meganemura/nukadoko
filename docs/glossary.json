@@ -32,7 +32,12 @@
     {
       "en": ["tending", "tend"],
       "ja": "手入れ",
-      "note": "「ぬか床は毎日手入れをすれば熟成し、放っておけば死ぬ」という比喩と対になっている。コマンド名 nuka tend は英語のまま"
+      "note": "「ぬか床は毎日手入れをすれば熟成し、放っておけば死ぬ」という比喩と対になっている。nuka tend は削除済みで、その所見は nuka check の注記になった。残るのは spec の M7 のような履歴の記述だけ。そこではコマンド名とマイルストーン名 tending を英語のまま書く"
+    },
+    {
+      "en": ["note", "notes"],
+      "ja": "注記",
+      "note": "nuka check の severity の一つで、壊れていることではなく腐っていることを指す。severity の値そのもの(`note`)はコードスパンで英語のまま書く。エラー(error)、警告(warning)と並べるときも同じ"
     },
     { "en": ["rot", "rotting", "rotten"], "ja": "腐る / 腐敗" },
     {
@@ -164,7 +169,7 @@
     {
       "en": ["scan", "scans", "scanned", "scanning"],
       "ja": "スキャン",
-      "note": "nuka check / nuka tend が静的検査のために feature ディレクトリを対象に取ること。ディレクトリを実際にたどる動作を指す walk(歩く)とは書き分ける"
+      "note": "nuka check が静的検査のために feature ディレクトリを対象に取ること。ディレクトリを実際にたどる動作を指す walk(歩く)とは書き分ける"
     },
     {
       "en": ["timeline"],
@@ -474,7 +479,6 @@
       "mutates",
       "ctx",
       "nuka check",
-      "nuka tend",
       "step_record_id",
       "scenario_record_id",
       "record.json",
@@ -492,12 +496,11 @@
       "rule": "見出しの主題が keep_english に載っている語なら英語のまま。説明的な句なら日本語化。どちらとも言い切れない英語の術語が単独で立つ場合だけ、丸括弧で短い日本語の言い換えを添える",
       "examples": {
         "english": ["Context API", "Records", "Allure results", "CLI summary"],
-        "japanese": ["nukadoko とは", "課題", "成果物", "キーワードの意味論", "実行", "ロードマップ"],
+        "japanese": ["nukadoko とは", "課題", "成果物", "キーワードの意味論", "実行", "ロードマップ", "check と注記"],
         "parenthetical": [
           "Compat steps(移行の扉)",
           "Scenario(スクリプト化された経路)",
           "Self-healing(監査付き)",
-          "Tending(手入れ)",
           "Out of scope(正直な限界)"
         ]
       }

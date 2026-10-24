@@ -42,7 +42,7 @@ describe("a config that does not load names its own fix", () => {
 
   it("a config whose default export is a Promise", async () => {
     const dir = await project({ "package.json": ESM_PACKAGE, "nukadoko.config.ts": "export default Promise.resolve({});\n" });
-    expect(await refusalHint(["tend"], dir)).toEqual({
+    expect(await refusalHint(["check"], dir)).toEqual({
       exitCode: 2,
       doLine: "  fix: Export the config object itself as the default export of nukadoko.config.ts, not a Promise of it.",
     });

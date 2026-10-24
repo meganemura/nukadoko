@@ -159,7 +159,7 @@ replaces the one before it:
    example or a second project, or when a red run traced back to its
    absence. A rule has a `Bad:`, a `Good:`, and a `Checked by:` line; the
    test suite refuses a rule without all three.
-3. **A finding code.** A rule that `nuka check` or `nuka tend` can decide
+3. **A finding code.** A rule that `nuka check` can decide
    from the feature file and the step contracts alone, with no guess about
    intent, becomes a code. The rule then names that code on its
    `Checked by:` line, and the code's own `fix:` carries the edit.

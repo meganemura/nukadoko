@@ -18,7 +18,7 @@ import { availableParameterTypeNames, CAPTURED_CLASS } from "../check/binding-ch
 import { formatFinding } from "../finding/finding.js";
 import { configMissingFinding, refuse, type RefusalSinks } from "./refusal.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
-import { DESCRIPTION_TODO_PREFIX } from "../tend/types.js";
+import { DESCRIPTION_TODO_PREFIX } from "../check/description-todo.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
@@ -49,7 +49,7 @@ import { shellWord } from "../shell/shell-word.js";
 //
 // `--description` is written as the step's description, a JSON string
 // literal like the pattern. Without it the description is
-// `TODO: describe <name>`, which imports and runs, so `nuka tend` reports
+// `TODO: describe <name>`, which imports and runs, so `nuka check` reports
 // it (`step-description-todo`) by the same prefix; `--command` has a real
 // sentence of its own instead, which `--description` replaces.
 //
@@ -167,7 +167,7 @@ export interface RunScaffoldOptions {
   /** Whether `--command` came before the name on the command line, which
    * is how a name ends up as its value. */
   commandBeforeName: boolean;
-  /** `--description`, or `null` for the TODO `nuka tend` reports (or,
+  /** `--description`, or `null` for the TODO `nuka check` reports (or,
    * with `--command`, the sentence that describes running the program). */
   description: string | null;
   /** Each `--from` value as typed, `<step>.<key>`, in order. */
@@ -1228,7 +1228,7 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const variantShape = VARIANTS[variant];
 
   if (description === "") {
-    return refuse(sinks, "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports", "invalid-value");
+    return refuse(sinks, "Refusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka check reports", "invalid-value");
   }
 
   if (entryPoint !== null) {

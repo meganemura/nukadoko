@@ -94,7 +94,7 @@ Environment と trusted publisher は、2026-09-23 の時点で既に設定済�
 2. `npm run archstrict && npm run typecheck && npm test && npm run selftest && npm run pack-check && npm run skill-examples` を実行します。
    `pack-check` は本物の tarball を、このリポジトリの外の捨てプロジェクトへインストールし、そこで CLI を動かします。
    これが捕まえるのは、このリポジトリが devDependency にしか挙げていないパッケージへ `bin` が依存していることと、`dist/` が `src/` と一致していないことです。
-   `skill-examples` は同じ tarball を `examples/acceptance/` の各プロジェクトのコピーへインストールし、そこで `nuka check`、`nuka run`、`nuka tend` を実行して、出力を `skills/nukadoko/references/examples/` にある実行記録と比べます。
+   `skill-examples` は同じ tarball を `examples/acceptance/` の各プロジェクトのコピーへインストールし、そこで `nuka check`、`nuka run`、`nuka run --probe` を実行して、出力を `skills/nukadoko/references/examples/` にある実行記録と比べます。
 
 3. 前回の tag から `skills/` が変わっているとき(`git diff --stat v<previous>..HEAD -- skills/` が行を出すとき)は、skill の評価を手で 1 回行います。
    `skills/nukadoko/references/examples/` の作業例を 1 つ選びます。

@@ -113,7 +113,7 @@ who writes it, whether it belongs in the repository, and its intended lifetime:
 | Purpose | Artifact | Written by | Committed | Lifetime | Read by |
 |---|---|---|---|---|---|
 | Contract | `.feature`, step definitions, `nukadoko.config.ts` | a human | yes | permanent | humans, the engine |
-| Measurement | `.nukadoko/runs/<run_id>/`, one directory per `nuka run` (`run.json`, the run's result; `summary.md`, its Markdown summary; `steps/<id>/`, each step record with its evidence; `scenarios/<id>/`, a scenario's own evidence, when it wrote any; `sources.json`, the feature text the run parsed; `exports`, which export files `nuka report` wrote of that run), and `.nukadoko/do/<id>/` (a `nuka do` step record) | the tool | no | the newest `retention.runs` runs; a `nuka do` record or an unfinished run, `retention.adHocDays` days | a person reviewing the run (its summary), `nuka report`, `nuka do --use`, `nuka tend` |
+| Measurement | `.nukadoko/runs/<run_id>/`, one directory per `nuka run` (`run.json`, the run's result; `summary.md`, its Markdown summary; `steps/<id>/`, each step record with its evidence; `scenarios/<id>/`, a scenario's own evidence, when it wrote any; `sources.json`, the feature text the run parsed; `exports`, which export files `nuka report` wrote of that run), and `.nukadoko/do/<id>/` (a `nuka do` step record) | the tool | no | the newest `retention.runs` runs; a `nuka do` record or an unfinished run, `retention.adHocDays` days | a person reviewing the run (its summary), `nuka report`, `nuka do --use` |
 | Export | `.nukadoko/export/allure-results/`, and any other file `nuka report --out` writes under `.nukadoko/export/` | the tool | no | with the run it renders | other tools |
 
 The table names files. The distinctions between its columns answer two
@@ -251,7 +251,7 @@ Node floor is the first release that does that without a flag (22.18 on the
   so it adds nothing.
 - A `package.json` with no `"type"` makes Node parse each `.ts` or `.js`
   file twice and print a `MODULE_TYPELESS_PACKAGE_JSON` warning on every
-  load. The files still load, so `nuka tend` reports it, as
+  load. The files still load, so `nuka check` reports it as a note,
   `package-type-missing`, and names the `package.json` to add
   `"type": "module"` to.
 
@@ -1196,13 +1196,13 @@ or that names `call`.
 The finding names that fixture and uses fixture wording. It does not quote
 the transformed source of a default value.
 
-`tend` adds one factual report.
+`nuka check` adds one factual note.
 `fixture-unused` identifies a `config.fixtures` entry that no typed step requires,
 directly or through another fixture.
 The entry can still be reached through `nuka do`.
 In `--json`, the finding names the fixture in a `fixture` field and leaves `step` unset,
 so a fixture and a step of the same name stay apart.
-`tend` only identifies the fixture, so a reader decides whether it belongs.
+The note only identifies the fixture, so a reader decides whether it belongs.
 
 A step record contains `fixtures` only when the list is not empty.
 The list contains every `config.fixtures` entry that fixture resolution touched
@@ -1490,7 +1490,7 @@ the call, while the declaration names a `Step` object. It does not name
 the identifier that the body binds to that object. A check would therefore
 have to guess whether the names correspond. The body can also call a part
 only in one branch. An unused `from` key is different because the feature
-files contain enough information to decide it. `nuka tend` reports that
+files contain enough information to decide it. `nuka check` notes that
 case. The available static data cannot decide whether a part is unused.
 
 The contradiction check does not enforce the read-only policy. In a
@@ -1759,8 +1759,9 @@ import { Given, When, Then } from "nukadoko/compat";
   `step-file-unsupported-extension` reports a `.cjs` or `.cts` file under
   `featuresDir` (see "Typed steps" for the import rule).
   `no-step-files-found` reports a scan that found no candidate files. Each
-  finding identifies what discovery inspected. The `scanned:` line from
-  `nuka tend` uses the same rule so that a reader can verify the finding.
+  finding identifies what discovery inspected, so that a reader can verify
+  the finding; the `pattern-unbound` note names its scanned directories for
+  the same reason.
   An `undefined-step` finding can also identify a missing pair of quotes.
   The finding applies when one registered pattern fits the same position and
   all its captures are `{...:string}` parameters. It names the step and
@@ -1928,7 +1929,7 @@ gate that has to stay seconds long and for `additionalFeatureDirs`.
 
 `nuka run` takes zero or more targets. With none, it runs `featuresDir`,
 the directory `nuka check` walks by default (without
-`additionalFeatureDirs`, which only `nuka check` and `nuka tend` read).
+`additionalFeatureDirs`, which only `nuka check` reads).
 Each target can be a feature file, a
 `file:line` selection, or a directory. A path ending in `.md` is refused
 by name: nukadoko reads scenarios from `.feature` files only. A directory target is walked
@@ -3252,7 +3253,7 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   This name heuristic controls only the warning. Redaction depends only on
   git's classification (untracked, ignored, or a tracked file that differs
   from HEAD, versus a tracked file that matches HEAD) and `secrets.redact`.
-  `nuka tend` reports the other two findings as notes:
+  `nuka check` also warns about the other two findings:
   `secrets-public-key-unknown` and `secrets-redact-key-unknown` name a
   `secrets.public` or `secrets.redact` key that no configured envFile defines.
 
@@ -3276,7 +3277,7 @@ missing file.
 | Key | What it holds |
 | --- | --- |
 | `featuresDir` | feature files and step code, `nuka run`'s own unattended set (default `features`, Cucumber-style) |
-| `additionalFeatureDirs` | extra directories `nuka check`/`nuka tend` bind vocabulary against, without joining `featuresDir` (default `[]`, below) |
+| `additionalFeatureDirs` | extra directories `nuka check` binds vocabulary against, without joining `featuresDir` (default `[]`, below) |
 | `baseURL` | top-level base URL, overridden per environment (below) |
 | `envFiles` | top-level env files, appended to per environment (below) |
 | `environments` | per-environment `baseURL`, `envFiles`, `policy`, `version` probe (below) |
@@ -3298,21 +3299,20 @@ missing file.
 argument, `nuka run` processes exactly that directory. The additional list
 does not widen the run set. Static checks bind vocabulary against both
 `featuresDir` and `additionalFeatureDirs`. Thus, `nuka check` with no argument
-and `nuka tend` walk the wider set. Pattern binding is a project property,
+walks the wider set. Pattern binding is a project property,
 independent of the current unattended run. A feature for a change that has
 landed, kept outside `featuresDir`, belongs in `additionalFeatureDirs` (see
 "Review"). Its steps then count as bound instead of producing
 `pattern-unbound`, but the feature does not run unattended. A feature that
 describes a core product path moves into `featuresDir` and needs no
 additional entry. A missing entry
-is a config error. `nuka check` reports `additional-feature-dir-missing`;
-`nuka tend` does not repeat it.
+is a config error. `nuka check` reports `additional-feature-dir-missing`.
 
 That feature walk skips `node_modules` and any directory whose name starts
 with `.` at every depth, for `featuresDir`, for each `additionalFeatureDirs`
 entry, and for a directory passed to `nuka run`. Step discovery skips those
-same directories. A `.feature` file inside one is not part of `nuka check`,
-`nuka tend`, or `nuka run`, and the skip reports nothing.
+same directories. A `.feature` file inside one is not part of `nuka check`
+or `nuka run`, and the skip reports nothing.
 
 `browserType` selects the Playwright engine that the `page` fixture launches. The
 choices are `"chromium"` (default), `"firefox"`, and `"webkit"`. It is separate
@@ -3380,7 +3380,7 @@ A path that is not on disk contributes nothing. `nuka check` warns with
 belongs to one environment. A path that is present but cannot be read, or
 a directory at that path, stops setup. The refusal is
 `env-file-unreadable`, exit 2, under `nuka check`, `nuka run` (with or
-without `--no-check`), `nuka do`, and `nuka tend`, and it names the
+without `--no-check`), and `nuka do`, and it names the
 configured path and the errno. The same read fills the `env` fixture and the secret set, so
 the two agree on whether the file was loaded.
 Only an environment can define `policy` and `version`. Without `--env`, the
@@ -3880,86 +3880,75 @@ workflow; the engine does not repair scenarios by itself. Without an audit
 trail, self-healing can silently remove what a test suite checks. The
 deviation record prevents that loss from staying hidden.
 
-## Tending
+## Checks and notes
 
-`nuka check` answers one question: can this project run right now. A
-project can pass every check and still rot. A declaration can remain
-unexercised for years. A
-contract can be unreadable to the agent that must select it. These problems
-do not stop a run, but each becomes more costly with time. This failure mode
-gives the tool its name: a nukadoko matures with daily tending and dies from
-neglect.
+`nuka check` reports everything nukadoko can decide about a project without
+running it, and each finding carries one of three severities:
 
-`nuka tend` answers the other question: are this vocabulary and its records
-still healthy.
+- An **error** stands between the project and a green run: a pattern that
+  does not match its schema, a feature line no step matches, a config
+  mistake. `nuka run` refuses over the errors of the scenarios it selected.
+- A **warning** is a tension a person should look at that does not stop a
+  run: a Then bound to a step that declares `mutates: true`, a scenario with
+  no Then, a `secrets` entry that names a key no envFile defines.
+- A **note** is rot rather than breakage. A project can pass every check
+  and still rot. A declaration can remain unexercised for years. A contract
+  can be unreadable to the agent that must select it. These problems do not
+  stop a run, but each becomes more costly with time. This failure mode
+  gives the tool its name: a nukadoko matures with daily tending and dies
+  from neglect.
 
-`nuka tend --codes` lists every code a tend finding can carry, each with a
-one-line description and the code's general `do`; with `--json` it prints the same list as JSON, under
-`codes`.
+The exit code is 1 when the report holds at least one error, or a code that
+`--fail-on` names (below); warnings and notes alone exit 0. The text form
+prints the errors, then the warnings, then the notes, and prints `ok: no
+issues found` only when there is none of the three.
 
-It is a separate command, rather than another set of `check` warnings,
-because the two commands are read at different times and have different meanings.
-`check` runs before every run, in CI, inside an agent's loop, and every
-line it prints is something standing between the project and a green run,
-so each finding must be worth stopping for. Tending findings are different:
-nothing here must be fixed today, and if these findings appeared
-on every `check`, they would teach everyone to skim past the line that
-did have to be fixed. Noise is not a cosmetic problem in a tool whose main
-claim is that users should read its checks.
+Notes are a fact about the whole project. Whether a step's pattern is bound,
+or a `from` declaration is ever exercised, depends on every feature the
+project scans (`featuresDir` and each `additionalFeatureDirs` entry), so only
+a `nuka check` with no target computes notes. A `nuka check` with targets,
+and the check `nuka run` runs before it executes, compute none. `nuka run`
+reports one note of its own, `repeated-scenario-prefix`, from the run that
+just ended (see "Running").
 
-Before listing findings, `tend` prints three summary lines that show the
-bed's current state. None of the three is a finding, and none changes the exit
-code (a suite in the middle of a migration is in a normal state, not a
-faulty one, and warning about it every time would drown the findings that
-do need acting on):
+Notes once came from a separate `tend` command. A survey of eleven
+projects that use nukadoko found that ten of its fourteen codes fired in none
+of them, that nobody read its summary, and that its one use was a test gating
+on two codes. Two commands that load the same project and print the same
+finding grammar cost every agent that reads the tool, so one command now
+reports everything static, and a project chooses what gates with `--fail-on`.
 
-- `scanned:` names every directory that this run inspected:
-  `featuresDir` plus each `additionalFeatureDirs` entry (see "Environments
-  and secrets"). Printed first, because a count means nothing
-  until the reader knows the scope of the count.
-- `bed:` shows how much of the vocabulary is typed instead of compat,
-  and how many typed steps declare `mutates: false`
-  (read-only).
-- `declared:` shows how many schema fields of typed steps carry a
-  `.describe()`. Each field without one is also a `schema-field-undescribed`
-  note.
+`nuka check --codes` lists every code with its severity, a one-line
+description, and the code's general fix; with `--json` it prints the same
+list as JSON, under `codes`.
 
-Under `--json`, the same summary is the `summary` object, in snake_case
-like every other document nukadoko prints: `typed_steps`, `compat_steps`,
-`compat_step_names`, `read_only_steps`, `scanned_feature_dirs`, and
-`describe` as `{ declared, total }`.
+The following notes show what `nuka check` reads as rot rather than style:
 
-This summary exists because the information was already available but unread. A step
-record's `world` and `declared` counts do shrink as a suite promotes, which
-is accurate but useless for showing progress: nobody reads a directory of
-step records to calculate how far a migration has progressed. Stating it once in the
-command devoted to the bed's health makes the information visible.
-
-The following findings show what `tend` inspects and why each item is rot rather than style:
-
-- **A `from` declaration that nothing exercises.** Every occurrence of the step
-  across every feature captures that key from the line, so the declared
-  producer never supplies anything. Reported as the fact it is (the
-  declaration may still be reached through `nuka do --use`), not as a
-  instruction to delete it.
-- **A step whose pattern no feature binds.** A step intended only for
-  the CLI should have no pattern at all; one that has a pattern is
-  claiming a place in a scenario it does not occupy. The note's `file`
-  names the step file, relative to the project root. `nuka check` and
-  `nuka run` name the same steps at the end of an `undefined-step`
-  message, because a renamed sentence or pattern leaves one line undefined
-  and one step unbound at once. They judge it on the same scanned
-  directories `tend` reads, also when a target selects fewer files, so a
-  step bound in a file the target left out is never called unbound, and
-  the message for one line does not change with the target.
-- **A schema field with no `.describe()`.** This is the tending finding
-  specifically for the agent: `nuka describe` is how an agent learns what
-  a field means, and a field with no description tells it nothing a name
-  did not already. Human readers of the step file can see the surrounding
-  code; the agent choosing between two steps cannot. An args field that
-  `from` fills counts as described when every producer it names describes
-  that `returns` field: the agent never writes that value, and `nuka
-  describe` names the producer whose field explains it. Repeating the
+- **A `from` declaration that nothing exercises** (`from-unused`). Every
+  occurrence of the step across every feature captures that key from the
+  line, so the declared producer never supplies anything. Reported as the
+  fact it is (the declaration may still be reached through `nuka do
+  --use`), not as an instruction to delete it.
+- **A step whose pattern no feature binds** (`pattern-unbound`). A step
+  intended only for the CLI should have no pattern at all; one that has a
+  pattern is claiming a place in a scenario it does not occupy. The note's
+  `file` names the step file, relative to the project root, and its message
+  names the directories that were scanned, since a step bound only from a
+  directory left out of `additionalFeatureDirs` reads as unbound. `nuka
+  check` and `nuka run` name the same steps at the end of an
+  `undefined-step` message, because a renamed sentence or pattern leaves one
+  line undefined and one step unbound at once. That suffix is judged on the
+  same scanned directories, also when a target selects fewer files, so a
+  step bound in a file the target left out is never called unbound, and the
+  message for one line does not change with the target.
+- **A schema field with no `.describe()`** (`schema-field-undescribed`).
+  This note is specifically for the agent: `nuka describe` is how an agent
+  learns what a field means, and a field with no description tells it
+  nothing a name did not already. Human readers of the step file can see
+  the surrounding code; the agent choosing between two steps cannot. An args
+  field that `from` fills counts as described when every producer it names
+  describes that `returns` field: the agent never writes that value, and
+  `nuka describe` names the producer whose field explains it. Repeating the
   sentence on every consumer would only make copies that drift.
 - **A step whose description is still the scaffold's TODO**
   (`step-description-todo`). `nuka scaffold` without `--description`
@@ -3967,17 +3956,12 @@ The following findings show what `tend` inspects and why each item is rot rather
   nothing else reports it, while `nuka steps` and `nuka describe` show it
   to whoever picks a step. The note matches that literal prefix only, so
   it claims exactly what the scaffold wrote and nobody replaced. It is a
-  note and not a `check` finding, because the step runs as it is.
-- **A configured parameter type that no pattern uses.** This is dead
-  configuration, reported like any other.
-- **A `secrets.public` or `secrets.redact` entry that names a key no envFile
-  defines.** The instruction is real but reaches nothing: configuration that has
-  drifted from the files it describes. It moved from `check`, because
-  nothing about it changes whether this run should happen. Its
-  neighbors stay on `check` and are worth the contrast: a `redact` entry
-  whose value is too short to be redacted, and a tracked env file with a
-  secret-looking key, both mean plaintext reaches a log the moment the run
-  starts, which is exactly something to know beforehand.
+  note and not an error, because the step runs as it is.
+- **A configured parameter type that no pattern uses**
+  (`parameter-type-unused`). This is dead configuration, reported like any
+  other.
+- **A `config.fixtures` entry that no typed step requires**
+  (`fixture-unused`), directly or through another fixture (see "Fixtures").
 - **A `package.json` with no `"type"` that governs a `.ts` or `.js`
   file nukadoko loads** (`package-type-missing`). Node reads such a file
   as CommonJS, finds ES module syntax, parses it again, and prints a
@@ -3986,35 +3970,33 @@ The following findings show what `tend` inspects and why each item is rot rather
   above the file. The note names it and the fix: `"type": "module"`, or
   `.mts` names when the project's own `.js` files are CommonJS. It is a
   note, because the run works.
-- **A configured `additionalFeatureDirs` entry that is absent from
-  disk.** It exists specifically to widen what `nuka check`/`nuka tend`
-  scan, so an absent directory is a config mistake to report, the same way
-  a missing `featuresDir` is, except every `tend` finding is a note, so
-  this is a note here even though
-  `nuka check` reports the identical fact as an error.
-Findings support `--json`, like the other output. Every finding is a note,
-and a note does not change the exit code, because a project is allowed to
-carry them. `--fail-on <code>` (repeatable, or
-comma-separated) makes one invocation exit non-zero when a finding with
-that code is reported, and says so on stderr. The finding itself stays a
-note in the output: what changed is the team's policy for that job, not
-the finding's nature. A code `tend` never reports is refused up front, so a
-typo cannot become a flag that never fires. A code an earlier release
-reported, such as the sign-off codes that went away with the `accept`
-command, is refused by name, with what replaced it (see
-`docs/upgrading.md`). An unknown code's refusal points at `nuka tend
---codes`, which lists every code. This is how a PR job gates on `pattern-unbound`
-without `tend` turning red for everyone else.
 
-Every run reports every code. No code is held back for a flag: every
-tend finding is already a note that leaves the exit code alone, so a
+A `secrets.public` or `secrets.redact` entry that names a key no envFile
+defines (`secrets-public-key-unknown`, `secrets-redact-key-unknown`) is a
+warning, not a note. The instruction is real but reaches nothing:
+configuration that has drifted from the files it describes. Its neighbors
+are worth the contrast: a `redact` entry whose value is too short to be
+redacted, and a tracked env file with a secret-looking key, both mean
+plaintext reaches a log the moment the run starts.
+
+`--fail-on <code>` (repeatable, or comma-separated) makes one invocation
+exit 1 when a finding with that code is reported, and says so on stderr as
+`fail-on: <code> reported <n> finding(s)`; under `--json` the envelope's
+`fail_on_hits` lists each such code with its count. The finding keeps its
+severity in the output: what changed is the project's policy for that job,
+not the finding's nature. A code that a check report never contains is
+refused before anything is analyzed, so a typo cannot become a gate that
+never fires; the refusal points at `nuka check --codes`. This is how a pull
+request job gates on `pattern-unbound` without the note turning red for
+everyone else.
+
+No note is held back for a flag. A note leaves the exit code alone, so a
 default-off code would only save output, and it would cost a gate that
-reads plain `--json` the findings it never sees. A team picks what gates
-with `--fail-on`, not by what a plain run prints.
+reads plain `--json` the findings it never sees.
 
-`tend` reports but does not repair. Repair means writing a description,
-deleting a step, or moving a feature: decisions with an author behind
-them.
+`nuka check` reports but does not repair. Repair means writing a
+description, deleting a step, or moving a feature: decisions with an author
+behind them.
 
 ## CLI summary
 
@@ -4292,7 +4274,7 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               description; without it the description
                               is "TODO: describe <name>" (with
                               --command, a sentence about running the
-                              program), which tend reports as
+                              program), which nuka check notes as
                               step-description-todo. A file already at
                               the step's path is refused. --replace
                               overwrites it only while it is, byte for
@@ -4344,7 +4326,7 @@ nuka scaffold --feature <path>
                               name, --pattern, --then, --command, --from,
                               --cwd, --argv, --request, --body,
                               --description, or --replace
-nuka check [feature..] [--json]
+nuka check [feature..] [--json] [--fail-on <code>]
                               static checks: pattern/schema mismatches, Then
                               binding to mutating steps, undefined steps per
                               feature (each naming the patterned steps no
@@ -4389,9 +4371,22 @@ nuka check [feature..] [--json]
                               bound in Then position, an envFile that is missing or
                               has an unreadable line, a tracked envFile key that
                               looks secret but is not in secrets.redact, a
-                              secrets.redact key too short to redact; with no
-                              target, scans featuresDir plus
-                              additionalFeatureDirs;
+                              secrets.redact key too short to redact, a
+                              secrets.public or secrets.redact key no envFile
+                              defines; with no target, scans featuresDir plus
+                              additionalFeatureDirs and adds notes, none of
+                              which changes the exit code: a `from` nothing
+                              exercises, a patterned step no feature binds
+                              (naming the scanned directories), a schema field
+                              with no `.describe()`, a description still the
+                              scaffold's TODO, a configured parameter type no
+                              pattern uses, a fixture no typed step requires,
+                              and a package.json with no "type" over a file
+                              nukadoko loads; --fail-on <code> (repeatable, or
+                              comma-separated) exits 1 when a finding with
+                              that code is reported, and the finding keeps its
+                              severity; a code a check report never contains
+                              is refused;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
                               files), so the errors
@@ -4412,26 +4407,6 @@ nuka clean [--dry-run] [--json]
                               the contents of allure-results/; the cache/
                               and records/ directories earlier releases
                               left go too
-nuka tend [--json] [--fail-on <code>]
-                              scans featuresDir plus additionalFeatureDirs,
-                              then where the bed is, then what is rotting
-                              rather than what is broken: how much of the
-                              vocabulary is typed rather than compat, how
-                              many typed steps are read-only, and how much
-                              of it declares what it could, then notes, none
-                              of which changes the exit code (--fail-on
-                              <code> makes a named note exit non-zero, for
-                              that invocation; a removed code is
-                              refused by name): a `from` nothing
-                              exercises, a patterned step no
-                              feature binds, a
-                              configured parameter type no pattern uses, a
-                              secrets entry naming a key no envFile defines,
-                              a fixture no typed step requires, and a schema
-                              field with no `.describe()`
-nuka tend --codes [--json]    list every finding code nuka tend can report,
-                              a one-line description, and the code's
-                              general do, instead of tending a project
 nuka init [--allure] [--server "<command>" --server-url <url>]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
@@ -4463,7 +4438,7 @@ nuka skill path               where the bundled skill lives, for a project
                               that wants the copy matching this nukadoko
 ```
 
-A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do`, `--env` on `nuka run`, and `--fail-on` on `nuka tend` are repeatable, and every value is kept in the order given.
+A flag that takes one string or one number is refused when it is given more than once, and that command writes nothing. `--use` on `nuka do`, `--env` on `nuka run`, and `--fail-on` on `nuka check` are repeatable, and every value is kept in the order given.
 
 Text output (no `--json`) is formatted for a human reading it.
 `--json` is the machine-readable contract: stdout carries exactly one JSON
@@ -4511,8 +4486,8 @@ has no text form, always does:
 `command` is the command path (`check`, `skill path`), or `""` when argv names no command. `verdict` is the exit
 code's: `passed` for 0, `refused` for 2, and `failed` otherwise. The
 command's own fields sit after `findings` and never replace the five:
-`steps` (`nuka steps`), the contract (`nuka describe`), `summary` and
-`fail_on_hits` (`nuka tend`), the `run.json` fields (`nuka run`), the plan
+`steps` (`nuka steps`), the contract (`nuka describe`), `fail_on_hits`
+(`nuka check`), the `run.json` fields (`nuka run`), the plan
 (`nuka clean`), and `codes` (`--codes`, each entry
 a finding with no location). `nuka do` prints its step record, which is a
 record and not a report, so it has no envelope and no `--json`; its
@@ -4522,9 +4497,9 @@ refusals and warnings are findings on stderr.
 
 A finding, a refusal, and a failed scenario are one shape. Its fields are
 `severity`, `code`, `message`, then `file`, `line`, and `step` when they
-are known (`fixture` on a tend note about a fixture), then `fix` and `do`.
-The severity is `error` or `warning` (`nuka check`, and a warning of any
-command), `note` (`nuka tend`), `refused` (see "Refusals"), or `failed` (a
+are known (`fixture` on a note about a fixture), then `fix` and `do`.
+The severity is `error`, `warning`, or `note` (`nuka check`, a warning of
+any command, and the note `nuka run` reports), `refused` (see "Refusals"), or `failed` (a
 failed scenario, a BeforeAll or AfterAll hook). `file` is
 relative to the project root: for a finding about one step, it is the step
 file that defines the step; for `duplicate-pattern`, which names several
@@ -4547,8 +4522,7 @@ In text, a finding is one line, `<severity>\t<code>\t<where>\t<message>`,
 where `<where>` is `<file>:<line>`, `<file>`, the step name, or `-`; a
 newline or a tab inside a value becomes a space. Indented lines may follow:
 the files a grouped finding covers, then `  fix: <text>`, then `  do:
-<command>`. `nuka check --codes` and `nuka tend --codes` print each code in
-the same grammar.
+<command>`. `nuka check --codes` prints each code in the same grammar.
 
 ### Refusals
 
@@ -4582,7 +4556,7 @@ reading either stream.
 | Exit | Meaning | Examples |
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
-| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka tend` reported |
+| 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported |
 | 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
@@ -4590,7 +4564,7 @@ reading either stream.
 | --- | --- | --- |
 | `nuka run` | one scenario's `run.json` entry per line under `--records`, `run.json` (the envelope) under `--json`, nothing otherwise | progress, the locations written, the summary line, the `scenario-failed` findings, warnings; nothing under `--json` |
 | `nuka do` | the step record, also for a failed step | warning findings |
-| `nuka check`, `nuka tend` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and `nuka tend`'s `fail-on` lines |
+| `nuka check` | the report, or with `--json` the envelope | nothing, except a refusal or a warning without `--json` and the `fail-on` lines |
 | `nuka steps`, `nuka describe` | the vocabulary or the contract (`--json` on `steps`; `describe` is always the envelope) | the step files that failed to import, as findings, except under `--json`, where they are in `findings` |
 | `nuka clean` | one line per path, or with `--json` the envelope | nothing, except a refusal without `--json` |
 
@@ -4603,15 +4577,13 @@ refusal finding and none of the command's own fields. A step record's
 A broken step file gets one of two different responses across this list.
 The split follows one question: is the command about to execute a step, or
 does it only report on the vocabulary? `nuka steps`, `nuka describe`,
-`nuka check`, and `nuka tend` are reporting tools. Each discovers steps per
+and `nuka check` are reporting tools. Each discovers steps per
 file, so one file whose import fails does not empty what the rest of the
 project could still show. `nuka check` names the failure as
 `step-file-import-failed`. When the cause is a relative `.js`, `.mjs`, or
 `.cjs` import whose `.ts`, `.mts`, or `.cts` file does not exist, it
 appends that file and the file whose import to edit, both relative to the
-project root, after Node's own text. `nuka steps`/`nuka describe` carry the same finding (above). `nuka tend` counts only what imported and
-does not repeat `nuka check`'s finding, so a reader runs `nuka check` beside
-it (see "Tending"). `nuka run`, `nuka do`, and `nuka init`
+project root, after Node's own text. `nuka steps`/`nuka describe` carry the same finding (above). `nuka run`, `nuka do`, and `nuka init`
 are about to execute a step, or set up a project that is about to, so they
 stay fail-fast: the same broken file rejects the whole call outright,
 because continuing past it is dangerous for anything about to run, not
@@ -4726,13 +4698,17 @@ would be running against glue it never actually read.
   step beside the step record it cites. Where a step's inputs come from stops
   being prose inside a `run` body and becomes a declaration the tool reads
   (see "Chaining steps").
-- **M7 (tending)**: `nuka tend`, the findings that are about rot rather
-  than breakage (see "Tending"). Kept off `nuka check` on purpose: `check`
-  is read before every run and has to stay worth stopping for.
+- **M7 (tending)**: a `tend` command for the findings that are about rot
+  rather than breakage, kept off `nuka check` so `check` stayed worth
+  stopping for. It was folded into `nuka check` later: no project ran it
+  beyond one test gating on two codes, and two commands that load the same
+  project and print the same findings cost every agent that reads the tool.
+  Its findings are `nuka check` notes, and `--fail-on` chooses which of
+  them gate (see "Checks and notes").
 - **M8 (fixtures)**: user-defined resources declared under
   `nukadoko.config.ts`'s own `fixtures` (see "Fixtures"), `defineFixtures`
   for full typing, scope, `use()`-based teardown carrying the step's or
-  scenario's own outcome, a fixture-specific timeout, and the `check`/`tend`
+  scenario's own outcome, a fixture-specific timeout, and the `check`
   findings that come with them. This closes the one gap the typed side had
   that compat's After hooks did not: a place to put cleanup that is not
   itself an acceptance condition.

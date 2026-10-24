@@ -58,8 +58,8 @@ const REFUSAL_CODES = {
     fix: "Make the file readable, replace the directory with a file, or remove the path from envFiles.",
   },
   "fail-on-unknown-code": {
-    description: "--fail-on names a code that nuka tend does not report.",
-    fix: "Name a code that nuka tend --codes lists.",
+    description: "--fail-on names a code that a nuka check report never contains.",
+    fix: "Name an error, warning, or note code that nuka check --codes lists.",
   },
   "file-edited": {
     description: "The file nuka scaffold would replace is not what scaffold wrote, so --replace leaves it.",

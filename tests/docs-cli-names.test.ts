@@ -6,20 +6,18 @@ import { describe, expect, it, vi } from "vitest";
 import { listCheckCodes } from "../src/check/codes.js";
 import { listAllCheckCodes } from "../src/cli/check.js";
 import { runCli } from "../src/cli/run-cli.js";
-import { REMOVED_TEND_CODES, TEND_CODES } from "../src/tend/types.js";
 import { createCaptureSink, repoRoot } from "./helpers/fixtures.js";
 
 // Responsibility: the names the reader-facing docs hand an agent (commands,
 // flags, finding codes, and cross-referenced headings) exist in the CLI and
 // in the files they point at. Each of these drifted once without any test
-// failing: a skill named a tend code that was never registered, CLI messages
+// failing: a skill named a note code that was never registered, CLI messages
 // and the spec cited a heading that had been renamed, and the spec's CLI
 // summary left out commands and flags the CLI had.
 //
 // The truth is read from the CLI itself: the command tree and each command's
 // flags from `nuka <path> --help` (yargs' own rendering of the tree runCli
-// builds), the check codes from the registry `nuka check --codes` prints,
-// and the tend codes from the set `nuka tend --fail-on` validates against.
+// builds), and the codes from the registry `nuka check --codes` prints.
 //
 // Extraction only reads explicit forms, so a hit always means a broken name:
 // - a command is an inline code span, or a line in a fenced block, that
@@ -164,14 +162,31 @@ function invocationProblem(tree: CommandNode, invocation: string): string | unde
 }
 
 // Every code `nuka check --codes` prints: check, run, and refusal codes.
-const allCodes = new Set([...listAllCheckCodes().map((entry) => entry.code), ...TEND_CODES]);
-// The families come from the check and tend findings only: a run code such
-// as `run-incomplete` would make every step named `run-...` read as a
+const allCodes = new Set(listAllCheckCodes().map((entry) => entry.code));
+// The families come from the check findings only: a run code such as
+// `run-incomplete` would make every step named `run-...` read as a
 // misspelled code.
-const findingCodes = new Set([...listCheckCodes().map((entry) => entry.code as string), ...TEND_CODES]);
-// A removed tend code is still a name the CLI answers to: `--fail-on` refuses
-// it by name and says what replaced it, so an upgrade note may cite it.
-const citableCodes = new Set([...allCodes, ...REMOVED_TEND_CODES.keys()]);
+const findingCodes = new Set(listCheckCodes().map((entry) => entry.code as string));
+// Codes earlier releases reported and then removed. The upgrade notes and
+// the changelog say what replaced each one, so they may still cite it.
+const RETIRED_CODES: ReadonlySet<string> = new Set([
+  "step-rationale-missing",
+  "fixture-replaces-builtin",
+  "fixture-touches-app",
+  "parameter-type-support-origin",
+  "post-navigation-read",
+  "import-failures-unseen",
+  "feature-never-signed",
+  "signed-feature-unscanned",
+  "signoff-condition-mismatch",
+  "signoff-feature-changed",
+  "signoff-feature-missing",
+  "signoff-record-old-format",
+  "signoff-record-unreadable",
+  "signoff-result-invalid",
+  "signoff-step-missing",
+]);
+const citableCodes = new Set([...allCodes, ...RETIRED_CODES]);
 const familyOf = (code: string): string => code.split("-")[0]!;
 // A first word counts as a family only when two or more codes share it, so
 // `no-browser` is not read as a misspelled `no-step-files-found`.
@@ -185,13 +200,13 @@ function codeProblems(file: DocFile): string[] {
     for (const match of paragraph.matchAll(/`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`/g)) {
       const token = match[1]!;
       if (codeFamilies.has(familyOf(token)) && !citableCodes.has(token)) {
-        problems.push(`\`${token}\` is not a check or tend code`);
+        problems.push(`\`${token}\` is not a code nuka check or nuka run reports`);
       }
     }
   }
   for (const invocation of nukaInvocations(file)) {
     for (const match of invocation.matchAll(/--fail-on[ =]([a-z][a-z0-9-]*)/g)) {
-      if (!TEND_CODES.has(match[1]!) && !REMOVED_TEND_CODES.has(match[1]!)) problems.push(`--fail-on ${match[1]} is not a tend code`);
+      if (!findingCodes.has(match[1]!) && !RETIRED_CODES.has(match[1]!)) problems.push(`--fail-on ${match[1]} is not a check code`);
     }
   }
   return problems;
@@ -318,6 +333,7 @@ function commandOmissions(tree: CommandNode, file: DocFile): string[] {
 // cite one.
 const REMOVED_COMMANDS = new Set([
   "accept",
+  "tend",
   "explore",
   "harvest",
   "mcp-tools",
@@ -331,7 +347,6 @@ const REMOVED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["run", new Set(["--session", "--quiet", "--summary"])],
   ["do", new Set(["--session"])],
   ["clean", new Set(["--records", "--cache", "--export"])],
-  ["tend", new Set(["--all"])],
 ]);
 const UPGRADE_NOTES = new Set(["docs/upgrading.md", "docs/upgrading.ja.md"]);
 
@@ -393,7 +408,7 @@ describe("names in README.md, llms.txt, docs/, and skills/", () => {
     expect(removedCitationsWithoutRemoval(file)).toEqual([]);
   });
 
-  it("every finding code is one nuka check or nuka tend reports", () => {
+  it("every finding code is one nuka check or nuka run reports", () => {
     expect(perFile(codeProblems)).toEqual({});
   });
 
@@ -439,7 +454,7 @@ describe("the extraction itself", () => {
   it("reports a command group named with a subcommand it does not have, and an unknown flag", async () => {
     const tree = await readCommandTree();
     expect(invocationProblem(tree, "skill install")).toBe('"nuka skill" has no command "install"');
-    expect(invocationProblem(tree, "tend --fix")).toBe('"nuka tend" has no flag --fix');
+    expect(invocationProblem(tree, "check --fix")).toBe('"nuka check" has no flag --fix');
     expect(invocationProblem(tree, "check features/m.feature --json -- --port 1")).toBe(undefined);
     expect(invocationProblem(tree, "run features/ --no-check")).toBe(undefined);
   });
@@ -466,10 +481,10 @@ describe("the extraction itself", () => {
       codeProblems(
         sample(
           "skills/x.md",
-          "`fixture-rot` and `fixture-unused` from `setup-node`.\n\n`nuka tend --fail-on step-missing`\n",
+          "`fixture-rot` and `fixture-unused` from `setup-node`.\n\n`nuka check --fail-on step-missing`\n",
         ),
       ),
-    ).toEqual(["`fixture-rot` is not a check or tend code", "--fail-on step-missing is not a tend code"]);
+    ).toEqual(["`fixture-rot` is not a code nuka check or nuka run reports", "--fail-on step-missing is not a check code"]);
   });
 
   it("reports a removed flag the newest upgrade section names as if it still worked", () => {

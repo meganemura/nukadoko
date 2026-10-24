@@ -358,7 +358,7 @@ describe("nuka scaffold --description", () => {
     ],
     [
       ["--description", ""],
-      "invalid-value\t-\tRefusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka tend reports\n" +
+      "invalid-value\t-\tRefusing to scaffold: --description is empty; say what the step does, or leave the flag out for a TODO that nuka check reports\n" +
         "  fix: Correct the flag's value as the message says.\n",
     ],
   ])("refuses %j and writes nothing", async (flags, message) => {

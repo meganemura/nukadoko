@@ -9,15 +9,40 @@ just until 0.1.
 
 ### Changed
 
-- **`repeated-scenario-prefix` is a note of `nuka run`, not of `nuka
-  tend`.** The run that just ended computes it from its own scenarios
-  and step records, before `run.json` is written, so it is in `run.json`,
-  the summary, `--json`, and the text after the count line. It never
-  changes the exit code. It measures one run, and that run is the one
-  whose output a person or an agent is already reading; a separate
-  command that reread the newest run reached almost nobody.
+- **`nuka check` reports notes, and `--fail-on` gates on any code.** A
+  check report has three severities: errors, warnings, and notes. The
+  notes are the findings `nuka tend` reported (`fixture-unused`,
+  `from-unused`, `package-type-missing`, `parameter-type-unused`,
+  `pattern-unbound`, `schema-field-undescribed`, and
+  `step-description-todo`), and they are computed only on a check of the
+  whole project, because `pattern-unbound` needs every feature file. The
+  two secrets codes, `secrets-public-key-unknown` and
+  `secrets-redact-key-unknown`, are warnings of every check. A note never
+  changes the exit code by itself: `nuka check --fail-on <code>[,...]`
+  turns a listed code into a failing exit, prints `fail-on: <code>
+  reported <n> finding(s)` on stderr, and `--json` carries
+  `fail_on_hits`. A code that `nuka check --codes` does not list as a
+  check code is refused with `fail-on-unknown-code`. One command that
+  reports everything static is less for an agent to read than two
+  commands that load the same project and print the same findings.
+  `pattern-unbound` now names the feature directories it scanned.
+
+- **`repeated-scenario-prefix` is a note of `nuka run`.** The run that
+  just ended computes it from its own scenarios and step records, before
+  `run.json` is written, so it is in `run.json`, the summary, `--json`,
+  and the text after the count line. It never changes the exit code. It
+  measures one run, and that run is the one whose output a person or an
+  agent is already reading; a separate command that reread the newest run
+  reached almost nobody.
 
 ### Removed
+
+- **`nuka tend` is removed.** Its findings are notes and warnings of
+  `nuka check`, its `--fail-on` is `nuka check --fail-on`, and its
+  summary lines (`scanned:` and the field-description totals) are gone.
+  No project that uses nukadoko ran it except one test that gated on two
+  codes, and its summary was read nowhere. `nuka tend` now refuses with
+  `removed-command` and points at `nuka check`.
 
 - **Four notes are removed: `fixture-replaces-builtin`,
   `fixture-touches-app`, `parameter-type-support-origin`, and

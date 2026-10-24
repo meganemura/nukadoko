@@ -28,7 +28,7 @@ A CommonJS project (no `"type": "module"` in `package.json`) gets
 step file loads there with a Node warning, unless `"type": "commonjs"`
 is set, where it needs `.mts`. A hand-written
 `nukadoko.config.ts` there loads with a Node warning on every run (`nuka
-tend` reports it as `package-type-missing`), and fails to import under
+check` notes it as `package-type-missing`), and fails to import under
 `"type": "commonjs"`, with an error that names the file.
 
 A flag that takes one string or one number is refused when it is given
@@ -79,14 +79,14 @@ plus a table or docstring. A `"pending"` or `"skipped"` return is still
 only visible to `nuka run`. `nuka check --codes` names every finding
 code `check` can produce: read the catalog there, not a list elsewhere.
 
-If the feature's directory is in `additionalFeatureDirs` (see "The loop"
-in `SKILL.md`, step 6), a bare `nuka check` already covers it, the same as any
-feature under `featuresDir`. Otherwise pass the feature path directly,
-since without either the argument or the config entry the one file you care
-about is the one that goes unchecked. `nuka check` takes the targets
-`nuka run` takes (several files, or a directory) and selects the same
-files, so `nuka check <targets>` reports the errors `nuka run <targets>`
-would stop on. `:line` belongs to `nuka run`.
+If the feature's directory is in `additionalFeatureDirs` (see "The loop" in
+`SKILL.md`, step 6), a bare `nuka check` already covers it, the same as any
+feature under `featuresDir`. Otherwise pass the feature path directly, since
+without either the argument or the config entry the one file you care about
+is the one that goes unchecked. `nuka check` takes the targets `nuka run`
+takes (several files, or a directory) and selects the same files, so `nuka
+check <targets>` reports the errors `nuka run <targets>` would stop on.
+`:line` belongs to `nuka run`. Notes and `--fail-on`: `maintenance.md`.
 
 The walk that finds those feature files skips `node_modules` and any
 directory whose name starts with `.`, at every depth: a `.feature` file
@@ -119,7 +119,7 @@ there is not checked and not run, and the skip reports nothing.
    writes nothing to stderr: every warning and failed scenario is a finding.
    Only Node's own process warnings and a step's own output reach it: a
    `MODULE_TYPELESS_PACKAGE_JSON` warning goes with `package-type-missing`
-   (`nuka tend`), and under `"type": "commonjs"` a "Failed to load the ES
+   (a note), and under `"type": "commonjs"` a "Failed to load the ES
    module" warning goes with `step-file-import-failed` (`config-invalid` for
    the config). Text a step, hook, or fixture writes through `console.log`
    or `process.stdout.write` goes to stderr; a child process spawned with

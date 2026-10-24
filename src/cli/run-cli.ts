@@ -25,7 +25,7 @@ import {
 } from "./refusal.js";
 
 // Responsibility: wires the commands (`steps`, `describe`, `do`, `run`,
-// `init`, `scaffold`, `check`, `clean`, `tend`, `skill path`)
+// `init`, `scaffold`, `check`, `clean`, `skill path`)
 // to yargs and turns any failure — yargs' own (bad flags, no command) or
 // ours (config/discovery errors, unknown step name) — into stderr output
 // plus a non-zero exit code, without ever calling `process.exit` itself.
@@ -37,10 +37,7 @@ import {
 // wiring) and src/check/* (the actual checks); `clean`'s own plan-then-
 // delete logic lives entirely in cli/clean.ts (see that file's own header
 // for why it stays self-contained rather than sharing path helpers with
-// cli/do.ts/cli/run.ts); `tend`'s own analysis lives
-// in cli/tend.ts (thin wiring) and src/tend/* (the actual findings) — the
-// same split, one command answering "can this run", the other "is this
-// still healthy" (docs/spec.md "Tending"); `skill`'s own path resolution logic lives in cli/skill.ts
+// cli/do.ts/cli/run.ts); `skill`'s own path resolution logic lives in cli/skill.ts
 // (`install` removed — see that file's header), the same split;
 // this module only wires their argv shapes and reports their
 // exit codes.
@@ -150,11 +147,6 @@ interface CheckArgs {
   json?: boolean;
   codes?: boolean;
   feature?: string[];
-}
-
-interface TendArgs {
-  json?: boolean;
-  codes?: boolean;
   /** `--fail-on`; yargs collects a repeated flag into an array. */
   "fail-on"?: string[];
 }
@@ -348,7 +340,7 @@ export async function runCli(
         // Tolerant: `steps` is a reporting tool, not something about to
         // execute a step, so one broken glue file elsewhere must not empty
         // everything else it could still read — the same migrating-suite
-        // reasoning `nuka check`/`nuka tend` already act on. `run`/`do`/
+        // reasoning `nuka check` already acts on. `run`/`do`/
         // `init` deliberately do not pass this (they stay fail-fast).
         const { vocabulary, config, importFailures } = await loadVocabulary(rootDir, {
           tolerateImportFailures: true,
@@ -655,7 +647,7 @@ export async function runCli(
     },
   };
 
-  // `harvest`, `session`, `explore`, and `experimental` were removed. Each
+  // `harvest`, `session`, `explore`, `experimental`, and `tend` were removed. Each
   // old spelling names what replaces it instead of yargs' bare "Unknown
   // argument", so a script that still calls it learns what to change.
   // Hidden from the help: they run nothing. A `fix` and no `do`, for the
@@ -698,6 +690,13 @@ export async function runCli(
     "explore",
     "`nuka explore` was removed with models and relations (see docs/upgrading.md in the nukadoko package)",
     () => "Write each sequence the model found as a scenario in a feature file.",
+  );
+
+  const removedTendCommand = removedCommand(
+    "tend",
+    "`nuka tend` was removed: `nuka check` reports its findings as notes, and `nuka check --fail-on <code>` " +
+      "turns one into a failing exit (see docs/upgrading.md in the nukadoko package)",
+    () => "Run nuka check, and add --fail-on <code> for each note a job gates on.",
   );
 
   const initCommand: CommandModule<Record<string, never>, InitArgs> = {
@@ -774,7 +773,7 @@ export async function runCli(
         .option("description", {
           type: "string",
           nargs: 1,
-          describe: "what the step does, written as its description; without it --command and --request write one of what they generate, and any other form writes a TODO nuka tend reports",
+          describe: "what the step does, written as its description; without it --command and --request write one of what they generate, and any other form writes a TODO that nuka check reports as step-description-todo",
         })
         .option("from", {
           type: "string",
@@ -865,7 +864,7 @@ export async function runCli(
   const checkCommand: CommandModule<Record<string, never>, CheckArgs> = {
     command: "check [feature..]",
     describe:
-      "static checks: pattern/schema mismatches, Then binding to mutating steps, undefined steps per feature, duplicate patterns, config coherence",
+      "static checks: pattern/schema mismatches, Then binding to mutating steps, undefined steps per feature, duplicate patterns, config coherence, and notes on unused declarations",
     builder: (y: Argv) =>
       y
         .positional("feature", {
@@ -879,6 +878,14 @@ export async function runCli(
           type: "boolean",
           default: false,
           describe: "machine-readable output",
+        })
+        .option("fail-on", {
+          type: "string",
+          array: true,
+          describe:
+            "exit 1 when a finding with this code is reported (repeatable, or comma-separated); the finding keeps " +
+            "its severity in the output, only the exit code changes. For a job that gates on one note, such as " +
+            "pattern-unbound",
         })
         .option("codes", {
           type: "boolean",
@@ -895,6 +902,7 @@ export async function runCli(
         json: args.json ?? false,
         codes: args.codes ?? false,
         targets: args.feature ?? [],
+        failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
         stdout,
         stderr,
       });
@@ -982,47 +990,6 @@ export async function runCli(
     },
   };
 
-  const tendCommand: CommandModule<Record<string, never>, TendArgs> = {
-    command: "tend",
-    describe: "what is rotting rather than what is broken: unused declarations, unbound steps, stale fixtures",
-    builder: (y: Argv) =>
-      refuseRemovedFlags(y, {
-        all: "nuka tend --all is removed: a plain nuka tend reports every code.",
-      })
-        .option("json", {
-          type: "boolean",
-          default: false,
-          describe: "machine-readable output",
-        })
-        .option("fail-on", {
-          type: "string",
-          array: true,
-          describe:
-            "exit 1 when a finding with this code is reported (repeatable, or comma-separated); every finding " +
-            "stays a note in the output, only the exit code changes. For a job that gates on one note, such as " +
-            "pattern-unbound",
-        })
-        .option("codes", {
-          type: "boolean",
-          default: false,
-          describe:
-            "list every finding code nuka tend can report, with a one-line description, instead of tending a project",
-        }) as Argv<TendArgs>,
-    handler: async (args: Arguments<TendArgs>) => {
-      if (argsFailed) return;
-      const { runTend } = await import("./tend.js");
-      exitCode = await runTend({
-        notices,
-        rootDir,
-        json: args.json ?? false,
-        codes: args.codes ?? false,
-        failOn: (args["fail-on"] ?? []).flatMap((value) => value.split(",")).map((code) => code.trim()).filter((code) => code.length > 0),
-        stdout,
-        stderr,
-      });
-    },
-  };
-
   const skillPathCommand: CommandModule<Record<string, never>, SkillPathArgs> = {
     command: "path",
     describe: "print the directory holding this package's own skills, one absolute path",
@@ -1062,13 +1029,13 @@ export async function runCli(
       heading: "Exploring",
       commands: [namingMissingConfig(doCommand)],
     },
-    { heading: "Upkeep", commands: [namingMissingConfig(tendCommand), namingMissingConfig(cleanCommand), skillCommand] },
+    { heading: "Upkeep", commands: [namingMissingConfig(cleanCommand), skillCommand] },
   ];
 
   const commandNames = new Map<string, readonly string[]>(
     helpGroups
       .flatMap((group) => group.commands)
-      .concat(removedHarvestCommand, removedSessionCommand, removedExperimentalCommand, removedExploreCommand)
+      .concat(removedHarvestCommand, removedSessionCommand, removedExperimentalCommand, removedExploreCommand, removedTendCommand)
       .map((command) => [firstWord(command.command), []]),
   );
   commandNames.set("skill", [firstWord(skillPathCommand.command)]);
@@ -1115,6 +1082,7 @@ export async function runCli(
     .command(removedSessionCommand)
     .command(removedExperimentalCommand)
     .command(removedExploreCommand)
+    .command(removedTendCommand)
     .demandCommand(1)
     .strict()
     .help();

@@ -79,7 +79,6 @@ export default {
     { glob: "src/environment/**", tags: ["layer:service", "pkghost:library"] },
     { glob: "src/report/**", tags: ["layer:service", "pkghost:library"] },
     { glob: "src/run/**", tags: ["layer:run", "pkghost:library"] },
-    { glob: "src/tend/**", tags: ["layer:workflow", "pkghost:library"] },
     { glob: "src/cli/**", tags: ["layer:adapter", "pkghost:cli"] },
     { glob: "src/cli.ts", tags: ["layer:entry", "pkghost:cli"] },
     { glob: "src/index.ts", tags: ["layer:entry", "pkghost:library"] },
@@ -90,7 +89,7 @@ export default {
       {
         tagNamespace: "layer",
         sequence: {
-          "": ["leaf", "base", "record", "contract", "config", "context", "fixture", "read", "service", "run", "workflow", "adapter", "entry"],
+          "": ["leaf", "base", "record", "contract", "config", "context", "fixture", "read", "service", "run", "adapter", "entry"],
         },
         direction: "downward-only",
         because:
@@ -256,6 +255,7 @@ export default {
         "binding-check.ts",
         "codes.ts",
         "config-check.ts",
+        "description-todo.ts",
         "done-callback.ts",
         "feature-check.ts",
         "from-order.ts",
@@ -307,7 +307,6 @@ export default {
         "step-stdout.ts",
       ],
     },
-    { name: "tend", glob: "src/tend/**", surface: ["analyze.ts", "record-parse.ts", "types.ts"] },
     { name: "cli", glob: "src/cli/**", surface: ["run-cli.ts"] },
     { name: "bin", glob: "src/cli.ts", surface: "cli.ts" },
     { name: "entry", glob: "src/index.ts", surface: "index.ts" },

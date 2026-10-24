@@ -5,9 +5,7 @@ import { defineConfig } from "./nukadoko-shim.js";
 // detection across kind, and Then-position compat gets a soft warning. A
 // compat-origin defineParameterType shares one registry with this
 // config-origin entry (no name collision here — see
-// check-compat-parameter-type-collision-project for the colliding case);
-// listing that registration as its own finding is now `nuka tend`'s job, so
-// tests/tend-moved-findings.test.ts reuses this same fixture too.
+// check-compat-parameter-type-collision-project for the colliding case).
 export default defineConfig({
   parameterTypes: [{ name: "shout-config", regexp: /[A-Z]+/ }],
 });

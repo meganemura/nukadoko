@@ -1,7 +1,7 @@
-// Responsibility: rewrite the two code tables in llms.txt from what the
-// built CLI prints for `nuka check --codes --json` (check, run, and refusal
-// codes) and `nuka tend --codes --json`. Boundary: only the lines between each table's
-// begin marker and the next end marker change; everything else in the file
+// Responsibility: rewrite the code table in llms.txt from what the built
+// CLI prints for `nuka check --codes --json` (check, run, and refusal
+// codes). Boundary: only the lines between the table's begin marker and the
+// next end marker change; everything else in the file
 // is hand-written. tests/llms-codes.test.ts fails while a table differs from
 // its registry, so run `npm run build && node scripts/llms-codes.ts` after
 // adding, removing, or rewording a code.
@@ -98,14 +98,6 @@ export function checkTable(entries: readonly CodeEntry[]): CodeTable {
   };
 }
 
-export function tendTable(entries: readonly CodeEntry[]): CodeTable {
-  return {
-    marker: "<!-- generated: nuka tend --codes --json -->",
-    header: ["Code", "Meaning", "Fix"],
-    rows: entries.map((entry) => [`\`${entry.code}\``, entry.message, entry.fix]),
-  };
-}
-
 export function rewrite(text: string, tables: readonly CodeTable[]): string {
   return tables.reduce((current, table) => spliceGenerated(current, table.marker, renderTable(table.header, table.rows)), text);
 }
@@ -117,11 +109,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     JSON.parse(execFileSync(process.execPath, [cli, command, "--codes", "--json"], { cwd: root, encoding: "utf8" })).codes;
   const file = path.join(root, "llms.txt");
   const before = readFileSync(file, "utf8");
-  const after = rewrite(before, [checkTable(codes("check")), tendTable(codes("tend"))]);
+  const after = rewrite(before, [checkTable(codes("check"))]);
   if (after === before) {
-    process.stdout.write("llms.txt: code tables unchanged\n");
+    process.stdout.write("llms.txt: code table unchanged\n");
   } else {
     writeFileSync(file, after);
-    process.stdout.write("llms.txt: code tables rewritten\n");
+    process.stdout.write("llms.txt: code table rewritten\n");
   }
 }
