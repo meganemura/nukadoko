@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
-import { CONDITION_NAME_PATTERN, CONDITION_VALUE_PATTERN } from "../condition/condition.js";
-
+import { BOOLEAN_TEXTS, CONDITION_NAME_PATTERN, CONDITION_VALUE_PATTERN } from "../condition/condition.js";
 // Responsibility: the validated shape of nukadoko.program.ts's default
 // export (docs/spec.md "Program"): how nukadoko builds, prepares, starts,
 // or reaches the program under test, the environment its processes get,
@@ -214,17 +213,24 @@ function serveOrUrl(value: { serve?: unknown; url?: unknown }, ctx: z.Refinement
 }
 
 /** What an environment sets up, as facts a scenario's `@with:` and
- * `@without:` tags name (src/condition/condition.ts). A string value has
- * to be one a tag can name, so a value no tag could ever meet is refused
- * here rather than read as a scenario no environment meets. */
+ * `@without:` tags name (src/condition/condition.ts). Each value is one
+ * a tag reads one way: a boolean, or a string `@with:<name>=<value>` can
+ * name, which holds no whitespace and no `@` (Gherkin splits a tag at
+ * either). The strings "true" and "false" are refused, not read: a string
+ * meets `@with:<name>`, so "false" would read as on, and the boolean is
+ * what the author meant. */
+const conditionValueSchema = z.union([
+  z.boolean(),
+  z
+    .string()
+    .regex(CONDITION_VALUE_PATTERN, { message: "must be true, false, or a value with no whitespace and no \"@\", as @with:<name>=<value> names it" })
+    .refine((value) => !BOOLEAN_TEXTS.has(value), {
+      message: "is a boolean written as a string, which @with:<name> reads as on whatever it says: write the boolean, without quotes",
+    }),
+]);
+
 const conditionsSchema = z
-  .record(
-    z.string(),
-    z.union([
-      z.boolean(),
-      z.string().regex(CONDITION_VALUE_PATTERN, { message: "must be true, false, or a value with no whitespace, as @with:<name>=<value> names it" }),
-    ]),
-  )
+  .record(z.string(), conditionValueSchema)
   .superRefine((conditions, ctx) => {
     // A key refused by the record's own key schema reads "Invalid key in
     // record", which names no rule, so the name is checked here instead.

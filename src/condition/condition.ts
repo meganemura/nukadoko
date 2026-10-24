@@ -25,9 +25,16 @@
  * hold. */
 export const CONDITION_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 
-/** A value `@with:<name>=<value>` names: one Gherkin tag cannot hold
- * whitespace, so neither can the value. */
-export const CONDITION_VALUE_PATTERN = /^\S+$/;
+/** A value `@with:<name>=<value>` names. Gherkin ends a tag at
+ * whitespace and starts a new one at `@`, so a tag can hold neither, and
+ * a value with one could never be named. */
+export const CONDITION_VALUE_PATTERN = /^[^\s@]+$/;
+
+/** The two values a tag may not name as text: `true` and `false` are the
+ * booleans an environment declares, and `@with:x=true` beside a declared
+ * `x: true` would read as on to a person and never meet it. A tag writes
+ * `@with:x` or `@without:x`, and the program file writes the boolean. */
+export const BOOLEAN_TEXTS: ReadonlySet<string> = new Set(["true", "false"]);
 
 /** What an environment declares for one condition: on, off, or a value. */
 export type ConditionValue = boolean | string;
@@ -66,8 +73,21 @@ export function readConditionTag(tag: string): ConditionTag | undefined {
   if (equals === -1) return CONDITION_NAME_PATTERN.test(body) ? { kind: "with", name: body } : undefined;
   const name = body.slice(0, equals);
   const value = body.slice(equals + 1);
-  if (!CONDITION_NAME_PATTERN.test(name) || !CONDITION_VALUE_PATTERN.test(value)) return undefined;
+  if (!CONDITION_NAME_PATTERN.test(name) || !CONDITION_VALUE_PATTERN.test(value) || BOOLEAN_TEXTS.has(value)) return undefined;
   return { kind: "with-value", name, value };
+}
+
+/** The tag a `@with:<name>=true` or `@with:<name>=false` means, which is
+ * malformed (`BOOLEAN_TEXTS`), so a finding can name the tag to write
+ * instead; `undefined` for any other text. Pure. */
+export function booleanValueTag(tag: string): ConditionTag | undefined {
+  if (!tag.startsWith(WITH_PREFIX)) return undefined;
+  const body = tag.slice(WITH_PREFIX.length);
+  const equals = body.indexOf("=");
+  const name = body.slice(0, equals);
+  const value = body.slice(equals + 1);
+  if (equals === -1 || !CONDITION_NAME_PATTERN.test(name) || !BOOLEAN_TEXTS.has(value)) return undefined;
+  return value === "true" ? { kind: "with", name } : { kind: "without", name };
 }
 
 /** The tag text `tag` was read from. Pure. */

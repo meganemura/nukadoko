@@ -99,9 +99,9 @@ const CHECK_CODES = {
   },
   "condition-tag-malformed": {
     description:
-      "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition.",
+      "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition. @with:<condition>=true and =false are malformed too: a value written as text is not the boolean the program file declares.",
     severity: "error",
-    fix: 'Rewrite the tag as @with:<condition>, @with:<condition>=<value>, or @without:<condition>; a condition name holds letters, digits, "_", ".", or "-", and a value holds no whitespace.',
+    fix: 'Rewrite the tag as @with:<condition>, @with:<condition>=<value>, or @without:<condition>; a condition name holds letters, digits, "_", ".", or "-", a value holds no whitespace and no "@", and a boolean is @with:<condition> or @without:<condition>.',
   },
   "condition-unknown": {
     description:

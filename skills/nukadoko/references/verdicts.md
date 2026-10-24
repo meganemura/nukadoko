@@ -16,7 +16,8 @@ not start"), and tag the
 scenario on its Feature, Rule, Scenario, or Examples line:
 
 - `@with:<condition>`: the condition is on (`true`, or any value).
-- `@with:<condition>=<value>`: it has exactly that value.
+- `@with:<condition>=<value>`: it has exactly that string. `=true` and
+  `=false` are malformed: write `@with:` or `@without:`.
 - `@without:<condition>`: it is off (`false`, or not declared).
 
 Its cell is required where the environment meets every tag and a control

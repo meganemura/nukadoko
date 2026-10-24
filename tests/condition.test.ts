@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import {
+  booleanValueTag,
   conditionTagText,
   meets,
   readConditionTag,
@@ -19,7 +20,9 @@ import { defaultEnvironmentNames } from "../src/environment/resolve-environment.
 
 const NAME_CHARS = "abcXYZ019_.-";
 const name = gs.text({ alphabet: NAME_CHARS, minSize: 1, maxSize: 8 });
-const value = gs.text({ alphabet: "abz09-_./:=@", minSize: 1, maxSize: 8 });
+// A value a tag can name: no whitespace, no "@", and not the text of a
+// boolean.
+const value = gs.text({ alphabet: "abz09-_./:=", minSize: 1, maxSize: 8 }).filter((text) => text !== "true" && text !== "false");
 
 const conditionTag = gs.oneOf(
   name.map((n): ConditionTag => ({ kind: "with", name: n })),
@@ -40,7 +43,7 @@ const environment = gs
 const declared = gs.optional(environment).map((conditions) => conditions ?? undefined);
 
 // The grammar the spec states, written once more as the oracle.
-const GRAMMAR = /^(?:@with:[A-Za-z0-9_.-]+(?:=\S+)?|@without:[A-Za-z0-9_.-]+)$/;
+const GRAMMAR = /^(?:@with:[A-Za-z0-9_.-]+(?:=(?!(?:true|false)$)[^\s@]+)?|@without:[A-Za-z0-9_.-]+)$/;
 
 describe("condition tags", () => {
   it("read back to the text they were written from", () =>
@@ -52,7 +55,7 @@ describe("condition tags", () => {
   it("read only text in one of the three forms, and that text exactly", () =>
     hegel.test((tc) => {
       const prefix = tc.draw(gs.sampledFrom(["@with:", "@without:"]));
-      const body = tc.draw(gs.text({ alphabet: "ab_.-=: \té@", maxSize: 8 }));
+      const body = tc.draw(gs.oneOf(gs.text({ alphabet: "ab_.-=: \té@", maxSize: 8 }), gs.sampledFrom(["a=true", "a=false", "a=truex", "a=@b"])));
       const text = `${prefix}${body}`;
       const read = readConditionTag(text);
       expect(read !== undefined).toBe(GRAMMAR.test(text));
@@ -60,10 +63,22 @@ describe("condition tags", () => {
     }));
 
   it("refuses each malformed shape", () => {
-    for (const text of ["@with:", "@without:", "@with:=on", "@with:x=", "@without:x=on", "@with:a b", "@with:é", "@with:x:y"]) {
+    for (const text of ["@with:", "@without:", "@with:=on", "@with:x=", "@without:x=on", "@with:a b", "@with:é", "@with:x:y", "@with:x=true", "@with:x=false", "@with:x=a@b"]) {
       expect(readConditionTag(text), text).toBeUndefined();
     }
   });
+
+  it("refuse a boolean written as a value, and name the tag that reads it", () =>
+    hegel.test((tc) => {
+      const n = tc.draw(name);
+      const on = tc.draw(gs.booleans());
+      const text = `@with:${n}=${on}`;
+      expect(readConditionTag(text)).toBeUndefined();
+      expect(booleanValueTag(text)).toEqual(on ? { kind: "with", name: n } : { kind: "without", name: n });
+      // Any tag that reads names no boolean as text.
+      const tag = tc.draw(conditionTag);
+      expect(booleanValueTag(conditionTagText(tag))).toBeUndefined();
+    }));
 
   it("reads a scenario's tags once each, with @held and the malformed ones apart", () => {
     expect(readCriterionTags(["@smoke", "@with:a", "@held", "@with:a", "@without:", "@without:b", "@without:"])).toEqual({

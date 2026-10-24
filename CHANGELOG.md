@@ -305,7 +305,9 @@ just until 0.1.
 
 - **Conditions, and controls that prove a scenario.** An environment in
   `nukadoko.program.ts` declares the switches of its program as
-  `conditions` (`true`, `false`, or a value), and a scenario names what
+  `conditions` (`true`, `false`, or a string a tag can name: no
+  whitespace, no `@`, and not `"true"` or `"false"`, which would read as
+  on), and a scenario names what
   it needs with `@with:<condition>`, `@with:<condition>=<value>`, or
   `@without:<condition>` on its `Feature:`, `Rule:`, `Scenario:`, or
   `Examples:` line. Its cell is `required` where the environment meets
@@ -314,7 +316,8 @@ just until 0.1.
   at the same line `--proof-runs <n>` times (2 by default), and then the
   row is `proven`. One failure could be the program being slow once, and
   proof is the one verdict that reads a failure as good news. `nuka check`
-  reports `condition-tag-malformed`, `condition-unknown` (a condition no
+  reports `condition-tag-malformed` (`@with:x=true` among them, which
+  names the boolean as text), `condition-unknown` (a condition no
   environment declares, with what to do once its switch is removed), and
   `condition-unmet` (a scenario no selected environment meets), and
   `nuka check --env` reads the tags against the environments it names, as

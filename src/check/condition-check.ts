@@ -1,4 +1,4 @@
-import { conditionTagText, describeConditions, readCriterionTags, roleIn, type Conditions } from "../condition/condition.js";
+import { booleanValueTag, conditionTagText, describeConditions, readCriterionTags, roleIn, type Conditions } from "../condition/condition.js";
 import type { Program } from "../config/program-schema.js";
 import type { ConditionTagOccurrence, FeatureFile } from "../feature/load-features.js";
 import type { CheckIssue } from "./types.js";
@@ -35,9 +35,13 @@ export function checkConditions(input: ConditionCheckInput): CheckIssue[] {
   for (const occurrence of input.conditionTags) {
     const where = { file: occurrence.relativePath, line: occurrence.line };
     if (occurrence.read === undefined) {
+      const meant = booleanValueTag(occurrence.tag);
       issues.push({
         code: "condition-tag-malformed",
-        message: `${occurrence.tag} does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition`,
+        message:
+          meant === undefined
+            ? `${occurrence.tag} does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition`
+            : `${occurrence.tag} names a boolean as text, which reads two ways: write ${conditionTagText(meant)}, which reads the boolean the program file declares`,
         ...where,
       });
       continue;

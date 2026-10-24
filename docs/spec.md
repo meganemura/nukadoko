@@ -2977,8 +2977,10 @@ holds:
   run with a 10-second budget; each step record stores what it answered
   as `target_version`.
 - `conditions` names the switches of the program this environment runs,
-  each `true`, `false`, or a value with no whitespace, such as
-  `{ banner: true, locale: "ja" }`. A scenario's `@with:` and
+  each `true`, `false`, or a string with no whitespace and no `@`, such as
+  `{ banner: true, locale: "ja" }`. The strings `"true"` and `"false"`
+  are refused: a string meets `@with:<condition>` whatever it says, so
+  `"false"` would read as on, and the boolean is what is meant. A scenario's `@with:` and
   `@without:` tags are read against them, and they decide which runs
   prove a scenario (see "Verdicts"). They set nothing in the program: the
   environment's `env` and env files do that.
@@ -4002,12 +4004,13 @@ conditions it needs with tags on its `Feature:`, `Rule:`, `Scenario:`, or
 `Examples:` line, which add up the way Gherkin tags do:
 
 - `@with:<condition>` needs the condition on: `true`, or any value.
-- `@with:<condition>=<value>` needs that value. `@with:x=true` names the
-  text `true`, which the boolean `true` never equals.
+- `@with:<condition>=<value>` needs that value. `@with:x=true` and
+  `@with:x=false` are malformed, since a value written as text is not
+  the boolean the program file declares: write `@with:x` or `@without:x`.
 - `@without:<condition>` needs it off: `false`, or not declared.
 
 A condition name is letters, digits, `_`, `.`, and `-`, and a value has no
-whitespace. A cell is `required` where its environment meets every
+whitespace and no `@`, where Gherkin would end the tag. A cell is `required` where its environment meets every
 condition tag of its row, and a `control` elsewhere. A row with no
 condition tag is required in every environment. A control runs like any
 cell and never turns the run red: its conditions do not hold, so a Then

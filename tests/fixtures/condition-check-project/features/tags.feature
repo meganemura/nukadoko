@@ -23,3 +23,7 @@ Feature: Condition tags
   @with:banner @without:banner
   Scenario: two tags no environment meets at once
     Then the banner reads "on"
+
+  @with:banner=true
+  Scenario: a boolean written as a value
+    Then the banner reads "on"

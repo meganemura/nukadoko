@@ -359,6 +359,16 @@ describe("renderRunSummary", () => {
     ]);
   });
 
+  it("quotes a string condition, so it reads apart from the boolean it spells", () => {
+    const markdown = renderRunSummary(
+      run({
+        environments: [{ name: "ja", target_version: null, conditions: { locale: "ja", banner: true } }],
+        scenarios: [scenario("features/a.feature", 2, "s", "passed", 10, { environment: "ja" })],
+      }),
+    );
+    expect(markdown).toContain('- environment: ja (conditions locale: "ja", banner: true)\n');
+  });
+
   it("names a world whose program did not start, with its log, and a hook failure beside it", () => {
     const unstarted = { ...world("default", "http://localhost:41563"), log: "worlds/default/program.log", error: "serve command node app/server.mjs exited with code 4" };
     const failedStart = { severity: "failed" as const, code: "program-start-failed", message: "the program did not start for world default" };

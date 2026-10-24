@@ -237,7 +237,8 @@ function renderFailure(failure: SummaryFailure): string {
 
 function conditionsText(conditions: Readonly<Record<string, boolean | string>>): string {
   const entries = Object.entries(conditions);
-  return entries.length === 0 ? "none" : entries.map(([name, value]) => `${name}: ${String(value)}`).join(", ");
+  // A string is quoted, so a value reads apart from the boolean it spells.
+  return entries.length === 0 ? "none" : entries.map(([name, value]) => `${name}: ${typeof value === "string" ? JSON.stringify(value) : String(value)}`).join(", ");
 }
 
 // A cell as the table shows it: what it came to, and, beside it, that it is

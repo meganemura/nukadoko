@@ -35,6 +35,12 @@ const MALFORMED = {
   line: 11,
   message: "@with: does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition",
 };
+const BOOLEAN_TEXT = {
+  code: "condition-tag-malformed",
+  file: "features/tags.feature",
+  line: 27,
+  message: "@with:banner=true names a boolean as text, which reads two ways: write @with:banner, which reads the boolean the program file declares",
+};
 const UNKNOWN = {
   code: "condition-unknown",
   file: "features/tags.feature",
@@ -51,6 +57,7 @@ describe("nuka check: condition tags", () => {
     expect(findings.map(({ code, file, line, message }) => ({ code, file, line, message }))).toEqual([
       MALFORMED,
       UNKNOWN,
+      BOOLEAN_TEXT,
       {
         code: "condition-unmet",
         file: "features/tags.feature",
@@ -105,6 +112,7 @@ describe("nuka check: condition tags", () => {
     expect(findings.map((finding) => [finding.code, finding.line])).toEqual([
       ["condition-tag-malformed", 11],
       ["condition-unknown", 15],
+      ["condition-tag-malformed", 27],
       ["condition-unmet", 4],
     ]);
   });
@@ -114,7 +122,8 @@ describe("nuka check: condition tags", () => {
     try {
       await writeFile(
         path.join(rootDir, "nukadoko.program.ts"),
-        'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ environments: { "flag-off": { conditions: { "bad name": false, locale: "en US" } } } });\n',
+        'import { defineProgram } from "./nukadoko-shim.js";\n' +
+          'export default defineProgram({ environments: { "flag-off": { conditions: { "bad name": false, locale: "en US", banner: "false", mail: "a@b" } } } });\n',
       );
       const stdout = createCaptureSink();
       const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr: createCaptureSink() });
@@ -122,7 +131,9 @@ describe("nuka check: condition tags", () => {
       const finding = (JSON.parse(stdout.text()) as { findings: { code: string; message: string }[] }).findings[0]!;
       expect(finding.code).toBe("config-invalid");
       expect(finding.message).toContain(
-        'environments.flag-off.conditions.locale: must be true, false, or a value with no whitespace, as @with:<name>=<value> names it; ' +
+        'environments.flag-off.conditions.locale: must be true, false, or a value with no whitespace and no "@", as @with:<name>=<value> names it; ' +
+          "environments.flag-off.conditions.banner: is a boolean written as a string, which @with:<name> reads as on whatever it says: write the boolean, without quotes; " +
+          'environments.flag-off.conditions.mail: must be true, false, or a value with no whitespace and no "@", as @with:<name>=<value> names it; ' +
           'environments.flag-off.conditions.bad name: must be a condition name of letters, digits, "_", ".", or "-", as @with:<name> names it',
       );
     } finally {

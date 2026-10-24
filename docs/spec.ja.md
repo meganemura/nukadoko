@@ -2419,7 +2419,9 @@ staging のサーバ、pull request ごとのプレビュー、機能を有効�
 - `version` は probe(`() => string | Promise<string>`)で、run ごとに 10 秒の持ち時間で 1 回呼ばれます。
   各 step record は、その答えを `target_version` として保存します。
 - `conditions` は、この environment が動かすプログラムのスイッチに名前を付けます。
-  値はそれぞれ `true`、`false`、または空白を含まない値で、たとえば `{ banner: true, locale: "ja" }` です。
+  値はそれぞれ `true`、`false`、または空白も `@` も含まない文字列で、たとえば `{ banner: true, locale: "ja" }` です。
+  文字列の `"true"` と `"false"` は拒否されます。
+  文字列は何と書いてあっても `@with:<condition>` を満たすので、`"false"` は入っていると読まれてしまい、書き手が意図したのは真偽値だからです。
   scenario の `@with:` と `@without:` の tag はこれに照らして読まれ、どの run が scenario を証明するかを決めます(「断定」を参照)。
   プログラムには何も設定しません。
   それをするのは environment の `env` と env file です。
@@ -3205,10 +3207,13 @@ tag は Gherkin の tag と同じように積み重なります:
 
 - `@with:<condition>` は condition が入っていること、つまり `true` か何かの値であることを求めます。
 - `@with:<condition>=<value>` はその値を求めます。
-  `@with:x=true` はテキストの `true` を名指し、真偽値の `true` はそれと等しくなりません。
+  `@with:x=true` と `@with:x=false` は形が誤っています。
+  テキストで書いた値は、program ファイルが宣言する真偽値ではないからです。
+  `@with:x` か `@without:x` と書きます。
 - `@without:<condition>` は condition が切れていること、つまり `false` か宣言されていないことを求めます。
 
-condition の名前は英字、数字、`_`、`.`、`-` で、値は空白を含みません。
+condition の名前は英字、数字、`_`、`.`、`-` で、値は空白も `@` も含みません。
+Gherkin はそこで tag を終えるからです。
 セルは、その environment が行の condition の tag をすべて満たすところで必須(`required`)、それ以外で対照(`control`)です。
 condition の tag を持たない行は、すべての environment で必須です。
 対照のセルはほかのセルと同じように走り、run を赤にすることはありません。
