@@ -34,9 +34,10 @@ import { createCallsCollector } from "./calls.js";
 import { installChannelPatches, withoutChannelRecording } from "./channels.js";
 
 // The commands install the patches before they load the config and the
-// step files, earlier than any context exists; this module is the context
-// layer's surface for them.
-export { installChannelPatches };
+// step files, earlier than any context exists, and write the line of every
+// request still open at their end, after the last context is gone; this
+// module is the context layer's surface for both.
+export { finalizeOpenRequests, installChannelPatches };
 import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
 import { createEnvReadsCollector } from "./env-reads.js";
@@ -46,7 +47,7 @@ import { createScratchCollector } from "./scratch.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createHttpLogFailedCollector } from "./http-log-failed.js";
 import { createHttpOmittedCollector } from "./http-omitted.js";
-import { type AfterStepEnd, createObservedCollector } from "./observed.js";
+import { type AfterStepEnd, createObservedCollector, finalizeOpenRequests } from "./observed.js";
 import { createPageEventsCollector } from "./page-events.js";
 import { pollWithRecording } from "./poll.js";
 import { createPollsCollector } from "./polls.js";

@@ -101,14 +101,23 @@ export interface ChannelHttpLine {
   readonly response_body?: RawBody;
 }
 
-/** A request still open when the step's `run` returned. */
+/** Where nukadoko stopped waiting for a request: at its step boundary's
+ * flush, or at the end of the run (or of the `nuka do` call). */
+export type WaitEnd = "step" | "run";
+
+/** A request whose line is not written yet. */
 export interface PendingCapture {
+  /** Settles once the line is written. */
   readonly done: Promise<void>;
+  /** True when the line can be written now without waiting for anything:
+   * a response whose body the step never started reading, which nothing
+   * will ever read once the step's `run` has returned. */
+  idle?(): boolean;
   /** Writes the line with what arrived so far: `status: 0` and the
    * no-response error when no response came, a body marked incomplete when
-   * one was still arriving. `waitedMs` is how long the flush waited. Does
-   * nothing once the line is written. */
-  finalize(waitedMs: number): void;
+   * one was still arriving, a body marked unread when the step never
+   * started reading it. Does nothing once the line is written. */
+  finalize(end: WaitEnd): void;
 }
 
 /** A client socket the patches saw connect. */
@@ -129,7 +138,11 @@ export interface ChannelRecorder {
   /** Counts one request and returns the function that writes its line
    * into the step that sent it, whenever the line is finished. */
   startHttp(): (line: ChannelHttpLine) => void;
-  track(capture: PendingCapture): void;
+  /** Keeps `capture` until its line is written, for the step boundary's
+   * flush and the run's end. Returns the function that lets it go, which
+   * the capture calls as it writes its line, so a finished request holds
+   * none of its buffers; an older recorder returns nothing. */
+  track(capture: PendingCapture): (() => void) | void;
   /** Notes a path a write call names, before the call runs. `before` is
    * given when the caller already knows the path did not exist.
    * `byPlaywrightServer` says whether Playwright's own server-side code
@@ -207,8 +220,12 @@ function firstLine(error: unknown): string {
   return message.split("\n", 1)[0] ?? "";
 }
 
-function noResponse(waitedMs: number): string {
-  return `no response within ${waitedMs} ms of the step's end`;
+/** The `error` of a request that had no response when nukadoko stopped
+ * waiting: when, and how long the request had by then, since a request
+ * the step's leftover code sent during the flush had less than the flush
+ * waited. */
+export function noResponse(end: WaitEnd, sentMs: number): string {
+  return `no response before the ${end} ended, ${sentMs} ms after it was sent`;
 }
 
 /** Keeps the first BODY_WINDOW bytes of a body the step's own code reads,
@@ -235,8 +252,15 @@ class BodyBuffer {
     return { window: this.window(), total: this.total };
   }
 
+  /** nukadoko stopped waiting while the body was arriving. */
   stopped(): RawBody {
-    return { window: this.window(), read: this.total, stopped: "step_end" };
+    return { window: this.window(), read: this.total, stopped: "wait" };
+  }
+
+  /** The body ended with an error, an abort, or a close before its end,
+   * which nukadoko did not cause. */
+  failed(error: string): RawBody {
+    return { window: this.window(), read: this.total, error };
   }
 }
 
@@ -244,7 +268,9 @@ class BodyBuffer {
  * first BODY_WINDOW bytes. It stops one chunk past the window and cancels
  * the branch, so the branch the step reads keeps its own pace and a body of
  * any length costs at most the window and a chunk. `finalize` stops at the
- * step's end with what arrived: an event stream never ends. */
+ * step's end with what arrived: an event stream never ends. A read that
+ * fails (the server aborted, the step aborted the request) is the body's
+ * error, not an incomplete body. */
 export function captureStream(stream: ReadableStream<Uint8Array>): { done: Promise<RawBody>; finalize(): RawBody } {
   const buffer = new BodyBuffer();
   const reader = stream.getReader();
@@ -265,8 +291,8 @@ export function captureStream(stream: ReadableStream<Uint8Array>): { done: Promi
         buffer.add(value);
         if (buffer.total > BODY_WINDOW) return stop({ window: buffer.window(), read: buffer.total, stopped: "cap" });
       }
-    } catch {
-      return result ?? (result = buffer.stopped());
+    } catch (error) {
+      return result ?? (result = buffer.failed(firstLine(error)));
     }
   })();
   return { done, finalize: () => stop(buffer.stopped()) };
@@ -331,26 +357,35 @@ function requestBodyOf(args: FetchArgs): FetchBody {
 }
 
 /**
- * Counts one request, tracks it for the step's flush, and returns the
- * function that writes its line, once. `atFlush` builds the line from what
- * the request has when the flush stops waiting. One rule for every client:
- * a request with no response by then is written with `status: 0` and the
+ * Counts one request, tracks it until its line is written, and returns the
+ * function that writes its line, once. The line is appended as soon as the
+ * request completes, and the recorder lets the request go then, so what
+ * stays in memory for a finished request is its count. `atEnd` builds the
+ * line from what the request has when nukadoko stops waiting, at the step
+ * boundary's flush or at the run's end. One rule for every client: a
+ * request with no response by then is written with `status: 0` and the
  * no-response error, and nothing arriving later changes it.
  */
-export function recordRequest(rec: ChannelRecorder, atFlush: (waitedMs: number) => ChannelHttpLine): (line: ChannelHttpLine) => void {
+export function recordRequest(
+  rec: ChannelRecorder,
+  atEnd: (end: WaitEnd) => ChannelHttpLine,
+  idle?: () => boolean,
+): (line: ChannelHttpLine) => void {
   const write = rec.startHttp();
   let written = false;
   let settle: () => void = () => {};
   const done = new Promise<void>((resolve) => {
     settle = resolve;
   });
+  let release: (() => void) | void = undefined;
   const once = (line: ChannelHttpLine): void => {
     if (written) return;
     written = true;
+    if (typeof release === "function") release();
     write(line);
     settle();
   };
-  rec.track({ done, finalize: (waitedMs) => once(atFlush(waitedMs)) });
+  release = rec.track({ done, ...(idle !== undefined ? { idle } : {}), finalize: (end) => once(atEnd(end)) });
   return once;
 }
 
@@ -400,10 +435,10 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
     ...(requestRaw !== undefined ? { request_body: requestRaw } : {}),
     ...(responseRaw !== undefined ? { response_body: responseRaw } : {}),
   });
-  const write = recordRequest(rec, (waitedMs) =>
+  const write = recordRequest(rec, (end) =>
     responded === undefined
       ? thrown === undefined
-        ? failed(noResponse(waitedMs), elapsed())
+        ? failed(noResponse(end, elapsed()), elapsed())
         : failed(thrown.error, thrown.durationMs)
       : withBodies(responded.line, requestBodyNow(), responded.capture?.finalize()),
   );
@@ -461,11 +496,22 @@ export function chunkBytes(chunk: unknown, encoding: unknown): Uint8Array | unde
   return undefined;
 }
 
+/** Whether a response has no body by protocol: the answer to a HEAD, a
+ * 204, a 304, or one that says `content-length: 0`. Its line is complete
+ * at the status, and nothing would ever end a body nobody reads. */
+function noBodyByProtocol(method: string, res: http.IncomingMessage): boolean {
+  const status = res.statusCode ?? 0;
+  return method === "HEAD" || status === 204 || status === 304 || res.headers["content-length"] === "0";
+}
+
 /** Records one `ClientRequest` passively: it listens to what the request
  * and its response already emit and never changes their flow, so a
  * response the step leaves unread stays unread, and an `upgrade` or
  * `connect` with no listener of the step's own still destroys the socket
- * as Node does. */
+ * as Node does. A response the step never started reading (no `data` or
+ * `readable` listener, never resumed or piped) is idle: the flush writes
+ * its line at once, saying the step did not read the body, instead of
+ * waiting for a body nothing will read. */
 function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:https", rec: ChannelRecorder): void {
   const startedAt = performance.now();
   const requestBody = new BodyBuffer();
@@ -499,8 +545,16 @@ function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:http
     ...(requestBody.total > 0 ? { request_body: requestBody.ended() } : {}),
     ...(fields.response !== undefined ? { response_body: fields.response } : {}),
   });
-  const write = recordRequest(rec, (waitedMs) =>
-    status === 0 ? line({ error: noResponse(waitedMs) }) : line({ response: responseBody.stopped() }),
+  let response: http.IncomingMessage | undefined;
+  const idle = (): boolean =>
+    response !== undefined && responseBody.total === 0 && response.readableFlowing === null && response.listenerCount("readable") === 0;
+  const write = recordRequest(
+    rec,
+    (end) =>
+      status === 0
+        ? line({ error: noResponse(end, Math.round(performance.now() - startedAt)) })
+        : line({ response: idle() ? { unread: "the step did not read the body" } : responseBody.stopped() }),
+    idle,
   );
   const responded = (res: http.IncomingMessage): void => {
     status = res.statusCode ?? 0;
@@ -514,18 +568,27 @@ function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:http
     } else if (event === "response") {
       const res = args[0] as http.IncomingMessage;
       responded(res);
-      const resEmit = res.emit;
-      res.emit = function (this: http.IncomingMessage, resEvent: string | symbol, ...resArgs: unknown[]): boolean {
-        if (resEvent === "data") {
-          const bytes = chunkBytes(resArgs[0], res.readableEncoding);
-          if (bytes !== undefined) responseBody.add(bytes);
-        } else if (resEvent === "end") {
-          write(line({ response: responseBody.ended() }));
-        } else if (resEvent === "error" || resEvent === "aborted" || resEvent === "close") {
-          write(line({ response: responseBody.stopped() }));
-        }
-        return (resEmit as (...a: unknown[]) => boolean).call(this, resEvent, ...resArgs);
-      } as typeof res.emit;
+      if (noBodyByProtocol(req.method, res)) {
+        write(line({}));
+      } else {
+        response = res;
+        const resEmit = res.emit;
+        res.emit = function (this: http.IncomingMessage, resEvent: string | symbol, ...resArgs: unknown[]): boolean {
+          if (resEvent === "data") {
+            const bytes = chunkBytes(resArgs[0], res.readableEncoding);
+            if (bytes !== undefined) responseBody.add(bytes);
+          } else if (resEvent === "end") {
+            write(line({ response: responseBody.ended() }));
+          } else if (resEvent === "error") {
+            write(line({ response: responseBody.failed(firstLine(resArgs[0])) }));
+          } else if (resEvent === "aborted" || resEvent === "close") {
+            // A close before `end`: the server aborted, or the step
+            // destroyed the response. Either way nukadoko did not stop it.
+            write(line({ response: responseBody.failed("the response closed before its end") }));
+          }
+          return (resEmit as (...a: unknown[]) => boolean).call(this, resEvent, ...resArgs);
+        } as typeof res.emit;
+      }
     } else if (event === "upgrade" || event === "connect") {
       // The handshake is this request's line, with its real status. What
       // the connection carries afterwards is no HTTP request: it is marked,

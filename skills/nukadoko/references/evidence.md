@@ -24,8 +24,12 @@ or `node:https` is a line too, with `via` naming that API. Every line
 but a page's keeps the request body and the response body as text, up to
 16 KiB each and redacted, and no line keeps headers. A body nukadoko
 stopped reading (a `fetch` body past 32 KiB, or one still arriving when
-the step ended) has `bytes_read` instead of `bytes`: not the whole size. A request with no
-response when the step ended has `status: 0` and an `error` that says so.
+the step ended, marked `incomplete`) has `bytes_read` instead of `bytes`: not the whole size.
+A body that failed on its own (the server aborted it, the step destroyed
+it) has `bytes_read` and an `error`, and a `node:http` response the step
+never read is `{ "unread": "the step did not read the body" }`. A request with no
+response when the step ended has `status: 0` and an `error` that says so
+and how long it had.
 A `fetch` that an interceptor installed after nukadoko (msw, nock)
 answers itself never reaches nukadoko, so it has no line; a mocked
 `node:http` request still has one.
@@ -33,7 +37,9 @@ answers itself never reaches nukadoko, so it has no line; a mocked
 A request or a `runCommand` process the step's code starts after its
 record was written (a timer it left behind) is written beside that
 record, marked `after_step_end`, never in the next step's files, and the
-run summary names it under the step. The record does not count it.
+run summary names it under the step, with the file that holds the
+requests (`http.jsonl`, which the record may not name). A request still
+open when the run ends gets its line then. The record does not count it.
 
 What nukadoko saw but cannot measure is in `observed.unmeasured`: a
 process started through `node:child_process` instead of `runCommand`

@@ -2918,9 +2918,16 @@ its scenario record's id, so either record leads to the other.
   that step's http.jsonl, a process's entry as `process-<n>.json`. The
   scenario record's step entry, and the step in `run.json`, carry
   `"after_step_end": { "requests", "processes" }`, the counts of what
-  started before the scenario ended, and the run summary names them on
-  the step's line. A file write, a socket, or a process started without
-  `runCommand` after the record was written is not recorded anywhere.
+  started before the scenario ended, with `"http": "http.jsonl"` when a
+  request did: the file in the step record's directory that holds their
+  lines, which the record's `evidence.http` does not name when every line
+  is late. The run summary names them, and that file, on the step's line.
+  Every request counted has a line: one still open when the run ends (or
+  the `nuka do` call) is written then, before `run.json`, with
+  `"status": 0` and `"error": "no response before the run ended, <n> ms
+  after it was sent"`, or with what arrived of its body. A file write, a
+  socket, or a process started without `runCommand` after the record was
+  written is not recorded anywhere.
 - A body or a file's content is kept as text: `{ "text", "bytes" }`, plus
   `"truncated": true` when `text` holds only the start,
   `"binary": true` (and no `text`) when
@@ -2935,12 +2942,23 @@ its scenario record's id, so either record leads to the other.
   past the first 32 KiB and then left, so a body of any length costs the
   step's process at most that much to record, and the step's own copy
   keeps its pace. A body nukadoko stopped reading there, and one still
-  arriving when the step boundary stopped waiting, has `"bytes_read"` instead of `bytes`: the
-  bytes read before nukadoko stopped, which is not the whole size. It is
-  always `"truncated": true`, and `"incomplete": true` when the step
-  boundary stopped waiting for it. The step boundary waits up to one
-  second for a response body still arriving, then keeps what arrived: an
-  event stream never ends, and the step record does not wait for it. A
+  arriving when nukadoko stopped waiting (at the step boundary or at the
+  run's end), has `"bytes_read"` instead of `bytes`: the bytes read
+  before nukadoko stopped, which is not the whole size. It is always
+  `"truncated": true`, and `"incomplete": true` when nukadoko stopped
+  waiting for it. A body that ended with an error, an abort, or a close
+  nukadoko did not cause (the server aborted it, the step destroyed the
+  response) has `"bytes_read"` and `"error"`, the first line of what
+  happened, and is never `incomplete`: the two say different things
+  about the request. The step boundary waits up to one second for a
+  response body still arriving, then keeps what arrived: an event stream
+  never ends, and the step record does not wait for it. A `node:http`
+  or `node:https` response the step never started reading (no `data` or
+  `readable` listener, never resumed or piped) is not waited for: its
+  line is written at the flush with `"response_body": { "unread": "the
+  step did not read the body" }`. Each line is appended when its
+  request completes, so a finished request costs the step's process
+  only its count, however many the step sends. A
   body the step asked for as strings (after `setEncoding`, or a write
   given an encoding) is turned back into its bytes first, so it is
   decoded and redacted the same way.
@@ -2955,8 +2973,9 @@ its scenario record's id, so either record leads to the other.
   reader never has to guess which path wrote a line from its shape alone.
   Every line but a `"page"` one has `"request_body"` (absent when the
   request sent none) and `"response_body"` (absent when no response
-  arrived or it had no body, as for HEAD or a 204, from every client),
-  kept as text of at most 16 KiB each (below).
+  arrived or it had no body, as for HEAD, a 204, a 304, or
+  `content-length: 0`, from every client, whose line is written at the
+  status), kept as text of at most 16 KiB each (below).
   Headers are never written: they carry cookies and credentials, and the
   trace holds a page's. A page line has no bodies: the trace already holds
   the page's traffic. A call the step itself made is logged whatever its outcome,
@@ -2969,8 +2988,10 @@ its scenario record's id, so either record leads to the other.
   string is then the only URL known, so it is `url`. `status` `0` always
   comes with an `error`. One rule holds for every client: a request with
   no response when the step boundary stops waiting (up to one second) is
-  written then, with `"error": "no response within <n> ms of the step's
-  end"`, and a response that arrives later changes nothing. A request
+  written then, with `"error": "no response before the step ended, <n> ms
+  after it was sent"`, where `<n>` is how long the request had, less than
+  the boundary waited for one the step's leftover code sent meanwhile,
+  and a response that arrives later changes nothing. A request
   that closed with neither a response nor an error has `"error": "the
   request was closed before a response arrived"`. A `fetch` that throws
   before it sends (a used Request, a GET with a body) is a line with the
@@ -3298,8 +3319,8 @@ holds:
   `runCommand` process after its record was written (`after_step_end`):
   one line per step, with its location, its text, its environment when
   the run had more than one, up to three of its actions and how many
-  more, `started after the step ended: <n> request(s), <n> process(es)`
-  when it did, the advice to start a process with `runCommand` when one
+  more, `started after the step ended: <n> request(s) in http.jsonl, <n>
+  process(es)` when it did, the advice to start a process with `runCommand` when one
   of its actions is a `child_process`, and its record's path. A step
   with neither adds nothing, and under `--repeat` the same step with the
   same line is one line;

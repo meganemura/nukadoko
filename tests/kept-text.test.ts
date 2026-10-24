@@ -65,17 +65,27 @@ describe("keepText", () => {
 });
 
 describe("keepBody", () => {
-  it("never keeps a secret, counts a whole body under bytes and a stopped one under bytes_read", () =>
+  it("never keeps a secret, counts a whole body under bytes and a stopped or failed one under bytes_read", () =>
     hegel.test((tc) => {
       const secret = tc.draw(secretValue);
       const text = tc.draw(gs.arrays(filler, { minSize: 1, maxSize: 4 })).join(secret);
-      const stopped = tc.draw(gs.sampledFrom([undefined, "cap", "step_end"] as const));
+      const stopped = tc.draw(gs.sampledFrom([undefined, "cap", "wait", "error"] as const));
       const bytes = Buffer.from(text, "utf8");
       const raw = rawBodyOf(bytes);
       if (!("total" in raw)) throw new Error("bytes in hand were not read whole");
-      const kept = keepBody(stopped === undefined ? raw : { window: raw.window, read: bytes.length, stopped }, [{ name: "TOKEN", value: secret }]);
+      const kept = keepBody(
+        stopped === undefined
+          ? raw
+          : stopped === "error"
+            ? { window: raw.window, read: bytes.length, error: "the response closed before its end" }
+            : { window: raw.window, read: bytes.length, stopped },
+        [{ name: "TOKEN", value: secret }],
+      );
       expect(kept.text ?? "").not.toMatch(/[0-9]/);
-      expect(kept.incomplete === true).toBe(stopped === "step_end");
+      // Only nukadoko's own stop is incomplete; a body that failed says so
+      // instead, and never both.
+      expect(kept.incomplete === true).toBe(stopped === "wait");
+      expect(kept.error).toBe(stopped === "error" ? "the response closed before its end" : undefined);
       if (stopped === undefined) {
         expect(kept.bytes).toBe(bytes.length);
         expect(kept.bytes_read).toBeUndefined();
@@ -99,7 +109,7 @@ describe("bodyFields", () => {
     expect(bodyFields(undefined, undefined, [])).toEqual({});
     expect(bodyFields(undefined, rawBodyOf(Buffer.from("ok")), [])).toEqual({ response_body: { text: "ok", bytes: 2 } });
     // Zero bytes read before the step ended is not a body known to be empty.
-    expect(bodyFields(undefined, { window: new Uint8Array(), read: 0, stopped: "step_end" }, [])).toEqual({
+    expect(bodyFields(undefined, { window: new Uint8Array(), read: 0, stopped: "wait" }, [])).toEqual({
       response_body: { text: "", truncated: true, bytes_read: 0, incomplete: true },
     });
   });

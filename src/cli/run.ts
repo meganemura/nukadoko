@@ -87,7 +87,7 @@ import { checkCodeFix } from "../check/codes.js";
 import type { RefusalCode } from "./refusal-codes.js";
 import { RefusalError, formatEnvelope, refuse, withHint, type Hint } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
-import { installChannelPatches } from "../context/create-context.js";
+import { finalizeOpenRequests, installChannelPatches } from "../context/create-context.js";
 
 // Responsibility: `nuka run`'s work, kept out of run-cli.ts so it is
 // unit-testable without going through yargs (same split as cli/do.ts).
@@ -764,6 +764,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       verdict: "passed" | "failed",
       failedScenarios: readonly FailedScenario[],
     ): Promise<{ summaryPath: string | null; retention: string | null; runResultWritten: boolean; exitCode: number; notRun: number; notes: readonly Finding[] }> => {
+      // Every request a step was counted for gets its line before run.json
+      // is written, one its step left open after it ended included. Under
+      // `--concurrency` each worker has done this for its own requests.
+      finalizeOpenRequests();
       // Read from the run's own scenario entries and the step records they
       // cite, which are on disk by now, so the notes reach run.json in its
       // one write, and a run another process finishes meanwhile is never

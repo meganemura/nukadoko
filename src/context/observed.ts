@@ -47,6 +47,13 @@ import {
 // boundary closed is still written beside that boundary's record, marked
 // `after_step_end`, and counted for the run summary, because the record
 // that would have counted it is already written and is not rewritten.
+//
+// A request's line is appended the moment the request completes, and the
+// boundary lets go of it then: what a finished request leaves in memory
+// is its count. A request still open is held twice, by its boundary for
+// the flush and by this module for the end of the run, so a request left
+// open after its boundary closed (no flush will ever wait for it) still
+// gets its line before run.json is written (`finalizeOpenRequests`).
 
 /** What a step's scope holds: the recorder runCommand and the channel
  * patches write into. */
@@ -70,8 +77,9 @@ export interface ObservedCollector extends StepRecorder {
    * current boundary. The first call in a boundary also reads the scratch
    * directories, the "before" side of `observed.files`. */
   openRun(scratchDirs: readonly string[]): StepRecorder;
-  /** Executor-only: waits up to `timeoutMs` for the requests still open,
-   * then writes what arrived of the rest. */
+  /** Executor-only: writes at once the line of each response whose body
+   * the step never started reading, waits up to `timeoutMs` for the other
+   * requests still open, then writes what arrived of the rest. */
   flush(timeoutMs?: number): Promise<void>;
   /** A snapshot of what was recorded since the last `reset()` (or since
    * creation, for `nuka do`'s single execution-wide boundary).
@@ -96,7 +104,8 @@ interface Boundary {
   readonly afterEnd: { requests: number; processes: number };
   processes: (ProcessEntry | undefined)[] | null;
   http: number;
-  pending: PendingCapture[];
+  /** The requests of this boundary whose line is not written yet. */
+  readonly pending: Set<PendingCapture>;
   readonly touched: Map<string, Identity | Uninspected>;
   touchesOverflowed: boolean;
   readonly unmeasured: Map<string, UnmeasuredEntry>;
@@ -112,7 +121,7 @@ function newBoundary(dir: string | undefined): Boundary {
     afterEnd: { requests: 0, processes: 0 },
     processes: null,
     http: 0,
-    pending: [],
+    pending: new Set(),
     touched: new Map(),
     touchesOverflowed: false,
     unmeasured: new Map(),
@@ -124,6 +133,32 @@ function newBoundary(dir: string | undefined): Boundary {
 /** The ceiling on how long the step boundary waits for open requests. An
  * event stream never ends, and a step's record must not wait on it. */
 export const FLUSH_TIMEOUT_MS = 1000;
+
+/** How often the flush looks again for a response that became idle while
+ * it waited: one that arrived during the flush, which nothing will read. */
+const IDLE_CHECK_MS = 50;
+
+/** Every request of this process whose line is not written yet, in any
+ * boundary of any collector. */
+const openRequests = new Set<PendingCapture>();
+
+/** Writes the line of every request still open in this process, with
+ * `status: 0` and the error that says the run ended first, or what
+ * arrived of its response body. `nuka run` calls it before run.json is
+ * written, and `nuka do` before it returns, so every request a step was
+ * counted for has a line, a request left open after its step ended
+ * included. */
+export function finalizeOpenRequests(): void {
+  for (const capture of [...openRequests]) capture.finalize("run");
+}
+
+function sleep(ms: number): { readonly done: Promise<void>; cancel(): void } {
+  let timer: NodeJS.Timeout | undefined;
+  const done = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  return { done, cancel: () => clearTimeout(timer) };
+}
 
 /** The unmeasured entry of a socket the step used that nothing accounts
  * for at the step's end. */
@@ -182,8 +217,14 @@ export function createObservedCollector(
           if (dir !== undefined) appendLine(dir, line, late);
         };
       },
-      track(capture: PendingCapture): void {
-        current().pending.push(capture);
+      track(capture: PendingCapture): () => void {
+        const state = current();
+        state.pending.add(capture);
+        openRequests.add(capture);
+        return () => {
+          state.pending.delete(capture);
+          openRequests.delete(capture);
+        };
       },
       touchFile(target: string, before?: Identity, byPlaywrightServer?: () => boolean): void {
         const state = current();
@@ -239,23 +280,20 @@ export function createObservedCollector(
     },
     async flush(timeoutMs: number = FLUSH_TIMEOUT_MS): Promise<void> {
       // A request the step's leftover code starts while the flush waits is
-      // waited for too, within the same deadline.
+      // waited for too, within the same deadline. Each capture removes
+      // itself from `pending` as its line is written.
       const state = boundary;
       const deadline = performance.now() + timeoutMs;
-      while (state.pending.length > 0) {
-        const pending = state.pending;
-        state.pending = [];
+      for (;;) {
+        for (const capture of [...state.pending]) if (capture.idle?.() === true) capture.finalize("step");
+        if (state.pending.size === 0) return;
         const remaining = deadline - performance.now();
-        if (remaining > 0) {
-          let timer: NodeJS.Timeout | undefined;
-          const timeout = new Promise<void>((resolve) => {
-            timer = setTimeout(resolve, remaining);
-          });
-          await Promise.race([Promise.allSettled(pending.map((capture) => capture.done)), timeout]);
-          clearTimeout(timer);
-        }
-        for (const capture of pending) capture.finalize(timeoutMs);
+        if (remaining <= 0) break;
+        const slice = sleep(Math.min(remaining, IDLE_CHECK_MS));
+        await Promise.race([Promise.allSettled([...state.pending].map((capture) => capture.done)), slice.done]);
+        slice.cancel();
       }
+      for (const capture of [...state.pending]) capture.finalize("step");
     },
     snapshot(scratchDirs: readonly string[] = []): ObservedCounts {
       const state = boundary;

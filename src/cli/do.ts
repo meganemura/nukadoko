@@ -4,7 +4,7 @@ import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../ru
 import { argOrigins, executeTypedStep } from "../run/execute-typed-step.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
-import { createStepContext, installChannelPatches, type DisposeResult } from "../context/create-context.js";
+import { createStepContext, finalizeOpenRequests, installChannelPatches, type DisposeResult } from "../context/create-context.js";
 import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
@@ -706,6 +706,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     stdout.write(`${JSON.stringify(redactedStepRecord, null, 2)}\n`);
     return status === "passed" ? 0 : 1;
   } finally {
+    // A request the step left open after its record was written still
+    // gets its line in http.jsonl (observed.ts).
+    finalizeOpenRequests();
     processSignal?.stop();
   }
 }

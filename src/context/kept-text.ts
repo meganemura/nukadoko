@@ -99,24 +99,29 @@ export function keepText(window: Uint8Array, whole: boolean, cap: number, secret
 /** A body as a channel read it: the first bytes (at most
  * `windowFor(BODY_CAP)`) and its whole size when that is known; or the
  * bytes read when nukadoko stopped before the end, at the cap (`"cap"`) or
- * when the step boundary stopped waiting (`"step_end"`); or the reason it
- * was not read at all. */
+ * when it stopped waiting at a step's or the run's end (`"wait"`); or the
+ * bytes read before the body ended with an error, an abort, or a close
+ * nukadoko did not cause; or the reason it was not read at all. */
 export type RawBody =
   | { readonly window: Uint8Array; readonly total: number }
-  | { readonly window: Uint8Array; readonly read: number; readonly stopped: "cap" | "step_end" }
+  | { readonly window: Uint8Array; readonly read: number; readonly stopped: "cap" | "wait" }
+  | { readonly window: Uint8Array; readonly read: number; readonly error: string }
   | { readonly unread: string };
 
 /** The record's form of one HTTP body. A body read to its end has `bytes`,
- * its whole size. One nukadoko stopped reading has `bytes_read` instead,
- * because its whole size was never seen and a reader must not take the
- * count for it. */
+ * its whole size. One nukadoko stopped reading, or one that ended with an
+ * error, has `bytes_read` instead, because its whole size was never seen
+ * and a reader must not take the count for it. `incomplete` says nukadoko
+ * stopped waiting; `error` says the body itself failed, which is a
+ * different fact about the request. */
 export function keepBody(raw: RawBody, secrets: SecretSet): KeptText {
   if ("unread" in raw) return { unread: raw.unread };
   if ("total" in raw) return { ...keepText(raw.window, raw.window.length >= raw.total, BODY_CAP, secrets), bytes: raw.total };
+  if ("error" in raw) return { ...keepText(raw.window, false, BODY_CAP, secrets), bytes_read: raw.read, error: raw.error };
   return {
     ...keepText(raw.window, false, BODY_CAP, secrets),
     bytes_read: raw.read,
-    ...(raw.stopped === "step_end" ? { incomplete: true as const } : {}),
+    ...(raw.stopped === "wait" ? { incomplete: true as const } : {}),
   };
 }
 

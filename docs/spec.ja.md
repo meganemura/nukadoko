@@ -2379,7 +2379,13 @@ scenario record は独立したファイルではなく、その run の `run.js
   record は確定しており書き直さないので、その操作は record の隣に `"after_step_end": true` を付けて書かれます。
   リクエストはその step の http.jsonl の行に、プロセスは `process-<n>.json` のエントリになります。
   scenario record の step のエントリと `run.json` の step は、`"after_step_end": { "requests", "processes" }` を持ちます。
-  これは scenario が終わる前に始まったものの数で、run サマリはそれを step の行に挙げます。
+  これは scenario が終わる前に始まったものの数です。
+  リクエストを始めたときは `"http": "http.jsonl"` も加わります。
+  これはその行を持つ、step record のディレクトリにあるファイルで、すべての行が record のあとのものなら、record の `evidence.http` はそれを名指しません。
+  run サマリは、その数とそのファイルを step の行に挙げます。
+  数えたリクエストには、どれも行があります。
+  run(または `nuka do` の呼び出し)が終わるときにまだ開いているリクエストは、そのとき、`run.json` より前に書かれます。
+  その行は `"status": 0` と `"error": "no response before the run ended, <n> ms after it was sent"` を持つか、届いた分の本文を持ちます。
   record を書いたあとのファイルの書き込み、socket、`runCommand` を通さずに起動したプロセスは、どこにも記録されません。
 - 本文やファイルの中身はテキストとして `{ "text", "bytes" }` で残します。
   `text` が先頭だけを持つときは `"truncated": true` が加わります。
@@ -2390,11 +2396,18 @@ scenario record は独立したファイルではなく、その run の `run.js
   `bytes` は、終わりまで読んだ本文か、サイズが分かる本文(文字列、バッファ、Blob)の、redact する前の全体のサイズです。
   nukadoko が自分の複製から読む `fetch` の本文(レスポンス、stream や FormData のアップロード)は、最初の 32 KiB を 1 チャンク超えるところまでしか読まず、そこで手放します。
   そのため、どれだけ長い本文でも、記録のために step のプロセスが使うのはその分までで、step 自身の複製は自分のペースを保ちます。
-  nukadoko がそこで読むのをやめた本文と、step の境界が待つのをやめたときにまだ届いていた本文は、`bytes` の代わりに `"bytes_read"` を持ちます。
+  nukadoko がそこで読むのをやめた本文と、nukadoko が待つのをやめたとき(step の境界、または run の終わり)にまだ届いていた本文は、`bytes` の代わりに `"bytes_read"` を持ちます。
   これは nukadoko がやめる前に読んだバイト数で、全体のサイズではありません。
-  そうした本文には必ず `"truncated": true` が付き、step の境界が待つのをやめたときは `"incomplete": true` も付きます。
+  そうした本文には必ず `"truncated": true` が付き、nukadoko が待つのをやめたときは `"incomplete": true` も付きます。
+  nukadoko が起こしたのではないエラー、中断、終わる前の close で終わった本文(サーバが中断した、step がレスポンスを destroy した)は、`"bytes_read"` と、起きたことの最初の 1 行である `"error"` を持ちます。
+  そうした本文は `incomplete` を持ちません。
+  2 つはリクエストについて別のことを述べるからです。
   step の境界は、まだ届いているレスポンス本文を最大 1 秒待ち、届いた分を残します。
   event stream は終わらず、step record はそれを待たないからです。
+  step が読み始めなかった `node:http` や `node:https` のレスポンス(`data` や `readable` のリスナーがなく、resume も pipe もされていない)は待ちません。
+  その行は flush のときに `"response_body": { "unread": "the step did not read the body" }` を付けて書かれます。
+  各行はリクエストが終わったときに追記されます。
+  そのため、step がどれだけ多く送っても、終わったリクエストが step のプロセスに残すのはその数だけです。
   step が文字列として求めた本文(`setEncoding` のあと、またはエンコーディングを渡した書き込み)は、まずバイト列に戻すので、同じようにデコードし redact します。
 - `evidence.http`(少なくとも 1 回の呼び出しが記録されたときだけ現れます)は http.jsonl を指します。
   1 行に 1 つの JSON オブジェクトで、形は `{ "method", "url", "status", "duration_ms", "via", "request_body", "response_body" }` です。
@@ -2402,7 +2415,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   step 自身のコードがその API で送ったもの(`observed` を参照)なら `"fetch"`、`"node:http"`、`"node:https"` です。
   page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
   どのエントリにも必ず付くため、読み手はその行がどの経路から来たかを形だけから推測せずに済みます。
-  `"page"` 以外のどの行にも `"request_body"`(リクエストが何も送らなかったときはありません)と `"response_body"`(レスポンスが届かなかったか、HEAD や 204 のように本文がなかったときは、どのクライアントでもありません)があり、それぞれ 16 KiB までのテキストとして残します(下記)。
+  `"page"` 以外のどの行にも `"request_body"`(リクエストが何も送らなかったときはありません)と `"response_body"`(レスポンスが届かなかったか、HEAD、204、304、`content-length: 0` のように本文がなかったときは、どのクライアントでもありません)があり、それぞれ 16 KiB までのテキストとして残します(下記)。
+  本文がない行は、ステータスの時点で書かれます。
   ヘッダは書きません。
   ヘッダは cookie と資格情報を運び、page のヘッダは trace が持つからです。
   page の行は本文を持ちません。
@@ -2416,7 +2430,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   そのとき分かっている URL は宣言された文字列だけなので、それが `url` になります。
   `status` が `0` なら、必ず `error` があります。
   どのクライアントにも 1 つの規則が当てはまります。
-  step の境界が待つのをやめたとき(最大 1 秒)にレスポンスがないリクエストは、そのときに `"error": "no response within <n> ms of the step's end"` を付けて書かれ、あとで届いたレスポンスは何も変えません。
+  step の境界が待つのをやめたとき(最大 1 秒)にレスポンスがないリクエストは、そのときに `"error": "no response before the step ended, <n> ms after it was sent"` を付けて書かれ、あとで届いたレスポンスは何も変えません。
+  `<n>` はそのリクエストに与えられた時間で、待つ間に step の残ったコードが送ったリクエストでは、境界が待った時間より短くなります。
   レスポンスもエラーもなく閉じたリクエストは `"error": "the request was closed before a response arrived"` を持ちます。
   送る前に throw する `fetch`(使用済みの Request、本文付きの GET)は、`fetch` が出すエラーを持つ行になり、step はそのエラーをそのまま受け取ります。
   Upgrade(WebSocket)や CONNECT は、ハンドシェイクの実際のステータス(101 またはトンネルのステータス)を持つ行で、CONNECT の `url` はその宛先の `<host>:<port>` です。
@@ -2622,7 +2637,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   これは失敗した environment ごとに 1 つずつ載り、run に environment が 2 つ以上あればその environment の名前が前に付きます。
 - 「Unmeasured actions」。
   step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、または record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、step ごとに 1 行を載せます。
-  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s), <n> process(es)`、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
+  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es)`、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
   どちらもない step は何も加えず、`--repeat` のときは同じ行を持つ同じ step が 1 行になります。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。

@@ -185,7 +185,7 @@ describe("a request with no response when the flush ends", () => {
     });
     await observed.flush(200);
     const lines = withoutDuration(httpLines());
-    const error = "no response within 200 ms of the step's end";
+    const error = expect.stringMatching(/^no response before the step ended, \d+ ms after it was sent$/);
     expect(lines).toHaveLength(2);
     expect(lines).toEqual(
       expect.arrayContaining([

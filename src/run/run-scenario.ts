@@ -2428,7 +2428,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       const late = entry.step_record_id === null ? undefined : afterStepEnd.get(entry.step_record_id);
       return late === undefined || (late.requests === 0 && late.processes === 0)
         ? entry
-        : { ...entry, after_step_end: { requests: late.requests, processes: late.processes } };
+        : {
+            ...entry,
+            after_step_end: { requests: late.requests, processes: late.processes, ...(late.requests > 0 ? { http: "http.jsonl" as const } : {}) },
+          };
     }),
     hooks: hookRecords,
     ...(git !== undefined ? { git } : {}),

@@ -3,7 +3,7 @@ import type { APIRequestContext, APIResponse } from "playwright";
 import type { KeptText } from "../record/types.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
-import { type ChannelHttpLine, channelRecorder, recordRequest, withoutChannelRecording } from "./channels.js";
+import { type ChannelHttpLine, channelRecorder, noResponse, recordRequest, withoutChannelRecording } from "./channels.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import { bodyFields, type RawBody, rawBodyOf } from "./kept-text.js";
 
@@ -159,7 +159,7 @@ async function logCall(
     ...(sent !== undefined ? { request_body: sent } : {}),
   });
   const rec = channelRecorder();
-  const write = rec === undefined ? undefined : recordRequest(rec, (waitedMs) => failed(`no response within ${waitedMs} ms of the step's end`));
+  const write = rec === undefined ? undefined : recordRequest(rec, (end) => failed(noResponse(end, elapsed())));
   const path = logPath();
   let response: APIResponse | undefined;
   let failure: unknown;

@@ -279,17 +279,21 @@ export interface KeptText {
    * stopped reading before the end (`bytes_read`) or did not read it
    * (`unread`). */
   readonly bytes?: number;
-  /** A body nukadoko stopped reading before its end: the bytes it read, at
-   * the cap or when the step boundary stopped waiting (`incomplete`). The
-   * body is at least this long; its whole size was never seen. */
+  /** A body nukadoko stopped reading before its end, or one that ended
+   * with an error: the bytes it read, at the cap, when nukadoko stopped
+   * waiting (`incomplete`), or when the body failed (`error`). The body
+   * is at least this long; its whole size was never seen. */
   readonly bytes_read?: number;
   /** `text` holds only the start. */
   readonly truncated?: true;
   /** The bytes are not UTF-8 text, so none is kept. */
   readonly binary?: true;
-  /** The body had not ended when the step boundary stopped waiting for
-   * it (an event stream, for example). */
+  /** The body had not ended when nukadoko stopped waiting for it, at the
+   * step boundary or at the run's end (an event stream, for example). */
   readonly incomplete?: true;
+  /** The body ended with an error, an abort, or a close before its end
+   * that nukadoko did not cause: the first line of what happened. */
+  readonly error?: string;
   /** Why nukadoko did not read the body at all. */
   readonly unread?: string;
 }

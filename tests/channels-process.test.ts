@@ -171,7 +171,66 @@ describe("the memory a fetch body costs to record", () => {
     expect(result.http).toBe(2);
   }, 120_000);
 
-  it("reads only the start of a Blob body to record it, however large the Blob is", () => {
+  it("keeps nothing of a finished request but its count, in its step and after its step ended", () => {
+    // Each body is 40 KB, past the 32 KiB window, so a request's line
+    // holds a window's worth of memory until the recorder lets it go. The
+    // same requests sent outside a step are the baseline. Holding every
+    // window until a flush that never comes measured 131 MB for the 2000
+    // requests in a step and 98 MB for the 1500 late ones.
+    const script = `
+      import http from "node:http";
+      ${imports}
+      installChannelPatches();
+      const MIB = ${MIB};
+      const body = "x".repeat(40000);
+      const server = http.createServer((req, res) => res.end(body));
+      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const base = "http://127.0.0.1:" + server.address().port;
+      const retained = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        globalThis.gc();
+        globalThis.gc();
+        return process.memoryUsage().arrayBuffers / MIB;
+      };
+      const poll = async (count) => {
+        for (let i = 0; i < count; i += 1) await (await fetch(base + "/x")).text();
+      };
+      const collector = createObservedCollector({ outputDir: () => ${JSON.stringify(path.join(dir, "out"))} });
+
+      await poll(2000);
+      const outside = await retained();
+
+      let inStep;
+      await withProcessRecording(collector.openRun([]), async () => {
+        await poll(2000);
+        inStep = await retained();
+      });
+      await collector.flush();
+      collector.snapshot();
+      collector.close();
+
+      // Left behind by the step, after its record was written.
+      const run = collector.openRun([]);
+      let leave;
+      const left = new Promise((resolve) => (leave = resolve));
+      const lateDone = withProcessRecording(run, async () => {
+        await left;
+        await poll(1500);
+      });
+      collector.reset();
+      leave();
+      await lateDone;
+      const late = await retained();
+      server.closeAllConnections();
+      server.close();
+      console.log(JSON.stringify({ outside, inStep, late }));
+    `;
+    const result = runScript(script, ["--expose-gc"]) as { outside: number; inStep: number; late: number };
+    expect(result.inStep - result.outside).toBeLessThan(16);
+    expect(result.late - result.outside).toBeLessThan(16);
+  }, 120_000);
+
+    it("reads only the start of a Blob body to record it, however large the Blob is", () => {
     const sparse = path.join(dir, "big.bin");
     // Counts every byte any reader takes from the Blob, through each of its
     // reading methods and those of any slice. undici reads the whole Blob to

@@ -120,6 +120,10 @@ export interface ScenarioStepEntry {
 export interface AfterStepEndCounts {
   readonly requests: number;
   readonly processes: number;
+  /** `"http.jsonl"`, the file in the step record's directory that holds
+   * those requests' lines, present when `requests` is above 0: the record
+   * was written before them, so its `evidence.http` may not name it. */
+  readonly http?: "http.jsonl";
 }
 
 /** One Before/After hook's own outcome — a hook that didn't apply to this

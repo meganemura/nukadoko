@@ -51,7 +51,9 @@ What each part of `observed` says:
 - `http` counts the requests the step sent. Each is a line in
   `http.jsonl` with its method, URL, status, request body, and response
   body. A line marked `after_step_end` started after the record was
-  written, so the record does not count it; the run summary names it.
+  written, so the record does not count it; the run summary names it and
+  its file. A body marked `incomplete` was still arriving when nukadoko
+  stopped waiting; one with an `error` failed on its own.
 - `files` lists the paths the step changed in a scratch directory or
   wrote through `node:fs`, each with its content after the step. A file
   the step asked Playwright to write (a screenshot saved to a path, a

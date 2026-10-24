@@ -48,12 +48,20 @@ just until 0.1.
   into the step or ends the run. A `fetch` body is read only to
   just past 32 KiB, so recording a body of any length costs about that
   much memory, and a body nukadoko stopped reading has `bytes_read`
-  instead of `bytes`. A request with no response when the step ends is
-  written with `status: 0` and an `error` that says so, from every
-  client; an upgrade or a CONNECT is a line with its real status. A
-  request or a `runCommand` process a step starts after its record was
-  written is written beside that record, marked `after_step_end`,
-  never in the next step's files. `unmeasured` lists, as
+  instead of `bytes`, with `incomplete` only when nukadoko stopped
+  waiting for it, and `error` when it failed on its own. Each line is
+  written when its request completes, so a finished request costs only
+  its count. A `node:http` response with no body by protocol (HEAD, 204,
+  304, `content-length: 0`) is written at its status, and one the step
+  never read is written at the step's end without a wait, as unread. A
+  request with no response when the step ends is written with
+  `status: 0` and an `error` that says so and how long it had, from
+  every client; an upgrade or a CONNECT is a line with its real status.
+  A request or a `runCommand` process a step starts after its record
+  was written is written beside that record, marked `after_step_end`,
+  never in the next step's files, run.json's `after_step_end` names
+  the `http.jsonl` that holds the requests, and a request still open
+  when the run ends gets its line before run.json is written. `unmeasured` lists, as
   `{ kind, detail }`, each process started without `runCommand` (by
   its program and argument count, never its arguments), `Worker`, and
   connection that carries no recorded request, one the step opened or

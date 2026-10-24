@@ -327,12 +327,13 @@ function countOf(count: number, one: string, many: string): string {
 // The item that names what a step started after its record was written
 // (docs/spec.md "Records"): those lines are in the step's own files, but
 // its record was already final, so this line is the one place that says
-// they exist.
+// they exist, and names the file that holds the requests, which the
+// record may not name.
 function afterStepEndItem(step: RunScenario["steps"][number]): string | undefined {
   const late = step.after_step_end;
   if (late === undefined) return undefined;
   const parts = [
-    ...(late.requests > 0 ? [countOf(late.requests, "request", "requests")] : []),
+    ...(late.requests > 0 ? [`${countOf(late.requests, "request", "requests")} in ${cellCode(late.http ?? "http.jsonl")}`] : []),
     ...(late.processes > 0 ? [countOf(late.processes, "process", "processes")] : []),
   ];
   return parts.length === 0 ? undefined : `started after the step ended: ${parts.join(", ")}`;

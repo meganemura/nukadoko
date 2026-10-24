@@ -34,6 +34,8 @@ let previousBase: string | undefined;
 
 beforeEach(async () => {
   server = createServer((req, res) => {
+    // Never answered: a request still open when the run ends.
+    if (req.url === "/hang") return;
     let body = "";
     req.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")));
     req.on("end", () => {
@@ -50,6 +52,7 @@ beforeEach(async () => {
 afterEach(async () => {
   if (previousBase === undefined) delete process.env.CHANNELS_BASE;
   else process.env.CHANNELS_BASE = previousBase;
+  server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
   await removeTempDir(rootDir);
 });
@@ -134,11 +137,14 @@ describe("a step record's observed", () => {
 });
 
 describe("an action a step started after its record was written", () => {
-  it("is written beside that step's record, marked after_step_end, never into the next step's files, and the run summary names it once", async () => {
+  it("is written beside that step's record, marked after_step_end, never into the next step's files, and the run summary names it and its file once", async () => {
     const [left, waited] = await runLine(16);
     // The record was written before the actions started, and is not rewritten.
     const cwd = left!.observed.files[0].path.slice(0, -1);
     expect(left!.observed).toEqual({ processes: null, http: null, files: [{ path: `${cwd}/`, change: "added" }], unmeasured: [] });
+    expect(left!.evidence.http).toBeUndefined();
+    // The request the server never answered is still open when the run
+    // ends, and gets its line then, before run.json.
     expect(httpLogLines(rootDir, left!.step_record_id)).toEqual([
       {
         method: "POST",
@@ -148,6 +154,15 @@ describe("an action a step started after its record was written", () => {
         via: "fetch",
         request_body: { text: "late", bytes: 4 },
         response_body: { text: '{"got":"late"}', bytes: 14 },
+        after_step_end: true,
+      },
+      {
+        method: "GET",
+        url: `${process.env.CHANNELS_BASE}/hang`,
+        status: 0,
+        duration_ms: expect.any(Number),
+        via: "fetch",
+        error: expect.stringMatching(/^no response before the run ended, \d+ ms after it was sent$/),
         after_step_end: true,
       },
     ]);
@@ -167,11 +182,11 @@ describe("an action a step started after its record was written", () => {
     expect(existsSync(waitedDir) ? readdirSync(waitedDir).filter((name) => name === "http.jsonl" || name.startsWith("process-")) : []).toEqual([]);
     expect(waited!.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
     const steps = latestRunJson(rootDir).scenarios[0].steps;
-    expect(steps.map((step: Record<string, unknown>) => step.after_step_end)).toEqual([{ requests: 1, processes: 1 }, undefined]);
+    expect(steps.map((step: Record<string, unknown>) => step.after_step_end)).toEqual([{ requests: 2, processes: 1, http: "http.jsonl" }, undefined]);
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary.match(/started after the step ended/g)).toHaveLength(1);
     expect(summary).toContain(
-      `- \`features/channels.feature:17\` a step leaves a request and a command for later: started after the step ended: 1 request, 1 process; record \``,
+      `- \`features/channels.feature:17\` a step leaves a request and a command for later: started after the step ended: 2 requests in \`http.jsonl\`, 1 process; record \``,
     );
   });
 });
@@ -204,7 +219,12 @@ describe("the step's own channels", () => {
   it("are never an unmeasured connection across --concurrency workers either", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--concurrency", "2", "features/own-channels.feature", "features/channels.feature"], { rootDir, stdout, stderr });
+    // Not the scenario at line 15: its request to /hang is never answered,
+    // and a worker process ends only once nothing of a step is left open.
+    const exitCode = await runCli(
+      ["run", "--concurrency", "2", "features/own-channels.feature", "features/channels.feature:3", "features/channels.feature:6", "features/channels.feature:9"],
+      { rootDir, stdout, stderr },
+    );
     expect(exitCode, stderr.text()).toBe(0);
     const unmeasured = latestRunJson(rootDir).scenarios.flatMap((scenario: Record<string, any>) =>
       scenario.steps.flatMap((step: Record<string, any>) => step.observed?.unmeasured ?? []),

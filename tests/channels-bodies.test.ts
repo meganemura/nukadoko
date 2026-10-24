@@ -61,8 +61,8 @@ describe("captureStream", () => {
     const capture = captureStream(new ReadableStream<Uint8Array>({ start: (c) => void (controller = c) }));
     controller.enqueue(new TextEncoder().encode("data: one\n\n"));
     await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(plain(capture.finalize())).toEqual({ window: new TextEncoder().encode("data: one\n\n"), read: 11, stopped: "step_end" });
-    expect(plain(await capture.done)).toEqual({ window: new TextEncoder().encode("data: one\n\n"), read: 11, stopped: "step_end" });
+    expect(plain(capture.finalize())).toEqual({ window: new TextEncoder().encode("data: one\n\n"), read: 11, stopped: "wait" });
+    expect(plain(await capture.done)).toEqual({ window: new TextEncoder().encode("data: one\n\n"), read: 11, stopped: "wait" });
   });
 });
 

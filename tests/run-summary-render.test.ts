@@ -94,7 +94,7 @@ describe("renderRunSummary", () => {
               ]),
             }),
             step("the count is shown", { line: 5, record: "steps/stp-2", observed: quiet }),
-            step("the mirror is pinged", { line: 6, record: "steps/stp-4", observed: quiet, after_step_end: { requests: 2, processes: 1 } }),
+            step("the mirror is pinged", { line: 6, record: "steps/stp-4", observed: quiet, after_step_end: { requests: 2, processes: 1, http: "http.jsonl" } }),
             step("the mirror is closed", {
               line: 7,
               record: "steps/stp-5",
@@ -126,7 +126,7 @@ describe("renderRunSummary", () => {
       "An action a step started after its record was written is in that step's own files, marked `after_step_end`, and not in its record.",
       "",
       "- `features/sync.feature:4` the mirror is fetched: child process `exec git with 2 arguments`, socket `connect db.internal:5432`; start a process with `runCommand` to record it; record `steps/stp-1`",
-      "- `features/sync.feature:6` the mirror is pinged: started after the step ended: 2 requests, 1 process; record `steps/stp-4`",
+      "- `features/sync.feature:6` the mirror is pinged: started after the step ended: 2 requests in `http.jsonl`, 1 process; record `steps/stp-4`",
       "- `features/sync.feature:7` the mirror is closed: socket `write to db.internal:5432, a connection opened before the step`, started after the step ended: 1 process; record `steps/stp-5`",
       "- `features/sync.feature:10` the report is built: worker thread `new Worker ./render.js`, child process `spawn convert with 2 arguments`, child process `spawn optipng with 1 argument`, and 1 more; start a process with `runCommand` to record it; record `steps/stp-3`",
       "",

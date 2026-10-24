@@ -33,7 +33,7 @@ import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
-import { installChannelPatches } from "../context/create-context.js";
+import { finalizeOpenRequests, installChannelPatches } from "../context/create-context.js";
 
 // Responsibility: one `nuka run --concurrency <n>` worker's own process
 // entry point (src/run/worker-protocol.ts's own argv/envelope contract;
@@ -358,6 +358,9 @@ async function main(): Promise<void> {
 
     processOutcome = allPassed ? "passed" : "failed";
     await tearDownProcessFixtures();
+    // Before this worker ends and the parent writes run.json: each request
+    // still open in this process gets its line (observed.ts).
+    finalizeOpenRequests();
   } finally {
     process.off("disconnect", onParentGone);
     // Closed, not unref'd: a `message` listener that project code adds

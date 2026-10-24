@@ -62,7 +62,7 @@ const step = z.looseObject({
   record_unreadable: z.literal(true).optional(),
   error: z.looseObject({ kind: errorKind.nullable(), message: z.string() }).optional(),
   used: z.array(z.looseObject({ step: z.string(), record: z.string(), result: z.unknown() })).optional(),
-  after_step_end: z.looseObject({ requests: z.number().int(), processes: z.number().int() }).optional(),
+  after_step_end: z.looseObject({ requests: z.number().int(), processes: z.number().int(), http: z.literal("http.jsonl").optional() }).optional(),
 });
 
 const declared = z.looseObject({
