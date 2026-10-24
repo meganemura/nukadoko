@@ -495,6 +495,16 @@
       "en": ["preflight"],
       "ja": "プリフライト",
       "note": "クロスオリジンのリクエストの前にブラウザが送る OPTIONS リクエスト(CORS)"
+    },
+    {
+      "en": ["launcher"],
+      "ja": "ランチャー",
+      "note": "サーバなど別のプロセスを起動するコマンド。Windows の serve.command では、起動して自分は終わるランチャーが残したプロセスに nukadoko の手が届かない"
+    },
+    {
+      "en": ["limit (of a phase)"],
+      "ja": "持ち時間",
+      "note": "world の各段階(build、prepare、serve、setup、url の関数)に与える時間。フィールド名 `timeout_ms` はコードスパンで英語のまま。段階は phase の訳"
     }
   ],
   "keep_english": [

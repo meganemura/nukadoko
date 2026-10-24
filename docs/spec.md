@@ -2587,6 +2587,17 @@ server, starts in a session of its own (`setsid`), as a daemon does;
 nukadoko does not stop such a service.
 On Windows a signal ends only the process it names, so the whole tree
 ends with `taskkill /t /f`.
+`taskkill /t` finds the tree through the process nukadoko started, and
+Windows has no process group to find it otherwise, so once that process
+has exited, a process it left running is out of reach.
+On Windows `serve.command` is therefore the server itself, or a
+launcher that keeps running while the server does, as `npm start` does,
+and never a launcher that starts the server and exits: nukadoko can
+neither find nor stop the server such a launcher leaves behind.
+The launcher's exit is the program's exit: before `ready` answers it
+fails the world, and after that the stop reports `program-exited`.
+A child that a `build` or `prepare` command leaves running on Windows
+is out of reach the same way.
 A program nukadoko started does not outlive nukadoko: when the process
 exits by any path, a signal or a crash included, every program still
 running is killed.

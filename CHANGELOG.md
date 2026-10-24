@@ -270,7 +270,10 @@ just until 0.1.
   timeout_ms }`, `setup: { run, timeout_ms }`, `url: { resolve,
   timeout_ms }`). Every command runs in a process group of its own, and a
   `build` or `prepare` command's group is killed when the command exits,
-  so nothing it left running outlives it. Each phase prints one line on
+  so nothing it left running outlives it; on Windows, which has no
+  process group, `serve.command` is the server itself or a launcher that
+  stays running with it, since nukadoko cannot stop what a launcher that
+  exits leaves behind. Each phase prints one line on
   stderr as it starts, and what `setup` prints reaches stderr and
   `program.log` redacted. A signal while a world starts stops it at once
   and leaves no program running, in `nuka do` and under `--concurrency`
