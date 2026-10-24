@@ -47,7 +47,7 @@ import {
   type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
-import { buildTable, executionOutcome, foldCell, hasRequiredCell, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome } from "../run/verdict-table.js";
+import { buildTable, executionOutcome, foldCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
 import { runTreePass, type TreeTarget } from "../run/tree-pass.js";
@@ -1079,6 +1079,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           ([name, environment]) => !envs.includes(name) && roleIn(conditions, environment.conditions) === "required",
         )?.[0];
       });
+      // An unproven or moved row has no failed execution either, so it gets
+      // one too, whose `do:` judges it again against the same base.
+      if (base !== undefined) rows.push(...judgedRowFindings(table, base.ref, rerunFlags));
       runFindings.push(...rows);
       const fields: RunFields = {
         run_id: runId,

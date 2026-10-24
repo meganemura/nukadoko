@@ -358,7 +358,11 @@ just until 0.1.
   abbreviated hash or a revision expression, which no server fetches); a ref
   that names no commit, a project outside git, a git failure, and a
   `featuresDir` at the project root are refused too. A base feature file
-  that does not parse is the warning `base-feature-unparsed`.
+  that does not parse is the warning `base-feature-unparsed`. Each
+  `unproven` or `moved` row is a `criterion-unproven` or `criterion-moved`
+  finding with its reason, whose `do:` line, `nuka run <file>:<line>
+  --base <ref>`, judges the row again; a removed row, which has no cells,
+  is not a `criterion-without-required-cell` finding.
 
 - **Conditions, and controls that prove a scenario.** An environment in
   `nukadoko.program.ts` declares the switches of its program as

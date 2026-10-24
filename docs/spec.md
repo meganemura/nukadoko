@@ -4268,6 +4268,12 @@ Three are red:
   does not load or check against head, makes the row `moved` with that
   reason, since nothing shows the sentence still means what it meant.
 
+An `unproven` row has a `criterion-unproven` finding and a `moved` row a
+`criterion-moved` finding, on stderr after the count line and in
+`run.json`'s findings, each with the row's reason. Their `do:` line is
+`nuka run <file>:<line> --base <ref>`, with the run's `--env` flags, which
+judges the row again against the same base.
+
 Without `--base` no change is known, so a row is `held`, `proven`, or
 `failed`. The exit code is 1 when a row is red, or when the run failed
 outside every scenario (a hook, a world, a worker): a `BeforeAll` or

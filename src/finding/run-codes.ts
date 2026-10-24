@@ -26,6 +26,18 @@ const RUN_CODES = {
       "nuka steps --json or nuka describe could not read part of a step's contract: its needs, a from entry, or an args or returns schema that JSON Schema cannot represent. The rest is printed, and the command exits 1.",
     fix: "Correct what the message names in the step file; a schema JSON Schema cannot represent, such as z.date(), still runs, and only its published contract is missing.",
   },
+  "criterion-moved": {
+    severity: "failed",
+    description:
+      "Under nuka run --base, an unchanged criterion passes at head, its mapping or its tags changed since the base, and the old world, head's code under the base's feature files and mapping, did not pass it or could not run it: the approved sentence no longer holds under the steps it was approved with.",
+    fix: "Restore what the changed step, helper, or tag did, so the base's steps still pass on head's code, or correct what kept the old world from running, which the message names; a sentence that should now mean something else is edited, which makes it a changed criterion to prove.",
+  },
+  "criterion-unproven": {
+    severity: "failed",
+    description:
+      "Under nuka run --base, a new or changed criterion passes at head, and nothing shows a Then failing where its behaviour is absent: its base cells passed, broke, were flaky, failed in fewer than --proof-runs runs, or did not run, and no control proves it.",
+    fix: "Make a Then claim what the change added, so that it fails on the base's code; tag the scenario @held when the base already has the behaviour; or correct what kept its base cell from running, which the message names.",
+  },
   "criterion-without-required-cell": {
     severity: "failed",
     description:

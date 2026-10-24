@@ -110,6 +110,10 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
 - **`removed`**: the base had the criterion and you dropped it. The
   summary quotes it under "Removed criteria" so the person sees it went.
 
+Each `unproven` and `moved` row is also a `criterion-unproven` or
+`criterion-moved` finding with the reason; its `do:` line judges that row
+again against the same base.
+
 ## The findings
 
 `nuka check` reads the tags against the environments a run would select

@@ -323,6 +323,32 @@ describe("nuka run --base", () => {
     );
   });
 
+  it("gives each unproven and moved row a finding whose do: line judges it again", async () => {
+    const document = JSON.parse(result.stdout) as { findings: { severity: string; code: string; file?: string; line?: number; message: string; do?: string }[] };
+    expect(document.findings.filter((finding) => finding.code.startsWith("criterion-"))).toEqual([
+      {
+        severity: "failed",
+        code: "criterion-moved",
+        file: "features/cart.feature",
+        line: 7,
+        message:
+          'Scenario "three items" is moved: it passes in default, but the mapping changed since the base, and a claim broke at line 9 of the base\'s feature file in the old world in default',
+        do: "nuka run features/cart.feature:7 --base base-branch",
+      },
+      {
+        severity: "failed",
+        code: "criterion-unproven",
+        file: "features/cart.feature",
+        line: 20,
+        message: 'Scenario "four items" is unproven: it passes in default, and nothing shows a Then failing where its behaviour is absent (base default: pass)',
+        do: "nuka run features/cart.feature:20 --base base-branch",
+      },
+    ]);
+    const again = await cli(["run", "--json", ...document.findings.find((finding) => finding.code === "criterion-unproven")!.do!.split(" ").slice(2)]);
+    expect(again.exitCode).toBe(1);
+    expect((JSON.parse(again.stdout) as { table: { rows: Row[] } }).table.rows.filter((row) => row.line === 20).map((row) => row.verdict)).toEqual(["unproven"]);
+  }, 60_000);
+
   it("refuses --since, naming --base", async () => {
     const refused = await cli(["run", "--since", "base-branch"]);
     expect(refused.exitCode).toBe(2);
@@ -440,6 +466,9 @@ describe("nuka run --base, when the base's steps no longer load against head", (
     // stderr says it once, where the count line shows the red rows.
     const notRun = result.stderr.split("\n").filter((line) => line.startsWith("old default  not run: "));
     expect(notRun).toEqual([`old default  not run: ${rows[0]!.cells.find((cell) => cell.world === "old")!.reason}`]);
+    // And each moved row is a finding after the count line, with a do: line.
+    expect(result.stderr).toContain("failed\tcriterion-moved\tfeatures/cart.feature:3\tScenario \"an empty cart\" is moved: it passes in default, but the mapping changed since the base, and it did not run in the old world in default: ");
+    expect(result.stderr).toContain("  do: nuka run features/cart.feature:3 --base base-branch\n");
   });
 });
 

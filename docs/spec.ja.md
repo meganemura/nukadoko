@@ -3407,6 +3407,10 @@ run を赤にすることはありません。
   基点の対応づけが head に対して読み込めないか check を通らないために走らなかった old のセルも、その理由を添えて行を `moved` にします。
   文が今も同じ意味であることを示すものが無いからです。
 
+`unproven` の行は `criterion-unproven` の finding を、`moved` の行は `criterion-moved` の finding を持ちます。
+どちらも stderr の数の行のあとと `run.json` の findings に出て、行の理由を述べます。
+その `do:` 行は、run の `--env` を付けた `nuka run <file>:<line> --base <ref>` で、同じ基点に対してその行をもう一度断定します。
+
 `--base` が無ければ変化は分からないので、行は `held`、`proven`、`failed` のどれかです。
 行が赤のとき、または run がどの scenario の外でも失敗したとき(hook、world、worker)、終了コードは 1 です。
 environment の回で失敗した `BeforeAll` や `AfterAll` は、どの `--concurrency` でも run を失敗にし、証明の回の worker で失敗したものは失敗にしません。

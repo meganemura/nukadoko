@@ -10,6 +10,7 @@ import {
   foldCell,
   hasRequiredCell,
   judgeRow,
+  judgedRowFindings,
   leftOutText,
   needsProofRun,
   plannedWorldCells,
@@ -583,5 +584,27 @@ describe("judgeRow under --base", () => {
       verdict: "unproven",
       reason: "passes in default, and no world where its behaviour is absent ran it, so nothing shows a Then failing without the change",
     });
+  });
+});
+
+describe("judgedRowFindings", () => {
+  const verdict = gs.sampledFrom<RunRowVerdict>(["held", "proven", "removed", "failed", "unproven", "moved"]);
+
+  it("gives one failed finding per unproven or moved row, whose do: line judges that row again against the same base", () =>
+    hegel.test((tc) => {
+      const verdicts = tc.draw(gs.arrays(verdict, { maxSize: 6 }));
+      const rows = verdicts.map((word, index) => ({ feature: "features/a b.feature", line: index + 3, name: `row ${index}`, verdict: word, reason: "passes in default, and more", cells: [] }));
+      const findings = judgedRowFindings({ rows } as unknown as Parameters<typeof judgedRowFindings>[0], "origin/main", ["--env", "on"]);
+      const red = rows.filter((row) => row.verdict === "unproven" || row.verdict === "moved");
+      expect(findings.map((finding) => [finding.severity, finding.code, finding.line])).toEqual(red.map((row) => ["failed", `criterion-${row.verdict}`, row.line]));
+      for (const [index, finding] of findings.entries()) {
+        expect(finding.message).toBe(`Scenario "${red[index]!.name}" is ${red[index]!.verdict}: it passes in default, and more`);
+        expect(finding.do).toBe(`nuka run 'features/a b.feature:${red[index]!.line}' --base origin/main --env on`);
+      }
+    }));
+
+  it("leaves a removed row, which has no cells, out of the rows without a required cell", () => {
+    const rows = [{ feature: "f.feature", line: 3, name: "gone", change: "removed", conditions: [], cells: [], verdict: "removed", reason: "", lines: [] }];
+    expect(rowsWithoutRequiredCell({ rows } as unknown as Parameters<typeof rowsWithoutRequiredCell>[0], [{ name: "default", conditions: undefined }], () => undefined)).toEqual([]);
   });
 });

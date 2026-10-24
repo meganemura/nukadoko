@@ -323,7 +323,8 @@ export function rowsWithoutRequiredCell(
 ): Finding[] {
   const described = environments.map((environment) => `${environment.name} (${describeConditions(environment.conditions)})`).join("; ");
   return table.rows.flatMap((row) => {
-    if (row.cells.some((cell) => cell.role === "required")) return [];
+    // A removed row has no cells at all, and is green.
+    if (row.verdict === "removed" || row.cells.some((cell) => cell.role === "required")) return [];
     const { conditions } = readCriterionTags(row.conditions);
     const other = elsewhere(row.conditions);
     return [
@@ -336,6 +337,26 @@ export function rowsWithoutRequiredCell(
           `Scenario "${row.name}" needs ${conditions.map(conditionTagText).join(" ")}, and no environment of this run meets ${conditions.length === 1 ? "it" : "all of them"}: ${described}. ` +
           "Its cells are all controls, so nothing shows that it holds",
         do: (other === undefined ? ["nuka", "check", row.feature] : ["nuka", "run", `${row.feature}:${row.line}`, "--env", other]).map(shellWord).join(" "),
+      },
+    ];
+  });
+}
+
+/** A finding for each `unproven` and `moved` row, which has no failed
+ * execution to carry one: the row's reason, and a `do:` line that judges
+ * the row again against the same base, in the environments the run named.
+ * Pure. */
+export function judgedRowFindings(table: Pick<RunTable, "rows">, base: string, envFlags: readonly string[]): Finding[] {
+  return table.rows.flatMap((row): Finding[] => {
+    if (row.verdict !== "unproven" && row.verdict !== "moved") return [];
+    return [
+      {
+        severity: "failed",
+        code: row.verdict === "unproven" ? "criterion-unproven" : "criterion-moved",
+        file: row.feature,
+        line: row.line,
+        message: `Scenario "${row.name}" is ${row.verdict}: it ${row.reason}`,
+        do: ["nuka", "run", `${row.feature}:${row.line}`, "--base", base, ...envFlags].map(shellWord).join(" "),
       },
     ];
   });
