@@ -3334,7 +3334,9 @@ stderr の件数の行は必須のセルだけを数えます。
 
 表は `run.json` の `table` で、run サマリはそれで始まります。
 受け入れ基準ごとに 1 行、world と environment ごとに 1 列(見出しにはその environment が宣言する condition が続きます)で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
-Allure の result と messages ストリームは、各実行の行の断定とセルの役割を持ちます(「Allure results」と「Messages stream」を参照)。
+ゲートは `nuka run` の終了コードで、対照がそれを赤にすることはありません。
+Allure の result は各対照を走った結果のままの状態で、対照と分かる形で残すので、失敗した対照はそこでは設計どおり失敗した result です。
+JUnit を読む CI がゲートにする messages ストリームは、対照を外します(「Allure results」と「Messages stream」を参照)。
 
 ### 単体 step(agent の経路)
 
@@ -4431,9 +4433,13 @@ Allure はハッシュの計算前に `excluded` な parameter を落として�
 `hidden` は parameter を UI から外すだけです。
 Scenario Outline の行は、Examples の各セルを可視 parameter として追加し、これも `historyId` に加わります。
 可視セルは以前の隠された行 parameter を置き換え、行を区別します。
-result は、run の表でのその行の断定である `verdict` と、そのセルの役割である `role` も持ち、どちらも `excluded` です(「断定」を参照)。
-失敗した対照は走ったとおり `failed` と表示され、この 2 つが、run がそれを証明として読んだことを述べます。
-run ごとに変わる断定は 1 つのテストの結果が変わることなので、どちらも `historyId` には加わりません。
+result は、run の表でのその行の断定である `verdict` を `excluded` の parameter として、そのセルの役割である `role` を label として持ちます(「断定」を参照)。
+対照の result の名前は `<scenario> (control)` です。
+`fullName` は名前だけを保つので、その履歴は分かれません。
+失敗した対照は、設計どおり走ったとおり `failed` と表示されます。
+その失敗こそがその行を証明するもので、`verdict` が、run がそう読んだことを述べます。
+run ごとに変わる断定は 1 つのテストの結果が変わることなので、`historyId` には加わりません。
+CI の job がゲートにするのは、対照が赤にすることのない `nuka run` の終了コードで、Allure の result ではありません。
 
 2 つの scenario が Gherkin の名前を共有することがあります(たいていは 1 つの Scenario Outline の 2 つの行です)。
 ハッシュへの入力がこれ以上なければ、両方が同じ `historyId` を使い、2 つ目が 1 つ目の scenario の history に入ります。
@@ -4636,10 +4642,13 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   そのため両方の形式が、その step を直前の step の終了時刻に幅ゼロで置きます。
   最初の step なら scenario の `started_at` に置きます。
   この基準点は `record.json` だけから読むので、run の後に record から作ったレポートも同じタイムラインになります。
+- ストリームは、証明の実行も含めて、対照のセルの実行をすべて外します(「断定」を参照)。
+  対照はゲートするテストではなく証拠です。
+  失敗した対照はその行を証明するもので、JUnit のレポートはそれを green の run の失敗として数えてしまいます。
+  `run.json`、run サマリ、Allure の result はそれらを残します。
 - 各 test case は、media type が `application/vnd.nukadoko.verdict+json` の `verdict.json` 添付を、最後の step の後に `testStepId` なしで持ちます。
-  その中身は、行の `verdict` と `reason`、セルの `role` です(「断定」を参照)。
+  その中身は、行の `verdict` と `reason` です(「断定」を参照)。
   `TestCaseFinished` は実行がどう終わったかを述べ、断定のためのフィールドを持ちません。
-  そして失敗した対照は、run が証明として読んだところで赤く終わります。
 - `testRunFinished.success` は常に run の断定と一致します。
   BeforeAll/AfterAll はこのストリームに書き込む場所を持ちません(汲み取れる run スコープの record が存在しないからです)。
   そのため run スコープのフックが失敗した run は、どの scenario の中にも現れず、ここにしか現れません。

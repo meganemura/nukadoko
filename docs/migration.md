@@ -441,7 +441,11 @@ Facts a migration runs into:
 - `nuka run` writes no report of its own. A formatter or a JUnit-based CI
   that read cucumber messages renders them after each run with
   `nuka report --format messages --out <path>`, and `--format allure`
-  does the same for Allure.
+  does the same for Allure. A scenario tagged with a condition runs as a
+  control where the condition does not hold. The messages stream leaves
+  every control out, so JUnit reads a green run as green; Allure keeps
+  each one, named `<scenario> (control)`, and shows one that failed as a
+  failed result by design. Gate CI on `nuka run`'s exit code.
 - The walk for `.feature` files skips `node_modules` and every directory
   whose name starts with `.`, at any depth, and says nothing about it.
 - A glue loop that slept and tried again becomes `poll` on the fixture

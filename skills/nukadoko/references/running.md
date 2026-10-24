@@ -185,6 +185,8 @@ you iterate, and `npx allure generate` and `npx allure open` serve a
 finished one. Nukadoko never renders HTML itself. The messages stream is
 for the opposite reason: feeding a suite's existing cucumber-js-era
 formatter or JUnit-based CI while it migrates, not for reading by hand.
+It leaves out every control, so JUnit reads a green run as green; Allure
+keeps each one as `<scenario> (control)`, failed when it failed.
 
 Rendering the same run again replaces what its last render wrote under
 `<stateDir>/export/`. Those files leave with their run: `nuka run` keeps the

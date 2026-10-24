@@ -1241,18 +1241,15 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
     { name: "environment", value: record.environment },
   ];
 
-  // The verdict table's word for the row and the cell's role, beside the
-  // execution's own status: a control that failed shows failed, and these
-  // say that the run read it as proof. Excluded from historyId, since a
-  // verdict changing between runs is a change of one test's outcome.
+  // The verdict table's word for the row, beside the execution's own
+  // status: a control that failed shows failed, as it ran, and this says
+  // the run read it as proof. Excluded from historyId, since a verdict
+  // changing between runs is a change of one test's outcome. The cell's
+  // role is a label and, for a control, part of the name, so a reader of
+  // a failed result sees it is a control before opening it.
   const contextParameters: MappedParameter[] = [
     ...(record.target_version !== undefined ? [{ name: "target_version", value: record.target_version, excluded: true }] : []),
-    ...(verdict !== undefined
-      ? [
-          { name: "verdict", value: verdict.verdict, excluded: true },
-          { name: "role", value: verdict.role, excluded: true },
-        ]
-      : []),
+    ...(verdict !== undefined ? [{ name: "verdict", value: verdict.verdict, excluded: true }] : []),
   ];
 
   // A step's own declared label/link (`ctx.declare`-style facade calls from
@@ -1272,6 +1269,7 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
     { name: "package", value: buildPackageLabelValue(projectName, posixPath) },
     ...resolveTagLabels(pickle),
     { name: "env", value: record.environment },
+    ...(verdict !== undefined ? [{ name: "role", value: verdict.role }] : []),
     ...declaredLabels,
     // This scenario's own outcome, direct — the first step (or, failing
     // that, hook) whose own failure resolved to a classified `ErrorKind`
@@ -1299,7 +1297,9 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
   }
 
   return {
-    name: pickle.name,
+    // fullName, which historyId is built from, keeps the bare name, so a
+    // scenario's history does not split when its cell becomes a control.
+    name: verdict?.role === "control" ? `${pickle.name} (control)` : pickle.name,
     featureName,
     description: resolveDescription(gherkinDocument, scenario),
     // A passed scenario with a step whose record could not be read is not

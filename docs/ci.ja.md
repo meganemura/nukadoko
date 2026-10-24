@@ -266,6 +266,10 @@ jobs:
   `@with:checkout_v2` の tag を付けた scenario は、フラグが入っているところで必須、切れているところで対照で、そこで Then が成り立たなければ、その行は `proven` です。
   2 つの job が言えるのは、それぞれの側が green だったことです。
   1 回の run は、scenario が 2 つを見分けたことを言えます。
+  job は、対照が赤にすることのない `nuka run` の終了コードでゲートします。
+  `nuka report --format messages` から作る JUnit のレポートは対照を外すので、終了コードと一致します。
+  Allure のレポートは、失敗した対照を `<scenario> (control)` という名前の失敗した result として、設計どおり示します。
+  その失敗こそが証明だからです。
 - **ランナー自身の速さに合わせた `retention.runs`。**
   既定は最新 20 回の run を残します。
   merge のたびと毎晩に走る永続ランナーは数日で 20 に達し、`nuka report` と `nuka do --use` は保持された run しか読みません。

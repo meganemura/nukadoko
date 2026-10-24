@@ -321,7 +321,12 @@ Five things the workflow above leaves to the team, each small.
   scenario on both sides. A scenario tagged `@with:checkout_v2` is
   required where the flag is on and a control where it is off, and its row
   is `proven` when its Then breaks there. Two jobs can say that each side
-  was green; one run can say that the scenario told them apart.
+  was green; one run can say that the scenario told them apart. The job
+  gates on `nuka run`'s exit code, which a control never turns red. A
+  JUnit report built from `nuka report --format messages` leaves the
+  controls out and agrees with it; an Allure report shows a control that
+  failed as a failed result named `<scenario> (control)`, by design,
+  since that failure is the proof.
 - **`retention.runs` sized to the runner's own pace.** The default keeps
   the newest 20 runs. A persistent runner that runs every merge and every
   night reaches 20 in days, and `nuka report` and `nuka do --use` read only

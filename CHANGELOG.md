@@ -346,10 +346,15 @@ just until 0.1.
   "{condition.banner}" }`), and the switch and the declaration cannot
   disagree. Each table cell names the conditions its role came from, and
   the summary's column heading shows each environment's.
-  Each Allure result carries the row's `verdict` and the cell's `role` as
-  `excluded` parameters, and each messages test case a `verdict.json`
-  attachment (`application/vnd.nukadoko.verdict+json`), since a control
-  that failed shows red in both. `examples/acceptance/http-api` runs one
+  The messages stream, which a JUnit-reading CI gates on, leaves out
+  every control execution, proof runs included, so a green run reads
+  green there, and each test case carries a `verdict.json` attachment
+  (`application/vnd.nukadoko.verdict+json`) with its row's verdict. Each
+  Allure result keeps the status it ran to, with the row's `verdict` as
+  an `excluded` parameter and the cell's `role` as a label, and a
+  control's is named `<scenario> (control)`: a control that failed is a
+  failed result there by design, and a CI gates on `nuka run`'s exit
+  code. `examples/acceptance/http-api` runs one
   flag-gated scenario that a control proves.
 
 - **`nukadoko.program.ts` builds, prepares, starts, and stops the program

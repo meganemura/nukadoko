@@ -798,6 +798,8 @@ step record が後から何を得ても、2 つ目の対応表を覚える必要
 `nuka report --format messages` は同じ run の cucumber-messages(NDJSON)ストリームを書くので、移行するチームの既存フォーマッタと JUnit ベースの CI をそのまま動かし続けます。
 これは単なる主張ではなく、自前のストリームを `@cucumber/junit-xml-formatter` に通して確認済みです。
 この formatter は test case の名前を scenario から付けるので、2 つの environment で走らせた素の Scenario は、そこでは同じ名前の 2 つの test case になります。
+対照(condition が成り立たないところで走らせた scenario)はストリームから外れるので、JUnit は green の run を green と読みます。
+Allure は対照を `<scenario> (control)` という名前で、走った結果の状態のまま残します。
 [Allure results](docs/spec.ja.md#allure-results) と [Messages stream](docs/spec.ja.md#messages-stream) を参照してください。
 
 `nuka run` はどちらも書きません。

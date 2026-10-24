@@ -476,9 +476,13 @@ This part does not change release to release.
   `started_at` and `finished_at`.
 
 - **The Allure results and the messages stream carry the verdict.** Each
-  Allure result has two more parameters, `verdict` and `role`, both
-  `excluded`, so `historyId` does not change. Each messages test case
-  has one more attachment, `verdict.json`, of media type
+  Allure result has one more parameter, `verdict`, `excluded`, so
+  `historyId` does not change, and one more label, `role`; a control's
+  result is named `<scenario> (control)`, with `fullName` unchanged. A
+  control that failed is a failed Allure result by design: gate CI on
+  `nuka run`'s exit code. The messages stream leaves out every control
+  execution, so a JUnit report counts required executions only, and each
+  test case has one more attachment, `verdict.json`, of media type
   `application/vnd.nukadoko.verdict+json`. A consumer that counts a test
   case's attachments counts one more.
 

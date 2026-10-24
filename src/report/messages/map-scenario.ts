@@ -176,10 +176,10 @@ export const CLAIM_BROKEN_EXCEPTION = "nukadoko.ClaimBroken";
 export const CLAIMS_MEDIA_TYPE = "application/vnd.nukadoko.claims+json";
 
 /** The media type of the test case attachment that carries what the
- * verdict table says of the execution (src/report/scenario-verdict.ts):
+ * verdict table says of the execution's row (src/report/scenario-verdict.ts):
  * the protocol has no field for a verdict, and `TestCaseFinished` says
- * only how the execution ended, which for a control that failed is red
- * where the run read it as proof. */
+ * only how the execution ended. The stream holds required executions only
+ * (src/cli/report.ts), so the cell's role is not carried. */
 export const VERDICT_MEDIA_TYPE = "application/vnd.nukadoko.verdict+json";
 
 /** The test case attachment for `verdict`, with no test step: it is the
@@ -188,7 +188,7 @@ export function verdictAttachment(verdict: ScenarioVerdict, testCaseStartedId: s
   return {
     kind: "built",
     attachment: {
-      body: JSON.stringify({ verdict: verdict.verdict, reason: verdict.reason, role: verdict.role }),
+      body: JSON.stringify({ verdict: verdict.verdict, reason: verdict.reason }),
       contentEncoding: AttachmentContentEncoding.IDENTITY,
       mediaType: VERDICT_MEDIA_TYPE,
       fileName: "verdict.json",

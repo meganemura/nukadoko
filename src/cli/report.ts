@@ -142,6 +142,13 @@ export async function runReport(options: RunReportOptions): Promise<number> {
     const run = loaded.run;
     const problems: string[] = [...run.problems];
     if (format === "messages") {
+      // The messages stream is what a JUnit-reading CI gates on, and a
+      // control is evidence, not a test that gates: the one that failed is
+      // the proof a green run rests on, and as a test case it would read as
+      // a failure. So the stream leaves out every control execution, proof
+      // runs included; run.json, the summary, and the Allure results keep
+      // them.
+      const gating = run.scenarios.filter((scenario) => scenario.verdict?.role !== "control");
       const lines: string[] = [];
       writeMessagesStream(
         {
@@ -154,8 +161,8 @@ export async function runReport(options: RunReportOptions): Promise<number> {
           finishedAt: run.document.finished_at,
           success: run.document.verdict === "passed",
         },
-        run.features.map((feature) => ({ ...feature, relativeFeaturePath: feature.relativePath, pickles: selectedPickles(run, feature.relativePath) })),
-        run.scenarios.map((scenario) => ({ record: scenario.record, pickle: scenario.pickle, stepRecords: scenario.stepRecords, verdict: scenario.verdict })),
+        run.features.map((feature) => ({ ...feature, relativeFeaturePath: feature.relativePath, pickles: selectedPickles(run, feature.relativePath, gating) })),
+        gating.map((scenario) => ({ record: scenario.record, pickle: scenario.pickle, stepRecords: scenario.stepRecords, verdict: scenario.verdict })),
       );
       return { kind: "text", runId: run.document.run_id, ownRun: run.ownRun, text: lines.join(""), problems };
     }
@@ -281,10 +288,10 @@ type ReportOutput =
       readonly write: (dir: string, onWrite: (absolutePath: string) => void) => void;
     };
 
-/** The pickles of `relativePath` the run selected, in file order: a `:line`
- * run selected fewer than the file holds. */
-function selectedPickles(run: LoadedRun, relativePath: string) {
-  const selected = new Set(run.scenarios.filter((scenario) => scenario.feature.relativePath === relativePath).map((scenario) => scenario.pickle));
+/** The pickles of `relativePath` that `scenarios` executed, in file order:
+ * a `:line` run selected fewer than the file holds. */
+function selectedPickles(run: LoadedRun, relativePath: string, scenarios: LoadedRun["scenarios"]) {
+  const selected = new Set(scenarios.filter((scenario) => scenario.feature.relativePath === relativePath).map((scenario) => scenario.pickle));
   return run.features.find((feature) => feature.relativePath === relativePath)!.pickles.filter((pickle) => selected.has(pickle));
 }
 

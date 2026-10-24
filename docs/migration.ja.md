@@ -339,6 +339,10 @@ pattern の無い step も完全な語彙であり、`nuka do` で実行でき�
 - `nuka run` は自分のレポートを書きません。
   cucumber messages を読んでいたフォーマッタや JUnit ベースの CI は、各 run のあとに `nuka report --format messages --out <path>` で描きます。
   Allure なら `--format allure` で同じことをします。
+  condition の tag を付けた scenario は、その condition が成り立たないところで対照として走ります。
+  messages ストリームは対照をすべて外すので、JUnit は green の run を green と読みます。
+  Allure は各対照を `<scenario> (control)` という名前で残し、失敗したものを設計どおり失敗した result として示します。
+  CI は `nuka run` の終了コードでゲートしてください。
 - `.feature` ファイルを探す走査は、どの深さでも `node_modules` と `.` で始まる名前のディレクトリを飛ばし、そのことを何も言いません。
 - 待ってからやり直していた glue のループは、fixture の束の `poll` になります。
   その `timeout` は呼び出し全体の予算です(docs/spec.ja.md の「Context API」)。

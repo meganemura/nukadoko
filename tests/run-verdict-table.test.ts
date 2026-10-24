@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { JUnitXmlPrinter } from "@cucumber/junit-xml-formatter";
+import { parseEnvelope } from "@cucumber/messages";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
@@ -182,7 +184,7 @@ describe("nuka run: the verdict table", () => {
     expect(document.table.rows.map((row: { verdict: string }) => row.verdict)).toEqual(["held"]);
   });
 
-  it("carries each execution's row verdict and cell role in the Allure results and the messages stream", async () => {
+  it("keeps each control in the Allure results with its own status, marked as a control, and carries the row's verdict", async () => {
     const rootDir = await copyFixtureToTempDir("run-verdict-project");
     try {
       const cli = (argv: string[], stdout = createCaptureSink()) => runCli(argv, { rootDir, stdout, stderr: createCaptureSink() });
@@ -190,31 +192,68 @@ describe("nuka run: the verdict table", () => {
 
       expect(await cli(["report", "--format", "allure"])).toBe(0);
       const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
-      const results = readdirSync(resultsDir)
+      type Result = { status: string; name: string; fullName: string; historyId: string; labels: { name: string; value: string }[]; parameters: { name: string; value: string; excluded?: boolean }[] };
+      const read = readdirSync(resultsDir)
         .filter((name) => name.endsWith("-result.json"))
-        .map((name) => JSON.parse(readFileSync(path.join(resultsDir, name), "utf8")) as { status: string; parameters: { name: string; value: string; excluded?: boolean }[] })
-        .map((result) => [result.status, ...result.parameters.filter((parameter) => ["environment", "verdict", "role"].includes(parameter.name)).map((parameter) => `${parameter.name}=${parameter.value}${parameter.excluded === true ? " (excluded)" : ""}`)])
+        .map((name) => JSON.parse(readFileSync(path.join(resultsDir, name), "utf8")) as Result);
+      const results = read
+        .map((result) => [
+          result.status,
+          result.name,
+          ...result.labels.filter((label) => label.name === "role").map((label) => `role=${label.value}`),
+          ...result.parameters.filter((parameter) => ["environment", "verdict", "role"].includes(parameter.name)).map((parameter) => `${parameter.name}=${parameter.value}${parameter.excluded === true ? " (excluded)" : ""}`),
+        ])
         .sort((a, b) => a.join().localeCompare(b.join()));
       expect(results).toEqual([
-        ["failed", "verdict=proven (excluded)", "role=control (excluded)", "environment=flag-off"],
-        ["failed", "verdict=proven (excluded)", "role=control (excluded)", "environment=flag-off"],
-        ["passed", "verdict=proven (excluded)", "role=required (excluded)", "environment=flag-on"],
+        ["failed", "the banner is on (control)", "role=control", "verdict=proven (excluded)", "environment=flag-off"],
+        ["failed", "the banner is on (control)", "role=control", "verdict=proven (excluded)", "environment=flag-off"],
+        ["passed", "the banner is on", "role=required", "verdict=proven (excluded)", "environment=flag-on"],
       ]);
+      // The name is not identity: fullName keeps the bare name for every
+      // cell, and the two proof runs of one control share a history.
+      expect(new Set(read.map((result) => result.fullName)).size).toBe(1);
+      expect(new Set(read.filter((result) => result.name.endsWith("(control)")).map((result) => result.historyId)).size).toBe(1);
+    } finally {
+      await removeTempDir(rootDir);
+    }
+  });
 
+  it("leaves every control execution out of the messages stream, so JUnit reads a green run with proven rows as green", async () => {
+    const rootDir = await copyFixtureToTempDir("run-verdict-project");
+    try {
+      const cli = (argv: string[], stdout = createCaptureSink()) => runCli(argv, { rootDir, stdout, stderr: createCaptureSink() });
+      expect(await cli(["run"])).toBe(0);
       const out = createCaptureSink();
       expect(await cli(["report", "--format", "messages"], out)).toBe(0);
-      const envelopes = out
+      const lines = out
         .text()
         .split("\n")
-        .filter((line) => line.length > 0)
-        .map((line) => JSON.parse(line) as { attachment?: { mediaType: string; body: string; testStepId?: string; fileName: string } });
+        .filter((line) => line.length > 0);
+      const envelopes = lines.map(
+        (line) =>
+          JSON.parse(line) as {
+            attachment?: { mediaType: string; body: string; testStepId?: string; fileName: string };
+            testCaseStarted?: unknown;
+            pickle?: { name: string };
+            testRunFinished?: { success: boolean };
+          },
+      );
+      // 8 executions ran, 3 of them controls (two proof runs each for two
+      // rows, and one passing control), which leaves the 5 required ones.
+      expect(envelopes.filter((envelope) => envelope.testCaseStarted !== undefined)).toHaveLength(5);
       const verdicts = envelopes.flatMap((envelope) => (envelope.attachment?.mediaType === "application/vnd.nukadoko.verdict+json" ? [envelope.attachment] : []));
-      expect(verdicts.map((attachment) => [attachment.fileName, attachment.testStepId, JSON.parse(attachment.body).role])).toEqual([
-        ["verdict.json", undefined, "control"],
-        ["verdict.json", undefined, "control"],
-        ["verdict.json", undefined, "required"],
-      ]);
-      expect(JSON.parse(verdicts[0]!.body)).toEqual({ verdict: "proven", reason: table(2).rows[0]!.reason, role: "control" });
+      expect(verdicts.map((attachment) => [attachment.fileName, attachment.testStepId])).toEqual(Array.from({ length: 5 }, () => ["verdict.json", undefined]));
+      // The required cell of a proven row still says the row is proven.
+      expect(verdicts.map((attachment) => JSON.parse(attachment.body))).toContainEqual({ verdict: "proven", reason: table(2).rows[0]!.reason });
+      expect(envelopes.at(-1)!.testRunFinished?.success).toBe(true);
+      let xml = "";
+      const printer = new JUnitXmlPrinter({}, (content) => {
+        xml += content;
+      });
+      for (const line of lines) printer.update(parseEnvelope(line));
+      expect(xml).toMatch(/<testsuite [^>]*tests="5"/);
+      expect(xml).toMatch(/<testsuite [^>]*failures="0"/);
+      expect(xml).not.toContain("<failure");
     } finally {
       await removeTempDir(rootDir);
     }

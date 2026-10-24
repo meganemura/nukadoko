@@ -404,8 +404,12 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `summary.md` を解析していたジョブは、代わりに run.json の `table` を読み、所要時間は各 scenario のエントリの `started_at` と `finished_at` から読みます。
 
 - **Allure の result と messages ストリームは断定を持ちます。**
-  Allure の各 result は、`verdict` と `role` の 2 つの parameter を新たに持ちます。
-  どちらも `excluded` なので、`historyId` は変わりません。
+  Allure の各 result は、parameter `verdict` を新たに持ちます。
+  `excluded` なので、`historyId` は変わりません。
+  label `role` も 1 つ多く持ち、対照の result の名前は `<scenario> (control)` で、`fullName` は変わりません。
+  失敗した対照は、設計どおり失敗した Allure の result です。
+  CI は `nuka run` の終了コードでゲートしてください。
+  messages ストリームは対照の実行をすべて外すので、JUnit のレポートは必須の実行だけを数えます。
   messages の各 test case は、media type が `application/vnd.nukadoko.verdict+json` の `verdict.json` 添付を 1 つ多く持ちます。
   test case の添付を数える消費者は、1 つ多く数えます。
 

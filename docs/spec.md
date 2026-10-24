@@ -4170,8 +4170,11 @@ The table is `run.json`'s `table`, and the run summary opens with it: a
 row per criterion, a column per world and environment, headed with the
 conditions that environment declares, and under it one
 line for each red row that says why, with where its execution stopped.
-The Allure results and the messages stream carry each execution's row
-verdict and cell role (see "Allure results" and "Messages stream").
+`nuka run`'s exit code is the gate, and a control never turns it red.
+The Allure results keep each control with the status it ran to, marked
+as a control, so a control that failed is a failed result there by
+design; the messages stream, which a JUnit-reading CI gates on, leaves
+the controls out (see "Allure results" and "Messages stream").
 
 ### Single steps (the agent path)
 
@@ -5601,8 +5604,10 @@ The one hidden parameter every scenario result carries for identity is `nukadoko
 It is `mode: "hidden"` rather than `excluded: true` on purpose: Allure drops an `excluded` parameter before hashing it, which would defeat the whole point, where `hidden` only keeps a parameter out of the UI.
 A Scenario Outline row adds each Examples cell as a visible parameter, which also feeds `historyId`.
 The visible cells replace the former hidden row parameter and distinguish rows.
-A result also carries `verdict`, its row's verdict in the run's table, and `role`, its cell's, both `excluded` (see "Verdicts").
-A control that failed shows `failed`, as it ran, and these two say the run read it as proof; a verdict that changes between runs is one test's outcome changing, so neither feeds `historyId`.
+A result also carries `verdict`, its row's verdict in the run's table, as an `excluded` parameter, and its cell's `role` as a label (see "Verdicts").
+A control's result is named `<scenario> (control)`; `fullName` keeps the bare name, so its history does not split.
+A control that failed shows `failed`, as it ran, by design: that failure is what proves its row, and `verdict` says the run read it so. A verdict that changes between runs is one test's outcome changing, so it does not feed `historyId`.
+A CI job gates on `nuka run`'s exit code, which a control never turns red, and not on the Allure results.
 
 Two scenarios can share a Gherkin name, most often as two rows of one Scenario Outline. Without more input to the hash, both would use the same `historyId`, and the second would enter the first scenario's history.
 `nukadoko.scenario.steps` closes that gap for a plain scenario, and an Outline row's own Examples cells close it for a row.
@@ -5786,12 +5791,16 @@ manifest, so retention and `nuka clean` remove it with the run.
   the scenario's `started_at` when it comes first. That anchor is read from
   `record.json` alone, so a report built from the record after the run
   gives the same timeline.
+- The stream leaves out every execution of a control cell, proof runs
+  included (see "Verdicts"). A control is evidence, not a test that
+  gates: the one that failed is what proves its row, and a JUnit report
+  would count it as a failure of a green run. `run.json`, the run
+  summary, and the Allure results keep them.
 - Each test case carries a `verdict.json` attachment of media type
   `application/vnd.nukadoko.verdict+json`, after its last step and with
-  no `testStepId`: its row's `verdict` and `reason` and its cell's `role`
-  (see "Verdicts"). `TestCaseFinished` says how the execution ended and
-  has no field for a verdict, and a control that failed ends red where the
-  run read it as proof.
+  no `testStepId`: its row's `verdict` and `reason` (see "Verdicts").
+  `TestCaseFinished` says how the execution ended and has no field for a
+  verdict.
 - `testRunFinished.success` always matches the run's verdict.
   BeforeAll/AfterAll have no place to write into this stream (no
   run-scope record exists to draw from), so a run whose
