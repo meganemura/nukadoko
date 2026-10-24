@@ -2704,8 +2704,8 @@ its scenario record's id, so either record leads to the other.
   calls, and a compat step's function: the executor opens a scope around
   it, and nukadoko patches `fetch`, `node:http`, `node:https`,
   `node:child_process`, `net.Socket#connect`, `write`, and `end`, the
-  `node:fs` writes, and `worker_threads.Worker`, once per process, to
-  record into that scope.
+  `node:fs` writes, `worker_threads.Worker`, and `dgram.Socket#send`,
+  once per process, to record into that scope.
   Outside a step the patches call the original and record nothing, and
   every patched function keeps the original's `name`, `length`, promise
   form (`util.promisify` of `exec` and `execFile`), and synchronous
@@ -2908,7 +2908,10 @@ its scenario record's id, so either record leads to the other.
   connection opened before the step`, once per connection; or what an
   upgraded connection or a CONNECT tunnel carries after its handshake,
   whose request is a line of its own, `traffic after the upgrade of
-  <url>` or `traffic through the CONNECT tunnel to <host>:<port>`. A
+  <url>` or `traffic through the CONNECT tunnel to <host>:<port>`; or
+  a UDP datagram the step sent through `node:dgram`, which has no
+  response to record, `send to <host>:<port>` once per address, the
+  connected peer's for a connected socket. A
   connection is accounted for when nukadoko's own I/O opened it, or when
   it carries a recorded request from `fetch`, `node:http`,
   `node:https`, the `request` fixture, or the browser, whenever its

@@ -1,4 +1,5 @@
 import { exec, execFile, execFileSync, execSync, spawn, spawnSync } from "node:child_process";
+import dgram from "node:dgram";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -257,6 +258,44 @@ describe("unmeasured actions", () => {
       { kind: "child_process", detail: "execSync node with 2 arguments" },
       { kind: "child_process", detail: "execFileSync node with 2 arguments" },
       { kind: "child_process", detail: "execFileSync node with 3 arguments" },
+    ]);
+  });
+
+  it("names each address a step sent a UDP datagram to once, and no send that threw or ran outside a step", async () => {
+    const receiver = dgram.createSocket("udp4");
+    const received: string[] = [];
+    receiver.on("message", (message) => received.push(String(message)));
+    await new Promise<void>((resolve) => receiver.bind(0, "127.0.0.1", resolve));
+    const port = receiver.address().port;
+    const other = dgram.createSocket("udp4");
+    other.on("message", (message) => received.push(String(message)));
+    await new Promise<void>((resolve) => other.bind(0, "127.0.0.1", resolve));
+    const otherPort = other.address().port;
+    const sender = dgram.createSocket("udp4");
+    const connected = dgram.createSocket("udp4");
+    await new Promise<void>((resolve) => connected.connect(otherPort, "127.0.0.1", resolve));
+    const sent = (socket: dgram.Socket, ...args: unknown[]): Promise<void> =>
+      new Promise((resolve, reject) => (socket.send as (...a: unknown[]) => void)(...args, (error: Error | null) => (error ? reject(error) : resolve())));
+    await sent(sender, "outside", port, "127.0.0.1");
+    const refused = await inStep(async () => {
+      await sent(sender, "one", port, "127.0.0.1");
+      await sent(sender, "two", port, "127.0.0.1");
+      await sent(sender, Buffer.from("xrangex"), 1, 5, port);
+      await sent(connected, "connected");
+      try {
+        sender.send("bad port", 0, "127.0.0.1");
+        return "sent";
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code;
+      }
+    });
+    while (received.length < 5) await new Promise((resolve) => setTimeout(resolve, 5));
+    for (const socket of [receiver, other, sender, connected]) socket.close();
+    expect(refused).toBe("ERR_SOCKET_BAD_PORT");
+    expect(received.sort()).toEqual(["connected", "one", "outside", "range", "two"]);
+    expect(observed.snapshot().unmeasured).toEqual([
+      { kind: "socket", detail: `send to 127.0.0.1:${port}` },
+      { kind: "socket", detail: `send to 127.0.0.1:${otherPort}` },
     ]);
   });
 

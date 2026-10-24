@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import childProcess from "node:child_process";
+import dgram from "node:dgram";
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -19,8 +20,9 @@ import { writeMadeByPlaywrightServer } from "./write-origin.js";
 // reaches without a nukadoko helper (docs/spec.md "Records"): requests
 // through `globalThis.fetch`, `node:http`, and `node:https`; writes through
 // `node:fs`; and, as unmeasured actions, a process started without
-// `runCommand`, a `worker_threads.Worker`, and a connection that carries
-// no recorded request. It records nothing itself: each patch hands what it
+// `runCommand`, a `worker_threads.Worker`, a connection that carries
+// no recorded request, and a UDP datagram sent through `node:dgram`. It
+// records nothing itself: each patch hands what it
 // saw to the recorder the step's scope holds, and the recorder
 // (observed.ts) owns the step record's shape, redaction, and files.
 //
@@ -974,6 +976,47 @@ function installWorker(): void {
   (workerThreads as { Worker: typeof Original }).Worker = sameShape(Marked, Original as unknown as (...args: never[]) => unknown);
 }
 
+// A datagram has no response to record, so a send can only be marked,
+// once per address. Marked after `send` returns, so arguments it rejects
+// send nothing and name nothing, the way a refused `connect` is still a
+// connection the step opened.
+function installDgram(): void {
+  const proto = dgram.Socket.prototype as unknown as Record<"send", (...args: unknown[]) => unknown>;
+  const send = proto.send;
+  proto.send = sameShape(function (this: dgram.Socket, ...args: unknown[]): unknown {
+    const rec = channelRecorder();
+    const result = send.apply(this, args);
+    if (rec !== undefined) rec.markUnmeasured({ kind: "socket", detail: `send to ${datagramAddress(this, args)}` });
+    return result;
+  }, send);
+}
+
+/** The `<host>:<port>` a `send` call goes to: the connected peer, or
+ * what the call names, read the way Node reads an unconnected socket's
+ * two forms (`send(msg, port, address)` and `send(msg, offset, length,
+ * port, address)`). Node sends to the loopback address when none is
+ * given. A socket still connecting refuses a send, so it never reaches
+ * here. */
+function datagramAddress(socket: dgram.Socket, args: readonly unknown[]): string {
+  try {
+    let peer: { address: string; port: number } | undefined;
+    try {
+      peer = socket.remoteAddress();
+    } catch {
+      peer = undefined;
+    }
+    if (peer !== undefined) return `${peer.address}:${peer.port}`;
+    const [, offset, length, port, address] = args;
+    const withRange = Boolean(address) || (Boolean(port) && typeof port !== "function");
+    const [to, host] = withRange ? [port, address] : [offset, length];
+    const loopback = (socket as { type?: unknown }).type === "udp6" ? "::1" : "127.0.0.1";
+    return `${typeof host === "string" ? host : loopback}:${String(to)}`;
+  } catch {
+    // An argument whose conversion throws the second time it is read.
+    return "an address nukadoko could not read";
+  }
+}
+
 /** Installs every patch, once per process. Later calls, from this copy of
  * nukadoko or another, do nothing. */
 export function installChannelPatches(): void {
@@ -986,5 +1029,6 @@ export function installChannelPatches(): void {
   installNet();
   installFs();
   installWorker();
+  installDgram();
   syncBuiltinESMExports();
 }

@@ -67,9 +67,10 @@ just until 0.1.
   when the run ends gets its line before run.json is written. `unmeasured` lists, as
   `{ kind, detail }`, each process started without `runCommand`
   however it ended (by its program and argument count, never its
-  arguments, a `NAME=value` word, or a directory), `Worker`, and
+  arguments, a `NAME=value` word, or a directory), `Worker`,
   connection that carries no recorded request, one the step opened or
-  one opened before the step that it wrote to, and the run
+  one opened before the step that it wrote to, and UDP datagram sent
+  through `node:dgram`, once per address, and the run
   summary gives each such step one line under "Unmeasured actions",
   with what it started after it ended. Each
   `runCommand` process gains `env`, its environment as a difference

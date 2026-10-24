@@ -49,8 +49,8 @@ process started through `node:child_process` instead of `runCommand`
 `NAME=value` word, however it ended), a
 `Worker`, a connection the step opened or wrote to that carries no
 recorded request (a database client, a pool opened before the step),
-what a WebSocket or a CONNECT tunnel carried after its handshake, or a
-path the step wrote whose identity nukadoko could not read. Such an
+what a WebSocket or a CONNECT tunnel carried after its handshake, a UDP
+datagram sent through `node:dgram`, or a path the step wrote whose identity nukadoko could not read. Such an
 entry says the record holds no evidence of what that action did. Start
 the program with `runCommand`, or attach the evidence the action
 produced. An empty list means nukadoko saw nothing it could not measure,

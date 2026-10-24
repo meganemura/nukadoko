@@ -2237,7 +2237,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   POST はリクエストであって書き込みではなく、ファイルが `files` に載るのはディスク上のそのファイルの同一性が変わったからです。
   チャネルを記録するのは、step 自身の `run`、それが呼ぶ part、compat step の関数の中です。
   executor はその周りにスコープを開きます。
-  nukadoko は `fetch`、`node:http`、`node:https`、`node:child_process`、`net.Socket#connect` と `write` と `end`、`node:fs` の書き込み、`worker_threads.Worker` をプロセスごとに 1 回だけ差し替え、そのスコープに記録します。
+  nukadoko は `fetch`、`node:http`、`node:https`、`node:child_process`、`net.Socket#connect` と `write` と `end`、`node:fs` の書き込み、`worker_threads.Worker`、`dgram.Socket#send` をプロセスごとに 1 回だけ差し替え、そのスコープに記録します。
   step の外では、差し替えたものは元の関数を呼ぶだけで、何も記録しません。
   差し替えたどの関数も、元の関数の `name`、`length`、promise の形(`exec` と `execFile` の `util.promisify`)、同期的な throw を保ちます。
   そのため step の外のコードには、Node が出荷したとおりの組み込みに見えます。
@@ -2376,6 +2376,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   step より前に開いた接続に step が書いた場合(fixture が開いたプール、keep-alive のクライアント)は、接続ごとに 1 回、`write to <host>:<port>, a connection opened before the step` です。
   Upgrade した接続や CONNECT のトンネルがハンドシェイクのあとに運ぶものは、`traffic after the upgrade of <url>` か `traffic through the CONNECT tunnel to <host>:<port>` です。
   そのハンドシェイクのリクエストは、それ自身の行になります。
+  step が `node:dgram` で送った UDP のデータグラムには記録するレスポンスがなく、宛先ごとに 1 回、`send to <host>:<port>` です。
+  接続済みの socket では、宛先は接続先です。
   接続は、nukadoko 自身の I/O が開いたとき、または `fetch`、`node:http`、`node:https`、`request` fixture、ブラウザからの記録したリクエストを運ぶときに、計測済みと数えます。
   agent がいつその接続をリクエストに渡しても同じで、少し遅れて接続する proxy の agent も含みます。
   判定するのは `Socket#connect` を呼ぶ接続だけです。
