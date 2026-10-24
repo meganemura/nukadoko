@@ -437,6 +437,15 @@ just until 0.1.
   multi-line error into the one line `nuka run` prints, and attaches the
   session's steps as evidence.
 
+### Fixed
+
+- **A record keeps a JSON object's own `__proto__` key.** Redaction
+  rebuilt each object by assignment, and assigning `__proto__` sets the
+  prototype instead of adding a key, so a response body or a returned
+  value that held that key lost it from the step record, run.json, and
+  the summary. A claim then showed `{}` not-equal `{}` as held. The key
+  now stays a key.
+
 ## 0.21.0 — 2026-10-23
 
 ### Changed

@@ -184,6 +184,38 @@ describe("redactString", () => {
 describe("redact", () => {
   const secrets: SecretEntry[] = [{ name: "TOKEN", value: "sekrit-value" }];
 
+  it("keeps the key set of any plain JSON object, an own __proto__ key included", () =>
+    hegel.test((tc) => {
+      const keys = gs.sampledFrom(["a", "__proto__", "constructor", "toString", "0", "sekrit-value"]);
+      const json = (depth: number): gs.Generator<unknown> => {
+        const leaf = gs.oneOf<unknown>(gs.just(null), gs.booleans(), gs.integers({ minValue: -5, maxValue: 5 }), gs.text({ maxSize: 4 }));
+        if (depth === 0) return leaf;
+        return gs.oneOf<unknown>(
+          leaf,
+          gs.arrays(json(depth - 1), { maxSize: 3 }),
+          gs.composite((inner) => {
+            const object: Record<string, unknown> = {};
+            const count = inner.draw(gs.integers({ minValue: 0, maxValue: 3 }));
+            for (let index = 0; index < count; index += 1) {
+              Object.defineProperty(object, inner.draw(keys), { value: inner.draw(json(depth - 1)), enumerable: true, writable: true, configurable: true });
+            }
+            return object;
+          }),
+        );
+      };
+      // The key set as JSON text writes it, with each key redacted the way
+      // a key is.
+      const keySets = (value: unknown, redactKey: (key: string) => string): unknown => {
+        if (Array.isArray(value)) return value.map((item) => keySets(item, redactKey));
+        if (typeof value !== "object" || value === null) return null;
+        return Object.keys(value).map((key) => [redactKey(key), keySets((value as Record<string, unknown>)[key], redactKey)]);
+      };
+      const value = tc.draw(json(3));
+      const stored = redact(value, secrets);
+      expect(keySets(stored, (key) => key)).toEqual(keySets(value, (key) => (key === "sekrit-value" ? "{{secret.TOKEN}}" : key)));
+      expect(JSON.stringify(stored)).toBe(JSON.stringify(value).replaceAll("sekrit-value", "{{secret.TOKEN}}"));
+    }));
+
   it("redacts strings found anywhere in a nested object/array structure", () => {
     const input = {
       args: { token: "sekrit-value" },

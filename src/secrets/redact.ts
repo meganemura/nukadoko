@@ -196,7 +196,15 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
         );
       }
       originalKeyOf.set(redactedKey, key);
-      result[redactedKey] = redactInner(val, replacements);
+      // defineProperty, not `result[key] =`: assigning to `__proto__`
+      // sets the prototype, so a JSON body's own `__proto__` key would be
+      // lost from the record while a claim compared it.
+      Object.defineProperty(result, redactedKey, {
+        value: redactInner(val, replacements),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     return result;
   }

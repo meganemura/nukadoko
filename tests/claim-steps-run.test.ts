@@ -653,6 +653,29 @@ export default defineStep({
   });
 });
 
+describe("what the record shows of an object", () => {
+  it("keeps an own __proto__ key that observe returned, so the record shows the value that was compared", async () => {
+    const rootDir = await project({
+      "features/steps/the-settings-differ-from.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the settings differ from",
+  args: z.object({ docstring: z.string() }),
+  poll: false,
+  observe() { return { settings: JSON.parse('{"__proto__": {"admin": true}}') }; },
+  claims: [{ actual: "settings", compare: "not-equal", expected: "docstring", expected_view: "json" }],
+});
+`,
+      "features/t.feature": feature("Then the settings differ from", '  """', "  {}", '  """'),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const claim = lastClaimStep(rootDir).claims[0];
+    expect(claim.outcome).toBe("held");
+    expect(JSON.stringify(claim.actual)).toBe('{"__proto__":{"admin":true}}');
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain('{"__proto__":{"admin":true}}');
+  });
+});
+
 describe("what defineStep validated is what runs", () => {
   it("refuses a step file that exports a copy of a step with other claims", async () => {
     const rootDir = await project({
