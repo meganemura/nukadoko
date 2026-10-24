@@ -267,10 +267,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 
 - **テスト対象のプログラムは `nukadoko.program.ts` に移り、`runServer` はなくなりました。**
   `runServer` を import する config と step ファイルは読み込めなくなりました。
-  config なら、`nuka run` と `nuka check` は次を出力します(`<project>` はプロジェクトの絶対パスの代わりです):
+  config なら、`nuka run` と `nuka check` は次を出力します:
 
   ```text
-  refused	config-invalid	-	Could not import config at <project>/nukadoko.config.ts: The requested module 'nukadoko' does not provide an export named 'runServer' (nukadoko.config.ts:1); runServer was removed from nukadoko: nukadoko.program.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after
+  refused	config-invalid	-	Could not import config at nukadoko.config.ts: The requested module 'nukadoko' does not provide an export named 'runServer' (nukadoko.config.ts:1); runServer was removed from nukadoko: nukadoko.program.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after
     fix: Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.
   ```
 
@@ -278,7 +278,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `baseURL` か `environments` を持つ config は `config-key-removed` で拒否されます:
 
   ```text
-  refused	config-key-removed	-	Invalid config at <project>/nukadoko.config.ts: baseURL was removed: the program under test is described in nukadoko.program.ts. Write url there for a program nukadoko does not start (export default defineProgram({ url: "http://localhost:3000" })), or serve for one it starts; the world's URL is the baseURL every page and request resolves against. environments was removed: write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, and --env starts that environment's world.
+  refused	config-key-removed	-	Invalid config at nukadoko.config.ts: baseURL was removed: the program under test is described in nukadoko.program.ts. Write url there for a program nukadoko does not start (export default defineProgram({ url: "http://localhost:3000" })), or serve for one it starts; the world's URL is the baseURL every page and request resolves against. environments was removed: write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, and --env starts that environment's world.
     fix: Remove baseURL and environments from nukadoko.config.ts: write baseURL as url in nukadoko.program.ts (or serve, for a program nukadoko starts), and write each environment under environments in nukadoko.program.ts.
   ```
 

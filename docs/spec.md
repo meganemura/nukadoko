@@ -2713,8 +2713,14 @@ fails the world, and after that the stop reports `program-exited`.
 A child that a `build` or `prepare` command leaves running on Windows
 is out of reach the same way.
 A program nukadoko started does not outlive nukadoko: when the process
-exits by any path, a signal or a crash included, every program still
-running is killed.
+exits by any path it can handle, a signal or a crash included, every
+world's process group still running is killed.
+SIGKILL is the exception: no process can handle it, and each world's
+process group is a group of its own, so it outlives a SIGKILL to
+nukadoko; `kill -- -<pgid>` stops it.
+A process that a step, a hook, a fixture, `setup`, or a `url` function
+spawns is in no world's group, and nukadoko does not stop it when it
+exits.
 
 The world fails when a `build` or `prepare` command fails, when the
 program exits before `ready` answers, when `ready` does not answer in
@@ -2722,8 +2728,9 @@ time, when `setup` throws, or when a phase passes its limit.
 nukadoko stops what it started, and the message names the command, how
 it ended, and the last 20 lines of the world's `program.log`.
 The message, the `program-exited` warning, and the line a ready world
-prints name the log by its path from the project root, as every path
-nukadoko prints does; `run.json` names it from the run directory.
+prints name the log by its path from the project root, as every path in
+the project nukadoko prints does, a refusal of the config or the program
+file included; `run.json` names it from the run directory.
 When the program exits during the pass, the world's stop reports
 `program-exited`, a warning: the requests after that found nothing
 listening, and the failed steps alone would not say why.
@@ -2770,8 +2777,9 @@ at its limit.
 The `signal` in the function's argument, an `AbortSignal`, is aborted
 then, and when a signal to nukadoko stops the start while the function
 runs.
-A function that honours it stops; one that does not goes on, with what
-it started, until it ends or nukadoko exits.
+A function that honours it stops; one that does not goes on until it
+ends or nukadoko exits, and a process it spawned is not stopped by
+nukadoko even then (see "serve").
 
 ### Placeholders
 
@@ -3015,9 +3023,11 @@ What a function returns is held to the same rule when the world starts,
 and fails the world with `program-start-failed`.
 Neither refusal quotes the URL.
 
-Such a world starts nothing and writes no `program.log`: nukadoko cannot
-read the log of a program it does not run, so the world's `log` is
-`null`.
+Such a world starts nothing, so its `program.log` holds only what its
+`url` function, `setup`, and `prepare` commands printed, never the
+program's own log: nukadoko cannot read the log of a program it does not
+run.
+The world's `log` is `null` when none of them printed anything.
 Its requests still carry a `traceparent`, and each step's
 `observed.program_log` is `null` (see "Trace context and the program's
 log").
@@ -3585,7 +3595,9 @@ Each run uses two output channels for two readers. stdout is for scripts,
 and it carries only what one asked for: under `--records`, NDJSON with one
 scenario per line, each line the scenario's entry in `run.json`, written as
 the scenario finishes, and under `--json`, the `run.json` document described
-below. Without either flag, stdout stays empty, on a terminal or not.
+below. A `--records` line holds no step's `program_log_late`: late lines
+are found when the world stops, after the scenario's line went out, so
+`program_log_late` appears only in `run.json`. Without either flag, stdout stays empty, on a terminal or not.
 `run.json` is on disk either way, and the `run` line names it.
 A person and an agent both read stderr, and an agent's shell is
 no terminal and reads stdout together with stderr, so a line of JSON per
@@ -5770,7 +5782,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records
                               prints NDJSON, each scenario's run.json
-                              entry, on a terminal or not. --json prints
+                              entry as the scenario finishes, on a terminal
+                              or not (a step's program_log_late is only in
+                              run.json, written when the world stops). --json prints
                               run.json (commit, environments, selection,
                               counts, verdicts, each scenario's steps with line,
                               status, record, and error, each failed

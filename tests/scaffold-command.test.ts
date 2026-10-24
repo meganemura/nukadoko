@@ -229,7 +229,7 @@ describe("nuka scaffold --command", () => {
     const result = await cli(rootDir, ["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command", entry]);
 
     expect(result.stderr).toBe(
-      `refused\tinvalid-value\t-\tRefusing to scaffold: entry point "${entry}" is not a file (looked at ${path.resolve(rootDir, entry)}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO\n${VALUE_TAIL}`,
+      `refused\tinvalid-value\t-\tRefusing to scaffold: entry point "${entry}" is not a file (looked at ${path.relative(rootDir, path.resolve(rootDir, entry)).split(path.sep).join("/")}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO\n${VALUE_TAIL}`,
     );
     expect(result.stdout).toBe("");
     expect(result.exitCode).toBe(2);
@@ -249,7 +249,7 @@ describe("nuka scaffold --command", () => {
     const result = await cli(rootDir, ["scaffold", "--command", "run-y", "--pattern", "I run y", "other"]);
 
     expect(result.stderr).toBe(
-      `refused\tinvalid-value\t-\tRefusing to scaffold: entry point "run-y" is not a file (looked at ${path.join(rootDir, "run-y")}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO; --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\n${VALUE_TAIL}`,
+      `refused\tinvalid-value\t-\tRefusing to scaffold: entry point "run-y" is not a file (looked at run-y); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO; --command before the name takes the next word as its value ("run-y" here); write the name first, or give --command a value\n${VALUE_TAIL}`,
     );
     expect(result.exitCode).toBe(2);
     expect(existsSync(stepPath(rootDir, "other"))).toBe(false);

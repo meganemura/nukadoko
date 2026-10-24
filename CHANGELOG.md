@@ -331,7 +331,9 @@ just until 0.1.
   the parent process owns it. `nuka do` starts one for its execution. The
   world's URL is the base URL of `page`, `context`, `pageAs`, and
   `request`, and its `env` reaches the steps' process too. `program.log`
-  holds what every command printed, redacted, and `{token}` is redacted as
+  holds what every command printed, redacted (for a world at a `url`,
+  only what its `url` function, `setup`, and `prepare` printed), and
+  `{token}` is redacted as
   `{{secret.WORLD_TOKEN}}`. A write the step's own process makes in the
   world's directory is in its `observed.files`; the program's own writes
   there are not, and its log is where its work shows. run.json gains `worlds` (`name`, `tree`,
@@ -395,7 +397,8 @@ just until 0.1.
   lines never replace each other.
   A line that arrives after the step's record was written goes to its
   `program-log-late.txt` when the world stops, run.json's step gains
-  `program_log_late`, and the run summary names it on the step's line;
+  `program_log_late` (a `--records` line, written as its scenario
+  finishes, does not), and the run summary names it on the step's line;
   `nuka do` names it in a `program-log-late` note. run.json's `worlds` entries
   gain `program_log: { stamped, lines, late, tagged }`, and the run
   summary says once per world, decided from the whole log, when the log
@@ -515,6 +518,15 @@ just until 0.1.
   starts, and a compat step's or hook's `{ timeout }` and
   `setDefaultTimeout` throw while the glue registers them (`-1` still
   means no limit). `defineStep({ timeout })` already refused it.
+
+- **Every path a refusal prints is from the project root.** The
+  refusals of the config and the program file (`Invalid config at`,
+  `Could not import config at`, `Invalid program at`, and the default
+  export ones), `features-dir-missing`, `additional-feature-dir-missing`,
+  `no-step-files-found`, `no-feature-files`, and `nuka scaffold
+  --command`'s entry point refusal printed an absolute path; they name
+  the path from the project root now, as every other path nukadoko
+  prints does. `ConfigError.configPath` still holds the absolute path.
 
 ## 0.21.0 — 2026-10-23
 

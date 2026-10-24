@@ -211,14 +211,14 @@ describe("loadProgram", () => {
     const error = await loadProgram(rootDir).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ConfigError);
     expect((error as ConfigError).message).toBe(
-      `Invalid program at ${path.join(rootDir, "nukadoko.program.ts")}: unknown key(s): URL (did you mean "url"?)`,
+      `Invalid program at nukadoko.program.ts: unknown key(s): URL (did you mean "url"?)`,
     );
   });
 
   it("refuses a file with no default export, and two program files at once", async () => {
     await writeFile(path.join(rootDir, "nukadoko.program.ts"), "export const program = {};\n");
     await expect(loadProgram(rootDir)).rejects.toThrow(
-      `${path.join(rootDir, "nukadoko.program.ts")} has no default export. nukadoko reads the default export as the program.`,
+      `nukadoko.program.ts has no default export. nukadoko reads the default export as the program.`,
     );
     await writeFile(path.join(rootDir, "nukadoko.program.mts"), "export default {};\n");
     await expect(loadProgram(rootDir)).rejects.toThrow("nukadoko cannot tell which one to read");

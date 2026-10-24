@@ -68,7 +68,7 @@ describe("nuka run names the next step when a target selects nothing", () => {
     expect(await run(["no features", "acceptance"])).toEqual({
       exitCode: 2,
       stderr:
-        `refused\tno-feature-files\t-\tno .feature file was found while scanning "no features" and "acceptance" (resolved to ${path.join(rootDir, "no features")}, ${path.join(rootDir, "acceptance")}); nothing can run\n` +
+        `refused\tno-feature-files\t-\tno .feature file was found while scanning "no features" and "acceptance"; nothing can run\n` +
         "  fix: Add a .feature file under no features or acceptance.\n",
     });
   });
@@ -80,7 +80,7 @@ describe("nuka run names the next step when a target selects nothing", () => {
     expect({ exitCode, stderr: stderr.text() }).toEqual({
       exitCode: 2,
       stderr:
-        `refused\tno-feature-files\t-\tnuka check: no .feature file was found while scanning "acceptance" (resolved to ${path.join(rootDir, "acceptance")}); nothing can run\n` +
+        `refused\tno-feature-files\t-\tnuka check: no .feature file was found while scanning "acceptance"; nothing can run\n` +
         "  fix: Add a .feature file under acceptance.\n",
     });
   });

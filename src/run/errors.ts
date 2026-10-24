@@ -110,7 +110,7 @@ export class NoFeatureFilesFoundError extends Error {
 
   constructor(scannedPaths: readonly string[], resolvedPath: string) {
     const relativePath = scannedPaths.join('" and "');
-    super(`no .feature file was found while scanning "${relativePath}" (resolved to ${resolvedPath}); nothing can run`);
+    super(`no .feature file was found while scanning "${relativePath}"; nothing can run`);
     this.name = "NoFeatureFilesFoundError";
     this.relativePath = relativePath;
     this.resolvedPath = resolvedPath;

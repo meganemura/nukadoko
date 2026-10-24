@@ -578,7 +578,8 @@ export async function runCli(
           default: false,
           describe:
             "write each scenario's run.json entry to stdout as one JSON line, as the scenario finishes " +
-            "(without it, stdout stays empty; run.json holds every entry either way)",
+            "(without it, stdout stays empty; run.json holds every entry either way). A step's program_log_late " +
+            "is only in run.json, written when the world stops, after the scenario's line",
         })
         .option("json", {
           type: "boolean",

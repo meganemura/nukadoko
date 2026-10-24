@@ -412,7 +412,7 @@ describe("a program nukadoko serves", () => {
 
     expect(exitCode).toBe(2);
     expect(stderr).toContain(
-      `refused\tconfig-invalid\t-\tInvalid program at ${path.join(rootDir, "nukadoko.program.ts")}: url: serve and url are two ways to reach the program`,
+      `refused\tconfig-invalid\t-\tInvalid program at nukadoko.program.ts: url: serve and url are two ways to reach the program`,
     );
   });
 
@@ -425,7 +425,7 @@ describe("a program nukadoko serves", () => {
     for (const args of [["check"], ["run", "--no-check"]]) {
       const { exitCode, stderr } = await cli(rootDir, args);
       expect(exitCode).toBe(2);
-      expect(stderr).toContain(`refused\tconfig-invalid\t-\tInvalid program at ${path.join(rootDir, "nukadoko.program.ts")}: ${reason}`);
+      expect(stderr).toContain(`refused\tconfig-invalid\t-\tInvalid program at nukadoko.program.ts: ${reason}`);
       expect(stderr).not.toContain("hunter2");
     }
     expect(stepRecordIds(rootDir)).toEqual([]);

@@ -1310,7 +1310,8 @@ async function entryPointRefusal(rootDir: string, entryPoint: string, commandBef
   );
   if (isFile) return null;
   const order = commandBeforeName && VALID_STEP_NAME.test(entryPoint) ? `; ${commandTookTheName(entryPoint)}` : "";
-  return `entry point ${JSON.stringify(entryPoint)} is not a file (looked at ${resolved}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO${order}`;
+  const looked = path.relative(rootDir, resolved).split(path.sep).join("/");
+  return `entry point ${JSON.stringify(entryPoint)} is not a file (looked at ${looked === "" ? "." : looked}); pass the path of the program the step runs, relative to the directory nuka runs in, or give --command no value to leave a TODO${order}`;
 }
 
 /** The relative `.js`, `.mjs`, and `.cjs` specifiers a TypeScript source

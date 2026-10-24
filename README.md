@@ -289,8 +289,11 @@ export default defineProgram({
 says. The command is split on whitespace and runs with no shell. The
 program is ready once `/` answers 2xx; `serve.ready` names another path.
 A line on stderr names the URL and `program.log`, which holds what the
-program printed, beside the run's records. Two runs at once never share a
-port. The same file holds `build` and `prepare` commands, a directory of
+program printed, beside the run's records. `port: "auto"`, the default,
+picks a free port when the world starts. Two runs at once can still race
+for the same one: a server that then cannot listen and exits fails its
+world, or, when the other run's server already answered its ready check,
+is reported as `program-exited` when the world stops. The same file holds `build` and `prepare` commands, a directory of
 its own for each run's database (`{dir}`), and `url` for a server
 nukadoko does not start: "Program" in [docs/spec.md](docs/spec.md#program)
 has every field. Commit the file beside the config.

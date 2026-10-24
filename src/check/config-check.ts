@@ -110,7 +110,7 @@ export async function checkConfig(
   if (!existsSync(featuresRoot)) {
     errors.push({
       code: "features-dir-missing",
-      message: `featuresDir "${config.featuresDir}" does not exist at ${featuresRoot}`,
+      message: `featuresDir "${config.featuresDir}" does not exist`,
       file: configFile,
       fix: `Create ${path.posix.join(config.featuresDir, "steps")} for the step files, or correct featuresDir in ${configFile}.`,
     });
@@ -128,7 +128,7 @@ export async function checkConfig(
     if (!existsSync(absolutePath)) {
       errors.push({
         code: "additional-feature-dir-missing",
-        message: `additionalFeatureDirs names "${relativePath}", which does not exist at ${absolutePath}`,
+        message: `additionalFeatureDirs names "${relativePath}", which does not exist`,
         file: relativePath,
         fix: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from additionalFeatureDirs in ${configFile}.`,
       });

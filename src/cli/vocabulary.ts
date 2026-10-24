@@ -96,7 +96,7 @@ class FeaturesDirMissingError extends Error {
   readonly resolvedPath: string;
 
   constructor(featuresDir: string, resolvedPath: string) {
-    super(`featuresDir "${featuresDir}" does not exist at ${resolvedPath}`);
+    super(`featuresDir "${featuresDir}" does not exist`);
     this.name = "FeaturesDirMissingError";
     this.featuresDir = featuresDir;
     this.resolvedPath = resolvedPath;

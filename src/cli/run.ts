@@ -257,7 +257,9 @@ export interface RunRunOptions {
    * Each selected scenario runs once per environment, in this order. */
   envs: readonly string[];
   /** `--records`: write each scenario's run.json entry to stdout, one per
-   * line, as the scenario finishes.
+   * line, as the scenario finishes. The line is not held back for a
+   * step's `program_log_late`, which the world's stop adds to run.json
+   * later: a consumer of the stream gets each scenario when it ends.
    * Without it stdout stays empty, terminal or not. */
   records: boolean;
   /** `--json`: print run.json on stdout at the end, and no scenario

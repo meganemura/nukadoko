@@ -87,7 +87,7 @@ describe("Markdown oaths, removed", () => {
     const findings = (JSON.parse(stdout.text()) as { findings: { code: string; message: string; fix: string }[] }).findings;
     expect(findings.map((finding) => finding.code)).toEqual(["config-key-removed"]);
     expect(findings[0]!.message).toBe(
-      `Invalid config at ${path.join(rootDir, "nukadoko.config.ts")}: oaths was removed: nukadoko reads scenarios from .feature files only. ` +
+      `Invalid config at nukadoko.config.ts: oaths was removed: nukadoko reads scenarios from .feature files only. ` +
         "Write each Markdown oath as a .feature file under featuresDir.",
     );
     expect(findings[0]!.fix).toBe("Remove oaths from nukadoko.config.ts.");
@@ -130,7 +130,7 @@ describe("run-time emitters, removed", () => {
     const findings = (JSON.parse(stdout.text()) as { findings: { code: string; message: string; fix: string }[] }).findings;
     expect(findings.map((finding) => finding.code)).toEqual(["config-key-removed"]);
     expect(findings[0]!.message).toBe(
-      `Invalid config at ${path.join(rootDir, "nukadoko.config.ts")}: allure was removed: nuka run writes no Allure results. ` +
+      `Invalid config at nukadoko.config.ts: allure was removed: nuka run writes no Allure results. ` +
         "Run nuka report --format allure after a run; it writes <stateDir>/export/allure-results, or the directory --out names. " +
         "messages was removed: nuka run writes no cucumber-messages stream. Run nuka report --format messages --out <path> after a run.",
     );
@@ -162,7 +162,7 @@ describe("the program's keys, moved to nukadoko.program.ts", () => {
     const findings = (JSON.parse(stdout.text()) as { findings: { code: string; message: string; fix: string }[] }).findings;
     expect(findings.map((finding) => finding.code)).toEqual(["config-key-removed"]);
     expect(findings[0]!.message).toBe(
-      `Invalid config at ${path.join(rootDir, "nukadoko.config.ts")}: baseURL was removed: the program under test is described in nukadoko.program.ts. ` +
+      `Invalid config at nukadoko.config.ts: baseURL was removed: the program under test is described in nukadoko.program.ts. ` +
         'Write url there for a program nukadoko does not start (export default defineProgram({ url: "http://localhost:3000" })), or serve for one it starts; ' +
         "the world's URL is the baseURL every page and request resolves against. " +
         "environments was removed: write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, " +

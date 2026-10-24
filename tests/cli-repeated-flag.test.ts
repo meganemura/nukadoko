@@ -90,7 +90,7 @@ describe("repeated singular flags", () => {
     expect(JSON.parse(stdout.text()).findings[1]).toEqual({
       severity: "refused",
       code: "features-dir-missing",
-      message: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+      message: `featuresDir "features" does not exist`,
       fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
       do: "nuka steps --help",
     });

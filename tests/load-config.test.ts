@@ -59,7 +59,9 @@ describe("loadConfig", () => {
     const configError = caught as ConfigError;
     expect(configError.message).toContain("typo");
     expect(configError.configPath.endsWith("nukadoko.config.ts")).toBe(true);
-    expect(configError.message).toContain(configError.configPath);
+    // The message names the file from the project root; the error keeps the absolute path.
+    expect(configError.message).toContain("Invalid config at nukadoko.config.ts: ");
+    expect(configError.message).not.toContain(configError.configPath);
   });
 
   it("names the correctly-cased key when an unknown key matches one case-insensitively", async () => {
@@ -125,7 +127,7 @@ describe("loadConfig", () => {
       expect(caught).toBeInstanceOf(ConfigError);
       const configError = caught as ConfigError;
       expect(configError.configPath).toBe(configPath);
-      expect(configError.message).toContain(configPath);
+      expect(configError.message.startsWith(`${path.basename(configPath)} has `)).toBe(true);
       expect(configError.message).toContain("default export");
     } finally {
       await removeTempDir(rootDir);
@@ -149,7 +151,7 @@ describe("loadConfig", () => {
       expect(caught).toBeInstanceOf(ConfigError);
       const configError = caught as ConfigError;
       expect(configError.configPath).toBe(configPath);
-      expect(configError.message).toContain(configPath);
+      expect(configError.message.startsWith(`${path.basename(configPath)} has `)).toBe(true);
       expect(configError.message).toContain("Promise");
     } finally {
       await removeTempDir(rootDir);
@@ -292,7 +294,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
     const configError = caught as ConfigError;
     expect(configError.configPath).toBe(configPath);
     expect(configError.message).toBe(
-      `Could not import config at ${configPath}: Cannot use import statement outside a module (nukadoko.config.ts:1)${CJS_TS_HINT}`,
+      `Could not import config at ${path.basename(configPath)}: Cannot use import statement outside a module (nukadoko.config.ts:1)${CJS_TS_HINT}`,
     );
     expect(configError.cause).toBeInstanceOf(Error);
     expect((configError.cause as Error).message).toBe("Cannot use import statement outside a module");
@@ -313,7 +315,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
     expect(exitCode).toBe(2);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toBe(
-      `refused\tconfig-invalid\t-\tCould not import config at ${configPath}: Cannot use import statement outside a module (nukadoko.config.ts:1)${CJS_TS_HINT}\n  fix: Correct the config file as the message says.\n  do: mv nukadoko.config.ts nukadoko.config.mts\n`,
+      `refused\tconfig-invalid\t-\tCould not import config at ${path.basename(configPath)}: Cannot use import statement outside a module (nukadoko.config.ts:1)${CJS_TS_HINT}\n  fix: Correct the config file as the message says.\n  do: mv nukadoko.config.ts nukadoko.config.mts\n`,
     );
   });
 
@@ -329,7 +331,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
     expect(caught).toBeInstanceOf(ConfigError);
     const configError = caught as ConfigError;
     expect(configError.message).toBe(
-      `Could not import config at ${configPath}: Unexpected token 'export' (nukadoko.config.ts:1)${CJS_TS_HINT}`,
+      `Could not import config at ${path.basename(configPath)}: Unexpected token 'export' (nukadoko.config.ts:1)${CJS_TS_HINT}`,
     );
   });
 
@@ -355,7 +357,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
     const configError = caught as ConfigError;
     expect(configError.configPath).toBe(configPath);
     expect(configError.message).toBe(
-      `Could not import config at ${configPath}: Cannot read properties of undefined (reading 'url')`,
+      `Could not import config at ${path.basename(configPath)}: Cannot read properties of undefined (reading 'url')`,
     );
     expect(configError.message).not.toContain('"type": "module"');
     expect(configError.cause).toBeInstanceOf(Error);
@@ -376,7 +378,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
     expect(caught).toBeInstanceOf(ConfigError);
     const configError = caught as ConfigError;
     expect(configError.configPath).toBe(configPath);
-    expect(configError.message).toBe(`Could not import config at ${configPath}: Expected ',', got ';' (nukadoko.config.mts:1)`);
+    expect(configError.message).toBe(`Could not import config at ${path.basename(configPath)}: Expected ',', got ';' (nukadoko.config.mts:1)`);
     expect(configError.cause).toBeInstanceOf(Error);
   });
 
@@ -402,7 +404,7 @@ describe("loadConfig: a failed import names the file and the cause", () => {
 
     expect(caught).toBeInstanceOf(ConfigError);
     const configError = caught as ConfigError;
-    expect(configError.message).toBe(`Invalid config at ${configPath}: unknown key(s): typo`);
+    expect(configError.message).toBe(`Invalid config at ${path.basename(configPath)}: unknown key(s): typo`);
     expect(configError.message).not.toContain('"type": "module"');
   });
 });

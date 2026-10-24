@@ -280,7 +280,10 @@ export default defineProgram({
 別のパスは `serve.ready` で指定します。
 stderr の 1 行が URL と `program.log` を示します。
 `program.log` は run の記録の隣にあり、プログラムが出力した内容を持ちます。
-同時に動く 2 つの run がポートを共有することはありません。
+既定の `port: "auto"` は、world が起動するときに空いているポートを選びます。
+それでも、同時に動く 2 つの run が同じポートを取り合うことはありえます。
+そのとき待ち受けられずに終わったサーバは、その world を失敗させます。
+もう一方の run のサーバがすでに準備の確認に答えていたなら、world が止まるときに `program-exited` として報告されます。
 同じファイルには、`build` と `prepare` のコマンド、run ごとのデータベースのための専用ディレクトリ(`{dir}`)、nukadoko が起動しないサーバのための `url` も書けます。
 すべてのフィールドは [docs/spec.ja.md](docs/spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」にあります。
 このファイルは config と並べて commit します。

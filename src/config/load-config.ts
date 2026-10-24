@@ -285,6 +285,9 @@ function renameToMts(configPath: string): string {
 async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const resolved = findConfigFile(rootDir);
   const configPath = resolved?.path ?? path.join(rootDir, CONFIG_FILE_NAME);
+  // What a message names: the file's path from the project root, as every
+  // path nukadoko prints is. The absolute path stays on the error.
+  const shown = path.relative(rootDir, configPath).split(path.sep).join("/");
 
   let raw: unknown = {};
   // Empty unless a config file is present, package.json says "type":
@@ -304,7 +307,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
       // so its location is added the way a step file's is.
       const cause = describeImportFailure(error, configPath, rootDir);
       throw new ConfigError(
-        `Could not import config at ${configPath}: ${cause.message}${explanation}`,
+        `Could not import config at ${shown}: ${cause.message}${explanation}`,
         configPath,
         importFailureHint(resolved.fileName, cause.missingPackage, explanation, cause.fix),
         { cause: error },
@@ -312,14 +315,14 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
     }
     if (mod.default === undefined) {
       throw new ConfigError(
-        `${configPath} has no default export. nukadoko reads the default export as the config.`,
+        `${shown} has no default export. nukadoko reads the default export as the config.`,
         configPath,
         { fix: `Export the config as the default export of ${resolved.fileName}: export default defineConfig({ ... }).` },
       );
     }
     if (isThenable(mod.default)) {
       throw new ConfigError(
-        `${configPath} has a Promise as its default export. Export the config object, not a Promise of it.`,
+        `${shown} has a Promise as its default export. Export the config object, not a Promise of it.`,
         configPath,
         { fix: `Export the config object itself as the default export of ${resolved.fileName}, not a Promise of it.` },
       );
@@ -330,7 +333,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const removed = removedKeysIn(raw);
   if (removed.length > 0) {
     throw new ConfigError(
-      `Invalid config at ${configPath}: ${removed.map((key) => `${key} was removed: ${REMOVED_CONFIG_KEYS[key]}`).join(" ")}`,
+      `Invalid config at ${shown}: ${removed.map((key) => `${key} was removed: ${REMOVED_CONFIG_KEYS[key]}`).join(" ")}`,
       configPath,
       { fix: removedKeysFix(removed, resolved?.fileName ?? CONFIG_FILE_NAME) },
       { code: "config-key-removed" },
@@ -340,7 +343,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
   const result = configSchema.safeParse(raw);
   if (!result.success) {
     throw new ConfigError(
-      `Invalid config at ${configPath}: ${formatIssues(result.error.issues)}${explanation}`,
+      `Invalid config at ${shown}: ${formatIssues(result.error.issues)}${explanation}`,
       configPath,
       explanation === ""
         ? { fix: `Correct the fields the message names in ${resolved?.fileName ?? CONFIG_FILE_NAME}.` }

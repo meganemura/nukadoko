@@ -130,7 +130,7 @@ describe("a --json command that cannot report prints a refused envelope on stdou
       root: "check-features-dir-missing-project",
       finding: {
         code: "features-dir-missing",
-        message: `featuresDir "features" does not exist at ${fixture("check-features-dir-missing-project")}/features`,
+        message: `featuresDir "features" does not exist`,
         fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
         do: "nuka steps --help",
       },
@@ -191,7 +191,7 @@ describe("a --json command that cannot report prints a refused envelope on stdou
     const [finding, ...rest] = refusedFindings(result.stdout);
     expect(rest).toEqual([]);
     expect(finding!.code).toBe("config-invalid");
-    expect(finding!.message).toMatch(/^Invalid config at .*nukadoko\.config\.ts: /);
+    expect(finding!.message).toMatch(/^Invalid config at nukadoko\.config\.ts: /);
     expect(finding!.fix).toBe("Correct the fields the message names in nukadoko.config.ts.");
     expect(finding!.do).toBeUndefined();
     expect(result.exitCode).toBe(2);

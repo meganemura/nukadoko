@@ -90,7 +90,7 @@ async function readProgram(rootDir: string): Promise<LoadedProgram | null> {
   } catch (error) {
     const cause = describeImportFailure(error, found.path, rootDir);
     throw new ConfigError(
-      `Could not import the program file at ${found.path}: ${cause.message}${explanation}`,
+      `Could not import the program file at ${found.fileName}: ${cause.message}${explanation}`,
       found.path,
       importFailureHint(found.fileName, cause.missingPackage, explanation),
       { cause: error },
@@ -98,14 +98,16 @@ async function readProgram(rootDir: string): Promise<LoadedProgram | null> {
   }
   if (mod.default === undefined || isThenable(mod.default)) {
     throw new ConfigError(
-      `${found.path} has ${mod.default === undefined ? "no default export" : "a Promise as its default export"}. nukadoko reads the default export as the program.`,
+      `${found.fileName} has ${mod.default === undefined ? "no default export" : "a Promise as its default export"}. nukadoko reads the default export as the program.`,
       found.path,
       { fix: `Export the program as the default export of ${found.fileName}: export default defineProgram({ ... }).` },
     );
   }
   const result = programSchema.safeParse(mod.default);
   if (!result.success) {
-    throw new ConfigError(`Invalid program at ${found.path}: ${formatIssues(result.error.issues, programSchema)}${explanation}`, found.path, {
+    // Messages name the file from the project root, where it is found, as
+    // every path nukadoko prints does; the absolute path stays on the error.
+    throw new ConfigError(`Invalid program at ${found.fileName}: ${formatIssues(result.error.issues, programSchema)}${explanation}`, found.path, {
       fix: `Correct the fields the message names in ${found.fileName}.`,
     });
   }

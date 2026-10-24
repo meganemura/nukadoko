@@ -27,7 +27,7 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
     if (rootDir) await removeTempDir(rootDir);
   });
 
-  it("fails loudly when featuresDir does not exist on disk: stderr names the resolved path, stdout stays empty, non-JSON", async () => {
+  it("fails loudly when featuresDir does not exist on disk: stderr names featuresDir from the project root, stdout stays empty, non-JSON", async () => {
     rootDir = await createEmptyTempDir();
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
@@ -37,7 +37,9 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
     expect(exitCode).not.toBe(0);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("featuresDir");
-    expect(stderr.text()).toContain(path.join(rootDir, "features"));
+    // The refusal names featuresDir from the project root; only the
+    // config-missing warning names the root itself.
+    expect(stderr.text()).toMatch(/^refused\tfeatures-dir-missing\t-\tfeaturesDir "features" does not exist$/m);
   });
 
   it("fails loudly when featuresDir does not exist on disk: --json answers with a refusal, not an empty vocabulary", async () => {
@@ -53,7 +55,7 @@ describe("nuka steps: featuresDir missing vs. featuresDir empty", () => {
     expect(bySeverity(stdout.text()).refused).toEqual([
       {
         code: "features-dir-missing",
-        message: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+        message: `featuresDir "features" does not exist`,
         fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
         do: "nuka steps --help",
       },
@@ -94,7 +96,7 @@ describe("nuka describe and nuka do: featuresDir missing", () => {
     expect(bySeverity(stdout.text()).refused).toEqual([
       {
         code: "features-dir-missing",
-        message: `featuresDir "features" does not exist at ${path.join(rootDir, "features")}`,
+        message: `featuresDir "features" does not exist`,
         fix: "Create the featuresDir directory, or correct featuresDir in the config file.",
         do: "nuka describe --help",
       },
@@ -102,7 +104,7 @@ describe("nuka describe and nuka do: featuresDir missing", () => {
     expect(withoutNoConfigLine(stderr.text())).toBe("");
   });
 
-  it("nuka do names the missing featuresDir instead of the step: stderr names the resolved path, stdout stays empty", async () => {
+  it("nuka do names the missing featuresDir instead of the step: stderr names featuresDir from the project root, stdout stays empty", async () => {
     rootDir = await createEmptyTempDir();
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
@@ -112,7 +114,9 @@ describe("nuka describe and nuka do: featuresDir missing", () => {
     expect(exitCode).not.toBe(0);
     expect(stdout.text()).toBe("");
     expect(stderr.text()).toContain("featuresDir");
-    expect(stderr.text()).toContain(path.join(rootDir, "features"));
+    // The refusal names featuresDir from the project root; only the
+    // config-missing warning names the root itself.
+    expect(stderr.text()).toMatch(/^refused\tfeatures-dir-missing\t-\tfeaturesDir "features" does not exist$/m);
     expect(stderr.text()).not.toContain("Unknown step");
   });
 });

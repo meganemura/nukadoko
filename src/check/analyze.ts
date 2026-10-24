@@ -367,7 +367,7 @@ async function reportFor(
   if (noStepFiles !== undefined) {
     errors.push({
       code: "no-step-files-found",
-      message: `no .ts/.mts/.js/.mjs step file was found while scanning "${config.featuresDir}" (resolved to ${featuresRoot}); no step can ever be registered`,
+      message: `no .ts/.mts/.js/.mjs step file was found while scanning "${config.featuresDir}"; no step can ever be registered`,
       file: config.featuresDir,
     });
   }

@@ -66,7 +66,7 @@ describe("a project that still imports runServer", () => {
       const { exitCode, stderr } = await cli(args);
       expect(exitCode).toBe(2);
       expect(stderr).toContain(
-        `refused\tconfig-invalid\t-\tCould not import config at ${path.join(rootDir, "nukadoko.config.ts")}: ` +
+        `refused\tconfig-invalid\t-\tCould not import config at nukadoko.config.ts: ` +
           `${nodeMessage("nukadoko", "runServer")} (nukadoko.config.ts:1)${SENTENCE}\n  fix: ${FIX}\n`,
       );
     }

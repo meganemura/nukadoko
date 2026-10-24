@@ -1,4 +1,3 @@
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
@@ -150,7 +149,7 @@ describe("nuka run <dir>", () => {
     expect(records.map((r) => r.feature)).toEqual(["features/order/a.feature", "features/order/a/x.feature"]);
   });
 
-  it("refuses a directory with no .feature file anywhere under it: non-zero exit, names what it walked, writes nothing", async () => {
+  it("refuses a directory with no .feature file anywhere under it: non-zero exit, names what it walked from the project root, writes nothing", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--records", "features/empty"], {
@@ -161,8 +160,8 @@ describe("nuka run <dir>", () => {
 
     expect(exitCode).not.toBe(0);
     expect(stdout.text()).toBe("");
-    expect(stderr.text()).toContain("features/empty");
-    expect(stderr.text()).toContain(path.join(rootDir, "features", "empty"));
+    expect(stderr.text()).toContain('no .feature file was found while scanning "features/empty"; nothing can run');
+    expect(stderr.text()).not.toContain(rootDir);
   });
 
   it("refuses :line on a directory target", async () => {

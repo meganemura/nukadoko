@@ -2216,11 +2216,15 @@ Windows ではシグナルが名指したプロセスしか終わらせないの
 `ready` が答える前なら world を失敗させ、そのあとなら world を止める時点で `program-exited` を報告します。
 Windows で `build` か `prepare` のコマンドが動かしたまま残した子にも、同じく手が届きません。
 nukadoko が起動したプログラムは nukadoko より長く生き残りません。
-シグナルやクラッシュを含め、どの経路でプロセスが終わっても、まだ動いているプログラムはすべて kill されます。
+シグナルやクラッシュを含め、プロセスが扱える経路で終わるなら、まだ動いている world のプロセスグループはすべて kill されます。
+例外は SIGKILL です。
+どのプロセスもそれを扱えず、各 world のプロセスグループはそれ自身のグループなので、nukadoko への SIGKILL のあとも残ります。
+`kill -- -<pgid>` でそれを止められます。
+step、hook、fixture、`setup`、`url` の関数が起動したプロセスは、どの world のグループにも入らず、nukadoko が終了してもそれを止めません。
 
 `build` か `prepare` のコマンドが失敗したとき、`ready` が答える前にプログラムが終わったとき、`ready` が時間内に答えないとき、`setup` が throw したとき、段階が持ち時間を過ぎたとき、world は失敗します。
 nukadoko は起動したものを止め、メッセージはコマンド、その終わり方、world の `program.log` の最後の 20 行を示します。
-このメッセージ、警告 `program-exited`、準備のできた world が出す行は、nukadoko が出すすべてのパスと同じく、ログをプロジェクトのルートからのパスで名指します。
+このメッセージ、警告 `program-exited`、準備のできた world が出す行は、config やプログラムファイルの拒否も含めて nukadoko が出すプロジェクト内のすべてのパスと同じく、ログをプロジェクトのルートからのパスで名指します。
 `run.json` は run ディレクトリからのパスで名指します。
 pass の途中でプログラムが終わったときは、world を止める時点で警告 `program-exited` を報告します。
 それ以降の request は待ち受ける相手を見つけられず、失敗した step だけではその理由が分からないからです。
@@ -2260,7 +2264,8 @@ export default defineProgram({
 world はそれを待たずに失敗し、`program.log` は、関数が持ち時間で見捨てられたことを述べる行で終わります。
 関数の引数にある `signal`(`AbortSignal`)は、そのときと、関数の実行中に nukadoko へのシグナルが起動を止めたときに中断されます。
 それに従う関数は止まります。
-従わない関数は、それが始めたことと一緒に、終わるか nukadoko が終了するまで続きます。
+従わない関数は、終わるか nukadoko が終了するまで続きます。
+それが起動したプロセスは、そのときも nukadoko が止めません(「serve」を参照)。
 
 ### プレースホルダー
 
@@ -2455,8 +2460,9 @@ environments: {
 関数が返したものも、world を起動するときに同じ規則で確かめられ、`program-start-failed` で world を失敗させます。
 どちらの拒否も URL を引用しません。
 
-そうした world は何も起動せず、`program.log` を書きません。
-nukadoko は自分が動かしていないプログラムのログを読めないので、world の `log` は `null` です。
+そうした world は何も起動しないので、その `program.log` が持つのは、`url` の関数、`setup`、`prepare` のコマンドが出力したものだけで、プログラム自身のログは決して持ちません。
+nukadoko は自分が動かしていないプログラムのログを読めないからです。
+そのどれも何も出力しなかったとき、world の `log` は `null` です。
 そのリクエストはそれでも `traceparent` を運び、各 step の `observed.program_log` は `null` です(「trace context とプログラムのログ」を参照)。
 `env` はそれでも step に届き、`{token}` もそれでも作られます。
 サーバがほかの誰かに必要なデータを持つなら、そうした environment には read-only の `policy` を付けます。
@@ -2872,6 +2878,8 @@ stderr の step ごとの進捗行は、その scenario 自身が終わるまで
 stdout はスクリプトのためのもので、求められたものだけを出力します。
 `--records` のときは、scenario が終わるたびに、1 行 1 件の scenario を NDJSON として出力します。
 各行は、その scenario の `run.json` のエントリです。
+`--records` の行は、どの step の `program_log_late` も持ちません。
+遅れた行は world が止まるとき、scenario の行が出たあとに見つかるので、`program_log_late` は `run.json` にだけ現れます。
 `--json` のときは、下で述べる `run.json` の文書を出力します。
 どちらのフラグもなければ、端末かどうかにかかわらず stdout には何も出力しません。
 `run.json` はフラグにかかわらずディスクにあり、`run` の行がそれを示します。
@@ -4655,7 +4663,9 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records
                               prints NDJSON, each scenario's run.json
-                              entry, on a terminal or not. --json prints
+                              entry as the scenario finishes, on a terminal
+                              or not (a step's program_log_late is only in
+                              run.json, written when the world stops). --json prints
                               run.json (commit, environments, selection,
                               counts, verdicts, each scenario's steps with line,
                               status, record, and error, each failed
