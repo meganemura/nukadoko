@@ -81,4 +81,22 @@ describe("{condition.<name>}", () => {
         'refused\tprogram-placeholder-unfilled\t-\tworld staging: env.BANNER names {condition.banner}, which has no value here: its environment declares no condition "banner" under conditions; nothing ran\n',
       );
     }));
+
+  it("is checked for the worlds a run with the same --env flags would start, and no other", () =>
+    withProject(async (rootDir) => {
+      // Without --env a run starts flag-off and flag-on, the environments
+      // that declare conditions, so neither staging nor the implicit
+      // default world, which declare no banner, is checked.
+      const plain = await cli(rootDir, ["check"]);
+      expect(plain.exitCode).toBe(0);
+      expect(plain.stdout).not.toContain("program-placeholder-unfilled");
+      const named = await cli(rootDir, ["check", "--env", "flag-on"]);
+      expect(named.exitCode).toBe(0);
+      expect(named.stdout).not.toContain("program-placeholder-unfilled");
+      const both = await cli(rootDir, ["check", "--env", "flag-on", "--env", "default"]);
+      expect(both.exitCode).toBe(1);
+      expect(both.stdout).toContain("program-placeholder-unfilled\tnukadoko.program.ts\tworld default: env.BANNER names {condition.banner}");
+      expect(both.stdout).not.toContain("world flag-on:");
+      expect(both.stdout).not.toContain("world staging:");
+    }));
 });
