@@ -2307,9 +2307,19 @@ hook は専用の trace id を持つので、その行はどの step のもの�
   そうした名前はループバックアドレスに解決される(RFC 6761)ので、nukadoko がプログラムに与えたポートに届きます。
   プロジェクトは、scenario の人ごとの cookie を分けるために、そこで人ごとにホスト名を与えます。
 - 自分で `traceparent` を設定したリクエストは、それを保ちます。
-  Request を渡した `fetch` と、プレーンなオブジェクトではない `init` を渡した `fetch` は、ヘッダなしでそのまま送られます。
-  nukadoko はそうした引数を決して作り直さないからです(「Records」を参照)。
-  ヘッダを配列で渡した `node:http` のリクエストは呼び出しが戻るときに送られるので、これもヘッダなしで送られます。
+  `extraHTTPHeaders` で設定した request context(`config.requestContext`、`config.browserContext`)も同じです。
+  ヘッダを配列で渡した `node:http` のリクエストは呼び出しが戻るときに送られるので、ヘッダなしで送られます。
+- ほかのオリジンへのリダイレクトは、ヘッダをそこへ持っていきません。
+  例外が 1 つあります。
+  `fetch` はリダイレクトを自分でたどるので、nukadoko は undici の `undici:request:create` diagnostics channel を通して、undici が送る各ホップにヘッダを足し、足すのは world へのホップだけです。
+  step 自身の引数はそのまま `fetch` に渡るので、Request を渡した `fetch` も、プレーンなオブジェクトではない `init` を渡した `fetch` も、同じようにヘッダが付きます(「Records」を参照)。
+  `node:http` と `node:https` はリダイレクトをたどりません。
+  Chromium の page のほかのオリジンへのリダイレクトはヘッダなしで送られます。
+  DevTools Protocol の接続は world のオリジンにだけ合うからです。
+  例外は Playwright の request context(`request` fixture、`page.request`、`context.request`)です。
+  Playwright はリダイレクトを自分のプロセスの中でたどり、呼び出しのヘッダをそのまま送るので、nukadoko はホップを変えられません。
+  そのとき呼び出しの http.jsonl の行は、レスポンスが来たオリジンを `"traceparent_sent_to": ["https://sso.example"]` として名指すので、id がどこへ行ったかを record が示します。
+  最初のホップと最後のホップの間のオリジンはわかりません。
 - http.jsonl の行は、nukadoko が足した値を `traceparent` として名指します。
   page の行は名指しません。
   ヘッダを足したのはブラウザだからです。
@@ -3330,6 +3340,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   nukadoko が `traceparent` を付けて world へ送ったリクエストの行は、足した値を `"traceparent"` として持ちます(「テスト対象のプログラム」を参照)。
   page の行は持ちません。
   ヘッダを足したのはブラウザだからです。
+  リダイレクトのあと、ほかのオリジンからレスポンスが来た request context の行は、そのオリジンをリストにして `"traceparent_sent_to"` として持ちます。
+  Playwright がリダイレクトと一緒にヘッダを送ったからです。
   それ以外のヘッダは書きません。
   ヘッダは cookie と資格情報を運び、page のヘッダは trace が持つからです。
   page の行は本文を持ちません。
@@ -3349,8 +3361,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   送る前に throw する `fetch`(使用済みの Request、本文付きの GET)は、`fetch` が出すエラーを持つ行になり、step はそのエラーをそのまま受け取ります。
   `fetch` は step が渡した引数を、複製せずそのまま受け取ります。
   `init` は Request でも、メンバーがプロトタイプ上の getter であるオブジェクトでもよく、複製するとそれらが落ちるからです。
-  唯一の例外は、`init` が無いかプレーンなオブジェクトである world へのリクエストです。
-  そうした `init` は複製しても全体が残るので、`traceparent` ヘッダを足した複製を受け取ります(「テスト対象のプログラム」を参照)。
+  world へのリクエストの `traceparent` は、undici が送る各ホップに足し、step の引数には決して足しません(「テスト対象のプログラム」を参照)。
   Upgrade(WebSocket)や CONNECT は、ハンドシェイクの実際のステータス(101 またはトンネルのステータス)を持つ行で、CONNECT の `url` はその宛先の `<host>:<port>` です。
   接続がそのあとに運ぶものは `unmeasured` の socket になり、step の境界はそれを待ちません。
   追記の失敗で step が失敗することはありません。

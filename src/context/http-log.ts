@@ -6,7 +6,7 @@ import type { SecretSet } from "../secrets/types.js";
 import { type ChannelHttpLine, channelRecorder, noResponse, recordRequest, withoutChannelRecording } from "./channels.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import { bodyFields, type RawBody, rawBodyOf } from "./kept-text.js";
-import { TRACEPARENT } from "./trace-context.js";
+import { originOf, TRACEPARENT } from "./trace-context.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
@@ -48,9 +48,17 @@ import { TRACEPARENT } from "./trace-context.js";
 // from the recorder (trace-context.ts), added to the call's own
 // `headers` option, and its line names the value. A relative URL is
 // resolved against the request context's base URL to find its origin. A
-// call that sets its own `traceparent` keeps it, and a call given a
-// Playwright `Request` (`route.fetch()`) goes as it was: that request
-// came from a page, which browser-trace.ts stamps already.
+// call that sets its own `traceparent`, or whose request context sets one
+// in its `extraHTTPHeaders`, keeps it, and a call given a Playwright
+// `Request` (`route.fetch()`) goes as it was: that request came from a
+// page, which browser-trace.ts stamps already.
+//
+// Playwright follows a redirect inside its own process and sends the
+// call's headers on to the origin the redirect names, and nothing lets a
+// caller see or change a hop. So a stamped call whose response comes from
+// another origin says so: its line names that origin in
+// `traceparent_sent_to`, so the record shows where the id went. An origin
+// between the first hop and the last is not known.
 //
 // A call is logged whatever its outcome, from a `finally`: a call that
 // throws (a refused connection, `failOnStatusCode` on a 4xx/5xx) still
@@ -117,6 +125,9 @@ export interface HttpLogEntry {
   /** Not `"page"`: the `traceparent` nukadoko added to a request to the
    * world (docs/spec.md "Program"). Absent when it added none. */
   traceparent?: string;
+  /** `via: "request"` only: the origin other than the world's that a
+   * redirect took the added `traceparent` to (this file's header). */
+  traceparent_sent_to?: readonly string[];
 }
 
 /** The http.jsonl entry of one line a channel patch or a request context
@@ -132,6 +143,7 @@ export function httpLogEntryOf(line: ChannelHttpLine, secrets: SecretSet): HttpL
     ...(line.error !== undefined ? { error: line.error } : {}),
     ...(line.as !== undefined ? { as: line.as } : {}),
     ...(line.traceparent !== undefined ? { traceparent: line.traceparent } : {}),
+    ...(line.traceparent_sent_to !== undefined ? { traceparent_sent_to: line.traceparent_sent_to } : {}),
     ...bodyFields(line.request_body, line.response_body, secrets),
   };
 }
@@ -157,6 +169,9 @@ interface LogTarget {
   /** The request context's base URL, which a relative URL resolves
    * against. */
   readonly baseURL: string | undefined;
+  /** The request context's own `extraHTTPHeaders`, which Playwright sends
+   * with every call. */
+  readonly extraHeaders?: { readonly [name: string]: string } | undefined;
   readonly as?: string | undefined;
 }
 
@@ -191,7 +206,11 @@ async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
   const elapsed = (): number => Math.round(performance.now() - startedAt);
   const rec = channelRecorder();
   const traceparent =
-    rec === undefined || typeof rec.traceparentFor !== "function" || call.headers === null || hasHeader(call.headers, TRACEPARENT)
+    rec === undefined ||
+    typeof rec.traceparentFor !== "function" ||
+    call.headers === null ||
+    hasHeader(call.headers, TRACEPARENT) ||
+    hasHeader(target.extraHeaders, TRACEPARENT)
       ? undefined
       : rec.traceparentFor(url, target.baseURL);
   const stampField = traceparent === undefined ? {} : { traceparent };
@@ -219,6 +238,7 @@ async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
   } finally {
     const sent = await call.requestBody().catch((): RawBody => ({ unread: "the request body could not be read" }));
     const received = response === undefined ? undefined : await responseBodyOf(response);
+    const sentTo = response === undefined || traceparent === undefined || rec?.isWorldUrl?.(response.url()) !== false ? undefined : originOf(response.url());
     const line: ChannelHttpLine = response
       ? {
           method,
@@ -229,6 +249,7 @@ async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
           via: "request",
           ...(as !== undefined ? { as } : {}),
           ...stampField,
+          ...(sentTo !== undefined ? { traceparent_sent_to: [sentTo] } : {}),
           ...(sent !== undefined ? { request_body: sent } : {}),
           ...(received !== undefined ? { response_body: received } : {}),
         }
@@ -330,8 +351,9 @@ export function wrapRequestContextWithLogging(
   secrets: SecretSet,
   httpLogFailed: HttpLogFailedCollector,
   baseURL?: string,
+  extraHeaders?: { readonly [name: string]: string },
 ): APIRequestContext {
-  const log: LogTarget = { logPath, secrets, httpLogFailed, baseURL };
+  const log: LogTarget = { logPath, secrets, httpLogFailed, baseURL, extraHeaders };
   const verb =
     (method: string, send: APIRequestContext["get"]) =>
     (url: string, options?: Parameters<APIRequestContext["get"]>[1]): Promise<APIResponse> =>
@@ -388,13 +410,14 @@ export function instrumentApiRequestContext(
   httpLogFailed: HttpLogFailedCollector,
   as?: string,
   baseURL?: string,
+  extraHeaders?: { readonly [name: string]: string },
 ): void {
   if (instrumentedApiRequests.has(target)) {
     return;
   }
   instrumentedApiRequests.add(target);
   const originalFetch = target.fetch.bind(target);
-  const log: LogTarget = { logPath, secrets, httpLogFailed, baseURL, as };
+  const log: LogTarget = { logPath, secrets, httpLogFailed, baseURL, extraHeaders, as };
   target.fetch = (urlOrRequest, options) =>
     logCall(log, {
       method: methodOf(urlOrRequest, options),

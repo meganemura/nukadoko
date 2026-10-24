@@ -301,6 +301,7 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       options.httpLogFailed,
       as,
       options.contextOptions.baseURL,
+      options.contextOptions.extraHTTPHeaders,
     );
     context.on("console", (msg) => {
       if (msg.type() !== "error") {

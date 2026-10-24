@@ -229,7 +229,11 @@ export function createObservedCollector(
 
   function recorderFor(
     current: () => Boundary,
-  ): StepRecorder & { readonly unwatchedDirs: readonly string[]; traceparentFor(url: string, base?: string): string | undefined } {
+  ): StepRecorder & {
+    readonly unwatchedDirs: readonly string[];
+    traceparentFor(url: string, base?: string): string | undefined;
+    isWorldUrl(url: string, base?: string): boolean;
+  } {
     return {
       unwatchedDirs,
       startProcess(): (entry: ProcessEntry, output?: ProcessOutput) => void {
@@ -298,6 +302,9 @@ export function createObservedCollector(
         state.stamped += 1;
         state.lastStampAt = Date.now();
         return traceparentOf(state.traceId, newSpanId());
+      },
+      isWorldUrl(url: string, base?: string): boolean {
+        return trace !== undefined && stampsUrl(trace.origin, url, base);
       },
     };
   }

@@ -2,10 +2,8 @@ import { readFileSync } from "node:fs";
 import http from "node:http";
 import type net from "node:net";
 import path from "node:path";
-import * as hegel from "@hegeldev/hegel";
-import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { installChannelPatches, withTraceparent } from "../src/context/channels.js";
+import { installChannelPatches } from "../src/context/channels.js";
 import { createObservedCollector, type ObservedCollector } from "../src/context/observed.js";
 import { withProcessRecording } from "../src/context/run-command.js";
 import { createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
@@ -13,7 +11,7 @@ import { createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
 // Responsibility: the `traceparent` the channel patches add to a request a
 // step sends to the world (src/context/channels.ts, observed.ts): through
 // `fetch` and `node:http`, only to the world's origin, never over the
-// caller's own header, never by rebuilding what the caller passed, one
+// caller's own header, never by changing what the caller passed, one
 // trace id per boundary under the world's prefix and one span id per
 // request, counted only when the header was added.
 
@@ -96,22 +94,13 @@ describe("fetch", () => {
     expect(trace.lastStampAt).toEqual(expect.any(Number));
   });
 
-  it("keeps the caller's own traceparent, and leaves a Request, a non-plain init, and another origin unstamped", async () => {
+  it("keeps the caller's own traceparent, and leaves another origin unstamped", async () => {
     await inStep(async () => {
       await (await fetch(`${base}/own`, { headers: { TraceParent: OWN } })).text();
-      await (await fetch(new Request(`${base}/request`))).text();
-      class Init {
-        get method(): string {
-          return "GET";
-        }
-      }
-      await (await fetch(`${base}/class`, new Init() as RequestInit)).text();
       await fetch("http://127.0.0.1:9/elsewhere").catch(() => undefined);
     });
     await observed.flush();
     expect(received.get("/own")).toBe(OWN);
-    expect(received.get("/request")).toBeUndefined();
-    expect(received.get("/class")).toBeUndefined();
     expect(httpLines().every((line) => line.traceparent === undefined)).toBe(true);
     expect(observed.boundaryTrace()!.stamped).toBe(0);
   });
@@ -139,58 +128,6 @@ describe("fetch", () => {
     await inStep(async () => (await fetch(`${base}/none`)).text());
     expect(received.get("/none")).toBeUndefined();
     expect(observed.boundaryTrace()).toBeUndefined();
-  });
-});
-
-describe("withTraceparent", () => {
-  const value = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
-  const name = gs.text({ alphabet: "abcdefxyz-", minSize: 1, maxSize: 8 }).filter((text) => text !== "traceparent");
-  const headerValue = gs.text({ alphabet: "abc 123;=", maxSize: 8 }).map((text) => text.trim());
-
-  it("adds the header to plain headers and keeps every other header and init member as the caller passed it", () =>
-    hegel.test((tc) => {
-      const headers = Object.fromEntries(tc.draw(gs.arrays(gs.tuples(name, headerValue), { maxSize: 5 })));
-      const signal = new AbortController().signal;
-      const init = { method: tc.draw(gs.sampledFrom(["GET", "POST", "PUT"])), headers, signal, keepalive: tc.draw(gs.booleans()) };
-      const stamped = withTraceparent(["http://localhost:1/x", init], () => value)!;
-      const [input, sent] = stamped.args;
-      expect(input).toBe("http://localhost:1/x");
-      expect(stamped.traceparent).toBe(value);
-      expect(sent?.method).toBe(init.method);
-      expect(sent?.signal).toBe(signal);
-      expect(sent?.keepalive).toBe(init.keepalive);
-      const result = new Headers(sent?.headers);
-      expect(result.get("traceparent")).toBe(value);
-      expect(Object.fromEntries([...result].filter(([key]) => key !== "traceparent"))).toEqual(Object.fromEntries([...new Headers(headers)]));
-    }));
-
-  it("leaves the arguments alone where adding a header would change them", () => {
-    const stamp = (): string => value;
-    expect(withTraceparent(["http://localhost:1/x", { headers: [["traceparent", OWN]] }], stamp)).toBeUndefined();
-    expect(withTraceparent([new Request("http://localhost:1/x")], stamp)).toBeUndefined();
-    expect(withTraceparent(["http://localhost:1/x", new Request("http://localhost:1/x") as unknown as RequestInit], stamp)).toBeUndefined();
-    expect(withTraceparent(["http://localhost:1/x", { headers: { "bad header": "x" } }], stamp)).toBeUndefined();
-    expect(withTraceparent(["http://localhost:1/x"], () => undefined)).toBeUndefined();
-    // Headers and arrays of pairs are read, not copied by reference.
-    const fromHeaders = withTraceparent(["http://localhost:1/x", { headers: new Headers({ a: "1" }) }], stamp)!;
-    expect([...new Headers(fromHeaders.args[1]?.headers)]).toEqual([
-      ["a", "1"],
-      ["traceparent", value],
-    ]);
-    expect(withTraceparent([new URL("http://localhost:1/x")], stamp)?.args[1]?.headers).toEqual(new Headers({ traceparent: value }));
-  });
-
-  it("asks for a value only once the header will be added, so the count is of requests that carry one", () => {
-    let asked = 0;
-    const stamp = (): string => {
-      asked += 1;
-      return value;
-    };
-    withTraceparent(["http://localhost:1/x", { headers: { traceparent: OWN } }], stamp);
-    withTraceparent([new Request("http://localhost:1/x")], stamp);
-    expect(asked).toBe(0);
-    withTraceparent(["http://localhost:1/x"], stamp);
-    expect(asked).toBe(1);
   });
 });
 

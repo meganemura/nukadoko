@@ -2795,12 +2795,30 @@ A hook gets a trace id of its own, so its lines belong to no step.
   (RFC 6761), so it reaches the port nukadoko gave the program, and a
   project gives each person in a scenario a host name of their own there
   to keep their cookies apart.
-- A request that sets its own `traceparent` keeps it.
-  A `fetch` given a Request, or an `init` that is not a plain object,
-  goes as it was and without the header, since nukadoko never rebuilds
-  those arguments (see "Records").
+- A request that sets its own `traceparent` keeps it, and so does a
+  request context whose `extraHTTPHeaders` set one
+  (`config.requestContext`, `config.browserContext`).
   A `node:http` request whose headers were given as an array is sent as
-  the call returns, so it goes without one too.
+  the call returns, so it goes without one.
+- A redirect to another origin does not take the header there, with one
+  exception.
+  `fetch` follows a redirect itself, so nukadoko adds the header to each
+  hop as undici sends it, through undici's `undici:request:create`
+  diagnostics channel, and only to a hop to the world.
+  The step's own arguments go to `fetch` untouched, so a `fetch` given
+  a Request, or an `init` that is not a plain object, is stamped the same
+  way (see "Records").
+  `node:http` and `node:https` do not follow a redirect.
+  A Chromium page's redirect to another origin goes without the header,
+  since the DevTools session matches only the world's origin.
+  The exception is a Playwright request context (the `request` fixture,
+  `page.request`, `context.request`): Playwright follows the redirect
+  inside its own process and sends the call's headers on, and nothing
+  lets nukadoko change a hop.
+  The call's http.jsonl line then names the origin its response came
+  from, `"traceparent_sent_to": ["https://sso.example"]`, so the record
+  shows where the id went; an origin between the first hop and the last
+  is not known.
 - A line of http.jsonl names the value nukadoko added, as `traceparent`.
   A page's line does not: the browser added it.
 - A page's requests are stamped through the Chrome DevTools Protocol, so
@@ -4146,7 +4164,10 @@ its scenario record's id, so either record leads to the other.
   status), kept as text of at most 16 KiB each (below).
   A line of a request nukadoko sent to the world with a `traceparent` has
   `"traceparent"`, the value it added (see "Program"); a page's line does
-  not, since the browser added it.
+  not, since the browser added it. A request context's line whose
+  response came from another origin, after a redirect, has
+  `"traceparent_sent_to"`, that origin in a list: Playwright sent the
+  header on with the redirect.
   No header is written: headers carry cookies and credentials, and the
   trace holds a page's. A page line has no bodies: the trace already holds
   the page's traffic. A call the step itself made is logged whatever its outcome,
@@ -4169,10 +4190,9 @@ its scenario record's id, so either record leads to the other.
   error `fetch` gives, and the step gets exactly that error. A `fetch`
   gets exactly the arguments the step passed, never a copy: its `init`
   can be a Request, or an object whose members are getters on its
-  prototype, and a copy would drop them. The one exception is a request
-  to the world whose `init` is absent or a plain object, which a copy
-  holds whole: it gets a copy with a `traceparent` header added (see
-  "Program"). An upgrade
+  prototype, and a copy would drop them. The `traceparent` of a request
+  to the world is added to each hop as undici sends it, never to the
+  step's arguments (see "Program"). An upgrade
   (a WebSocket) or a CONNECT is a line with the handshake's real status,
   101 or the tunnel's, and `url` is the CONNECT target `<host>:<port>`;
   what the connection carries afterwards is an `unmeasured` socket, and

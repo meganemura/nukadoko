@@ -287,8 +287,15 @@ just until 0.1.
   request context, and a Chromium page's documents, fetches, XHRs, and
   EventSources. For a `localhost` world, a name below `localhost` at the
   same port counts as the world's origin. A request that sets its own
-  `traceparent` keeps it, and a request to another origin goes as
-  before. A page's requests are stamped through the DevTools Protocol,
+  `traceparent`, or whose request context's `extraHTTPHeaders` set one,
+  keeps it. A request to another origin gets no header, and neither does
+  a redirect to one: `fetch` is stamped on each hop as undici sends it,
+  through the `undici:request:create` diagnostics channel, only on a hop
+  to the world, and with the step's arguments untouched, so a `fetch`
+  given a Request or a non-plain `init` is stamped too. The exception is
+  a Playwright request context, which follows a redirect inside
+  Playwright and sends the call's headers on; its http.jsonl line then
+  names that origin in `traceparent_sent_to`. A page's requests are stamped through the DevTools Protocol,
   since `setExtraHTTPHeaders` sent the header to other origins and broke
   a CORS request with a preflight, and `context.route` turned the HTTP
   cache off; Firefox and WebKit pages go unstamped. When nukadoko serves

@@ -1174,6 +1174,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         secrets,
         httpLogFailed,
         baseURL,
+        config.requestContext?.extraHTTPHeaders,
       );
     }
     return requestContext;

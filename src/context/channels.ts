@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import childProcess from "node:child_process";
 import dgram from "node:dgram";
+import diagnosticsChannel from "node:diagnostics_channel";
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -85,12 +86,27 @@ import { writeMadeByPlaywrightServer } from "./write-origin.js";
 //
 // A request to the world's origin also gets a `traceparent` header here,
 // the recorder's (observed.ts, trace-context.ts), so the program's log can
-// say which step sent it. Only where adding a header changes nothing else
-// the caller passed: a `fetch` whose `init` is absent or a plain object
-// (a copy of it holds every member), and a `ClientRequest` whose headers
-// are not sent yet. A caller's own `traceparent` is kept. A `fetch`
-// given a Request, or an `init` of any other kind, goes as it was,
-// without one: rebuilding it is what the rule above forbids.
+// say which step sent it, and only where adding it changes nothing else
+// the caller passed. A caller's own `traceparent` is kept.
+//
+// `fetch` follows a redirect itself, and a header put in the caller's
+// `init` would follow the redirect to whatever origin it names, a third
+// party's included. So the caller's arguments go to the original
+// untouched, and the header is added to each hop on its own: undici
+// publishes every request it creates, the first and each redirect, on the
+// `undici:request:create` diagnostics channel, and the subscriber adds
+// the header to a hop whose origin is the world's, through the request's
+// own `addHeader`. A hop's headers are made again from the caller's
+// arguments, so a header added to one hop never reaches the next. One
+// `fetch` call has one value, asked of the recorder at its first stamped
+// hop and reused on the others, since it is one line of http.jsonl and
+// one request the step counts. Measured on Node 22.22.0, 22.23.4,
+// 24.22.1, and 26.12.1: the channel fires once per hop, before the hop is
+// sent, in the `fetch` call's async context, and `addHeader` exists.
+//
+// `node:http` and `node:https` do not follow a redirect, so a
+// `ClientRequest` is one hop; it gets the header while its headers are
+// not sent yet.
 //
 // What no patch reaches: a Worker's own globals, a native addon, a child
 // process's own traffic, a function copied before installation, a
@@ -113,6 +129,10 @@ export interface ChannelHttpLine {
   readonly response_body?: RawBody;
   /** The `traceparent` nukadoko added to the request, when it added one. */
   readonly traceparent?: string;
+  /** The origins other than the world's that the added `traceparent`
+   * reached: a Playwright request context sends a call's headers on to
+   * the origin a redirect names (http-log.ts). */
+  readonly traceparent_sent_to?: readonly string[];
 }
 
 /** Where nukadoko stopped waiting for a request: at its step boundary's
@@ -173,6 +193,8 @@ export interface ChannelRecorder {
    * the world's or the run has no world. Called only once the caller knows
    * it will add the header. */
   traceparentFor?(url: string, base?: string): string | undefined;
+  /** Whether a request to `url` goes to the world, counting nothing. */
+  isWorldUrl?(url: string, base?: string): boolean;
 }
 
 const SCOPE_KEY = Symbol.for("nukadoko.runCommand.scope");
@@ -416,36 +438,55 @@ function fetchMethod(args: FetchArgs): string {
   return String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 }
 
-function isPlainObject(value: object): boolean {
-  const prototype = Object.getPrototypeOf(value) as unknown;
-  return prototype === Object.prototype || prototype === null;
+/** One `fetch` call's stamp: the recorder that hands out the value, and
+ * the value once a hop to the world was given it (this file's header). */
+interface FetchStamp {
+  readonly rec: ChannelRecorder;
+  traceparent: string | undefined;
 }
 
-/** `args` with a `traceparent` header added, and the value, when the
- * request goes to the world (this file's own header): `input` a string
- * or a URL, `init` absent or a plain object, and headers `Headers` can
- * read, without one of their own. `undefined` leaves `args` as the caller
- * passed them. Throws where reading the arguments throws. */
-export function withTraceparent(
-  args: FetchArgs,
-  traceparentFor: (url: string) => string | undefined,
-): { readonly args: FetchArgs; readonly traceparent: string } | undefined {
-  const [input, init] = args;
-  if (typeof input !== "string" && !(input instanceof URL)) return undefined;
-  if (init !== undefined && (typeof init !== "object" || init === null || !isPlainObject(init))) return undefined;
-  let headers: Headers;
-  try {
-    headers = new Headers(init?.headers);
-  } catch {
-    // Headers `fetch` would refuse: the original refuses them, with its
-    // own error.
-    return undefined;
+const fetchStamps = new AsyncLocalStorage<FetchStamp>();
+
+/** The members of undici's request the hop stamp reads. */
+interface UndiciRequest {
+  readonly origin?: unknown;
+  readonly path?: unknown;
+  readonly headers?: unknown;
+  addHeader?(name: string, value: string): unknown;
+}
+
+/** Whether undici's request headers, a flat `[name, value, ...]` array
+ * or the `name: value\r\n` text an older undici keeps, hold a
+ * `traceparent`. */
+export function carriesTraceparent(headers: unknown): boolean {
+  if (Array.isArray(headers)) {
+    for (let index = 0; index < headers.length; index += 2) {
+      if (String(headers[index]).toLowerCase() === TRACEPARENT) return true;
+    }
+    return false;
   }
-  if (headers.has(TRACEPARENT)) return undefined;
-  const traceparent = traceparentFor(fetchTarget(input));
-  if (traceparent === undefined) return undefined;
-  headers.set(TRACEPARENT, traceparent);
-  return { args: [input, { ...init, headers }], traceparent };
+  return typeof headers === "string" && /(?:^|\n)traceparent[ \t]*:/i.test(headers);
+}
+
+/** Adds the `fetch` call's `traceparent` to one hop that goes to the
+ * world and carries none of its own (this file's header). */
+function stampFetchHop(message: unknown): void {
+  const stamp = fetchStamps.getStore();
+  if (stamp === undefined) return;
+  try {
+    const request = (message as { readonly request?: UndiciRequest } | null)?.request;
+    if (request === undefined || typeof request.addHeader !== "function" || carriesTraceparent(request.headers)) return;
+    const url = new URL(String(request.path), String(request.origin)).href;
+    if (stamp.traceparent === undefined) {
+      stamp.traceparent = stamp.rec.traceparentFor?.(url);
+      if (stamp.traceparent === undefined) return;
+    } else if (stamp.rec.isWorldUrl?.(url) !== true) {
+      return;
+    }
+    request.addHeader(TRACEPARENT, stamp.traceparent);
+  } catch {
+    // A hop nukadoko cannot read goes as undici made it.
+  }
 }
 
 async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args: FetchArgs): Promise<Response> {
@@ -454,24 +495,19 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
   let method = "GET";
   let declared = "";
   let request: FetchBody;
-  let sent: FetchArgs = args;
-  let traceparent: string | undefined;
+  const stamp: FetchStamp = { rec, traceparent: undefined };
   try {
     method = fetchMethod(args);
     declared = fetchTarget(args[0]);
     request = requestBodyOf(args);
-    const stamped = typeof rec.traceparentFor === "function" ? withTraceparent(args, (url) => rec.traceparentFor?.(url)) : undefined;
-    if (stamped !== undefined) {
-      sent = stamped.args;
-      traceparent = stamped.traceparent;
-    }
   } catch {
     // The caller's own arguments still go to the original, so the caller
     // gets exactly the error `fetch` throws for them, and the line
     // records it.
     request = { body: undefined };
   }
-  const stampField = traceparent === undefined ? {} : { traceparent };
+  // Read when the line is made: the value is known once a hop was sent.
+  const stampField = (): { traceparent?: string } => (stamp.traceparent === undefined ? {} : { traceparent: stamp.traceparent });
   let requestBody: RawBody | undefined = request.body instanceof Promise ? undefined : request.body;
   const requestBodyRead = Promise.resolve(request.body).then(
     (body) => (requestBody = body),
@@ -491,7 +527,7 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
       duration_ms: durationMs,
       via: "fetch",
       error,
-      ...stampField,
+      ...stampField(),
       ...(body !== undefined ? { request_body: body } : {}),
     };
   };
@@ -510,7 +546,7 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
 
   let response: Response;
   try {
-    response = await withoutChannelRecording(() => original(...sent));
+    response = await withoutChannelRecording(() => fetchStamps.run(stamp, () => original(...args)));
   } catch (error) {
     const failure = { error: firstLine(error), durationMs: elapsed() };
     thrown = failure;
@@ -525,7 +561,7 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
     status: response.status,
     duration_ms: elapsed(),
     via: "fetch",
-    ...stampField,
+    ...stampField(),
   };
   let capture: { done: Promise<RawBody>; finalize(): RawBody } | undefined;
   if (response.body !== null) {
@@ -549,6 +585,7 @@ function installFetch(): void {
     return recordedFetch(rec, original, args);
   }, original);
   globalThis.fetch = patched as typeof fetch;
+  diagnosticsChannel.subscribe("undici:request:create", stampFetchHop);
 }
 
 /** The bytes of one chunk a stream emitted or a write was given. A string
