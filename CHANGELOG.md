@@ -274,9 +274,14 @@ just until 0.1.
   stderr as it starts, and what `setup` prints reaches stderr and
   `program.log` redacted. A signal while a world starts stops it at once
   and leaves no program running, in `nuka do` and under `--concurrency`
-  as well. Step files load before any world's env is set, at every
-  `--concurrency`, and a step reads the world's env when it runs. A
-  placeholder a world has
+  as well. `serve.ready` is a path on the world's own server, starting
+  with one `/`; the ready check counts only a 2xx answer and never
+  follows a redirect, and a world that never gets one names the last
+  answer it got. `url` is an `http:` or `https:` URL with no user or
+  password, refused when the file is read, and a url function's answer
+  is held to the same rule when the world starts. Step files load before
+  any world's env is set, at every `--concurrency`, and a step reads the
+  world's env when it runs. A placeholder a world has
   no value for is the check error `program-placeholder-unfilled`, for
   every world the file can start, and `nuka run` and `nuka do` refuse it
   with that code before any command runs. `nuka run` starts one world
@@ -317,7 +322,8 @@ just until 0.1.
   names that origin in `traceparent_sent_to`. A page's requests are stamped through the DevTools Protocol,
   since `setExtraHTTPHeaders` sent the header to other origins and broke
   a CORS request with a preflight, and `context.route` turned the HTTP
-  cache off; Firefox and WebKit pages go unstamped. When nukadoko serves
+  cache off; Firefox and WebKit pages, a popup's first requests, and a
+  service worker's requests go unstamped. When nukadoko serves
   the program, a line of `program.log` belongs to the step whose trace
   id it carries, wherever and whenever it appears, so a server that logs
   the trace id with a span id of its own is read correctly and a line

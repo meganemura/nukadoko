@@ -4,7 +4,7 @@ import { mkdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { format } from "node:util";
-import { commandWords, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
+import { commandWords, programUrlProblem, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
@@ -350,6 +350,10 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
                   "the url function",
                   abort,
                 );
+          // A string `url` was checked at load; what a function returns
+          // is checked here, by the same rule, without quoting it.
+          const problem = programUrlProblem(String(url));
+          if (problem !== undefined) throw new WorldStartError(`the url function's answer ${problem}`);
         }
         const values: PlaceholderValues = {
           root: options.rootDir,
@@ -459,6 +463,17 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       }
     },
   };
+}
+
+/** The last answer the ready check got, for the message when none was
+ * 2xx. A redirect names where it pointed, since that is usually the
+ * mistake: `ready` names a path that sends a visitor to a login page. */
+function describeAnswer(response: Response): string {
+  const location = response.headers.get("location");
+  if (response.status >= 300 && response.status < 400 && location !== null) {
+    return `the last answer was ${response.status}, a redirect to ${location}, which the ready check does not follow`;
+  }
+  return `the last answer was ${response.status}`;
 }
 
 function filledText(text: string, values: PlaceholderValues, where: string): string {
@@ -676,6 +691,7 @@ async function waitUntilReady(server: ServeProcess, readyUrl: string, timeoutMs:
   const deadline = Date.now() + timeoutMs;
   const aborted = abortedBy(abort);
   aborted.catch(() => {});
+  let lastAnswer: string | undefined;
   for (;;) {
     if (abort?.aborted === true) throw new WorldStartAborted("the start was aborted");
     if (server.exit !== null) {
@@ -683,13 +699,19 @@ async function waitUntilReady(server: ServeProcess, readyUrl: string, timeoutMs:
     }
     const remaining = deadline - Date.now();
     if (remaining <= 0) {
-      throw new WorldStartError(`serve command ${display(server.argv)} did not answer ${readyUrl} with a 2xx status within ${timeoutMs} ms`);
+      throw new WorldStartError(
+        `serve command ${display(server.argv)} did not answer ${readyUrl} with a 2xx status within ${timeoutMs} ms (timeout_ms)${lastAnswer === undefined ? "" : `; ${lastAnswer}`}`,
+      );
     }
     try {
       const signals = [AbortSignal.timeout(Math.min(READY_REQUEST_MS, remaining)), ...(abort === undefined ? [] : [abort])];
-      const response = await fetch(readyUrl, { signal: AbortSignal.any(signals) });
+      // A redirect is an answer, not ready: following one would let a
+      // ready path that sends the check elsewhere, a login page or
+      // another host, answer for the program.
+      const response = await fetch(readyUrl, { signal: AbortSignal.any(signals), redirect: "manual" });
       await response.body?.cancel();
       if (response.ok) return;
+      lastAnswer = describeAnswer(response);
     } catch {
       // Not listening yet, or not answering in time: the next poll asks again.
     }

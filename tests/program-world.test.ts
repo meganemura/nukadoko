@@ -165,9 +165,29 @@ describe("a world that does not start", () => {
     const world = await starter().start("default", recipe({ ...SERVE, serve: { command: "node pid.mjs", ready: "/fail", timeout_ms: 800 } }), []);
     expect(world.ok).toBe(false);
     if (world.ok) return;
-    expect(world.message).toMatch(/serve command node pid\.mjs did not answer http:\/\/localhost:\d+\/fail with a 2xx status within 800 ms\./);
+    expect(world.message).toMatch(/serve command node pid\.mjs did not answer http:\/\/localhost:\d+\/fail with a 2xx status within 800 ms \(timeout_ms\); the last answer was 500\./);
     const pid = Number(readFileSync(path.join(rootDir, "pid"), "utf8"));
     expect(() => process.kill(pid, 0)).toThrow();
+  });
+
+  it("does not follow a redirect from the ready path, and names where it pointed", async () => {
+    writeFileSync(
+      path.join(rootDir, "redirect.mjs"),
+      [
+        'import { createServer } from "node:http";',
+        "createServer((req, res) => {",
+        '  if (req.url === "/up") res.writeHead(302, { location: "/login" });',
+        "  else res.writeHead(200);",
+        "  res.end();",
+        "}).listen(Number(process.env.PORT));",
+      ].join("\n"),
+    );
+    const world = await starter().start("default", recipe({ serve: { command: "node redirect.mjs", ready: "/up", timeout_ms: 800 }, env: { PORT: "{port}" } }), []);
+    expect(world.ok ? null : world.message).toMatch(
+      /did not answer http:\/\/localhost:\d+\/up with a 2xx status within 800 ms \(timeout_ms\); the last answer was 302, a redirect to \/login, which the ready check does not follow\./,
+    );
+    // The program's log has the one path it was asked, never /login.
+    expect(readFileSync(path.join(runDir, "worlds", "default", "program.log"), "utf8")).not.toContain("/login");
   });
 
   it("refuses a fixed port something already answers on", async () => {
@@ -314,6 +334,19 @@ describe("the limit and the process group of each phase", () => {
 });
 
 describe("a world nukadoko does not serve", () => {
+  it.each([
+    ["localhost:4123", 'must be an http: or https: URL, such as "http://localhost:3000"'],
+    [
+      "http://user:hunter2@127.0.0.1:1",
+      "must not hold a user or a password: fetch refuses such a URL, and every record names the world's URL; a step sends credentials itself, from an env file",
+    ],
+  ])("refuses a url function that answers %s, without quoting it", async (answer, reason) => {
+    const world = await starter().start("default", recipe({ url: () => answer }), []);
+    expect(world.ok ? null : world.message).toBe(`the program did not start for world default: the url function's answer ${reason}`);
+    expect(world.ok ? null : world.message).not.toContain("hunter2");
+  });
+
+
   it("reaches a url, a function of the world, and starts nothing", async () => {
     const progress = createCaptureSink();
     const world = await startOk(

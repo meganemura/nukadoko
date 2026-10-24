@@ -408,4 +408,19 @@ describe("a program nukadoko serves", () => {
       `refused\tconfig-invalid\t-\tInvalid program at ${path.join(rootDir, "nukadoko.program.ts")}: url: serve and url are two ways to reach the program`,
     );
   });
+
+  it.each([
+    ["serve: { command: \"node app/server.mjs\", ready: \"//example.com/up\" }", "serve.ready: must be a path on the world's own server"],
+    ["url: \"localhost:4123\"", 'url: must be an http: or https: URL, such as "http://localhost:3000"'],
+    ["url: \"http://user:hunter2@127.0.0.1:1\"", "url: must not hold a user or a password"],
+  ])("nuka check and nuka run refuse %s before anything runs", async (field, reason) => {
+    await writeFile(path.join(rootDir, "nukadoko.program.ts"), `export default { ${field} };\n`);
+    for (const args of [["check"], ["run", "--no-check"]]) {
+      const { exitCode, stderr } = await cli(rootDir, args);
+      expect(exitCode).toBe(2);
+      expect(stderr).toContain(`refused\tconfig-invalid\t-\tInvalid program at ${path.join(rootDir, "nukadoko.program.ts")}: ${reason}`);
+      expect(stderr).not.toContain("hunter2");
+    }
+    expect(stepRecordIds(rootDir)).toEqual([]);
+  });
 });

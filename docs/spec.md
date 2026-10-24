@@ -2506,7 +2506,7 @@ with `runCommand`: such a project needs nothing new.
 | `build` | commands run once per tree per run, in the tree's root, before any world (`npm run build`, `bundle install`, `go build ./...`) |
 | `prepare` | commands run once per world, in the tree's root, with the world's env (`bin/rails db:prepare`) |
 | `serve` | `{ command, port, ready, timeout_ms }`: the server nukadoko starts, waits for, and stops (below) |
-| `url` | a URL, or a function of the world that returns one, for a program nukadoko does not start (below) |
+| `url` | an `http:` or `https:` URL, or a function of the world that returns one, for a program nukadoko does not start (below) |
 | `env` | the variables the world's processes and the steps' process get, with placeholders (below) |
 | `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, url, port, env }` (`{ run, timeout_ms }` to give it a limit of its own, below) |
 | `environments` | named overrides of any field above, plus `policy`, `envFiles`, and `version` (below) |
@@ -2555,9 +2555,19 @@ world's requests there, and stops the program after the world's pass.
   nukadoko sets no variable a program did not ask for, because `PORT` is a
   convention and not every program reads it.
 - The world's URL is `http://localhost:<port>`.
-- `ready` is a path, `/` by default.
+- `ready` is a path on the world's server, `/` by default.
+  It starts with one `/`: `//example.com/up` would name another host,
+  and so would a `\` after the first `/`, which a URL parser reads as a
+  second one, so both are refused when the file is read.
   nukadoko sends `GET` to it every 100 ms, each request with 2 seconds to
   answer, until one answers with a 2xx status.
+  Only a 2xx answer counts as ready.
+  A redirect is neither followed nor counted: a ready path that sends a
+  visitor to a login page, or to another host, would otherwise answer for
+  a program that cannot take requests yet.
+  Any other status, or no answer, is asked again at the next poll, and
+  when `ready` does not answer in time, the message names the last
+  answer, with where a redirect pointed.
   A port that accepts connections is not enough: Rails and many other
   servers listen before they can answer, and a scenario that starts then
   fails for a reason the criteria do not name.
@@ -2843,6 +2853,16 @@ environments: {
 },
 ```
 
+`url` is an `http:` or `https:` URL with no user and no password.
+Anything else written as a string is refused when the file is read, with
+`config-invalid`: a request to another scheme never reaches the world,
+so no request would carry a `traceparent` and no step would say why,
+and `fetch` refuses a URL that holds a password, which every record that
+names the world's URL would show.
+What a function returns is held to the same rule when the world starts,
+and fails the world with `program-start-failed`.
+Neither refusal quotes the URL.
+
 Such a world starts nothing and writes no `program.log`: nukadoko cannot
 read the log of a program it does not run, so the world's `log` is
 `null`.
@@ -3053,6 +3073,19 @@ at the median, and 50 ms at most.
 Run in turn, back to back, the run took 77.5 and 79.3 s, against 73.6
 and 74.4 s for the same suite with no request stamped and the Rails log
 written to its file.
+
+What this does not reach, in one list:
+
+- A service worker's requests go without a `traceparent`: nukadoko
+  stamps a page's own requests, and a service worker sends its requests
+  apart from any page.
+- A Firefox or WebKit page's requests go without one, and so do a
+  Chromium popup's first requests (above).
+- With `port: "auto"`, nukadoko closes the free port it found before the
+  program starts, and it does not prove that the server answering
+  `ready` there is the one it started: a process that took the port in
+  between would answer for it.
+  A fixed `port` is checked before the program starts (see "serve").
 
 ### A Ruby program
 

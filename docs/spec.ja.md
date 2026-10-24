@@ -2070,7 +2070,7 @@ step が `runCommand` でコマンドを実行するコマンドラインツー�
 | `build` | run ごと、tree ごとに 1 回、どの world よりも前に、tree のルートで実行するコマンド(`npm run build`、`bundle install`、`go build ./...`) |
 | `prepare` | world ごとに 1 回、tree のルートで、world の env を付けて実行するコマンド(`bin/rails db:prepare`) |
 | `serve` | `{ command, port, ready, timeout_ms }`: nukadoko が起動し、待ち、止めるサーバ(下記) |
-| `url` | nukadoko が起動しないプログラムの URL、またはそれを返す world の関数(下記) |
+| `url` | nukadoko が起動しないプログラムの `http:` か `https:` の URL、またはそれを返す world の関数(下記) |
 | `env` | world のプロセスと step のプロセスが受け取る変数。プレースホルダーを使える(下記) |
 | `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, url, port, env }`(専用の持ち時間を与えるには `{ run, timeout_ms }`、下記) |
 | `environments` | 上のどのフィールドも上書きする名前付きの設定。加えて `policy`、`envFiles`、`version`(下記) |
@@ -2114,8 +2114,17 @@ nukadoko は `serve.command` を起動し、`ready` が答えるまで待ち、w
   nukadoko は、プログラムが求めていない変数を設定しません。
   `PORT` は慣習にすぎず、すべてのプログラムが読むわけではないからです。
 - world の URL は `http://localhost:<port>` です。
-- `ready` はパスで、既定は `/` です。
+- `ready` は world のサーバ上のパスで、既定は `/` です。
+  先頭の `/` は 1 つだけです。
+  `//example.com/up` は別のホストを名指します。
+  最初の `/` の後ろの `\` も、URL の parser が 2 つ目の `/` として読むので、同じく別のホストを名指します。
+  そのためどちらもファイルを読んだ時点で拒否されます。
   nukadoko はそこへ 100 ms ごとに `GET` を送り、それぞれの request には答えるまで 2 秒を与え、どれかが 2xx で答えるまで続けます。
+  準備ができたとみなすのは 2xx の答えだけです。
+  リダイレクトはたどらず、準備ができたともみなしません。
+  訪問者をログインのページや別のホストへ送る `ready` のパスが、まだ request を受けられないプログラムの代わりに答えてしまうからです。
+  ほかのステータスや答えが無いときは、次のポーリングでまた尋ねます。
+  `ready` が時間内に答えないとき、メッセージは最後の答えを示し、リダイレクトならその行き先も示します。
   接続を受け付けるポートだけでは足りません。
   Rails をはじめ多くのサーバは、答えられるようになる前に待ち受けを始めます。
   そのときに始まった scenario は、criteria が名指さない理由で失敗します。
@@ -2348,6 +2357,13 @@ environments: {
 },
 ```
 
+`url` は、ユーザーもパスワードも含まない `http:` か `https:` の URL です。
+文字列で書いたそれ以外のものは、ファイルを読んだ時点で `config-invalid` で拒否されます。
+別のスキームへの request は world に届かないので、どの request も `traceparent` を運ばず、なぜなのかをどの step も示さないからです。
+また `fetch` はパスワードを含む URL を拒否し、world の URL を名指すすべての record がそのパスワードを示してしまうからです。
+関数が返したものも、world を起動するときに同じ規則で確かめられ、`program-start-failed` で world を失敗させます。
+どちらの拒否も URL を引用しません。
+
 そうした world は何も起動せず、`program.log` を書きません。
 nukadoko は自分が動かしていないプログラムのログを読めないので、world の `log` は `null` です。
 そのリクエストはそれでも `traceparent` を運び、各 step の `observed.program_log` は `null` です(「trace context とプログラムのログ」を参照)。
@@ -2498,6 +2514,16 @@ id が行のテキストにあれば、形は何でも構いません。
 64 の step では待たず、中央値は 10 ms、最大は 50 ms です。
 交互に続けて実行すると、run は 77.5 s と 79.3 s かかりました。
 どのリクエストにもヘッダを付けず、Rails のログをファイルに書いた同じスイートでは 73.6 s と 74.4 s です。
+
+この仕組みが届かないものを、1 つの一覧にまとめます:
+
+- service worker のリクエストは `traceparent` を運びません。
+  nukadoko が付けるのはページ自身のリクエストで、service worker はどのページとも別にリクエストを送るからです。
+- Firefox と WebKit のページのリクエストも運ばず、Chromium のポップアップの最初のリクエストも運びません(上記)。
+- `port: "auto"` では、nukadoko は見つけた空きポートをプログラムの起動前に閉じます。
+  そのポートで `ready` に答えるサーバが自分の起動したものであることは確かめません。
+  その間にポートを取ったプロセスがあれば、そのプロセスが代わりに答えます。
+  固定の `port` は、プログラムの起動前に確かめられます(「serve」を参照)。
 
 ### Ruby のプログラム
 

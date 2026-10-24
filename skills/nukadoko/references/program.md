@@ -29,6 +29,10 @@ terminal has to keep a server running, and no fixture starts one.
 A command is an argv array, or a string split on whitespace. Neither goes
 through a shell; write `["sh", "-c", "a && b"]` when one is needed. The
 program learns its port only from `{port}`, in the command or in `env`.
+`ready` is a path on the program's own server, and only a 2xx answer
+counts: a redirect is not followed, so name a path that answers 200 with
+no login (`/up`, `/health`). `url` is an `http:` or `https:` URL with
+no user or password in it.
 
 | Placeholder | Its value |
 | --- | --- |

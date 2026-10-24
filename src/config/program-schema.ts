@@ -84,6 +84,61 @@ export interface ProgramWorld extends ProgramWorldPlace {
 export type ProgramUrl = string | ((world: ProgramWorldPlace) => string | Promise<string>);
 export type ProgramSetup = (world: ProgramWorld) => unknown;
 
+const HTTP_URL = 'must be an http: or https: URL, such as "http://localhost:3000"';
+
+/** Why `url` cannot be a world's URL, or `undefined` when it can be. Only
+ * an `http:` or `https:` URL is one: a request to anything else is never
+ * a request to the world, so nothing would carry a `traceparent` and no
+ * step would say why. A user or a password in it is refused too: `fetch`
+ * refuses such a URL, and every record that names the world's URL would
+ * show the password. The reason never quotes the URL, for that password.
+ * Pure. */
+export function programUrlProblem(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return HTTP_URL;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return HTTP_URL;
+  if (parsed.username !== "" || parsed.password !== "") {
+    return "must not hold a user or a password: fetch refuses such a URL, and every record names the world's URL; a step sends credentials itself, from an env file";
+  }
+  return undefined;
+}
+
+// Any origin serves as the world's here: `ready` is checked before the
+// world has a port.
+const SOME_WORLD = new URL("http://localhost:1");
+
+/** Why `ready` cannot be the path nukadoko polls, or `undefined` when it
+ * can be. It has to stay on the world's server once resolved against the
+ * world's URL: `//example.com/up`, or `/\example.com/up`, whose
+ * backslash a URL parser reads as a slash, would send the ready check to
+ * another host, which could answer for a program that never started.
+ * Pure. */
+export function readyPathProblem(ready: string): string | undefined {
+  if (!ready.startsWith("/")) return 'must be a path starting with "/"';
+  let resolved: URL;
+  try {
+    resolved = new URL(ready, SOME_WORLD);
+  } catch {
+    return 'must be a path starting with "/"';
+  }
+  if (resolved.origin !== SOME_WORLD.origin) {
+    return 'must be a path on the world\'s own server, starting with one "/": a second "/" or a "\\" after it names another host';
+  }
+  return undefined;
+}
+
+/** A zod refinement that adds `problem`'s reason as the issue. */
+function refusedBy(problem: (value: string) => string | undefined) {
+  return (value: string, ctx: z.RefinementCtx): void => {
+    const reason = problem(value);
+    if (reason !== undefined) ctx.addIssue({ code: "custom", message: reason });
+  };
+}
+
 /** `serve`'s defaults, applied when `serve` is written. */
 export const DEFAULT_SERVE_TIMEOUT_MS = 60_000;
 
@@ -95,7 +150,7 @@ const serveSchema = z
      * send every request to a server nukadoko did not start. */
     port: z.union([z.literal("auto"), z.number().int().min(1).max(65_535)]).default("auto"),
     /** The path that answers 2xx once the program can take requests. */
-    ready: z.string().startsWith("/", { message: 'must be a path starting with "/"' }).default("/"),
+    ready: z.string().superRefine(refusedBy(readyPathProblem)).default("/"),
     timeout_ms: z.number().int().positive().default(DEFAULT_SERVE_TIMEOUT_MS),
   })
   .strict();
@@ -114,7 +169,11 @@ const programFields = {
   /** A program nukadoko does not start: a remote server, a deployed
    * preview. A function may take `timeout_ms` beside it as `resolve`. */
   url: z
-    .union([z.string().min(1), urlFunctionSchema, z.object({ resolve: urlFunctionSchema, timeout_ms: timeoutSchema.optional() }).strict()])
+    .union([
+      z.string().superRefine(refusedBy(programUrlProblem)),
+      urlFunctionSchema,
+      z.object({ resolve: urlFunctionSchema, timeout_ms: timeoutSchema.optional() }).strict(),
+    ])
     .optional(),
   env: z.record(z.string(), z.string()).optional(),
   /** A function, or one with a `timeout_ms` of its own as `run`. */

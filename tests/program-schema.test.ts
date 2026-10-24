@@ -12,6 +12,8 @@ import {
   DEFAULT_URL_TIMEOUT_MS,
   layerProgram,
   programSchema,
+  programUrlProblem,
+  readyPathProblem,
   type ProgramEnvironment,
 } from "../src/config/program-schema.js";
 import { copyFixtureToTempDir, removeTempDir } from "./helpers/fixtures.js";
@@ -78,6 +80,11 @@ describe("programSchema", () => {
     [{ environments: { staging: { policy: "readonly" } } }, "policy"],
     [{ environments: { staging: { version: "1.0.0" } } }, "must be a function returning string | Promise<string>"],
     [{ setup: "seed" }, "must be a function"],
+    [{ serve: { command: "x", ready: "//example.com/up" } }, "must be a path on the world's own server"],
+    [{ serve: { command: "x", ready: "/\\example.com/up" } }, "must be a path on the world's own server"],
+    [{ url: "localhost:4123" }, "must be an http: or https: URL"],
+    [{ url: "ftp://files.example" }, "must be an http: or https: URL"],
+    [{ environments: { staging: { url: "http://user:hunter2@staging.example" } } }, "must not hold a user or a password"],
     [{ setup: { run: "seed" } }, "must be a function"],
     [{ build: [{ command: "make", timeout_ms: 0 }] }, "timeout_ms"],
     [{ prepare: [{ command: "make", timeout: 5 }] }, "timeout"],
@@ -118,6 +125,39 @@ describe("layerProgram", () => {
       if (own?.serve !== undefined) expect(recipe.reach).toEqual({ kind: "serve", serve: own.serve });
       else if (own?.url !== undefined) expect(recipe.reach).toEqual({ kind: "url", url: own.url, timeout_ms: DEFAULT_URL_TIMEOUT_MS });
       else expect(recipe.reach).toEqual({ kind: "none" });
+    }));
+});
+
+describe("readyPathProblem", () => {
+  const worlds = ["http://localhost:41873", "http://127.0.0.1:3000", "http://localhost:1"];
+
+  it("accepts a path exactly when it starts with \"/\" and stays on the world's server, whichever port the world has", () =>
+    hegel.test((tc) => {
+      const parts = tc.draw(gs.arrays(gs.sampledFrom(["/", "\\", "up", "example.com", ".", "..", "%2F", "?", "#", ":", "@", "x"]), { maxSize: 6 }));
+      const ready = parts.join("");
+      const world = new URL(tc.draw(gs.sampledFrom(worlds)));
+      let staysOnTheWorld = false;
+      try {
+        staysOnTheWorld = new URL(ready, world).origin === world.origin;
+      } catch {
+        // Not a URL reference at all.
+      }
+      expect(readyPathProblem(ready) === undefined).toBe(ready.startsWith("/") && staysOnTheWorld);
+    }));
+});
+
+describe("programUrlProblem", () => {
+  it("accepts an http: or https: URL with no user and no password, and refuses every other", () =>
+    hegel.test((tc) => {
+      const scheme = tc.draw(gs.sampledFrom(["http", "https", "ftp", "ws", "file", "localhost", ""]));
+      const user = tc.draw(gs.sampledFrom(["", "user@", "user:hunter2@", ":hunter2@"]));
+      const host = tc.draw(gs.sampledFrom(["localhost", "127.0.0.1", "staging.example"]));
+      const port = tc.draw(gs.sampledFrom(["", ":3000"]));
+      const url = `${scheme === "" ? "" : `${scheme}://`}${user}${host}${port}`;
+      const accepted = (scheme === "http" || scheme === "https") && user === "";
+      expect(programUrlProblem(url) === undefined, url).toBe(accepted);
+      // A refusal never quotes the URL, which can hold a password.
+      if (!accepted) expect(programUrlProblem(url)).not.toContain("hunter2");
     }));
 });
 
