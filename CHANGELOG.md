@@ -305,6 +305,10 @@ just until 0.1.
   from an earlier step's request never lands in a later step. A step's
   lines go to `program-log.txt` beside its record, and
   `observed.program_log` counts them (`{ trace_id, lines, file, stamped }`).
+  `ctx.evidence` refuses those two file names, and under `nuka do`
+  `world`, the world's directory beside the record, with
+  `ReservedEvidenceNameError`, so a step's attachment and the program's
+  lines never replace each other.
   A line that arrives after the step's record was written goes to its
   `program-log-late.txt` when the world stops, run.json's step gains
   `program_log_late`, and the run summary names it on the step's line;

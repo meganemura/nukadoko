@@ -254,7 +254,9 @@ export interface StepFixtures {
    * listed on the step record. Both throw `InvalidEvidenceNameError` (src/
    * context/errors.ts) for a `name` containing a path separator or equal to
    * `"."`/`".."`/`""`, and `ReservedEvidenceNameError` for a harness file
-   * name (`record.json`, `final.png`, `trace.zip`, `http.jsonl`, any case):
+   * name (`record.json`, `final.png`, `trace.zip`, `http.jsonl`,
+   * `program-log.txt`, `program-log-late.txt`, and under `nuka do` the
+   * world directory `world`, any case):
    * refused, never silently rewritten. Capped at 100
    * attachments per execution, the true total reported on
    * `truncated.evidence` once that cap is hit, the same sibling-field

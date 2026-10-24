@@ -4,6 +4,7 @@ import path from "node:path";
 import type { EvidenceAttachmentEntry, EvidenceMeta } from "../record/types.js";
 import { isNamedContextHarnessFile } from "./context-name.js";
 import { InvalidEvidenceNameError, ReservedEvidenceNameError } from "./errors.js";
+import { PROGRAM_LOG_LATE_FILE_NAME, PROGRAM_LOG_SLICE_FILE_NAME } from "./program-log-slice.js";
 import { isProcessOutputFileName } from "./process-output.js";
 
 // Responsibility: `ctx.evidence`'s own `attach`/`path` — the
@@ -41,13 +42,17 @@ import { isProcessOutputFileName } from "./process-output.js";
 // the harness file names seeded, so a later step still cannot replace them.
 //
 // Those harness files (`record.json`, `final.png`, `trace.zip`,
-// `http.jsonl`) are refused up front, including a spelling that differs
-// only by case (`ReservedEvidenceNameError`). A suffixed copy would not be
+// `http.jsonl`, and the step's lines of the program's log,
+// `program-log.txt` and `program-log-late.txt`) are refused up front,
+// including a spelling that differs only by case
+// (`ReservedEvidenceNameError`). A suffixed copy would not be
 // the name the step asked for, and writing the name as given would replace
 // the file the harness writes in this directory. A `pageAs(name)` context
 // writes `trace.<name>.zip` and `final.<name>.png` beside them, so those
 // shapes are refused for every valid context name, opened or not: whether
-// a later step opens one is not known when this step attaches.
+// a later step opens one is not known when this step attaches. A caller
+// can reserve more: `nuka do` keeps its world's directory, `world`, in
+// the same directory.
 //
 // A name is refused, never sanitized, when it contains a path separator or
 // is `.`/`..`/empty — see `InvalidEvidenceNameError`'s own doc comment
@@ -68,7 +73,14 @@ const MAX_ATTACHMENTS = 100;
 /** Files the harness writes into the same directory `attach`/`path` use.
  * Seeded into the name registry, and refused when a step asks for one,
  * including a spelling that differs only by case. */
-const HARNESS_EVIDENCE_FILE_NAMES = ["record.json", "final.png", "trace.zip", "http.jsonl"] as const;
+const HARNESS_EVIDENCE_FILE_NAMES = [
+  "record.json",
+  "final.png",
+  "trace.zip",
+  "http.jsonl",
+  PROGRAM_LOG_SLICE_FILE_NAME,
+  PROGRAM_LOG_LATE_FILE_NAME,
+] as const;
 
 /** Registry key. `toLowerCase` is the locale-independent Unicode default
  * mapping. A case-insensitive volume treats that result as one file. The
@@ -78,8 +90,8 @@ function evidenceNameKey(name: string): string {
   return name.toLowerCase();
 }
 
-function createUsedFileNames(): Set<string> {
-  return new Set(HARNESS_EVIDENCE_FILE_NAMES.map((name) => evidenceNameKey(name)));
+function createUsedFileNames(reserved: readonly string[]): Set<string> {
+  return new Set([...HARNESS_EVIDENCE_FILE_NAMES, ...reserved].map((name) => evidenceNameKey(name)));
 }
 
 export interface EvidenceSnapshot {
@@ -130,13 +142,13 @@ function splitExtension(fileName: string): { readonly stem: string; readonly ext
   return { stem: fileName.slice(0, dot), ext: fileName.slice(dot) };
 }
 
-function assertSafeEvidenceName(name: string): void {
+function assertSafeEvidenceName(name: string, reservedNames: readonly string[]): void {
   if (name === "" || name === "." || name === ".." || name.includes("/") || name.includes("\\")) {
     throw new InvalidEvidenceNameError(name);
   }
   const key = evidenceNameKey(name);
   if (
-    HARNESS_EVIDENCE_FILE_NAMES.some((reserved) => evidenceNameKey(reserved) === key) ||
+    [...HARNESS_EVIDENCE_FILE_NAMES, ...reservedNames].some((reserved) => evidenceNameKey(reserved) === key) ||
     isNamedContextHarnessFile(name) ||
     isProcessOutputFileName(name)
   ) {
@@ -144,13 +156,15 @@ function assertSafeEvidenceName(name: string): void {
   }
 }
 
-export function createEvidenceCollector(dirOf: () => string): EvidenceCollector {
-  let usedFileNames = createUsedFileNames();
+/** `reserved` adds names the caller keeps in the same directory (this
+ * file's header). */
+export function createEvidenceCollector(dirOf: () => string, reserved: readonly string[] = []): EvidenceCollector {
+  let usedFileNames = createUsedFileNames(reserved);
   let attachEntries: EvidenceAttachmentEntry[] = [];
   let pathAllocations: { readonly name: string; readonly file: string }[] = [];
 
   function allocateFileName(name: string): string {
-    assertSafeEvidenceName(name);
+    assertSafeEvidenceName(name, reserved);
     const key = evidenceNameKey(name);
     if (!usedFileNames.has(key)) {
       usedFileNames.add(key);
@@ -205,7 +219,7 @@ export function createEvidenceCollector(dirOf: () => string): EvidenceCollector 
       };
     },
     reset(): void {
-      usedFileNames = createUsedFileNames();
+      usedFileNames = createUsedFileNames(reserved);
       attachEntries = [];
       pathAllocations = [];
     },

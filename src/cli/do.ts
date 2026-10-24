@@ -120,6 +120,10 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // written from it — never twice, independently, which could let the two
 // drift apart.
 
+/** The world's directory, beside the step record: `nuka do` has one step
+ * and one world, so the record directory holds both. */
+const DO_WORLD_DIR_NAME = "world";
+
 export interface RunDoOptions {
   rootDir: string;
   name: string;
@@ -416,7 +420,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     if (resolvedEnv.program !== null) {
       const started = await createWorldStarter({
         rootDir,
-        worldDir: () => path.join(evidenceDir, "world"),
+        worldDir: () => path.join(evidenceDir, DO_WORLD_DIR_NAME),
         recordPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
         progress: stderr,
       }).start(resolvedEnv.name, resolvedEnv.program, secrets);
@@ -447,6 +451,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       programLog: world?.view.log,
       tracePrefix: world?.view.tracePrefix,
       evidenceDir,
+      // The world's directory is beside the record (worldDir above), so a
+      // step's evidence may not take its name.
+      reservedEvidenceNames: [DO_WORLD_DIR_NAME],
       rootDir,
       env: stepEnv,
       secrets,

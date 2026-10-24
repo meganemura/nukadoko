@@ -173,7 +173,8 @@ export class InvalidEvidenceNameError extends Error {
 
 /** Thrown by `ctx.evidence.attach(name, body)`/`ctx.evidence.path(name)`
  * when `name` is a file the harness writes in the same directory
- * (`record.json`, `final.png`, `trace.zip`, `http.jsonl`), including a
+ * (`record.json`, `final.png`, `trace.zip`, `http.jsonl`, `program-log.txt`,
+ * `program-log-late.txt`, or a name the caller reserved), including a
  * spelling that differs only by case. Refused rather than given a `-2`
  * suffix: a quietly renamed copy would not be the file the step asked
  * for, and writing the name as given would replace the harness file a
@@ -186,10 +187,11 @@ export class ReservedEvidenceNameError extends Error {
   constructor(name: string) {
     super(
       `ctx.evidence name ${JSON.stringify(name)} is reserved for a file the harness writes ` +
-        "itself (record.json, final.png, trace.zip, http.jsonl, or the trace.<name>.zip and " +
-        "final.<name>.png files of a pageAs() context, or the process-<n>.stdout.txt, " +
-        "process-<n>.stderr.txt, and process-<n>.stdin.txt files that keep what a runCommand process printed " +
-        "and was given). A name that differs only " +
+        "itself (record.json, final.png, trace.zip, http.jsonl, the step's lines of the program's log " +
+        "in program-log.txt and program-log-late.txt, the trace.<name>.zip and " +
+        "final.<name>.png files of a pageAs() context, the process-<n>.stdout.txt, " +
+        "process-<n>.stderr.txt, process-<n>.stdin.txt, and process-<n>.json files that keep what a runCommand " +
+        "process printed and was given, or, under nuka do, the world directory, world). A name that differs only " +
         "by case is the same file on a case-insensitive volume, so it is reserved too. " +
         "Choose a different name.",
     );

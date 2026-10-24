@@ -530,6 +530,11 @@ export interface CreateStepContextOptions {
    * screenshots) and, until `beginStep` first moves it, http.jsonl too; must
    * already exist. */
   evidenceDir: string;
+  /** More names a step may not attach or allocate in its record directory,
+   * because the caller keeps a file or directory of its own there (src/
+   * context/evidence.ts): `nuka do` keeps its world's directory, `world`,
+   * beside the record. */
+  reservedEvidenceNames?: readonly string[];
   /** The project root. `scratch.copy(source)` resolves a relative `source`
    * against it, so a step names a path in the project the same way whether
    * `nuka` was started there or with another working directory. Defaults
@@ -723,7 +728,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // header): `beginStep` below redirects both at once, so an attachment
   // always lands beside that step's own http.jsonl, trace.zip, and
   // final.png, never in a stale directory.
-  const evidence = createEvidenceCollector(() => boundaryDir);
+  const evidence = createEvidenceCollector(() => boundaryDir, options.reservedEvidenceNames);
   // Lives as long as this handle: `beginStep` only starts a new list for the
   // step record, and `dispose()` removes every directory. Under `nuka run`
   // one handle spans a scenario, so that is where "removed when the

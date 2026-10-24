@@ -572,7 +572,8 @@ fixture の名前:
   step が一方のメソッドを必要とする頻度は、もう一方を必要とする頻度とほぼ同じです。
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name` も拒否されます。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt` と等しい `name` も拒否されます。
+  `nuka do` では、record の隣にある world の directory の名前 `world` も拒否されます。
   `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も拒否されます。
   大文字小文字だけが違う綴りも同じです。
   それらは harness がその directory に自分で書くファイルであり、step の名前がそこに重なるとそのファイルを置き換えるからです。
@@ -3382,7 +3383,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl`、`program-log.txt`、`program-log-late.txt` と等しい `name`、`nuka do` での `world` という `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。

@@ -666,7 +666,9 @@ The fixture names:
   evidence. A step needs one method about as often as it needs the other. A
   `name` that contains a path separator is refused. A `name` equal to `.`,
   `..`, or the empty string is also refused. A `name` of `record.json`,
-  `final.png`, `trace.zip`, or `http.jsonl`, or of the shape
+  `final.png`, `trace.zip`, `http.jsonl`, `program-log.txt`, or
+  `program-log-late.txt`, under `nuka do` a `name` of `world` (the world's
+  directory beside the record), or a `name` of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused too,
   including a spelling that differs only by case (`ReservedEvidenceNameError`). Those
   are files the harness writes in that directory, and a step name that
@@ -4228,7 +4230,8 @@ its scenario record's id, so either record leads to the other.
   call. A `name` containing a path separator, or equal to `.`/`..`/the
   empty string, is refused before anything is written, never silently
   rewritten into something safe. A `name` of `record.json`, `final.png`,
-  `trace.zip`, or `http.jsonl`, of the shape `trace.<name>.zip` or
+  `trace.zip`, `http.jsonl`, `program-log.txt`, or `program-log-late.txt`,
+  under `nuka do` a `name` of `world`, of the shape `trace.<name>.zip` or
   `final.<name>.png` for a valid `pageAs` name, or of the shape
   `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by

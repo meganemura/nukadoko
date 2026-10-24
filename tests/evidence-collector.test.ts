@@ -127,11 +127,12 @@ describe("EvidenceCollector", () => {
   });
 
   // The evidence directory also holds files the harness writes itself
-  // (record.json, final.png, trace.zip, http.jsonl). A step name that
+  // (record.json, final.png, trace.zip, http.jsonl, and the step's lines
+  // of the program's log, program-log.txt and program-log-late.txt). A step name that
   // matches one of those, or differs only by case, would replace that file
   // on a case-insensitive volume. Linux keeps the two cases apart, so the
   // assertion compares the case-folded names rather than the raw paths.
-  const harnessFiles = ["record.json", "final.png", "trace.zip", "http.jsonl"] as const;
+  const harnessFiles = ["record.json", "final.png", "trace.zip", "http.jsonl", "program-log.txt", "program-log-late.txt"] as const;
 
   it.each(harnessFiles)(
     "refuses to attach or allocate a harness file name, including a different case: %s",
@@ -155,6 +156,16 @@ describe("EvidenceCollector", () => {
       expect(written).not.toContain(reserved.toLowerCase());
     },
   );
+
+  it("refuses a name the caller reserved, in any case and after a reset, and leaves it free for a collector that did not", async () => {
+    const collector = createEvidenceCollector(() => dir, ["world"]);
+    for (const name of ["world", "WORLD"]) {
+      await expect(collector.attach(name, "nope")).rejects.toMatchObject({ name: "ReservedEvidenceNameError" });
+    }
+    collector.reset();
+    expect(() => collector.path("World")).toThrowError(expect.objectContaining({ name: "ReservedEvidenceNameError" }));
+    expect(createEvidenceCollector(() => dir).path("world")).toBe(path.join(dir, "world"));
+  });
 
   it("refuses the names a runCommand process's files and a late process's entry are written to, and leaves near names free", () => {
     const collector = createEvidenceCollector(() => dir);
