@@ -1580,8 +1580,9 @@ A claim that holds whether or not the behaviour exists is one of the
 visible ways: an `observe` that returns a constant, or reads something
 the step itself decided. No static rule can stop a step author who is
 determined to make code agree. What a reader needs to catch it is in
-the record: `measured: none` beside a value, the readings of a poll, and
-which scenarios no claim judged at all. The surest test is to run the
+the record: `measured: none` beside a value, `expected measured: none`
+beside an expected value an earlier step returned, the readings of a
+poll, and which scenarios no claim judged at all. The surest test is to run the
 criterion where the behaviour is absent and see the Then fail there.
 
 These promises hold against step code that uses nukadoko's API and
@@ -2016,9 +2017,11 @@ A claim step's record has these fields of its own (see "Records"):
   every string holds, a view that could not apply, a side compared with
   itself, a value the args schema changed) or when nukadoko could not
   judge it (a value that is not plain JSON, a `Proxy`, a value nested
-  too deep), and `measured`. An `each` claim carries `actual_from`, the
-  `each` declarations, counts, and item results, and the same `outcome`,
-  `reason`, and `measured`.
+  too deep), `measured`, and `expected_measured` when the expected value
+  came from `from` or `observe`. An `each` claim carries `actual_from`,
+  the `each` declarations (each with `expected_measured` on the same
+  terms), counts, and item results, and the same `outcome`, `reason`,
+  and `measured`.
 - `observation`: `observed` when the step read its values, `unobserved`
   when it could not. The step's `error` then says why.
 - `attempts`: how many times the step read its values. Each `observe` call
@@ -2050,6 +2053,18 @@ out of a JSON response body, or one line of a program's output, is
 reader where to look, and the run summary prints it on every claim's line
 as `measured: none`, or `measured: <channel>` (with `of <step record id>`
 for a channel of another step).
+
+`expected_measured` is the same search for an expected value that came
+from `from` (in the producing step's record) or `observe` (in the claim
+step's own), and it is absent for a value the sentence states or a
+literal, which the feature holds. The search skips the channel `measured`
+names: a claim whose two sides are one channel compares that channel with
+itself. `expected_measured: null` is what a constant on the expected side
+looks like: a When step that returns `wanted: 0` beside the exit code it
+measured gives its Then an expected value no channel holds, even when the
+program did exit 0. The run summary prints it after `measured` as
+`expected measured: none` or `expected measured: <channel>`, and for an
+`each` names the declaration (`expected measured: claims[0] none`).
 
 A broken claim fails the step with `error.kind` `claim_broken`, and the
 message names the claim:
@@ -3948,7 +3963,8 @@ holds:
 - "Claims", one entry per Then that declared claims: its location and
   sentence, the number of readings when there was more than one, and under
   it one line per claim, in the words of its failure message with the
-  outcome after them and `measured: <channel>` or `measured: none`
+  outcome after them and `measured: <channel>` or `measured: none`, then
+  `expected measured` for an expected value from `from` or `observe`
   (see "Claims");
 - "Scenarios with no claim", one line per scenario whose entry has
   `judged_by`: its location, its name, and what judged it (only a compat
@@ -4519,7 +4535,7 @@ Never clamped to the parent step entry's own start/stop range: a timeline entry 
 A claim is an assertion, and Allure's unit of an assertion is a step with its own status, so each claim of a claim step becomes one zero-width child step after the timeline (see "Claims").
 Its name is the claim's line, the same words the run summary prints (e.g. `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`).
 Its status is passed when the claim held, failed when it broke, and broken when the step observed nothing or nukadoko could not judge the claim.
-Its parameters are `actual`, `actual from`, `expected`, `expected from`, and, when a channel holds the raw actual value, `measured`, so a reader sees both values without opening `record.json`.
+Its parameters are `actual`, `actual from`, `expected`, `expected from`, and, when a channel holds the raw actual value, `measured`, so a reader sees both values without opening `record.json`. An expected value from `from` or `observe` adds `expected measured`, with its channel or `none`.
 A step that failed with `claim_broken` is failed, like `step_error` and `result_invalid`: a broken claim is a criterion failing, which is what Allure's failed means.
 
 `page_events` becomes up to three parameters (see "Records"): `console errors (observed)`, `page errors (observed)`, and `failed requests (observed)`. It adds a parameter only when that category has an entry, so readers can see the count without opening `record.json`.

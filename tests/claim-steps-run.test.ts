@@ -1032,6 +1032,61 @@ export default defineStep({
     expect(summary).toContain(`  - 3 (from:the-app-exits@3.exitCode) equal 3 (sentence:code) held; measured: observed.processes[0].exit_code of ${producer.step_record_id}\n`);
     expect(summary).toContain('  - "42" (observe:shown) equal "42" (sentence:total) held; measured: none\n');
   });
+
+  it("says expected measured: none for a constant the When step returned, and names the channel of one it measured", async () => {
+    const rootDir = await project({
+      "features/steps/the-command-runs.ts": `import { defineStep, runCommand, z } from "nukadoko";
+export default defineStep({
+  description: "Run a program that prints v1 and exits 0",
+  pattern: "the command runs",
+  args: z.object({}),
+  returns: z.object({ exitCode: z.number(), wanted: z.number(), version: z.string() }),
+  mutates: false,
+  async run() {
+    const result = await runCommand(process.execPath, ["-e", "process.stdout.write('v1')"]);
+    return { exitCode: result.exitCode ?? -1, wanted: 0, version: result.stdout };
+  },
+});
+`,
+      "features/steps/the-command-succeeds.ts": `import { defineStep, z } from "nukadoko";
+import command from "./the-command-runs.ts";
+export default defineStep({
+  pattern: "the command succeeds",
+  args: z.object({ exitCode: command.returns.shape.exitCode, wanted: command.returns.shape.wanted }),
+  from: { exitCode: [command, "exitCode"], wanted: [command, "wanted"] },
+  claims: [{ actual: "exitCode", compare: "equal", expected: { from: "wanted" } }],
+});
+`,
+      "features/steps/the-tool-reports-that-version.ts": `import { defineStep, runCommand, z } from "nukadoko";
+import command from "./the-command-runs.ts";
+export default defineStep({
+  pattern: "the tool reports that version",
+  args: z.object({ version: command.returns.shape.version }),
+  from: { version: [command, "version"] },
+  async observe() {
+    const result = await runCommand(process.execPath, ["-e", "process.stdout.write('v1')"]);
+    return { shown: result.stdout };
+  },
+  claims: [{ actual: "shown", compare: "equal", expected: { from: "version" } }],
+});
+`,
+      "features/t.feature": feature("When the command runs", "Then the command succeeds", "And the tool reports that version"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(0);
+    const run = latestRunJson(rootDir);
+    const [producer, succeeds, reports] = run.scenarios[0].steps;
+    expect(succeeds.claims[0].measured).toEqual({ step_record_id: producer.step_record_id, channel: "observed.processes[0].exit_code" });
+    expect(succeeds.claims[0].expected_measured).toBeNull();
+    expect(reports.claims[0].expected_measured).toEqual({ step_record_id: producer.step_record_id, channel: "observed.processes[0].stdout" });
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain(
+      `  - 0 (from:the-command-runs@3.exitCode) equal 0 (from:the-command-runs@3.wanted) held; measured: observed.processes[0].exit_code of ${producer.step_record_id}; expected measured: none\n`,
+    );
+    expect(summary).toContain(
+      `  - "v1" (observe:shown) equal "v1" (from:the-command-runs@3.version) held; measured: observed.processes[0].stdout; expected measured: observed.processes[0].stdout of ${producer.step_record_id}\n`,
+    );
+  });
 });
 
 describe("a polled claim step records what each reading read", () => {

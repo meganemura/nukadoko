@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { ClaimRecord, KeptText, MeasuredChannel, ObservedCounts, StepRecord } from "../record/types.js";
+import type { ClaimItemDeclaration, ClaimRecord, KeptText, MeasuredChannel, ObservedCounts, StepRecord } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
-import { deepEqual, type JudgedClaim } from "../step/evaluate-claims.js";
+import { deepEqual, type ExpectedOrigin, type JudgedClaim } from "../step/evaluate-claims.js";
 
 // Responsibility: the `measured` field of each claim record (docs/spec.md
 // "Claims"): which recorded channel of which step record holds exactly the
@@ -16,6 +16,17 @@ import { deepEqual, type JudgedClaim } from "../step/evaluate-claims.js";
 // `0` in step code is not taken for an exit code. `measured` is
 // information for a reader of the record, never a condition of the claim,
 // so a channel that cannot be read is skipped without a word.
+//
+// An expected value an earlier step returned or `observe` read gets the
+// same search (`expected_measured`): a When step that returns a constant
+// for the Then to compare with fills the expected side as surely as a
+// constant in `observe` fills the actual side, and the record shows both
+// the same way. A value the sentence states or a literal is in the
+// feature, so no channel is looked for. The search skips the channel the
+// actual value matched: a claim whose two sides are one channel compares
+// that channel with itself, so a constant equal to it (an expected exit
+// code of 0 beside a process that exited 0) is `null` as a constant
+// should be, and another channel with the same content is still found.
 
 /** One recorded channel and where it sits in its step record: a text, or
  * a number the record holds as a number. */
@@ -109,7 +120,8 @@ export interface MeasuredContext {
 }
 
 /** The judged claims as the step record carries them, each with the
- * channel its raw actual value equals, or `null`. */
+ * channel its raw actual value equals, or `null`, and each expected value
+ * an earlier step returned or `observe` read with the channel it equals. */
 export function withMeasured(judged: readonly JudgedClaim[], context: MeasuredContext): ClaimRecord[] {
   const cache = new Map<string, readonly ChannelText[]>();
   const channelsOf = (id: string): readonly ChannelText[] => {
@@ -121,14 +133,34 @@ export function withMeasured(judged: readonly JudgedClaim[], context: MeasuredCo
     }
     return channels;
   };
-  return judged.map(({ record, rawActual, fromKey }) => {
-    const recordId = fromKey === null ? context.ownRecordId : context.fromRecordOf(fromKey);
-    let measured: MeasuredChannel | null = null;
-    if (recordId !== null && record.outcome !== "unobserved") {
-      const match = channelsOf(recordId).find((channel) => sameContent(rawActual, channel, context.secrets));
-      if (match !== undefined) measured = { step_record_id: recordId, channel: match.channel };
-    }
-    return { ...record, measured };
+  const channelFor = (recordId: string | null, raw: unknown, skip: MeasuredChannel | null = null): MeasuredChannel | null => {
+    if (recordId === null) return null;
+    const skipped = (channel: ChannelText): boolean => skip !== null && skip.step_record_id === recordId && skip.channel === channel.channel;
+    const match = channelsOf(recordId).find((channel) => !skipped(channel) && sameContent(raw, channel, context.secrets));
+    return match === undefined ? null : { step_record_id: recordId, channel: match.channel };
+  };
+  // A claim that read nothing has no expected value to have measured
+  // either, and an origin of `null` is a value the feature states.
+  const withExpected = <T extends { readonly expected?: unknown }>(entry: T, origin: ExpectedOrigin | undefined, measured: MeasuredChannel | null, observed: boolean): T => {
+    if (!observed || origin === null || origin === undefined) return entry;
+    const recordId = origin === "observe" ? context.ownRecordId : context.fromRecordOf(origin.fromKey);
+    return { ...entry, expected_measured: Object.hasOwn(entry, "expected") ? channelFor(recordId, entry.expected, measured) : null };
+  };
+  return judged.map(({ record, rawActual, fromKey, expectedOrigins }) => {
+    const observed = record.outcome !== "unobserved";
+    const measured = observed ? channelFor(fromKey === null ? context.ownRecordId : context.fromRecordOf(fromKey), rawActual) : null;
+    if (!("each" in record)) return { ...withExpected(record, expectedOrigins[0], measured, observed), measured };
+    const where = record.each.where ?? [];
+    const declared = (entry: ClaimItemDeclaration, index: number): ClaimItemDeclaration => withExpected(entry, expectedOrigins[index], measured, observed);
+    return {
+      ...record,
+      each: {
+        ...record.each,
+        ...(record.each.where === undefined ? {} : { where: where.map((entry, index) => declared(entry, index)) }),
+        claims: record.each.claims.map((entry, index) => declared(entry, where.length + index)),
+      },
+      measured,
+    };
   });
 }
 

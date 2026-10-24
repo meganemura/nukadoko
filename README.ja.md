@@ -240,7 +240,7 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 
 ## Claims
 
-Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does).
+Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`.
 
 - `features/greet.feature:6` the output says "Hi, Ada!"
   - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken; measured: observed.processes[0].stdout of step-20261024-123634-plgs

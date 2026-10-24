@@ -846,6 +846,7 @@ describe("the record of a claim", () => {
       },
       rawActual: 0,
       fromKey: "result",
+      expectedOrigins: [null],
     });
     expect(Object.keys(judged!.record)).toEqual(["actual", "actual_from", "compare", "expected", "expected_from", "expected_text", "outcome"]);
   });

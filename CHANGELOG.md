@@ -33,7 +33,10 @@ just until 0.1.
   snapshot, `observe` receives a copy of its inputs, and an args schema
   that still changes a value a claim reads breaks the claim. A `Date`, a
   bigint, `NaN`, a `Proxy`, or a value nested deeper than 256 levels
-  leaves the claim `unjudged`, and the reason names it.
+  leaves the claim `unjudged`, and the reason names it. An expected
+  value from `from` or `observe` gets `expected_measured`, the channel
+  that holds it, and the summary prints `expected measured: none` for a
+  constant a When step returned.
   `defineStep` validates one copy of the claims, `from`, `parts`,
   `poll`, and patterns, frozen at every level, and the run reads only
   that copy: a getter, a setter, a Proxy, or a class instance in them is

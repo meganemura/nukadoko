@@ -3,6 +3,7 @@ import path from "node:path";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
 import type { RunClaim, RunDocument, RunScenario, RunVerdict } from "../record/run-result.js";
+import type { MeasuredChannel } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { scenarioKey } from "./criteria-since.js";
@@ -414,15 +415,28 @@ function renderUnjudged(document: RunDocument): string[] {
   return ["", "## Scenarios with no claim", "", "No line of each scenario below binds a claim step.", "", ...sorted.map((line) => line.text)];
 }
 
+function channelText(measured: MeasuredChannel | null | undefined, ownRecordId: string | null): string {
+  if (measured === null || measured === undefined) return "none";
+  return measured.step_record_id === ownRecordId ? measured.channel : `${measured.channel} of ${measured.step_record_id}`;
+}
+
 // Where a claim's actual value was measured, beside the claim: a value no
 // recorded channel holds is what a constant in step code looks like, so
-// the line says `measured: none` for a reader to weigh. A claim that read
-// nothing has no value to have measured.
+// the line says `measured: none` for a reader to weigh. An expected value
+// an earlier step returned or `observe` read gets the same, as `expected
+// measured`: a When step that returns the value its Then compares with is
+// a constant on the expected side. An `each` names each declaration that
+// has one. A claim that read nothing has no value to have measured.
 function measuredText(claim: RunClaim, ownRecordId: string | null): string {
   if (claim.outcome === "unobserved") return "";
-  const measured = claim.measured;
-  if (measured === null || measured === undefined) return "; measured: none";
-  return measured.step_record_id === ownRecordId ? `; measured: ${measured.channel}` : `; measured: ${measured.channel} of ${measured.step_record_id}`;
+  const actual = `; measured: ${channelText(claim.measured, ownRecordId)}`;
+  const has = (entry: object): entry is { readonly expected_measured: MeasuredChannel | null } => Object.hasOwn(entry, "expected_measured");
+  if (!("each" in claim)) return has(claim) ? `${actual}; expected measured: ${channelText(claim.expected_measured, ownRecordId)}` : actual;
+  const declared = [
+    ...(claim.each.where ?? []).map((entry, index) => [`where[${index}]`, entry] as const),
+    ...claim.each.claims.map((entry, index) => [`claims[${index}]`, entry] as const),
+  ].flatMap(([name, entry]) => (has(entry) ? [`${name} ${channelText(entry.expected_measured, ownRecordId)}`] : []));
+  return declared.length === 0 ? actual : `${actual}; expected measured: ${declared.join(", ")}`;
 }
 
 // One entry per Then that declared claims, and under it one line per claim
@@ -453,7 +467,7 @@ function renderClaims(document: RunDocument): string[] {
     "",
     "## Claims",
     "",
-    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does).",
+    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`.",
     "",
     ...sorted.flatMap((entry) => entry.lines),
   ];

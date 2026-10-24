@@ -33,6 +33,8 @@ const errorKind = z.enum([
 // What the summary reads of one claim (src/report/summary/claim-line.ts).
 const claimOutcome = z.enum(["held", "broken", "unobserved", "unjudged"]);
 
+const measuredChannel = z.looseObject({ step_record_id: z.string(), channel: z.string() });
+
 const comparisonClaim = z.looseObject({
   actual: z.unknown().optional(),
   actual_from: z.string(),
@@ -41,9 +43,10 @@ const comparisonClaim = z.looseObject({
   compare: z.string(),
   expected: z.unknown().optional(),
   expected_from: z.string(),
+  expected_measured: measuredChannel.nullable().optional(),
   outcome: claimOutcome,
   reason: z.string().optional(),
-  measured: z.looseObject({ step_record_id: z.string(), channel: z.string() }).nullable().optional(),
+  measured: measuredChannel.nullable().optional(),
 });
 
 const itemDeclaration = z.looseObject({
@@ -53,6 +56,7 @@ const itemDeclaration = z.looseObject({
   compare: z.string(),
   expected: z.unknown().optional(),
   expected_from: z.string(),
+  expected_measured: measuredChannel.nullable().optional(),
 });
 
 const eachClaim = z.looseObject({
@@ -78,7 +82,7 @@ const eachClaim = z.looseObject({
   }),
   outcome: claimOutcome,
   reason: z.string().optional(),
-  measured: z.looseObject({ step_record_id: z.string(), channel: z.string() }).nullable().optional(),
+  measured: measuredChannel.nullable().optional(),
 });
 
 const process = z.looseObject({

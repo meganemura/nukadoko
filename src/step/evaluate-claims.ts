@@ -316,13 +316,39 @@ export interface ClaimInputs {
   readonly budget: JudgingBudget;
 }
 
+/** Where an expected value was read, when a step record can hold it: the
+ * args key a `from` value filled (the record of the step that returned
+ * it), or `observe` (the claim step's own record). `null` for a value the
+ * sentence states or a literal, which no channel holds. */
+export type ExpectedOrigin = { readonly fromKey: string } | "observe" | null;
+
 /** One claim as judged, with the raw actual value (before `view` and
- * `at`) the runner compares with each recorded channel, and the args key
- * it was read from (`null` for a value `observe` returned). */
+ * `at`) the runner compares with each recorded channel, the args key it
+ * was read from (`null` for a value `observe` returned), and where each
+ * expected value the record declares was read: a comparison's one, or an
+ * `each`'s `where` declarations followed by its claims. */
 export interface JudgedClaim {
   readonly record: ClaimComparisonRecord | ClaimEachRecord;
   readonly rawActual: unknown;
   readonly fromKey: string | null;
+  readonly expectedOrigins: readonly ExpectedOrigin[];
+}
+
+/** Where `claim`'s expected value is read, for `expected_measured`. Pure. */
+export function expectedOriginOf(claim: ItemClaim, fromKeys: ReadonlySet<string>): ExpectedOrigin {
+  const expected = claim.expected;
+  if (typeof expected === "string") return fromKeys.has(expected) ? { fromKey: expected } : null;
+  if ("from" in expected) {
+    const head = (pathSegments(expected.from) ?? [expected.from])[0]!;
+    return fromKeys.has(head) ? { fromKey: head } : null;
+  }
+  return "observe" in expected ? "observe" : null;
+}
+
+/** The origins of every expected value `claim` declares, in record order. */
+function expectedOriginsOf(claim: Claim, fromKeys: ReadonlySet<string>): readonly ExpectedOrigin[] {
+  const entries = isEachClaim(claim) ? [...(claim.each.where ?? []), ...claim.each.claims] : [claim];
+  return entries.map((entry) => expectedOriginOf(entry, fromKeys));
 }
 
 /** A value read at a place, or why there is none: a reason that breaks the
@@ -704,9 +730,11 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
   let stoppedAt: number | null = null;
   for (const [index, claim] of claims.entries()) {
     const fromKey = fromKeyOf(claim, inputs.fromKeys);
+    const expectedOrigins = expectedOriginsOf(claim, inputs.fromKeys);
     if (stoppedAt === null && inputs.budget.left() <= 0) stoppedAt = index;
     if (stoppedAt !== null) {
-      judged.push({ record: notJudged(claim, inputs, "unjudged", budgetSpent(inputs.budget, claims.length - stoppedAt, claims.length, "claims")), rawActual: undefined, fromKey });
+      const reason = budgetSpent(inputs.budget, claims.length - stoppedAt, claims.length, "claims");
+      judged.push({ record: notJudged(claim, inputs, "unjudged", reason), rawActual: undefined, fromKey, expectedOrigins });
       continue;
     }
     let rawActual: unknown;
@@ -715,9 +743,10 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
       rawActual = "value" in actual ? actual.value : undefined;
       const segments = actual.fromKey === null ? null : (pathSegments(claim.actual) ?? null);
       const record = isEachClaim(claim) ? await judgeEach(claim, actual, segments, inputs) : await judgeComparison(claim, actual, segments, inputs);
-      judged.push({ record, rawActual, fromKey });
+      judged.push({ record, rawActual, fromKey, expectedOrigins });
     } catch (error) {
-      judged.push({ record: notJudged(claim, inputs, "unjudged", `nukadoko could not judge this claim: ${messageOf(error)}`), rawActual, fromKey });
+      const reason = `nukadoko could not judge this claim: ${messageOf(error)}`;
+      judged.push({ record: notJudged(claim, inputs, "unjudged", reason), rawActual, fromKey, expectedOrigins });
     }
   }
   return judged;
@@ -730,6 +759,7 @@ export function unobservedClaims(claims: readonly Claim[], inputs: ClaimInputs):
     record: notJudged(claim, inputs, "unobserved", undefined),
     rawActual: undefined,
     fromKey: fromKeyOf(claim, inputs.fromKeys),
+    expectedOrigins: expectedOriginsOf(claim, inputs.fromKeys),
   }));
 }
 

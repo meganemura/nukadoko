@@ -661,7 +661,8 @@ export type ClaimView = "text" | "lines" | "json";
  * step read its values and nukadoko failed while judging this claim. */
 export type ClaimOutcome = "held" | "broken" | "unobserved" | "unjudged";
 
-/** A recorded channel whose content equals a claim's raw actual value:
+/** A recorded channel whose content equals a claim's raw actual value, or
+ * an expected value an earlier step returned or `observe` read:
  * `channel` is a path inside that step record, such as
  * `observed.processes[0].stdout`, `observed.processes[0].exit_code`,
  * `http.jsonl[1].response_body`, `http.jsonl[1].status`, or
@@ -683,7 +684,11 @@ export interface MeasuredChannel {
  * `reason` is present only when the claim broke for something other than
  * the comparison itself: an undefined value, a value that is not plain
  * JSON, two JSON types, an empty expected value, a side compared with
- * itself, or, for an `unjudged` claim, the failure. */
+ * itself, or, for an `unjudged` claim, the failure. `expected_measured`
+ * is the channel that holds an expected value an earlier step returned or
+ * `observe` read (`null` when none does), and absent for any other
+ * expected value and for an item's comparison inside an `each`, whose
+ * declaration carries it. */
 export interface ClaimComparisonRecord {
   readonly actual?: unknown;
   readonly actual_from: string;
@@ -694,6 +699,7 @@ export interface ClaimComparisonRecord {
   readonly expected_from: string;
   readonly expected_view?: ClaimView;
   readonly expected_text: string | null;
+  readonly expected_measured?: MeasuredChannel | null;
   readonly outcome: ClaimOutcome;
   readonly reason?: string;
 }
@@ -710,6 +716,9 @@ export interface ClaimItemDeclaration {
   readonly expected_from: string;
   readonly expected_view?: ClaimView;
   readonly expected_text: string | null;
+  /** As on a comparison: the channel that holds an expected value an
+   * earlier step returned or `observe` read, `null` when none does. */
+  readonly expected_measured?: MeasuredChannel | null;
 }
 
 /** One item of an `each`: whether `where` selected it, the `where`

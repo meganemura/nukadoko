@@ -909,6 +909,12 @@ function claimParameters(claim: ClaimRecord): MappedParameter[] {
   if ("expected" in claim && claim.expected !== undefined) parameters.push({ name: "expected", value: JSON.stringify(claim.expected) });
   if ("expected_from" in claim) parameters.push({ name: "expected from", value: claim.expected_from });
   if (claim.measured !== null) parameters.push({ name: "measured", value: `${claim.measured.step_record_id} ${claim.measured.channel}` });
+  // Present only for an expected value an earlier step returned or observe
+  // read, where `none` is what a constant looks like, so it is shown.
+  if ("expected_measured" in claim && claim.expected_measured !== undefined) {
+    const measured = claim.expected_measured;
+    parameters.push({ name: "expected measured", value: measured === null ? "none" : `${measured.step_record_id} ${measured.channel}` });
+  }
   return parameters;
 }
 

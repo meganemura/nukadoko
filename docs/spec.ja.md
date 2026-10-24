@@ -1322,7 +1322,7 @@ Given や When の throw はその step のエラーであり、成り立たな�
 定数を返す `observe` や、step 自身が決めたものを読む `observe` がこれに当たります。
 コードを一致させようと決めた step の作者を、静的な規則で止めることはできません。
 それを見つけるのに読み手が要るものは record にあります。
-値の隣の `measured: none`、poll の読み取り、どの claim にも判定されなかった scenario です。
+値の隣の `measured: none`、前の step が返した期待値の隣の `expected measured: none`、poll の読み取り、どの claim にも判定されなかった scenario です。
 最も確かな確かめ方は、振る舞いがない場所で受け入れ基準を動かし、そこで Then が失敗するのを見ることです。
 
 これらの約束が成り立つのは、nukadoko の API と普通のライブラリを使う step のコードに対してです。
@@ -1639,9 +1639,9 @@ compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)�
 claim step の record には、次の固有のフィールドがあります(「Records」を参照)。
 
 - `claims`: step が宣言した順の、各 claim です。
-  比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、そして `measured` を持ちます。
+  比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
   `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、args スキーマが変えた値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子)にあります。
-  `each` の claim は、`actual_from`、`each` の宣言と数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
+  `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。
 - `attempts`: step が値を読んだ回数です。
@@ -1667,6 +1667,14 @@ step のコードが書いた値や導いた値は、どのチャネルにもあ
 JSON のレスポンス本文から取り出したタイトルや、プログラムの出力の 1 行も `null` です。
 そのため `null` は、claim が空であることを意味しません。
 どこを見ればよいかを読み手に伝えるもので、run サマリはそれを各 claim の行に `measured: none`、または `measured: <channel>`(別の step のチャネルなら `of <step record id>` 付き)として出力します。
+
+`expected_measured` は、`from`(値を返した step の record)か `observe`(claim step 自身の record)から来た期待値について、同じ探索をしたものです。
+文が述べる値やリテラルは feature が持っているので、`expected_measured` はありません。
+探索は `measured` が名指しするチャネルを飛ばします。
+2 つの辺が 1 つのチャネルである claim は、そのチャネルを自分自身と比べるからです。
+`expected_measured: null` は、期待値の側の定数がとる姿です。
+計測した終了コードの隣に `wanted: 0` を返す When の step は、プログラムが実際に 0 で終了したときでも、どのチャネルにもない期待値を Then に与えます。
+run サマリはそれを `measured` のあとに `expected measured: none` または `expected measured: <channel>` として出力し、`each` では宣言を名指しします(`expected measured: claims[0] none`)。
 
 成り立たない claim は、`error.kind` が `claim_broken` の失敗として step を落とし、メッセージがその claim を名指しします。
 
@@ -3115,7 +3123,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
   これは失敗した environment ごとに 1 つずつ載り、run に environment が 2 つ以上あればその environment の名前が前に付きます。
 - 「Claims」。
-  claim を宣言した Then ごとに 1 つの項目で、その場所と文、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続けて載せます(「Claims」を参照)。
+  claim を宣言した Then ごとに 1 つの項目で、その場所と文、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
   要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、何が判定したか(compat step だけか、何もないか)を載せます。
 - 「Unmeasured actions」。
@@ -3674,6 +3682,7 @@ claim は assertion であり、Allure で assertion を表す単位は自分の
 名前は claim の行で、run サマリが出力するのと同じ言葉です(例: `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`)。
 status は、claim が成り立ったときは passed、成り立たなかったときは failed、step が何も観測できなかったときや nukadoko が claim を判定できなかったときは broken です。
 parameter は `actual`、`actual from`、`expected`、`expected from` で、生の actual 値を持つ channel があれば `measured` も加わります。
+`from` か `observe` から来た期待値には、そのチャネルか `none` を値とする `expected measured` が加わります。
 読み手は `record.json` を開かずに両方の値を確認できます。
 `claim_broken` で失敗した step は、`step_error` や `result_invalid` と同じく failed です。
 成り立たなかった claim は基準が満たされなかったことであり、それが Allure の failed の意味だからです。
