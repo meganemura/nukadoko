@@ -99,8 +99,9 @@ the run summary names it on the step's line.
 step's trace id by the time its record was written. Read the run
 summary's line for the world, decided from the whole log once the world
 stopped: "carries no trace ids" means the program does not tag its
-lines; "arrived after the steps ended" means it tags them but its output
-is buffered on a pipe, which `STDOUT.sync = true` fixes in Ruby and
+lines; "arrived after that step ended" counts the lines that came late.
+When it adds that none came in time, output buffered on a pipe is a
+possible cause: `STDOUT.sync = true` fixes it in Ruby and
 `PYTHONUNBUFFERED=1` in Python. For Rails, send the test log to stdout
 and tag it, in `config/environments/test.rb`:
 

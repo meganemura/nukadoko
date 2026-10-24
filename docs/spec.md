@@ -3185,15 +3185,22 @@ empty:
 - program log of world default: carries no trace ids, so each step's slice of it is empty
 ```
 
-A log whose steps' lines all arrived after the steps ended tags its lines
-late.
-The usual cause is output buffered on a pipe: Ruby and Python buffer
-standard output when it is not a terminal, and write it in blocks, or
-when the program stops.
-The summary says:
+A log with lines that arrived after their step ended gets one line that
+counts them:
 
 ```text
-- program log of world default: its lines for the steps arrived after the steps ended, so each step's slice of it is empty and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
+- program log of world default: 2 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`).
+```
+
+nukadoko does not know why a line came late, so it names no cause for
+that count.
+When none of the steps' lines arrived in time, the line adds one
+possible cause, since output buffered on a pipe looks like that: Ruby
+and Python buffer standard output when it is not a terminal, and write
+it in blocks, or when the program stops.
+
+```text
+- program log of world default: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`). None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
 ```
 
 A world at a `url` has no log nukadoko can read.

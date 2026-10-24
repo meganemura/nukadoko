@@ -392,10 +392,11 @@ just until 0.1.
   `nuka do` names it in a `program-log-late` note. run.json's `worlds` entries
   gain `program_log: { stamped, lines, late, tagged }`, and the run
   summary says once per world, decided from the whole log, when the log
-  carries no trace ids, when the steps' lines all arrived after the steps
-  ended (output buffered on a pipe: `STDOUT.sync = true` in Ruby,
-  `PYTHONUNBUFFERED=1`), or when it was not read because the world runs
-  at a `url` (there `observed.program_log` is `null`). The
+  carries no trace ids, how many lines arrived after their step ended
+  (and, only when none came in time, that output buffered on a pipe looks
+  like that, with `STDOUT.sync = true` for Ruby and `PYTHONUNBUFFERED=1`
+  for Python), or when it was not read because the world runs at a `url`
+  (there `observed.program_log` is `null`). The
   program has to write the id into its lines: docs/spec.md shows the
   Rails `config.log_tags` and logger lines and the Node one-liner, and
   the todo and HTTP API examples' servers tag their lines that way. On a

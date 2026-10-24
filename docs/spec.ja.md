@@ -2565,13 +2565,19 @@ world の trace id を持つ行が 1 つも無いログは、行に何も付け�
 - program log of world default: carries no trace ids, so each step's slice of it is empty
 ```
 
-step たちの行がすべて step が終わったあとに届いたログは、行に遅れて id を付けています。
-よくある原因は、パイプの上でバッファされた出力です。
-Ruby と Python は、標準出力が端末でないときにそれをバッファし、ブロックごとに、あるいはプログラムが止まるときに書きます。
-サマリはこう言います:
+step が終わったあとに届いた行があるログには、その数を数える行が 1 つ付きます:
 
 ```text
-- program log of world default: its lines for the steps arrived after the steps ended, so each step's slice of it is empty and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
+- program log of world default: 2 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`).
+```
+
+nukadoko は行が遅れた理由を知らないので、その数には原因を書きません。
+step たちの行が 1 つも間に合わなかったときは、ありうる原因を 1 つ書き足します。
+パイプの上でバッファされた出力がそう見えるからです。
+Ruby と Python は、標準出力が端末でないときにそれをバッファし、ブロックごとに、あるいはプログラムが止まるときに書きます。
+
+```text
+- program log of world default: 6 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`). None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
 ```
 
 `url` の world には、nukadoko が読めるログがありません。

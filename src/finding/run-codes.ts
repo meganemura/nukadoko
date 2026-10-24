@@ -39,7 +39,7 @@ const RUN_CODES = {
     severity: "note",
     description:
       "nuka do found lines of the program's log that carry the step's trace id and arrived after the step ended, when the world stopped. They are in program-log-late.txt beside the step record, and are not in its observed.program_log.",
-    fix: "No change is necessary. When it happens on every call, the program buffers its output: set STDOUT.sync = true in Ruby, or PYTHONUNBUFFERED=1 for Python.",
+    fix: "No change is necessary. When it happens on every call, the program may buffer its output on a pipe; if so, set STDOUT.sync = true in Ruby, or PYTHONUNBUFFERED=1 for Python.",
   },
   "program-start-failed": {
     severity: "failed",

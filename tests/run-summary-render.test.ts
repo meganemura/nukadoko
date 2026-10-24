@@ -484,10 +484,11 @@ function world(name: string, url: string | null): RunWorld {
 }
 
 const NO_TRACE_IDS = "carries no trace ids";
-const CAME_LATE = "arrived after the steps ended";
+const CAME_LATE = "arrived after that step ended";
+const BUFFERED = "buffers its output on a pipe";
 
 describe("the program log lines of the summary", () => {
-  it("says once per world that a log was not read, carries no trace ids, or tagged its lines late, and nothing for the others", () => {
+  it("says once per world that a log was not read, carries no trace ids, or has late lines, and nothing for the others", () => {
     const markdown = renderRunSummary(
       run({
         environments: [
@@ -506,24 +507,25 @@ describe("the program log lines of the summary", () => {
         ],
       }),
     );
-    expect(markdown.split("\n").slice(3, 14)).toEqual([
+    expect(markdown.split("\n").slice(3, 15)).toEqual([
       "- commit: `0123456`",
       "- environment: default at http://localhost:41873",
       "- environment: untagged at http://localhost:41874",
       "- environment: buffered at http://localhost:41876",
       "- environment: staging at https://staging.example.test",
       "- environment: quiet at http://localhost:41875",
+      "- program log of world default: 2 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`).",
       "- program log of world untagged: carries no trace ids, so each step's slice of it is empty",
-      "- program log of world buffered: its lines for the steps arrived after the steps ended, so each step's slice of it is empty " +
-        "and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: " +
-        "set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
+      "- program log of world buffered: 8 lines carrying a step's trace id arrived after that step ended (`program-log-late.txt`). " +
+        "None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; " +
+        "if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
       "- program log of world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
       "- browser: none launched",
       "- selection: full",
     ]);
   });
 
-  it("says a log carries no trace ids only when no line of it carries one, and that its lines came late only when every step's did", () =>
+  it("says a log carries no trace ids only when no line of it carries one, counts its late lines, and offers buffering only when no line came in time", () =>
     hegel.test((tc) => {
       const lines = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
       const late = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
@@ -532,7 +534,8 @@ describe("the program log lines of the summary", () => {
       const stamped = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
       const markdown = renderRunSummary(run({ worlds: [{ ...world("default", "http://localhost:1"), program_log: { stamped, lines, late, tagged } }] }));
       expect(markdown.includes(NO_TRACE_IDS)).toBe(stamped > 0 && tagged === 0);
-      expect(markdown.includes(CAME_LATE)).toBe(stamped > 0 && lines === 0 && late > 0);
+      expect(markdown.includes(CAME_LATE)).toBe(stamped > 0 && tagged > 0 && late > 0);
+      expect(markdown.includes(BUFFERED)).toBe(stamped > 0 && tagged > 0 && lines === 0 && late > 0);
     }));
 
   it("names a step's late lines once under that step, and says when they could not be written", () => {

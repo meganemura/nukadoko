@@ -138,8 +138,11 @@ function renderCondition(document: RunDocument): string[] {
   });
   // Once per world, so a reader of an empty slice knows why it is empty.
   // Decided from the whole log when the world stopped: a log with no line
-  // that carries a trace id of the world does not tag its lines, and one
-  // whose steps' lines all came after the steps ended tags them late.
+  // that carries a trace id of the world does not tag its lines, and a
+  // log with lines that came after their step ended says how many. Why
+  // they came late is not known, so it is only offered as a possibility,
+  // and only when no line of the world came in time, the pattern a
+  // program that buffers its output on a pipe makes.
   const programLogs = (document.worlds ?? []).flatMap((world) => {
     const log = world.program_log;
     if (log === null) {
@@ -147,11 +150,12 @@ function renderCondition(document: RunDocument): string[] {
     }
     if (log === undefined || log.stamped === 0) return [];
     if (log.tagged === 0) return [`- program log of world ${world.name}: carries no trace ids, so each step's slice of it is empty`];
-    if (log.lines === 0 && log.late > 0) {
+    if (log.late > 0) {
+      const fact = `- program log of world ${world.name}: ${countOf(log.late, "line", "lines")} carrying a step's trace id arrived after that step ended (\`program-log-late.txt\`).`;
+      if (log.lines > 0) return [fact];
       return [
-        `- program log of world ${world.name}: its lines for the steps arrived after the steps ended, so each step's slice of it is empty ` +
-          "and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: " +
-          "set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
+        `${fact} None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; ` +
+          "if that is the cause, set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
       ];
     }
     return [];
