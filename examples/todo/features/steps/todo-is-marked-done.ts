@@ -1,19 +1,31 @@
 import { defineStep, z } from "nukadoko";
 
-// GET /todos, read in a Then. observe returns the titles of the todos that
-// are done, and the claim says the title the sentence names is one of them.
-// It returns titles rather than the todo's `done` flag because a claim may
-// compare with a literal only when the sentence states it, and "is marked
-// done" does not say `true`. It checks `done` where todo-list-includes
-// checks presence, so a scenario can state either claim on its own line.
+// GET /todos, read in a Then. observe reports each todo's state in the
+// sentence's own words ("done" or "open") instead of the app's `done` flag,
+// because a claim may compare with a literal only when the sentence states
+// it, and "is marked done" states the word, not `true`. The claim then
+// compares that word with the one the line captured, so the record shows
+// both, and a todo the list does not hold breaks the claim instead of
+// passing over nothing.
 export default defineStep({
-  pattern: "the todo titled {title:string} is marked done",
-  description: "The todo with this title has done: true in GET /todos",
-  args: z.object({ title: z.string().describe("The title of the todo expected to be done") }),
+  pattern: "the todo titled {title:string} is marked {state:word}",
+  description: "The todo with this title has the state the line names in GET /todos",
+  args: z.object({
+    title: z.string().describe("The title of the todo to read"),
+    state: z.string().describe('The state the todo is expected to have: "done" or "open"'),
+  }),
   async observe({ request }) {
     const res = await request.get("/todos");
     const todos = (await res.json()) as Array<{ title?: string; done?: boolean }>;
-    return { done: todos.filter((todo) => todo.done === true).map((todo) => todo.title) };
+    return { todos: todos.map((todo) => ({ title: todo.title ?? "", state: todo.done === true ? "done" : "open" })) };
   },
-  claims: [{ actual: "done", compare: "has-item", expected: "title" }],
+  claims: [
+    {
+      actual: "todos",
+      each: {
+        where: [{ actual: "title", compare: "equal", expected: "title" }],
+        claims: [{ actual: "state", compare: "equal", expected: "state" }],
+      },
+    },
+  ],
 });

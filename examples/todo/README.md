@@ -60,8 +60,11 @@ field from `title` to `name`, everywhere — same app, one changed field. Part
   - `complete-todo.ts` — resolves a title to an id via `GET /todos`, then
     `PATCH /todos/:id`
   - `todo-list-includes.ts` / `todo-is-marked-done.ts`: claim steps
-    bound in `Then` position. Each reads `GET /todos` in `observe` and
-    claims that the sentence's title is in the list it read. Neither has a `run`.
+    bound in `Then` position. Each reads `GET /todos` in `observe`.
+    `todo-list-includes` claims that the sentence's title is in the list it
+    read; `todo-is-marked-done` reports each todo's state as the word
+    `done` or `open` and claims that the todo with the sentence's title has
+    the state the sentence names. Neither has a `run`.
 
 ## Part 1 — adaptive authoring
 
