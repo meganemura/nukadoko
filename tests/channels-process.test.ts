@@ -171,11 +171,12 @@ describe("the memory a fetch body costs to record", () => {
     expect(result.http).toBe(2);
   }, 120_000);
 
-  it("adds less than the Blob's own size to the peak of sending a Blob", () => {
+  it("reads only the start of a Blob body to record it, however large the Blob is", () => {
     const sparse = path.join(dir, "big.bin");
-    // undici holds a Blob body whole while it sends it, so the bound is
-    // against the same send outside a step, measured first in a fresh
-    // process: later sends in one process peak higher whoever sends them.
+    // Counts every byte any reader takes from the Blob, through each of its
+    // reading methods and those of any slice. undici reads the whole Blob to
+    // send it, so the send outside a step is the baseline, and the record
+    // adds only what it read itself.
     const script = `
       import fs from "node:fs";
       import http from "node:http";
@@ -185,27 +186,35 @@ describe("the memory a fetch body costs to record", () => {
       const fd = fs.openSync(${JSON.stringify(sparse)}, "w");
       fs.ftruncateSync(fd, ${TOTAL} * MIB);
       fs.closeSync(fd);
+      let read = 0;
+      class CountingBlob extends Blob {
+        slice(...args) { return new CountingBlob([super.slice(...args)]); }
+        async arrayBuffer() { const bytes = await super.arrayBuffer(); read += bytes.byteLength; return bytes; }
+        async bytes() { const bytes = await super.bytes(); read += bytes.byteLength; return bytes; }
+        async text() { const text = await super.text(); read += Buffer.byteLength(text); return text; }
+        stream() { return super.stream().pipeThrough(new TransformStream({ transform(chunk, controller) { read += chunk.byteLength; controller.enqueue(chunk); } })); }
+      }
+      const blob = new CountingBlob([await fs.openAsBlob(${JSON.stringify(sparse)})]);
       const server = http.createServer((req, res) => req.resume().on("end", () => res.end("ok")));
       await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
       const base = "http://127.0.0.1:" + server.address().port;
       const collector = createObservedCollector({ outputDir: () => ${JSON.stringify(path.join(dir, "out"))} });
-      const peakOf = async (fn) => {
-        globalThis.gc();
-        let peak = 0;
-        const timer = setInterval(() => (peak = Math.max(peak, process.memoryUsage().arrayBuffers)), 2);
-        await fn();
-        clearInterval(timer);
-        return Math.round(peak / MIB);
-      };
-      const sendBlob = async () => (await fetch(base + "/upload", { method: "POST", body: await fs.openAsBlob(${JSON.stringify(sparse)}) })).text();
-      const outside = await peakOf(sendBlob);
-      const inside = await peakOf(() => withProcessRecording(collector.openRun([]), sendBlob));
+      const sendBlob = async () => (await fetch(base + "/upload", { method: "POST", body: blob })).text();
+      read = 0;
+      await sendBlob();
+      const outside = read;
+      read = 0;
+      await withProcessRecording(collector.openRun([]), sendBlob);
+      const inside = read;
       await collector.flush();
       server.close();
-      console.log(JSON.stringify({ outside, inside, http: collector.snapshot().http }));
+      console.log(JSON.stringify({ size: blob.size, outside, inside, http: collector.snapshot().http }));
     `;
-    const result = runScript(script, ["--expose-gc"]) as { outside: number; inside: number; http: number };
-    expect(result.inside).toBeLessThan(result.outside + 32);
+    const result = runScript(script) as { size: number; outside: number; inside: number; http: number };
+    expect(result.outside).toBe(result.size);
+    // Reading the whole Blob for the record would add all of its size.
+    expect(result.inside - result.outside).toBeGreaterThan(0);
+    expect(result.inside - result.outside).toBeLessThan(MIB);
     expect(result.http).toBe(1);
   }, 120_000);
 });
