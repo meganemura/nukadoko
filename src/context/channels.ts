@@ -298,39 +298,46 @@ export function captureStream(stream: ReadableStream<Uint8Array>): { done: Promi
   return { done, finalize: () => stop(buffer.stopped()) };
 }
 
-/** The body a `fetch` sends, as the record keeps it, and the arguments
- * that send it. Never consumes what the caller passed: a stream is teed,
- * a Request cloned, a Blob sliced. Throws where building the copy throws,
- * and then the caller sends with the step's own arguments. */
+/** The body a `fetch` sends, as the record keeps it. The caller's
+ * arguments go to the original exactly as given, never spread or rebuilt:
+ * an `init` can be a Request or a class instance whose fields are
+ * getters on its prototype, which a copy would drop. So a body is read
+ * only from something nukadoko can take without changing what the caller
+ * passed: a value in hand, a Blob slice, a Request clone. A stream or
+ * FormData body in a plain `init` cannot be read that way (a stream read
+ * by nukadoko is a stream `fetch` no longer has, and FormData is encoded,
+ * with its boundary, only inside `fetch`), so it is named unread. Throws
+ * where reading throws, and then the line has no request body. */
 interface FetchBody {
-  readonly send: FetchArgs;
   readonly body: Promise<RawBody | undefined> | RawBody | undefined;
   readonly pending?: { finalize(): RawBody };
 }
 
 type FetchArgs = [input: string | URL | Request, init?: RequestInit];
 
-function capturedBody(stream: ReadableStream<Uint8Array>, send: FetchArgs): FetchBody {
+function capturedBody(stream: ReadableStream<Uint8Array>): FetchBody {
   const capture = captureStream(stream);
-  return { send, body: capture.done, pending: capture };
+  return { body: capture.done, pending: capture };
 }
 
 function requestBodyOf(args: FetchArgs): FetchBody {
   const [input, init] = args;
+  // A Request given as `init` (a forwarding proxy passes the incoming one)
+  // is what `fetch` reads its body from.
+  if (init instanceof Request) return init.body === null ? { body: undefined } : capturedBody(init.clone().body!);
   const body = init?.body;
   if (body === undefined || body === null) {
-    if (input instanceof Request && input.body !== null) return capturedBody(input.clone().body!, args);
-    return { send: args, body: undefined };
+    if (input instanceof Request && input.body !== null) return capturedBody(input.clone().body!);
+    return { body: undefined };
   }
-  if (typeof body === "string") return { send: args, body: rawBodyOf(Buffer.from(body, "utf8")) };
-  if (body instanceof URLSearchParams) return { send: args, body: rawBodyOf(Buffer.from(body.toString(), "utf8")) };
-  if (body instanceof ArrayBuffer) return { send: args, body: rawBodyOf(new Uint8Array(body)) };
-  if (ArrayBuffer.isView(body)) return { send: args, body: rawBodyOf(new Uint8Array(body.buffer, body.byteOffset, body.byteLength)) };
+  if (typeof body === "string") return { body: rawBodyOf(Buffer.from(body, "utf8")) };
+  if (body instanceof URLSearchParams) return { body: rawBodyOf(Buffer.from(body.toString(), "utf8")) };
+  if (body instanceof ArrayBuffer) return { body: rawBodyOf(new Uint8Array(body)) };
+  if (ArrayBuffer.isView(body)) return { body: rawBodyOf(new Uint8Array(body.buffer, body.byteOffset, body.byteLength)) };
   if (body instanceof Blob) {
     // A Blob knows its size, so only the window is read, from a slice.
     const size = body.size;
     return {
-      send: args,
       body: body
         .slice(0, BODY_WINDOW)
         .arrayBuffer()
@@ -340,20 +347,9 @@ function requestBodyOf(args: FetchArgs): FetchBody {
         ),
     };
   }
-  if (body instanceof FormData) {
-    // The multipart encoding, boundary included, exists only once a
-    // Request is built, so the request is built here and the same bytes
-    // are read and sent. `dispatcher` is undici's own option, outside
-    // RequestInit, and is the one a Request would drop.
-    const request = new Request(input, init);
-    const dispatcher = (init as { dispatcher?: unknown }).dispatcher;
-    return capturedBody(request.clone().body!, dispatcher === undefined ? [request] : [request, { dispatcher } as RequestInit]);
-  }
-  if (body instanceof ReadableStream) {
-    const [forSend, forRecord] = body.tee();
-    return capturedBody(forRecord, [input, { ...init, body: forSend }]);
-  }
-  return { send: args, body: { unread: "a body that could not be read without consuming it" } };
+  if (body instanceof FormData) return { body: { unread: "a FormData body, which fetch encodes itself" } };
+  if (body instanceof ReadableStream) return { body: { unread: "a stream body, which nukadoko cannot read without taking it from fetch" } };
+  return { body: { unread: "a body that could not be read without consuming it" } };
 }
 
 /**
@@ -412,9 +408,10 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
     declared = fetchTarget(args[0]);
     request = requestBodyOf(args);
   } catch {
-    // The caller's own arguments go to the original, so the caller gets
-    // exactly the error `fetch` throws for them, and the line records it.
-    request = { send: args, body: undefined };
+    // The caller's own arguments still go to the original, so the caller
+    // gets exactly the error `fetch` throws for them, and the line
+    // records it.
+    request = { body: undefined };
   }
   let requestBody: RawBody | undefined = request.body instanceof Promise ? undefined : request.body;
   const requestBodyRead = Promise.resolve(request.body).then(
@@ -445,7 +442,7 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
 
   let response: Response;
   try {
-    response = await withoutChannelRecording(() => original(...request.send));
+    response = await withoutChannelRecording(() => original(...args));
   } catch (error) {
     const failure = { error: firstLine(error), durationMs: elapsed() };
     thrown = failure;

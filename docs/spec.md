@@ -2932,13 +2932,15 @@ its scenario record's id, so either record leads to the other.
   `"truncated": true` when `text` holds only the start,
   `"binary": true` (and no `text`) when
   the bytes are not UTF-8, or `{ "unread": "<why>" }` when nukadoko did
-  not read it at all (a multipart body Playwright encodes itself). The
+  not read it at all (a multipart body Playwright encodes itself, or a
+  stream or FormData body a step passes to `fetch` in its `init`, which
+  nukadoko could read only by changing what `fetch` sends). The
   bytes are decoded, redacted, and only then cut, so a secret the cut
   would split is already replaced, and a piece of a secret left at the
   end of what was read is dropped. `bytes` is the whole size, before
   redaction, of a body read to its end or one whose size is known (a
   string, a buffer, a Blob). A `fetch` body nukadoko reads from its own
-  copy (a response, a stream or FormData upload) is read only to one chunk
+  copy (a response, or a Request's upload) is read only to one chunk
   past the first 32 KiB and then left, so a body of any length costs the
   step's process at most that much to record, and the step's own copy
   keeps its pace. A body nukadoko stopped reading there, and one still
@@ -2995,7 +2997,10 @@ its scenario record's id, so either record leads to the other.
   that closed with neither a response nor an error has `"error": "the
   request was closed before a response arrived"`. A `fetch` that throws
   before it sends (a used Request, a GET with a body) is a line with the
-  error `fetch` gives, and the step gets exactly that error. An upgrade
+  error `fetch` gives, and the step gets exactly that error. A `fetch`
+  gets exactly the arguments the step passed, never a copy: its `init`
+  can be a Request, or an object whose members are getters on its
+  prototype, and a copy would drop them. An upgrade
   (a WebSocket) or a CONNECT is a line with the handshake's real status,
   101 or the tunnel's, and `url` is the CONNECT target `<host>:<port>`;
   what the connection carries afterwards is an `unmeasured` socket, and

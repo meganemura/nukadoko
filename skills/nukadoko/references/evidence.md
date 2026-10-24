@@ -27,7 +27,9 @@ stopped reading (a `fetch` body past 32 KiB, or one still arriving when
 the step ended, marked `incomplete`) has `bytes_read` instead of `bytes`: not the whole size.
 A body that failed on its own (the server aborted it, the step destroyed
 it) has `bytes_read` and an `error`, and a `node:http` response the step
-never read is `{ "unread": "the step did not read the body" }`. A request with no
+never read is `{ "unread": "the step did not read the body" }`. A stream or
+FormData body the step passes to `fetch` in its `init` is unread too: nukadoko
+sends `fetch` exactly what the step passed. A request with no
 response when the step ended has `status: 0` and an `error` that says so
 and how long it had.
 A `fetch` that an interceptor installed after nukadoko (msw, nock)

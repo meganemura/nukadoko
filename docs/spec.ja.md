@@ -2390,11 +2390,11 @@ scenario record は独立したファイルではなく、その run の `run.js
 - 本文やファイルの中身はテキストとして `{ "text", "bytes" }` で残します。
   `text` が先頭だけを持つときは `"truncated": true` が加わります。
   バイト列が UTF-8 でなければ `"binary": true` が加わり、`text` はありません。
-  nukadoko がまったく読まなかったとき(Playwright が自分でエンコードする multipart の本文)は `{ "unread": "<理由>" }` です。
+  nukadoko がまったく読まなかったとき(Playwright が自分でエンコードする multipart の本文、または step が `fetch` の `init` に渡した stream や FormData の本文で、`fetch` が送るものを変えなければ読めないもの)は `{ "unread": "<理由>" }` です。
   バイト列はデコードし、redact してから切り詰めます。
   そのため、切り詰めが分断するはずの secret はすでに置き換わっており、読んだ部分の終わりに残った secret の断片は捨てられます。
   `bytes` は、終わりまで読んだ本文か、サイズが分かる本文(文字列、バッファ、Blob)の、redact する前の全体のサイズです。
-  nukadoko が自分の複製から読む `fetch` の本文(レスポンス、stream や FormData のアップロード)は、最初の 32 KiB を 1 チャンク超えるところまでしか読まず、そこで手放します。
+  nukadoko が自分の複製から読む `fetch` の本文(レスポンス、または Request のアップロード)は、最初の 32 KiB を 1 チャンク超えるところまでしか読まず、そこで手放します。
   そのため、どれだけ長い本文でも、記録のために step のプロセスが使うのはその分までで、step 自身の複製は自分のペースを保ちます。
   nukadoko がそこで読むのをやめた本文と、nukadoko が待つのをやめたとき(step の境界、または run の終わり)にまだ届いていた本文は、`bytes` の代わりに `"bytes_read"` を持ちます。
   これは nukadoko がやめる前に読んだバイト数で、全体のサイズではありません。
@@ -2434,6 +2434,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   `<n>` はそのリクエストに与えられた時間で、待つ間に step の残ったコードが送ったリクエストでは、境界が待った時間より短くなります。
   レスポンスもエラーもなく閉じたリクエストは `"error": "the request was closed before a response arrived"` を持ちます。
   送る前に throw する `fetch`(使用済みの Request、本文付きの GET)は、`fetch` が出すエラーを持つ行になり、step はそのエラーをそのまま受け取ります。
+  `fetch` は step が渡した引数を、複製せずそのまま受け取ります。
+  `init` は Request でも、メンバーがプロトタイプ上の getter であるオブジェクトでもよく、複製するとそれらが落ちるからです。
   Upgrade(WebSocket)や CONNECT は、ハンドシェイクの実際のステータス(101 またはトンネルのステータス)を持つ行で、CONNECT の `url` はその宛先の `<host>:<port>` です。
   接続がそのあとに運ぶものは `unmeasured` の socket になり、step の境界はそれを待ちません。
   追記の失敗で step が失敗することはありません。

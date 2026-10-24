@@ -45,7 +45,9 @@ just until 0.1.
   wrote through `node:fs`, with their content after the step, at most
   8 KiB per file and 64 KiB per step; a path whose identity cannot be
   read is named in `unmeasured` instead, and reading it never throws
-  into the step or ends the run. A `fetch` body is read only to
+  into the step or ends the run. A `fetch` in a step gets exactly the
+  arguments the step passed, whatever object its `init` is, so a stream
+  or FormData body there is unread. A `fetch` body is read only to
   just past 32 KiB, so recording a body of any length costs about that
   much memory, and a body nukadoko stopped reading has `bytes_read`
   instead of `bytes`, with `incomplete` only when nukadoko stopped

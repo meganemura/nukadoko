@@ -219,7 +219,14 @@ describe("a fetch that throws before it sends", () => {
     const lines = withoutDuration(httpLines());
     expect(lines).toEqual([
       { method: "POST", url: `${base}/x`, status: 0, via: "fetch", error: outside[0]!.message },
-      { method: "GET", url: `${base}/x`, status: 0, via: "fetch", error: outside[1]!.message },
+      {
+        method: "GET",
+        url: `${base}/x`,
+        status: 0,
+        via: "fetch",
+        error: outside[1]!.message,
+        request_body: { unread: "a FormData body, which fetch encodes itself" },
+      },
     ]);
     expect(observed.snapshot().http).toBe(lines.length);
   });
