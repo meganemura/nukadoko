@@ -3365,6 +3365,7 @@ old のセルの行は、old の world が走らせる基点の feature ファ�
 通ったセルや、`broke` になったセルはもう走りません。
 各証明の実行は、番号の付いた scenario の行とは別に、stderr の `proof run <k>/<n>` の行になります。
 対照自身の scenario の行は `(control)` で終わり、tree の scenario の行は `base <environment>` か `old <environment>` で始まります。
+セルが走らない tree は、そのわけを `<world> <environment>  not run: <reason>` の行で述べます。
 
 `--concurrency` のもとでは、各証明の回は自分の worker で走り、その worker は `BeforeAll` と `AfterAll` をもう一度実行します。
 回の中でうまくいかなかったこと(それらの hook の失敗、または与えられたセルの record を書かずに worker が終了したこと)は、その回のセルが負い、run は負いません。

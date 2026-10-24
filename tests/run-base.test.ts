@@ -380,3 +380,64 @@ describe("nuka run --base", () => {
     }
   });
 });
+
+describe("nuka run --base, when the base's steps no longer load against head", () => {
+  let rootDir: string;
+  let result: { exitCode: number; stdout: string; stderr: string };
+
+  const git = (...args: string[]): string =>
+    execFileSync("git", ["-C", rootDir, "-c", "user.email=test@example.com", "-c", "user.name=test", ...args], { encoding: "utf8" }).trim();
+
+  // Head moves the module the step imports, and the step with it; the
+  // base's copy of the step still imports it from where it was.
+  beforeAll(async () => {
+    rootDir = await copyFixtureToTempDir("allure-identity-project");
+    for (const file of ["nukadoko.program.ts", "features/checkout.feature", "features/steps/a-cart.ts", "features/steps/cart-holds.ts"]) {
+      rmSync(path.join(rootDir, file));
+    }
+    writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(pathToFileURL(path.join(repoRoot, "src", "index.ts")).href)};\n`);
+    writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
+    mkdirSync(path.join(rootDir, "lib"));
+    writeFileSync(path.join(rootDir, "lib", "cart.mjs"), "export function total(count) {\n  return count * 2;\n}\n");
+    writeFileSync(path.join(rootDir, "features", "cart.feature"), BASE_FEATURE);
+    writeFileSync(path.join(rootDir, "features", "steps", "a-cart.ts"), STEP_A_CART);
+    writeFileSync(path.join(rootDir, "features", "steps", "total-is.ts"), claimStep("the total is {expected:int}", "equal"));
+    writeFileSync(path.join(rootDir, "features", "steps", "total-about.ts"), claimStep("the total is about {expected:int}", "equal"));
+    git("init", "-q");
+    git("add", "-A");
+    git("commit", "-qm", "base");
+    git("branch", "base-branch");
+    git("mv", "lib/cart.mjs", "lib/prices.mjs");
+    writeFileSync(path.join(rootDir, "features", "steps", "a-cart.ts"), STEP_A_CART.replace("../../lib/cart.mjs", "../../lib/prices.mjs"));
+    git("add", "-A");
+    git("commit", "-qm", "head");
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "--base", "base-branch"], { rootDir, stdout, stderr });
+    result = { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+  }, 120_000);
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("calls every unchanged row moved, with the import that failed, named from the project root", () => {
+    expect(result.exitCode).toBe(1);
+    const rows = (latestRunJson(rootDir) as { table: { rows: Row[] } }).table.rows;
+    expect(rows.map((row) => [row.name, row.change, row.verdict])).toEqual([
+      ["an empty cart", "unchanged", "moved"],
+      ["three items", "unchanged", "moved"],
+      ["five items", "unchanged", "moved"],
+      ["gone soon", "unchanged", "moved"],
+    ]);
+    for (const row of rows) {
+      const old = row.cells.find((cell) => cell.world === "old");
+      expect(old).toMatchObject({ outcome: "not-run" });
+      expect(old?.reason).toMatch(/^nuka check reports \d+ errors? in the old tree, the first step-file-import-failed at features\/steps\/a-cart\.ts: .*lib\/cart\.mjs/);
+      expect(old?.reason).not.toContain(rootDir);
+    }
+    // stderr says it once, where the count line shows the red rows.
+    const notRun = result.stderr.split("\n").filter((line) => line.startsWith("old default  not run: "));
+    expect(notRun).toEqual([`old default  not run: ${rows[0]!.cells.find((cell) => cell.world === "old")!.reason}`]);
+  });
+});

@@ -1311,6 +1311,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         const context = { change, held: readCriterionTags(pickle.tags.map((tag) => tag.name)).held, mappingChanged: base.mapping.changed };
         planned.set(key, plannedWorldCells(headCells, proofRuns, context));
       }
+      // A tree's cells that will not run say why on stderr too, beside the
+      // count line that shows the rows they turn red.
+      const leaveNotRun = (world: "base" | "old", environment: string, reason: string): void => {
+        treeNotRun.set(treeKey(world, environment), reason);
+        progress.write(`${world} ${environment}  not run: ${reason}\n`);
+      };
       const trees = [
         { world: "base" as const, tree: base.base },
         { world: "old" as const, tree: base.old },
@@ -1350,8 +1356,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               const baseProgram = (await loadProgram(tree.root))?.program ?? null;
               recipe = resolveEnvironment(config, baseProgram, environment, !implicitDefault).program;
             } catch (error) {
-              treeNotRun.set(
-                treeKey(world, environment),
+              leaveNotRun(
+                world,
+                environment,
                 projectRelativeText(`the base tree's program file does not give this environment: ${error instanceof Error ? error.message : String(error)}`, rootDir),
               );
               continue;
@@ -1362,10 +1369,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             const result = await starter.start(environment, recipe, pass.secrets);
             if (!result.ok) {
               if (result.unavailable === true) {
-                treeNotRun.set(treeKey(world, environment), `the ${world} world has no URL to reach: ${result.message}`);
+                leaveNotRun(world, environment, `the ${world} world has no URL to reach: ${result.message}`);
               } else {
                 worlds.push(result.record());
-                treeNotRun.set(treeKey(world, environment), `the program did not start for the ${world} world`);
+                leaveNotRun(world, environment, `the program did not start for the ${world} world`);
                 if (!result.aborted) warn({ severity: "warning", code: "program-start-failed", message: result.message });
               }
               continue;
@@ -1417,7 +1424,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             stderr,
             live,
           });
-          if (result.notRun !== null) treeNotRun.set(treeKey(world, environment), result.notRun);
+          if (result.notRun !== null) leaveNotRun(world, environment, result.notRun);
           if (started !== null) await stopWorld(started, world);
         }
       }

@@ -4212,7 +4212,9 @@ reader sees 503 against 404 and weighs it. A cell that passed or broke is
 not run again. Each proof run is a `proof run <k>/<n>` line on stderr,
 apart from the numbered scenario lines, and a control's own scenario line
 ends with `(control)`; a tree's scenario lines start with
-`base <environment>` or `old <environment>`.
+`base <environment>` or `old <environment>`, and a tree whose cells do
+not run says why on a line of its own,
+`<world> <environment>  not run: <reason>`.
 
 Under `--concurrency`, each proof round runs in a worker of its own,
 which runs `BeforeAll` and `AfterAll` again. What goes wrong in a round
