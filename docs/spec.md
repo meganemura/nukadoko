@@ -515,7 +515,7 @@ becomes a construction instruction as a consequence.
 The fixture names:
 
 - `page: Page`: a Playwright Page in a fresh browser context, built from
-  `config.browserContext`. The configured baseURL is wired into the browser context, so
+  `config.browserContext`. The world's base URL (see "Program") is wired into the browser context, so
   `page.goto("/path")` resolves against it. The standard URL rule applies: a
   leading slash replaces baseURL's own path instead of appending to it.
   This behavior was measured with Playwright 1.61.1 and `baseURL:
@@ -551,14 +551,15 @@ The fixture names:
   is `page.context()` of the page it returns. Destructuring `pageAs` launches
   nothing; the first call does. See "Several people in one scenario" below.
 - `request: APIRequestContext`: a Playwright APIRequestContext built from
-  `config.requestContext`. As with `page` above, `baseURL` is optional. A suite that
-  calls only absolute URLs across multiple hosts has no single baseURL to
-  state. Nukadoko does not force one into config only to satisfy this fixture.
-  If `baseURL` is unset and a step passes a relative path, Playwright produces
+  `config.requestContext`, with the world's base URL. As with `page` above, a base URL is optional. A suite that
+  calls only absolute URLs across multiple hosts has no single base URL to
+  state. Nukadoko does not force a program file on it only to satisfy this fixture.
+  If there is no base URL and a step passes a relative path, Playwright produces
   the failure. Nukadoko does not re-implement Playwright's URL resolution to
   prevent that failure first.
-- `env`: read-only environment variables from the configured envFiles. The
-  file format is under "Environments and secrets". This fixture
+- `env`: read-only environment variables from the configured envFiles,
+  then the world's `env` from `nukadoko.program.ts` over them (see
+  "Program"). The file format is under "Environments and secrets". This fixture
   enforces determinism: the process environment is never merged. It
   also enforces secrets redaction: only values that nukadoko loaded are
   redactable. It is not a convenience. The object a step receives is a
@@ -580,10 +581,11 @@ The fixture names:
   whether the call finds a value or throws. The names use read order and are
   deduplicated. Reading the same value directly from `env` leaves no trace.
   That path is a plain object, so the library never sees the read.
-- `baseURL`: the configured baseURL for the occasional URL assembled by hand.
-  The common paths receive it as described above. It is `undefined` when
-  `config.baseURL` is unset. This is valid for a suite that uses only absolute
-  URLs. It is not an error state.
+- `baseURL`: the world's base URL for the occasional URL assembled by hand,
+  such as a `fetch` call. The common paths receive it as described above.
+  It is `undefined` when the tree has no program file, or when its world
+  has neither `serve` nor `url`. This is valid for a suite that uses only
+  absolute URLs. It is not an error state.
 - `resultOf(stepModule)`: returns the validated result from that step's most
   recent successful execution in the current scenario. It returns `undefined`
   under `nuka do` or when the step has not succeeded yet. This is the scenario
@@ -1001,33 +1003,12 @@ return a page that the executor still owns and measures.
 Therefore, `check` refuses it with `page-override-unowned`.
 
 An override can also add a dependency.
-`nuka init --server "<command>" --server-url <url>` writes a `server`
-fixture that starts the program under test with `runServer` and a
-`request` override that destructures the builtin `request` and `server`
-and hands back the builtin unchanged.
-Every step that destructures `request` then starts the server first, and
-the feature still names what ran, through the steps it binds.
-`runServer(command, args, { url, cwd, env, timeout })` is an import from
-`nukadoko`, not a fixture, for the reason `runCommand` is one.
-It runs the program with no shell and resolves to `{ url, stop() }` once
-the URL's host and port accept a TCP connection.
-Readiness is that observation and nothing else: a log line or an HTTP
-probe would be a guess at what each program prints or which path answers.
-It rejects when the port already accepts connections before the program
-starts, since every request would then reach a server it did not start;
-when the program exits first, naming its exit and its stderr; and when the
-timeout passes (10 seconds by default), after it stops the program.
-It does not tell the program a port: a `PORT` variable is a convention, so
-the program listens at the URL by its own means.
-`stop()` sends SIGTERM, then SIGKILL after 5 seconds.
-On Windows the program is found and started the way `runCommand` starts
-one, so a bare `npm` or a `.cmd` file works, and `stop()` ends the program
-and every process it started with `taskkill /t /f`, since a signal there
-ends only the process it names and the server `npm` started would keep
-the port.
-The generated fixture keeps the default `scenario` scope, the one that
-never shares server state between scenarios; `{ scope: "process" }` is the
-author's declaration that the server keeps none.
+A `request` override that destructures the builtin `request` and a
+project fixture builds that fixture before every step that sends a
+request, and hands back the builtin unchanged.
+The program under test is not such a fixture: `nukadoko.program.ts` starts
+it once per world, so a run can name which program answered (see
+"Program").
 
 A project that already declares its own `scratch` fixture keeps it.
 Its `config.fixtures` entry replaces the builtin at run time, as any
@@ -2481,6 +2462,326 @@ In both arrangements, place the shared file outside `featuresDir`.
 Discovery could import it without harm because the module defines no step.
 However, its location shows that the existing suite owns it.
 
+## Program
+
+The criteria live in `nukadoko.config.ts`: the features, the steps, the
+fixtures, the parameter types, and the secrets.
+The program under test lives in a second file, `nukadoko.program.ts`.
+Its default export is the program, written with `defineProgram`:
+how nukadoko builds it, prepares its state, starts it or reaches it, and
+the environment variables its processes get.
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  build: ["npm run build"],
+  prepare: ["node dist/migrate.js"],
+  serve: { command: "node dist/server.js", ready: "/health" },
+  env: { PORT: "{port}", DATABASE_PATH: "{dir}/app.sqlite3" },
+});
+```
+
+The two files are apart because a run compares criteria across commits
+(`--since`, the summary's changed criteria).
+With the recipe in the config, a change to how the program builds counted
+as a change to every criterion, and a run that read an older tree's
+config found no recipe at all.
+nukadoko reads the program file from the tree it builds: in this release,
+the tree the run was started in.
+
+A tree with no program file has no program to start.
+The run starts no world, `run.json` holds `worlds: []`, and each step
+record's `world_name` is `null`.
+That is the right shape for a command-line tool whose steps run commands
+with `runCommand`: such a project needs nothing new.
+
+### The fields
+
+| Field | What it holds |
+| --- | --- |
+| `build` | commands run once per tree per run, in the tree's root, before any world (`npm run build`, `bundle install`, `go build ./...`) |
+| `prepare` | commands run once per world, in the tree's root, with the world's env (`bin/rails db:prepare`) |
+| `serve` | `{ command, port, ready, timeout_ms }`: the server nukadoko starts, waits for, and stops (below) |
+| `url` | a URL, or a function of the world that returns one, for a program nukadoko does not start (below) |
+| `env` | the variables the world's processes and the steps' process get, with placeholders (below) |
+| `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, url, port, env }` |
+| `environments` | named overrides of any field above, plus `policy`, `envFiles`, and `version` (below) |
+
+`serve` and `url` are two ways to reach the program, so writing both is
+refused.
+A program file with neither is valid: its world runs `build` and `prepare`
+and has no URL, for a tool whose steps run what `build` made.
+
+A command is an argv array, or a string split on whitespace.
+Neither goes through a shell, and a string has no quoting rule: a word
+that holds a space is written as an array.
+A shell would make what runs depend on the host's shell, and a quoting
+rule would need a shell-words parser, which is a dependency.
+A project that needs a pipe or a `&&` writes `["sh", "-c", "..."]`.
+Every command runs in the tree's root.
+On Windows a bare program name such as `npm` is looked up through `PATH`
+and `PATHEXT`, and a `.cmd` or `.bat` file runs through `cmd.exe`, the
+same way `runCommand` starts one.
+A `build` or `prepare` command that exits with a code other than 0 stops
+the world before anything after it runs.
+
+The file is `nukadoko.program.ts`, or `nukadoko.program.mts`.
+Both at once are refused, since nukadoko cannot tell which one to read.
+A file with no default export is refused, and so is a key the shape does
+not have; a key that differs from a real one only in case names the real
+one.
+Each refusal is `config-invalid`, names the file, and stops every command
+that reads it, `nuka check` included.
+
+### serve
+
+nukadoko starts `serve.command`, waits until `ready` answers, sends the
+world's requests there, and stops the program after the world's pass.
+
+- `port` is `"auto"` (the default) or a number.
+  `"auto"` takes a free port for each world: nukadoko listens on port 0,
+  reads the port the system gave, and closes it before the program starts.
+  A number is checked first: when something already answers on it, the
+  world fails, since every request would reach a server nukadoko did not
+  start and the scenarios would pass or fail on its behalf.
+- The program learns its port only from a placeholder: `{port}` in the
+  command (`bin/rails server -p {port}`) or in `env` (`PORT: "{port}"`).
+  nukadoko sets no variable a program did not ask for, because `PORT` is a
+  convention and not every program reads it.
+- The world's URL is `http://localhost:<port>`.
+- `ready` is a path, `/` by default.
+  nukadoko sends `GET` to it every 100 ms, each request with 2 seconds to
+  answer, until one answers with a 2xx status.
+  A port that accepts connections is not enough: Rails and many other
+  servers listen before they can answer, and a scenario that starts then
+  fails for a reason the criteria do not name.
+- `timeout_ms` is how long the program has to answer `ready`, 60,000 by
+  default.
+
+The program runs in a process group of its own on POSIX.
+Stopping it sends SIGTERM to the group, waits up to 5 seconds, and then
+sends SIGKILL to the group, so a child the program started (`npm start`
+starts the server as one) does not keep the port.
+On Windows a signal ends only the process it names, so the whole tree
+ends with `taskkill /t /f`.
+A program nukadoko started does not outlive nukadoko: when the process
+exits by any path, a signal or a crash included, every program still
+running is killed.
+
+The world fails when the program exits before `ready` answers, when
+`ready` does not answer in time, or when `setup` throws.
+nukadoko stops what it started, and the message names the command, how
+it ended, and the last 20 lines of the world's `program.log`.
+When the program exits during the pass, the world's stop reports
+`program-exited`, a warning: the requests after that found nothing
+listening, and the failed steps alone would not say why.
+
+### Placeholders
+
+`env` values and the words of `prepare` and `serve` commands may name a
+placeholder:
+
+| Placeholder | Its value |
+| --- | --- |
+| `{port}` | the port nukadoko gave `serve` |
+| `{url}` | the world's URL: `http://localhost:{port}`, or the `url` the file names |
+| `{dir}` | the world's directory, `.nukadoko/runs/<run_id>/worlds/<environment>/`, as an absolute path |
+| `{root}` | the root of the tree the program is built from, as an absolute path |
+| `{world}` | the world's name: the environment it runs |
+| `{token}` | 32 random hexadecimal characters made for this world |
+
+`build` runs once per tree, before any world exists, so a `build` command
+may name `{root}` alone.
+A placeholder the world has no value for is refused by name before
+anything runs: `{port}` in a world that does not serve, or `{url}` in one
+with neither `serve` nor `url`.
+Any other text in braces stays as written, so a JSON value or a shell
+brace in a command needs no escape.
+
+`{token}` is for a value the program and the steps must share and nobody
+else may read, such as a seeded admin's password or a signing key.
+It is redacted wherever a record could show it, as
+`{{secret.WORLD_TOKEN}}`: in `program.log`, in every step record, and in
+`run.json`.
+
+`{dir}` is where a world keeps its state: a SQLite file, a pid file, an
+upload directory.
+Two worlds never share it, so two runs at once, or two environments of
+one run, never write the same database.
+Retention removes it with its run.
+
+### env
+
+`env` is a map of variable names to values, placeholders filled.
+The world's processes (`build` aside, which runs before the world) get
+the environment `nuka` itself runs in, with `env` over it.
+They do not get the config's env files, which hold the steps' secrets
+and not the program's.
+
+The steps get `env` too, so a step, a `runCommand` child, and the server
+read `DATABASE_PATH` the same way.
+During the world's pass, `process.env` holds `env`, and the previous
+values come back after the pass.
+The `env` fixture is the env files, then `env` over them.
+Under `--concurrency` each worker applies the same values.
+
+### Worlds
+
+A world is one pass of a run against one program.
+In this release a run starts one world for each environment it selects,
+of the tree it was started in.
+
+- `nuka run` starts the world before the environment's BeforeAll hooks,
+  since a hook may already talk to the program.
+  It stops the world after the AfterAll hooks and after the `"process"`
+  scope fixtures are torn down, since a fixture's teardown may too.
+- Under `--concurrency`, the parent process starts the world, and every
+  worker sends its requests there.
+- `nuka do` starts the world for its one execution and stops it after.
+  The world's directory is `world/` inside the step record's directory.
+- When a world does not start, the run reports `program-start-failed`
+  with the message above, runs no scenario and no BeforeAll or AfterAll
+  hook in that environment, and exits 1.
+  `nuka do` reports the same finding, exits 1, and writes no
+  `record.json`; the record's directory keeps the world's `program.log`.
+- A world that ran a command or `setup` prints one line on stderr once it
+  is ready, with what each phase took, the URL, and the log:
+
+```text
+world default: build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (log .nukadoko/runs/run-20261024-101500-a1b2/worlds/default/program.log)
+```
+
+The world's URL is the base URL of `page`, `context`, `pageAs`, and
+`request`, and it is the `baseURL` fixture.
+`run.json`'s `environments[].base_url` names it.
+
+`program.log` holds what every command of the world printed, stdout and
+stderr, each line redacted as it is written, with a `$ <command>` line
+before each command.
+A `build` that ran for an earlier world of the same tree writes one line
+that names that world.
+
+`run.json` names every world in `worlds`, in the order the run started
+them:
+
+```json
+"worlds": [
+  {
+    "name": "default",
+    "tree": "head",
+    "url": "http://localhost:41873",
+    "commands": [
+      { "phase": "build", "argv": ["npm", "run", "build"] },
+      { "phase": "prepare", "argv": ["node", "dist/migrate.js"] },
+      { "phase": "serve", "argv": ["node", "dist/server.js"] }
+    ],
+    "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
+    "log": "worlds/default/program.log",
+    "error": null
+  }
+]
+```
+
+- `tree` is the tree the program was built from: `head`, the tree the run
+  was started in.
+- `commands` lists what the world ran, placeholders filled and redacted.
+  A `build` appears in the first world that ran it.
+- `timings` holds a key for each phase that ran: `build_ms`,
+  `prepare_ms`, `serve_ms`, `setup_ms`, and `stop_ms`.
+- `log` is relative to the run directory, `null` when the world ran no
+  command.
+- `error` is why the program did not start, `null` when it did.
+
+Each step record names its world in `world_name`, the `name` of a
+`worlds` entry, or `null` when no world ran.
+The compat World a compat step reads and writes is `world`, a different
+field.
+
+### Environments
+
+`environments` names the deployment targets and the variants of the
+program: a staging server, a preview per pull request, the same app with
+a feature turned on.
+An entry may hold any field above, plus three that only an environment
+holds:
+
+- `policy: "read-only"` refuses a step that declares it mutates.
+- `envFiles` follow the config's `envFiles`, and later files win.
+- `version` is a probe, `() => string | Promise<string>`, called once per
+  run with a 10-second budget; each step record stores what it answered
+  as `target_version`.
+
+The rules for all three are under "Environments and secrets".
+A field an environment writes replaces the top level's, except `env`,
+whose keys merge with the environment's winning, so an environment that
+changes one variable does not repeat the rest.
+`serve` and `url` are one choice: an environment that writes either one
+replaces the top level's.
+`build` and `prepare` are inherited like any field, so an environment
+with a `url` and no command to run writes `build: []` and `prepare: []`.
+`--env <name>` selects an environment, and a run without `--env` uses the
+top level under the name `default`.
+`--env` may repeat; each environment is a world of its own (see
+"Running").
+
+```ts
+export default defineProgram({
+  serve: { command: "npm start", ready: "/health" },
+  env: { PORT: "{port}" },
+  environments: {
+    "new-checkout": { env: { CHECKOUT_V2: "1" } },
+    staging: { url: "https://staging.acme.example", policy: "read-only" },
+  },
+});
+```
+
+### A program nukadoko does not start
+
+`url` names a program that runs somewhere nukadoko does not: a deployed
+server, a preview per pull request.
+A function receives the world's `{ name, root, dir }` before anything is
+reached, so one entry covers every preview:
+
+```ts
+environments: {
+  "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
+},
+```
+
+Such a world starts nothing and writes no `program.log`: nukadoko cannot
+read the log of a program it does not run, so the world's `log` is
+`null`.
+`env` still reaches the steps, and `{token}` is still made.
+A read-only `policy` belongs on such an environment whenever the server
+holds data someone else needs.
+
+### A Ruby program
+
+The file is TypeScript, and the commands are whatever the project runs.
+A Rails application:
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  build: ["bundle install"],
+  prepare: ["bin/rails db:prepare"],
+  serve: { command: "bin/rails server -p {port} -P {dir}/server.pid", ready: "/up" },
+  env: {
+    RAILS_ENV: "test",
+    DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
+  },
+});
+```
+
+`-P {dir}/server.pid` keeps the pid file in the world's directory, so two
+worlds never refuse each other's start, and `DATABASE_URL` gives each
+world a database of its own.
+`/up` is the health check Rails generates.
+
 ## Running
 
 ### Scenarios (the scripted path)
@@ -2697,16 +2998,17 @@ every scenario has `criteria: { changed_since: null }` and `since` is
 selected scenario once in each environment. `default` is a name `--env`
 takes too, whether or not the config defines it: it is the environment a
 run without `--env` uses (the top-level settings, or `environments.default`
-when the config defines one) and the name `run.json` gives it, so
+when the program file defines one) and the name `run.json` gives it, so
 `--env default --env staging` runs both. The environments run one after
 another in the order given, the whole selection in `a` and then the whole
 selection in `b`, so two environments never share a target at once, and
 each pass is the run it would have been alone: its own env files, secrets,
-version probe, `baseURL`, and policy, its own BeforeAll and AfterAll, and
+version probe, world, and policy, its own BeforeAll and AfterAll, and
 its own `"process"`-scope fixtures, torn down before the next environment
-starts. An environment stays generic config: nukadoko has no notion of a
-feature flag, and what differs between two environments is whatever their
-env files and `baseURL` say. Each scenario entry carries its `environment`,
+starts, and its world stopped (see "Program"). An environment stays generic
+configuration: nukadoko has no notion of a feature flag, and what differs
+between two environments is whatever their env files and program fields
+say. Each scenario entry carries its `environment`,
 and `verdicts` holds one cell per scenario and environment, red when any
 execution in it is red. The exit code is red when any cell is red. Naming
 one environment twice is refused before anything runs, since its cells
@@ -2849,6 +3151,7 @@ to act on the run without opening another file:
   "finished_at": "...",
   "commit": { "sha": "<40 hex characters>", "dirty": false },
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
+  "worlds": [],
   "selection": "full",
   "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
   "scenarios": [
@@ -2936,10 +3239,13 @@ to act on the run without opening another file:
   repository or before the first commit. `environments` lists each
   environment the run targeted, in the order `--env` gave them (`default`
   without `--env`), with `target_version`, what that environment's version
-  probe answered, `null` without one, and `base_url`, the `baseURL` it
-  resolved to, `null` without one, so the run names the instance it
+  probe answered, `null` without one, and `base_url`, the URL of its
+  world, `null` without one, so the run names the instance it
   judged and not only the commit. `base_url` is redacted like
   `target_version`; the summary's environment line names it too.
+- `worlds` lists each world the run started, in the order it started
+  them, with what it ran, how long each phase took, and its log; it is
+  empty when the tree has no program file. The fields are under "Program".
 - `run_dir` is the run directory, relative to the project root with `/`
   separators, so a script passes it to `nuka report` without knowing the
   state directory's layout. The paths inside run.json stay relative to
@@ -4024,8 +4330,9 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
 - **No state carries across calls.** Each scenario under `nuka run` and each
   `nuka do` call starts clean. A step that needs login state gets it from a
   fixture, or from a Given step its feature names.
-- **Environments** name deployment targets. Each environment can define a
-  `baseURL`, `envFiles`, `policy: "read-only"`, and an optional `version` probe.
+- **Environments** name deployment targets, in `nukadoko.program.ts` (see
+  "Program"). Each environment can override how the program is reached,
+  and define `envFiles`, `policy: "read-only"`, and an optional `version` probe.
   The read-only policy refuses mutating steps. Each step record stores the
   probe result as `target_version`. The run summary states each environment
   and version, so a reviewer knows the deployment where the run was green.
@@ -4117,9 +4424,7 @@ missing file.
 | --- | --- |
 | `featuresDir` | feature files and step code, `nuka run`'s own unattended set (default `features`, Cucumber-style) |
 | `additionalFeatureDirs` | extra directories `nuka check` binds vocabulary against, without joining `featuresDir` (default `[]`, below) |
-| `baseURL` | top-level base URL, overridden per environment (below) |
-| `envFiles` | top-level env files, appended to per environment (below) |
-| `environments` | per-environment `baseURL`, `envFiles`, `policy`, `version` probe (below) |
+| `envFiles` | env files every environment loads; an environment in `nukadoko.program.ts` appends its own (below) |
 | `stateDir` | where nukadoko writes at run time (default `.nukadoko`, see "The state directory") |
 | `retention` | how long measurement stays: `runs` (default 20) newest runs kept whole, `adHocDays` (default 7) for a record no run owns (see "Artifacts") |
 | `browserType` | which Playwright engine the `page` fixture launches: `chromium` (default), `firefox`, or `webkit` (below) |
@@ -4185,8 +4490,8 @@ keys follow the `browser` policy and use Playwright's type directly. This makes
 options such as `ignoreHTTPSErrors` available for local targets with a
 self-signed certificate. Previously, neither fixture could set that option.
 Both keys reject `baseURL` with an error that gives the reason:
-`config.baseURL` is the single source for the project base URL, and a second
-one would let the config contain conflicting sources. `storageState` passes
+the world's URL, from `serve` or `url` in `nukadoko.program.ts`, is the
+single source for the base URL, and a second one could disagree with it. `storageState` passes
 through to Playwright unchanged, so a project that keeps a login state file
 names it here.
 
@@ -4210,9 +4515,10 @@ beside the key would be a second source for one object, and the two could
 disagree. The value must be a plain object. An array, a string, or `null`
 fails config load, so a step never sees an empty object in its place.
 
-An environment entry is `{ baseURL?, envFiles?, policy?: "read-only",
-version?: () => string | Promise<string> }`. Its `baseURL` overrides the
-top-level value. Its `envFiles` follow the top-level list, and later files win.
+An environment is an entry of `environments` in `nukadoko.program.ts`
+(see "Program"). Besides the program's own fields, it holds `envFiles`,
+`policy: "read-only"`, and `version: () => string | Promise<string>`.
+Its `envFiles` follow the config's `envFiles`, and later files win.
 This order provides the common and override layers familiar to dotenv users.
 A path that is not on disk contributes nothing. `nuka check` warns with
 `env-file-missing`, or with `environment-env-file-missing` when the path
@@ -4227,7 +4533,7 @@ environment name is `default`, which needs no entry. An entry named `default`
 is still allowed, and `policy: "read-only"` on it is what keeps a `nuka do`
 typed without `--env` from writing anywhere. An explicitly named
 environment must exist because its name asserts that it exists. The `version`
-probe is a function because config is executable TypeScript. A URL and
+probe is a function because the program file is executable TypeScript. A URL and
 jsonPath DSL would only provide a more complex form of `fetch`. The tool calls
 the probe once per run with a 10-second budget. An exception or timeout removes
 only `target_version`; it does not stop the run.
@@ -4262,14 +4568,12 @@ skipped. `nuka check` reports it as `env-file-skipped-line`, a warning. The
 finding names the file and the line number, never the text, because that
 text may be a secret. The run still loads every binding it could read.
 
-This example defines both `environments` and `fixtures`:
+This example defines `envFiles` and `fixtures`; its environments are in
+`nukadoko.program.ts` (see "Program"):
 
 ```ts
 export default defineConfig({
-  baseURL: "https://acme.example",
-  environments: {
-    staging: { baseURL: "https://staging.acme.example", policy: "read-only" },
-  },
+  envFiles: [".env"],
   fixtures: {
     tenant: async ({ request }, use) => {
       const t = await createTenant(request);
@@ -4868,6 +5172,10 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               when omitted); repeated, it runs every selected
                               scenario once in each, in order, in one run
                               with one verdict per scenario and environment.
+                              With nukadoko.program.ts, each environment's
+                              world (build, prepare, serve, setup) starts
+                              before its scenarios and stops after them;
+                              run.json names it in worlds.
                               :line runs one scenario, for iteration only;
                               its summary covers only that scenario. Each target
                               can be a file, file:line, or directory. Targets
@@ -4971,7 +5279,10 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               A claim step reads its values, judges every
                               claim, and records them as in a run.
-                              --env as on nuka run; each call starts clean.
+                              --env as on nuka run; each call starts clean,
+                              and with nukadoko.program.ts it starts that
+                              environment's world for this one execution
+                              and stops it after.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
                               delivered on stderr.
@@ -5126,7 +5437,7 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               step that sends one request through
                               Playwright's request fixture, unwrapped:
                               request.fetch(path, { method }), resolved
-                              against baseURL, returning status
+                              against the world's URL, returning status
                               (response.status()) and body (the response
                               text). Each {key} in the path is that args
                               key's value, inserted as it is; a {key} no
@@ -5289,7 +5600,7 @@ nuka clean [--dry-run] [--json]
                               the contents of allure-results/; the cache/
                               and records/ directories earlier releases
                               left go too
-nuka init [--allure] [--server "<command>" --server-url <url>]
+nuka init [--allure]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
                               .nukadoko/, .env, .env.*, and !.env.example in
@@ -5301,19 +5612,9 @@ nuka init [--allure] [--server "<command>" --server-url <url>]
                               file has comments. --allure writes
                               allurerc.mjs and creates
                               .nukadoko/export/allure-results.
-                              --server with --server-url also writes
-                              baseURL: <url>, a server fixture that calls
-                              runServer on the command (split on
-                              whitespace only, no shell) and stops it
-                              after the scenario, a request override that
-                              destructures the builtin request and
-                              server, so every step that sends a request
-                              starts the program first, and the
-                              StepFixtures declaration for server. One
-                              without the other, an empty command, or a
-                              URL that is not http(s) is refused with
-                              nothing written. Without playwright
-                              installed, stderr names its install line.
+                              --server and --server-url are removed: the
+                              program under test is described in
+                              nukadoko.program.ts (see "Program").
                               After a passing self-check, its last
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project

@@ -8,7 +8,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 // sees that one step is built out of two others without opening a file").
 // Reuses tests/fixtures/parts-project (already built for tests/parts.test.ts's
 // own `call`/`parts` execution coverage) rather than a second fixture: this
-// file never executes a step, so the fixture's own baseURL placeholder is
+// file never executes a step, so the fixture's own program file url is
 // never touched.
 
 describe('nuka steps --json / nuka describe: parts (docs/spec.md "Parts")', () => {

@@ -61,9 +61,10 @@ Decide the optional flags now. `nuka init` refuses to run again once
 - `--allure` writes `allurerc.mjs`, which sorts failures into Allure
   categories. Without it, copy
   [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) by hand.
-- `--server "<command>" --server-url <url>` writes a fixture that starts
-  your server for each scenario that sends a request. See
-  [A server you start yourself](../README.md#a-server-you-start-yourself).
+
+A program under test that serves HTTP goes in a second file,
+`nukadoko.program.ts`, which `nuka init` does not write. See
+[An HTTP API](../README.md#an-http-api).
 
 A CommonJS project (no `"type": "module"`) gets `nukadoko.config.mts`
 instead, and `nuka scaffold` writes its step files as `.mts`. When the
@@ -171,12 +172,12 @@ line such as `nuka run features/greet.feature:3` that reruns that one
 scenario.
 
 `nuka run --env <name>` runs against an environment that
-`nukadoko.config.ts` names under `environments`, each with its own
-`baseURL`, `envFiles`, and `policy`. An environment with
+`nukadoko.program.ts` names under `environments`, each with its own
+`url` or `serve`, `envFiles`, and `policy`. An environment with
 `policy: "read-only"` refuses every step declared `mutates: true`
 before it runs. The `--command` scaffold writes `mutates: true`; set
 it to `false` when the program changes nothing outside its scratch
-directory. See
+directory. See [Program](spec.md#program) and
 [Environments and secrets](spec.md#environments-and-secrets).
 
 ## 6. Read the run directory

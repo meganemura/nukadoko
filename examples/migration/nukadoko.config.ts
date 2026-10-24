@@ -1,7 +1,5 @@
 import { defineConfig } from "nukadoko";
 
-// Local-only example, same shape as examples/todo/nukadoko.config.ts -- no
-// envFiles entry because this app needs no secrets.
-export default defineConfig({
-  baseURL: "http://localhost:4000",
-});
+// No envFiles entry: this app needs no secrets. How the app starts is in
+// nukadoko.program.ts.
+export default defineConfig({});

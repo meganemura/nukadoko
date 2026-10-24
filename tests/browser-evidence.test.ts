@@ -296,7 +296,7 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
   });
 
   it.skipIf(!chromiumAvailable)(
-    "passes browserContext straight through, alongside config.baseURL",
+    "passes browserContext straight through, alongside the world's baseURL",
     async () => {
       const originalLaunch = chromium.launch.bind(chromium);
       let newContextSpy: ReturnType<typeof vi.spyOn> | undefined;
@@ -308,9 +308,9 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
 
       const { ctx, dispose } = createStepContext({
         config: baseConfig({
-          baseURL: "http://127.0.0.1:1",
           browserContext: { ignoreHTTPSErrors: true },
         }),
+        baseURL: "http://127.0.0.1:1",
         evidenceDir,
         env: {},
         stepTitle: "browser step",
@@ -340,7 +340,7 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
       });
 
       const { ctx, dispose } = createStepContext({
-        config: baseConfig({ baseURL: "http://127.0.0.1:1" }),
+        config: baseConfig(), baseURL: "http://127.0.0.1:1",
         evidenceDir,
         env: {},
         stepTitle: "browser step",
@@ -509,7 +509,7 @@ describe("createStepContext / page.request and context.request", () => {
 
 // Responsibility: proves the browser-context half of docs/spec.md "Context
 // API"'s baseURL wiring —
-// `page.goto("/path")` must resolve against `config.baseURL` without the
+// `page.goto("/path")` must resolve against the world's `baseURL` without the
 // step assembling the full URL itself, unlike `ctx.request()`'s own baseURL
 // handling (already covered by create-context.test.ts). Own server, own
 // describe block, same reasoning as the "page traffic in http.jsonl" block
@@ -539,7 +539,7 @@ describe("createStepContext / ctx.page(): baseURL wired into the browser context
     'resolves page.goto("/path") against the configured baseURL',
     async () => {
       const { ctx, dispose } = createStepContext({
-        config: baseConfig({ baseURL }),
+        config: baseConfig(), baseURL,
         evidenceDir,
         env: {},
         stepTitle: "browser step",

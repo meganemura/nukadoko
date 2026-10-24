@@ -52,6 +52,24 @@ export async function copyFixtureToTempDir(name: string): Promise<string> {
   return dest;
 }
 
+/**
+ * Writes `nukadoko.program.ts` into `rootDir` naming a program nukadoko does
+ * not start, listening at `url`: the way a test points a project at the
+ * server it started itself. `rest` is spliced into the object as written,
+ * such as `environments: { readonly: { policy: "read-only" } }`.
+ * `importFrom` is the module `defineProgram` is imported from.
+ */
+export async function writeUrlProgram(rootDir: string, url: string, rest = "", importFrom = "./nukadoko-shim.js"): Promise<void> {
+  await writeFile(
+    path.join(rootDir, "nukadoko.program.ts"),
+    [
+      `import { defineProgram } from ${JSON.stringify(importFrom)};`,
+      `export default defineProgram({ url: ${JSON.stringify(url)}${rest === "" ? "" : `, ${rest}`} });`,
+      "",
+    ].join("\n"),
+  );
+}
+
 export async function removeTempDir(dir: string): Promise<void> {
   await rm(dir, { recursive: true, force: true });
 }
@@ -72,12 +90,29 @@ export async function removeTempDir(dir: string): Promise<void> {
 export async function copyExampleToTempDir(name: string): Promise<string> {
   await mkdir(tempFixturesRoot, { recursive: true });
   const dest = await mkdtemp(path.join(tempFixturesRoot, "example-"));
+  await copyExample(name, dest);
+  return dest;
+}
+
+/**
+ * Copies the examples `names` side by side into one temporary directory,
+ * the way they sit under examples/, and returns that directory: for an
+ * example whose program file serves a sibling example's app. Each example
+ * is copied as copyExampleToTempDir copies one.
+ */
+export async function copyExamplesToTempDir(names: readonly string[]): Promise<string> {
+  await mkdir(tempFixturesRoot, { recursive: true });
+  const dest = await mkdtemp(path.join(tempFixturesRoot, "examples-"));
+  for (const name of names) await copyExample(name, path.join(dest, name));
+  return dest;
+}
+
+async function copyExample(name: string, dest: string): Promise<void> {
   const source = path.join(repoRoot, "examples", name);
   await cp(source, dest, {
     recursive: true,
     filter: (candidate) => path.relative(source, candidate).split(path.sep)[0] !== ".nukadoko",
   });
-  return dest;
 }
 
 /**
@@ -231,6 +266,8 @@ const FAILED_SCENARIO_LINE = /^failed\tscenario-failed\t/;
 // each failed scenario finding is followed by its rerun command.
 const STEP_FAILURE_LINE = /^ {6}\S/;
 const RERUN_LINE = /^ {2}do: nuka run /;
+// The line a world writes once its program is ready (src/program/world.ts).
+const WORLD_READY_LINE = /^world \S+: /;
 // The run's repeated-opening note. Whether it fires depends on what each
 // step took on this machine, against a 2% floor, so a test that asserts
 // "nothing unexpected happened" would pass or fail with the machine's load.
@@ -259,7 +296,8 @@ export function stripRunProgressLines(text: string): string {
         !RUN_SUMMARY_LINE.test(line) &&
         !FAILED_SCENARIO_LINE.test(line) &&
         !STEP_FAILURE_LINE.test(line) &&
-        !RERUN_LINE.test(line),
+        !RERUN_LINE.test(line) &&
+        !WORLD_READY_LINE.test(line),
     )
     .join("\n");
 }

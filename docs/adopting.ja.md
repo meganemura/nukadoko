@@ -61,8 +61,10 @@ next: read node_modules/nukadoko/llms.txt, written for an agent: the loop, every
 - `--allure` は `allurerc.mjs` を書きます。
   これは失敗を Allure のカテゴリに振り分けます。
   付けなかった場合は、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) を手でコピーします。
-- `--server "<command>" --server-url <url>` は、request を送る scenario ごとにサーバを起動する fixture を書きます。
-  [A server you start yourself](../README.ja.md#a-server-you-start-yourself) を参照してください。
+
+HTTP を提供するテスト対象のプログラムは、2 つ目のファイル `nukadoko.program.ts` に書きます。
+`nuka init` はこのファイルを書きません。
+[An HTTP API](../README.ja.md#an-http-api) を参照してください。
 
 CommonJS のプロジェクト(`"type": "module"` がないもの)では、代わりに `nukadoko.config.mts` が書かれ、`nuka scaffold` は step ファイルを `.mts` で書きます。
 package.json に `"type"` がまったくなければ、`.ts` の step ファイルもそこで動きますが、読み込むたびに Node が `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
@@ -161,11 +163,11 @@ run       .nukadoko/runs/run-20261018-232314-j5x1/run.json
 `nuka run` は先に `nuka check` を実行し、エラーがあれば止まります。
 scenario が失敗すると、stderr にその step、エラー、step record、そしてその scenario だけを再実行する `nuka run features/greet.feature:3` のような `do:` の行が出ます。
 
-`nuka run --env <name>` は、`nukadoko.config.ts` の `environments` が名付けた environment に対して実行します。
-各 environment は自分の `baseURL`、`envFiles`、`policy` を持ちます。
+`nuka run --env <name>` は、`nukadoko.program.ts` の `environments` が名付けた environment に対して実行します。
+各 environment は自分の `url` または `serve`、`envFiles`、`policy` を持ちます。
 `policy: "read-only"` の environment は、`mutates: true` と宣言された step を実行前にすべて拒否します。
 `--command` の scaffold は `mutates: true` を書くので、プログラムが scratch ディレクトリの外を何も変えないなら `false` にします。
-[docs/spec.ja.md](spec.ja.md) の「Environment、secret」を参照してください。
+[docs/spec.ja.md](spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」と「Environment、secret」を参照してください。
 
 ## 6. run ディレクトリを読む
 

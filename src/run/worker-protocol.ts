@@ -17,11 +17,15 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 //   { "kind": "note", "text": string }
 //
 // Argv contract (never yargs — this is not a CLI command):
-//   <rootDir> <runId> <env|""> <featureListPath> <repeat>
+//   <rootDir> <runId> <env|""> <featureListPath> <repeat> <worldPath|"">
 // `featureListPath` names a temp file, one repo-relative `.feature` path per
 // line, in the exact order this worker should run them. `repeat` is how
 // many times the worker runs that whole list (`nuka run --repeat`), a
 // whole number of 1 or more that the parent has already validated.
+// `worldPath` names a temp file holding the world the parent started for
+// this pass (src/program/world-view.ts), or is empty when the tree has no
+// program file. The parent owns the program: every worker of a pass sends
+// its requests to the one server the parent started.
 //
 // Framing choice, decided once here rather than reargued at each call site:
 // both a finished scenario's own record *and* its progress text ride the

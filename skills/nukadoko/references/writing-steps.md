@@ -91,7 +91,7 @@ each stub's own single scaffold with `--replace`; add `--command` or
    holds a TODO that throws `fill in the entry point: <file>:<line>`.
    Add `--request "<METHOD> <path>"` for a When step that calls an HTTP
    API: one `request.fetch(path, { method })` on Playwright's `request`,
-   against `baseURL`, returning `status` and `body` (the text). A `{key}`
+   against the world's URL, returning `status` and `body` (the text). A `{key}`
    in the path is that args key's value (`"GET /items/{id}"`), `--body
    <key>` sends one as the data (`--body docstring`), and any other value
    throws by name until you pass it. Quote a path in the feature line
@@ -126,7 +126,7 @@ the project (a real service, a shared database, a file outside
 `scratch`), tell the user what it is about to change and get their
 go-ahead, once per step, not on every retry while fixing it, or
 trial-and-error stops being possible. A step that writes only under
-`scratch`, or to a server a fixture started for the scenario, needs no
+`scratch`, or to a server a fixture or `nukadoko.program.ts` started, needs no
 go-ahead (`examples/http-api.md`), nor does a claim or `mutates: false` step.
 
 With nobody to ask mid-task, because the caller handed the task over

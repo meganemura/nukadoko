@@ -11,6 +11,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: mixed-scenario coverage
@@ -62,14 +63,7 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
   beforeEach(async () => {
     ({ server, baseURL } = await startTestServer());
     rootDir = await copyFixtureToTempDir("compat-mixed-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}" });`,
-        "",
-      ].join("\n"),
-    );
+    await writeUrlProgram(rootDir, baseURL);
   });
 
   afterEach(async () => {

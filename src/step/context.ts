@@ -152,7 +152,7 @@ export interface PollOptions {
 export interface StepFixtures {
   /** Playwright Page; the browser launches when this name is destructured
    * (docs/spec.md "Context API"), in a fresh context built from
-   * `config.browserContext`, with the configured baseURL wired into the browser
+   * `config.browserContext`, with the world's base URL wired into the browser
    * context so `page.goto("/path")` resolves against it. A step that never
    * destructures `page` (or `context`) never causes a browser to launch at
    * all. */
@@ -174,10 +174,11 @@ export interface StepFixtures {
    * (src/context/context-name.ts). Closed when the scenario ends, after its
    * final screenshot (`final.<name>.png`). The context is `page.context()`. */
   readonly pageAs: (name: string, options?: BrowserContextOptions) => Promise<Page>;
-  /** Playwright APIRequestContext with the configured baseURL, built from
+  /** Playwright APIRequestContext with the world's base URL, built from
    * `config.requestContext` when this name is destructured. */
   readonly request: APIRequestContext;
-  /** Environment variables from the configured envFiles. A frozen copy of
+  /** Environment variables from the configured envFiles, then the world's
+   * `env` from nukadoko.program.ts. A frozen copy of
    * the merged map: assigning a property throws in a step module, so a
    * write in one step is not visible to a later step or a later scenario.
    * A configured key still reads back as the loaded value. */
@@ -193,9 +194,10 @@ export interface StepFixtures {
    * `string`, never `undefined`: the whole point is not needing an
    * `if (!value) throw` at every call site. */
   readonly requireEnv: (name: string) => string;
-  /** The configured baseURL. `undefined` when the config doesn't set one;
-   * `request`'s own construction is what raises the "which key to set"
-   * error, not this type. */
+  /** The world's base URL: the port nukadoko gave `serve`, or the program
+   * file's `url`. `undefined` with no program file, or a world with
+   * neither; `request`'s own construction is what raises the error for a
+   * relative URL then, not this type. */
   readonly baseURL: string | undefined;
   /** The validated `result` of `step`'s most recent successful execution in
    * the current scenario, matched by the Step object's own identity — not
@@ -332,14 +334,15 @@ export const BROWSER_FIXTURE_NAMES: ReadonlySet<string> = new Set<keyof FixtureB
 
 export interface StepContext {
   /** Playwright Page; browser launches on first call, in a fresh context
-   * built from `config.browserContext`, with the configured baseURL wired into the
+   * built from `config.browserContext`, with the world's base URL wired into the
    * browser context so `page.goto("/path")` resolves against it. */
   page(): Promise<Page>;
   /** The same function as `StepFixtures.pageAs`; see its doc comment. */
   pageAs(name: string, options?: BrowserContextOptions): Promise<Page>;
-  /** Playwright APIRequestContext with the configured baseURL, built from `config.requestContext`. */
+  /** Playwright APIRequestContext with the world's base URL, built from `config.requestContext`. */
   request(): Promise<APIRequestContext>;
-  /** Environment variables from the configured envFiles. A frozen copy of
+  /** Environment variables from the configured envFiles, then the world's
+   * `env` from nukadoko.program.ts. A frozen copy of
    * the merged map: assigning a property throws in a step module, so a
    * write in one step is not visible to a later step or a later scenario.
    * A configured key still reads back as the loaded value. */
@@ -355,8 +358,7 @@ export interface StepContext {
    * `string`, never `undefined`: the whole point is not needing an
    * `if (!value) throw` at every call site. */
   requireEnv(name: string): string;
-  /** The configured baseURL. `undefined` when the config doesn't set one;
-   * `request()` is what raises the "which key to set" error, not this type. */
+  /** The world's base URL; see `StepFixtures.baseURL`. */
   readonly baseURL: string | undefined;
   /** The validated `result` of `step`'s most recent successful execution in
    * the current scenario, matched by the Step object's own identity — not

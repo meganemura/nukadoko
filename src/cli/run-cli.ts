@@ -118,8 +118,6 @@ interface RunArgs {
 
 interface InitArgs {
   allure?: boolean;
-  server?: string;
-  serverUrl?: string;
 }
 
 interface ScaffoldArgs {
@@ -507,7 +505,7 @@ export async function runCli(
           type: "string",
           describe:
             'target a named environment (omit it, or name "default", for the "default" environment: the top-level ' +
-            "settings, or environments.default when the config defines it)",
+            "settings, or environments.default when nukadoko.program.ts defines it)",
         })
         .option("use", {
           type: "string",
@@ -570,7 +568,7 @@ export async function runCli(
           type: "string",
           describe:
             'target a named environment (omit it, or name "default", for the "default" environment: the top-level ' +
-            "settings, or environments.default when the config defines it); repeat it to run every selected " +
+            "settings, or environments.default when nukadoko.program.ts defines it); repeat it to run every selected " +
             'scenario once in each, in one run with one verdict per scenario and environment, "default" among them',
         })
         .option("records", {
@@ -693,7 +691,16 @@ export async function runCli(
     describe: "set up a project; ends with a self-check",
     builder: (y: Argv) =>
       refuseRemovedFlags(y, {
-        "base-url": "nuka init --base-url is removed: set baseURL in the generated config after init.",
+        "base-url":
+          "nuka init --base-url is removed: write url in nukadoko.program.ts " +
+          '(export default defineProgram({ url: "http://localhost:3000" })), the URL every page and request resolves against.',
+        server:
+          "nuka init --server is removed: describe the program in nukadoko.program.ts " +
+          '(export default defineProgram({ serve: { command: "npm start" }, env: { PORT: "{port}" } })); ' +
+          "nukadoko starts it once for each environment, on a port of its own, and stops it after the scenarios.",
+        "server-url":
+          "nuka init --server-url is removed: a program nukadoko starts gets its port from serve in nukadoko.program.ts, " +
+          "and one it does not start is named by url there.",
         "features-dir":
           "nuka init --features-dir is removed: init creates features/steps; for another directory, " +
           "set featuresDir in the generated config after init and move steps/ there.",
@@ -703,27 +710,13 @@ export async function runCli(
         .option("allure", {
           type: "boolean",
           describe: "write allurerc.mjs and an empty <stateDir>/export/allure-results/ for nuka report --format allure",
-        })
-        .option("server", {
-          type: "string",
-          nargs: 1,
-          describe:
-            '"<command>" with --server-url: write a server fixture that starts this command (split on whitespace, no shell) for each scenario that sends a request, and stops it after',
-        })
-        .option("server-url", {
-          type: "string",
-          nargs: 1,
-          describe: "<url> the URL the --server command listens at, written as baseURL; the fixture waits until its port accepts a connection",
-        })
-        .check(rejectRepeatedFlags(["server", "server-url"])) as Argv<InitArgs>,
+        }) as Argv<InitArgs>,
     handler: async (args: Arguments<InitArgs>) => {
       if (argsFailed) return;
       const { runInit } = await import("./init.js");
       exitCode = await runInit({
         rootDir,
         allure: args.allure ?? false,
-        server: args.server ?? null,
-        serverUrl: args.serverUrl ?? null,
         stdout,
         stderr,
       });

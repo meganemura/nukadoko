@@ -1,0 +1,53 @@
+import type { SecretSet } from "../secrets/types.js";
+
+// Responsibility: what the steps of a world see of it, as one plain value
+// that crosses to a `--concurrency` worker as JSON: its name, its base
+// URL, the env its processes got, the values made for it that every record
+// redacts, and its program log when nukadoko serves the program. Boundary:
+// no process; starting and stopping the program is src/program/world.ts's.
+
+export interface WorldView {
+  readonly name: string;
+  /** The base URL `page`, `context`, `request`, and `pageAs` resolve
+   * against; `undefined` for a world with neither `serve` nor `url`. */
+  readonly url: string | undefined;
+  /** The program file's `env`, placeholders filled. The steps' process
+   * gets it too, so a step and a `runCommand` child read a variable the
+   * way the program does. */
+  readonly env: Readonly<Record<string, string>>;
+  /** `{token}` and anything else made for this world, redacted wherever a
+   * record could show it. */
+  readonly secrets: SecretSet;
+  /** The absolute path of `program.log` while nukadoko serves the program
+   * and writes what it prints there; `null` for a world it does not serve,
+   * whose program's log nukadoko cannot read. */
+  readonly log: string | null;
+}
+
+export function serializeWorldView(view: WorldView): string {
+  return JSON.stringify(view);
+}
+
+/** Reads what `serializeWorldView` wrote. The parent wrote it a moment
+ * ago, so a value that does not read is a bug and throws. */
+export function parseWorldView(text: string): WorldView {
+  const value = JSON.parse(text) as Partial<WorldView>;
+  if (typeof value.name !== "string" || typeof value.env !== "object" || !Array.isArray(value.secrets)) {
+    throw new Error(`not a world view: ${text.slice(0, 200)}`);
+  }
+  return { name: value.name, url: value.url ?? undefined, env: value.env ?? {}, secrets: value.secrets, log: value.log ?? null };
+}
+
+/** Sets the world's env on this process, for the steps and every child
+ * they start, and returns what puts the previous values back after the
+ * world's pass. */
+export function applyWorldEnv(env: Readonly<Record<string, string>>): () => void {
+  const previous = Object.keys(env).map((key) => [key, process.env[key]] as const);
+  Object.assign(process.env, env);
+  return () => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+}

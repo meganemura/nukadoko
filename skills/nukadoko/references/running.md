@@ -15,14 +15,6 @@ then. It also adds the steps and the config to `tsconfig.json`'s
 comments and trailing commas. When `compilerOptions` comes only through
 `extends`, `init` says on stderr what to add instead of editing.
 
-For an HTTP API, `nuka init --server "node src/server.ts" --server-url
-http://127.0.0.1:3000` also writes `baseURL` and a `server` fixture that
-starts the command with `runServer` for each scenario that sends a request
-(`nuka scaffold --request`), so no fixture is written by hand. The
-program has to listen at that URL on its own; `runServer` waits for the
-port and fails by name when the program exits first, never listens, or
-finds the port already taken. Install `playwright` when init says so.
-
 A CommonJS project (no `"type": "module"` in `package.json`) gets
 `nukadoko.config.mts` and `.mts` step files from `nuka scaffold`. A `.ts`
 step file loads there with a Node warning, unless `"type": "commonjs"`
@@ -36,17 +28,22 @@ more than once, and the command writes nothing. `--use`, `--fail-on`,
 `nuka run`'s `--env`, and `nuka scaffold`'s `--from` repeat, each value
 kept in the order given.
 
+## The program under test
+
+`nukadoko.program.ts`, beside the config, builds, starts, and stops the
+program the scenarios talk to, once per run (`references/program.md`).
+
 ## Environments
 
-`--env <name>` on `nuka do` and `nuka run` targets one of the environments named in `nukadoko.config.ts`'s
-own `environments` key; omitting it targets `default`, which needs no
-entry there. Each entry can override `baseURL`, append its own `envFiles`
-after the top-level list, and set `policy: "read-only"`. `nuka run --env
-a --env b` runs every selected scenario in `a`, then in `b`, as one run:
-`verdicts` and the summary hold one cell per scenario and environment, a
-failure's `do:` names its environment, and any red cell makes the run red.
-A cell that reads `not run` never ran: the `hook-failed` finding beside
-it names the environment whose BeforeAll stopped it.
+`--env <name>` on `nuka do` and `nuka run` targets an entry of the program
+file's `environments`, or `default`, which needs none. An entry overrides
+any program field, adds `envFiles` after the config's, and may set
+`policy: "read-only"`. `nuka run --env a --env b` runs every selected
+scenario in `a`, then in `b`, as one run: `verdicts` and the summary hold
+one cell per scenario and environment, a failure's `do:` names its
+environment, and any red cell makes the run red. A cell that reads `not
+run` never ran: the `hook-failed` finding beside it names the
+environment whose BeforeAll stopped it.
 
 Trial and error, `nuka do` while building a step and `nuka run` while
 getting a feature green, belongs on a verification environment; never

@@ -1279,7 +1279,7 @@ describe("measured names an HTTP status", () => {
     try {
       const port = (server.address() as AddressInfo).port;
       const rootDir = await project({
-        "nukadoko.config.ts": `import { defineConfig } from "nukadoko";\nexport default defineConfig({ baseURL: "http://127.0.0.1:${port}" });\n`,
+        "nukadoko.program.ts": `import { defineProgram } from "nukadoko";\nexport default defineProgram({ url: "http://127.0.0.1:${port}" });\n`,
         "features/steps/an-item-is-created.ts": `import { defineStep, z } from "nukadoko";
 export default defineStep({
   description: "POST /items",

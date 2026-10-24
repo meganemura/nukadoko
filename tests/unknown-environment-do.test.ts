@@ -13,19 +13,19 @@ describe("an unknown --env names every environment --env accepts, default includ
     expect({ exitCode, stderr: stderr.text() }).toEqual({
       exitCode: 2,
       stderr:
-        'refused\tunknown-environment\t-\tUnknown environment "stagign": not defined in nukadoko.config.ts\'s "environments"\n' +
-        "  fix: Pass --env with a name it accepts (default, no-overrides, probe-ok, probe-throws, readonly, staging), or add environments.stagign to the config file.\n",
+        'refused\tunknown-environment\t-\tUnknown environment "stagign": not defined in nukadoko.program.ts\'s "environments"\n' +
+        "  fix: Pass --env with a name it accepts (default, no-overrides, probe-ok, probe-throws, readonly, staging), or add environments.stagign to nukadoko.program.ts.\n",
     });
   });
 
-  it("offers --env default when the config defines no environment", async () => {
+  it("offers --env default when the program file defines no environment", async () => {
     const stderr = createCaptureSink();
     const exitCode = await runCli(["run", "--env", "staging"], { rootDir: fixture("pure-step-project"), stdout: createCaptureSink(), stderr });
     expect({ exitCode, stderr: stderr.text() }).toEqual({
       exitCode: 2,
       stderr:
-        'refused\tunknown-environment\t-\tUnknown environment "staging": not defined in nukadoko.config.ts\'s "environments"\n' +
-        "  fix: Leave out --env or pass --env default (the config defines no other environment), or add environments.staging to the config file.\n",
+        'refused\tunknown-environment\t-\tUnknown environment "staging": not defined in nukadoko.program.ts\'s "environments"\n' +
+        "  fix: Leave out --env or pass --env default (nukadoko.program.ts defines no other environment), or add environments.staging to nukadoko.program.ts.\n",
     });
   });
 });

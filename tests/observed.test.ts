@@ -11,6 +11,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: measured mutates end to end against tests/fixtures/
@@ -51,14 +52,7 @@ describe("measured mutates: request-side observed counts", () => {
   beforeEach(async () => {
     ({ server, baseURL } = await startTestServer());
     rootDir = await copyFixtureToTempDir("observed-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}", environments: { readonly: { policy: "read-only" } } });`,
-        "",
-      ].join("\n"),
-    );
+    await writeUrlProgram(rootDir, baseURL, 'environments: { readonly: { policy: "read-only" } }');
   });
 
   afterEach(async () => {

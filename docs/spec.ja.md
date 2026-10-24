@@ -428,7 +428,7 @@ nukadoko では、このパターンがまず `check` に宣言を渡します�
 fixture の名前:
 
 - `page: Page`: `config.browserContext` から作った新しい browser context の Playwright の Page です。
-  設定された baseURL は browser context に渡されるため、`page.goto("/path")` はそれを基準に解決されます。
+  world の base URL(「テスト対象のプログラム」を参照)は browser context に渡されるため、`page.goto("/path")` はそれを基準に解決されます。
   標準の URL 規則が適用されます: 先頭のスラッシュは、baseURL 自身のパスに追加されず、そのパスを置き換えます。
   この動作は、Playwright 1.61.1 と `baseURL: "https://demo.playwright.dev/todomvc/"` を使って計測しました。
   `goto("/")` はホスト自身の根である `https://demo.playwright.dev/` に着地します。
@@ -461,13 +461,13 @@ fixture の名前:
   `pageAs` を分割代入しても何も起動しません。
   起動するのは最初の呼び出しです。
   後述の「1 つの scenario の複数の人」を参照してください。
-- `request: APIRequestContext`: `config.requestContext` から作った Playwright の APIRequestContext です。
-  上の `page` と同様に、`baseURL` は任意です。
-  複数のホストに絶対 URL だけでアクセスするスイートには、指定する単一の baseURL がありません。
-  nukadoko は、この fixture を満たすためだけに baseURL を config へ強制しません。
-  `baseURL` が未設定の状態で step が相対パスを渡すと、Playwright がエラーを発生させます。
+- `request: APIRequestContext`: `config.requestContext` から作り、world の base URL を持つ Playwright の APIRequestContext です。
+  上の `page` と同様に、base URL は任意です。
+  複数のホストに絶対 URL だけでアクセスするスイートには、指定する単一の base URL がありません。
+  nukadoko は、この fixture を満たすためだけにプログラムのファイルを強制しません。
+  base URL が無い状態で step が相対パスを渡すと、Playwright がエラーを発生させます。
   nukadoko は、そのエラーを先に防ぐために Playwright の URL 解決を再実装しません。
-- `env`: 設定された envFiles から得た読み取り専用の環境変数です。
+- `env`: 設定された envFiles から得た読み取り専用の環境変数に、`nukadoko.program.ts` の world の `env` を重ねたものです(「テスト対象のプログラム」を参照)。
   ファイルの形式は「Environment、secret」にあります。
   この fixture は決定論を強制します: プロセス環境は決してマージされません。
   secrets の redaction も強制します: redact できるのは nukadoko がロードした値だけです。
@@ -494,9 +494,9 @@ fixture の名前:
   名前は読み取り順に並び、重複が除かれます。
   同じ値を `env` から直接読むと、記録は残りません。
   その経路はプレーンなオブジェクトなので、ライブラリは読み取りを認識しません。
-- `baseURL`: 手作業で URL を組み立てる稀な場合に使う、設定済みの baseURL です。
-  一般的な経路には、上記のとおり baseURL が渡されます。
-  `config.baseURL` が未設定のときは `undefined` です。
+- `baseURL`: `fetch` の呼び出しのように、手作業で URL を組み立てる稀な場合に使う、world の base URL です。
+  一般的な経路には、上記のとおり base URL が渡されます。
+  tree にプログラムのファイルが無いとき、またはその world に `serve` も `url` も無いときは `undefined` です。
   絶対 URL だけを使うスイートでは、これは正当な状態です。
   エラー状態ではありません。
 - `resultOf(stepModule)`: 現在の scenario で、その step が直近に成功した実行のバリデーション済み result を返します。
@@ -784,24 +784,9 @@ use(page); }`)。
 したがって、`check` は `page-override-unowned` で拒否します。
 
 上書きは依存を足すこともできます。
-`nuka init --server "<command>" --server-url <url>` は、テスト対象のプログラムを `runServer` で起動する `server` fixture と、builtin の `request` と `server` を分割代入して builtin をそのまま返す `request` の上書きを書きます。
-これで `request` を分割代入するすべての step が先にサーバを起動し、feature は束ねる step を通して、実行したものを引き続きすべて名指しします。
-`runServer(command, args, { url, cwd, env, timeout })` は、`runCommand` と同じ理由で、fixture ではなく `nukadoko` からの import です。
-プログラムを shell なしで実行し、URL のホストとポートが TCP 接続を受け付けた時点で `{ url, stop() }` に解決します。
-起動完了の判定はこの観測だけです。
-ログの行や HTTP のプローブは、プログラムごとに何を出力するか、どの path が応答するかの推測になります。
-プログラムを起動する前からそのポートが接続を受け付けているときは reject します。
-そのままでは、すべての request が自分の起動していないサーバに届くからです。
-プログラムが先に終了したときは、その終了の仕方と stderr を挙げて reject します。
-timeout(既定は 10 秒)を過ぎたときは、プログラムを止めてから reject します。
-プログラムにポートは伝えません。
-`PORT` 変数は慣習にすぎないので、プログラムは自分の手段でその URL で待ち受けます。
-`stop()` は SIGTERM を送り、5 秒後に SIGKILL を送ります。
-Windows では、`runCommand` と同じやり方でプログラムを探して起動するので、拡張子のない `npm` や `.cmd` のファイルも使えます。
-Windows の `stop()` は、`taskkill /t /f` でプログラムとそれが起動したすべてのプロセスを終わらせます。
-Windows のシグナルは名指ししたプロセスしか終わらせないので、そのままでは `npm` が起動したサーバがポートを持ち続けるからです。
-生成される fixture は既定の `scenario` scope のままです。
-これはシナリオ間でサーバの状態を共有しない scope で、`{ scope: "process" }` はサーバが状態を持たないという作者の宣言です。
+builtin の `request` とプロジェクトの fixture を分割代入する `request` の上書きは、request を送るすべての step の前にその fixture を作り、builtin をそのまま返します。
+テスト対象のプログラムはそうした fixture ではありません。
+`nukadoko.program.ts` が world ごとに 1 回それを起動するので、run はどのプログラムが答えたかを名指せます(「テスト対象のプログラム」を参照)。
 
 自分の `scratch` fixture をすでに宣言しているプロジェクトは、それをそのまま使えます。
 その `config.fixtures` エントリは、他の上書きと同じく、実行時に builtin を置き換えます。
@@ -2046,6 +2031,281 @@ Playwright の `test()` は Playwright runner の外では動かないため、i
 モジュールは step を定義しないため、discovery が import しても問題はありません。
 しかし、その場所は既存のスイートが共有ファイルを所有することを示します。
 
+## テスト対象のプログラム
+
+criteria は `nukadoko.config.ts` にあります。
+feature、step、fixture、parameter type、secret です。
+テスト対象のプログラムは、2 つ目のファイル `nukadoko.program.ts` にあります。
+その default export が、`defineProgram` で書いたプログラムです。
+nukadoko がそれをどう build し、状態をどう用意し、どう起動するかまたはどこに届くか、そしてそのプロセスが受け取る環境変数を書きます。
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  build: ["npm run build"],
+  prepare: ["node dist/migrate.js"],
+  serve: { command: "node dist/server.js", ready: "/health" },
+  env: { PORT: "{port}", DATABASE_PATH: "{dir}/app.sqlite3" },
+});
+```
+
+2 つのファイルを分けるのは、run が commit をまたいで criteria を比べるからです(`--since`、サマリの変わった criteria)。
+手順が config にあると、プログラムの build の仕方を変えただけで、すべての criterion が変わったことになりました。
+また、古い tree の config を読んだ run は、手順をまったく見つけられませんでした。
+nukadoko はプログラムのファイルを、build する tree から読みます。
+このリリースでは、run を始めた tree です。
+
+プログラムのファイルが無い tree には、起動するプログラムがありません。
+run は world を起動せず、`run.json` は `worlds: []` を持ち、各 step record の `world_name` は `null` です。
+step が `runCommand` でコマンドを実行するコマンドラインツールには、それが正しい形です。
+そうしたプロジェクトに新しく必要なものはありません。
+
+### フィールド
+
+| フィールド | 中身 |
+| --- | --- |
+| `build` | run ごと、tree ごとに 1 回、どの world よりも前に、tree のルートで実行するコマンド(`npm run build`、`bundle install`、`go build ./...`) |
+| `prepare` | world ごとに 1 回、tree のルートで、world の env を付けて実行するコマンド(`bin/rails db:prepare`) |
+| `serve` | `{ command, port, ready, timeout_ms }`: nukadoko が起動し、待ち、止めるサーバ(下記) |
+| `url` | nukadoko が起動しないプログラムの URL、またはそれを返す world の関数(下記) |
+| `env` | world のプロセスと step のプロセスが受け取る変数。プレースホルダーを使える(下記) |
+| `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, url, port, env }` |
+| `environments` | 上のどのフィールドも上書きする名前付きの設定。加えて `policy`、`envFiles`、`version`(下記) |
+
+`serve` と `url` はプログラムに届く 2 つの方法なので、両方を書くと拒否されます。
+どちらも無いプログラムのファイルも有効です。
+その world は `build` と `prepare` を実行し、URL を持ちません。
+`build` が作ったものを step が実行するツールのための形です。
+
+コマンドは argv の配列か、空白で分割する文字列です。
+どちらも shell を通らず、文字列には引用の規則がありません。
+空白を含む語は配列で書きます。
+shell を通すと、実行されるものがホストの shell に左右されます。
+引用の規則には shell の語を分ける parser が必要で、それは依存になります。
+パイプや `&&` が必要なプロジェクトは `["sh", "-c", "..."]` と書きます。
+どのコマンドも tree のルートで実行します。
+Windows では、`npm` のような裸のプログラム名は `PATH` と `PATHEXT` から探され、`.cmd` や `.bat` のファイルは `cmd.exe` を通して動きます。
+`runCommand` がプログラムを起動するのと同じ方法です。
+`build` か `prepare` のコマンドが 0 以外のコードで終わると、world はそれより後を何も実行せずに止まります。
+
+ファイルは `nukadoko.program.ts` か `nukadoko.program.mts` です。
+両方あると、nukadoko はどちらを読むか決められないので拒否します。
+default export の無いファイルは拒否され、形に無いキーも拒否されます。
+本物のキーと大文字小文字だけが違うキーには、本物のキーを示します。
+どの拒否も `config-invalid` で、ファイルを名指し、それを読むすべてのコマンドを止めます。
+`nuka check` も含みます。
+
+### serve
+
+nukadoko は `serve.command` を起動し、`ready` が答えるまで待ち、world の request をそこへ送り、world の pass が終わったらプログラムを止めます。
+
+- `port` は `"auto"`(既定)か数値です。
+  `"auto"` は world ごとに空いているポートを取ります。
+  nukadoko はポート 0 で待ち受け、システムが与えたポートを読み、プログラムを起動する前に閉じます。
+  数値はまず確かめられます。
+  そこですでに何かが答えていれば、world は失敗します。
+  すべての request が nukadoko の起動していないサーバに届き、scenario はそのサーバの都合で通ったり失敗したりするからです。
+- プログラムがポートを知る手段はプレースホルダーだけです。
+  コマンドの中の `{port}`(`bin/rails server -p {port}`)か、`env` の中(`PORT: "{port}"`)です。
+  nukadoko は、プログラムが求めていない変数を設定しません。
+  `PORT` は慣習にすぎず、すべてのプログラムが読むわけではないからです。
+- world の URL は `http://localhost:<port>` です。
+- `ready` はパスで、既定は `/` です。
+  nukadoko はそこへ 100 ms ごとに `GET` を送り、それぞれの request には答えるまで 2 秒を与え、どれかが 2xx で答えるまで続けます。
+  接続を受け付けるポートだけでは足りません。
+  Rails をはじめ多くのサーバは、答えられるようになる前に待ち受けを始めます。
+  そのときに始まった scenario は、criteria が名指さない理由で失敗します。
+- `timeout_ms` は、プログラムが `ready` に答えるまでの持ち時間で、既定は 60,000 です。
+
+POSIX では、プログラムは専用のプロセスグループで動きます。
+止めるときはグループに SIGTERM を送り、最大 5 秒待ち、それからグループに SIGKILL を送ります。
+そのため、プログラムが起動した子(`npm start` はサーバをそうして起動します)がポートを持ち続けることはありません。
+Windows ではシグナルが名指したプロセスしか終わらせないので、ツリー全体を `taskkill /t /f` で終わらせます。
+nukadoko が起動したプログラムは nukadoko より長く生き残りません。
+シグナルやクラッシュを含め、どの経路でプロセスが終わっても、まだ動いているプログラムはすべて kill されます。
+
+`ready` が答える前にプログラムが終わったとき、`ready` が時間内に答えないとき、`setup` が throw したとき、world は失敗します。
+nukadoko は起動したものを止め、メッセージはコマンド、その終わり方、world の `program.log` の最後の 20 行を示します。
+pass の途中でプログラムが終わったときは、world を止める時点で警告 `program-exited` を報告します。
+それ以降の request は待ち受ける相手を見つけられず、失敗した step だけではその理由が分からないからです。
+
+### プレースホルダー
+
+`env` の値と、`prepare` と `serve` のコマンドの語は、プレースホルダーを名指せます:
+
+| プレースホルダー | 値 |
+| --- | --- |
+| `{port}` | nukadoko が `serve` に与えたポート |
+| `{url}` | world の URL。`http://localhost:{port}`、またはファイルが名指す `url` |
+| `{dir}` | world のディレクトリ `.nukadoko/runs/<run_id>/worlds/<environment>/` の絶対パス |
+| `{root}` | プログラムを build する tree のルートの絶対パス |
+| `{world}` | world の名前。それが実行する environment |
+| `{token}` | その world のために作った 32 文字のランダムな 16 進数 |
+
+`build` は tree ごとに 1 回、どの world よりも前に実行するので、`build` のコマンドが名指せるのは `{root}` だけです。
+world が値を持たないプレースホルダーは、何かを実行する前に名前を挙げて拒否されます。
+serve しない world の `{port}` や、`serve` も `url` も無い world の `{url}` です。
+波括弧で囲まれたそれ以外のテキストは書いたまま残るので、コマンドの中の JSON の値や shell の波括弧はエスケープ不要です。
+
+`{token}` は、プログラムと step が共有し、ほかの誰にも読ませない値のためのものです。
+用意した管理者のパスワードや署名の鍵がその例です。
+record がそれを見せうる場所ではどこでも `{{secret.WORLD_TOKEN}}` として redact されます。
+`program.log`、すべての step record、`run.json` です。
+
+`{dir}` は world が状態を置く場所です。
+SQLite のファイル、pid ファイル、アップロードのディレクトリなどです。
+2 つの world がそれを共有することはないので、同時に動く 2 つの run も、1 つの run の 2 つの environment も、同じデータベースに書くことはありません。
+retention はそれを run とともに消します。
+
+### env
+
+`env` は変数名から値への map で、プレースホルダーは埋められます。
+world のプロセス(world より前に動く `build` を除く)は、`nuka` 自身が動いている環境の上に `env` を重ねたものを受け取ります。
+config の env file は受け取りません。
+env file が持つのは step の secret で、プログラムのものではないからです。
+
+step も `env` を受け取ります。
+そのため step、`runCommand` の子、サーバが、`DATABASE_PATH` を同じように読みます。
+world の pass のあいだ、`process.env` は `env` を持ち、pass のあとに元の値に戻ります。
+`env` fixture は、env file の上に `env` を重ねたものです。
+`--concurrency` では、各 worker が同じ値を適用します。
+
+### World
+
+world は、1 つのプログラムに対する run の 1 回の pass です。
+このリリースでは、run は選んだ environment ごとに 1 つの world を、run を始めた tree から起動します。
+
+- `nuka run` は environment の BeforeAll の hook より前に world を起動します。
+  hook がすでにプログラムと話すかもしれないからです。
+  world を止めるのは、AfterAll の hook のあと、`"process"` スコープの fixture の teardown のあとです。
+  fixture の teardown もプログラムと話すかもしれないからです。
+- `--concurrency` では、親プロセスが world を起動し、すべての worker がそこへ request を送ります。
+- `nuka do` は 1 回の実行のために world を起動し、終わったら止めます。
+  world のディレクトリは、step record のディレクトリの中の `world/` です。
+- world が起動しなかったとき、run は上のメッセージとともに `program-start-failed` を報告し、その environment ではどの scenario も、BeforeAll と AfterAll のどの hook も実行せず、1 で終わります。
+  `nuka do` は同じ所見を報告し、1 で終わり、`record.json` を書きません。
+  record のディレクトリには world の `program.log` が残ります。
+- コマンドか `setup` を実行した world は、準備ができた時点で stderr に 1 行を出し、各段階にかかった時間、URL、ログを示します:
+
+```text
+world default: build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (log .nukadoko/runs/run-20261024-101500-a1b2/worlds/default/program.log)
+```
+
+world の URL は `page`、`context`、`pageAs`、`request` の base URL であり、`baseURL` fixture です。
+`run.json` の `environments[].base_url` がそれを名指します。
+
+`program.log` は、world のすべてのコマンドが出力したもの(stdout と stderr)を持ち、各行は書かれるときに redact されます。
+各コマンドの前には `$ <command>` の行があります。
+同じ tree のより前の world ですでに実行した `build` は、その world を名指す 1 行を書きます。
+
+`run.json` は、run が起動した順に、すべての world を `worlds` で名指します:
+
+```json
+"worlds": [
+  {
+    "name": "default",
+    "tree": "head",
+    "url": "http://localhost:41873",
+    "commands": [
+      { "phase": "build", "argv": ["npm", "run", "build"] },
+      { "phase": "prepare", "argv": ["node", "dist/migrate.js"] },
+      { "phase": "serve", "argv": ["node", "dist/server.js"] }
+    ],
+    "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
+    "log": "worlds/default/program.log",
+    "error": null
+  }
+]
+```
+
+- `tree` はプログラムを build した tree で、run を始めた tree を表す `head` です。
+- `commands` は world が実行したものを、プレースホルダーを埋め、redact して並べます。
+  `build` は、それを実行した最初の world に現れます。
+- `timings` は、実行した段階ごとにキーを持ちます。
+  `build_ms`、`prepare_ms`、`serve_ms`、`setup_ms`、`stop_ms` です。
+- `log` は run ディレクトリからの相対パスで、world が何のコマンドも実行しなかったときは `null` です。
+- `error` はプログラムが起動しなかった理由で、起動したときは `null` です。
+
+各 step record は、自分の world を `world_name` で名指します。
+`worlds` のエントリの `name` か、world が動かなかったときは `null` です。
+compat の step が読み書きする compat の World は `world` で、別のフィールドです。
+
+### Environment
+
+`environments` は、配備先とプログラムの変種に名前を付けます。
+staging のサーバ、pull request ごとのプレビュー、機能を有効にした同じアプリなどです。
+エントリは上のどのフィールドも持てるほか、environment だけが持つ 3 つのフィールドを持てます:
+
+- `policy: "read-only"` は、mutate すると宣言した step を拒否します。
+- `envFiles` は config の `envFiles` のあとに続き、あとのファイルが勝ちます。
+- `version` は probe(`() => string | Promise<string>`)で、run ごとに 10 秒の持ち時間で 1 回呼ばれます。
+  各 step record は、その答えを `target_version` として保存します。
+
+3 つの規則は「Environment、secret」にあります。
+environment が書いたフィールドはトップレベルのものを置き換えます。
+例外は `env` で、キーごとに合わさり、environment のものが勝ちます。
+そのため、変数を 1 つ変える environment が残りを繰り返す必要はありません。
+`serve` と `url` は 1 つの選択です。
+どちらかを書いた environment は、トップレベルのものを置き換えます。
+`build` と `prepare` はほかのフィールドと同じく引き継がれます。
+そのため、`url` を持ち実行するコマンドが無い environment は、`build: []` と `prepare: []` を書きます。
+`--env <name>` が environment を選び、`--env` の無い run はトップレベルを `default` という名前で使います。
+`--env` は繰り返せ、environment ごとに自分の world を持ちます(「実行」を参照)。
+
+```ts
+export default defineProgram({
+  serve: { command: "npm start", ready: "/health" },
+  env: { PORT: "{port}" },
+  environments: {
+    "new-checkout": { env: { CHECKOUT_V2: "1" } },
+    staging: { url: "https://staging.acme.example", policy: "read-only" },
+  },
+});
+```
+
+### nukadoko が起動しないプログラム
+
+`url` は、nukadoko が動かさない場所で動いているプログラムを名指します。
+配備されたサーバや、pull request ごとのプレビューです。
+関数は、何かに届く前に world の `{ name, root, dir }` を受け取るので、1 つのエントリですべてのプレビューを賄えます:
+
+```ts
+environments: {
+  "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
+},
+```
+
+そうした world は何も起動せず、`program.log` を書きません。
+nukadoko は自分が動かしていないプログラムのログを読めないので、world の `log` は `null` です。
+`env` はそれでも step に届き、`{token}` もそれでも作られます。
+サーバがほかの誰かに必要なデータを持つなら、そうした environment には read-only の `policy` を付けます。
+
+### Ruby のプログラム
+
+ファイルは TypeScript で、コマンドはプロジェクトが実行するものなら何でも構いません。
+Rails のアプリケーションです:
+
+```ts
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  build: ["bundle install"],
+  prepare: ["bin/rails db:prepare"],
+  serve: { command: "bin/rails server -p {port} -P {dir}/server.pid", ready: "/up" },
+  env: {
+    RAILS_ENV: "test",
+    DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
+  },
+});
+```
+
+`-P {dir}/server.pid` は pid ファイルを world のディレクトリに置くので、2 つの world が互いの起動を拒むことはありません。
+`DATABASE_URL` は、world ごとに専用のデータベースを与えます。
+`/up` は Rails が生成するヘルスチェックです。
+
 ## 実行
 
 ### Scenario(スクリプト化された経路)
@@ -2204,13 +2464,13 @@ unchanged ではない scenario は現在の `lines` を持ち、どの scenario
 `--env` は繰り返せます。
 `nuka run --env a --env b` は、1 つの `run_id`、1 つの `run.json`、1 つのサマリ、1 つの終了コードを持つ 1 回の run で、選ばれたすべての scenario を各 environment で 1 回ずつ実行します。
 `--env` は、config が定義していてもいなくても `default` という名前を受け付けます。
-それは `--env` なしの run が使う environment(トップレベルの設定、または config が定義していれば `environments.default`)で、`run.json` がそう名付けるものなので、`--env default --env staging` は両方を実行します。
+それは `--env` なしの run が使う environment(トップレベルの設定、またはプログラムのファイルが定義していれば `environments.default`)で、`run.json` がそう名付けるものなので、`--env default --env staging` は両方を実行します。
 environment は与えた順に 1 つずつ走ります。
 `a` で選択全体を実行し、それから `b` で選択全体を実行するので、2 つの environment が同時に同じ対象を共有することはありません。
 各回は、それだけを走らせたときと同じ run です。
-自分の env file、secret、version の probe、`baseURL`、policy、自分の BeforeAll と AfterAll、自分の `"process"` スコープの fixture を持ち、その fixture は次の environment が始まる前に teardown されます。
+自分の env file、secret、version の probe、world、policy、自分の BeforeAll と AfterAll、自分の `"process"` スコープの fixture を持ち、その fixture は次の environment が始まる前に teardown され、world は止められます(「テスト対象のプログラム」を参照)。
 environment は汎用の設定のままです。
-nukadoko は feature flag という概念を持たず、2 つの environment の違いは、それぞれの env file と `baseURL` が言うことだけです。
+nukadoko は feature flag という概念を持たず、2 つの environment の違いは、それぞれの env file とプログラムのフィールドが言うことだけです。
 各 scenario のエントリは自分の `environment` を持ちます。
 `verdicts` は scenario と environment の組ごとに 1 つのセルを持ち、その中のどれか 1 つの実行が失敗ならセルも失敗です。
 どれか 1 つのセルが失敗なら終了コードも失敗です。
@@ -2329,7 +2589,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
   "started_at": "...",
   "finished_at": "...",
   "commit": { "sha": "<40 hex characters>", "dirty": false },
-  "environments": [{ "name": "default", "target_version": null }],
+  "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
+  "worlds": [],
   "selection": "full",
   "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
   "scenarios": [
@@ -2416,9 +2677,12 @@ run が終わったとき、最後の step record と run サマリの後に、�
   git リポジトリの外や最初のコミットの前では `null` です。
   `environments` は run が対象にした各 environment を `--env` が与えた順に並べます(`--env` が無ければ `default`)。
   各要素の `target_version` は、その environment のバージョン probe が答えた値です(probe がなければ `null`)。
-  各要素の `base_url` は、その environment が解決した `baseURL` です(なければ `null`)。
+  各要素の `base_url` は、その world の URL です(なければ `null`)。
   これで run は、コミットだけでなく、判定した相手のインスタンスも名指しします。
   `base_url` は `target_version` と同じく redact され、summary の environment の行にも出ます。
+- `worlds` は、run が起動した各 world を起動した順に並べ、それが実行したもの、各段階にかかった時間、ログを持ちます。
+  tree にプログラムのファイルが無ければ空です。
+  フィールドは「テスト対象のプログラム」にあります。
 - `run_dir` は run ディレクトリを、プロジェクトのルートからの相対パスで `/` 区切りで示します。
   スクリプトは state ディレクトリの構成を知らずに、これを `nuka report` に渡せます。
   run.json の中のパスは、これまでどおりこのディレクトリからの相対パスです。
@@ -3167,8 +3431,8 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
 - **呼び出しをまたいで持ち運ばれる状態はありません。**
   `nuka run` の各 scenario も、`nuka do` の各呼び出しも、クリーンに始まります。
   ログイン状態が必要な step は、それを fixture から、またはその feature が名指す Given step から得ます。
-- **Environment** はデプロイ先に名前を付けます。
-  各 environment は `baseURL`、`envFiles`、`policy: "read-only"`、任意の `version` プローブを定義できます。
+- **Environment** は、`nukadoko.program.ts` の中でデプロイ先に名前を付けます(「テスト対象のプログラム」を参照)。
+  各 environment はプログラムへの届き方を上書きでき、`envFiles`、`policy: "read-only"`、任意の `version` プローブを定義できます。
   read-only policy は mutate する step を拒否します。
   各 step record はプローブの結果を `target_version` として保存します。
   run サマリは各 environment と version を述べるので、レビュアーは run が green だったデプロイ先を知ります。
@@ -3247,9 +3511,7 @@ default export が無いファイル、または default export が Promise で�
 | --- | --- |
 | `featuresDir` | feature ファイルと step のコード。`nuka run` が無人で実行する集合そのもの(デフォルトは `features`。Cucumber 流のやり方) |
 | `additionalFeatureDirs` | `nuka check` が語彙を結び付ける対象を広げる追加のディレクトリ。`featuresDir` そのものを広げることはない(デフォルトは `[]`。下記) |
-| `baseURL` | トップレベルの base URL。environment ごとに上書きされる(下記) |
-| `envFiles` | トップレベルの env file。environment ごとに追記される(下記) |
-| `environments` | environment ごとの `baseURL`、`envFiles`、`policy`、`version` プローブ(下記) |
+| `envFiles` | すべての environment が読み込む env file。`nukadoko.program.ts` の environment が自分のものを追記する(下記) |
 | `stateDir` | nukadoko が実行時に書き込む場所(デフォルトは `.nukadoko`。「State directory」を参照) |
 | `retention` | Measurement を残す長さ。`runs`(既定 20)は丸ごと残す最新の run の数、`adHocDays`(既定 7)はどの run にも属さない record の日数(「成果物」を参照) |
 | `browserType` | `page` fixture が起動する Playwright のエンジン: `chromium`(デフォルト)、`firefox`、`webkit`(下記) |
@@ -3306,7 +3568,7 @@ Playwright のオプションを zod で列挙し直すと、Playwright が 1 �
 これにより `ignoreHTTPSErrors` のようなオプションに初めて手が届くようになります。
 自己署名証明書を使うローカルの接続先では、どちらの fixture にもそれを設定する手段がこれまでありませんでした。
 どちらのキーも `baseURL` は理由を述べたエラーで拒否し、黙って無視することはしません。
-`config.baseURL` はプロジェクトの base URL の唯一の出所であり、2 つ目の出所があると config が食い違う値を持ちうるからです。
+`nukadoko.program.ts` の `serve` か `url` から来る world の URL が base URL の唯一の出所であり、2 つ目の出所はそれと食い違いうるからです。
 `storageState` はそのまま Playwright に渡ります。
 ログイン状態のファイルを持つプロジェクトは、ここでそれを名指します。
 
@@ -3328,8 +3590,9 @@ cucumber-js は同じオブジェクトを自分の設定か `--world-parameters
 値はプレーンなオブジェクトでなければなりません。
 配列、文字列、`null` は config のエラーであり、step が欠落として読んでしまう空のオブジェクトにはなりません。
 
-environment のエントリは `{ baseURL?, envFiles?, policy?: "read-only", version?: () => string | Promise<string> }` です。
-その `baseURL` はトップレベルのものを上書きし、その `envFiles` はトップレベルのリストのあとに追加されます(あとのファイルが勝ちます。
+environment は `nukadoko.program.ts` の `environments` のエントリです(「テスト対象のプログラム」を参照)。
+プログラム自身のフィールドのほか、`envFiles`、`policy: "read-only"`、`version: () => string | Promise<string>` を持ちます。
+その `envFiles` は config の `envFiles` のあとに追加されます(あとのファイルが勝ちます。
 dotenv のユーザーにはおなじみの、共通設定と上書きの重ね方です)。
 ディスク上にないパスは、何も寄与しません。
 `nuka check` は `env-file-missing` で警告し、environment 自身のリストにあるパスは `environment-env-file-missing` で警告します。
@@ -3343,7 +3606,7 @@ dotenv のユーザーにはおなじみの、共通設定と上書きの重ね�
 そこに `policy: "read-only"` を置くことが、`--env` 無しで打った `nuka do` をどこにも書き込ませない手段です。
 明示的に名前を付けた environment は存在していなければなりません。
 名前を付けるということは、それが存在すると主張することだからです。
-`version` プローブが関数になっているのは、config がすでに実行可能な TypeScript だからです(URL と jsonPath の DSL は `fetch` を書くにはより悪い方法でしょう)。
+`version` プローブが関数になっているのは、プログラムのファイルがすでに実行可能な TypeScript だからです(URL と jsonPath の DSL は `fetch` を書くにはより悪い方法でしょう)。
 ツールはこれを実行ごとに 1 回、10 秒の予算で呼び出し、throw やタイムアウトが犠牲にするのは `target_version` だけで、実行そのものが失敗することはありません。
 
 env file は `KEY=VALUE` のテキストです。
@@ -3379,14 +3642,12 @@ ASCII の英字に限りません。
 そのテキストは secret かもしれないからです。
 実行は、読めた代入をそのまま読み込みます。
 
-`environments` と `fixtures` を両方名指しする例です:
+`envFiles` と `fixtures` を名指しする例です。
+environment は `nukadoko.program.ts` にあります(「テスト対象のプログラム」を参照):
 
 ```ts
 export default defineConfig({
-  baseURL: "https://acme.example",
-  environments: {
-    staging: { baseURL: "https://staging.acme.example", policy: "read-only" },
-  },
+  envFiles: [".env"],
   fixtures: {
     tenant: async ({ request }, use) => {
       const t = await createTenant(request);
@@ -3977,6 +4238,10 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               when omitted); repeated, it runs every selected
                               scenario once in each, in order, in one run
                               with one verdict per scenario and environment.
+                              With nukadoko.program.ts, each environment's
+                              world (build, prepare, serve, setup) starts
+                              before its scenarios and stops after them;
+                              run.json names it in worlds.
                               :line runs one scenario, for iteration only;
                               its summary covers only that scenario. Each target
                               can be a file, file:line, or directory. Targets
@@ -4080,7 +4345,10 @@ nuka do <step> [--args '<json>'] [--use <step-record-id>] [--env <name>]
                               execute one typed step; step record to stdout.
                               A claim step reads its values, judges every
                               claim, and records them as in a run.
-                              --env as on nuka run; each call starts clean.
+                              --env as on nuka run; each call starts clean,
+                              and with nukadoko.program.ts it starts that
+                              environment's world for this one execution
+                              and stops it after.
                               Text the step or its fixtures write through
                               console.log or process.stdout.write is
                               delivered on stderr.
@@ -4235,7 +4503,7 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               step that sends one request through
                               Playwright's request fixture, unwrapped:
                               request.fetch(path, { method }), resolved
-                              against baseURL, returning status
+                              against the world's URL, returning status
                               (response.status()) and body (the response
                               text). Each {key} in the path is that args
                               key's value, inserted as it is; a {key} no
@@ -4398,7 +4666,7 @@ nuka clean [--dry-run] [--json]
                               the contents of allure-results/; the cache/
                               and records/ directories earlier releases
                               left go too
-nuka init [--allure] [--server "<command>" --server-url <url>]
+nuka init [--allure]
                               set up a project; ends with a self-check.
                               Writes nukadoko.config.ts, features/steps/,
                               .nukadoko/, .env, .env.*, and !.env.example in
@@ -4410,19 +4678,9 @@ nuka init [--allure] [--server "<command>" --server-url <url>]
                               file has comments. --allure writes
                               allurerc.mjs and creates
                               .nukadoko/export/allure-results.
-                              --server with --server-url also writes
-                              baseURL: <url>, a server fixture that calls
-                              runServer on the command (split on
-                              whitespace only, no shell) and stops it
-                              after the scenario, a request override that
-                              destructures the builtin request and
-                              server, so every step that sends a request
-                              starts the program first, and the
-                              StepFixtures declaration for server. One
-                              without the other, an empty command, or a
-                              URL that is not http(s) is refused with
-                              nothing written. Without playwright
-                              installed, stderr names its install line.
+                              --server and --server-url are removed: the
+                              program under test is described in
+                              nukadoko.program.ts (see "Program").
                               After a passing self-check, its last
                               stderr line names this package's llms.txt
 nuka skill path               where the bundled skill lives, for a project

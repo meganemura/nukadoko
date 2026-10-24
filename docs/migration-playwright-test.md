@@ -11,15 +11,25 @@ which door you use, and none of it is cucumber-specific: install the
 package, then run `nuka init` from the project root. It writes
 `nukadoko.config.ts`, or `nukadoko.config.mts` in a CommonJS project (no
 `"type": "module"` in `package.json`, which an existing suite can be).
-Add `baseURL` to it, and `featuresDir` when your features do not live in
-`features/`:
+Add `featuresDir` to it when your features do not live in `features/`:
 
 ```ts
 import { defineConfig } from "nukadoko";
 
 export default defineConfig({
   featuresDir: "features",
-  baseURL: "http://localhost:...", // wherever the app under test listens
+});
+```
+
+The app under test goes in a second file, `nukadoko.program.ts`: how it
+starts, or the URL of one that already runs.
+
+```ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "npm start", ready: "/" }, // the command webServer runs
+  env: { PORT: "{port}" },
 });
 ```
 
@@ -29,17 +39,13 @@ plain `.ts` file as CommonJS, and nukadoko is ESM-only. With no `"type"`,
 Node loads a `.ts` file only after it parses it again, with a
 `MODULE_TYPELESS_PACKAGE_JSON` warning on every load.
 
-A Playwright Test suite already has its own `baseURL`, in
-`playwright.config.ts`'s `use.baseURL`. That is a separate field, and
-nukadoko never reads it, so the same value ends up written into both
-files. Nothing here removes that duplication; it is just how the two
-configs sit today.
-
 Neither `nuka run` nor `nuka do` reads `playwright.config.ts` at all, so
-its `webServer` field never runs, unlike under `playwright test`, which
-starts the app under test through that field before a single spec runs. A
-step that calls `request` or `page` before the app is listening fails
-with `ECONNREFUSED`. Start the app by hand first.
+its `webServer` field and its `use.baseURL` mean nothing to nukadoko.
+`serve` in the program file does the job `webServer` does: nukadoko starts
+the app on a free port of its own, waits until `ready` answers, and makes
+that URL the base URL of `page` and `request`. The same command ends up
+written into both files. Nothing here removes that duplication; it is
+just how the two configs sit today.
 
 ## Share the implementation, not the runner
 

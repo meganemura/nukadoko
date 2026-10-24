@@ -11,6 +11,9 @@ import {
 } from "../run/execute-typed-step.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
+import { loadProgram } from "../config/load-program.js";
+import { createWorldStarter, type StartedWorld } from "../program/world.js";
+import { applyWorldEnv } from "../program/world-view.js";
 import { createStepContext, finalizeOpenRequests, installChannelPatches, type DisposeResult } from "../context/create-context.js";
 import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
@@ -48,7 +51,7 @@ import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../
 import { resolveUse, type ResolveUseSuccess } from "../step/resolve-use.js";
 import { reviveStoredForm } from "../stored-form/revive.js";
 import { formatFinding, warningSink } from "../finding/finding.js";
-import { refuse, withHint } from "./refusal.js";
+import { FAILED_EXIT_CODE, refuse, withHint } from "./refusal.js";
 import { describeArgsCommand } from "./option-defaults.js";
 import { assertFeaturesDirExists } from "./vocabulary.js";
 import type { WritableSink } from "../sink/writable-sink.js";
@@ -96,6 +99,14 @@ import type { WritableSink } from "../sink/writable-sink.js";
 // and its failure or timeout never fails the run. Only `target_version`
 // is omitted, with one stderr warning line.
 //
+// With a program file, the tree's head world is started for this one
+// execution, before the step's context, and stopped after the step's
+// fixtures are torn down (docs/spec.md "Program"). Its directory sits in
+// the step record's own, so a failed step and the program's log are read
+// side by side. A world that does not start is a refusal like the setup
+// phase's: the step never ran, so no step record is written, and the
+// message carries the end of the program's log.
+//
 // The evidence-collecting side of ctx (browser/http/trace) is created and
 // disposed here, never handed to the step itself — see
 // context/create-context.ts's header for why that split exists.
@@ -116,7 +127,7 @@ export interface RunDoOptions {
   argsJson: string | null;
   /** `--env`'s value, or `null` when it was omitted. `null` is not the same
    * as the string `"default"`: it is what tells resolveEnvironment() not to
-   * require a matching `environments` entry.
+   * require a matching `environments` entry in nukadoko.program.ts.
    */
   env: string | null;
   /** `--use <record-id>` (repeatable), in the order given (docs/spec.md
@@ -146,19 +157,21 @@ export async function runDo(options: RunDoOptions): Promise<number> {
 
   // --- Setup phase: any failure here writes nothing. ---
   let config;
+  let program;
   try {
     config = await loadConfig(rootDir);
+    program = (await loadProgram(rootDir))?.program ?? null;
   } catch (error) {
     return refuse(sinks, error, "unexpected-error");
   }
 
   // `env !== null` is what distinguishes "explicit --env
-  // that must exist in config.environments" from "implicit default, no such
-  // requirement" — see
+  // that must exist in the program file's environments" from "implicit
+  // default, no such requirement"; see
   // resolve-environment.ts's header for the reasoning.
   let resolvedEnv: ResolvedEnvironment;
   try {
-    resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
+    resolvedEnv = resolveEnvironment(config, program, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
   } catch (error) {
     return refuse(sinks, error, "unexpected-error");
   }
@@ -166,6 +179,9 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   // Installed once this execution's fixture caches exist. `stop()` in the
   // `finally` below removes it on a normal return.
   let processSignal: ProcessSignal | undefined;
+  // Set once the head world runs, so the `finally` below stops it on every
+  // path out, a throw included.
+  let stopWorld: (() => Promise<void>) | undefined;
 
   try {
     let vocabulary;
@@ -392,14 +408,36 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       }
     }
 
+    let world: StartedWorld | null = null;
+    if (resolvedEnv.program !== null) {
+      const started = await createWorldStarter({
+        rootDir,
+        worldDir: () => path.join(evidenceDir, "world"),
+        recordPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
+        progress: stderr,
+      }).start(resolvedEnv.name, resolvedEnv.program, secrets);
+      if (!started.ok) {
+        stderr.write(formatFinding(withHint({ severity: "failed", code: "program-start-failed", message: started.message })));
+        return FAILED_EXIT_CODE;
+      }
+      world = started;
+      // The program outlives the fixtures, whose teardown may still talk
+      // to it, on the signal path as on the normal one.
+      stopWorld = runOnce(async () => {
+        const exitedEarly = await started.stop();
+        if (exitedEarly !== null) warnings("program-exited").write(`world ${started.view.name}: ${exitedEarly}\n`);
+      });
+    }
+    const restoreEnv = world === null ? () => {} : applyWorldEnv(world.view.env);
+    const stepEnv = world === null ? envVars : { ...envVars, ...world.view.env };
+    if (world !== null) secrets = [...secrets, ...world.view.secrets];
+
     const contextHandle = createStepContext({
-      // Only `baseURL` is overridden from the resolved environment: every
-      // other config field (featuresDir, stateDir, browser, ...) has no
-      // per-environment counterpart.
-      config: { ...config, baseURL: resolvedEnv.baseURL },
+      config,
+      baseURL: world?.view.url,
       evidenceDir,
       rootDir,
-      env: envVars,
+      env: stepEnv,
       secrets,
       // `nuka do` has no scenario, so no chain: `ctx.resultOf` always
       // returns `undefined` here (docs/spec.md "Context API"). This matches
@@ -475,6 +513,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     });
     processSignal = installProcessSignalHandlers();
     processSignal.setScenarioCleanup(tearDownFixtures);
+    if (stopWorld !== undefined) processSignal.setProcessCleanup(stopWorld);
     const startedAt = new Date();
 
     // `--use`'s actual effect — applied here, not in
@@ -603,6 +642,8 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // failure never changes `status`.
     fixtureOutcome = status;
     await tearDownFixtures();
+    await stopWorld?.();
+    restoreEnv();
     const { evidence } = disposeResult;
     // `dispose()` above is what closes this execution's own (only) trace
     // chunk, if `ctx.page()` was ever called (create-context.ts's own
@@ -660,6 +701,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             result,
             status: "passed",
             environment: resolvedEnv.name,
+            world_name: world?.view.name ?? null,
             target_version: targetVersion,
             scenario_record_id: null,
             run_id: null,
@@ -706,6 +748,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment: resolvedEnv.name,
+            world_name: world?.view.name ?? null,
             target_version: targetVersion,
             scenario_record_id: null,
             run_id: null,
@@ -752,6 +795,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // A request the step left open after its record was written still
     // gets its line in http.jsonl (observed.ts).
     finalizeOpenRequests();
+    await stopWorld?.();
     processSignal?.stop();
   }
 }

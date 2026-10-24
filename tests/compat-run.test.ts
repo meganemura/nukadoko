@@ -11,6 +11,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: compat-only scenario e2e
@@ -57,14 +58,7 @@ describe("nuka run: compat step execution", () => {
   beforeEach(async () => {
     ({ server, baseURL } = await startTestServer());
     rootDir = await copyFixtureToTempDir("compat-run-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}" });`,
-        "",
-      ].join("\n"),
-    );
+    await writeUrlProgram(rootDir, baseURL);
   });
 
   afterEach(async () => {

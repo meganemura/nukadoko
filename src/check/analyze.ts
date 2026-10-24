@@ -4,6 +4,7 @@ import type { GherkinDocument, Pickle } from "@cucumber/messages";
 import { UnsupportedTagExpressionError } from "../compat/errors.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
+import { loadProgram, type LoadedProgram } from "../config/load-program.js";
 import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import { isPlaywrightInstalled } from "../context/load-playwright.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
@@ -257,18 +258,22 @@ async function analyze(
   selection: boolean,
 ): Promise<RunSelectionAnalysis> {
   const config = await loadConfig(rootDir);
+  // A program file that does not load is refused the way a config file
+  // that does not load is, before any step file is read.
+  const program = await loadProgram(rootDir);
   // Tolerant mode: a broken step file
   // becomes a report entry (`importFailures`, handled below) instead of
   // rejecting this whole call the way `run --no-check`/`do`/`steps`/`init`
   // still do via their own plain `discoverSteps(rootDir, config.featuresDir)`
   // calls.
   const discovery = await discoverSteps(rootDir, config.featuresDir, { tolerateImportFailures: true });
-  return { ...(await reportFor(rootDir, config, discovery, loadFeatures, selection)), discovery };
+  return { ...(await reportFor(rootDir, config, program, discovery, loadFeatures, selection)), discovery };
 }
 
 async function reportFor(
   rootDir: string,
   config: Config,
+  program: LoadedProgram | null,
   discovery: DiscoveryResult,
   loadFeatures: (config: Config) => LoadFeaturesResult,
   selection: boolean,
@@ -407,7 +412,7 @@ async function reportFor(
     });
   }
 
-  const configResult = await checkConfig(rootDir, config);
+  const configResult = await checkConfig(rootDir, config, program);
   errors.push(...configResult.errors);
   warnings.push(...configResult.warnings);
 

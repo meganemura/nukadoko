@@ -71,10 +71,10 @@ describe("loadConfig", () => {
     }
     expect(caught).toBeInstanceOf(ConfigError);
     const configError = caught as ConfigError;
-    expect(configError.message).toContain('unknown key(s): baseUrl (did you mean "baseURL"?)');
+    expect(configError.message).toContain('unknown key(s): featuresdir (did you mean "featuresDir"?)');
   });
 
-  it("names the correctly-cased key for a match nested inside an environment entry", async () => {
+  it("names the correctly-cased key for a match nested inside an object", async () => {
     let caught: unknown;
     try {
       await loadConfig(fixture("config-key-suggestion-nested-project"));
@@ -83,7 +83,7 @@ describe("loadConfig", () => {
     }
     expect(caught).toBeInstanceOf(ConfigError);
     const configError = caught as ConfigError;
-    expect(configError.message).toContain('unknown key(s): baseUrl (did you mean "baseURL"?)');
+    expect(configError.message).toContain('unknown key(s): Public (did you mean "public"?)');
   });
 
   it("suggests nothing for an unknown key with no case-insensitive match", async () => {
@@ -468,60 +468,6 @@ describe("configSchema", () => {
   });
 });
 
-describe("configSchema: environments", () => {
-  it("accepts baseURL, envFiles, policy: read-only, and a version function", () => {
-    const version = () => "1.0.0";
-    const result = configSchema.safeParse({
-      environments: {
-        staging: {
-          baseURL: "http://staging.example",
-          envFiles: [".env.staging"],
-          policy: "read-only",
-          version,
-        },
-      },
-    });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.environments?.staging).toEqual({
-        baseURL: "http://staging.example",
-        envFiles: [".env.staging"],
-        policy: "read-only",
-        version,
-      });
-    }
-  });
-
-  it("accepts an environment with no fields at all", () => {
-    const result = configSchema.safeParse({ environments: { staging: {} } });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects an environment name outside [a-z0-9_-]+", () => {
-    const result = configSchema.safeParse({ environments: { "Bad Name": {} } });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects an unknown key inside an environment entry", () => {
-    const result = configSchema.safeParse({ environments: { staging: { typo: true } } });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects a policy value other than the literal read-only", () => {
-    const result = configSchema.safeParse({
-      environments: { staging: { policy: "readonly" } },
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects a non-function version", () => {
-    const result = configSchema.safeParse({
-      environments: { staging: { version: "1.0.0" } },
-    });
-    expect(result.success).toBe(false);
-  });
-});
-
 describe("configSchema: parameterTypes", () => {
   it("defaults to an empty list when omitted", () => {
     const result = configSchema.safeParse({});
@@ -666,7 +612,7 @@ describe("configSchema: browserContext", () => {
     expect(configSchema.safeParse({ browserContext: null }).success).toBe(false);
   });
 
-  it("rejects browserContext.baseURL, with a message stating config.baseURL is the only source", () => {
+  it("rejects browserContext.baseURL, with a message naming the world's URL as the only source", () => {
     const result = configSchema.safeParse({
       browserContext: { baseURL: "http://example.invalid" },
     });
@@ -674,7 +620,7 @@ describe("configSchema: browserContext", () => {
     if (!result.success) {
       const message = JSON.stringify(result.error.issues);
       expect(message).toContain("browserContext.baseURL");
-      expect(message).toContain("config.baseURL is the only source");
+      expect(message).toContain("the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL");
     }
   });
 
@@ -716,7 +662,7 @@ describe("configSchema: requestContext", () => {
     expect(configSchema.safeParse({ requestContext: null }).success).toBe(false);
   });
 
-  it("rejects requestContext.baseURL, with a message stating config.baseURL is the only source", () => {
+  it("rejects requestContext.baseURL, with a message naming the world's URL as the only source", () => {
     const result = configSchema.safeParse({
       requestContext: { baseURL: "http://example.invalid" },
     });
@@ -724,7 +670,7 @@ describe("configSchema: requestContext", () => {
     if (!result.success) {
       const message = JSON.stringify(result.error.issues);
       expect(message).toContain("requestContext.baseURL");
-      expect(message).toContain("config.baseURL is the only source");
+      expect(message).toContain("the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL");
     }
   });
 

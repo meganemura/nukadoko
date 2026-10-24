@@ -166,8 +166,8 @@ describe("nuka run: progress output", () => {
 
   it("the do line carries --env, so the scenario reruns where it failed", async () => {
     await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      'import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({ environments: { staging: {} } });\n',
+      path.join(rootDir, "nukadoko.program.ts"),
+      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ environments: { staging: {} } });\n',
     );
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

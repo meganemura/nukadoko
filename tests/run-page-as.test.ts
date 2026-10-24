@@ -6,7 +6,7 @@ import path from "node:path";
 import { chromium, type Browser } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, latestRunDir, createCaptureSink, removeTempDir, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, latestRunDir, createCaptureSink, removeTempDir, stepRecordDir, stripRunProgressLines, writeUrlProgram } from "./helpers/fixtures.js";
 
 // Responsibility: `pageAs(name)` through a real `nuka run` and a real
 // browser. Two people sign in to an app that remembers a person by a cookie.
@@ -80,14 +80,7 @@ describe("nuka run: pageAs gives each person a browser context of their own", ()
   beforeEach(async () => {
     ({ server, baseURL } = await startServer());
     rootDir = await copyFixtureToTempDir("run-page-as-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}" });`,
-        "",
-      ].join("\n"),
-    );
+    await writeUrlProgram(rootDir, baseURL);
   });
 
   afterEach(async () => {

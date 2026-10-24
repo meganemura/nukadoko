@@ -55,7 +55,7 @@ describe("createStepContext / ctx.request()", () => {
 
   it("logs method/url/status/duration_ms for each request to http.jsonl", async () => {
     const { ctx, dispose } = createStepContext({
-      config: baseConfig({ baseURL }),
+      config: baseConfig(), baseURL,
       evidenceDir,
       env: {},
     });
@@ -95,7 +95,7 @@ describe("createStepContext / ctx.request()", () => {
     // before any Request-vs-string check) — a deliberate substitution for
     // the real page/route case, noted here rather than left implicit.
     const { ctx, dispose } = createStepContext({
-      config: baseConfig({ baseURL }),
+      config: baseConfig(), baseURL,
       evidenceDir,
       env: {},
     });
@@ -116,7 +116,7 @@ describe("createStepContext / ctx.request()", () => {
 
   it("omits evidence.http when request() was never called", async () => {
     const { dispose } = createStepContext({
-      config: baseConfig({ baseURL }),
+      config: baseConfig(), baseURL,
       evidenceDir,
       env: {},
     });
@@ -127,7 +127,7 @@ describe("createStepContext / ctx.request()", () => {
 
   it("returns an APIRequestContext without a baseURL, for suites that only use absolute URLs", async () => {
     const { ctx, dispose } = createStepContext({
-      config: baseConfig({ baseURL: undefined }),
+      config: baseConfig(), baseURL: undefined,
       evidenceDir,
       env: {},
     });
@@ -161,12 +161,12 @@ describe("createStepContext / ctx.request(): config.requestContext reaches newCo
     await rm(evidenceDir, { recursive: true, force: true });
   });
 
-  it("passes requestContext straight through, alongside config.baseURL", async () => {
+  it("passes requestContext straight through, alongside the world's baseURL", async () => {
     const { ctx, dispose } = createStepContext({
       config: baseConfig({
-        baseURL: "http://127.0.0.1:1",
         requestContext: { ignoreHTTPSErrors: true },
       }),
+      baseURL: "http://127.0.0.1:1",
       evidenceDir,
       env: {},
     });
@@ -182,7 +182,7 @@ describe("createStepContext / ctx.request(): config.requestContext reaches newCo
 
   it("passes no extra options to newContext when requestContext is unset (regression)", async () => {
     const { ctx, dispose } = createStepContext({
-      config: baseConfig({ baseURL: "http://127.0.0.1:1" }),
+      config: baseConfig(), baseURL: "http://127.0.0.1:1",
       evidenceDir,
       env: {},
     });

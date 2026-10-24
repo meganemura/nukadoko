@@ -12,14 +12,25 @@ nukadoko 自身のインストールと設定は、どちらの扉を使って�
 パッケージをインストールし、プロジェクトルートから `nuka init` を実行してください。
 `nuka init` は `nukadoko.config.ts` を書きます。
 CommonJS のプロジェクト(`package.json` に `"type": "module"` が無い場合で、既存のスイートはこうなっていることもあります)では `nukadoko.config.mts` を書きます。
-そこに `baseURL` を足し、feature が `features/` に無いときは `featuresDir` も足してください:
+feature が `features/` に無いときは、そこに `featuresDir` を足してください:
 
 ```ts
 import { defineConfig } from "nukadoko";
 
 export default defineConfig({
   featuresDir: "features",
-  baseURL: "http://localhost:...", // wherever the app under test listens
+});
+```
+
+テスト対象のアプリは、2 つ目のファイル `nukadoko.program.ts` に書きます。
+起動の仕方か、すでに動いているアプリの URL です。
+
+```ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "npm start", ready: "/" }, // the command webServer runs
+  env: { PORT: "{port}" },
 });
 ```
 
@@ -28,17 +39,12 @@ export default defineConfig({
 `"type"` が無い場合、Node は `.ts` ファイルを解析し直してから読み込み、読み込むたびに `MODULE_TYPELESS_PACKAGE_JSON` の警告を出します。
 `nuka init` はそれを stderr で伝えます。
 
-Playwright Test のスイートはすでに自分自身の `baseURL` を持っています。
-`playwright.config.ts` の `use.baseURL` です。
-これは別のフィールドであり、nukadoko はそれを一切読みません。
-そのため同じ値を両方のファイルに書くことになります。
+`nuka run` も `nuka do` も `playwright.config.ts` を一切読まないため、その `webServer` フィールドと `use.baseURL` は nukadoko にとって意味を持ちません。
+`webServer` の役目は、プログラムのファイルの `serve` が果たします。
+nukadoko は専用の空いているポートでアプリを起動し、`ready` が答えるまで待ち、その URL を `page` と `request` の base URL にします。
+同じコマンドを両方のファイルに書くことになります。
 ここではその重複を解消しません。
 2 つの設定が今そういう関係にある、というだけです。
-
-`nuka run` も `nuka do` も `playwright.config.ts` を一切読まないため、その `webServer` フィールドは決して動きません。
-`playwright test` はそのフィールドを通じて、spec を 1 つ実行する前にテスト対象のアプリを起動しますが、この 2 つのコマンドはそうしません。
-アプリがまだ待ち受けていない状態で `request` や `page` を呼ぶ step は `ECONNREFUSED` で失敗します。
-先に自分の手でアプリを起動してください。
 
 ## 共有するのは runner ではなく実装
 

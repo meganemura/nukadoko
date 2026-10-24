@@ -187,6 +187,18 @@ just until 0.1.
   launches is now inside the execution's evidence directory, so
   retention and `nuka clean` remove it after an exit that left it.
 
+- **`baseURL` and `environments` move from the config to
+  `nukadoko.program.ts`.** The config holds the criteria, and the program
+  file holds the program under test, so a change to how the program is
+  reached is not a change to a criterion. A program nukadoko does not
+  start is `url` there; an environment is an `environments` entry there,
+  with its `policy`, `envFiles` (after the config's), and `version`,
+  and it can override any field of the program. `baseURL` or
+  `environments` in the config is refused with `config-invalid`, and the
+  message names what replaces it. `browserContext.baseURL` and
+  `requestContext.baseURL` stay refused, now naming the world's URL as
+  the one source.
+
 ### Removed
 
 - **`nuka tend` is removed.** Its findings are notes and warnings of
@@ -232,7 +244,41 @@ just until 0.1.
   design. A reviewer reads the declaration and the step record side by
   side.
 
+- **`runServer` and `nuka init --server` and `--server-url` are
+  removed.** A server started from a fixture was the documented way to
+  run an HTTP program, so every project started its program its own way,
+  nukadoko could not start a second tree's program, and a record could
+  not say which program answered. `serve` in `nukadoko.program.ts`
+  replaces it, with a free port per world, a ready path that answers 2xx
+  rather than a port that accepts a connection, and the program's output
+  in `program.log`. `nuka init --server` and `--server-url` refuse with
+  `removed-flag` and name the program file; `runServer` is no longer
+  exported.
+
 ### Added
+
+- **`nukadoko.program.ts` builds, prepares, starts, and stops the program
+  under test.** Its default export, written with `defineProgram`, holds
+  `build` (commands run once per run in the tree's root), `prepare`
+  (once per world, with the world's env), `serve` (`command`, `port`,
+  `ready`, `timeout_ms`) or `url`, `env` with the placeholders
+  `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, and `{token}`,
+  `setup(world)`, and `environments`. A command is an argv array or a
+  string split on whitespace, never a shell. `nuka run` starts one world
+  per environment, in `.nukadoko/runs/<run_id>/worlds/<env>/`, before the
+  BeforeAll hooks, and stops it after the scenarios; under `--concurrency`
+  the parent process owns it. `nuka do` starts one for its execution. The
+  world's URL is the base URL of `page`, `context`, `pageAs`, and
+  `request`, and its `env` reaches the steps' process too. `program.log`
+  holds what every command printed, redacted, and `{token}` is redacted as
+  `{{secret.WORLD_TOKEN}}`. run.json gains `worlds` (`name`, `tree`,
+  `url`, `commands`, `timings`, `log`, `error`), each step record gains
+  `world_name`, and two run codes are new: `program-start-failed`, which
+  fails the run and runs no scenario in that world, and `program-exited`,
+  a warning for a program that exited during the pass. The fields are
+  additive, so no `schema_version` changes. A tree with no program file
+  starts no world and behaves as before. Before this, a terminal or a CI
+  step kept the program running, or a fixture started it per scenario.
 
 - **Six check codes for claims.** `then-without-claims`: a Then bound
   to a typed step that runs. `claims-outside-then`: a claim step bound in

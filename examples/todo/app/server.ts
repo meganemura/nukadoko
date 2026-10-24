@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { fileURLToPath } from "node:url";
 
 // The one thing this example app exists to demonstrate: an in-memory todo
 // API whose text field is called "title" in v1 and renamed to "name" in
@@ -10,7 +9,7 @@ import { fileURLToPath } from "node:url";
 // framework, no dependency beyond node:http -- this app is scaffolding for
 // the walkthrough, not a thing worth designing well.
 
-export interface TodoAppOptions {
+interface TodoAppOptions {
   /** Switches the API's text field from "title" (v1, default) to "name" (v2). */
   v2?: boolean;
 }
@@ -38,7 +37,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /** Builds the todo API as an unstarted node:http server; call `.listen()`. */
-export function createTodoApp(options: TodoAppOptions = {}): ReturnType<typeof createServer> {
+function createTodoApp(options: TodoAppOptions = {}): ReturnType<typeof createServer> {
   const fieldName = options.v2 ? "name" : "title";
   const todos: TodoRecord[] = [];
 
@@ -95,11 +94,9 @@ export function createTodoApp(options: TodoAppOptions = {}): ReturnType<typeof c
 
 function parseArgs(argv: readonly string[]): { port: number; v2: boolean } {
   let port = 4000;
-  // An env var alongside the flag: the walkthrough's reader types --v2 by
-  // hand, the smoke test (tests/examples-todo.test.ts) starts this same app
-  // in-process and toggles the option directly -- the flag exists for the
-  // human path only, kept here so the two paths stay demonstrably the same
-  // code.
+  // An env var alongside the flag: a reader starting the app by hand can
+  // type --v2, and the v2 environment in nukadoko.program.ts sets
+  // TODO_APP_V2=1, so both environments share one serve command.
   let v2 = process.env.TODO_APP_V2 === "1";
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -114,16 +111,8 @@ function parseArgs(argv: readonly string[]): { port: number; v2: boolean } {
   return { port, v2 };
 }
 
-// Only starts a listening server when this file is run directly (`node
-// app/server.ts`), never when `createTodoApp` is imported -- the smoke test
-// imports it to run the app in-process on an ephemeral port instead.
-const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
-
-if (isMain) {
-  const { port, v2 } = parseArgs(process.argv.slice(2));
-  const server = createTodoApp({ v2 });
-  server.listen(port, () => {
-    const mode = v2 ? ' (v2: field renamed "title" -> "name")' : "";
-    console.log(`todo app listening on http://localhost:${port}${mode}`);
-  });
-}
+const { port, v2 } = parseArgs(process.argv.slice(2));
+createTodoApp({ v2 }).listen(port, () => {
+  const mode = v2 ? ' (v2: field renamed "title" -> "name")' : "";
+  console.log(`todo app listening on http://localhost:${port}${mode}`);
+});

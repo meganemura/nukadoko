@@ -1,5 +1,3 @@
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
 import { chromium } from "playwright";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -30,13 +28,10 @@ describe("nuka run: a scenario that never destructures page never launches a bro
   let rootDir: string;
 
   beforeEach(async () => {
+    // No program file: neither step in features/no-browser.feature
+    // navigates anywhere, since the point here is bag construction, not
+    // network.
     rootDir = await copyFixtureToTempDir("run-browser-project");
-    // No baseURL: neither step in features/no-browser.feature ever
-    // navigates anywhere — the point here is bag construction, not network.
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      ['import { defineConfig } from "./nukadoko-shim.js";', "export default defineConfig({});", ""].join("\n"),
-    );
   });
 
   afterEach(async () => {

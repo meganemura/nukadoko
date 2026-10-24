@@ -7,10 +7,10 @@ import { defineConfig } from "nukadoko";
 // not itself part of the swap (selftest-suite/nukadoko.config.ts, the
 // OUTER project, is).
 //
-// No baseURL: most scenarios here launch no browser at all, by design (the
+// No program file: most scenarios here launch no browser at all, by design (the
 // stage 1-3 scenarios must not get slower), the same non-browser shape as
 // tests/fixtures/run-project. browser-evidence.feature is the one
 // exception -- its own step and Before hook
 // do launch a browser, but only ever navigate a `data:` URL, so there is
-// still no real app for a `baseURL` to point at.
+// still no real app for a program file to start or name.
 export default defineConfig({});

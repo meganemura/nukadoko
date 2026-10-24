@@ -22,6 +22,7 @@ import { spawnRunWorker } from "./spawn-run-worker.js";
 import { createLineBuffer } from "../sink/line-buffer.js";
 import { exitCodeForSignal, HANDLED_SIGNALS } from "./process-signal.js";
 import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
+import { serializeWorldView, type WorldView } from "../program/world-view.js";
 
 // Responsibility: `nuka run --concurrency <n>`'s own parent-side
 // orchestration (n > 1 and more than one feature file: every
@@ -82,6 +83,13 @@ import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 // (src/run/spawn-run-worker.ts says why). A parent that dies closes each
 // worker's IPC channel. A worker treats that as its first signal, or, when
 // a forwarded signal came first, lets the teardown it started finish.
+//
+// The parent owns each pass's world (src/program/world.ts): it starts the
+// program before the pass's first worker and stops it after the last one,
+// and every worker reads the world from a file the parent wrote. A world
+// that does not start fails the pass, whose scenarios then have no record;
+// the caller has already reported why, so the count below does not report
+// them a second time as an incomplete run.
 
 const SERIAL_TAG = "@nukadoko:serial";
 
@@ -103,6 +111,10 @@ export interface ConcurrentCondition {
   readonly environment: string;
   readonly targetVersion: string | undefined;
   readonly secrets: SecretSet;
+  /** Starts the pass's world: `null` when the tree has no program file,
+   * `"failed"` when the program did not start (the caller has reported
+   * why). `close` stops the program after the pass. */
+  readonly openWorld: () => Promise<{ readonly view: WorldView; close(): Promise<void> } | "failed" | null>;
 }
 
 export interface RunConcurrentOptions {
@@ -180,7 +192,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const warnings = (code: string): WritableSink => warningSink(code, warn);
 
   const hasPickles = flatPickles.length > 0;
-  const expectedRecords = flatPickles.length * repeat * conditions.length;
+  let expectedRecords = flatPickles.length * repeat * conditions.length;
 
   const pickleByKey = new Map<string, { readonly feature: SelectedFeature; readonly pickle: Pickle }>();
   for (const entry of flatPickles) {
@@ -287,7 +299,12 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const liveWorkers = new Set<ChildProcess>();
   let interruptedBy: NodeJS.Signals | null = null;
 
-  async function runWorkerGroup(files: readonly SelectedFeature[], worker: number, envArg: string | null): Promise<WorkerGroupResult> {
+  async function runWorkerGroup(
+    files: readonly SelectedFeature[],
+    worker: number,
+    envArg: string | null,
+    world: WorldView | null,
+  ): Promise<WorkerGroupResult> {
     const filesWithRecords = new Set<string>();
     if (interruptedBy !== null) {
       return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
@@ -301,11 +318,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
           : feature.selectedLines.map((line) => `${feature.relativePath}:${line}`),
       );
       await writeFile(featureListPath, `${featureTargets.join("\n")}\n`, "utf8");
+      const worldPath = world === null ? null : path.join(tmpDir, "world.json");
+      if (worldPath !== null && world !== null) await writeFile(worldPath, serializeWorldView(world), "utf8");
       // A signal can arrive during the two awaits above.
       if (interruptedBy !== null) {
         return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
       }
-      const child = spawnRunWorker({ rootDir, runId, env: envArg, featureListPath, repeat });
+      const child = spawnRunWorker({ rootDir, runId, env: envArg, featureListPath, repeat, worldPath });
       liveWorkers.add(child);
 
       const stdoutBuffer = createLineBuffer((line) => {
@@ -381,13 +400,23 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       if (interruptedBy !== null) break;
       if (conditions.length > 1) progress.write(`environment ${condition.environment}\n`);
       currentEnvironment = condition.environment;
-      await runCondition(condition.envArg);
+      const world = hasPickles ? await condition.openWorld() : null;
+      if (world === "failed") {
+        expectedRecords -= flatPickles.length * repeat;
+        allPassed = false;
+        continue;
+      }
+      try {
+        await runCondition(condition.envArg, world?.view ?? null);
+      } finally {
+        await world?.close();
+      }
     }
   } finally {
     for (const signal of HANDLED_SIGNALS) process.off(signal, onSignal);
   }
 
-  async function runCondition(envArg: string | null): Promise<void> {
+  async function runCondition(envArg: string | null, world: WorldView | null): Promise<void> {
     const workerCount = Math.min(concurrency, parallelFeatures.length);
     if (workerCount > 0) {
       const buckets: SelectedFeature[][] = Array.from({ length: workerCount }, () => []);
@@ -395,7 +424,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         buckets[index % workerCount]!.push(feature);
       });
 
-      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1, envArg)));
+      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1, envArg, world)));
       for (const [bucketIndex, result] of results.entries()) {
         if (result.exitCode !== 0) {
           for (const feature of buckets[bucketIndex]!) {
@@ -413,7 +442,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const feature of serialFeatures) {
       // Worker 1: a `@nukadoko:serial` file runs alone, so there is never a
       // second number to tell it apart from.
-      const result = await runWorkerGroup([feature], 1, envArg);
+      const result = await runWorkerGroup([feature], 1, envArg, world);
       if (result.exitCode !== 0 && !result.filesWithRecords.has(feature.relativePath)) {
         failedFiles.add(envArg === null ? feature.relativePath : `${feature.relativePath} (${envArg})`);
       }

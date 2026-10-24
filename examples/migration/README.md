@@ -40,25 +40,25 @@ this one, in order, each with its own real command and its own real output.
 
 ## The app
 
-Reuses [examples/todo](../todo)'s own todo API outright --
-[`app/server.ts`](app/server.ts) is a thin wrapper around `createTodoApp`
-from `examples/todo/app/server.ts`. This walkthrough is about glue code
-evolving, not about the app underneath it; a second bespoke app would just
-duplicate examples/todo's own one for nothing.
+Reuses [examples/todo](../todo)'s own todo API outright.
+[`nukadoko.program.ts`](nukadoko.program.ts) serves
+`../todo/app/server.ts` as it is:
 
-Start it in its own terminal and leave it running:
-
-```sh
-node app/server.ts
+```ts
+export default defineProgram({
+  serve: { command: "node ../todo/app/server.ts --port {port}", ready: "/todos" },
+});
 ```
 
-It listens on `http://localhost:4000`, matching the `baseURL` already in
-`nukadoko.config.ts`. Run every `nuka` command below from a second
-terminal, in this same directory.
+This walkthrough is about glue code evolving, not about the app underneath
+it; a second bespoke app would just duplicate examples/todo's own one for
+nothing. Every `nuka run` below starts the app on a free port of its own
+and stops it when the run ends, so there is nothing to start by hand.
 
 ## Layout
 
-- `nukadoko.config.ts` -- `baseURL` only, borrowed from examples/todo's own.
+- `nukadoko.program.ts` -- how the app starts.
+- `nukadoko.config.ts` -- empty: this app needs no secrets.
 - `features/migration.feature` -- 2 scenarios: one still-compat, one fully
   promoted.
 - `features/support/world.ts` -- the World subclass: `defineWorld({
@@ -197,7 +197,8 @@ is the `Then(/^the todo list has .../, ...)` half, same treatment.)
 Two things changed, not one: the import (`@cucumber/cucumber` ->
 `nukadoko/compat`), and the Before hook's own hand-rolled bootstrapping
 became `await this.openRequest()` -- no `baseURL` to manage by hand there
-anymore, it comes from `nukadoko.config.ts` once, for every step. Every
+anymore: every request resolves against the URL of the app
+`nukadoko.program.ts` started, once, for every step. Every
 step body below that hook -- the table read, `.hashes()`, the POSTs, the
 `this.seededCount` stash, the regexp capture, the GET -- is untouched,
 character for character.

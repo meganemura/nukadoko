@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
@@ -12,6 +12,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: README's
@@ -66,17 +67,6 @@ function nonEmptyLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
-async function pointConfigAt(rootDir: string, baseURL: string): Promise<void> {
-  await writeFile(
-    path.join(rootDir, "nukadoko.config.ts"),
-    [
-      'import { defineConfig } from "./nukadoko-shim.js";',
-      `export default defineConfig({ baseURL: "${baseURL}" });`,
-      "",
-    ].join("\n"),
-  );
-}
-
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
   const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
@@ -104,8 +94,8 @@ describe("README claims 1 and 2: `nuka run` against both projects", () => {
     ({ server, baseURL } = await startTestServer());
     glueRoot = await copyFixtureToTempDir("promotion-glue-project");
     typedRoot = await copyFixtureToTempDir("promotion-typed-project");
-    await pointConfigAt(glueRoot, baseURL);
-    await pointConfigAt(typedRoot, baseURL);
+    await writeUrlProgram(glueRoot, baseURL);
+    await writeUrlProgram(typedRoot, baseURL);
   });
 
   afterEach(async () => {
@@ -188,7 +178,7 @@ describe("README claim 3: `nuka do` runs the typed step standalone and refuses t
   it("`nuka do create-project` runs the typed step and returns a validated result", async () => {
     const rootDir = await copyFixtureToTempDir("promotion-typed-project");
     try {
-      await pointConfigAt(rootDir, baseURL);
+      await writeUrlProgram(rootDir, baseURL);
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(
@@ -209,7 +199,7 @@ describe("README claim 3: `nuka do` runs the typed step standalone and refuses t
   it("`nuka do` refuses the compat step by name and writes no step record", async () => {
     const rootDir = await copyFixtureToTempDir("promotion-glue-project");
     try {
-      await pointConfigAt(rootDir, baseURL);
+      await writeUrlProgram(rootDir, baseURL);
       const stdout = createCaptureSink();
       const stderr = createCaptureSink();
       const exitCode = await runCli(

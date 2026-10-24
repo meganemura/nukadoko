@@ -1,10 +1,12 @@
 // Responsibility: the public "nukadoko" package entry point — the surface a
-// step file or nukadoko.config.ts imports from. CLI wiring, discovery, and
-// config loading are implementation details of this package's own `cli.ts`,
-// not re-exported here.
+// step file, nukadoko.config.ts, or nukadoko.program.ts imports from. CLI
+// wiring, discovery, and config loading are implementation details of this
+// package's own `cli.ts`, not re-exported here.
 
 export type { NukadokoConfig, NukadokoConfigInput } from "./config/schema.js";
 export { defineConfig } from "./config/define-config.js";
+export { defineProgram } from "./config/define-program.js";
+export type { ProgramInput, ProgramWorld, ProgramWorldPlace } from "./config/program-schema.js";
 export { ConfigError } from "./config/errors.js";
 export type { FixtureBag, ReplaceableFixtures, Scratch, StepFixtures } from "./step/context.js";
 export {
@@ -47,8 +49,6 @@ export type {
 } from "./record/types.js";
 export { runCommand } from "./context/run-command.js";
 export type { RunCommandOptions, RunCommandResult } from "./context/run-command.js";
-export { runServer } from "./context/run-server.js";
-export type { RunningServer, RunServerOptions } from "./context/run-server.js";
 export type { DeclaredLabel, DeclaredLink, DeclaredParameter, DeclaredSnapshot } from "./compat/declared.js";
 export type {
   CallEntry,

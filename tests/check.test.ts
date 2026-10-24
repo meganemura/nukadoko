@@ -59,7 +59,7 @@ describe("nuka check", () => {
         }),
         expect.objectContaining({
           code: "environment-env-file-missing",
-          fix: 'Create .env.staging-missing, or remove ".env.staging-missing" from environments.staging.envFiles in nukadoko.config.ts.',
+          fix: 'Create .env.staging-missing, or remove ".env.staging-missing" from environments.staging.envFiles in nukadoko.program.ts.',
         }),
         expect.objectContaining({ code: "scenario-without-then", file: "features/no-then.feature" }),
         // The config names a secrets.public key that no envFile defines.

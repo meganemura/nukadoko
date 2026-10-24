@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, writeUrlProgram } from "./helpers/fixtures.js";
 
 // Responsibility: proves docs/spec.md "Secrets" end to end through the real
 // `nuka do` executor — secrets-project's ".env.secret" is a secret source
@@ -43,13 +43,13 @@ async function writeConfig(
     [
       'import { defineConfig } from "./nukadoko-shim.js";',
       "export default defineConfig({",
-      `  baseURL: "${baseURL}",`,
       '  envFiles: [".env.secret"],',
       `  secrets: { public: ${JSON.stringify(publicKeys)} },`,
       "});",
       "",
     ].join("\n"),
   );
+  await writeUrlProgram(rootDir, baseURL);
 }
 
 describe("secret redaction (nuka do integration)", () => {

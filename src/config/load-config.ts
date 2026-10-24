@@ -77,8 +77,8 @@ function unwrapSchema(schema: unknown): unknown {
  * `.strict()` object), but a suggestion is simply omitted rather than
  * guessed when it happens.
  */
-function knownKeysAt(path: readonly PropertyKey[]): readonly string[] | undefined {
-  let current: unknown = configSchema;
+function knownKeysAt(root: unknown, path: readonly PropertyKey[]): readonly string[] | undefined {
+  let current: unknown = root;
   for (const segment of path) {
     current = unwrapSchema(current);
     if (current instanceof ZodObject) {
@@ -119,6 +119,12 @@ const REMOVED_CONFIG_KEYS: Readonly<Record<string, string>> = {
     "<stateDir>/export/allure-results, or the directory --out names.",
   messages:
     "nuka run writes no cucumber-messages stream. Run nuka report --format messages --out <path> after a run.",
+  baseURL:
+    "the program under test is described in nukadoko.program.ts. Write url there for a program nukadoko does not start " +
+    "(export default defineProgram({ url: \"http://localhost:3000\" })), or serve for one it starts; the world's URL is the baseURL every page and request resolves against.",
+  environments:
+    "write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, " +
+    "and --env starts that environment's world.",
 };
 
 function removedKeysIn(raw: unknown): string[] {
@@ -130,18 +136,21 @@ function removedKeysIn(raw: unknown): string[] {
 // `{}` and fills every default. That is the same silent drop as a missing
 // default export. Any thenable has that shape, so the check is `then`,
 // not only `instanceof Promise`.
-function isThenable(value: unknown): boolean {
+export function isThenable(value: unknown): boolean {
   if (value === null || (typeof value !== "object" && typeof value !== "function")) {
     return false;
   }
   return typeof (value as { then?: unknown }).then === "function";
 }
 
-function formatIssues(issues: readonly z.core.$ZodIssue[]): string {
+/** `issues` as one line, each unknown key with the known key it differs
+ * from only by case. `root` is the schema the issues came from: the
+ * config's, or the program file's (src/config/load-program.ts). */
+export function formatIssues(issues: readonly z.core.$ZodIssue[], root: unknown = configSchema): string {
   return issues
     .map((issue) => {
       if (issue.code === "unrecognized_keys") {
-        const known = knownKeysAt(issue.path);
+        const known = knownKeysAt(root, issue.path);
         const described = issue.keys.map((key) => `${key}${suggestFor(key, known)}`).join(", ");
         return `unknown key(s): ${described}`;
       }
@@ -237,7 +246,7 @@ function configFileStamp(rootDir: string): string {
 // A config that cannot find `nukadoko` itself has one fix: the project
 // installs the package. Any other missing package may be a typo in the
 // import, so it is named, not installed.
-function importFailureHint(
+export function importFailureHint(
   fileName: string,
   missingPackage: { readonly name: string; readonly importedBy?: string } | undefined,
   explanation: string,

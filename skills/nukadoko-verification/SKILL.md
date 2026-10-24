@@ -91,10 +91,11 @@ How a step reaches the CLI's instance depends on its handle:
   call the same functions, and prove per-connection settings (scripts
   turned off) with a scenario, since they do not survive a reconnect.
 
-Either way, run whole scenarios against the CLI's instance: read `baseURL`
-in `nukadoko.config.ts` from an environment variable whose name no
+Either way, run whole scenarios against the CLI's instance: read `url`
+in `nukadoko.program.ts` from an environment variable whose name no
 production tool reads, and have the CLI's `scenario` command set it and
-run `nuka run --json`.
+run `nuka run --json`. A program each run may start fresh goes in `serve`
+there instead, with its state under `{dir}`.
 
 A library function that starts a program calls `runCommand` from
 `nukadoko`. Inside a step the process lands on the step record
@@ -109,8 +110,8 @@ exists, a decimal integer, or `true` or `false`.
 
 ## 4. Doctor and readiness
 
-`runServer` treats a server as ready once its port accepts a TCP
-connection, and nothing more. Usable is the control CLI's `doctor`: the
+`serve.ready` in `nukadoko.program.ts` treats a server as ready once one
+path answers 2xx, and nothing more. Usable is the control CLI's `doctor`: the
 port is ours, the build is the expected one, the data is seeded. For a
 command-line tool, usable is the tool's own startup check (`--version`
 exits 0 on this runtime) and a checkout that has not changed since the

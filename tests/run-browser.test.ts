@@ -12,6 +12,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: the Background + browser round trip, against a trace
@@ -76,14 +77,7 @@ describe("nuka run (Background + browser)", () => {
   beforeEach(async () => {
     ({ server, baseURL } = await startTestServer());
     rootDir = await copyFixtureToTempDir("run-browser-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}" });`,
-        "",
-      ].join("\n"),
-    );
+    await writeUrlProgram(rootDir, baseURL);
   });
 
   afterEach(async () => {

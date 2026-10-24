@@ -1,104 +1,66 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
-import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createTodoApp } from "../examples/todo/app/server.js";
 import { runCli } from "../src/cli/run-cli.js";
 import {
   copyExampleToTempDir,
   createCaptureSink,
   ensureNukadokoShim,
+  latestRunJson,
   removeTempDir,
   repoRoot,
   stripRunProgressLines,
 } from "./helpers/fixtures.js";
 
 // Responsibility: anti-rot proof for examples/todo/README.md's two central,
-// checkable claims -- run the
-// actual example project against the actual app, in both its v1 and v2
-// shape, so the walkthrough's story ("the feature runs green" / "the field
-// rename breaks it") can't silently stop being true. Only that mechanical
-// claim is asserted here; the repair loop itself (README.md, Part 2) is
-// prose an agent enacts by hand, not something this suite re-derives.
+// checkable claims: the example project, with the app its committed
+// nukadoko.program.ts starts, runs green as v1 and fails under the v2
+// environment, so the walkthrough's story ("the feature runs green" / "the
+// field rename breaks it") cannot silently stop being true. Only that
+// mechanical claim is asserted here; the repair loop itself (README.md,
+// Part 2) is prose an agent enacts by hand, not something this suite
+// re-derives.
 
-function startTodoApp(options: { v2?: boolean } = {}): Promise<{ server: Server; baseURL: string }> {
-  return new Promise((resolve) => {
-    const server = createTodoApp(options);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address() as AddressInfo;
-      resolve({ server, baseURL: `http://127.0.0.1:${address.port}` });
-    });
-  });
-}
-
-// The committed config points at the fixed port the README tells a human
-// reader to use (http://localhost:4000); this test needs an ephemeral one
-// instead, so it overwrites the temp copy's config the same way
-// run-browser.test.ts does for its own fixture.
-async function pointConfigAt(rootDir: string, baseURL: string): Promise<void> {
-  await writeFile(
-    path.join(rootDir, "nukadoko.config.ts"),
-    [
-      'import { defineConfig } from "nukadoko";',
-      "",
-      `export default defineConfig({ baseURL: "${baseURL}" });`,
-      "",
-    ].join("\n"),
-  );
+async function runTodo(rootDir: string, args: string[]): Promise<{ exitCode: number; statuses: string[]; stderr: string }> {
+  const stdout = createCaptureSink();
+  const stderr = createCaptureSink();
+  const exitCode = await runCli(["run", "--records", ...args, "features/todo.feature"], { rootDir, stdout, stderr });
+  const statuses = stdout
+    .text()
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => (JSON.parse(line) as { status: string }).status);
+  return { exitCode, statuses, stderr: stderr.text() };
 }
 
 describe("examples/todo", () => {
-  let server: Server;
   let rootDir: string;
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
     await removeTempDir(rootDir);
   });
 
-  it("runs features/todo.feature green against the v1 app", async () => {
-    const started = await startTodoApp({ v2: false });
-    server = started.server;
+  it("runs features/todo.feature green against the v1 app the program file starts", async () => {
     rootDir = await copyExampleToTempDir("todo");
     await ensureNukadokoShim();
-    await pointConfigAt(rootDir, started.baseURL);
 
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "features/todo.feature"], { rootDir, stdout, stderr });
+    const { exitCode, statuses, stderr } = await runTodo(rootDir, []);
 
-    expect(stripRunProgressLines(stderr.text())).toBe("");
-    const records = stdout
-      .text()
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as { status: string });
-    expect(records).toHaveLength(3);
-    for (const record of records) {
-      expect(record.status).toBe("passed");
-    }
+    expect(stripRunProgressLines(stderr)).toBe("");
+    expect(statuses).toEqual(["passed", "passed", "passed"]);
     expect(exitCode).toBe(0);
+    expect(latestRunJson(rootDir).worlds).toEqual([expect.objectContaining({ name: "default", error: null })]);
   });
 
-  it("fails the same feature against the v2 app (the field rename breaks it)", async () => {
-    const started = await startTodoApp({ v2: true });
-    server = started.server;
+  it("fails the same feature under --env v2 (the field rename breaks it)", async () => {
     rootDir = await copyExampleToTempDir("todo");
     await ensureNukadokoShim();
-    await pointConfigAt(rootDir, started.baseURL);
 
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-    const exitCode = await runCli(["run", "--records", "features/todo.feature"], { rootDir, stdout, stderr });
+    const { exitCode, statuses } = await runTodo(rootDir, ["--env", "v2"]);
 
-    const records = stdout
-      .text()
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as { status: string });
-    expect(records.some((record) => record.status === "failed")).toBe(true);
+    expect(statuses).toEqual(["failed", "failed", "failed"]);
     expect(exitCode).toBe(1);
+    expect(latestRunJson(rootDir).worlds).toEqual([expect.objectContaining({ name: "v2", error: null })]);
   });
 });
 

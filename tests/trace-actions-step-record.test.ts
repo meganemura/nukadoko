@@ -10,6 +10,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: `actions` end to end against tests/fixtures/
@@ -53,12 +54,9 @@ describe("actions on the step record: secret redaction", () => {
     rootDir = await copyFixtureToTempDir("trace-actions-project");
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}", envFiles: [".env.secret"] });`,
-        "",
-      ].join("\n"),
+      ['import { defineConfig } from "./nukadoko-shim.js";', 'export default defineConfig({ envFiles: [".env.secret"] });', ""].join("\n"),
     );
+    await writeUrlProgram(rootDir, baseURL);
   });
 
   afterEach(async () => {

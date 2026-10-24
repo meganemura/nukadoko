@@ -46,6 +46,9 @@ export interface SpawnRunWorkerOptions {
   readonly featureListPath: string;
   /** `--repeat`: how many times this worker runs its own files. */
   readonly repeat: number;
+  /** Absolute path to a temp file holding the pass's world
+   * (src/program/world-view.ts), or `null` when the pass has none. */
+  readonly worldPath: string | null;
 }
 
 // `detached` on POSIX puts each worker in its own process group, so a
@@ -59,11 +62,11 @@ export interface SpawnRunWorkerOptions {
 const detached = process.platform !== "win32";
 
 export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<null, Readable, Readable> {
-  const { rootDir, runId, env, featureListPath, repeat } = options;
+  const { rootDir, runId, env, featureListPath, repeat, worldPath } = options;
   const here = fileURLToPath(import.meta.url);
   const ext = path.extname(here);
   const workerEntry = path.join(path.dirname(here), `run-worker-entry${ext}`);
-  const args = [rootDir, runId, env ?? "", featureListPath, String(repeat)];
+  const args = [rootDir, runId, env ?? "", featureListPath, String(repeat), worldPath ?? ""];
   const nodeArgs =
     ext === ".ts" ? ["--import", loaderUrl, workerEntry] : [workerEntry];
 

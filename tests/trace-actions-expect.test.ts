@@ -10,6 +10,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: the one accepted-but-unverified corner of the per-step
@@ -80,14 +81,7 @@ describe("actions on the step record: a real expect() wait", () => {
   beforeEach(async () => {
     ({ server, baseURL } = await startLateElementServer());
     rootDir = await copyFixtureToTempDir("trace-actions-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}" });`,
-        "",
-      ].join("\n"),
-    );
+    await writeUrlProgram(rootDir, baseURL);
   });
 
   afterEach(async () => {

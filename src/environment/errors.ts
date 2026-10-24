@@ -5,7 +5,7 @@
 // convention as config/errors.ts.
 
 /** Thrown only when `--env <name>` was given explicitly and `name` has no
- * matching entry in nukadoko.config.ts's `environments`. The "default"
+ * matching entry in nukadoko.program.ts's `environments`. The "default"
  * environment, implicit or named by `--env default`, never throws this even
  * when `environments.default` is undefined — see resolve-environment.ts. */
 export class UnknownEnvironmentError extends Error {
@@ -13,20 +13,20 @@ export class UnknownEnvironmentError extends Error {
   readonly environmentName: string;
   /** The names `--env` accepts, which a CLI refusal's `fix:` line offers
    * in place of the unknown one: `default` (always accepted, see
-   * resolve-environment.ts) and every name the config defines. */
+   * resolve-environment.ts) and every name the program file defines. */
   readonly fix: string;
 
   constructor(environmentName: string, definedNames: readonly string[]) {
     super(
-      `Unknown environment "${environmentName}": not defined in nukadoko.config.ts's "environments"`,
+      `Unknown environment "${environmentName}": not defined in nukadoko.program.ts's "environments"`,
     );
     this.name = "UnknownEnvironmentError";
     this.environmentName = environmentName;
-    const add = `add environments.${environmentName} to the config file`;
+    const add = `add environments.${environmentName} to nukadoko.program.ts`;
     const valid = [...new Set(["default", ...definedNames])].sort();
     this.fix =
       definedNames.length === 0
-        ? `Leave out --env or pass --env default (the config defines no other environment), or ${add}.`
+        ? `Leave out --env or pass --env default (nukadoko.program.ts defines no other environment), or ${add}.`
         : `Pass --env with a name it accepts (${valid.join(", ")}), or ${add}.`;
   }
 }

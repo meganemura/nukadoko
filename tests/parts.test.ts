@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir } from "./helpers/fixtures.js";
+import { copyFixtureToTempDir, createCaptureSink, removeTempDir, stepRecordDir, writeUrlProgram } from "./helpers/fixtures.js";
 
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
   const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
@@ -67,14 +67,7 @@ describe("call / parts", () => {
   beforeEach(async () => {
     ({ server, baseURL, requests } = await startTestServer());
     rootDir = await copyFixtureToTempDir("parts-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}", environments: { readonly: { policy: "read-only" } } });`,
-        "",
-      ].join("\n"),
-    );
+    await writeUrlProgram(rootDir, baseURL, 'environments: { readonly: { policy: "read-only" } }');
   });
 
   afterEach(async () => {

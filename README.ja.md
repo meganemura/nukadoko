@@ -261,32 +261,31 @@ CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.j
 
 **HTTP API**
 
-`nuka init` は API のプロジェクトも同じように準備します。
-サーバを起動するコマンドと、そのサーバが待ち受ける URL を指定すると、init がサーバを起動する fixture を書きます。
-When の step は Playwright の `request` で request を送るので、`playwright` もインストールしてください(入っていなければ init がその行を示します):
-
-```sh
-npx nuka init --server "node src/server.ts" --server-url http://127.0.0.1:3000
-npm install -D -E playwright@1.61.1
-```
-
-config には `baseURL` と 2 つの fixture が入ります。
-`server` は `runServer` を呼びます。
-`runServer` はコマンドを(空白で分割し、shell を通さずに)起動し、URL のポートが接続を受け付けるまで待ちます。
-nukadoko はプログラムにポートを伝えないので、プログラムは自分でそこで待ち受ける必要があります。
-`request` は Playwright 自身の `request` と `server` を分割代入して builtin をそのまま返します。
-そのため、request を送るすべての step が、シナリオごとに一度、先にサーバを起動します:
+テスト対象のプログラムは、config の隣にある専用のファイル `nukadoko.program.ts` に書きます。
+nukadoko は run ごとに専用の空いているポートでそれを起動し、応答するまで待ち、すべての step の request をそこへ送り、シナリオの後に止めます:
 
 ```ts
-// nukadoko.config.ts (the server fixture)
-server: async ({ baseURL }, use) => {
-  const server = await runServer("node", ["src/server.ts"], { url: baseURL });
-  await use(server);
-  await server.stop();
-},
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "node src/server.ts" },
+  env: { PORT: "{port}" },
+});
 ```
 
-ここでの `src/server.ts` は `127.0.0.1:3000` で待ち受け、`/greet/<name>` に `Hello, <name>!` というテキストで答えます。
+`{port}` は nukadoko が選んだポートで、プログラムは `PORT` が示すところで待ち受けます。
+コマンドは空白で分割され、shell を通さずに動きます。
+プログラムは `/` が 2xx で答えた時点で準備ができたとみなされます。
+別のパスは `serve.ready` で指定します。
+stderr の 1 行が URL と `program.log` を示します。
+`program.log` は run の記録の隣にあり、プログラムが出力した内容を持ちます。
+同時に動く 2 つの run がポートを共有することはありません。
+同じファイルには、`build` と `prepare` のコマンド、run ごとのデータベースのための専用ディレクトリ(`{dir}`)、nukadoko が起動しないサーバのための `url` も書けます。
+すべてのフィールドは [docs/spec.ja.md](docs/spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」にあります。
+このファイルは config と並べて commit します。
+
+ここでの `src/server.ts` は `/greet/<name>` に `Hello, <name>!` というテキストで答えます。
 次の feature があるとします:
 
 ```gherkin
@@ -298,9 +297,11 @@ Feature: greet API
     Then the greeting is "Hello, Ada!"
 ```
 
-When の step とその Then を scaffold するだけで、編集なしでシナリオが動きます:
+When の step とその Then を scaffold するだけで、編集なしでシナリオが動きます。
+When の step は Playwright の `request` で request を送るので、`playwright` もインストールしてください:
 
 ```sh
+npm install -D -E playwright@1.61.1
 npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
 npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
 ```
@@ -308,75 +309,39 @@ npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then -
 `get-greeting` は ``request.fetch(`/greet/${name}`, { method: "GET" })`` の呼び出し 1 つで、`status` と `body`(レスポンスのテキスト)を返します。
 各 request は step record の `http.jsonl` に記録されます。
 
-`--request "<METHOD> <path>"` は path を `baseURL` を基準に解決します。
+`--request "<METHOD> <path>"` は path をプログラムの URL を基準に解決します。
 path の中の `{key}` はその args キーの値で、そのまま埋め込まれます。
 `--body <key>` は args キー(たとえばその行の `docstring`)を request の data として送ります。
 request が読まない値は、置き場所が決まるまで名前を挙げて throw します。
 step は `mutates: true` を書きます。
 メソッドは書き込みの意味の代わりにすぎないので、`false` にするのは作者です。
 
-自分で空いているポートを選ぶサーバや、プロセス内で起動するサーバは、[A server you start yourself](#a-server-you-start-yourself) の形を使います。
+## Calling the program with fetch
 
-## A server you start yourself
+**fetch でプログラムを呼ぶ**
 
-**自分で起動するサーバ**
-
-自分のコードから起動するサーバには、自分で書く fixture を使い、step は `fetch` でそれを呼びます。
-ここでは `src/server.ts` が `startServer()` を export します。
-`startServer()` は空いているポートで待ち受け、`{ url, close() }` で resolve します:
-
-```ts
-// nukadoko.config.ts
-import { defineConfig, defineFixtures } from "nukadoko";
-import { startServer } from "./src/server.ts";
-
-export default defineConfig({
-  fixtures: defineFixtures({
-    server: [
-      async ({}, use) => {
-        const server = await startServer();
-        await use(server);
-        await server.close();
-      },
-      { scope: "process" },
-    ],
-  }),
-});
-
-declare module "nukadoko" {
-  interface StepFixtures {
-    server: Awaited<ReturnType<typeof startServer>>;
-  }
-}
-```
-
-`{ scope: "process" }` は、scenario ごとではなく `nuka run` 全体で 1 つのサーバを起動します。
-サーバは、step が初めて `server` を分割代入したときに起動します。
-`use()` の次の行が teardown です。
-`declare module` のブロックは、`tsc` のために `server` に型を付けます。
-`nuka check` は fixture の名前をソーステキストから読むので、このブロックを必要としません。
+step は代わりに `fetch` でプログラムを呼ぶこともでき、その場合は何もインストールする必要がありません。
+`baseURL` は、上の `nukadoko.program.ts` から nukadoko が起動したプログラムの URL です:
 
 ```ts
 // features/steps/get-greeting.ts
 import { defineStep, z } from "nukadoko";
 
 export default defineStep({
-  description: "GET /greet/<name> from the server under test",
+  description: "GET /greet/<name> from the program under test",
   pattern: "I request the greeting for {name:string}",
   args: z.object({ name: z.string() }),
   returns: z.object({ status: z.number(), message: z.string() }),
-  async run({ server }, { name }) {
-    const response = await fetch(`${server.url}/greet/${encodeURIComponent(name)}`);
+  async run({ baseURL }, { name }) {
+    const response = await fetch(`${baseURL}/greet/${encodeURIComponent(name)}`);
     const body = (await response.json()) as { message: string };
     return { status: response.status, message: body.message };
   },
 });
 ```
 
-`fetch` には何もインストールする必要がありません。
-サーバを呼ぶもう 1 つの方法は、Playwright の `APIRequestContext` である `ctx.request()` です。
-こちらは `playwright` のインストールが必要です。
-どちらの方法でも、呼び出しは 1 つずつ、リクエスト本文とレスポンス本文とともに step record の `http.jsonl` に記録されます。
+呼び出しは 1 つずつ、リクエスト本文とレスポンス本文とともに step record の `http.jsonl` に記録されます。
+`request` の呼び出しと同じです。
 
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。
@@ -402,7 +367,7 @@ Feature: greet API
 - [The compat door](#the-compat-door): import を 1 つ切り替えて、既存の cucumber-js のスイートを取り込む。
 - [Reports fill themselves](#reports-fill-themselves): 終わった run を Allure の結果、cucumber-messages のストリーム、Markdown のサマリとして描き出す `nuka report`。
 - [Running this in CI](#running-this-in-ci): ゲート全体を担う 1 つの step、run が遅いときに分ける `nuka check`、`--concurrency`、`--repeat`。
-- environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md) の「Environment、secret」): 名前付きの environment、redact。
+- environment、secret([Secrets need no manifest](#secrets-need-no-manifest)、および [docs/spec.ja.md](docs/spec.ja.md#テスト対象のプログラム) の「テスト対象のプログラム」と「Environment、secret」): 名前付きの environment、redact。
 - [Skills for coding agents](#skills-for-coding-agents): agent がこのループを回すために読み込む 3 つの skill。
 - [The bed has to be tended](#the-bed-has-to-be-tended): 壊れているものではなく腐りつつあるもののために `nuka check` が加える注記。
 - [Setup details](#setup-details)、[Upgrading](#upgrading)、[Status](#status)、[Why this exists now](#why-this-exists-now)。
@@ -764,8 +729,8 @@ export default defineStep({
   step が実際に分割代入した名前だけが構築されるため、`page` を一度も名指ししない step はブラウザを起動しません(そうした step を持たないプロジェクトは、[Install](#install) のとおり Playwright そのものをインストールしません)。
   どちらも返すのは Playwright 自身の `APIRequestContext` と `Page` のオブジェクトであり、nukadoko 独自のラッパーではありません。
   そのため既存の Playwright の知識とヘルパーはそのまま持ち込めます。
-- 上の `request.post("/projects", ...)` は、その相対パスを `nukadoko.config.ts` 自身の `baseURL` に対して解決します(`URL` が大文字である点は Playwright 自身のキーと同じです)。
-  未設定のままだと、絶対 URL しか通りません。
+- 上の `request.post("/projects", ...)` は、その相対パスを、`nukadoko.program.ts` が起動するか名指すプログラムの URL に対して解決します([An HTTP API](#an-http-api))。
+  `nukadoko.program.ts` がなければ、絶対 URL しか通りません。
 - `nuka do create-project --args '{"name":"acme"}'` は、この step だけを実行して step record を出力します。
   この record は agent の探索ループを構成する単位であり、事前の準備は不要です。
 
@@ -1148,12 +1113,12 @@ run サマリの「Criteria since」の節は、unchanged ではない各 scenar
 
 `nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。
 まず `a` ですべてを実行し、次に `b` ですべてを実行します。
-それぞれの environment が、自分の env file、secret、version の probe、BeforeAll と AfterAll、process スコープの fixture を持ちます。
+それぞれの environment が、自分の env file、secret、version の probe、プログラム、BeforeAll と AfterAll、process スコープの fixture を持ちます。
 `--env default` は `--env` なしの run が使う environment を、`run.json` が名付けるとおりに名指すので、`--env default --env staging` は両方を実行します。
 `run.json` は scenario と environment の組ごとに 1 つの断定を持ち、サマリの表は environment ごとに 1 列を持ち、どれか 1 つのセルが失敗なら終了コードも失敗です。
 feature flag を有効にすると通り、無効にすると失敗する scenario は、1 行を横に読めば分かります。
-environment はそれでも設定にすぎません。
-`a` と `b` で何が違うかは、それぞれの env file と `baseURL` が決めます。
+environment はそれでも `nukadoko.program.ts` の設定にすぎません。
+`a` と `b` で何が違うかは、それぞれの env file とプログラムのフィールドが決めます。
 
 ## What this does not do
 

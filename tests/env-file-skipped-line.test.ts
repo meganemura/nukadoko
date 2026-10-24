@@ -28,8 +28,15 @@ describe("nuka check: env-file-skipped-line", () => {
         'import { defineConfig } from "./nukadoko-shim.js";',
         "export default defineConfig({",
         '  envFiles: [".env"],',
-        "  environments: { staging: { envFiles: [\".env.staging\"] } },",
         "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      [
+        'import { defineProgram } from "./nukadoko-shim.js";',
+        'export default defineProgram({ environments: { staging: { envFiles: [".env.staging"] } } });',
         "",
       ].join("\n"),
     );

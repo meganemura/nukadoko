@@ -10,6 +10,7 @@ import {
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
+  writeUrlProgram,
 } from "./helpers/fixtures.js";
 
 // Responsibility: http.jsonl's page-origin half, end to end against
@@ -113,12 +114,9 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
     rootDir = await copyFixtureToTempDir("page-network-project");
     await writeFile(
       path.join(rootDir, "nukadoko.config.ts"),
-      [
-        'import { defineConfig } from "./nukadoko-shim.js";',
-        `export default defineConfig({ baseURL: "${baseURL}", envFiles: [".env.secret"] });`,
-        "",
-      ].join("\n"),
+      ['import { defineConfig } from "./nukadoko-shim.js";', 'export default defineConfig({ envFiles: [".env.secret"] });', ""].join("\n"),
     );
+    await writeUrlProgram(rootDir, baseURL);
   });
 
   afterEach(async () => {

@@ -103,19 +103,11 @@ jobs:
       # Playwright's own browser binary is present but missing the system
       # libraries it needs to actually launch.
       - run: npx playwright install --with-deps chromium
-      # `nuka run` never reads playwright.config.ts, so its own
-      # `webServer` field never starts anything (unlike `npx playwright
-      # test`, which does): start the app under test by hand, or a step
-      # that calls `page`/`request` fails with ECONNREFUSED before it
-      # gets anywhere near a real assertion. Replace both the start
-      # command and the health check below with this project's own.
-      - name: Start the app under test
-        run: |
-          npm run start &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:3000/ && break
-            sleep 1
-          done
+      # No step starts the app under test: `nuka run` builds and starts
+      # it from nukadoko.program.ts, on a port of its own, waits until its
+      # ready path answers, and stops it after the scenarios
+      # (docs/spec.md "Program"). `nuka run` never reads
+      # playwright.config.ts, so its `webServer` field starts nothing.
       # Merge/deploy gate: executes, writes step records. Its Markdown
       # run summary appears on this job's summary page by itself, since
       # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
@@ -169,11 +161,11 @@ jobs:
   だから上のインストールコマンドはそれを明示的に名指しています。
   firefox と webkit もそれぞれ自分自身のバイナリを必要とします(docs/spec.ja.md の「Environment、secret」を参照)。
   `browserType`(や、それを渡り歩く test matrix)が実際に必要とするものを足してください。
-- **テスト対象のアプリは自分の手で起動する必要があります。**
-  `playwright test` から来た人がもっとも見落としがちなのがこれです。
-  そちらでは `webServer` という設定フィールドが、1 つ目の spec が走るより前に自動でアプリを起動します。
+- **テスト対象のアプリは `webServer` ではなく `nukadoko.program.ts` から起動します。**
   `nuka run` と `nuka do` は `playwright.config.ts` を一切読みません([docs/migration-playwright-test.ja.md](migration-playwright-test.ja.md) を参照)。
-  だから明示の起動 step が無いと、`page` や `request` に触れる最初の step が、何が欠けていたかを名指すことも無いまま `ECONNREFUSED` で失敗します。
+  だからその `webServer` フィールドは何も起動しません。
+  その役目はプログラムのファイルの `build`、`prepare`、`serve` が果たします。
+  起動しなかったプログラムは、`page` や `request` に触れる最初の step の `ECONNREFUSED` ではなく、`program-start-failed` とログの末尾で run を失敗させます(docs/spec.ja.md の「テスト対象のプログラム」を参照)。
 - **run が残すものには上限があり、それ以外にはありません。**
   `nuka run` は最新 `retention.runs` 回分の run を保ち、それより古い run を毎回の run の終わりに自分で消します(docs/spec.ja.md の「成果物」を参照)。
   だから永続するランナーでも、`.nukadoko/runs/` と export の出力はその回数ぶんの大きさに留まります。

@@ -52,7 +52,7 @@ describe("nuka run: an environment's own version probe", () => {
           severity: "warning",
           code: "version-probe-failed",
           message: 'version probe for environment "probe-throws" failed: probe boom',
-          fix: "Correct the environment's version setting in the config file, or the endpoint it names.",
+          fix: "Correct the environment's version setting in nukadoko.program.ts, or the endpoint it names.",
         },
       ]);
 

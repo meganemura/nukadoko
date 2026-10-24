@@ -114,19 +114,11 @@ jobs:
       # Playwright's own browser binary is present but missing the system
       # libraries it needs to actually launch.
       - run: npx playwright install --with-deps chromium
-      # `nuka run` never reads playwright.config.ts, so its own
-      # `webServer` field never starts anything (unlike `npx playwright
-      # test`, which does): start the app under test by hand, or a step
-      # that calls `page`/`request` fails with ECONNREFUSED before it
-      # gets anywhere near a real assertion. Replace both the start
-      # command and the health check below with this project's own.
-      - name: Start the app under test
-        run: |
-          npm run start &
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:3000/ && break
-            sleep 1
-          done
+      # No step starts the app under test: `nuka run` builds and starts
+      # it from nukadoko.program.ts, on a port of its own, waits until its
+      # ready path answers, and stops it after the scenarios
+      # (docs/spec.md "Program"). `nuka run` never reads
+      # playwright.config.ts, so its `webServer` field starts nothing.
       # Merge/deploy gate: executes, writes step records. Its Markdown
       # run summary appears on this job's summary page by itself, since
       # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
@@ -194,15 +186,15 @@ of the above; these four are what changes.
   webkit each need their own binary too (see "Environments and
   secrets" in [docs/spec.md](spec.md)); add the ones `browserType` (or a
   test matrix across it) actually needs.
-- **The app under test needs starting by hand.** This is the one most
-  likely to be missed by someone coming from `playwright test`, whose own
-  `webServer` config field starts the app automatically before a single
-  spec runs. `nuka run` and `nuka do` read `playwright.config.ts` for
+- **The app under test starts from `nukadoko.program.ts`, not from
+  `webServer`.** `nuka run` and `nuka do` read `playwright.config.ts` for
   nothing at all (see
   [docs/migration-playwright-test.md](migration-playwright-test.md)), so
-  without an explicit start step, the first step that touches `page` or
-  `request` fails with `ECONNREFUSED`, not with anything that names what
-  went missing.
+  its `webServer` field starts nothing. The program file's `build`,
+  `prepare`, and `serve` do that job, and a program that does not start
+  fails the run with `program-start-failed` and the end of its log, not
+  with an `ECONNREFUSED` in the first step that touches `page` or
+  `request` (see "Program" in [docs/spec.md](spec.md#program)).
 - **What a run leaves behind is bounded, and the rest is not.** `nuka run`
   keeps the newest `retention.runs` runs and removes older ones itself at
   the end of every run (see "Artifacts" in

@@ -32,6 +32,7 @@ import {
 import type { HookParameter, HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
+import type { WorldView } from "../program/world-view.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import type { StepContext } from "../step/context.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
@@ -244,9 +245,12 @@ interface ChainEntry {
 
 export interface RunScenarioOptions {
   readonly rootDir: string;
-  /** Already resolved for this run's target environment (baseURL swapped in,
-   * same as cli/do.ts passes to createStepContext) — see cli/run.ts. */
   readonly config: NukadokoConfig;
+  /** The world this scenario runs against: its URL is the base URL every
+   * page and request resolves against, and its name goes on each step
+   * record. `null` when the tree has no program file. Not the compat
+   * World, which this file calls `world`. */
+  readonly programWorld: WorldView | null;
   readonly pickle: Pickle;
   readonly relativeFeaturePath: string;
   /** This pickle's own feature file, already parsed (src/feature/load-
@@ -672,6 +676,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const {
     rootDir,
     config,
+    programWorld,
     pickle,
     relativeFeaturePath,
     gherkinDocument,
@@ -839,6 +844,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
 
   const contextHandle = createStepContext({
     config,
+    baseURL: programWorld?.url,
     evidenceDir: scenarioDir,
     rootDir,
     env,
@@ -1161,6 +1167,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             result,
             status: "passed",
             environment,
+            world_name: programWorld?.name ?? null,
             target_version: targetVersion,
             scenario_record_id: scenarioId,
             run_id: runId,
@@ -1214,6 +1221,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             error: { message: errorMessage, kind: errorKind ?? "step_error" },
             status: "failed",
             environment,
+            world_name: programWorld?.name ?? null,
             target_version: targetVersion,
             scenario_record_id: scenarioId,
             run_id: runId,
@@ -2159,6 +2167,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           error: { message, kind: "step_error" },
           status: "failed",
           environment,
+          world_name: programWorld?.name ?? null,
           target_version: targetVersion,
           scenario_record_id: scenarioId,
           run_id: runId,

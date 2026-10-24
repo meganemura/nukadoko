@@ -3,6 +3,7 @@ import path from "node:path";
 import { loadEnvFiles, parseEnvFile } from "../context/env.js";
 import { skippedEnvFileLines } from "../env/parse-env-file.js";
 import { resolveConfigFileName } from "../config/load-config.js";
+import { PROGRAM_FILE_NAME, type LoadedProgram } from "../config/load-program.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
@@ -13,7 +14,8 @@ import type { CheckIssue } from "./types.js";
 // the additionalFeatureDirs-missing check below, same severity and
 // same reasoning: a directory named in config to be scanned and absent from
 // disk is a config mistake, not a leniency to extend); a configured envFile
-// (top-level or per-environment) not existing is a warning. The distinction
+// (top-level, or an environment's in nukadoko.program.ts) not existing is
+// a warning. The distinction
 // there matters: `do`/`run` are already tolerant of a missing envFile
 // (loadEnvFiles contributes nothing for ENOENT). check's job here is to
 // surface that leniency, not turn it into a reason to fail (docs/spec.md
@@ -54,7 +56,7 @@ export interface ConfigCheckResult {
 }
 
 /** Every key any configured envFile defines, across the top-level list and
- * every environment's own list, plus the flattened list of envFile paths
+ * every environment's own list in the program file, plus the flattened list of envFile paths
  * itself. loadEnvFiles tolerates a missing file (contributes nothing) and
  * throws for any other read error, naming the path and the errno, so a
  * directory or an unreadable file is reported here rather than looking like
@@ -62,14 +64,15 @@ export interface ConfigCheckResult {
 function collectDefinedEnvKeys(
   rootDir: string,
   config: NukadokoConfig,
+  program: LoadedProgram | null,
 ): {
   readonly allEnvFiles: readonly string[];
   readonly allDefinedEnv: Record<string, string>;
   readonly allDefinedKeys: ReadonlySet<string>;
 } {
   const environmentEnvFiles: string[] = [];
-  for (const environmentConfig of Object.values(config.environments ?? {})) {
-    environmentEnvFiles.push(...(environmentConfig.envFiles ?? []));
+  for (const environment of Object.values(program?.program.environments ?? {})) {
+    environmentEnvFiles.push(...(environment.envFiles ?? []));
   }
   const allEnvFiles = [...(config.envFiles ?? []), ...environmentEnvFiles];
   const allDefinedEnv = loadEnvFiles(rootDir, allEnvFiles);
@@ -91,6 +94,7 @@ export function looksLikeSecretKey(key: string): boolean {
 export async function checkConfig(
   rootDir: string,
   config: NukadokoConfig,
+  program: LoadedProgram | null,
 ): Promise<ConfigCheckResult> {
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
@@ -136,20 +140,21 @@ export async function checkConfig(
     }
   }
 
-  for (const [environmentName, environmentConfig] of Object.entries(config.environments ?? {})) {
-    for (const relativePath of environmentConfig.envFiles ?? []) {
+  const programFile = program?.fileName ?? PROGRAM_FILE_NAME;
+  for (const [environmentName, environment] of Object.entries(program?.program.environments ?? {})) {
+    for (const relativePath of environment.envFiles ?? []) {
       if (!existsSync(path.join(rootDir, relativePath))) {
         warnings.push({
           code: "environment-env-file-missing",
           message: `environments.${environmentName}.envFiles names "${relativePath}", which does not exist`,
           file: relativePath,
-          fix: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from environments.${environmentName}.envFiles in ${configFile}.`,
+          fix: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from environments.${environmentName}.envFiles in ${programFile}.`,
         });
       }
     }
   }
 
-  const { allEnvFiles, allDefinedEnv, allDefinedKeys } = collectDefinedEnvKeys(rootDir, config);
+  const { allEnvFiles, allDefinedEnv, allDefinedKeys } = collectDefinedEnvKeys(rootDir, config, program);
 
   // The same files loadEnvFiles just parsed. A line that did not become a
   // binding is still invisible to the run. Name it here. The text stays

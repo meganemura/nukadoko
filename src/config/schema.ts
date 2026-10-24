@@ -4,20 +4,19 @@ import type { ParameterTypeConfig as BindingParameterTypeConfig } from "../bindi
 import type { FixtureDefinition } from "../step/fixture-types.js";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
-// export, per docs/spec.md's config section (featuresDir, baseURL, envFiles,
-// environments, stateDir, browser, browserContext, requestContext, secrets,
+// export, per docs/spec.md's config section (featuresDir, envFiles,
+// stateDir, browser, browserContext, requestContext, secrets,
 // parameterTypes, worldParameters). `.strict()` is
-// what makes an unknown key an error instead of a silent no-op. `environments`
-// is now typed exactly: baseURL/
-// envFiles per environment layer on top of the top-level values (resolution
-// lives in src/environment/resolve-environment.ts, not here), `policy:
-// "read-only"` and `version` exist only per-environment. `browser` takes
+// what makes an unknown key an error instead of a silent no-op. The config
+// holds the criteria side only: how the program under test is built,
+// started, or reached, and the named environments, are
+// nukadoko.program.ts's (src/config/program-schema.ts). `browser` takes
 // Playwright's own `LaunchOptions` type directly rather than a bespoke
 // enumeration — see the field's own
 // doc comment for why zod does not re-validate its shape. `secrets` is
 // typed differently again: its one
 // field is small and fully designed by docs/spec.md today, so it is typed
-// exactly, the same as `environments` above but for the opposite reason
+// exactly, for the opposite reason
 // `browser` is not — there is no upstream type to defer to for it.
 // `parameterTypes` is typed
 // exactly for the same reason `secrets` is: docs/spec.md fully designs its
@@ -26,33 +25,8 @@ import type { FixtureDefinition } from "../step/fixture-types.js";
 // this same list — is src/binding/registry.ts's job, not this schema's; a
 // zod schema only rejects shapes, not cross-entry relationships.
 
-// A name is written on the command line and into every record, so it
-// keeps to a set that needs no quoting and holds no `.` or `/`.
-const ENVIRONMENT_NAME_PATTERN = /^[a-z0-9_-]+$/;
-
-/** One named deployment target (docs/spec.md "Environments and
- * secrets"). `version` is a function rather than a URL+jsonPath DSL:
- * nukadoko.config.ts is already executable TypeScript (Node loads it by
- * erasing its types), so a config author can call HTTP or exec directly instead of
- * learning a bespoke schema for the same thing. zod has no schema shape for
- * "a function with this signature", so
- * `z.custom` with a `typeof` check stands in here; the probe's actual return
- * value is only checked when it runs (src/environment/probe-version.ts). */
-const environmentConfigSchema = z
-  .object({
-    baseURL: z.string().optional(),
-    envFiles: z.array(z.string()).optional(),
-    policy: z.literal("read-only").optional(),
-    version: z
-      .custom<() => string | Promise<string>>((value) => typeof value === "function", {
-        message: "must be a function returning string | Promise<string>",
-      })
-      .optional(),
-  })
-  .strict();
-
 // A parameter type's own name, same character set as an environment name
-// (ENVIRONMENT_NAME_PATTERN above): it is not filesystem-derived here, but it is
+// (src/config/program-schema.ts): it is not filesystem-derived here, but it is
 // still the identifier a pattern's `{key:type}` and this list's collision
 // check both key off of, so keeping it to an unambiguous, easy-to-diff
 // character set costs nothing and rules out a name that would need
@@ -66,7 +40,7 @@ const PARAMETER_TYPE_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
  * shapes that type couldn't possibly accept before anything tries to
  * construct it, not to re-describe its full contract. `z.custom` is what
  * stands in for "a RegExp or a string" and "a function": zod has no built-in
- * schema for either, the same reason `environments.*.version` above uses it.
+ * schema for either.
  * `transformer` is intentionally typed as accepting/returning `unknown` —
  * its return value is not statically checked: a custom type's captured
  * value skips check's capture-type-mismatch
@@ -130,8 +104,8 @@ const DEFAULT_RETENTION_AD_HOC_DAYS = 7;
  * missing upstream, not the type itself. */
 type RequestContextOptions = NonNullable<Parameters<APIRequest["newContext"]>[0]>;
 
-// Same character set requirement as an environment/parameter-type name
-// (`ENVIRONMENT_NAME_PATTERN`/`PARAMETER_TYPE_NAME_PATTERN` above), but
+// Same character set requirement as a parameter-type name
+// (`PARAMETER_TYPE_NAME_PATTERN` above), but
 // stricter still: a fixture name is destructured directly (`{ tenant }`,
 // src/step/fixture-names.ts), so it must be a legal JS identifier, not just
 // an unambiguous, easy-to-diff string — a leading digit or a hyphen would
@@ -220,11 +194,10 @@ export const configSchema = z
      * unless named. */
     additionalFeatureDirs: z.array(z.string()).default([]),
     stateDir: z.string().default(".nukadoko"),
-    baseURL: z.string().optional(),
+    /** Env files every environment loads; an environment in
+     * nukadoko.program.ts appends its own (src/environment/
+     * resolve-environment.ts). */
     envFiles: z.array(z.string()).optional(),
-    environments: z
-      .record(z.string().regex(ENVIRONMENT_NAME_PATTERN), environmentConfigSchema)
-      .optional(),
     // Default `[]`: registering nothing is the common case, and every
     // consumer (src/binding/registry.ts's factory) already treats "no custom
     // types" as its own no-op default, so this mirrors that rather than
@@ -311,9 +284,9 @@ export const configSchema = z
      * intersection type instead of deferring to Playwright, the same
      * problem `browser`'s doc comment above already argues against.
      * `baseURL` is rejected below even though `BrowserContextOptions`
-     * allows it: `config.baseURL` is meant to be the only place a project
-     * states its base URL, and accepting it here would let a config value
-     * silently disagree with the one nukadoko already injects. Rejecting it
+     * allows it: the world's URL (nukadoko.program.ts) is the only place a
+     * project states its base URL, and accepting it here would let a config
+     * value silently disagree with the one nukadoko already injects. Rejecting it
      * outright (rather than silently dropping it) is deliberate: a dropped
      * option would leave a config author with something written that
      * quietly does nothing. */
@@ -322,7 +295,7 @@ export const configSchema = z
       .superRefine((value, ctx) => {
         if (value.baseURL !== undefined) {
           ctx.addIssue(
-            "browserContext.baseURL is not accepted: config.baseURL is the only source for baseURL; setting it again here would give config two disagreeing answers for the same question.",
+            "browserContext.baseURL is not accepted: the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL; setting it again here would give two disagreeing answers for the same question.",
           );
         }
       })
@@ -339,7 +312,7 @@ export const configSchema = z
       .superRefine((value, ctx) => {
         if (value.baseURL !== undefined) {
           ctx.addIssue(
-            "requestContext.baseURL is not accepted: config.baseURL is the only source for baseURL; setting it again here would give config two disagreeing answers for the same question.",
+            "requestContext.baseURL is not accepted: the world's URL, from serve or url in nukadoko.program.ts, is the only source for baseURL; setting it again here would give two disagreeing answers for the same question.",
           );
         }
       })

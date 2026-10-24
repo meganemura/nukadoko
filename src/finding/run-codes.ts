@@ -30,6 +30,16 @@ const RUN_CODES = {
     description: "A BeforeAll or AfterAll hook threw, so the run is red.",
     fix: "Correct the hook the message names.",
   },
+  "program-exited": {
+    severity: "warning",
+    description: "The program a world served exited while the scenarios still ran, so the requests after that found nothing listening.",
+    fix: "Read the world's program.log, which the message names, for why the program exited.",
+  },
+  "program-start-failed": {
+    severity: "failed",
+    description: "The program in nukadoko.program.ts did not start for a world: a build or prepare command failed, the server did not answer its ready path in time, or setup threw. The world's scenarios did not run.",
+    fix: "Correct what the message names; the end of the world's program.log is in the message, and the whole file is in the world's directory.",
+  },
   "record-unmatched": {
     severity: "warning",
     description: "A worker reported a record that matches no selected scenario, so nuka report cannot render it.",
@@ -89,7 +99,7 @@ const RUN_CODES = {
   "version-probe-failed": {
     severity: "warning",
     description: "The environment's version probe did not answer, so the records have no target version.",
-    fix: "Correct the environment's version setting in the config file, or the endpoint it names.",
+    fix: "Correct the environment's version setting in nukadoko.program.ts, or the endpoint it names.",
   },
   "world-setup-failed": {
     severity: "warning",

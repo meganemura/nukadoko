@@ -210,15 +210,45 @@ export interface RunVerdict {
   readonly passed: number;
 }
 
-/** A condition the run ran under: an environment from the config. */
+/** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
 export interface RunEnvironment {
   readonly name: string;
   /** What the environment's version probe answered, `null` without one. */
   readonly target_version: string | null;
-  /** The `baseURL` the environment resolved to, `null` without one, so
-   * the run names the instance it judged and not only the commit. Absent
-   * in a run.json an earlier build wrote. */
+  /** The URL of the environment's world (`worlds[].url`), `null` without
+   * one, so the run names the instance it judged and not only the commit.
+   * Absent in a run.json an earlier build wrote. */
   readonly base_url?: string | null;
+}
+
+/** One command a world ran, in the order it ran. */
+export interface RunWorldCommand {
+  readonly phase: "build" | "prepare" | "serve";
+  readonly argv: readonly string[];
+}
+
+/** One pass of the run against one program (docs/spec.md "Program"): in
+ * this release, one per environment, of the tree the run was started in. */
+export interface RunWorld {
+  /** The environment the world ran, the `environment` of its scenarios. */
+  readonly name: string;
+  /** Which tree the program was built from: `head`, the tree the run was
+   * started in. */
+  readonly tree: "head";
+  /** The base URL every page and request resolved against: the port
+   * nukadoko gave `serve`, or the program file's `url`. `null` for a world
+   * with neither. */
+  readonly url: string | null;
+  /** What the world ran: build commands appear in the first world that
+   * needed them, since a tree builds once per run. */
+  readonly commands: readonly RunWorldCommand[];
+  /** Milliseconds per phase, for the phases that ran. */
+  readonly timings: Readonly<Partial<Record<"build_ms" | "prepare_ms" | "serve_ms" | "setup_ms" | "stop_ms", number>>>;
+  /** `program.log`, relative to the run directory, or `null` when the
+   * world ran no command. */
+  readonly log: string | null;
+  /** Why the program did not start, or `null` when it did. */
+  readonly error: string | null;
 }
 
 /** The fields `nuka run` puts beside the envelope's `findings`. */
@@ -238,6 +268,10 @@ export type RunFields = {
    * them; `default` alone without `--env`. Each selected scenario ran once
    * per environment. */
   readonly environments: readonly RunEnvironment[];
+  /** One per world the run started, in the order it started them; empty
+   * when the tree has no program file. Absent in a run.json an earlier
+   * build wrote. */
+  readonly worlds?: readonly RunWorld[];
   /** `partial` when a `:line` target left out some scenarios of its file,
    * so the run covers less than the files it names. */
   readonly selection: "full" | "partial";

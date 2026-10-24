@@ -1,17 +1,21 @@
 import type { NukadokoConfig } from "../config/schema.js";
+import { layerProgram, type Program, type ProgramRecipe } from "../config/program-schema.js";
 import { UnknownEnvironmentError } from "./errors.js";
 export { ReadOnlyEnvironmentError } from "./errors.js";
 
-// Responsibility: turn a `--env` name plus the loaded config into the
-// *effective* settings one `do` run actually uses, and never anything
-// else's job (cli/do.ts wires the result into the read-only check, the
-// version probe, and ctx.baseURL/envFiles;
-// it never re-derives any of this layering itself).
+// Responsibility: turn a `--env` name, the loaded config, and the loaded
+// program file into the *effective* settings one environment's pass uses,
+// and never anything else's job (cli/run.ts and cli/do.ts wire the result
+// into the read-only check, the version probe, env files, and the world
+// they start; neither re-derives any of this layering itself).
 //
-// Layering rule: effective baseURL = env.baseURL ?? top-level
-// baseURL; effective envFiles = [...top-level envFiles, ...env.envFiles]
-// (append, later files winning when merged by context/env.ts — the same
-// "common + per-environment override" shape as dotenv's own convention).
+// Environments live in nukadoko.program.ts, beside the program they
+// change, and not in the config, which holds the criteria. Layering rule:
+// the program's fields are the environment's over the top level's
+// (`layerProgram`, src/config/program-schema.ts); effective envFiles =
+// [...config.envFiles, ...environment.envFiles] (append, later files
+// winning when merged by context/env.ts, the same "common +
+// per-environment override" shape as dotenv's own convention).
 // `policy`/`version` exist only per-environment; there is no top-level
 // fallback for either.
 //
@@ -23,43 +27,44 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 // named "default" everywhere a run records one (run.json's cells, the
 // summary's columns, a scenario's `environment`), so `--env default` names
 // it too, and `nuka run --env default --env staging` runs both. The
-// alternative refused was refusing `--env default` unless the config
+// alternative refused was refusing `--env default` unless the program file
 // defines it, which left the environment every record names as the one
-// name `--env` could not combine with others. A config that does define
-// `environments.default` keeps its entry, as before.
+// name `--env` could not combine with others. A program file that does
+// define `environments.default` keeps its entry.
 
 export const DEFAULT_ENVIRONMENT_NAME = "default";
 
 export interface ResolvedEnvironment {
   readonly name: string;
-  readonly baseURL: string | undefined;
   readonly envFiles: readonly string[];
   readonly policy: "read-only" | undefined;
   readonly version: (() => string | Promise<string>) | undefined;
+  /** The program this environment's world builds and reaches, or `null`
+   * when the tree has no program file and the run starts no world. */
+  readonly program: ProgramRecipe | null;
 }
 
 export function resolveEnvironment(
   config: NukadokoConfig,
+  program: Program | null,
   name: string,
   explicit: boolean,
 ): ResolvedEnvironment {
   // Bracket access walks Object.prototype, so "constructor" and "toString"
   // read as present on every plain `environments` object even when the
-  // config never defined them. Only an own entry is a name that exists.
-  const environments = config.environments;
-  const envConfig =
-    environments !== undefined && Object.hasOwn(environments, name)
-      ? environments[name]
-      : undefined;
-  if (envConfig === undefined && explicit && name !== DEFAULT_ENVIRONMENT_NAME) {
+  // program file never defined them. Only an own entry is a name that exists.
+  const environments = program?.environments;
+  const environment =
+    environments !== undefined && Object.hasOwn(environments, name) ? environments[name] : undefined;
+  if (environment === undefined && explicit && name !== DEFAULT_ENVIRONMENT_NAME) {
     throw new UnknownEnvironmentError(name, Object.keys(environments ?? {}));
   }
 
   return {
     name,
-    baseURL: envConfig?.baseURL ?? config.baseURL,
-    envFiles: [...(config.envFiles ?? []), ...(envConfig?.envFiles ?? [])],
-    policy: envConfig?.policy,
-    version: envConfig?.version,
+    envFiles: [...(config.envFiles ?? []), ...(environment?.envFiles ?? [])],
+    policy: environment?.policy,
+    version: environment?.version,
+    program: program === null ? null : layerProgram(program, environment),
   };
 }

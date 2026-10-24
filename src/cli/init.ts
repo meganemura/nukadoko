@@ -11,8 +11,6 @@ import { ensureTsconfig } from "./tsconfig-edit.js";
 import { formatFinding } from "../finding/finding.js";
 import { refusalOf, refuse } from "./refusal.js";
 import { formatVocabularyError } from "./vocabulary.js";
-import { listenAddress } from "../context/run-server.js";
-import { isPlaywrightInstalled, PlaywrightMissingError } from "../context/load-playwright.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { allureHistoryRelativePath, allureResultsRelativeDir } from "../record/state-layout.js";
 
@@ -69,10 +67,6 @@ export interface RunInitOptions {
   /** `--allure`: write `allurerc.mjs` and the empty results directory
    * `nuka report --format allure` writes into. */
   allure: boolean;
-  /** `--server`: the command that starts the program under test, or `null`. */
-  server?: string | null;
-  /** `--server-url`: the URL that program listens at, written as `baseURL`. */
-  serverUrl?: string | null;
   stdout: WritableSink;
   stderr: WritableSink;
 }
@@ -85,83 +79,9 @@ export interface RunInitOptions {
 const CONFIG_KEYS_COMMENT =
   '  // Every config key nukadoko reads, one line each: docs/spec.md, "Environments and secrets"';
 
-/** What `--server` and `--server-url` name: the program's argv and its URL. */
-export interface ServerSpec {
-  readonly argv: readonly [string, ...string[]];
-  readonly url: string;
-}
-
-/** The command split into words on whitespace alone, the rule `scaffold
- * --argv` uses: a quoting rule would need a shell-words parser, which is
- * a dependency, and a shell would make what runs depend on the host. */
-export function commandWords(command: string): string[] {
-  return command.split(/\s+/).filter((word) => word !== "");
-}
-
-/** `--server` and `--server-url`, read, or why they cannot be. */
-export function readServerFlags(server: string | null, serverUrl: string | null): ServerSpec | null | { refusal: string; fix: string } {
-  if (server === null && serverUrl === null) return null;
-  if (server === null) {
-    return {
-      refusal: "--server-url names the URL the --server command listens at, and no --server was given",
-      fix: `Pass --server with the command that starts the program under test, beside --server-url ${serverUrl}.`,
-    };
-  }
-  const words = commandWords(server);
-  if (serverUrl === null || words.length === 0) {
-    return {
-      refusal:
-        words.length === 0
-          ? "--server is empty; name the command that starts the program under test"
-          : "--server needs --server-url, the URL the program listens at: nukadoko waits for it and sends every request there, and the program alone knows it",
-      fix:
-        words.length === 0
-          ? "Pass --server with the command that starts the program under test, and --server-url with the URL it listens at."
-          : "Pass --server-url with the URL the program listens at, such as http://127.0.0.1:3000.",
-    };
-  }
-  const address = listenAddress(serverUrl);
-  if ("refusal" in address) {
-    return { refusal: address.refusal.replace("runServer", "--server-url"), fix: "Pass --server-url as an http URL with a host and a port." };
-  }
-  return { argv: words as [string, ...string[]], url: serverUrl };
-}
-
-function configTemplate(server: ServerSpec | null): string {
-  if (server === null) {
-    const body = `{\n${CONFIG_KEYS_COMMENT}\n}`;
-    return ['import { defineConfig } from "nukadoko";', "", `export default defineConfig(${body});`, ""].join("\n");
-  }
-  const [command, ...args] = server.argv;
-  return [
-    'import { defineConfig, defineFixtures, runServer, type RunningServer } from "nukadoko";',
-    "",
-    "export default defineConfig({",
-    CONFIG_KEYS_COMMENT,
-    `  baseURL: ${JSON.stringify(server.url)},`,
-    "  fixtures: defineFixtures({",
-    "    // The program under test, started for each scenario that sends a request and stopped",
-    "    // after it. It has to listen at baseURL; runServer waits until the port accepts a connection.",
-    "    server: async ({ baseURL }, use) => {",
-    `      const server = await runServer(${JSON.stringify(command)}, ${JSON.stringify(args)}, { url: baseURL });`,
-    "      await use(server);",
-    "      await server.stop();",
-    "    },",
-    "    // Playwright's own request, built after server: a step that sends a request starts it.",
-    "    request: async ({ request, server }, use) => {",
-    "      void server;",
-    "      await use(request);",
-    "    },",
-    "  }),",
-    "});",
-    "",
-    'declare module "nukadoko" {',
-    "  interface StepFixtures {",
-    "    server: RunningServer;",
-    "  }",
-    "}",
-    "",
-  ].join("\n");
+function configTemplate(): string {
+  const body = `{\n${CONFIG_KEYS_COMMENT}\n}`;
+  return ['import { defineConfig } from "nukadoko";', "", `export default defineConfig(${body});`, ""].join("\n");
 }
 
 /**
@@ -412,11 +332,6 @@ export async function runInit(options: RunInitOptions): Promise<number> {
     );
   }
 
-  const server = readServerFlags(options.server ?? null, options.serverUrl ?? null);
-  if (server !== null && "refusal" in server) {
-    return refuse(sinks, `Refusing to init: ${server.refusal}; nothing was written`, "invalid-arguments", { fix: server.fix });
-  }
-
   const isCjs = isCommonJsProject(rootDir);
   const configFileName = isCjs ? "nukadoko.config.mts" : CONFIG_FILE_NAME;
   const configPath = path.join(rootDir, configFileName);
@@ -425,13 +340,8 @@ export async function runInit(options: RunInitOptions): Promise<number> {
   const featuresDirRelative = defaults.featuresDir;
   const stepsDirRelative = path.join(featuresDirRelative, "steps");
 
-  await writeFile(configPath, configTemplate(server));
+  await writeFile(configPath, configTemplate());
   stdout.write(`${configFileName}\n`);
-  // Said now rather than at the first nuka check: the install is the next
-  // command either way, and init already knows it is needed.
-  if (server !== null && !isPlaywrightInstalled()) {
-    stderr.write(`note: ${new PlaywrightMissingError(`The request fixture in ${configFileName}`).message}\n`);
-  }
   if (isCjs) {
     stderr.write(
       refusesEsmTs(rootDir)

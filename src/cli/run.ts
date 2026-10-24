@@ -8,6 +8,9 @@ import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
+import { loadProgram } from "../config/load-program.js";
+import { createWorldStarter, type StartedWorld } from "../program/world.js";
+import { applyWorldEnv } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
@@ -38,7 +41,6 @@ import {
 } from "../run/progress-log.js";
 import { foldVerdicts } from "../run/verdicts.js";
 import type { SecretSet } from "../secrets/types.js";
-import type { NukadokoConfig } from "../config/schema.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
@@ -58,6 +60,7 @@ import {
   type RunFields,
   type RunScenario,
   type RunSince,
+  type RunWorld,
 } from "../record/run-result.js";
 import { compareSince, scenarioKey, sinceStepFiles, type SinceComparison } from "../run/criteria-since.js";
 import { resolveSince, SinceGitError } from "../run/git-since.js";
@@ -191,6 +194,15 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // run.json that could not be written is in the summary as the failure it
 // is.
 //
+// Each environment's pass runs against one world (src/program/world.ts):
+// when the tree has a program file, the world is built, prepared, and
+// served before the pass's BeforeAll, and stopped after its process
+// fixtures are torn down, since a fixture's teardown may still talk to
+// it. A world that does not start fails the pass, and its scenarios are
+// cells that did not run. The world's env is set on this process for the
+// pass, so a step and every child it starts read it as the program does,
+// and run.json names each world (`worlds`).
+//
 // `--concurrency` above 1 diverts to src/run/run-concurrent.ts, in one
 // branch after every setup-phase check (bindings, from, fixtures, tag
 // expressions) and before `registerAllureRuntime`. Those checks still run
@@ -226,7 +238,6 @@ interface Condition {
   readonly envVars: Readonly<Record<string, string>>;
   readonly secrets: SecretSet;
   readonly targetVersion: string | undefined;
-  readonly runConfig: NukadokoConfig;
 }
 
 export interface RunRunOptions {
@@ -358,8 +369,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
   // --- Setup phase: any failure here writes nothing. ---
   let config;
+  let program;
   try {
     config = await loadConfig(rootDir);
+    program = (await loadProgram(rootDir))?.program ?? null;
   } catch (error) {
     return refused(error);
   }
@@ -384,8 +397,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   try {
     resolvedEnvs =
       envs.length === 0
-        ? [resolveEnvironment(config, DEFAULT_ENVIRONMENT_NAME, false)]
-        : envs.map((name) => resolveEnvironment(config, name, true));
+        ? [resolveEnvironment(config, program, DEFAULT_ENVIRONMENT_NAME, false)]
+        : envs.map((name) => resolveEnvironment(config, program, name, true));
   } catch (error) {
     return refused(error);
   }
@@ -596,9 +609,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     // Each environment is a condition of its own: its env files, the
-    // secrets they hold, its version probe, and its baseURL. Only `baseURL`
-    // is overridden from the resolved environment, same as cli/do.ts: every
-    // other config field has no per-environment counterpart.
+    // secrets they hold, its version probe, and the world its pass starts
+    // (in the execution phase, below).
     const conditions: Condition[] = [];
     for (const resolvedEnv of resolvedEnvs) {
       const envFiles = resolvedEnv.envFiles;
@@ -634,11 +646,36 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         envVars,
         secrets,
         targetVersion,
-        runConfig: { ...config, baseURL: resolvedEnv.baseURL },
       });
     }
 
     const runId = generateRunId();
+    // One starter for the run, so a tree builds once however many
+    // environments it serves. A world's directory sits in the run's own,
+    // and its record names paths relative to it, as every path in run.json.
+    const runDirAbsolute = path.join(rootDir, runRelativeDir(config.stateDir, runId));
+    const worldStarter = createWorldStarter({
+      rootDir,
+      worldDir: (name) => path.join(runDirAbsolute, "worlds", name),
+      recordPath: (absolutePath) => path.relative(runDirAbsolute, absolutePath).split(path.sep).join("/"),
+      progress,
+    });
+    const worlds: RunWorld[] = [];
+    // Starts the pass's world, or reports why it did not start. `null`
+    // when the tree has no program file: the pass runs with no world.
+    const startWorld = async (condition: Condition): Promise<StartedWorld | "failed" | null> => {
+      if (condition.resolvedEnv.program === null) return null;
+      const started = await worldStarter.start(condition.resolvedEnv.name, condition.resolvedEnv.program, condition.secrets);
+      if (started.ok) return started;
+      worlds.push(started.record());
+      warn({ severity: "failed", code: "program-start-failed", message: started.message });
+      return "failed";
+    };
+    const stopWorld = async (world: StartedWorld): Promise<void> => {
+      const exitedEarly = await world.stop();
+      worlds.push(world.record());
+      if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${world.view.name}: ${exitedEarly}` });
+    };
     const git = await probeGitState(rootDir);
     // Under `--since`, each selected scenario's criteria and each step
     // file's text are compared with the ref before the first scenario runs,
@@ -824,8 +861,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // Unlike a scenario record, run.json is not redacted as a whole,
           // and a version probe can answer with a secret value.
           target_version: condition.targetVersion === undefined ? null : redactString(condition.targetVersion, condition.secrets),
-          base_url: condition.resolvedEnv.baseURL === undefined ? null : redactString(condition.resolvedEnv.baseURL, condition.secrets),
+          base_url: worlds.find((world) => world.name === condition.resolvedEnv.name)?.url ?? null,
         })),
+        // Each world's record is redacted with its own values already.
+        worlds,
         selection,
         check: options.check ? "ran" : "skipped",
         counts: countScenarios(runScenarios, verdicts),
@@ -1005,6 +1044,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             environment: condition.resolvedEnv.name,
             targetVersion: condition.targetVersion,
             secrets: condition.secrets,
+            openWorld: async () => {
+              const world = await startWorld(condition);
+              if (world === null || world === "failed") return world;
+              return { view: world.view, close: () => stopWorld(world) };
+            },
           })),
           concurrency: effectiveConcurrency,
           selected,
@@ -1097,8 +1141,22 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           }
         });
         processSignal.setProcessCleanup(tearDownProcessFixtures);
-        let beforeAllFailed = false;
-        if (hasPickles) {
+        // The pass's world, before BeforeAll: a hook may already talk to
+        // the program. A signal from here on stops it after the fixtures.
+        const world = hasPickles ? await startWorld(condition) : null;
+        const started = world === null || world === "failed" ? null : world;
+        const restoreEnv = started === null ? () => {} : applyWorldEnv(started.view.env);
+        if (started !== null) {
+          processSignal.setProcessCleanup(async () => {
+            await tearDownProcessFixtures();
+            await started.stop();
+          });
+        }
+        const passEnv = started === null ? condition.envVars : { ...condition.envVars, ...started.view.env };
+        const passSecrets = started === null ? condition.secrets : [...condition.secrets, ...started.view.secrets];
+        let beforeAllFailed = world === "failed";
+        if (beforeAllFailed) passPassed = false;
+        if (hasPickles && !beforeAllFailed) {
           for (const hook of beforeAllHooks) {
             const ok = await runOneRunHook(hook, "BeforeAll", condition.resolvedEnv.name);
             if (!ok) {
@@ -1129,8 +1187,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               name: pickle.name,
             });
 
-            const record = await runScenario({              rootDir,
-              config: condition.runConfig,
+            const record = await runScenario({
+              rootDir,
+              config,
+              programWorld: started?.view ?? null,
               pickle,
               relativeFeaturePath: feature.relativePath,
               gherkinDocument: feature.gherkinDocument,
@@ -1142,8 +1202,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               environment: condition.resolvedEnv.name,
               policy: condition.resolvedEnv.policy,
               targetVersion: condition.targetVersion,
-              env: condition.envVars,
-              secrets: condition.secrets,
+              env: passEnv,
+              secrets: passSecrets,
               instantiateCompatWorld,
               onWorldSetupFailure: (message) => {
                 warnings("world-setup-failed").write(`${message}\n`);
@@ -1191,7 +1251,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // attempted regardless of an earlier one's own failure (unlike
         // BeforeAll) — same "teardown always runs, in full" convention as
         // src/run/run-scenario.ts's own After-hook loop.
-        if (hasPickles) {
+        if (hasPickles && world !== "failed") {
           for (const hook of afterAllHooks) {
             const ok = await runOneRunHook(hook, "AfterAll", condition.resolvedEnv.name);
             if (!ok) {
@@ -1214,6 +1274,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // own text, with no scenario record to redact it first.
         processOutcome = passPassed ? "passed" : "failed";
         await tearDownProcessFixtures();
+        if (started !== null) {
+          processSignal.setProcessCleanup(null);
+          await stopWorld(started);
+        }
+        restoreEnv();
         if (!passPassed) allPassed = false;
       }
 

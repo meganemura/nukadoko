@@ -31,24 +31,37 @@ Run `npm install` and `npm run build` once, from the repository root.
 | `GET` | `/todos/:id` | one todo |
 | `PATCH` | `/todos/:id` | update `done` |
 
-Start it in its own terminal and leave it running:
+You do not start it yourself. [`nukadoko.program.ts`](nukadoko.program.ts)
+says how:
 
-```sh
-node app/server.ts
+```ts
+export default defineProgram({
+  serve: { command: "node app/server.ts --port {port}", ready: "/todos" },
+  environments: {
+    v2: { env: { TODO_APP_V2: "1" } },
+  },
+});
 ```
 
-It listens on `http://localhost:4000` by default (`--port <n>` to change
-it), matching the `baseURL` already in `nukadoko.config.ts`. Run every `nuka`
-command below from a second terminal, in this same directory.
+`nuka run` and `nuka do` start the app on a free port of their own, wait
+until `GET /todos` answers, send every step's requests there, and stop the
+app when they finish. A line on stderr names the port and the app's log,
+`program.log`, beside the run's records. Two runs at once never share a
+port or a todo list.
 
-There's a second mode: `--v2` (or `TODO_APP_V2=1`) renames the API's text
-field from `title` to `name`, everywhere — same app, one changed field. Part
-2 below uses it; ignore it for Part 1.
+There's a second mode: `TODO_APP_V2=1` (or `--v2`, when you start the app
+by hand) renames the API's text field from `title` to `name`, everywhere:
+same app, one changed field. The `v2` environment above sets it, and
+`--env v2` selects that environment. Part 2 below uses it; ignore it for
+Part 1.
+
+To look at the app with `curl` outside a run, start it by hand with
+`node app/server.ts`; it listens on `http://localhost:4000`.
 
 ## Layout
 
-- `nukadoko.config.ts`: `baseURL`. No `envFiles` (this app needs no
-  secrets).
+- `nukadoko.program.ts`: how the app starts, and the `v2` environment.
+- `nukadoko.config.ts`: empty. No `envFiles` (this app needs no secrets).
 - `features/todo.feature`: 3 scenarios: adding a todo, completing a todo,
   and adding several at once via a data table.
 - `features/steps/*.ts`: 5 typed steps, each importing `defineStep` and
@@ -114,7 +127,7 @@ nuka do add-todo --args '{"title":"Buy milk"}'
 }
 ```
 
-(`evidence`, `environment`, and the timestamps are trimmed above
+(`evidence`, `environment`, `world_name`, and the timestamps are trimmed above
 for space; the real step record on your terminal has them too.)
 `args_origin` says where each argument came from, here the command line.
 `observed.http` counts the one request the step made, and the step record's
@@ -228,20 +241,16 @@ the same committed state you did.
 
 ## Part 2 — self-healing
 
-Stop the app (`Ctrl-C`) and restart it as v2:
+Run the exact same scenario against the v2 app:
 
 ```sh
-node app/server.ts --v2
+nuka run --env v2 --records features/todo.feature
 ```
 
-Nothing else changed — not the feature file, not the typed steps, not their
-`args`/`returns` schemas. Run the exact same scenario:
+Nothing else changed: not the feature file, not the typed steps, not their
+`args`/`returns` schemas. Only the app under them did.
 
-```sh
-nuka run --records features/todo.feature
-```
-
-exit `1`. The first scenario's first step, as its stdout line and
+The run exits `1`. The first scenario's first step, as its stdout line and
 `run.json` carry it (the record id differs from run to run):
 
 ```json
@@ -275,7 +284,7 @@ To re-diagnose adaptively rather than read the message and guess, an agent
 has the same tool it had in Part 1 — run the one suspect step on its own:
 
 ```sh
-nuka do add-todo --args '{"title":"Buy milk"}'
+nuka do add-todo --env v2 --args '{"title":"Buy milk"}'
 ```
 
 Same failure, same field, in isolation. That step record is where the trail
@@ -311,7 +320,7 @@ Apply it to all 5, then:
 
 ```sh
 nuka check
-nuka run features/todo.feature
+nuka run --env v2 features/todo.feature
 ```
 
 Green again — exit `0`. That green scenario run, not the `nuka do` call
@@ -321,9 +330,9 @@ the proof." A PR shipping this fix cites that run; it may quote the failing
 step record above as the story of how the fix was found, the same way this
 walkthrough just did.
 
-The edits above are yours to make and discard — this directory's committed
-step files stay v1-shaped, so restart the app without `--v2` (or just
-re-clone) and you're back to Part 1's starting point.
+The edits above are yours to make and discard: this directory's committed
+step files stay v1-shaped, so discard them (or just re-clone) and run
+without `--env v2`, and you're back to Part 1's starting point.
 
 ## Part 3 — review
 

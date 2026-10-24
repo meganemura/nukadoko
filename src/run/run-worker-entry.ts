@@ -8,6 +8,8 @@ import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { formatVocabularyError } from "../discover/format-vocabulary-error.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { loadConfig } from "../config/load-config.js";
+import { loadProgram } from "../config/load-program.js";
+import { applyWorldEnv, parseWorldView, type WorldView } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
 import { discoverSteps } from "../discover/discover-steps.js";
@@ -78,8 +80,13 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // caller's own text and can carry a loaded secret, so those two notes are
 // redacted before they are written. The parent parses each note back into
 // its finding and reports it as the serial path does.
+//
+// The world is the parent's (src/run/run-concurrent.ts): this worker reads
+// what the parent wrote about it, sets the world's env on itself for the
+// steps and their children, and sends every request to the world's URL.
+// It starts no program of its own.
 
-const [rootDirArg, runIdArg, envArg0, featureListPathArg, repeatRawArg] = process.argv.slice(2);
+const [rootDirArg, runIdArg, envArg0, featureListPathArg, repeatRawArg, worldPathArg] = process.argv.slice(2);
 
 if (
   rootDirArg === undefined ||
@@ -87,6 +94,7 @@ if (
   envArg0 === undefined ||
   featureListPathArg === undefined ||
   repeatRawArg === undefined ||
+  worldPathArg === undefined ||
   !/^[1-9][0-9]*$/.test(repeatRawArg)
 ) {
   process.exit(1);
@@ -102,6 +110,7 @@ const runId: string = runIdArg;
 const featureListPath: string = featureListPathArg;
 const env = envArg0 === "" ? null : envArg0;
 const repeat: number = Number(repeatRawArg);
+const worldPath = worldPathArg === "" ? null : worldPathArg;
 
 const envelopeStdout = divertProcessStdoutToStderr();
 const parentPid = process.ppid;
@@ -145,7 +154,10 @@ async function main(): Promise<void> {
   // through them.
   installChannelPatches();
   const config = await loadConfig(rootDir);
-  const resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
+  const program = (await loadProgram(rootDir))?.program ?? null;
+  const resolvedEnv = resolveEnvironment(config, program, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
+  const world: WorldView | null = worldPath === null ? null : parseWorldView(readFileSync(worldPath, "utf8"));
+  if (world !== null) applyWorldEnv(world.env);
 
   const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
     await discoverSteps(rootDir, config.featuresDir);
@@ -166,14 +178,16 @@ async function main(): Promise<void> {
   const hasPickles = flatPickles.length > 0;
 
   const envFiles = resolvedEnv.envFiles;
-  const envVars = loadEnvFiles(rootDir, envFiles);
+  const envVars = { ...loadEnvFiles(rootDir, envFiles), ...(world?.env ?? {}) };
   const classification = await classifyEnvFiles(rootDir, envFiles);
-  const secrets = buildSecretSet(rootDir, {
+  const envSecrets = buildSecretSet(rootDir, {
     secretSourceFiles: classification.secretSource,
     trackedFiles: classification.tracked,
     publicKeys: config.secrets.public,
     redactKeys: config.secrets.redact,
   });
+  // The world's token is redacted wherever the env files' secrets are.
+  const secrets = world === null ? envSecrets : [...envSecrets, ...world.secrets];
 
   const probeResult = await probeVersion(resolvedEnv.version);
   let targetVersion: string | undefined;
@@ -187,8 +201,6 @@ async function main(): Promise<void> {
 
   const git = await probeGitState(rootDir);
   const onUnknownTraceVersion = createTraceVersionWarner(notes("trace-version-unknown"));
-
-  const runConfig = { ...config, baseURL: resolvedEnv.baseURL };
 
   const runOneRunHook = async (
     hook: (typeof compatRunHooks)[number],
@@ -303,8 +315,10 @@ async function main(): Promise<void> {
           { stateDir: config.stateDir, runId },
         );
 
-        const record = await runScenario({          rootDir,
-          config: runConfig,
+        const record = await runScenario({
+          rootDir,
+          config,
+          programWorld: world,
           pickle,
           relativeFeaturePath: feature.relativePath,
           gherkinDocument: feature.gherkinDocument,

@@ -346,7 +346,7 @@ const REMOVED_COMMANDS = new Set([
   "experimental",
 ]);
 const REMOVED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ["init", new Set(["--env", "--env-files", "--base-url", "--features-dir"])],
+  ["init", new Set(["--env", "--env-files", "--base-url", "--features-dir", "--server", "--server-url"])],
   ["run", new Set(["--session", "--quiet", "--summary", "--probe"])],
   ["do", new Set(["--session"])],
   ["clean", new Set(["--records", "--cache", "--export"])],

@@ -67,7 +67,7 @@ describe("ctx.request() / http.jsonl entry per call outcome", () => {
   }
 
   it("logs a call that throws on a failed status, with status 0 and an error", async () => {
-    const { ctx, dispose } = createStepContext({ config: baseConfig({ baseURL }), evidenceDir, env: {} });
+    const { ctx, dispose } = createStepContext({ config: baseConfig(), baseURL, evidenceDir, env: {} });
     const request = await ctx.request();
 
     await expect(request.get("/boom", { failOnStatusCode: true })).rejects.toThrow(/500/);
@@ -97,7 +97,7 @@ describe("ctx.request() / http.jsonl entry per call outcome", () => {
   });
 
   it("logs the absolute URL with params, and the declared one beside it", async () => {
-    const { ctx, dispose } = createStepContext({ config: baseConfig({ baseURL }), evidenceDir, env: {} });
+    const { ctx, dispose } = createStepContext({ config: baseConfig(), baseURL, evidenceDir, env: {} });
     const request = await ctx.request();
 
     await request.get("/search", { params: { q: "a b" } });
@@ -113,7 +113,7 @@ describe("ctx.request() / http.jsonl entry per call outcome", () => {
   });
 
   it("logs the URL a redirect ended at, and the declared one beside it", async () => {
-    const { ctx, dispose } = createStepContext({ config: baseConfig({ baseURL }), evidenceDir, env: {} });
+    const { ctx, dispose } = createStepContext({ config: baseConfig(), baseURL, evidenceDir, env: {} });
     const request = await ctx.request();
 
     await request.get("/redirect");
@@ -138,7 +138,7 @@ describe("ctx.request() / http.jsonl entry per call outcome", () => {
   it("returns the response and counts the lost line when the append fails", async () => {
     const missing = path.join(evidenceDir, "gone");
     const { ctx, dispose, httpLogFailedSnapshot } = createStepContext({
-      config: baseConfig({ baseURL }),
+      config: baseConfig(), baseURL,
       evidenceDir: missing,
       env: {},
     });

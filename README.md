@@ -270,36 +270,33 @@ records and the run summaries, and `nuka init` already ignores it.
 
 ## An HTTP API
 
-`nuka init` sets up an API project the same way. Name the command that
-starts the server and the URL it listens at, and init writes the fixture
-that starts it. The When step sends its request through Playwright's
-`request`, so install `playwright` too (init names the line when it is
-missing):
-
-```sh
-npx nuka init --server "node src/server.ts" --server-url http://127.0.0.1:3000
-npm install -D -E playwright@1.61.1
-```
-
-The config gets `baseURL` and two fixtures. `server` calls `runServer`,
-which starts the command (split on whitespace, no shell) and waits until
-the URL's port accepts a connection; the program has to listen there
-itself, since nukadoko tells it no port. `request` destructures
-Playwright's own `request` and `server` and hands the builtin back, so
-every step that sends a request starts the server first, once per
-scenario:
+The program under test is described in a file of its own,
+`nukadoko.program.ts`, beside the config. nukadoko starts it for each run
+on a free port of its own, waits until it answers, sends every step's
+requests there, and stops it after the scenarios:
 
 ```ts
-// nukadoko.config.ts (the server fixture)
-server: async ({ baseURL }, use) => {
-  const server = await runServer("node", ["src/server.ts"], { url: baseURL });
-  await use(server);
-  await server.stop();
-},
+// nukadoko.program.ts
+import { defineProgram } from "nukadoko";
+
+export default defineProgram({
+  serve: { command: "node src/server.ts" },
+  env: { PORT: "{port}" },
+});
 ```
 
-Here `src/server.ts` listens at `127.0.0.1:3000` and answers
-`/greet/<name>` with the text `Hello, <name>!`. With this feature:
+`{port}` is the port nukadoko picked, and the program listens where `PORT`
+says. The command is split on whitespace and runs with no shell. The
+program is ready once `/` answers 2xx; `serve.ready` names another path.
+A line on stderr names the URL and `program.log`, which holds what the
+program printed, beside the run's records. Two runs at once never share a
+port. The same file holds `build` and `prepare` commands, a directory of
+its own for each run's database (`{dir}`), and `url` for a server
+nukadoko does not start: "Program" in [docs/spec.md](docs/spec.md#program)
+has every field. Commit the file beside the config.
+
+Here `src/server.ts` answers `/greet/<name>` with the text
+`Hello, <name>!`. With this feature:
 
 ```gherkin
 # features/greet.feature
@@ -310,9 +307,12 @@ Feature: greet API
     Then the greeting is "Hello, Ada!"
 ```
 
-scaffold the When step and its Then, and the scenario runs with no edit:
+scaffold the When step and its Then, and the scenario runs with no edit.
+The When step sends its request through Playwright's `request`, so
+install `playwright` too:
 
 ```sh
+npm install -D -E playwright@1.61.1
 npx nuka scaffold get-greeting --pattern "I request the greeting for {name:string}" --request "GET /greet/{name}"
 npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then --from get-greeting.body
 ```
@@ -321,75 +321,38 @@ npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then -
 call that returns `status` and `body` (the response text). Each request
 lands in the step record's `http.jsonl`.
 
-`--request "<METHOD> <path>"` resolves the path against `baseURL`. Each
-`{key}` in the path is that args key's value, put in as it is, and
-`--body <key>` sends an args key (the line's `docstring`, say) as the
+`--request "<METHOD> <path>"` resolves the path against the program's
+URL. Each `{key}` in the path is that args key's value, put in as it is,
+and `--body <key>` sends an args key (the line's `docstring`, say) as the
 request's data. A value the request does not read throws by name until
 it is placed. The step writes `mutates: true`: the method is a proxy for
 write semantics, so the author sets `false`.
 
-A server that picks its own free port, or starts in-process, is
-[a server you start yourself](#a-server-you-start-yourself).
+## Calling the program with fetch
 
-## A server you start yourself
-
-A server you start from your own code takes a fixture you write, and its
-steps call it with `fetch`. Here
-`src/server.ts` exports `startServer()`, which listens on a free port and
-resolves to `{ url, close() }`:
-
-```ts
-// nukadoko.config.ts
-import { defineConfig, defineFixtures } from "nukadoko";
-import { startServer } from "./src/server.ts";
-
-export default defineConfig({
-  fixtures: defineFixtures({
-    server: [
-      async ({}, use) => {
-        const server = await startServer();
-        await use(server);
-        await server.close();
-      },
-      { scope: "process" },
-    ],
-  }),
-});
-
-declare module "nukadoko" {
-  interface StepFixtures {
-    server: Awaited<ReturnType<typeof startServer>>;
-  }
-}
-```
-
-`{ scope: "process" }` starts one server for the whole `nuka run`, not one
-per scenario. The server starts the first time a step destructures
-`server`, and the line after `use()` is its teardown. The `declare module`
-block gives `server` its type for `tsc`. `nuka check` reads fixture names
-from the source text, so it does not need the block.
+A step can call the program with `fetch` instead, which needs nothing
+installed. `baseURL` is the URL of the program nukadoko started, from the
+program file above:
 
 ```ts
 // features/steps/get-greeting.ts
 import { defineStep, z } from "nukadoko";
 
 export default defineStep({
-  description: "GET /greet/<name> from the server under test",
+  description: "GET /greet/<name> from the program under test",
   pattern: "I request the greeting for {name:string}",
   args: z.object({ name: z.string() }),
   returns: z.object({ status: z.number(), message: z.string() }),
-  async run({ server }, { name }) {
-    const response = await fetch(`${server.url}/greet/${encodeURIComponent(name)}`);
+  async run({ baseURL }, { name }) {
+    const response = await fetch(`${baseURL}/greet/${encodeURIComponent(name)}`);
     const body = (await response.json()) as { message: string };
     return { status: response.status, message: body.message };
   },
 });
 ```
 
-`fetch` needs nothing installed. `ctx.request()`, Playwright's
-`APIRequestContext`, is the other way to call the server: it needs
-`playwright` installed. Either way, each call lands in the step record's
-`http.jsonl` with its request body and response body.
+Each call lands in the step record's `http.jsonl` with its request body
+and response body, the same as a `request` call.
 
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way
@@ -414,7 +377,7 @@ Everything past the loop above, one line each:
 - [The compat door](#the-compat-door): bring an existing cucumber-js suite in by switching one import.
 - [Reports fill themselves](#reports-fill-themselves): `nuka report`, which renders a finished run as Allure results, a cucumber-messages stream, or the Markdown summary.
 - [Running this in CI](#running-this-in-ci): one step for the whole gate, a separate `nuka check` when the run is slow, `--concurrency`, and `--repeat`.
-- Environments and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Environments and secrets" in [docs/spec.md](docs/spec.md#environments-and-secrets)): named environments, redaction.
+- Environments and secrets ([Secrets need no manifest](#secrets-need-no-manifest), and "Program" and "Environments and secrets" in [docs/spec.md](docs/spec.md#program)): named environments, redaction.
 - [Skills for coding agents](#skills-for-coding-agents): the two skills an agent loads to run this loop.
 - [The bed has to be tended](#the-bed-has-to-be-tended): the notes `nuka check` adds for what is rotting rather than broken.
 - [Setup details](#setup-details), [Upgrading](#upgrading), [Status](#status), and [Why this exists now](#why-this-exists-now).
@@ -816,9 +779,9 @@ export default defineStep({
   `APIRequestContext` and `Page` objects, not a nukadoko wrapper, so
   existing Playwright knowledge and helpers carry over directly.
 - `request.post("/projects", ...)` above resolves that relative path
-  against `nukadoko.config.ts`'s own `baseURL` (spelled with a capital
-  `URL`, matching Playwright's own key). Leave it unset and only an
-  absolute URL works.
+  against the URL of the program `nukadoko.program.ts` starts or names
+  ([An HTTP API](#an-http-api)). Without a program file, only an absolute
+  URL works.
 - `nuka do create-project --args '{"name":"acme"}'` runs this step by
   itself and prints its step record. This record is the unit of an agent's
   exploration loop, and the command requires no prior setup.
@@ -1273,15 +1236,16 @@ only; the exit code stays the run's.
 
 `nuka run --env a --env b` runs every selected scenario once in each
 environment, in one run with one run id: all of `a` first, then all of
-`b`, each with its own env files, secrets, version probe, BeforeAll and
-AfterAll, and process-scope fixtures. `run.json` holds one verdict per
+`b`, each with its own env files, secrets, version probe, program,
+BeforeAll and AfterAll, and process-scope fixtures. `run.json` holds one verdict per
 scenario and environment, the summary table has one column per
 environment, and the exit code is red when any cell is. A scenario that
 passes with a feature flag on and fails with it off reads across one row.
 `--env default` names the environment a run without `--env` uses, as
 `run.json` names it, so `--env default --env staging` runs both.
-An environment is still only config: what differs between `a` and `b` is
-whatever their env files and `baseURL` say.
+An environment is still only configuration, in `nukadoko.program.ts`:
+what differs between `a` and `b` is whatever their env files and
+program fields say.
 
 ## What this does not do
 

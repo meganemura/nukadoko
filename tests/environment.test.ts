@@ -5,13 +5,13 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 
 // Responsibility: `nuka do --env`'s wiring exercised end to end against
 // tests/fixtures/environments-project —
-// baseURL/envFiles layering, unknown-environment setup failure,
+// the program file's url/envFiles layering, unknown-environment setup failure,
 // `policy: "read-only"` refusal, and the `version` probe (success/throw).
 // Pure resolution-logic unit tests live in
 // resolve-environment.test.ts and probe-version.test.ts.
 
-describe("nuka do --env: baseURL/envFiles layering", () => {
-  it("uses the top-level baseURL/envFiles when --env is omitted", async () => {
+describe("nuka do --env: url/envFiles layering", () => {
+  it("uses the top-level url/envFiles when --env is omitted", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stdout = createCaptureSink();
@@ -34,7 +34,7 @@ describe("nuka do --env: baseURL/envFiles layering", () => {
     }
   });
 
-  it("overrides baseURL and appends envFiles (later file wins) for a named environment", async () => {
+  it("overrides url and appends envFiles (later file wins) for a named environment", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stdout = createCaptureSink();
@@ -60,7 +60,7 @@ describe("nuka do --env: baseURL/envFiles layering", () => {
     }
   });
 
-  it("falls back to the top-level baseURL for an environment with no overrides", async () => {
+  it("falls back to the top-level url for an environment with no overrides", async () => {
     const rootDir = await copyFixtureToTempDir("environments-project");
     try {
       const stdout = createCaptureSink();

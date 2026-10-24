@@ -263,6 +263,92 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `ctx.evidence.attach` と `ctx.evidence.path` は、`process-<n>.stdin.txt` と `process-<n>.json`(step が終わったあとに始まった `runCommand` のプロセスのエントリ)を、大文字小文字にかかわらず `ReservedEvidenceNameError` で拒否します。
   どちらかの名前でファイルを添付していた step は、別の名前を選んでください。
 
+- **テスト対象のプログラムは `nukadoko.program.ts` に移り、`runServer` はなくなりました。**
+  `baseURL` か `environments` を持つ config、または `runServer` を import する step ファイルは読み込めなくなり、メッセージがプログラムのファイルを名指します。
+  config の隣にそのファイルを書き、config からそれらのキーを取り除いてください。
+  fixture が `runServer` で起動していたサーバの場合です:
+
+  ```ts
+  // nukadoko.config.ts, before
+  import { defineConfig, defineFixtures, runServer } from "nukadoko";
+
+  export default defineConfig({
+    baseURL: "http://127.0.0.1:3000",
+    fixtures: defineFixtures({
+      server: async ({ baseURL }, use) => {
+        const server = await runServer("node", ["src/server.ts"], { url: baseURL });
+        await use(server);
+        await server.stop();
+      },
+      request: async ({ request, server }, use) => {
+        void server;
+        await use(request);
+      },
+    }),
+  });
+  ```
+
+  ```ts
+  // nukadoko.config.ts, after
+  import { defineConfig } from "nukadoko";
+
+  export default defineConfig({});
+  ```
+
+  ```ts
+  // nukadoko.program.ts
+  import { defineProgram } from "nukadoko";
+
+  export default defineProgram({
+    serve: { command: "node src/server.ts", ready: "/" },
+    env: { PORT: "{port}" },
+  });
+  ```
+
+  `server` の fixture、それを起動するためだけの `request` の override、`server` の `StepFixtures` の宣言を取り除きます。
+  ポートは nukadoko が選ぶようになったので、プログラムは決まった URL で待ち受けるのではなく、`PORT`(またはコマンドの中の `{port}`)からポートを読みます。
+  `port: 3000` と書けば決まったポートのままになり、そこですでに何かが答えていれば nukadoko は拒否します。
+  プログラムの準備ができたとみなすのは、ポートが接続を受け付けたときではなく、`ready` が 2xx で答えたときです。
+  プログラムは scenario ごとではなく run ごとに 1 回起動します。
+  そのため、空のサーバを前提にしていた scenario は Given で状態を作るか、プログラムの状態を `{dir}` に置いて `prepare` で world ごとに作り直します。
+  `server.url` を読んでいた step は `baseURL` を読みます。
+
+  `baseURL` と environment があり、サーバは誰かほかの人が起動する場合です:
+
+  ```ts
+  // nukadoko.config.ts, before
+  export default defineConfig({
+    baseURL: "http://localhost:3000",
+    envFiles: [".env"],
+    environments: {
+      staging: { baseURL: "https://staging.acme.example", policy: "read-only", envFiles: [".env.staging"] },
+    },
+  });
+  ```
+
+  ```ts
+  // nukadoko.config.ts, after
+  export default defineConfig({ envFiles: [".env"] });
+  ```
+
+  ```ts
+  // nukadoko.program.ts
+  import { defineProgram } from "nukadoko";
+
+  export default defineProgram({
+    url: "http://localhost:3000",
+    environments: {
+      staging: { url: "https://staging.acme.example", policy: "read-only", envFiles: [".env.staging"] },
+    },
+  });
+  ```
+
+  `nuka init --server` と `--server-url` は `removed-flag` で拒否します。
+  `nuka init` を実行し、プログラムのファイルは手で書いてください。
+  run.json を読む側には新しい配列 `worlds` があり、各 step record には新しい `world_name` があります。
+  どちらも追加なので、既存の読み方は変わりません。
+  `nuka run` の前にアプリを起動していた CI の step は、`serve` が起動するようになれば取り除けます。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

@@ -1,12 +1,9 @@
 import { execFile } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
-import type { Server } from "node:http";
-import type { AddressInfo } from "node:net";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { createTodoApp } from "../examples/todo/app/server.js";
-import { copyExampleToTempDir, httpLogLines, removeTempDir, repoRoot, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
+import { copyExamplesToTempDir, httpLogLines, removeTempDir, repoRoot, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,50 +42,24 @@ async function runNuka(
   }
 }
 
-function startTodoApp(): Promise<{ server: Server; baseURL: string }> {
-  return new Promise((resolve) => {
-    const server = createTodoApp();
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address() as AddressInfo;
-      resolve({ server, baseURL: `http://127.0.0.1:${address.port}` });
-    });
-  });
-}
-
-// The committed config points at the fixed port the README tells a human
-// reader to use (http://localhost:4000); this test needs an ephemeral one
-// instead, same convention as tests/examples-todo.test.ts's own helper.
-async function pointConfigAt(rootDir: string, baseURL: string): Promise<void> {
-  await writeFile(
-    path.join(rootDir, "nukadoko.config.ts"),
-    [
-      'import { defineConfig } from "nukadoko";',
-      "",
-      `export default defineConfig({ baseURL: "${baseURL}" });`,
-      "",
-    ].join("\n"),
-  );
-}
-
 async function readStepRecord(rootDir: string, recordId: string): Promise<Record<string, unknown>> {
   const recordPath = path.join(stepRecordDir(rootDir, recordId), "record.json");
   return JSON.parse(await readFile(recordPath, "utf8"));
 }
 
 describe("examples/migration", () => {
-  let server: Server;
+  let examplesDir: string;
   let rootDir: string;
 
   afterEach(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    await removeTempDir(rootDir);
+    await removeTempDir(examplesDir);
   });
 
   it("runs the shipped mixed compat/typed suite green, with the shapes README.md quotes", async () => {
-    const started = await startTodoApp();
-    server = started.server;
-    rootDir = await copyExampleToTempDir("migration");
-    await pointConfigAt(rootDir, started.baseURL);
+    // The program file serves ../todo/app/server.ts, so examples/todo is
+    // copied beside it.
+    examplesDir = await copyExamplesToTempDir(["migration", "todo"]);
+    rootDir = path.join(examplesDir, "migration");
 
     const { stdout, stderr, exitCode } = await runNuka(["run", "--records", "features/migration.feature"], rootDir);
 

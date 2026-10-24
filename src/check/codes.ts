@@ -123,7 +123,7 @@ const CHECK_CODES = {
   "environment-env-file-missing": {
     description: "An entry in one environment's own envFiles does not exist on disk.",
     severity: "warning",
-    fix: "Create the file, or remove it from that environment's envFiles in the config file.",
+    fix: "Create the file, or remove it from that environment's envFiles in nukadoko.program.ts.",
   },
   "feature-parse-error": {
     description: "A .feature file could not be parsed, so nothing in it was checked.",

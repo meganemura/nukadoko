@@ -170,8 +170,8 @@ const REFUSAL_CODES = {
     fix: "Read the message; it is the error the command stopped on.",
   },
   "unknown-environment": {
-    description: "--env names an environment that the config file does not define.",
-    fix: "Pass default or an environment the config defines, or add it to environments in the config file.",
+    description: "--env names an environment that nukadoko.program.ts does not define.",
+    fix: "Pass default or an environment nukadoko.program.ts defines, or add it to environments there.",
   },
   "unknown-step": {
     description: "The command names a step that is not in the vocabulary.",

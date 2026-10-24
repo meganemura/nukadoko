@@ -1,6 +1,6 @@
 import { defineConfig } from "./nukadoko-shim.js";
 
-// No baseURL: every scenario in this fixture stays off the wire (its
+// No program file: every scenario in this fixture stays off the wire (its
 // coverage is entirely about step/hook timeouts,
 // pending/skipped returns, done-callback detection, and the hook parameter
 // — none of it touches Playwright/HTTP).

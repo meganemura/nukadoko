@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { createServer } from "node:net";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -9,7 +8,6 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { commandWords } from "../src/cli/init.js";
 import { loadConfig } from "../src/config/load-config.js";
 import { buildCategories } from "../src/report/allure/categories.js";
 import { buildFailureMarker } from "../src/report/allure/map-scenario.js";
@@ -160,97 +158,23 @@ describe("nuka init", () => {
     await expect(loadConfig(rootDir)).resolves.toMatchObject({ featuresDir: "features" });
   });
 
-  it("with --server and --server-url, writes baseURL, a server fixture that starts the command, and a request that needs it", async () => {
-    const stdout = createCaptureSink();
-    const stderr = createCaptureSink();
-
-    const exitCode = await runCli(["init", "--server", "node  src/server.ts --quiet", "--server-url", "http://127.0.0.1:4567"], {
-      rootDir,
-      stdout,
-      stderr,
-    });
-
-    expect(exitCode).toBe(0);
-    expect(stderr.text()).toBe(NEXT_LINE);
-    expect(await readFile(path.join(rootDir, "nukadoko.config.ts"), "utf8")).toBe(
-      [
-        'import { defineConfig, defineFixtures, runServer, type RunningServer } from "nukadoko";',
-        "",
-        "export default defineConfig({",
-        '  // Every config key nukadoko reads, one line each: docs/spec.md, "Environments and secrets"',
-        '  baseURL: "http://127.0.0.1:4567",',
-        "  fixtures: defineFixtures({",
-        "    // The program under test, started for each scenario that sends a request and stopped",
-        "    // after it. It has to listen at baseURL; runServer waits until the port accepts a connection.",
-        "    server: async ({ baseURL }, use) => {",
-        '      const server = await runServer("node", ["src/server.ts","--quiet"], { url: baseURL });',
-        "      await use(server);",
-        "      await server.stop();",
-        "    },",
-        "    // Playwright's own request, built after server: a step that sends a request starts it.",
-        "    request: async ({ request, server }, use) => {",
-        "      void server;",
-        "      await use(request);",
-        "    },",
-        "  }),",
-        "});",
-        "",
-        'declare module "nukadoko" {',
-        "  interface StepFixtures {",
-        "    server: RunningServer;",
-        "  }",
-        "}",
-        "",
-      ].join("\n"),
-    );
-    expect((await loadConfig(rootDir)).baseURL).toBe("http://127.0.0.1:4567");
-  });
-
-  it("refuses --server without --server-url, --server-url alone, and a URL that is not http, writing nothing", async () => {
-    const refusal = async (argv: string[]) => {
-      const stderr = createCaptureSink();
-      const exitCode = await runCli(["init", ...argv], { rootDir, stdout: createCaptureSink(), stderr });
-      return { exitCode, stderr: stderr.text() };
-    };
-
-    expect(await refusal(["--server", "node src/server.ts"])).toEqual({
-      exitCode: 2,
-      stderr:
-        "refused\tinvalid-arguments\t-\tRefusing to init: --server needs --server-url, the URL the program listens at: nukadoko waits for it and sends every request there, and the program alone knows it; nothing was written\n" +
-        "  fix: Pass --server-url with the URL the program listens at, such as http://127.0.0.1:3000.\n",
-    });
-    expect(await refusal(["--server-url", "http://127.0.0.1:3000"])).toEqual({
-      exitCode: 2,
-      stderr:
-        "refused\tinvalid-arguments\t-\tRefusing to init: --server-url names the URL the --server command listens at, and no --server was given; nothing was written\n" +
-        "  fix: Pass --server with the command that starts the program under test, beside --server-url http://127.0.0.1:3000.\n",
-    });
-    expect(await refusal(["--server", "node src/server.ts", "--server-url", "127.0.0.1:3000"])).toEqual({
-      exitCode: 2,
-      stderr:
-        'refused\tinvalid-arguments\t-\tRefusing to init: --server-url needs an http or https URL, and got "127.0.0.1:3000"; nothing was written\n' +
-        "  fix: Pass --server-url as an http URL with a host and a port.\n",
-    });
-    expect(await fileSet(rootDir)).toEqual(["package.json"]);
-  });
-
-  it("starts the --server command for a --request step, and the scenario passes with no hand edit", async () => {
-    const port = await new Promise<number>((resolve) => {
-      const probe = createServer().listen(0, "127.0.0.1", () => {
-        const { port: free } = probe.address() as { port: number };
-        probe.close(() => resolve(free));
-      });
-    });
+  it("starts the program file's serve command for a --request step, and the scenario passes with no hand edit", async () => {
     await mkdir(path.join(rootDir, "src"));
     await writeFile(
       path.join(rootDir, "src", "server.ts"),
-      `import { createServer } from "node:http";\ncreateServer((req, res) => res.end(req.url === "/health" ? "ok" : "no")).listen(${port}, "127.0.0.1");\n`,
+      'import { createServer } from "node:http";\ncreateServer((req, res) => res.end(req.url === "/health" ? "ok" : "no")).listen(Number(process.env.PORT));\n',
     );
     const quiet = { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() };
-
-    // The command runs in the directory nuka runs in, which is not rootDir in this process.
-    const server = `node ${path.join(rootDir, "src", "server.ts")}`;
-    expect(await runCli(["init", "--server", server, "--server-url", `http://127.0.0.1:${port}`], quiet)).toBe(0);
+    expect(await runCli(["init"], quiet)).toBe(0);
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      [
+        'import { defineProgram } from "nukadoko";',
+        "",
+        'export default defineProgram({ serve: { command: "node src/server.ts", ready: "/health" }, env: { PORT: "{port}" } });',
+        "",
+      ].join("\n"),
+    );
     await writeFile(
       path.join(rootDir, "features", "health.feature"),
       'Feature: health\n  Scenario: ok\n    When I request "/health"\n    Then the body is "ok"\n',
@@ -262,6 +186,7 @@ describe("nuka init", () => {
 
     expect(exitCode).toBe(0);
     expect(`${run.stdout.text()}${run.stderr.text()}`).toMatch(/^1 scenario(s)?: 1 passed, 0 failed {2}\(\d+s\)$/m);
+    expect(run.stderr.text()).toMatch(/^world default: serve \d+\.\ds, http:\/\/localhost:\d+ {2}\(log \.nukadoko\/runs\/[^/]+\/worlds\/default\/program\.log\)$/m);
   });
 
   it("with --allure, also writes allurerc.mjs and the results directory, and adds no config key", async () => {
@@ -524,7 +449,18 @@ describe("nuka init", () => {
 
   const ENV_LINES = "init always adds .env, .env.*, and !.env.example to .gitignore.";
   it.each([
-    [["--base-url", "https://example.com"], "nuka init --base-url is removed: set baseURL in the generated config after init."],
+    [
+      ["--base-url", "https://example.com"],
+      'nuka init --base-url is removed: write url in nukadoko.program.ts (export default defineProgram({ url: "http://localhost:3000" })), the URL every page and request resolves against.',
+    ],
+    [
+      ["--server", "npm start"],
+      'nuka init --server is removed: describe the program in nukadoko.program.ts (export default defineProgram({ serve: { command: "npm start" }, env: { PORT: "{port}" } })); nukadoko starts it once for each environment, on a port of its own, and stops it after the scenarios.',
+    ],
+    [
+      ["--server-url", "http://127.0.0.1:3000"],
+      "nuka init --server-url is removed: a program nukadoko starts gets its port from serve in nukadoko.program.ts, and one it does not start is named by url there.",
+    ],
     [
       ["--features-dir", "e2e"],
       "nuka init --features-dir is removed: init creates features/steps; for another directory, set featuresDir in the generated config after init and move steps/ there.",
@@ -1038,14 +974,4 @@ describe("nuka init: the project's own tsc checks the steps and the config with 
     );
     expect(checked).toEqual({ code: 0, output: "" });
   });
-});
-
-describe("commandWords", () => {
-  it("gives back the words a command was joined from, whatever whitespace joins them", () =>
-    hegel.test((tc) => {
-      const words = tc.draw(gs.arrays(gs.text({ minSize: 1, maxSize: 6, alphabet: "az09./-=\"'" }), { minSize: 1, maxSize: 5 }));
-      const gaps = words.map(() => tc.draw(gs.sampledFrom([" ", "  ", "\t", " \n "])));
-      const command = `${tc.draw(gs.sampledFrom(["", " ", "\t"]))}${words.map((word, index) => `${word}${gaps[index]}`).join("")}`;
-      expect(commandWords(command)).toEqual(words);
-    }));
 });

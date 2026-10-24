@@ -506,6 +506,11 @@ export interface StepContextHandle {
 
 export interface CreateStepContextOptions {
   config: NukadokoConfig;
+  /** The world's base URL (src/program/world-view.ts): `page`, `context`,
+   * `request`, and `pageAs` resolve a relative URL against it, and
+   * `ctx.baseURL` is it. `undefined` when the run has no world, or a world
+   * with neither `serve` nor `url`. */
+  baseURL?: string | undefined;
   /** Absolute path to this execution's browser evidence directory (trace.zip,
    * screenshots) and, until `beginStep` first moves it, http.jsonl too; must
    * already exist. */
@@ -604,6 +609,7 @@ interface OpenedContext {
 export function createStepContext(options: CreateStepContextOptions): StepContextHandle {
   const {
     config,
+    baseURL,
     evidenceDir,
     env: sourceEnv,
     secrets = [],
@@ -911,7 +917,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       }
       return value;
     },
-    baseURL: config.baseURL,
+    baseURL,
     async page(): Promise<Page> {
       return pageOf(undefined, undefined);
     },
@@ -1056,7 +1062,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   ): BrowserContextOptions {
     return {
       ...(config.browserContext ?? {}),
-      ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+      ...(baseURL ? { baseURL } : {}),
       ...(options ?? {}),
     };
   }
@@ -1117,7 +1123,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   async function setUpRequest(): Promise<APIRequestContext> {
     if (!requestContext) {
       // No `baseURL` requirement here, matching `ctx.page()` above, which
-      // already passes `config.baseURL` through as `undefined` without
+      // already passes `baseURL` through as `undefined` without
       // complaint — a suite
       // that only ever talks to absolute URLs across several hosts has no
       // single baseURL to state, and forcing one into config would make
@@ -1137,7 +1143,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       const { request: playwrightRequest } = await loadPlaywright(neededBy("ctx.request()"));
       const raw = await playwrightRequest.newContext({
         ...(config.requestContext ?? {}),
-        ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+        ...(baseURL ? { baseURL } : {}),
       });
       requestContext = wrapRequestContextWithLogging(
         raw,

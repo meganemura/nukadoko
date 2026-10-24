@@ -958,6 +958,11 @@ export interface StepRecordBase {
    * "Environments and secrets": default is just the name of an
    * environment that may or may not itself be configured. */
   environment: string;
+  /** The world this step ran against (run.json's `worlds[].name`), or
+   * `null` when the tree has no program file and no world ran. Not the
+   * compat World a step reads and writes, which is `world`. Absent on a
+   * record an earlier build wrote. */
+  world_name?: string | null;
   /** The owning scenario record's id for a `run`-originated step record
    * (`kind: "run"`); always `null` for a `do`- or `external`-originated
    * one. */

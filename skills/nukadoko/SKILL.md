@@ -23,9 +23,9 @@ touch, then one line for each of these that applies:
 - A `mutates: true` step that reaches past the project (a real service, a
   shared database, a file outside `scratch`) gets a go-ahead before its
   first `nuka do`, once, not on every retry. A step that writes only under
-  `scratch`, or only to a server a fixture started for the scenario, needs
-  none (`references/writing-steps.md`, "Asking before a step changes
-  something").
+  `scratch`, or only to a server a fixture or `nukadoko.program.ts`
+  started, needs none (`references/writing-steps.md`, "Asking before a
+  step changes something").
 - A step that needs `page`, `context`, `pageAs`, or `request` needs the project's
   own `playwright`; `nuka check` reports `playwright-missing` with the
   install line. Adding it is a dependency change: ask first. A `page` step
@@ -43,8 +43,8 @@ never commits, pushes, or publishes. Keep the narration short.
 ## Where to start
 
 Run `nuka` from the directory that holds the config, and `nuka init`
-first when there is none (`references/running.md`, "Setting up"). Then
-pick the one line that is true:
+first when there is none (`references/running.md`, "Setting up"); an app to
+start needs `nukadoko.program.ts` (`references/program.md`). Pick one line:
 
 1. **Prose only** (a ticket, a request, a conversation):
    `references/from-prose.md`, then line 2.

@@ -310,6 +310,97 @@ This part does not change release to release.
   after its step ended) with `ReservedEvidenceNameError`, in any case. A
   step that attached a file under either name picks another name.
 
+- **The program under test moves to `nukadoko.program.ts`, and
+  `runServer` is gone.** A config with `baseURL` or `environments`, or
+  a step file that imports `runServer`, now fails to load, and the
+  message names the program file. Write the file beside the config and
+  take those keys out of the config. A server a fixture started with
+  `runServer`:
+
+  ```ts
+  // nukadoko.config.ts, before
+  import { defineConfig, defineFixtures, runServer } from "nukadoko";
+
+  export default defineConfig({
+    baseURL: "http://127.0.0.1:3000",
+    fixtures: defineFixtures({
+      server: async ({ baseURL }, use) => {
+        const server = await runServer("node", ["src/server.ts"], { url: baseURL });
+        await use(server);
+        await server.stop();
+      },
+      request: async ({ request, server }, use) => {
+        void server;
+        await use(request);
+      },
+    }),
+  });
+  ```
+
+  ```ts
+  // nukadoko.config.ts, after
+  import { defineConfig } from "nukadoko";
+
+  export default defineConfig({});
+  ```
+
+  ```ts
+  // nukadoko.program.ts
+  import { defineProgram } from "nukadoko";
+
+  export default defineProgram({
+    serve: { command: "node src/server.ts", ready: "/" },
+    env: { PORT: "{port}" },
+  });
+  ```
+
+  Drop the `server` fixture, the `request` override that only started it,
+  and the `StepFixtures` declaration for `server`. nukadoko now picks the
+  port, so the program reads it from `PORT` (or from `{port}` in its
+  command) instead of listening at a fixed URL; `port: 3000` keeps a
+  fixed one, and nukadoko refuses it when something already answers
+  there. The program is ready when `ready` answers 2xx, not when the port
+  accepts a connection. It starts once per run instead of once per
+  scenario, so a scenario that relied on an empty server gets its state
+  from a Given, or the program's state goes in `{dir}` and `prepare`
+  resets it per world. A step that read `server.url` reads `baseURL`.
+
+  A `baseURL` and environments, with a server someone else starts:
+
+  ```ts
+  // nukadoko.config.ts, before
+  export default defineConfig({
+    baseURL: "http://localhost:3000",
+    envFiles: [".env"],
+    environments: {
+      staging: { baseURL: "https://staging.acme.example", policy: "read-only", envFiles: [".env.staging"] },
+    },
+  });
+  ```
+
+  ```ts
+  // nukadoko.config.ts, after
+  export default defineConfig({ envFiles: [".env"] });
+  ```
+
+  ```ts
+  // nukadoko.program.ts
+  import { defineProgram } from "nukadoko";
+
+  export default defineProgram({
+    url: "http://localhost:3000",
+    environments: {
+      staging: { url: "https://staging.acme.example", policy: "read-only", envFiles: [".env.staging"] },
+    },
+  });
+  ```
+
+  `nuka init --server` and `--server-url` refuse with `removed-flag`;
+  run `nuka init` and write the program file by hand. A reader of
+  run.json finds the new `worlds` array, and each step record a new
+  `world_name`; both are additive. A CI step that started the app before
+  `nuka run` can go, once `serve` starts it.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

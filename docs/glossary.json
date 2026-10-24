@@ -90,6 +90,8 @@
     { "en": ["stale"], "ja": "古びた / 古びている" },
     { "en": ["round trip"], "ja": "往復", "context": "nuka explore が書いた行を読み戻して同じ step と args に戻るか確かめること" },
     { "en": ["placeholder"], "ja": "プレースホルダー" },
+    { "en": ["program under test"], "ja": "テスト対象のプログラム", "note": "nukadoko.program.ts が build し、起動するか URL で名指すもの。docs/spec.ja.md の見出しもこの語。テスト対象の、を落とすと step が実行するプログラムと紛れる文脈では落とさない" },
+    { "en": ["program file"], "ja": "プログラムのファイル", "note": "nukadoko.program.ts。config ファイルと対にして書く。ファイル名をコードスパンで書ける文脈ではそちらを優先する" },
     {
       "en": ["composite", "composite step"],
       "ja": "複合 / 複合 step",
@@ -476,6 +478,10 @@
     }
   ],
   "keep_english": [
+    {
+      "term": "world",
+      "why": "1 つのプログラムに対する run の 1 回の pass。run.json の `worlds`、step record の `world_name`、`.nukadoko/runs/<run_id>/worlds/<env>/` と直接対応する。小文字の world として書き、compat の this オブジェクトである大文字の World とは別の語。見出しは World"
+    },
     {
       "term": "envelope",
       "why": "すべてのコマンドの `--json` が出す `{ schema_version, nukadoko, command, verdict, findings }` の文書と、worker や cucumber-messages の 1 行ずつの envelope の両方を指す。docs/spec.ja.md がすでに英語で書いており、訳すとフィールド群との対応が切れる"
