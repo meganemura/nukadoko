@@ -1,4 +1,5 @@
 import type { PollOptions } from "../step/context.js";
+import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
 
 // Responsibility: `ctx.poll`'s own retry loop (docs/spec.md "Context API") —
 // the submit-poll-fetch wait for a value that has been asked for but is not
@@ -44,7 +45,7 @@ export class InvalidPollOptionsError extends Error {
   readonly value: number;
 
   constructor(option: "timeout" | "interval", value: number) {
-    super(`poll ${option} must be a finite number of milliseconds greater than 0 (got ${String(value)})`);
+    super(`poll ${option} must be a finite number of milliseconds greater than 0 and ${MAX_TIMER_DELAY_REASON} (got ${String(value)})`);
     this.name = "InvalidPollOptionsError";
     this.option = option;
     this.value = value;
@@ -54,7 +55,7 @@ export class InvalidPollOptionsError extends Error {
 type BudgetResult<T> = { readonly status: "value"; readonly value: T } | { readonly status: "timeout" };
 
 function requirePositiveMs(value: number, option: "timeout" | "interval"): void {
-  if (!Number.isFinite(value) || value <= 0) {
+  if (!Number.isFinite(value) || value <= 0 || value > MAX_TIMER_DELAY_MS) {
     throw new InvalidPollOptionsError(option, value);
   }
 }

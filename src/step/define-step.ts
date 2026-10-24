@@ -6,6 +6,7 @@ import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 import { claimsProblem, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
 import { freezeInPlace, frozenCopy, type Keep } from "./frozen-copy.js";
+import { MAX_TIMER_DELAY_MS } from "../timer/max-delay.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
@@ -576,10 +577,10 @@ function resolvePatterns(definition: Pick<StepDefinitionInput, "pattern" | "patt
   return [...fromPattern, ...fromPatterns];
 }
 
-/** Largest delay `setTimeout` actually waits. A larger number, or a
- * non-finite or non-positive one, is clamped to 1ms, so a step would be
- * recorded as timed out for a deadline that never ran. */
-const MAX_STEP_TIMEOUT_MS = 2_147_483_647;
+/** Largest delay `setTimeout` actually waits (src/timer/max-delay.ts). A
+ * larger number, or a non-finite or non-positive one, is clamped to 1ms, so
+ * a step would be recorded as timed out for a deadline that never ran. */
+const MAX_STEP_TIMEOUT_MS = MAX_TIMER_DELAY_MS;
 
 /** Thrown when `defineStep` is given a definition that is not the shape
  * docs/spec.md "Typed steps" describes. Named so a caller can tell it from

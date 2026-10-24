@@ -192,7 +192,9 @@ describe("ctx.poll", () => {
     { timeout: 100, interval: 0 },
     { timeout: 100, interval: -1 },
     { timeout: 100, interval: Number.POSITIVE_INFINITY },
-  ])("refuses a non-positive or non-finite timeout or interval (%j) before calling fn", async (options) => {
+    { timeout: 2 ** 31, interval: 10 },
+    { timeout: 100, interval: 2 ** 31 },
+  ])("refuses a non-positive, non-finite, or longer-than-a-timer timeout or interval (%j) before calling fn", async (options) => {
     const { ctx } = createStepContext({ config: baseConfig(), evidenceDir, env: {} });
     let calls = 0;
     const outcome = await settled(

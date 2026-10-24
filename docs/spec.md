@@ -1140,6 +1140,15 @@ strings, and every `parts` entry must be a step. A `.js` step file is not
 type-checked. The throw happens while discovery imports the file, and
 `nuka check` reports it as `step-file-import-failed`.
 
+Every other limit a project writes stops at the same number, for the same
+reason, and is refused where it is written: `stepTimeout`, `fixtureTimeout`,
+and a fixture's `options.timeout` in `nukadoko.config.ts` (`config-invalid`),
+a `poll` call's `timeout` and `interval` (`InvalidPollOptionsError`), a
+`runCommand` `timeout` (a `RangeError` before the program starts), a compat
+step's or hook's `{ timeout }` and `setDefaultTimeout` (a throw while the
+glue registers it, where `-1` still means no limit), and each `timeout_ms`
+in `nukadoko.program.ts` (see "Limits" under "Program").
+
 A key that is none of these options, such as `rationale`, which an earlier
 release read, is not refused, because it changes nothing at run time.
 `defineStep` keeps its name, and `nuka check` warns `step-option-ignored`
@@ -2734,6 +2743,12 @@ export default defineProgram({
   setup: { run: (world) => seedAdmin(world.url), timeout_ms: 120_000 },
 });
 ```
+
+Each `timeout_ms` is a whole number of milliseconds from 1 to
+2,147,483,647, the longest delay a Node.js timer keeps.
+A longer one would fire after 1 ms and fail its phase at once, so loading
+`nukadoko.program.ts` refuses it with `config-invalid`, naming the field
+and the limit.
 
 A phase past its limit fails the world with `program-start-failed`, and
 the message names the phase, its command, the limit, and the end of the

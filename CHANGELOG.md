@@ -294,7 +294,8 @@ just until 0.1.
   600 s for each `build` or `prepare` command, and 60 s for `setup`
   and a `url` function, each changed with `timeout_ms` (`{ command,
   timeout_ms }`, `setup: { run, timeout_ms }`, `url: { resolve,
-  timeout_ms }`). Every command runs in a process group of its own, and a
+  timeout_ms }`), a whole number of milliseconds from 1 to
+  2,147,483,647, the longest delay a Node.js timer keeps. Every command runs in a process group of its own, and a
   `build` or `prepare` command's group is killed when the command exits,
   so nothing it left running outlives it; on Windows, which has no
   process group, `serve.command` is the server itself or a launcher that
@@ -473,6 +474,18 @@ just until 0.1.
   value that held that key lost it from the step record, run.json, and
   the summary. A claim then showed `{}` not-equal `{}` as held. The key
   now stays a key.
+
+- **A limit no timer can keep is refused where it is written.** A
+  Node.js timer keeps a delay of at most 2,147,483,647 ms; a longer one
+  printed a `TimeoutOverflowWarning` and fired after 1 ms, so the step,
+  the fixture, or the poll failed at once for a limit it never waited
+  for. `stepTimeout`, `fixtureTimeout`, and a fixture's
+  `options.timeout` past it are `config-invalid`, a `poll` call's
+  `timeout` or `interval` throws `InvalidPollOptionsError`, a
+  `runCommand` `timeout` throws a `RangeError` before the program
+  starts, and a compat step's or hook's `{ timeout }` and
+  `setDefaultTimeout` throw while the glue registers them (`-1` still
+  means no limit). `defineStep({ timeout })` already refused it.
 
 ## 0.21.0 — 2026-10-23
 

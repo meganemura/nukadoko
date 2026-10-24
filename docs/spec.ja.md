@@ -900,6 +900,13 @@ Node のタイマーは、その範囲の外にある遅延を 1ms に切り詰�
 `.js` の step ファイルは型チェックされません。
 例外は discovery がファイルを import するときに投げられ、`nuka check` はそれを `step-file-import-failed` として報告します。
 
+プロジェクトが書くほかの時間制限も、同じ理由で同じ数を上限とし、書かれた場所で拒否されます。
+`nukadoko.config.ts` の `stepTimeout`、`fixtureTimeout`、fixture の `options.timeout` は `config-invalid` になります。
+`poll` 呼び出しの `timeout` と `interval` は `InvalidPollOptionsError` になります。
+`runCommand` の `timeout` は、プログラムを始める前の `RangeError` になります。
+compat の step や hook の `{ timeout }` と `setDefaultTimeout` は、glue が登録する時点で throw します(`-1` は引き続き制限なしを意味します)。
+`nukadoko.program.ts` の各 `timeout_ms` は「テスト対象のプログラム」の「持ち時間」を参照してください。
+
 以前のリリースが読んでいた `rationale` のように、これらのどのオプションでもないキーは拒否されません。
 実行時には何も変えないからです。
 `defineStep` はそのキーの名前を残し、`nuka check` は step ファイルを添えて `step-option-ignored` を警告します。
@@ -2237,6 +2244,10 @@ export default defineProgram({
   setup: { run: (world) => seedAdmin(world.url), timeout_ms: 120_000 },
 });
 ```
+
+各 `timeout_ms` は 1 から 2,147,483,647 までの整数のミリ秒です。
+これは Node.js のタイマーが保てる最長の遅延です。
+それより長い値は 1 ms 後に発火して段階をすぐに失敗させるため、`nukadoko.program.ts` の読み込みは `config-invalid` でそれを拒否し、フィールドと上限を示します。
 
 持ち時間を過ぎた段階は `program-start-failed` で world を失敗させます。
 メッセージは、起動のほかの失敗と同じく、段階、そのコマンド、持ち時間、world の `program.log` の最後を示します。

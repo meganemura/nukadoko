@@ -9,6 +9,7 @@ import { withoutChannelRecording } from "./channels.js";
 import { type EnvDifference, envDifference } from "./env-difference.js";
 import { diffSnapshots, takeSnapshot } from "./file-snapshot.js";
 import { windowsSpawnPlan } from "./windows-command.js";
+import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
 
 // Responsibility: `runCommand`, the exported helper a step uses to run a
 // command-line program under test, and the scope that lets it add what it
@@ -108,7 +109,8 @@ export interface RunCommandOptions {
   input?: string;
   /** Milliseconds before the child is stopped with SIGTERM. `runCommand`
    * then throws, because a program that never finished has no exit code
-   * for a step to assert on. */
+   * for a step to assert on. At most 2147483647 (src/timer/max-delay.ts):
+   * a larger one is refused before the program starts. */
   timeout?: number;
   /** Secrets the step holds, by name. Each value is written as
    * `{{secret.NAME}}` in the recorded `command`, with the same rules as a
@@ -150,6 +152,11 @@ export async function runCommand(
   args: readonly string[] = [],
   options: RunCommandOptions = {},
 ): Promise<RunCommandResult> {
+  // Before anything starts or is recorded: a timer would fire after 1 ms
+  // and stop the program for a limit it was never given.
+  if (options.timeout !== undefined && options.timeout > MAX_TIMER_DELAY_MS) {
+    throw new RangeError(`runCommand: timeout is ${options.timeout} ms; it must be ${MAX_TIMER_DELAY_REASON}`);
+  }
   const cwd = resolve(options.cwd ?? process.cwd());
   // Taken at call time, so the position in `observed.processes` is the
   // call order even when calls overlap.

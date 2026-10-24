@@ -59,8 +59,9 @@ stderr and `program.log` redacted.
 Every phase has a limit: 600 s for each `build` or `prepare` command, 60 s
 for `serve` to answer `ready`, `setup`, and a `url` function. Write
 `{ command, timeout_ms }` for a command, `serve.timeout_ms`, `setup: {
-run, timeout_ms }`, or `url: { resolve, timeout_ms }` for another. Each
-phase prints `world <name>: <phase> started` on stderr, so a long
+run, timeout_ms }`, or `url: { resolve, timeout_ms }` for another, in
+whole milliseconds up to 2147483647, the longest delay a Node.js timer
+keeps. Each phase prints `world <name>: <phase> started` on stderr, so a long
 wait names what it waits on. A `build` or `prepare` command's process
 group is killed when the command exits: a service that has to outlive
 `prepare`, such as a database, starts with `setsid`, as a daemon does.

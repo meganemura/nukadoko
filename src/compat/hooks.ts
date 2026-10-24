@@ -26,6 +26,7 @@
 // of its own.
 
 import type { Duration, GherkinDocument, Pickle, PickleStep } from "@cucumber/messages";
+import { refuseUnkeptTimeout } from "./registry.js";
 
 /** `"after_step"` — for `AfterStep`, alongside the pre-existing `Before`/
  * `After`. Registration is identical for all three (`registerHook`, this
@@ -234,6 +235,7 @@ function registerHook(
   if (maybeFn === undefined) {
     throw new Error(`${label}({ tags, timeout }, fn) requires a function as its second argument`);
   }
+  refuseUnkeptTimeout(`${label}({ timeout }, fn)`, optionsOrFn.timeout);
 
   hookBuffer.push({
     type,

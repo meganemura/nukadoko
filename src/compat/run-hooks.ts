@@ -15,6 +15,8 @@
 // run` invocation) is src/cli/run.ts's job; this module only records what
 // was called.
 
+import { refuseUnkeptTimeout } from "./registry.js";
+
 export type RunHookType = "beforeAll" | "afterAll";
 
 /**
@@ -101,6 +103,7 @@ function registerRunHook(
   if (maybeFn === undefined) {
     throw new Error(`${label}({ timeout }, fn) requires a function as its second argument`);
   }
+  refuseUnkeptTimeout(`${label}({ timeout }, fn)`, optionsOrFn.timeout);
 
   runHookBuffer.push({
     type,

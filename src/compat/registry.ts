@@ -1,3 +1,5 @@
+import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
+
 // Responsibility: the compat module's registration buffers — the mechanism
 // docs/spec.md's migration-door promise runs on. `Given`/`When`/`Then`/
 // `defineParameterType` are plain functions that push onto a module-level
@@ -145,6 +147,7 @@ function registerStep(
   if (maybeFn === undefined) {
     throw new Error(`${keyword}(pattern, options, fn) requires a function as its third argument`);
   }
+  refuseUnkeptTimeout(`${keyword}(${String(pattern)}, { timeout }, fn)`, optionsOrFn.timeout);
   stepBuffer.push({
     keyword,
     pattern,
@@ -259,7 +262,18 @@ export function drainCompatParameterTypes(): CompatParameterTypeRegistration[] {
 let defaultTimeoutMs: number | undefined;
 
 export function setDefaultTimeout(ms: number): void {
+  refuseUnkeptTimeout(`setDefaultTimeout(${String(ms)})`, ms);
   defaultTimeoutMs = ms;
+}
+
+/** Throws at registration for a timeout no timer keeps
+ * (src/timer/max-delay.ts): cucumber-js fires such a timer after 1 ms, so
+ * the step or hook would fail at once for a limit it never had. -1 stays
+ * the way to write no limit. */
+export function refuseUnkeptTimeout(call: string, timeout: unknown): void {
+  if (typeof timeout === "number" && timeout > MAX_TIMER_DELAY_MS) {
+    throw new Error(`${call}: the timeout is ${timeout} ms; it must be ${MAX_TIMER_DELAY_REASON}, or -1 for no limit`);
+  }
 }
 
 /** Read once, at the end of a discovery run (src/discover/discover-

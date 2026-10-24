@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
 
 // Responsibility: the validated shape of nukadoko.program.ts's default
 // export (docs/spec.md "Program"): how nukadoko builds, prepares, starts,
@@ -43,7 +44,14 @@ export const DEFAULT_COMMAND_TIMEOUT_MS = 600_000;
 export const DEFAULT_SETUP_TIMEOUT_MS = 60_000;
 export const DEFAULT_URL_TIMEOUT_MS = 60_000;
 
-const timeoutSchema = z.number().int().positive();
+/** Every `timeout_ms` of the file: whole milliseconds, from 1 to the
+ * longest delay a timer keeps (src/timer/max-delay.ts), refused when the
+ * file is read rather than firing after 1 ms. */
+const timeoutSchema = z
+  .number()
+  .int("must be a whole number of milliseconds")
+  .min(1, "must be at least 1 ms")
+  .max(MAX_TIMER_DELAY_MS, `must be ${MAX_TIMER_DELAY_REASON}`);
 
 /** A `build` or `prepare` entry: a command, or a command with a
  * `timeout_ms` of its own. */
@@ -151,7 +159,7 @@ const serveSchema = z
     port: z.union([z.literal("auto"), z.number().int().min(1).max(65_535)]).default("auto"),
     /** The path that answers 2xx once the program can take requests. */
     ready: z.string().superRefine(refusedBy(readyPathProblem)).default("/"),
-    timeout_ms: z.number().int().positive().default(DEFAULT_SERVE_TIMEOUT_MS),
+    timeout_ms: timeoutSchema.default(DEFAULT_SERVE_TIMEOUT_MS),
   })
   .strict();
 

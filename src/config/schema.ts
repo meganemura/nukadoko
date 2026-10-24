@@ -2,6 +2,7 @@ import type { APIRequest, BrowserContextOptions, LaunchOptions } from "playwrigh
 import { z } from "zod";
 import type { ParameterTypeConfig as BindingParameterTypeConfig } from "../binding/parameter-type-config.js";
 import type { FixtureDefinition } from "../step/fixture-types.js";
+import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
 
 // Responsibility: the validated shape of nukadoko.config.ts's default
 // export, per docs/spec.md's config section (featuresDir, envFiles,
@@ -166,8 +167,8 @@ const fixtureDefinitionSchema: z.ZodType<FixtureDefinition, FixtureDefinition> =
           'not exist: a nuka run --concurrency worker is a process, so "process" already names one worker',
       );
     }
-    if (obj.timeout !== undefined && (typeof obj.timeout !== "number" || !(obj.timeout > 0))) {
-      ctx.addIssue("fixture options.timeout must be a positive number of milliseconds");
+    if (obj.timeout !== undefined && (typeof obj.timeout !== "number" || !(obj.timeout > 0) || obj.timeout > MAX_TIMER_DELAY_MS)) {
+      ctx.addIssue(`fixture options.timeout must be a positive number of milliseconds, ${MAX_TIMER_DELAY_REASON}`);
     }
     const unknownKeys = Object.keys(obj).filter((key) => key !== "scope" && key !== "timeout" && key !== "auto");
     if (unknownKeys.length > 0) {
@@ -229,7 +230,7 @@ export const configSchema = z
      * a fixture that forgets to call `use(...)` would leave `nuka run`
      * hanging indefinitely instead of failing with a named cause
      * (src/fixture/lifecycle.ts's own `FixtureTimeoutError`). */
-    fixtureTimeout: z.number().positive().default(60_000),
+    fixtureTimeout: z.number().positive().max(MAX_TIMER_DELAY_MS, `must be ${MAX_TIMER_DELAY_REASON}`).default(60_000),
     /** Which Playwright browser engine `ctx.page()` launches —
      * deliberately a separate key from `browser` below, never a
      * field mixed into it: `LaunchOptions` (`browser`'s own type) has no key
@@ -368,7 +369,7 @@ export const configSchema = z
      * step from starting to fail purely from switching
      * (src/compat/registry.ts, docs/migration.md). A typed step is not a
      * migrating asset, so the same reasoning does not reach it. */
-    stepTimeout: z.number().positive().default(DEFAULT_STEP_TIMEOUT_MS),
+    stepTimeout: z.number().positive().max(MAX_TIMER_DELAY_MS, `must be ${MAX_TIMER_DELAY_REASON}`).default(DEFAULT_STEP_TIMEOUT_MS),
     /** How long measurement stays on disk (docs/spec.md "Artifacts").
      * `runs`: the newest N `nuka run` invocations keep every record and
      * export file they wrote; at the end of each `nuka run`, an older run's
