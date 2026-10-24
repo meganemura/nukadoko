@@ -241,6 +241,7 @@ const table = z.looseObject({
     }),
   ),
   left_out: z.number().int(),
+  proof_runs: z.number().int().min(1),
 });
 
 const document = z.looseObject({

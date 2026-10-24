@@ -29,7 +29,7 @@ const base: RunDocument = {
   selection: "full",
   counts: { scenarios: 0, passed: 0, failed: 0, not_run: 0, controls: 0, controls_not_run: 0 },
   scenarios: [],
-  table: { base: null, mapping_changed: null, worlds: [{ world: "head", environment: "default" }], rows: [], left_out: 0 },
+  table: { base: null, mapping_changed: null, worlds: [{ world: "head", environment: "default" }], rows: [], left_out: 0, proof_runs: 2 },
 };
 
 // A document whose `table` reads its own scenarios, as `nuka run` builds

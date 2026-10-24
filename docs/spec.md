@@ -3818,7 +3818,8 @@ to act on the run without opening another file:
         "reason": "a claim broke at line 6 in default"
       }
     ],
-    "left_out": 0
+    "left_out": 0,
+    "proof_runs": 2
   }
 }
 ```
@@ -3918,7 +3919,8 @@ to act on the run without opening another file:
   three name, `runs`, the executions it holds, and for `not-run` a
   `reason`. `left_out` counts the selected criteria the run left out
   because `--env` named no environment that meets their conditions, 0
-  without `--env`. It is the table the run summary draws.
+  without `--env`. `proof_runs` is `--proof-runs`, what a control's
+  `runs` is measured against. It is the table the run summary draws.
 - `counts` holds `scenarios`, `passed`, and `failed`, which count the
   executions of required cells, and `not_run`, which counts the required
   cells that are `not-run`; `controls` counts the executions of
@@ -5047,8 +5049,9 @@ holds:
   carries no trace ids, or tagged the steps' lines only after they ended
   (see "Program"), every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
-  file), `check: skipped` under `nuka run --no-check` (nothing when the check
-  ran), the nukadoko version, the run id, and the start and finish times;
+  file), `proof runs: <n>` when `--proof-runs` is not 2, `check: skipped`
+  under `nuka run --no-check` (nothing when the check ran), the nukadoko
+  version, the run id, and the start and finish times;
 - under `--since`, "Criteria since `<ref>`": how many scenarios are
   unchanged, changed, and new, how many criteria were removed (and how many
   are ambiguous or not compared, when any are), which targets and which
@@ -5057,7 +5060,8 @@ holds:
   `gherkin` block, and under each changed step file every scenario that
   names it;
 - "Claims", one entry per Then that declared claims: its location and
-  sentence, the number of readings when there was more than one, and under
+  sentence, its environment in a run of several, `control` for a
+  control's, the number of readings when there was more than one, and under
   it one line per claim, in the words of its failure message with the
   outcome after them and `measured: <channel>` or `measured: none`, then
   `expected measured` for an expected value from `from` or `observe`

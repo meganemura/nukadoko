@@ -144,6 +144,13 @@ export function meets(tag: ConditionTag, conditions: Conditions | undefined): bo
  * the gate red. */
 export type CellRole = "required" | "control";
 
+/** How many runs a control has to break the same claim in before its row
+ * is `proven`: `--proof-runs` when the flag is not given, and the count
+ * the summary leaves unsaid. It lives here, beside the roles, rather than
+ * in src/run/, because `nuka --help` prints it from the option table,
+ * which must not load the run engine. */
+export const DEFAULT_PROOF_RUNS = 2;
+
 /** `required` where the environment meets every condition, `control`
  * where it meets the opposite of at least one. A scenario that names no
  * condition is required everywhere. Every environment is one or the

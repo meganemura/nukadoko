@@ -90,6 +90,7 @@ function table(proofRuns: number) {
       },
     ],
     left_out: 0,
+    proof_runs: proofRuns,
   };
 }
 
@@ -131,13 +132,21 @@ describe("nuka run: the verdict table", () => {
       ]);
       expect(stderr).toMatch(/^scenario \d\/8 {2}features\/banner\.feature:4 {2}the banner is on {2}\(control\)$/m);
       expect(stderr).toMatch(/^5 scenarios: 5 passed, 0 failed {2}\(\d+s\)\n5 control runs\ncriteria: 2 held, 2 proven, 0 failed\n/m);
+      // A control's claims are marked as a control's, and the default
+      // --proof-runs is not named.
+      expect(summary).toContain("\n- `features/banner.feature:5` the banner reads \"on\" (flag-off, control)\n  - \"off\" (observe:banner) equal \"on\" (sentence:state) broken; measured: none\n");
+      expect(summary).toContain("\n- `features/banner.feature:5` the banner reads \"on\" (flag-on)\n");
+      expect(summary).toContain(" An entry marked `control` is a control's: a claim it broke is evidence that the scenario tells the behaviour apart, not a failure.\n");
+      expect(summary).not.toContain("proof runs:");
     });
   }
 
   it("runs a control until --proof-runs agreeing failures, and no further", async () => {
-    const { exitCode, document } = await run(["features/banner.feature:4", "--proof-runs", "3"]);
+    const { exitCode, document, summary } = await run(["features/banner.feature:4", "--proof-runs", "3"]);
     expect(exitCode).toBe(0);
     expect(document.table.rows).toEqual([table(3).rows[0]]);
+    expect(document.table.proof_runs).toBe(3);
+    expect(summary).toContain("\n- proof runs: 3 (`--proof-runs`: a control proves its row once it breaks a claim at the same Then line in 3 runs)\n");
     expect((document.scenarios as unknown[]).length).toBe(4);
   });
 

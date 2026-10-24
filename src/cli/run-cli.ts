@@ -10,6 +10,7 @@ import { AGENT_ENTRY_POINT, HELP_WIDTH, type HelpGroup, helpLines, renderCommand
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
+import { DEFAULT_PROOF_RUNS } from "../condition/condition.js";
 import { formatFinding, type Finding } from "../finding/finding.js";
 import {
   REFUSED_EXIT_CODE,
@@ -608,7 +609,7 @@ export async function runCli(
         })
         .option("proof-runs", {
           type: "number",
-          default: 2,
+          default: DEFAULT_PROOF_RUNS,
           describe:
             "run a control cell (a scenario in an environment that does not meet its @with:/@without: conditions) until " +
             "a claim in Then has broken at the same line this many times, or a run disagrees (default 2); only then does " +
@@ -638,7 +639,7 @@ export async function runCli(
         json: args.json ?? false,
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
-        proofRuns: args["proof-runs"] ?? 2,
+        proofRuns: args["proof-runs"] ?? DEFAULT_PROOF_RUNS,
         ...(args.since !== undefined ? { since: args.since } : {}),
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.

@@ -282,6 +282,10 @@ export interface RunTable {
    * required cell, so nothing it showed would count. 0 without `--env`,
    * where `nuka check` reports such a criterion as `condition-unmet`. */
   readonly left_out: number;
+  /** `--proof-runs`: how many runs that broke the same claim a control
+   * needs before it proves its row, so a reader of the table knows what
+   * `proven` took. */
+  readonly proof_runs: number;
 }
 
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */

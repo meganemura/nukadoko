@@ -153,6 +153,7 @@ describe("nuka run: run.json", () => {
           },
         ],
         left_out: 0,
+        proof_runs: 2,
       },
       since: null,
     });

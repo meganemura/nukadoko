@@ -254,5 +254,6 @@ export function buildTable(input: TableInput): RunTable {
     worlds: input.environments.map((environment) => ({ world: "head", environment: environment.name })),
     rows,
     left_out: input.leftOut,
+    proof_runs: input.proofRuns,
   };
 }

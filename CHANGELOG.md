@@ -235,7 +235,9 @@ just until 0.1.
   `failed`, and `not_run` count required cells alone, as the stderr count
   line does; a run with a control adds a `<n> control runs` line under
   it. The run summary opens with the table and one line per red
-  row, and its per-feature tables and durations are gone. A passing
+  row, and its per-feature tables and durations are gone; its "Claims"
+  section marks a control's entries, and it names `--proof-runs`
+  (`table.proof_runs`) when it is not 2. A passing
   scenario says the code does what it says, not that the scenario would
   notice otherwise; a control that fails is the run that shows it would.
 

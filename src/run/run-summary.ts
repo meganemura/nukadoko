@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { DEFAULT_PROOF_RUNS } from "../condition/condition.js";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
 import type { RunClaim, RunDocument, RunScenario, RunTableCell, RunTableRow } from "../record/run-result.js";
@@ -177,6 +178,12 @@ function renderCondition(document: RunDocument): string[] {
     document.selection === "full"
       ? "- selection: full"
       : "- selection: partial (a line target left out other scenarios of its file)";
+  // Only a count other than the default is said, as `proven` reads
+  // with it: a control's `(n runs)` in the table is measured against it.
+  const proofRuns =
+    document.table.proof_runs === DEFAULT_PROOF_RUNS
+      ? []
+      : [`- proof runs: ${document.table.proof_runs} (\`--proof-runs\`: a control proves its row once it breaks a claim at the same Then line in ${document.table.proof_runs} runs)`];
   // Only a skipped check is said: a run whose check ran is the default, and
   // a finding of that check would have stopped it.
   const check =
@@ -191,6 +198,7 @@ function renderCondition(document: RunDocument): string[] {
     ...programLogs,
     browser,
     selection,
+    ...proofRuns,
     ...check,
     `- nukadoko: ${document.nukadoko}`,
     `- run: ${document.run_id}`,
@@ -514,15 +522,21 @@ function measuredText(claim: RunClaim, ownRecordId: string | null): string {
 // (src/report/summary/claim-line.ts): what was compared, with what, where
 // each value came from, and whether it held. A reader approving the run
 // reads what each criterion measured here without opening a record. Under
-// `--repeat`, a Then whose claims came out the same is one entry.
+// `--repeat`, a Then whose claims came out the same is one entry. A
+// control's entry says so, since its broken claim is the proof a reader
+// wants, not a failure to fix.
 function renderClaims(document: RunDocument): string[] {
   const named = document.environments.length > 1;
+  let anyControl = false;
   const entries = new Map<string, { readonly sortKey: [string, number]; readonly lines: readonly string[] }>();
   for (const scenario of document.scenarios) {
     for (const step of scenario.steps) {
       if (step.claims === undefined) continue;
       const where = `${scenario.feature}:${step.line ?? scenario.line}`;
-      const environment = named ? ` (${cellText(scenario.environment)})` : "";
+      const control = scenario.role === "control";
+      if (control) anyControl = true;
+      const marks = [...(named ? [cellText(scenario.environment)] : []), ...(control ? ["control"] : [])];
+      const environment = marks.length === 0 ? "" : ` (${marks.join(", ")})`;
       const attempts = step.attempts !== undefined && step.attempts > 1 ? `, ${step.attempts} readings` : "";
       const observation = step.observation === "unobserved" ? ", observed nothing" : "";
       const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${observation}`;
@@ -538,7 +552,8 @@ function renderClaims(document: RunDocument): string[] {
     "",
     "## Claims",
     "",
-    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`.",
+    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does). An expected value an earlier step returned or `observe` read gets the same, as `expected measured`." +
+      (anyControl ? " An entry marked `control` is a control's: a claim it broke is evidence that the scenario tells the behaviour apart, not a failure." : ""),
     "",
     ...sorted.flatMap((entry) => entry.lines),
   ];

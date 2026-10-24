@@ -255,6 +255,7 @@ describe("buildTable", () => {
         },
       ],
       left_out: 0,
+      proof_runs: 2,
     });
   });
 
