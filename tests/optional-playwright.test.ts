@@ -453,7 +453,10 @@ describe("the shipped declarations under the project's own tsc", () => {
     expect(init.stdout).toContain("tsconfig.json");
     await run(["scaffold", "run-greet", "--pattern", "I run greet with {name:string}", "--command"]);
     await run(["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
-    await run(["scaffold", "output-is-empty", "--pattern", "the output is empty", "--then"]);
+    // A word's literal needs the JSON type of the value it is compared with, so this one chains it.
+    await run(["scaffold", "output-is-empty", "--pattern", "the output is empty", "--then", "--from", "run-greet.stdout"]);
+    // A claim step that reads its value through observe, the shape a capture with no --from gets.
+    await run(["scaffold", "output-shows", "--pattern", "the output shows {text:string}", "--then"]);
     await run(["scaffold", "plain-stub", "--pattern", "nothing happens yet"]);
     await writeFile(
       path.join(dir, "features", "steps", "page-title.ts"),

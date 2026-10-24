@@ -85,10 +85,14 @@ just until 0.1.
   (exit 2), and `nuka scaffold --feature` skips such a Then line with a
   note. A word's literal is the one of the JSON type the single `--from`
   value's `returns` schema declares (`""`, `0`, or `[]`), compared with
-  `equal`, or with `not-equal` right after the word `not`; with no `--from`, several, or
-  one whose type the word fixes no value of, `--then` refuses and
-  `--feature` skips the line with a note, so neither writes a claim
-  across two JSON types.
+  `equal`, or with `not-equal` right after the word `not`; with no
+  `--from`, several, or one whose type the word fixes no value of,
+  `--then` refuses and `--feature` skips the line with a note. A stated
+  value and a `--from` value of two different JSON types (a `{string}`
+  capture against a `z.number()`) are not compared: the claim takes the
+  literal of the chained value's type that a word of the line fixes ("no
+  {thing:string} is shown" claims `0`), and `--then` refuses when no
+  word does. Neither writes a claim across two JSON types.
   `nuka scaffold --feature` writes the same claim step for a Then line.
   Neither writes `mutates: false` or an `assert` body any more.
 

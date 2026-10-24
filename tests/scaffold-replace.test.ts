@@ -4,7 +4,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { type Attachment, type ChainedField, isUneditedStub, type Producer, stepTemplate, thenLiteralRefusal, thenStatesValue } from "../src/cli/scaffold.js";
+import { type Attachment, type ChainedField, isUneditedStub, type Producer, stepTemplate, thenLiteralRefusal, thenStatesValue, thenTypeRefusal } from "../src/cli/scaffold.js";
 import { stripCaptureNames } from "../src/binding/pattern.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
@@ -195,7 +195,12 @@ function draftStub(tc: hegel.TestCase): { file: string; name: string; relativeFi
   const command = variant === "command";
   const attachment = pattern === null || command ? null : tc.draw(gs.sampledFrom<Attachment | null>([null, "docstring", "table"]));
   // scaffold refuses --then for a line that states no value, so it writes no such stub to read back.
-  tc.assume(variant !== "then" || (thenStatesValue(pattern, captures, attachment) && thenLiteralRefusal(pattern, captures, attachment, chained) === null));
+  tc.assume(
+    variant !== "then" ||
+      (thenStatesValue(pattern, captures, attachment) &&
+        thenLiteralRefusal(pattern, captures, attachment, chained) === null &&
+        thenTypeRefusal(pattern, captures, attachment, chained) === null),
+  );
   const file = stepTemplate({
     name,
     pattern,

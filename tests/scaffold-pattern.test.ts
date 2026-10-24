@@ -5,7 +5,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { type ChainedField, stepTemplate, thenLiteralRefusal } from "../src/cli/scaffold.js";
+import { type ChainedField, stepTemplate, thenLiteralRefusal, thenTypeRefusal } from "../src/cli/scaffold.js";
 import { claimsProblem } from "../src/step/claims.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot, withoutCheckNotes } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
@@ -438,7 +438,7 @@ describe("nuka scaffold --then: the claim it writes", () => {
     { valueClass: "other", jsonType: "array" },
   ];
 
-  it("is a claim defineStep accepts, whatever the keys are called", () =>
+  it("is a claim defineStep accepts, whatever the keys are called, and never compares two values of two known JSON types", () =>
     hegel.test((tc) => {
       const keys = tc.draw(gs.sets(gs.sampledFrom(keyNames), { minSize: 0, maxSize: 4 }));
       const ordered = [...keys];
@@ -446,16 +446,18 @@ describe("nuka scaffold --then: the claim it writes", () => {
       const captureKeys = ordered.slice(0, captureCount);
       const chainedKeys = ordered.slice(captureCount);
       const captures = captureKeys.map((key) => ({ key, type: tc.draw(gs.sampledFrom(types)) }));
-      // A line with no capture states its value with a word, or gets no stub.
-      const words = captures.length === 0 ? [tc.draw(gs.sampledFrom(["empty", "not empty", "holding nothing"]))] : [];
+      // A line with no capture states its value with a word, or gets no stub;
+      // a line with captures may hold a word too.
+      const words = captures.length === 0 ? [tc.draw(gs.sampledFrom(["empty", "not empty", "holding nothing"]))] : tc.draw(gs.sampledFrom([[], ["none"], ["empty"]]));
       const pattern = ["it is", ...captures.map((capture) => `{${capture.key}:${capture.type}}`), ...words].join(" ");
       const chained: ChainedField[] = chainedKeys.map((key) => ({
         key,
         producers: [{ step: "producer", identifier: "producer", specifier: "./producer.ts" }],
         ...tc.draw(gs.sampledFrom(kinds)),
       }));
-      // scaffold refuses a word's Then whose one chained value has no type the word fixes a value of.
-      tc.assume(thenLiteralRefusal(pattern, captures, null, chained) === null);
+      // scaffold refuses a word's Then whose one chained value has no type the word fixes a value of,
+      // and a stated value compared with a chained value of another JSON type.
+      tc.assume(thenLiteralRefusal(pattern, captures, null, chained) === null && thenTypeRefusal(pattern, captures, null, chained) === null);
       const file = stepTemplate({
         name: "it-is",
         pattern,
@@ -486,5 +488,18 @@ describe("nuka scaffold --then: the claim it writes", () => {
           stringArgs: null,
         }),
       ).toBeNull();
+      const jsonTypeOfKey = new Map<string, string | null>([
+        ...captures.map((capture): [string, string | null] => [capture.key, capture.type === "int" ? "number" : capture.type === "string" ? "string" : null]),
+        ...chained.map((field): [string, string | null] => [field.key, field.jsonType]),
+      ]);
+      const [claim] = claims as { actual: string; expected: string | { literal: unknown } }[];
+      const actualType = jsonTypeOfKey.get(claim!.actual) ?? null;
+      const expectedType =
+        typeof claim!.expected === "string"
+          ? (jsonTypeOfKey.get(claim!.expected) ?? null)
+          : Array.isArray(claim!.expected.literal)
+            ? "array"
+            : typeof claim!.expected.literal;
+      if (actualType !== null && expectedType !== null) expect(expectedType).toBe(actualType);
     }));
 });

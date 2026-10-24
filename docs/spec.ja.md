@@ -4132,33 +4132,37 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               refuses a pattern check would refuse in
                               this project, a type it does not register
                               included, with the registered type names.
-                              --then writes a claim step, for a step a
-                              Then line binds: claims in place of run,
-                              and no returns or mutates. With exactly one
-                              value the line states (a capture, the
-                              docstring, or the table) and exactly one
-                              --from, the claim compares the two with
-                              equal; a chained stdout or stderr string
-                              against a stated string gets view: "text",
-                              which trims the trailing newline a program
-                              prints last. Otherwise it writes an observe
-                              stub that throws "not implemented: <name>"
-                              and one claim on what observe returns
-                              against the first stated value. A line
-                              that states no value but holds a word that
-                              fixes one (no, none, nothing, empty) needs
-                              exactly one --from whose returns schema is
-                              a bare z.string(), z.number(), or
-                              z.array(): its claim compares that value
-                              with the word's literal of the same JSON
-                              type ("", 0, or []), with equal, or with
-                              not-equal right after the word "not". With
-                              no --from, several, one of another type,
-                              or one whose type the word fixes no value
-                              of, --then refuses and writes no literal.
-                              A pattern that states no value at all is
-                              refused, so --then never writes an
-                              expected value that observe computes.
+                              --then writes a claim step, for a step a Then
+                              line binds: claims in place of run, and no
+                              returns or mutates. With exactly one value the
+                              line states (a capture, the docstring, or the
+                              table) and exactly one --from, the claim
+                              compares the two with equal; a chained stdout
+                              or stderr string against a stated string gets
+                              view: "text", which trims the trailing newline
+                              a program prints last. When the two are of two
+                              different JSON types (a {string} capture
+                              against a z.number()), the claim compares the
+                              chained value with the literal of its type a
+                              word of the line fixes ("no {thing:string} is
+                              shown" claims 0), and --then refuses when no
+                              word does. Otherwise it writes an observe stub
+                              that throws "not implemented: <name>" and one
+                              claim on what observe returns against the
+                              first stated value. A line that states no
+                              value but holds a word that fixes one (no,
+                              none, nothing, empty) needs exactly one --from
+                              whose returns schema is a bare z.string(),
+                              z.number(), or z.array(): its claim compares
+                              that value with the word's literal of the same
+                              JSON type ("", 0, or []), with equal, or with
+                              not-equal right after the word "not". With no
+                              --from, several, one of another type, or one
+                              whose type the word fixes no value of, --then
+                              refuses and writes no literal. A pattern that
+                              states no value at all is refused, so --then
+                              never writes an expected value that observe
+                              computes.
                               observe's key is actual, or actual2, ...
                               past a key args holds. When every feature line the
                               pattern matches carries a docstring, args

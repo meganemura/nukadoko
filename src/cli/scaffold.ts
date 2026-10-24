@@ -445,8 +445,8 @@ export function importSpecifier(fromDir: string, toFile: string, spelling: Impor
 export type Attachment = "docstring" | "table";
 
 const ATTACHMENT_FIELD: Readonly<Record<Attachment, { readonly field: Field; readonly schema: string }>> = {
-  docstring: { field: { key: "docstring", valueClass: "string" }, schema: "z.string()" },
-  table: { field: { key: "table", valueClass: "other" }, schema: "z.array(z.array(z.string()))" },
+  docstring: { field: { key: "docstring", valueClass: "string", jsonType: "string" }, schema: "z.string()" },
+  table: { field: { key: "table", valueClass: "other", jsonType: "array" }, schema: "z.array(z.array(z.string()))" },
 };
 
 /** The attachment every line the pattern matches carries, or `null` when
@@ -519,9 +519,17 @@ function importLines(chained: readonly ChainedField[]): string[] {
   return lines;
 }
 
+/** The JSON type a capture's value has when its parameter type is a
+ * built-in one that yields a number or a string; `null` for a bigint and
+ * for a custom type, whose transformer's output is unknown. */
+function capturedJsonType(type: string): ChainedJsonType {
+  const captured = CAPTURED_CLASS.get(type);
+  return captured === "number" || captured === "string" ? captured : null;
+}
+
 function fieldsOf(captures: readonly Capture[], chained: readonly ChainedField[]): Field[] {
   return [
-    ...captures.map((capture) => ({ key: capture.key, valueClass: CAPTURED_CLASS.get(capture.type) ?? "other" })),
+    ...captures.map((capture) => ({ key: capture.key, valueClass: CAPTURED_CLASS.get(capture.type) ?? "other", jsonType: capturedJsonType(capture.type) })),
     ...chained.map(({ key, valueClass, jsonType }) => ({ key, valueClass, jsonType })),
   ];
 }
@@ -629,6 +637,49 @@ export function thenLiteralRefusal(
   return `the line states its value only with the word "${first.word}", which fixes ${values}, and ${why}; a literal of another JSON type would never hold`;
 }
 
+/** How `--then` compares a line's one stated value with its one chained
+ * value: `compare` the two, or, when both JSON types are known and differ
+ * (a value of one type never equals a value of another), compare the
+ * chained value with the literal a `word` of the line fixes of its type
+ * ("no {thing:string} is shown" against a count claims 0), or `refuse`
+ * when no word does. Pure. */
+function statedAgainstChained(pattern: string | null, stated: ChainedJsonType, chained: ChainedJsonType): "compare" | "word" | "refuse" {
+  if (stated === null || chained === null || stated === chained) return "compare";
+  return wordLiteral(pattern, chained) === null ? "refuse" : "word";
+}
+
+function withArticle(jsonType: Exclude<ChainedJsonType, null>): string {
+  return jsonType === "array" ? "an array" : `a ${jsonType}`;
+}
+
+/** The next step for a line `thenTypeRefusal` refuses, in words. */
+export const THEN_TYPE_FIX =
+  "Capture the value with a parameter type of the JSON type the chained value holds ({int} or {float} for a number, {string} for a text), or chain a value of the type the line states, and scaffold again.";
+
+/** Why `--then` writes no claim for a line that states one value and
+ * chains one of another JSON type, with no word of the line that fixes a
+ * value of the chained type (`statedAgainstChained`), or `null` when it
+ * can: such a claim never holds. Pure. */
+export function thenTypeRefusal(
+  pattern: string | null,
+  captures: readonly Capture[],
+  attachment: "docstring" | "table" | null | undefined,
+  chained: readonly Pick<ChainedField, "key" | "jsonType">[],
+): string | null {
+  const stated = [
+    ...captures.map((capture) => ({ what: `{${capture.key}:${capture.type}}`, jsonType: capturedJsonType(capture.type) })),
+    ...(attachment === null || attachment === undefined ? [] : [{ what: `its ${attachment}`, jsonType: ATTACHMENT_FIELD[attachment].field.jsonType ?? null }]),
+  ];
+  if (stated.length !== 1 || chained.length !== 1) return null;
+  const line = stated[0]!;
+  const only = chained[0]!;
+  if (line.jsonType === null || only.jsonType === null || statedAgainstChained(pattern, line.jsonType, only.jsonType) !== "refuse") return null;
+  return (
+    `the line states ${line.what}, ${withArticle(line.jsonType)}, and --from ${only.key} holds ${withArticle(only.jsonType)}, ` +
+    `and no word of the line fixes ${withArticle(only.jsonType)}; a claim across two JSON types would never hold`
+  );
+}
+
 /** A Then step's claims, and its `observe` while it has none to read from
  * (docs/spec.md "Claims"). The expected value is always one the line
  * states: a capture, the docstring, the table, or, for a line with none of
@@ -644,6 +695,14 @@ function thenLines(name: string, pattern: string | null, stated: readonly Field[
   if (expected === undefined) return wordThenLines(pattern, chained);
   if (stated.length === 1 && chained.length === 1) {
     const actual = chained[0]!;
+    const against = statedAgainstChained(pattern, expected.jsonType ?? null, actual.jsonType ?? null);
+    if (against === "refuse") throw new Error("internal: the caller should have refused this Then (thenTypeRefusal)");
+    if (against === "word") {
+      return [
+        `  // The line's ${expected.key} is ${withArticle(expected.jsonType!)} and ${actual.key} holds ${withArticle(actual.jsonType!)}, which never compare equal, so the claim reads the line's word.`,
+        ...wordThenLines(pattern, chained),
+      ];
+    }
     const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string" && expected.valueClass === "string";
     return [
       ...(text ? ["  // The program ends its output with a newline that the feature line does not show."] : []),
@@ -997,7 +1056,10 @@ export function isUneditedStub(source: string, name: string, relativeFilePath: s
         (attachment) =>
           // scaffold writes no Then stub for a line that states no value,
           // so that reading cannot match, and stepTemplate refuses to draw it.
-          (variant !== "then" || (thenStatesValue(pattern, captures, attachment) && thenLiteralRefusal(pattern, captures, attachment, chained) === null)) &&
+          (variant !== "then" ||
+            (thenStatesValue(pattern, captures, attachment) &&
+              thenLiteralRefusal(pattern, captures, attachment, chained) === null &&
+              thenTypeRefusal(pattern, captures, attachment, chained) === null)) &&
           stepTemplate({
             name,
             pattern,
@@ -1555,6 +1617,10 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
   const literalRefusal = then ? thenLiteralRefusal(pattern, read.captures, attachment, chained) : null;
   if (literalRefusal !== null) {
     return refuse(sinks, `Refusing to scaffold: --then: ${literalRefusal}`, "invalid-value", { fix: THEN_LITERAL_FIX });
+  }
+  const typeRefusal = then ? thenTypeRefusal(pattern, read.captures, attachment, chained) : null;
+  if (typeRefusal !== null) {
+    return refuse(sinks, `Refusing to scaffold: --then: ${typeRefusal}`, "invalid-value", { fix: THEN_TYPE_FIX });
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });

@@ -270,6 +270,31 @@ describe("nuka scaffold --from", () => {
     expect(empty.stderr).toContain('which fixes "" or [], and --from exitCode holds a number, a type no word of the line fixes a value of; a literal of another JSON type would never hold');
   });
 
+  it("compares a chained number with a word's 0 when the line's capture is a string, and refuses when no word of the line fixes a number", async () => {
+    expect((await cli(rootDir, ["scaffold", "no-greeting-is-shown", "--pattern", "no {greeting:string} is shown", "--then", "--from", "run-greet.exitCode"])).exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "no-greeting-is-shown.ts"), "utf8")).toContain(
+      [
+        "  // The line's greeting is a string and exitCode holds a number, which never compare equal, so the claim reads the line's word.",
+        '  // "no" states 0 for the type exitCode holds. A word\'s literal is compared with equal alone.',
+        '  claims: [{ actual: "exitCode", compare: "equal", expected: { literal: 0 } }],',
+      ].join("\n"),
+    );
+    const refused = await cli(rootDir, ["scaffold", "greet-exits-with", "--pattern", "greet exits with {code:string}", "--then", "--from", "run-greet.exitCode"]);
+    expect(refused).toEqual({
+      exitCode: 2,
+      stdout: "",
+      stderr:
+        "refused\tinvalid-value\t-\tRefusing to scaffold: --then: the line states {code:string}, a string, and --from exitCode holds a number, and no word of the line fixes a number; a claim across two JSON types would never hold\n" +
+        "  fix: Capture the value with a parameter type of the JSON type the chained value holds ({int} or {float} for a number, {string} for a text), or chain a value of the type the line states, and scaffold again.\n",
+    });
+    expect(existsSync(path.join(rootDir, "features", "steps", "greet-exits-with.ts"))).toBe(false);
+    // The same line with an {int} capture compares the two.
+    expect((await cli(rootDir, ["scaffold", "greet-exits-with-code", "--pattern", "greet exits with code {code:int}", "--then", "--from", "run-greet.exitCode"])).exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "greet-exits-with-code.ts"), "utf8")).toContain(
+      '  claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],',
+    );
+  });
+
   it("refuses --then when a word's values have no value of the chained value's type, or no value is chained, and writes nothing", async () => {
     const none = await cli(rootDir, ["scaffold", "the-list-is-empty", "--pattern", "the list is empty", "--then"]);
     expect(none).toEqual({
