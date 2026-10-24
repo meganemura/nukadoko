@@ -5,7 +5,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FILE_CAP, STEP_FILES_CAP } from "../src/context/kept-text.js";
+import { FILE_CAP, STEP_FILES_CAP, windowFor } from "../src/context/kept-text.js";
 import {
   changesFromTouches,
   compareScratch,
@@ -25,7 +25,10 @@ import { createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
 // is named apart and never a change, and merging them with the scratch
 // comparison gives one sorted entry per path, the scratch side winning.
 // The examples: an identity that cannot be read, a scratch directory
-// compared before and after, and the content caps.
+// compared before and after, and the content caps. The property of the
+// caps: whatever the step wrote, text or binary, describing it reads at
+// most the step's budget and one file's cap past it, keeps at most the
+// budget as text, and opens no file once the budget is spent.
 
 const paths = gs.sampledFrom(["/w/a", "/w/b", "/w/c", "/w/d/", "/w/e"]);
 const change = gs.sampledFrom<PathChange["change"]>(["added", "changed", "removed"]);
@@ -140,13 +143,80 @@ describe("the scratch comparison and the content caps", () => {
     });
   });
 
-  it("keeps each file's content up to its cap, and stops keeping content once the step's budget is spent", async () => {
+  it("keeps each file's content up to its cap and to what every byte read so far left of the step's budget", async () => {
+    const size = FILE_CAP + 10;
     const files = Array.from({ length: STEP_FILES_CAP / FILE_CAP + 1 }, (_, index) => path.join(dir, `f${String(index).padStart(2, "0")}.txt`));
-    for (const file of files) await writeFile(file, "x".repeat(FILE_CAP + 10));
+    for (const file of files) await writeFile(file, "x".repeat(size));
     const described = describeChanges(files.map((file) => ({ path: file, change: "added" as const })), []);
-    expect(described.slice(0, -1).every((entry) => entry.content?.text?.length === FILE_CAP && entry.content.truncated === true)).toBe(true);
-    expect(described.at(-1)).toEqual({ path: files.at(-1), change: "added", bytes: FILE_CAP + 10, content: { text: "", bytes: FILE_CAP + 10, truncated: true } });
+    // Each of these files is read whole, so after seven the budget has
+    // less than one file's cap left.
+    const full = Math.floor(STEP_FILES_CAP / size);
+    expect(described.slice(0, full).every((entry) => entry.content?.text?.length === FILE_CAP && entry.content.truncated === true)).toBe(true);
+    expect(described[full]?.content).toEqual({ text: "x".repeat(STEP_FILES_CAP - full * size), bytes: size, truncated: true });
+    expect(described.at(-1)).toEqual({ path: files.at(-1), change: "added", bytes: size, content: { text: "", bytes: size, truncated: true } });
   });
+
+  it("counts a binary file's read against the step's budget, though it keeps no text", async () => {
+    const files = Array.from({ length: 200 }, (_, index) => path.join(dir, `f${String(index).padStart(3, "0")}.bin`));
+    for (const file of files) await writeFile(file, Buffer.alloc(20_000, 0xff));
+    const { described, opened } = describedCounting(files);
+    const read = STEP_FILES_CAP / windowFor(FILE_CAP);
+    expect(opened).toEqual(files.slice(0, read));
+    expect(described.slice(0, read).every((entry) => entry.content?.binary === true)).toBe(true);
+    expect(described.slice(read).every((entry) => entry.bytes === 20_000 && entry.content?.text === "")).toBe(true);
+  });
+
+  it("reads at most its budget and one file's cap past it, keeps at most its budget, and opens no file once the budget is spent", () =>
+    hegel.test(
+      (tc) => {
+        const written = tc.draw(gs.arrays(gs.tuples(gs.integers({ minValue: 0, maxValue: 20_000 }), gs.booleans()), { maxSize: 14 }));
+        const caseDir = fs.mkdtempSync(path.join(dir, "case-"));
+        const files = written.map(([size, binary], index) => {
+          const file = path.join(caseDir, `f${String(index).padStart(2, "0")}`);
+          fs.writeFileSync(file, Buffer.alloc(size, binary ? 0xff : 0x78));
+          return file;
+        });
+        const { described, opened, reads } = describedCounting(files);
+        const bytesRead = reads.reduce((sum, count) => sum + count, 0);
+        const kept = described.reduce((sum, entry) => sum + Buffer.byteLength(entry.content?.text ?? "", "utf8"), 0);
+        expect(bytesRead).toBeLessThanOrEqual(STEP_FILES_CAP + FILE_CAP);
+        expect(kept).toBeLessThanOrEqual(STEP_FILES_CAP);
+        // The files opened are the first ones, up to the one that spent
+        // the budget: the reads before the last one stayed under it.
+        expect(opened).toEqual(files.slice(0, opened.length));
+        expect(reads.slice(0, -1).reduce((sum, count) => sum + count, 0)).toBeLessThan(STEP_FILES_CAP);
+        if (opened.length < files.length) expect(bytesRead).toBeGreaterThanOrEqual(STEP_FILES_CAP);
+      },
+      { testCases: 40 },
+    ));
+
+  /** `describeChanges` over `files`, all added, with the files it opened
+   * and the bytes it read from each. step-files.ts imports `openSync` and
+   * `readSync` by name, so the count goes through the same export refresh
+   * the channel patches use. */
+  function describedCounting(files: readonly string[]): { described: ReturnType<typeof describeChanges>; opened: string[]; reads: number[] } {
+    const { openSync, readSync } = fs;
+    const opened: string[] = [];
+    const reads: number[] = [];
+    fs.openSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+      opened.push(String(target));
+      reads.push(0);
+      return (openSync as (...a: unknown[]) => number)(target, ...rest);
+    }) as typeof fs.openSync;
+    fs.readSync = ((...args: unknown[]) => {
+      const count = (readSync as (...a: unknown[]) => number)(...args);
+      reads[reads.length - 1]! += count;
+      return count;
+    }) as typeof fs.readSync;
+    syncBuiltinESMExports();
+    try {
+      return { described: describeChanges(files.map((file) => ({ path: file, change: "added" as const })), []), opened, reads };
+    } finally {
+      fs.openSync = openSync;
+      fs.readSync = readSync;
+      syncBuiltinESMExports();
+    }
+  }
 
   it("opens no file once the step's budget is spent, and takes the size of the rest from lstat", async () => {
     const kept = STEP_FILES_CAP / FILE_CAP;

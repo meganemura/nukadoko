@@ -2346,7 +2346,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   `path` は絶対パスで、ディレクトリは末尾に `/` が付きます。
   `change` は `added`、`changed`、`removed` のどれかです。
   `bytes` は step の後のファイルのサイズで、`content` は step の後のそのテキスト(下記)です。
-  `content` は 1 ファイルあたり 8 KiB、1 step あたり 64 KiB までです。
+  `content` は 1 ファイルあたり 8 KiB までです。
+  step がファイルの中身を読むのは全部で 64 KiB までで、テキストでもバイナリでも、読んだバイトはすべてこの上限に数えます。
+  バイナリのファイルはテキストを残しませんが、読む手間は同じだからです。
   step の上限を超えたファイルは開きません。
   その `bytes` は `lstat` によるサイズで、`content` は `{ "text": "", "bytes", "truncated": true }` です。
   ディレクトリと消えたパスはどちらも持ちません。

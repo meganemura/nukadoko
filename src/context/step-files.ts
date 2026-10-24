@@ -35,8 +35,11 @@ import { FILE_CAP, keepText, STEP_FILES_CAP, windowFor } from "./kept-text.js";
 //
 // Contents are read once, after the step, so a file written in several
 // calls is kept as it ended up. Each file keeps at most FILE_CAP bytes of
-// text and the step at most STEP_FILES_CAP, so a step that writes a
-// thousand files cannot make its record the largest file of the run.
+// text, and the step reads at most STEP_FILES_CAP bytes of content in all,
+// so a step that writes a thousand files cannot make its record the
+// largest file of the run, nor its end a thousand reads. The budget counts
+// every byte read, text or not: a binary file keeps no text, but reading
+// it costs the same.
 
 export type Change = FileChange["change"];
 
@@ -165,9 +168,11 @@ export function compareScratch(
 }
 
 /** The record's entries for `changes`: each file's size and content
- * after the step, within the caps. Once the step's budget is spent, a
- * file is no longer opened: its size comes from `lstat`, so a step that
- * wrote a thousand files costs a thousand stats, not a thousand reads. */
+ * after the step, within the caps. Each file reads the window for what it
+ * may still keep, and every byte read comes off the step's budget. Once
+ * the budget is spent, a file is no longer opened: its size comes from
+ * `lstat`, so a step that wrote a thousand files costs a thousand stats,
+ * not a thousand reads. */
 export function describeChanges(changes: readonly PathChange[], secrets: SecretSet): FileChange[] {
   let budget = STEP_FILES_CAP;
   return changes.map((entry) => {
@@ -177,10 +182,11 @@ export function describeChanges(changes: readonly PathChange[], secrets: SecretS
     if (budget <= 0) {
       return { path: entry.path, change: entry.change, bytes: info.size, content: { text: "", bytes: info.size, truncated: true } };
     }
-    const read = readStart(entry.path, Math.min(windowFor(FILE_CAP), info.size));
+    const cap = Math.min(FILE_CAP, budget);
+    const read = readStart(entry.path, Math.min(windowFor(cap), info.size));
     if (read === undefined) return { path: entry.path, change: entry.change };
-    const kept = keepText(read, read.length >= info.size, Math.min(FILE_CAP, budget), secrets);
-    if ("text" in kept) budget -= Buffer.byteLength(kept.text, "utf8");
+    budget -= read.length;
+    const kept = keepText(read, read.length >= info.size, cap, secrets);
     return { path: entry.path, change: entry.change, bytes: info.size, content: { ...kept, bytes: info.size } };
   });
 }

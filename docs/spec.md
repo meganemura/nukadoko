@@ -2869,7 +2869,9 @@ its scenario record's id, so either record leads to the other.
   is absolute, with a trailing `/` for a directory, and `change` is
   `added`, `changed`, or `removed`. `bytes` is the file's size after
   the step and `content` its text after the step (below), at most 8 KiB
-  per file and 64 KiB per step; past the step's budget a file is not
+  per file. The step reads at most 64 KiB of file content in all, and
+  every byte read counts, text or binary: a binary file keeps no text,
+  but reading it costs the same. Past the step's budget a file is not
   opened, its `bytes` is its size from `lstat`, and its content is
   `{ "text": "", "bytes", "truncated": true }`. A directory and a removed
   path have neither. `run.json` copies the list without `content`. A step

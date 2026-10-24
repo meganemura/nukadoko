@@ -43,8 +43,9 @@ just until 0.1.
   redacted text of at most 16 KiB each; headers are never written.
   `files` lists the paths the step changed in a scratch directory or
   wrote through `node:fs`, with their content after the step, at most
-  8 KiB per file and 64 KiB per step; a path whose identity cannot be
-  read is named in `unmeasured` instead, and reading it never throws
+  8 KiB per file, from at most 64 KiB read per step, text or binary; a
+  path whose identity cannot be read is named in `unmeasured` instead,
+  and reading it never throws
   into the step or ends the run. A `fetch` in a step gets exactly the
   arguments the step passed, whatever object its `init` is, so a stream
   or FormData body there is unread. A `fetch` body is read only to
