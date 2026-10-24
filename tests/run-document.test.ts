@@ -91,6 +91,8 @@ describe("buildRunScenario", () => {
         recordPath: (id) => `steps/${id}`,
         evidenceDir: "scenarios/scn-1",
         rerun: "nuka run features/a.feature:3",
+        inThen: () => false,
+        stepKind: () => "run",
       });
 
       expect(entry.steps).toHaveLength(steps.length);

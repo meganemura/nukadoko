@@ -43,6 +43,7 @@ const comparisonClaim = z.looseObject({
   expected_from: z.string(),
   outcome: claimOutcome,
   reason: z.string().optional(),
+  measured: z.looseObject({ step_record_id: z.string(), channel: z.string() }).nullable().optional(),
 });
 
 const itemDeclaration = z.looseObject({
@@ -77,6 +78,7 @@ const eachClaim = z.looseObject({
   }),
   outcome: claimOutcome,
   reason: z.string().optional(),
+  measured: z.looseObject({ step_record_id: z.string(), channel: z.string() }).nullable().optional(),
 });
 
 const process = z.looseObject({
@@ -181,6 +183,15 @@ const scenario = z.looseObject({
       step_files: z.array(z.string()).optional(),
     })
     .optional(),
+  claims: z
+    .looseObject({
+      held: z.number().int(),
+      broken: z.number().int(),
+      unobserved: z.number().int().optional(),
+      unjudged: z.number().int().optional(),
+    })
+    .optional(),
+  judged_by: z.enum(["compat", "nothing"]).optional(),
 });
 
 const document = z.looseObject({
@@ -196,6 +207,7 @@ const document = z.looseObject({
   commit: z.looseObject({ sha: z.string(), dirty: z.boolean() }).nullable(),
   environments: z.array(z.looseObject({ name: z.string(), target_version: z.string().nullable(), base_url: z.string().nullable().optional() })),
   selection: z.enum(["full", "partial"]),
+  check: z.enum(["ran", "skipped"]).optional(),
   counts: z.looseObject({ scenarios: z.number().int(), passed: z.number().int(), failed: z.number().int(), not_run: z.number().int() }),
   scenarios: z.array(scenario),
   verdicts: z.array(

@@ -4,7 +4,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { type Attachment, type ChainedField, isUneditedStub, type Producer, stepTemplate } from "../src/cli/scaffold.js";
+import { type Attachment, type ChainedField, isUneditedStub, type Producer, stepTemplate, thenStatesValue } from "../src/cli/scaffold.js";
 import type { PrimitiveClass } from "../src/binding/schema-shape.js";
 import { stripCaptureNames } from "../src/binding/pattern.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
@@ -130,7 +130,8 @@ describe("nuka scaffold --replace", () => {
   });
 });
 
-const word = gs.sampledFrom(["I", "run", "greet", "with", "the", "output", "is", "it's", "a/b", "(x)", "\\{"]);
+// "none" and "empty" state a value, so a --then stub of a line with no capture is drawn too.
+const word = gs.sampledFrom(["I", "run", "greet", "with", "the", "output", "is", "it's", "a/b", "(x)", "\\{", "none", "empty"]);
 const capture = gs.sampledFrom(["string", "int", "float", "word", "custom"]);
 
 function draftPattern(tc: hegel.TestCase): string | null {
@@ -187,6 +188,8 @@ function draftStub(tc: hegel.TestCase): { file: string; name: string; relativeFi
   const stringKeys = [...captures.filter((capture) => capture.type === "string").map((capture) => capture.key)];
   const command = variant === "command";
   const attachment = pattern === null || command ? null : tc.draw(gs.sampledFrom<Attachment | null>([null, "docstring", "table"]));
+  // scaffold refuses --then for a line that states no value, so it writes no such stub to read back.
+  tc.assume(variant !== "then" || thenStatesValue(pattern, captures, attachment));
   const file = stepTemplate({
     name,
     pattern,

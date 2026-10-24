@@ -5,7 +5,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { analyzeProject } from "../src/check/analyze.js";
 import { findScenarioShapeFindings, parseFeatureSource } from "../src/feature/load-features.js";
-import { createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
+import { createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot } from "./helpers/fixtures.js";
 
 const CONFIG = 'import { defineConfig } from "nukadoko";\nexport default defineConfig({});\n';
 
@@ -39,6 +39,15 @@ const CLAIM_STEP = [
   "});",
   "",
 ].join("\n");
+
+// A compat step bound in Then position judges by throwing, which nukadoko
+// cannot see. A relative import of this checkout's compat entry: the bare
+// "nukadoko/compat" resolves to dist/ from a project nested in this
+// repository, a module instance discovery from src/ does not share.
+function compatStep(stepsDir: string): string {
+  const compat = path.relative(stepsDir, path.join(repoRoot, "src", "compat", "index.js")).split(path.sep).join("/");
+  return [`import { Then } from "${compat}";`, 'Then("the word was seen", function () {});', ""].join("\n");
+}
 
 const FEATURE = [
   "Feature: shapes",
@@ -75,6 +84,10 @@ const FEATURE = [
   "      | word |",
   "      | a    |",
   "",
+  "  Scenario: a compat Then",
+  '    When the word is "a"',
+  "    Then the word was seen",
+  "",
 ].join("\n");
 
 describe("nuka check: scenario-without-then and outline-rows-share-name", () => {
@@ -87,6 +100,7 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
     await writeFile(path.join(rootDir, "nukadoko.config.ts"), CONFIG);
     await writeFile(path.join(rootDir, "features", "steps", "word.ts"), STEP);
     await writeFile(path.join(rootDir, "features", "steps", "word-should-be.ts"), CLAIM_STEP);
+    await writeFile(path.join(rootDir, "features", "steps", "word-was-seen.ts"), compatStep(path.join(rootDir, "features", "steps")));
     await writeFile(path.join(rootDir, "features", "shapes.feature"), FEATURE);
   });
 
@@ -94,8 +108,9 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
     await removeTempDir(rootDir);
   });
 
-  it("warns on a scenario with no Then and on an outline whose rows share its name, and on nothing else", async () => {
+  it("warns on each scenario that judges no claim and on an outline whose rows share its name, and on nothing else", async () => {
     const report = await analyzeProject(rootDir);
+    const fix = "Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.";
 
     expect(report.errors).toEqual([]);
     expect(report.warnings).toEqual([
@@ -105,7 +120,15 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
           'Scenario "no outcome" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.',
         file: "features/shapes.feature",
         line: 3,
-        fix: "Add a Then line that checks the outcome the scenario is for.",
+        fix,
+      },
+      {
+        code: "scenario-without-then",
+        message:
+          'Scenario "only stars" has only * lines, so no line is in Then position and no claim is judged: it passes whenever its steps run without an error.',
+        file: "features/shapes.feature",
+        line: 12,
+        fix,
       },
       {
         code: "outline-rows-share-name",
@@ -115,27 +138,43 @@ describe("nuka check: scenario-without-then and outline-rows-share-name", () => 
         line: 15,
         fix: "Add a column to the name, such as: words <word>",
       },
+      {
+        code: "then-compat-step",
+        message:
+          'Step "compat: the word was seen" is a compat step bound in Then position. A compat step cannot declare claims, so nukadoko cannot see what it judges; this is a static coverage gap, not something the tool caught at run time (docs/spec.md "Compat steps", "Claims")',
+        file: "features/shapes.feature",
+        line: 37,
+        step: "compat: the word was seen",
+        fix: "Move the step to defineStep with claims, or move the line out of Then position.",
+      },
+      {
+        code: "scenario-without-then",
+        message:
+          'Scenario "a compat Then" judges no claim: none of its Then lines binds a claim step, so it passes whenever its steps run without an error. A compat step in Then position judges by throwing or not, and nukadoko cannot see what it checked.',
+        file: "features/shapes.feature",
+        line: 37,
+        fix,
+      },
     ]);
   });
 });
 
 const KEYWORDS = ["Given", "When", "Then", "And", "But", "*"] as const;
 
-/** Whether a scenario of these keywords, under a Background of those, has no
- * Then position anywhere and a Given or When position among its own steps,
- * reading And and But as the keyword before them. */
+/** Whether a scenario of these keywords, under a Background of those, has
+ * steps of its own and no Then position anywhere, reading And and But as
+ * the keyword before them. */
 function lacksThen(background: readonly string[], keywords: readonly string[]): boolean {
   let position = "*";
   const positions = [...background, ...keywords].map((keyword) => {
     position = keyword === "And" || keyword === "But" ? position : keyword;
     return position;
   });
-  const own = positions.slice(background.length);
-  return !positions.includes("Then") && own.some((p) => p === "Given" || p === "When");
+  return keywords.length > 0 && !positions.includes("Then");
 }
 
 describe("findScenarioShapeFindings", () => {
-  it("warns once for each scenario with no Then position, under the Background too, and some Given or When of its own", () =>
+  it("warns once for each scenario with steps of its own and no Then position, under the Background too", () =>
     hegel.test((tc) => {
       const background = tc.draw(gs.arrays(gs.sampledFrom(KEYWORDS), { maxSize: 3 }));
       const scenarios = tc.draw(

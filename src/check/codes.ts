@@ -63,9 +63,15 @@ const CHECK_CODES = {
   },
   "claim-compares-itself": {
     description:
-      "A claim's actual value and its expected value resolve to the same place: the same path of the same earlier line's result, or the same observe path. Such a claim holds whatever the behaviour is.",
+      "A claim's actual value and its expected value resolve to the same place: the same path of the same earlier line's result, or the same observe path, with a view and an at counted as steps of the path. Such a claim holds whatever the behaviour is. Also reported for a claim step whose observe receives a from value that an expected from reads, or one that holds it or that it holds, so observe could return the expected value as the actual one.",
     severity: "error",
-    fix: "Take the expected value from the sentence (a capture, the docstring, or the table), or from another step's result, so the two sides can differ.",
+    fix: "Take the expected value from the sentence (a capture, the docstring, or the table), or from another step's result, so the two sides can differ. For observe, give it values from another step, or none from the step the expected value comes from.",
+  },
+  "claim-expected-transformed": {
+    description:
+      "A claim step names an args key as its expected value, and a pattern fills that key with a parameter type that config.parameterTypes or a compat defineParameterType registered with a transformer. The transformer rewrites the line's text before the claim reads it, so code would decide what the claim compares while the record labels the value as the sentence's.",
+    severity: "error",
+    fix: "Capture the key with a type that has no transformer, such as {key:string}, and declare expected_view (text, lines, or json) on the claim if the text needs one.",
   },
   "claim-path-unknown": {
     description:
@@ -260,9 +266,9 @@ const CHECK_CODES = {
   },
   "scenario-without-then": {
     description:
-      "A scenario has a Given or When step of its own and no Then step, in it or in its Background, so it passes whenever its steps run without an error. A * line counts as neither.",
+      "A scenario judges no claim, so it passes whenever its steps run without an error: it has steps of its own and no Then step, in it or in its Background (a scenario of only * lines included, since a * line has no position), or each of its Then lines binds a step that is not a claim step, such as a compat step.",
     severity: "warning",
-    fix: "Add a Then line that checks the outcome the scenario is for.",
+    fix: "Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.",
   },
   "schema-field-undescribed": {
     description:

@@ -66,10 +66,11 @@ each stub's own single scaffold with `--replace`; add `--command` or
    one value the line states and one `--from`, the claim compares the two
    with `equal`, and a chained `stdout` or `stderr` is read through `view:
    "text"`, without the newline the program printed last; otherwise it
-   writes an `observe` stub to fill in. A step whose feature lines carry a docstring or a table
-   gets a `docstring` or `table` key, which a Then claims like a
-   capture; write the feature line first, or add the key by hand, or
-   `nuka check` reports `table-docstring-key-mismatch`.
+   writes an `observe` stub to fill in, and refuses a line that states no
+   value. A step whose feature lines carry a docstring or a table gets a
+   `docstring` or `table` key, which a Then claims like a capture; write
+   the feature line first, or add the key by hand, or `nuka check` reports
+   `table-docstring-key-mismatch`.
    Add `--from <step>.<key>` for each value the step reads from an
    earlier step's result: it writes the import, the args field, and the
    `from` entry ("Chaining a value from an earlier step"). Repeat it with
@@ -156,8 +157,7 @@ its own, not that it works in the scenario's own order; only `run` checks
 that. Nothing carries across `do` calls or into a scenario, login state
 included, so shared state needs fixing in the feature: give it its own
 step, named for what it establishes, and call it once. A scenario that
-needs to be signed in gets that from a fixture or a Given step its feature
-names.
+needs to be signed in gets it from a fixture or a Given step its feature names.
 
 A step that declares `from` (see "Chaining a value from an earlier step"
 below) still runs alone: pass the key in `--args` like any other, or add
@@ -175,10 +175,10 @@ scenario reads as what actually chains to what). For a new step, `nuka
 scaffold <name> --from other-step.resultKey` writes it: the import, the
 args field typed by the producer's own schema
 (`resultKey: otherStep.returns.shape.resultKey`), and the `from` entry.
-Only fall back to the `resultOf` fixture inside `run` for a read `from`
-cannot express: the value needs reshaping on the way, which upstream step
-to read is decided at run time, or the whole result is wanted rather than
-one key of it.
+Only fall back to the `resultOf` fixture inside `run` (it throws in a claim
+step) for a read `from` cannot express: the value needs reshaping on the
+way, which upstream step to read is decided at run time, or the whole
+result is wanted rather than one key of it.
 
 A value that can arrive two ways (created in one scenario, imported in
 another) lists both, and the consuming step stays one step: `from: { key:

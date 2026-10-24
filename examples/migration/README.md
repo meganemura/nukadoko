@@ -15,7 +15,7 @@ demonstration. It is not "before" or "after"; it is the messy, realistic
 middle: some glue is still cucumber-js-shaped compat code, one World key has
 been promoted to a validated, declared field while another is still a plain
 undeclared stash, and one producer/consumer pair has already been promoted
-all the way to typed steps wired through the `resultOf` fixture. The four stages
+all the way to typed steps wired through `from`. The four stages
 below walk through how a project actually gets to a state that looks like
 this one, in order, each with its own real command and its own real output.
 
@@ -73,9 +73,9 @@ terminal, in this same directory.
   respectively.
 - `features/steps/create-todo.ts` / `features/steps/created-todo-is-
   titled.ts` -- the one promoted producer/consumer pair (Stage 2), wired
-  through the `resultOf` fixture instead of a World write. The consumer is
-  a claim step: it reads the producer's result and declares what it
-  claims, with no `run`.
+  through `from` instead of a World write. The consumer is a claim step:
+  it reads the producer's result through `from` and declares what it
+  claims, with no `run` and no `observe`.
 
 `nuka steps --json` lists the whole mixed vocabulary, typed and compat side
 by side (real captured output, trimmed to each entry's `name`, `kind`,
@@ -95,9 +95,9 @@ and the claim step's `claims`):
     "name": "created-todo-is-titled",
     "kind": "typed",
     "patterns": ["the created todo is titled {title:string}"],
-    "description": "The todo the previous step created, read through resultOf, has this title",
+    "description": "The todo the previous step created has this title, as the app returned it",
     "mutates": false,
-    "claims": [{ "actual": "created.title", "compare": "equal", "expected": "title" }]
+    "claims": [{ "actual": "createdTitle", "compare": "equal", "expected": "title" }]
   },
   {
     "name": "compat: a legacy note {string} is stashed",
@@ -226,7 +226,7 @@ and `hooks`; ids and timestamps will differ on your own run):
   "hooks": [{ "type": "before", "status": "passed" }]
 }
 {
-  "scenario": "a promoted producer feeds a typed consumer via resultOf",
+  "scenario": "a promoted producer feeds a typed consumer via from",
   "status": "passed",
   "steps": [
     { "text": "a todo titled \"Read a book\" is created", "status": "passed", "step_record_id": "step-...-x9fp" },
@@ -318,11 +318,11 @@ this stage: `seededCount` and `note` sit side by side in the same class,
 one declared, one not, and `nuka check`/`nuka run` are unbothered by
 either.
 
-## Stage 2 -- promoting a producer to `resultOf`
+## Stage 2 -- promoting a producer to `from`
 
 The full promotion: a step that used to be compat glue producing data onto
 `this`, and a second step reading it back off `this`, become a typed
-producer and a typed consumer wired through the `resultOf` fixture --
+producer and a typed consumer wired through `from` --
 [`features/steps/create-todo.ts`](features/steps/create-todo.ts):
 
 ```ts
@@ -339,21 +339,23 @@ export default defineStep({
 ```
 
 and [`features/steps/created-todo-is-titled.ts`](features/steps/created-todo-is-titled.ts),
-a claim step: `observe` reads the producer's result, and the claim says
-its title is the one the sentence names:
+a claim step: `from` fills `createdTitle` with the title the producer
+returned, and the claim says it is the one the sentence names:
 
 ```ts
 import createTodo from "./create-todo.ts";
 
 export default defineStep({
   pattern: "the created todo is titled {title:string}",
-  args: z.object({ title: z.string() }),
-  observe({ resultOf }) {
-    return { created: resultOf(createTodo) ?? null };
-  },
-  claims: [{ actual: "created.title", compare: "equal", expected: "title" }],
+  args: z.object({ title: z.string(), createdTitle: z.string() }),
+  from: { createdTitle: [createTodo, "title"] },
+  claims: [{ actual: "createdTitle", compare: "equal", expected: "title" }],
 });
 ```
+
+A claim step reads an earlier step's result only through `from`: inside
+`observe`, `resultOf` throws, because a value read there would reach the
+claim with no record of where it came from.
 
 Producer before consumer, deliberately -- migration-knowhow's own
 recommended order: a consumer can only read a validated result once one
@@ -380,7 +382,7 @@ and `step-...-f602`), trimmed the same way:
   "claims": [
     {
       "actual": "Read a book",
-      "actual_from": "observe:created.title",
+      "actual_from": "from:create-todo@19.title",
       "compare": "equal",
       "expected": "Read a book",
       "expected_from": "sentence:title",
@@ -398,10 +400,12 @@ and `step-...-f602`), trimmed the same way:
 (its step record has no `http.jsonl`) and never touched a World. There is
 no World field here at all, for either step record, because a typed step
 never receives `this`. It read the producer's own validated title
-straight through the `resultOf` fixture, and that read is recorded by the
-tool, not declared by either step. The claim record says where each side
-of the comparison came from: the actual value from what `observe`
-returned, the expected one from the sentence. This pair is this suite's
+through `from`, and that read is recorded by the tool, not declared by
+either step. The claim record says where each side of the comparison came
+from: the actual value from the title of the `create-todo` step on line
+19, the expected one from the sentence. `measured` is `null` because no
+recorded channel holds exactly `"Read a book"`: the producer's response
+body holds it inside a larger JSON object. This pair is this suite's
 fully-migrated end state: no stash, no compat glue, no `this` at all.
 
 ## Going back

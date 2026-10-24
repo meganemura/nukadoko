@@ -207,7 +207,7 @@ scenario with no Then (S2):
 
 ```
 warning	scenario-without-then	probe/no-then.feature:3	Scenario "a run with no claim" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.
-  fix: Add a Then line that checks the outcome the scenario is for.
+  fix: Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.
 ```
 
 The action under test written as a Given, with no Given before it (S10):

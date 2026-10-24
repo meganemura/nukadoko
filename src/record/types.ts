@@ -663,7 +663,8 @@ export type ClaimOutcome = "held" | "broken" | "unobserved" | "unjudged";
 
 /** A recorded channel whose content equals a claim's raw actual value:
  * `channel` is a path inside that step record, such as
- * `observed.processes[0].stdout`, `http.jsonl[1].response_body`, or
+ * `observed.processes[0].stdout`, `observed.processes[0].exit_code`,
+ * `http.jsonl[1].response_body`, `http.jsonl[1].status`, or
  * `observed.files[0].content`. Information about where the value came
  * from, never a condition of the claim. */
 export interface MeasuredChannel {
@@ -747,6 +748,27 @@ export interface ClaimEachRecord {
   };
   readonly outcome: ClaimOutcome;
   readonly reason?: string;
+}
+
+/** What one claim read on one reading of a polled claim step: the value
+ * it compared as actual, the start of that value's JSON and its size when
+ * the JSON is longer than `CLAIM_READING_MAX_BYTES`, or why it had no
+ * value. */
+export type ClaimReadingValue =
+  | { readonly value: unknown }
+  | { readonly json_start: string; readonly json_bytes: number }
+  | { readonly reason: string };
+
+/** One reading of a polled claim step: its number among the step's
+ * readings, when it happened, whether every claim held on it, and either
+ * what each claim read (`actuals`, in claim order) or the first line of
+ * the error `observe` threw. */
+export interface ClaimReading {
+  readonly attempt: number;
+  readonly at: string;
+  readonly held: boolean;
+  readonly actuals?: readonly ClaimReadingValue[];
+  readonly error?: string;
 }
 
 /** A claim as the step record carries it (docs/spec.md "Claims"):
@@ -1075,6 +1097,13 @@ export interface StepRecordBase {
    * `observe` call counts; a step with no `observe` reads its `from`
    * values once. */
   attempts?: number;
+  /** A polled claim step only: its readings, the first
+   * `CLAIM_READINGS_HEAD` and the last `CLAIM_READINGS_TAIL`, oldest
+   * first; `attempt` says where a gap falls. `poll` reads until every
+   * claim holds, so how many times `observe` is called tells it whether a
+   * reading held; what each reading read shows a value that walked toward
+   * the expected one. */
+  readings?: ClaimReading[];
 }
 
 export interface StepRecordPassed extends StepRecordBase {

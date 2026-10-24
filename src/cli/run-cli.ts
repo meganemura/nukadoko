@@ -752,7 +752,7 @@ export async function runCli(
         .option("then", {
           type: "boolean",
           default: false,
-          describe: "a claim step for a Then line: claims in place of run",
+          describe: "a claim step for a Then line: claims in place of run, against a value the line states (a capture, the docstring, the table, or a word such as none); a line that states none is refused",
         })
         .option("command", {
           type: "string",
@@ -853,7 +853,7 @@ export async function runCli(
   const checkCommand: CommandModule<Record<string, never>, CheckArgs> = {
     command: "check [feature..]",
     describe:
-      "static checks: pattern/schema mismatches, Then binding to mutating steps, undefined steps per feature, duplicate patterns, config coherence, and notes on unused declarations",
+      "static checks: pattern/schema mismatches, claim steps and where they are bound, undefined steps per feature, duplicate patterns, config coherence, and notes on unused declarations",
     builder: (y: Argv) =>
       y
         .positional("feature", {

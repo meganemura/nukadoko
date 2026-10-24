@@ -102,7 +102,12 @@ says. Expect one of four answers, each citing the field it rests on:
 Without a subagent, judge it yourself from the record alone and say so.
 
 A claim's `measured` names the channel in the record that holds the raw
-value it compared. A Then whose `observe` reads a file and claims on it
+value it compared, and the run summary prints it on the claim's line as
+`measured: <channel>` or `measured: none`. `none` is what a constant in
+step code looks like, and also a value read out of a larger body (one
+key of a JSON response), so it is a place to look, not a verdict. A
+scenario under "Scenarios with no claim" passed without any claim, and a
+run with `check: skipped` started past `nuka check`. A Then whose `observe` reads a file and claims on it
 often comes back as cannot tell, with `measured: null`: the record keeps
 what a process printed and the files it changed, and nothing of a file
 the step read itself. That is a gap in the evidence, not a wrong step.

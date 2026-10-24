@@ -99,7 +99,7 @@ describe("nuka scaffold --request", () => {
       exitCode: 0,
       stdout:
         'warning\tscenario-without-then\tfeatures/items.feature:2\tScenario "one" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n' +
-        "  fix: Add a Then line that checks the outcome the scenario is for.\n",
+        "  fix: Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.\n",
       stderr: "",
     });
   });

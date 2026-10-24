@@ -286,7 +286,8 @@ step has.
 
 A `Then` is promoted to a claim step, not to a step with `run`. Its
 `expect` calls become `claims`: each one reads its value through `from`
-or an `observe`, and takes its expected value from the sentence, so a
+or an `observe` (not `resultOf`, which throws in a claim step), and takes
+its expected value from the sentence, so a
 sentence such as `the command succeeds` is reworded to state the value
 (`it exits with 0`). See docs/spec.md "Claims". Until then a compat `Then`
 stays a compat `Then`: a compat step cannot declare claims, and nothing

@@ -24,7 +24,8 @@ whether the sentence says enough is review.
 
 Bad: a scenario of a Given and a When. It runs green and gates nothing.
 Good: at least one Then line, last.
-Checked by: `scenario-without-then` for a scenario with no Then line;
+Checked by: `scenario-without-then` for a scenario with no Then line,
+one of only `*` lines, or one whose Then lines bind no claim step;
 `from-order-violation` for a Then that reads a step placed after it.
 
 ## S3. Expected values come from the criteria, never from a run

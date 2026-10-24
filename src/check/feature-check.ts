@@ -242,6 +242,9 @@ export function checkFeatures(
     // The scaffold list holds one stub per text, since one step covers every
     // line that reads the same; each such line keeps its own finding.
     const scaffoldedText = new Set<string>();
+    // An outline's rows share their Then lines, so a scenario that judges
+    // no claim is reported once, at its first Then line.
+    const unjudgedLines = new Set<number>();
 
     for (const pickle of feature.pickles) {
       for (const step of pickle.steps) {
@@ -473,6 +476,12 @@ export function checkFeatures(
         });
       }
 
+      const unjudged = scenarioJudgingNothing(pickle, vocabulary, match);
+      if (unjudged !== null && unjudged.line !== undefined && !unjudgedLines.has(unjudged.line)) {
+        unjudgedLines.add(unjudged.line);
+        warnings.push({ code: "scenario-without-then", message: unjudged.message, file: feature.relativePath, line: unjudged.line });
+      }
+
       // Where each side of a claim comes from depends on the line that
       // produced a from value, so this runs per pickle too.
       for (const issue of checkClaimSources(pickle, vocabulary, match, (index) => pickle.steps[index]?.line)) {
@@ -488,6 +497,36 @@ export function checkFeatures(
   }
 
   return { errors: firstOfEach(errors), warnings: firstOfEach(warnings), boundSteps: [...boundSteps.values()], undefinedSteps };
+}
+
+/** The half of `scenario-without-then` that needs the vocabulary: a
+ * scenario with Then lines, each bound to exactly one step, none of them a
+ * claim step. A scenario with no Then line at all is the document's half
+ * (src/feature/scenario-shape.ts), and a Then line that matches nothing or
+ * several steps has its own error, so neither is judged here. */
+function scenarioJudgingNothing(
+  pickle: FeatureFile["pickles"][number],
+  vocabulary: Vocabulary,
+  match: StepTextMatcher,
+): { readonly line: number | undefined; readonly message: string } | null {
+  const thens = pickle.steps.filter((step) => step.type === PickleStepType.OUTCOME);
+  if (thens.length === 0) return null;
+  const kinds: ("claim" | "run" | "compat")[] = [];
+  for (const step of thens) {
+    const names = match(step.text).stepNames;
+    if (names.length !== 1) return null;
+    const entry = vocabulary.get(names[0]!);
+    if (entry === undefined) return null;
+    kinds.push(entry.kind === "compat" ? "compat" : isClaimStep(entry.step) ? "claim" : "run");
+  }
+  if (kinds.includes("claim")) return null;
+  const compat = kinds.includes("compat")
+    ? " A compat step in Then position judges by throwing or not, and nukadoko cannot see what it checked."
+    : "";
+  return {
+    line: thens[0]!.line,
+    message: `Scenario "${pickle.name}" judges no claim: none of its Then lines binds a claim step, so it passes whenever its steps run without an error.${compat}`,
+  };
 }
 
 /** A Background or an outline repeats one source line across pickles, and

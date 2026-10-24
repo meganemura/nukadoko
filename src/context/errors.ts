@@ -78,6 +78,23 @@ export class UnregisteredStepError extends Error {
   }
 }
 
+/** Thrown by `ctx.resultOf()` while a claim step reads its values
+ * (docs/spec.md "Claims"). `observe` reads the world; a value from an
+ * earlier step reaches a claim step only through `from`, where the record
+ * names where it came from. Read in code, an earlier result could tell
+ * `observe` the value the claim will compare, and the record would not
+ * show it. */
+export class ResultsWithheldError extends Error {
+  constructor(stepName: string) {
+    super(
+      `resultOf is not available to step "${stepName}", a claim step: observe reads the world, ` +
+        "and a value from an earlier step reaches a claim step only through from, where the record names its origin. " +
+        "Declare the value in the step's from instead",
+    );
+    this.name = "ResultsWithheldError";
+  }
+}
+
 /** Thrown by `ctx.call(part, args)` (docs/spec.md "Parts") when the calling
  * step never listed `part` in its own `parts`. `parts` is declared, not read
  * out of a step's body (src/step/define-step.ts's own header on `parts`

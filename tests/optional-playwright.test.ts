@@ -194,7 +194,7 @@ describe("a project without playwright installed", () => {
             'Scenario "fetches" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.',
           file: "features/http.feature",
           line: 3,
-          fix: "Add a Then line that checks the outcome the scenario is for.",
+          fix: "Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.",
         },
       ],
       fail_on_hits: [],

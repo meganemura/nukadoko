@@ -42,6 +42,11 @@ describe("nuka check: a finding on a line repeated across pickles", () => {
       { code: "undefined-step", line: 24, step: undefined },
       { code: "undefined-step", line: 25, step: undefined },
     ]);
-    expect(shape(report.warnings)).toEqual([]);
+    // Each scenario whose only Then binds a step that runs judges no claim,
+    // and the outline's two rows share one line, so one warning each.
+    expect(shape(report.warnings)).toEqual([
+      { code: "scenario-without-then", line: 11, step: undefined },
+      { code: "scenario-without-then", line: 23, step: undefined },
+    ]);
   });
 });

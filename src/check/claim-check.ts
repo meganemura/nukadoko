@@ -1,29 +1,49 @@
 import type { Pickle } from "@cucumber/messages";
 import type { z } from "zod";
+import type { ParameterTypeConfig } from "../binding/parameter-type-config.js";
+import { stripCaptureNames } from "../binding/pattern.js";
 import type { Vocabulary } from "../discover/discover-steps.js";
 import type { FixtureGraph } from "../fixture/graph.js";
 import { stepNeeds } from "../fixture/step-needs.js";
-import { isEachClaim, pathSegments, type Claim, type ClaimExpected, type ItemClaim } from "../step/claims.js";
+import {
+  ANY_INDEX,
+  isEachClaim,
+  pathSegments,
+  placesOverlap,
+  type Claim,
+  type ClaimExpected,
+  type ItemClaim,
+} from "../step/claims.js";
+import type { ClaimView } from "../record/types.js";
 import { isClaimStep, isStep, tryFromCandidates, type ClaimStep, type Step } from "../step/define-step.js";
 import type { BoundStepLine, StepTextMatcher } from "./feature-check.js";
 import type { CheckIssue } from "./types.js";
 
-// Responsibility: the `nuka check` findings that need a claim step's line
+// Responsibility: the `nuka check` findings about a claim step
 // (docs/spec.md "Claims"). Where each side of a claim comes from depends on
 // which earlier line produced a `from` value, so the producer is resolved
 // per pickle, the same way a run fills the key: the nearest earlier line
 // that runs the one candidate step bound before this line. Two findings
 // come from that: a path into a `from` value that the producer's `returns`
 // schema does not have (`claim-path-unknown`), and a claim whose two sides
-// resolve to the same place (`claim-compares-itself`). A third finding is
-// per bound step: a claim step whose `observe` reaches a browser page and
-// does not state `poll` (`claim-poll-unstated`).
+// resolve to the same place (`claim-compares-itself`), which also covers
+// an `observe` that receives the value an expected `from` reads, or a
+// value that holds it or that it holds. Two findings are per bound step:
+// a claim step whose `observe` reaches a browser page and does not state
+// `poll` (`claim-poll-unstated`), and an expected sentence key that a
+// parameter type with a transformer fills (`claim-expected-transformed`),
+// which only the project's config can say.
 //
 // Each finding claims only what can end one way. A line whose producer is
 // missing or ambiguous is left to `from-order-violation`, and a schema this
 // module cannot read for certain (a union, a transform, a loose object)
 // is taken to have the path. A claim's `view` and `at` read text the step
-// returned at run time, so a path inside them is never checked here.
+// returned at run time, so a path inside them is never checked against a
+// schema; they are steps of the path for the self-comparison check, so
+// `at: "count"` on a value reads the same place as the path `.count`. An
+// item of an `each` is one index the check does not know (`ANY_INDEX`),
+// so an item side is the same as another only when both paths are written
+// the same; the run, which knows the index, breaks the rest.
 
 export interface ClaimCheckIssue {
   /** 0-based index into `pickle.steps`: the claim step's line. */
@@ -31,6 +51,22 @@ export interface ClaimCheckIssue {
   readonly stepName: string;
   readonly code: "claim-compares-itself" | "claim-path-unknown";
   readonly message: string;
+}
+
+/** Where one side of a claim reads its value, as the check knows it: the
+ * origin (`observe`, or the line of the producing step) and the path,
+ * with a view as one segment and an item index as `ANY_INDEX`. */
+interface CheckPlace {
+  readonly origin: string;
+  readonly segments: readonly string[];
+  /** How a message names the place. */
+  readonly text: string;
+}
+
+/** Whether two places are certainly the same: the same origin and the
+ * same segments, with `ANY_INDEX` equal only to itself. Pure. */
+export function certainlySamePlace(a: Pick<CheckPlace, "origin" | "segments">, b: Pick<CheckPlace, "origin" | "segments">): boolean {
+  return a.origin === b.origin && a.segments.length === b.segments.length && a.segments.every((segment, index) => segment === b.segments[index]);
 }
 
 /** Where a path ends in a zod schema: a schema to keep walking, a schema
@@ -80,7 +116,9 @@ export function walkSchema(schema: z.ZodTypeAny, segments: readonly string[], de
     }
     switch (def.type) {
       case "object": {
-        const next = def.shape?.[segment];
+        // An own key only: `constructor` or `toString` is on every
+        // object's prototype, and the run reads own properties alone.
+        const next = def.shape !== undefined && Object.hasOwn(def.shape, segment) ? def.shape[segment] : undefined;
         if (next !== undefined) {
           current = next;
           continue;
@@ -159,33 +197,49 @@ function resolveProducer(
   return bound.length === 1 ? bound[0]! : null;
 }
 
-/** Where one side of a claim reads its value, for the self-comparison
- * check, or `null` for a side that cannot be the same as another
- * (a sentence value, a literal, or a key this line does not resolve). */
+/** Where a path reads its value, for the self-comparison check, or
+ * `null` for a path this line does not resolve to one producer. */
 function placeOf(
   source: "from" | "observe",
   path: string,
   producerOf: (key: string) => Producer | null,
-): string | null {
-  if (source === "observe") return `observe:${path}`;
-  const [head, ...rest] = pathSegments(path) ?? [];
-  if (head === undefined) return null;
-  const producer = producerOf(head);
-  return producer === null ? null : `${producer.lineIndex}:${[producer.key, ...rest].join(".")}`;
+  lineOf: (index: number) => number | undefined,
+): CheckPlace | null {
+  const segments = pathSegments(path);
+  if (segments === null) return null;
+  if (source === "observe") return { origin: "observe", segments, text: `the observe path ${path}` };
+  const [head, ...rest] = segments;
+  const producer = producerOf(head!);
+  if (producer === null) return null;
+  const line = lineOf(producer.lineIndex);
+  const upstream = [producer.key, ...rest];
+  return {
+    origin: `line:${producer.lineIndex}`,
+    segments: upstream,
+    text: `${upstream.join(".")} of step "${producer.stepName}"${line === undefined ? "" : ` on line ${line}`}`,
+  };
 }
 
-function expectedPlace(expected: ClaimExpected, producerOf: (key: string) => Producer | null): string | null {
+/** `place` read through `view` and then `at`, the way the run walks it. */
+function shapedPlace(place: CheckPlace, view: ClaimView | undefined, at: string | undefined): CheckPlace {
+  const viewed = view === undefined ? place : { origin: place.origin, segments: [...place.segments, `#${view}`], text: `${place.text} as ${view}` };
+  if (at === undefined || at === "") return viewed;
+  return { origin: viewed.origin, segments: [...viewed.segments, ...at.split(".")], text: `${viewed.text} at ${at}` };
+}
+
+/** `place` walked further by `path`. */
+function placeUnder(place: CheckPlace, segments: readonly string[], text: string): CheckPlace {
+  return { origin: place.origin, segments: [...place.segments, ...segments], text };
+}
+
+function expectedPlace(
+  expected: ClaimExpected,
+  producerOf: (key: string) => Producer | null,
+  lineOf: (index: number) => number | undefined,
+): CheckPlace | null {
   if (typeof expected === "string" || "literal" in expected) return null;
-  if ("from" in expected) return placeOf("from", expected.from, producerOf);
-  return placeOf("observe", expected.observe, producerOf);
-}
-
-function describePlace(place: string, producers: readonly Producer[], lines: readonly (number | undefined)[]): string {
-  if (place.startsWith("observe:")) return `the observe path ${place.slice("observe:".length)}`;
-  const [index, path] = [Number(place.slice(0, place.indexOf(":"))), place.slice(place.indexOf(":") + 1)];
-  const producer = producers.find((entry) => entry.lineIndex === index);
-  const line = lines[index];
-  return `${path} of step "${producer?.stepName ?? "?"}"${line === undefined ? "" : ` on line ${line}`}`;
+  if ("from" in expected) return placeOf("from", expected.from, producerOf, lineOf);
+  return placeOf("observe", expected.observe, producerOf, lineOf);
 }
 
 function missingMessage(
@@ -249,32 +303,93 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       }
       return walk.kind === "schema" ? walk.schema : null;
     };
+    const lineOf = (index: number): number | undefined => lines[index];
+    const comparesItself = (label: string, actual: CheckPlace | null, expected: CheckPlace | null): void => {
+      if (actual === null || expected === null || !certainlySamePlace(actual, expected)) return;
+      const where = actual.text === expected.text ? `${actual.text} on both sides` : `${actual.text} as its actual value and ${expected.text} as its expected value, one place`;
+      report("claim-compares-itself", `Step "${stepName}"'s ${label} reads ${where}, so it holds whatever the behaviour is`);
+    };
+    // Every expected `{ from }` place of the step, for the observe check.
+    const expectedFromPlaces: { readonly label: string; readonly place: CheckPlace }[] = [];
+    const noteExpectedFrom = (label: string, expected: ClaimExpected): void => {
+      if (typeof expected !== "object" || !("from" in expected)) return;
+      const place = placeOf("from", expected.from, producerOf, lineOf);
+      if (place !== null) expectedFromPlaces.push({ label: `${label}.expected`, place });
+    };
     step.claims.forEach((claim: Claim, index) => {
       const label = `claims[${index}]`;
       const actualSchema = checkFromPath(`${label}.actual`, claim.actual);
       const actualSource = fromKeys.has(pathSegments(claim.actual)?.[0] ?? "") ? "from" : "observe";
+      const top = placeOf(actualSource, claim.actual, producerOf, lineOf);
+      const actual = top === null ? null : shapedPlace(top, claim.view, claim.at);
       if (isEachClaim(claim)) {
         if (actualSchema !== null && claim.view === undefined && claim.at === undefined) {
           checkItemPaths(stepName, label, claim, actualSchema, report);
+        }
+        const items: readonly [string, ItemClaim][] = [
+          ...(claim.each.where ?? []).map((item, itemIndex): [string, ItemClaim] => [`${label}.each.where[${itemIndex}]`, item]),
+          ...claim.each.claims.map((item, itemIndex): [string, ItemClaim] => [`${label}.each.claims[${itemIndex}]`, item]),
+        ];
+        for (const [itemLabel, item] of items) {
+          if (typeof item.expected === "object" && "from" in item.expected) checkFromPath(`${itemLabel}.expected.from`, item.expected.from);
+          noteExpectedFrom(itemLabel, item.expected);
+          const itemSegments = item.actual === undefined ? [] : (pathSegments(item.actual) ?? null);
+          if (actual === null || itemSegments === null) continue;
+          const itemPlace = shapedPlace(
+            placeUnder(actual, [ANY_INDEX, ...itemSegments], `${item.actual ?? "item"} of each item of ${actual.text}`),
+            item.view,
+            item.at,
+          );
+          comparesItself(itemLabel, itemPlace, expectedPlace(item.expected, producerOf, lineOf));
         }
         return;
       }
       if (typeof claim.expected === "object" && "from" in claim.expected) {
         checkFromPath(`${label}.expected.from`, claim.expected.from);
       }
-      if (claim.view !== undefined || claim.at !== undefined) return;
-      const actual = placeOf(actualSource, claim.actual, producerOf);
-      const expected = expectedPlace(claim.expected, producerOf);
-      if (actual !== null && actual === expected) {
+      noteExpectedFrom(label, claim.expected);
+      // expected_view is on a sentence key alone, which no other side reads.
+      comparesItself(label, actual, expectedPlace(claim.expected, producerOf, lineOf));
+    });
+    // An observe that receives a value an expected `from` reads, or one
+    // that holds it or that it holds, could return the expected value as
+    // the actual one. `observe` never receives an expected key, so only a
+    // second key from the same producer can carry it.
+    if (step.observe !== undefined) {
+      const withheld = expectedHeads(step.claims);
+      for (const key of Object.keys(step.from)) {
+        if (withheld.has(key)) continue;
+        const input = placeOf("from", key, producerOf, lineOf);
+        if (input === null) continue;
+        const hit = expectedFromPlaces.find((entry) => placesOverlap(input, entry.place));
+        if (hit === undefined) continue;
         report(
           "claim-compares-itself",
-          `Step "${stepName}"'s ${label} reads ${describePlace(actual, [...producers.values()].filter((p): p is Producer => p !== null), lines)} on both sides, ` +
-            "so it holds whatever the behaviour is",
+          `Step "${stepName}"'s observe receives args.${key}, which is ${input.text}, and its ${hit.label} reads ${hit.place.text}, ` +
+            "so observe could return the value the claim compares it with. Give observe values from another step, or none from this one",
         );
       }
-    });
+    }
   });
   return issues;
+}
+
+/** The args keys a claim names as its expected value: a sentence key, or
+ * the first segment of a `{ from }` path. `observe` never receives them. */
+function expectedHeads(claims: readonly Claim[]): Set<string> {
+  const keys = new Set<string>();
+  const add = (expected: ClaimExpected): void => {
+    if (typeof expected === "string") keys.add(expected);
+    else if ("from" in expected) {
+      const head = pathSegments(expected.from)?.[0];
+      if (head !== undefined) keys.add(head);
+    }
+  };
+  for (const claim of claims) {
+    if (!isEachClaim(claim)) add(claim.expected);
+    else for (const item of [...(claim.each.where ?? []), ...claim.each.claims]) add(item.expected);
+  }
+  return keys;
 }
 
 /** Item paths of an `each` claim against the array's element schema. */
@@ -332,6 +447,68 @@ export function findUnstatedPolls(boundSteps: readonly BoundStepLine[], vocabula
         "Write poll: { timeout_ms } to read until every claim holds on two consecutive readings, or poll: false to read once",
       step: bound.stepName,
     });
+  }
+  return issues;
+}
+
+/** `claim-expected-transformed`: a bound claim step whose expected value is
+ * an args key that a pattern fills with a parameter type the project
+ * registered with a transformer. The transformer runs before the args
+ * schema, so the record would label the value `sentence:` while step code
+ * decided it. `defineStep` refuses a schema that rewrites the key; which
+ * parameter type fills a capture is known only once the config is read,
+ * so this half is the check's. A built-in type converts the text into the
+ * type it names and no more, so it is not reported. */
+export function findTransformedExpected(
+  boundSteps: readonly BoundStepLine[],
+  vocabulary: Vocabulary,
+  customTypes: readonly ParameterTypeConfig[],
+): CheckIssue[] {
+  const transformed = new Set(customTypes.filter((type) => type.transformer !== undefined).map((type) => type.name));
+  if (transformed.size === 0) return [];
+  const issues: CheckIssue[] = [];
+  const reported = new Set<string>();
+  for (const bound of boundSteps) {
+    if (reported.has(bound.stepName)) continue;
+    reported.add(bound.stepName);
+    const entry = vocabulary.get(bound.stepName);
+    if (entry?.kind !== "typed" || !isClaimStep(entry.step)) continue;
+    const step = entry.step;
+    const sentenceKeys = new Map<string, string>();
+    step.claims.forEach((claim, index) => {
+      const label = `claims[${index}]`;
+      if (!isEachClaim(claim)) {
+        if (typeof claim.expected === "string" && !sentenceKeys.has(claim.expected)) sentenceKeys.set(claim.expected, label);
+        return;
+      }
+      const items: readonly [string, ItemClaim][] = [
+        ...(claim.each.where ?? []).map((item, itemIndex): [string, ItemClaim] => [`${label}.each.where[${itemIndex}]`, item]),
+        ...claim.each.claims.map((item, itemIndex): [string, ItemClaim] => [`${label}.each.claims[${itemIndex}]`, item]),
+      ];
+      for (const [itemLabel, item] of items) {
+        if (typeof item.expected === "string" && !sentenceKeys.has(item.expected)) sentenceKeys.set(item.expected, itemLabel);
+      }
+    });
+    for (const pattern of step.patterns) {
+      let captures: ReturnType<typeof stripCaptureNames>["captures"];
+      try {
+        captures = stripCaptureNames(pattern).captures;
+      } catch {
+        continue; // A pattern that does not scan is a pattern finding.
+      }
+      for (const capture of captures) {
+        const label = sentenceKeys.get(capture.key);
+        if (label === undefined || !transformed.has(capture.type)) continue;
+        issues.push({
+          code: "claim-expected-transformed",
+          message:
+            `Step "${bound.stepName}"'s ${label}.expected is args.${capture.key}, and its pattern "${pattern}" fills it with the parameter type {${capture.type}}, ` +
+            "whose transformer rewrites the line's text before the claim reads it, so code would decide what the claim compares. " +
+            `Capture ${capture.key} with a type that has no transformer, such as {${capture.key}:string}, and read it with expected_view if it needs one`,
+          step: bound.stepName,
+        });
+      }
+    }
   }
   return issues;
 }

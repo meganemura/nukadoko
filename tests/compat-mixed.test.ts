@@ -16,7 +16,7 @@ import {
 // Responsibility: mixed-scenario coverage
 // — a typed step and a compat step sharing one pickle's ctx (a cookie the
 // compat step picks up via `this.openRequest()` is visible to a typed
-// step's own `ctx.request()`), and a typed step's `ctx.resultOf` working
+// step's own `ctx.request()`), and `ctx.resultOf` in a typed step that runs working
 // normally even though the same scenario also has a compat step in it.
 
 function startTestServer(): Promise<{ server: Server; baseURL: string }> {
@@ -95,9 +95,7 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
     // ctx.resultOf, unaffected by the compat step sharing the same pickle.
     const createRecordId = record.steps[0].step_record_id as string;
     const resultOfStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id);
-    expect(resultOfStepRecord.claims).toEqual([
-      { actual: "t1", actual_from: "observe:created", compare: "equal", expected: "t1", expected_from: "sentence:id", expected_text: "\"t1\"", outcome: "held", measured: null },
-    ]);
+    expect(resultOfStepRecord.result).toEqual({ created: "t1" });
     expect(resultOfStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-thing" }]);
 
     // The compat step's own step record: openRequest() + a GET is measured

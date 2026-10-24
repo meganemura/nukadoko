@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// A step that reads its own earlier result: the cursor of the page before.
-// `from` can only name the step once the step exists, so the entry is added
-// after defineStep returns.
+// A step that tries to read its own earlier result: the cursor of the page
+// before. `from` can only name the step once the step exists, so the entry
+// is added after defineStep returns, and defineStep froze `from`, so the
+// file does not load.
 const nextPageRead = defineStep({
   pattern: "the next page is read",
   description: "Read the page after the one this step read before",

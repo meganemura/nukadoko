@@ -450,6 +450,16 @@
       "note": "claim step は値を読んだが、nukadoko 自身が claim の判定の途中で失敗したこと(matches を試す worker が止まった など)。受け入れ基準については何もわからない。`outcome` の値 `unjudged` とエラー種別 `claim_unjudged` はコードスパンで英語のまま。成り立たない claim とも観測できなかった step とも書き分ける"
     },
     {
+      "en": ["reading", "readings"],
+      "ja": "読み取り",
+      "note": "claim step の observe を 1 回呼んで得た値。poll では成り立つまで繰り返し、step record の `readings` が各読み取りを残す。フィールド名 `readings` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["place (where a claim side reads)", "the same place"],
+      "ja": "場所",
+      "note": "claim の一辺が読む出所(observe、値を返した step の record、文のキー)と、view と at を含む完全なパスの組。自分自身との比較は、両辺が同じ場所かで決まる"
+    },
+    {
       "en": ["plain JSON", "not a JSON value"],
       "ja": "素の JSON / JSON の値ではない",
       "note": "null、真偽値、文字列、有限の数値、穴のない配列、プロトタイプが Object.prototype か null で自分のプロパティがすべて列挙可能なデータプロパティであるオブジェクトだけからなる値。claim の両辺はこれでなければならない。Date、Map、bigint、NaN は JSON の値ではない"

@@ -22,6 +22,7 @@ import { DESCRIPTION_TODO_PREFIX } from "../check/description-todo.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
+import { fixedWords, LITERAL_WORDS, type ClaimLiteral } from "../step/claims.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
 
@@ -536,18 +537,53 @@ function stubBody(name: string, fields: readonly Field[]): string {
  * output the usual way. */
 const OUTPUT_STREAMS: ReadonlySet<string> = new Set(["stdout", "stderr"]);
 
+/** Why `--then` writes no claim for a line that states no value: a claim's
+ * expected value comes from the sentence (docs/spec.md "Claims"), and
+ * `observe` computing both sides would be a judgment made in code. Shared
+ * by `nuka scaffold --then`, which refuses, and `--feature`, which writes
+ * no stub for such a line and says so. */
+export const THEN_STATES_NO_VALUE =
+  "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, empty)";
+
+/** The first word of `pattern` that states a literal (`LITERAL_WORDS`), the
+ * value `--then` compares with, and the word's other values, or `null`. The
+ * value is the one of the actual value's class when the word has one (`""`
+ * for a string, `0` for a number), and the word's first otherwise. The word
+ * fixes the value, so the claim compares with `equal` alone. Pure. */
+export function statedWord(
+  pattern: string | null,
+  actualClass: PrimitiveClass = "other",
+): { readonly word: string; readonly literal: ClaimLiteral; readonly others: readonly ClaimLiteral[] } | null {
+  if (pattern === null) return null;
+  for (const word of fixedWords(pattern)) {
+    const values = LITERAL_WORDS[word.toLowerCase()];
+    if (values === undefined || values.length === 0) continue;
+    const literal = values.find((value) => typeof value === actualClass) ?? values[0]!;
+    return { word, literal, others: values.filter((value) => value !== literal) };
+  }
+  return null;
+}
+
+/** Whether `--then` can write a claim for this line: it captures a value,
+ * carries a docstring or a table, or holds a word that states one. */
+export function thenStatesValue(pattern: string | null, captures: readonly Capture[], attachment: "docstring" | "table" | null | undefined): boolean {
+  return captures.length > 0 || (attachment !== null && attachment !== undefined) || statedWord(pattern) !== null;
+}
+
 /** A Then step's claims, and its `observe` while it has none to read from
- * (docs/spec.md "Claims"). One value the line states and at most one
- * chained value make a whole claim: the chained value is the actual, the
- * stated one the expected, compared with `equal`; with no chained value,
- * `observe` throws until someone writes the reading, so the step records
- * as unobserved instead of passing. Any other shape leaves which value is
- * expected to the author, so `observe` throws, and with no stated value the
- * claim compares two observe paths, under a TODO to put the value in the
- * sentence. */
-function thenLines(name: string, stated: readonly Field[], chained: readonly Field[]): string[] {
+ * (docs/spec.md "Claims"). The expected value is always one the line
+ * states: a capture, the docstring, the table, or, for a line with none of
+ * them, the literal a word of the line states, never a value `observe`
+ * computes. One stated value and one chained value make a whole claim: the
+ * chained value is the actual, the stated one the expected, compared with
+ * `equal`. Otherwise the first stated value is the expected one, and
+ * `observe` throws until someone writes the reading, so the step records as
+ * unobserved instead of passing. A caller never asks for a line that states
+ * no value (`thenStatesValue`). */
+function thenLines(name: string, pattern: string | null, stated: readonly Field[], chained: readonly Field[]): string[] {
   const expected = stated[0];
-  if (expected !== undefined && stated.length === 1 && chained.length === 1) {
+  if (expected === undefined) return wordThenLines(name, pattern, chained);
+  if (stated.length === 1 && chained.length === 1) {
     const actual = chained[0]!;
     const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string" && expected.valueClass === "string";
     return [
@@ -561,17 +597,45 @@ function thenLines(name: string, stated: readonly Field[], chained: readonly Fie
   // value the sentence fills, and defineStep refuses one that does.
   const taken = new Set([...stated, ...chained].map((field) => field.key));
   const actualKey = freeKey("actual", taken);
-  const expectedValue = expected === undefined ? `{ observe: ${JSON.stringify(freeKey("expected", new Set([...taken, actualKey])))} }` : JSON.stringify(expected.key);
+  const expectedValue = JSON.stringify(expected.key);
   return [
-    ...(expected === undefined
-      ? ["  // TODO: state the value this line checks in the pattern, as a capture, and name it in expected."]
-      : []),
     `  // TODO: read the value this line checks and return it as { ${actualKey} }, or take it`,
     "  // from an earlier step's returns through `from` and remove observe.",
     `  observe(${parameter}) {`,
     stubBody(name, inputs),
     "  },",
     `  claims: [{ actual: ${JSON.stringify(actualKey)}, compare: "equal", expected: ${expectedValue} }],`,
+  ];
+}
+
+/** A Then step whose line states its value with a word alone: the claim
+ * compares with that word's literal. A chained value, when there is exactly
+ * one, is the actual; otherwise `observe` reads it. */
+function wordThenLines(name: string, pattern: string | null, chained: readonly Field[]): string[] {
+  const stated = statedWord(pattern, chained.length === 1 ? chained[0]!.valueClass : "other");
+  if (stated === null) throw new Error(`internal: ${THEN_STATES_NO_VALUE}, and the caller should have refused it`);
+  const literal = `{ literal: ${JSON.stringify(stated.literal)} }`;
+  const others = stated.others.map((value) => JSON.stringify(value)).join(" or ");
+  const note = `  // "${stated.word}" states ${JSON.stringify(stated.literal)}${others === "" ? "" : `, or ${others}`}: keep the one of the value you compare. A word's literal is compared with equal alone.`;
+  if (chained.length === 1) {
+    const actual = chained[0]!;
+    const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string";
+    return [
+      note,
+      ...(text ? ["  // The program ends its output with a newline that the feature line does not show."] : []),
+      `  claims: [{ actual: ${JSON.stringify(actual.key)},${text ? ' view: "text",' : ""} compare: "equal", expected: ${literal} }],`,
+    ];
+  }
+  const parameter = chained.length === 0 ? "" : `{}, { ${chained.map((field) => field.key).join(", ")} }`;
+  const actualKey = freeKey("actual", new Set(chained.map((field) => field.key)));
+  return [
+    `  // TODO: read the value this line checks and return it as { ${actualKey} }, or take it`,
+    "  // from an earlier step's returns through `from` and remove observe.",
+    `  observe(${parameter}) {`,
+    stubBody(name, chained),
+    "  },",
+    note,
+    `  claims: [{ actual: ${JSON.stringify(actualKey)}, compare: "equal", expected: ${literal} }],`,
   ];
 }
 
@@ -687,7 +751,7 @@ export function stepTemplate({
         : `${DESCRIPTION_TODO_PREFIX} ${name}`);
   const outcomeLines =
     variant === "then"
-      ? thenLines(name, [...fieldsOf(captures, []), ...attached], fieldsOf([], chained))
+      ? thenLines(name, pattern, [...fieldsOf(captures, []), ...attached], fieldsOf([], chained))
       : variant === "command"
         ? [
             "  returns: z.object({",
@@ -874,6 +938,9 @@ export function isUneditedStub(source: string, name: string, relativeFilePath: s
     return TEMPLATE_VARIANTS.some((variant) =>
       TEMPLATE_ATTACHMENTS.some(
         (attachment) =>
+          // scaffold writes no Then stub for a line that states no value,
+          // so that reading cannot match, and stepTemplate refuses to draw it.
+          (variant !== "then" || thenStatesValue(pattern, captures, attachment)) &&
           stepTemplate({
             name,
             pattern,
@@ -1410,6 +1477,15 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
         "invalid-value",
       );
     }
+  }
+
+  // Last of the refusals, so a wrong --from or --body is named first: the
+  // line's docstring or table counts as a stated value, and only the
+  // feature files say whether it has one.
+  if (then && !thenStatesValue(pattern, read.captures, attachment)) {
+    return refuse(sinks, `Refusing to scaffold: --then: ${THEN_STATES_NO_VALUE}`, "invalid-value", {
+      fix: 'Capture the value the line checks in --pattern, such as "the count is {count:int}", or write a feature line with a docstring or a table, and scaffold again.',
+    });
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });

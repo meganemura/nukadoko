@@ -4,6 +4,8 @@ import type {
   ClaimEachRecord,
   ClaimItemDeclaration,
   ClaimItemRecord,
+  ClaimReading,
+  ClaimReadingValue,
   ClaimView,
 } from "../record/types.js";
 import {
@@ -634,4 +636,71 @@ export async function pollReadings(
     await clock.sleep(POLL_INTERVAL_MS);
   }
   return { last, attempts };
+}
+
+// --- the readings of a polled claim step ---
+//
+// `poll` reads until every claim holds, so the number of readings tells
+// `observe` whether a reading held: a step can offer candidates until one
+// holds. No rule in code can tell that from a value that settles, so the
+// record keeps what each reading read, and a value that walks toward the
+// expected one is there to see.
+
+/** How many of the first readings the record keeps. */
+export const CLAIM_READINGS_HEAD = 10;
+/** How many of the last readings the record keeps. */
+export const CLAIM_READINGS_TAIL = 10;
+/** The longest value, as JSON, a reading keeps whole. */
+export const CLAIM_READING_MAX_BYTES = 1024;
+
+/** A claim's raw actual value as one reading keeps it. Pure. */
+export function readingValue(raw: unknown, reason: string | undefined): ClaimReadingValue {
+  if (raw === undefined) return { reason: reason ?? "no value" };
+  let text: string;
+  try {
+    text = JSON.stringify(raw) ?? "null";
+  } catch {
+    return { reason: reason ?? "the value is not JSON" };
+  }
+  const bytes = new TextEncoder().encode(text).length;
+  return bytes <= CLAIM_READING_MAX_BYTES ? { value: raw } : { json_start: text.slice(0, CLAIM_READING_MAX_BYTES), json_bytes: bytes };
+}
+
+/** One reading as the record keeps it, from the claims judged on it. Pure. */
+export function readingOf(attempt: number, at: string, judged: readonly JudgedClaim[]): ClaimReading {
+  return {
+    attempt,
+    at,
+    held: judged.every((entry) => entry.record.outcome === "held"),
+    actuals: judged.map((entry) => readingValue(entry.rawActual, entry.record.reason)),
+  };
+}
+
+/** A reading on which `observe` threw. Pure. */
+export function failedReading(attempt: number, at: string, error: unknown): ClaimReading {
+  const message = error instanceof Error ? error.message : String(error);
+  return { attempt, at, held: false, error: message.split("\n")[0] ?? "" };
+}
+
+/** Keeps the first `head` and the last `tail` readings added, in the
+ * order they were added, so a long poll costs bounded memory. */
+export interface ReadingsLog {
+  readonly add: (reading: ClaimReading) => void;
+  readonly kept: () => ClaimReading[];
+}
+
+export function createReadingsLog(head = CLAIM_READINGS_HEAD, tail = CLAIM_READINGS_TAIL): ReadingsLog {
+  const first: ClaimReading[] = [];
+  const last: ClaimReading[] = [];
+  return {
+    add(reading) {
+      if (first.length < head) {
+        first.push(reading);
+        return;
+      }
+      last.push(reading);
+      if (last.length > tail) last.shift();
+    },
+    kept: () => [...first, ...last],
+  };
 }

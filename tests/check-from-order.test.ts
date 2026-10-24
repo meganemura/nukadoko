@@ -99,17 +99,19 @@ describe("nuka check: from's scenario-order check", () => {
     expect(issues.map((issue) => issue.line).sort()).toEqual([12, 24]);
   });
 
-  it("errors on a step whose from names itself at each line no earlier line binds it", async () => {
-    const FROM_ORDER_FIX = 'Put a line that runs step "next-page-read" earlier in the scenario.';
+  // A step can name itself in from only by changing from after defineStep
+  // returned, and defineStep freezes what it validated (docs/spec.md
+  // "Claims"), so the step file does not load and no line is judged.
+  it("refuses a step whose from is changed after defineStep returns, so no step names itself", async () => {
     const { exitCode, report } = await checkReport(fixture("from-self-project"));
     expect(exitCode).toBe(1);
-    // The fixture's scenarios only read pages, so they hold no Then line.
-    expect((report.warnings as { code: string }[]).filter((issue) => issue.code !== "scenario-without-then")).toEqual([]);
-    const message =
-      'Step "next-page-read"\'s from.cursor needs step "next-page-read" to have already run earlier in this scenario, but "next-page-read" is bound in this scenario, but only at or after this line, never before it. This line would fail args validation with certainty';
     expect(report.errors).toEqual([
-      { code: "from-order-violation", message, file: "features/pages.feature", line: 4, step: "next-page-read", fix: FROM_ORDER_FIX },
-      { code: "from-order-violation", message, file: "features/pages.feature", line: 7, step: "next-page-read", fix: FROM_ORDER_FIX },
+      {
+        code: "step-file-import-failed",
+        file: "features/steps/next-page-read.ts",
+        message: "Cannot add property cursor, object is not extensible",
+        fix: "Correct the import or the error that the message names in the file, then run nuka check again.",
+      },
     ]);
   });
 });

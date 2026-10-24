@@ -33,7 +33,7 @@ import {
   SCENARIO_HOOK_ARG_COUNT,
 } from "./done-callback.js";
 import { findDescriptionTodos } from "./description-todo.js";
-import { findUnstatedPolls } from "./claim-check.js";
+import { findTransformedExpected, findUnstatedPolls } from "./claim-check.js";
 import { checkFeatures, type UndefinedStepLine } from "./feature-check.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
@@ -67,9 +67,11 @@ function scenarioShapeWarning(finding: ScenarioShapeFinding): CheckIssue {
   if (finding.code === "scenario-without-then") {
     return {
       code: finding.code,
-      message:
-        `Scenario "${finding.name}" has no Then step, so it passes whenever its steps run without an error, ` +
-        "and no step checks an outcome.",
+      message: finding.starsOnly
+        ? `Scenario "${finding.name}" has only * lines, so no line is in Then position and no claim is judged: ` +
+          "it passes whenever its steps run without an error."
+        : `Scenario "${finding.name}" has no Then step, so it passes whenever its steps run without an error, ` +
+          "and no step checks an outcome.",
       file: finding.relativePath,
       line: finding.line,
     };
@@ -615,6 +617,7 @@ async function reportFor(
   });
   errors.push(...findPlaywrightMissing(featureResult.boundSteps, vocabulary, fixtureGraph, isPlaywrightInstalled));
   errors.push(...findUnstatedPolls(featureResult.boundSteps, vocabulary, fixtureGraph));
+  errors.push(...findTransformedExpected(featureResult.boundSteps, vocabulary, [...config.parameterTypes, ...compatParameterTypes]));
 
   // A broken glue file's own missing steps otherwise resurface here as a
   // flood of `undefined-step` errors (empirically, a

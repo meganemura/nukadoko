@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
-import type { RunDocument, RunScenario, RunVerdict } from "../record/run-result.js";
+import type { RunClaim, RunDocument, RunScenario, RunVerdict } from "../record/run-result.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { scenarioKey } from "./criteria-since.js";
@@ -124,6 +124,12 @@ function renderCondition(document: RunDocument): string[] {
     document.selection === "full"
       ? "- selection: full"
       : "- selection: partial (a line target left out other scenarios of its file)";
+  // Only a skipped check is said: a run whose check ran is the default, and
+  // a finding of that check would have stopped it.
+  const check =
+    document.check === "skipped"
+      ? ["- check: skipped (`nuka run --no-check`), so no finding of `nuka check` held this run back"]
+      : [];
   const elapsed = Date.parse(document.finished_at) - Date.parse(document.started_at);
   return [
     "",
@@ -131,6 +137,7 @@ function renderCondition(document: RunDocument): string[] {
     ...environments,
     browser,
     selection,
+    ...check,
     `- nukadoko: ${document.nukadoko}`,
     `- run: ${document.run_id}`,
     `- started ${document.started_at}, finished ${document.finished_at} (${formatSummaryDuration(elapsed)})`,
@@ -383,6 +390,41 @@ function renderUnmeasured(document: RunDocument): string[] {
   ];
 }
 
+// One line per scenario that binds no claim step (run.json's `judged_by`):
+// it passed or failed without nukadoko judging a claim, which a reader
+// approving the run has to see beside the green. Under `--repeat` or
+// several environments the scenario is one line.
+function renderUnjudged(document: RunDocument): string[] {
+  const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
+  for (const scenario of document.scenarios) {
+    if (scenario.judged_by === undefined) continue;
+    const key = scenarioKey(scenario.feature, scenario.line);
+    if (lines.has(key)) continue;
+    const why =
+      scenario.judged_by === "compat"
+        ? "only a compat step in Then position judged it, by throwing or not, and nukadoko cannot see what it checked"
+        : "nothing judged it, so it passes whenever its steps run without an error";
+    lines.set(key, {
+      sortKey: [scenario.feature, scenario.line],
+      text: `- ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}: ${why}`,
+    });
+  }
+  if (lines.size === 0) return [];
+  const sorted = [...lines.values()].sort((a, b) => a.sortKey[0].localeCompare(b.sortKey[0]) || a.sortKey[1] - b.sortKey[1]);
+  return ["", "## Scenarios with no claim", "", "No line of each scenario below binds a claim step.", "", ...sorted.map((line) => line.text)];
+}
+
+// Where a claim's actual value was measured, beside the claim: a value no
+// recorded channel holds is what a constant in step code looks like, so
+// the line says `measured: none` for a reader to weigh. A claim that read
+// nothing has no value to have measured.
+function measuredText(claim: RunClaim, ownRecordId: string | null): string {
+  if (claim.outcome === "unobserved") return "";
+  const measured = claim.measured;
+  if (measured === null || measured === undefined) return "; measured: none";
+  return measured.step_record_id === ownRecordId ? `; measured: ${measured.channel}` : `; measured: ${measured.channel} of ${measured.step_record_id}`;
+}
+
 // One entry per Then that declared claims, and under it one line per claim
 // (src/report/summary/claim-line.ts): what was compared, with what, where
 // each value came from, and whether it held. A reader approving the run
@@ -399,7 +441,7 @@ function renderClaims(document: RunDocument): string[] {
       const attempts = step.attempts !== undefined && step.attempts > 1 ? `, ${step.attempts} readings` : "";
       const observation = step.observation === "unobserved" ? ", observed nothing" : "";
       const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}${attempts}${observation}`;
-      const lines = [head, ...step.claims.map((claim) => `  - ${cellText(claimLine(claim))}`)];
+      const lines = [head, ...step.claims.map((claim) => `  - ${cellText(`${claimLine(claim)}${measuredText(claim, step.step_record_id)}`)}`)];
       const key = lines.join("\n");
       if (entries.has(key)) continue;
       entries.set(key, { sortKey: [scenario.feature, step.line ?? scenario.line], lines });
@@ -411,7 +453,7 @@ function renderClaims(document: RunDocument): string[] {
     "",
     "## Claims",
     "",
-    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, and whether it held.",
+    "Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does).",
     "",
     ...sorted.flatMap((entry) => entry.lines),
   ];
@@ -446,6 +488,7 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderCriteriaSince(document),
     ...renderFeatures(document),
     ...renderClaims(document),
+    ...renderUnjudged(document),
     ...renderUnmeasured(document),
     ...renderFindings(document),
     ...renderRerun(document),

@@ -30,9 +30,11 @@ just until 0.1.
   `defineStep` freezes what it validated, and discovery runs only the
   step `defineStep` returned, not a copy of it. `matches` runs on a
   worker thread that the step's deadline stops. `observe` receives every
-  args key except the ones a claim compares with, and
-  `poll: { timeout_ms }` reads again until every claim holds on two
-  readings in a row. nukadoko compares and records each claim. Before
+  args key except the ones a claim compares with, and `resultOf` throws
+  inside a claim step, so an earlier step's value reaches a claim only
+  through `from`, under a label that names it. `poll: { timeout_ms }`
+  reads again until every claim holds on two readings in a row.
+  nukadoko compares and records each claim. Before
   this, a Then was code that called `expect`: in ten small projects that
   use nukadoko, 32 of 35 Thens kept the expected value in step code, where
   a reader of the feature could not see it, and a value compared with
@@ -47,13 +49,23 @@ just until 0.1.
   `then-compat-step` warning now says that a compat step cannot declare
   claims, so nukadoko cannot see what it judges.
 
+- **`scenario-without-then` covers every scenario no claim judges.** It
+  also warns for a scenario of only `*` lines, which it used to leave
+  alone, and for one whose Then lines each bind a step that is not a
+  claim step, such as a compat step. Each of those passes whenever its
+  steps run without an error.
+
 - **`nuka scaffold --then` writes a claim step.** With one value the line
   states and one `--from`, it writes one `equal` claim, with `view:
   "text"` for a chained `stdout` or `stderr`; otherwise it writes an
   `observe` stub that throws `not implemented: <name>` and one claim on
-  what `observe` returns. `nuka scaffold --feature` writes the same
-  claim step for a Then line. Neither writes `mutates: false` or an
-  `assert` body any more.
+  what `observe` returns. The expected value is always one the line
+  states: a capture, the docstring, the table, or the literal of a word
+  such as `none` or `empty`, never a value `observe` computes, so a
+  pattern that states no value is refused (exit 2), and
+  `nuka scaffold --feature` skips such a Then line with a note.
+  `nuka scaffold --feature` writes the same claim step for a Then line.
+  Neither writes `mutates: false` or an `assert` body any more.
 
 - **`nuka check` reports notes, and `--fail-on` gates on any code.** A
   check report has three severities: errors, warnings, and notes. The
@@ -193,14 +205,19 @@ just until 0.1.
 
 ### Added
 
-- **Five check codes for claims.** `then-without-claims`: a Then bound
+- **Six check codes for claims.** `then-without-claims`: a Then bound
   to a typed step that runs. `claims-outside-then`: a claim step bound in
   Given or When position, or on a `*` line. `claim-compares-itself`: a
-  claim whose two sides resolve to the same place. `claim-path-unknown`:
-  a `from` path the producer's `returns` does not declare.
+  claim whose two sides resolve to the same place, `view` and `at`
+  counted and `each` items included, or a claim step whose `observe`
+  receives a `from` value an expected `{ from }` reads.
+  `claim-path-unknown`: a `from` path the producer's `returns` does not
+  declare, or one that names an inherited member such as `constructor`.
   `claim-poll-unstated`: a claim step whose `observe` reaches `page`,
-  `context`, or `pageAs` and does not state `poll`. All five are
-  errors.
+  `context`, or `pageAs` and does not state `poll`.
+  `claim-expected-transformed`: a pattern fills a claim's expected key
+  with a parameter type whose transformer rewrites the line's text. All
+  six are errors.
 
 - **A claim step's record holds its claims.** `claims` lists each claim
   with its `actual` and `expected` values, `actual_from` and
@@ -213,9 +230,23 @@ just until 0.1.
   `null`. An `each` claim records its `where` and item claims, and
   for each item whether `where` selected it and why. `observation` and
   `attempts` say whether and how many times the step read its values.
-  run.json's step entries carry the same three fields, and the run
-  summary lists every claim under "Claims", `held` or `broken`. The
-  fields are additive, so no `schema_version` changes.
+  A claim step that polls also has `readings`: the attempt number, the
+  time, whether every claim held, and each claim's actual value for its
+  first 10 and last 10 readings, so an `observe` that walks toward the
+  expected value is visible. `measured` also finds a process's exit code
+  and a response's status, as numbers, in the producing step's record or
+  the claim step's own. run.json's step entries carry `claims`,
+  `observation`, and `attempts`, and the run summary lists every claim
+  under "Claims" with its outcome and `measured: <channel>` or
+  `measured: none`, which is what a constant looks like. The fields are
+  additive, so no `schema_version` changes.
+
+- **run.json says what judged each scenario, and whether the check
+  ran.** Each scenario entry has `claims`, its claims counted by
+  outcome, and a scenario that binds no claim step has `judged_by`,
+  `compat` or `nothing`; the run summary lists those under "Scenarios
+  with no claim". run.json has `check`, `ran` or `skipped`, and a run
+  under `--no-check` says so in the summary's condition lines.
 
 - **Three error kinds: `claim_broken`, `unobserved`, and
   `claim_unjudged`.** A broken claim fails the step with `claim_broken`

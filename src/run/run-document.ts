@@ -1,5 +1,5 @@
 import type { GherkinDocument, Pickle, Step as GherkinStep } from "@cucumber/messages";
-import { CLAIM_VALUE_MAX_BYTES, type RunClaim, type RunScenario, type RunStep, type RunUsed } from "../record/run-result.js";
+import { CLAIM_VALUE_MAX_BYTES, type RunClaim, type RunScenario, type RunScenarioClaims, type RunStep, type RunUsed } from "../record/run-result.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import type { ClaimRecord, ObservedCounts, StepRecord } from "../record/types.js";
 
@@ -38,6 +38,12 @@ export interface RunScenarioInput {
   readonly evidenceDir: string;
   /** The command that reruns this scenario, used when it failed. */
   readonly rerun: string;
+  /** Whether the step at this index is in Then position, as the pickle
+   * reads it (an And or But takes the keyword before it). */
+  readonly inThen: (index: number) => boolean;
+  /** What a step name is: a claim step, a step that runs, or a compat
+   * step; `null` for a name the vocabulary does not hold. */
+  readonly stepKind: (name: string) => "claim" | "run" | "compat" | null;
 }
 
 /** Whether the scenario wrote a file into its own evidence directory: the
@@ -154,6 +160,32 @@ function observedForRun(observed: ObservedCounts): ObservedCounts {
   return { ...observed, files: observed.files.map(({ content: _content, ...rest }) => rest) };
 }
 
+/** The claims of a scenario's step records, counted by outcome. Pure. */
+export function scenarioClaims(stepRecords: readonly (StepRecord | null)[]): RunScenarioClaims {
+  const counts = { held: 0, broken: 0, unobserved: 0, unjudged: 0 };
+  for (const stepRecord of stepRecords) {
+    for (const claim of stepRecord?.claims ?? []) counts[claim.outcome] += 1;
+  }
+  return {
+    held: counts.held,
+    broken: counts.broken,
+    ...(counts.unobserved > 0 ? { unobserved: counts.unobserved } : {}),
+    ...(counts.unjudged > 0 ? { unjudged: counts.unjudged } : {}),
+  };
+}
+
+/** What judged a scenario that binds no claim step, or `undefined` for
+ * one that binds one, run or not. Pure. */
+export function judgedBy(
+  names: readonly (string | null)[],
+  inThen: (index: number) => boolean,
+  stepKind: RunScenarioInput["stepKind"],
+): "compat" | "nothing" | undefined {
+  const kinds = names.map((name) => (name === null ? null : stepKind(name)));
+  if (kinds.includes("claim")) return undefined;
+  return kinds.some((kind, index) => kind === "compat" && inThen(index)) ? "compat" : "nothing";
+}
+
 export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput): RunScenario {
   const steps = record.steps.map((entry, index): RunStep => {
     const stepRecord = entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null);
@@ -183,6 +215,14 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
           }),
     };
   });
+  const judged = judgedBy(
+    steps.map((entry) => entry.step),
+    input.inThen,
+    input.stepKind,
+  );
+  const claims = scenarioClaims(
+    record.steps.map((entry) => (entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null))),
+  );
   return {
     scenario_record_id: record.scenario_record_id,
     feature: record.feature,
@@ -198,6 +238,8 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     ...(wroteScenarioEvidence(record) ? { evidence: { ...record.evidence, dir: input.evidenceDir } } : {}),
     ...(record.teardown_errors === undefined ? {} : { teardown_errors: record.teardown_errors }),
     ...(record.status === "failed" ? { do: input.rerun } : {}),
+    claims,
+    ...(judged === undefined ? {} : { judged_by: judged }),
   };
 }
 

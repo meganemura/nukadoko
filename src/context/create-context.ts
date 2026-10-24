@@ -43,7 +43,7 @@ export { finalizeOpenRequests, installChannelPatches, withoutChannelRecording };
 import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
 import { createEnvReadsCollector } from "./env-reads.js";
-import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, UnregisteredStepError } from "./errors.js";
+import { MissingEnvError, PartNotDeclaredError, ReadOnlyMutatingPartError, ResultsWithheldError, UnregisteredStepError } from "./errors.js";
 import { createEvidenceCollector, type EvidenceSnapshot } from "./evidence.js";
 import { createScratchCollector } from "./scratch.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
@@ -401,6 +401,16 @@ export interface StepContextHandle {
    * `nuka run` (run-scenario.ts) and `nuka do` (cli/do.ts) both do. Never
    * exposed on `ctx`. */
   beginStepRun(step: Step, fixtures: FixtureBag): void;
+  /** Executor-only: until the next `beginStep`, `ctx.resultOf` throws
+   * a `ResultsWithheldError` naming `stepName`, a claim step
+   * (docs/spec.md "Claims"). Its `observe` reads the world, and a value
+   * from an earlier step reaches it only through `from`, where the record
+   * names its origin; an earlier result read in code would let `observe`
+   * pick what to read by the value the claim compares. Set before the
+   * step's fixtures resolve, so a fixture of the project's that reads
+   * `resultOf` while it sets up for this step throws too. Never exposed on
+   * `ctx`. */
+  withholdResults(stepName: string): void;
   /** Executor-only: runs a step's own body (`step.run`, or a compat
    * step's glue function) so that every `runCommand` it reaches, and every
    * request, file write, and unmeasured action the channel patches see
@@ -662,6 +672,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // is (this file's own header). `ctx.call` subsets this rather than
   // building a bag of its own.
   let currentFixtures: FixtureBag | undefined;
+  // The claim step `ctx.resultOf` refuses to serve, set by
+  // `withholdResults` and cleared by `beginStep`.
+  let resultsWithheldFor: string | undefined;
   // Same lifetime rule again, for `ctx.poll`'s own finished-call log.
   const polls = createPollsCollector();
   // Same lifetime rule again, for `ctx.requireEnv`'s name log.
@@ -939,6 +952,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
       // instead (see UnregisteredStepError's own doc comment).
       if (!isRegisteredStep(step)) {
         throw new UnregisteredStepError();
+      }
+      if (resultsWithheldFor !== undefined) {
+        throw new ResultsWithheldError(resultsWithheldFor);
       }
       const entry = readResultOf(step);
       if (entry === undefined) {
@@ -1249,6 +1265,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     currentFixtures = fixtures;
   }
 
+  function withholdResults(stepName: string): void {
+    resultsWithheldFor = stepName;
+  }
+
   function pollsSnapshot(): PollRecord[] {
     return polls.snapshot();
   }
@@ -1293,6 +1313,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     sections.reset();
     calls.reset();
     currentFixtures = undefined;
+    resultsWithheldFor = undefined;
     polls.reset();
     envReads.reset();
     pageEvents.reset();
@@ -1316,6 +1337,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     sectionsSnapshot,
     callsSnapshot,
     beginStepRun,
+    withholdResults,
     recordingProcesses: <T>(fn: () => T): T => withProcessRecording(observed.openRun(scratch.allDirs()), fn),
     pollsSnapshot,
     namedContexts,

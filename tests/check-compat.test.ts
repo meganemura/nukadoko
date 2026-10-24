@@ -46,8 +46,9 @@ describe("nuka check: compat integration", () => {
     );
 
     // compat-glue.ts registers a support-origin parameter type, and that is
-    // no warning: only then-compat-step remains.
-    expect(report.warnings.map((issue) => issue.code)).toEqual(["then-compat-step"]);
+    // no warning: then-compat-step remains, with scenario-without-then for
+    // the scenario whose only Then is that compat step.
+    expect(report.warnings.map((issue) => issue.code)).toEqual(["then-compat-step", "scenario-without-then"]);
 
     expect(exitCode).toBe(1);
   });

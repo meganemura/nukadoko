@@ -180,6 +180,8 @@ describe("nuka scaffold --from", () => {
     const result = await cli(rootDir, [
       "scaffold",
       "greet-wrote",
+      "--pattern",
+      "greet wrote {text:string}",
       "--then",
       "--from",
       "run-greet.stdout",
@@ -198,9 +200,10 @@ describe("nuka scaffold --from", () => {
         "",
         "export default defineStep({",
         '  description: "TODO: describe greet-wrote",',
-        '  // pattern: "the feature line this step matches", (without one, the step is called by name only)',
+        '  pattern: "greet wrote {text:string}",',
         "  // Give each field a .describe(): `nuka describe` shows it to whoever picks this step.",
         "  args: z.object({",
+        "    text: z.string(),",
         "    stdout: runGreet.returns.shape.stdout,",
         "    cwd: makeDir.returns.shape.cwd,",
         "    exitCode: runGreet.returns.shape.exitCode,",
@@ -210,15 +213,45 @@ describe("nuka scaffold --from", () => {
         '    cwd: [makeDir, "cwd"],',
         '    exitCode: [runGreet, "exitCode"],',
         "  },",
-        "  // TODO: state the value this line checks in the pattern, as a capture, and name it in expected.",
         "  // TODO: read the value this line checks and return it as { actual }, or take it",
         "  // from an earlier step's returns through `from` and remove observe.",
         "  observe({}, { stdout, cwd, exitCode }) {",
         "    throw new Error(`not implemented: greet-wrote; args ${JSON.stringify({ stdout, cwd, exitCode })}`);",
         "  },",
-        '  claims: [{ actual: "actual", compare: "equal", expected: { observe: "expected" } }],',
+        '  claims: [{ actual: "actual", compare: "equal", expected: "text" }],',
         "});",
         "",
+      ].join("\n"),
+    );
+  });
+
+  // A claim's expected value is one the line states (docs/spec.md
+  // "Claims"), so a Then whose pattern captures nothing and carries no
+  // word that states a value gets no stub, never a claim observe fills on
+  // both sides.
+  it("refuses --then for a line that states no value, and writes nothing", async () => {
+    const result = await cli(rootDir, ["scaffold", "greet-wrote", "--then", "--from", "run-greet.stdout"]);
+
+    expect(result).toEqual({
+      exitCode: 2,
+      stdout: "",
+      stderr:
+        "refused\tinvalid-value\t-\tRefusing to scaffold: --then: a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, empty)\n" +
+        '  fix: Capture the value the line checks in --pattern, such as "the count is {count:int}", or write a feature line with a docstring or a table, and scaffold again.\n',
+    });
+    expect(existsSync(path.join(rootDir, "features", "steps", "greet-wrote.ts"))).toBe(false);
+  });
+
+  it("compares with the literal a word of the line states when it captures nothing", async () => {
+    const result = await cli(rootDir, ["scaffold", "greet-printed-nothing", "--pattern", "greet printed nothing", "--then", "--from", "run-greet.stdout"]);
+
+    expect(result.exitCode).toBe(0);
+    const written = await readFile(path.join(rootDir, "features", "steps", "greet-printed-nothing.ts"), "utf8");
+    expect(written).toContain(
+      [
+        '  // "nothing" states "", or 0 or []: keep the one of the value you compare. A word\'s literal is compared with equal alone.',
+        "  // The program ends its output with a newline that the feature line does not show.",
+        '  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: { literal: "" } }],',
       ].join("\n"),
     );
   });
@@ -426,7 +459,7 @@ describe("nuka scaffold --from in a project whose tsconfig.json accepts no .ts i
       '{ "extends": "./tsconfig.base.json", "compilerOptions": { "module": "nodenext" } }\n',
     );
 
-    const result = await cli(rootDir, ["scaffold", "output-says", "--then", "--from", "run-greet.stdout"]);
+    const result = await cli(rootDir, ["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
 
     expect(result.stderr).toBe("");
     expect(result.exitCode).toBe(0);
@@ -438,7 +471,7 @@ describe("nuka scaffold --from in a project whose tsconfig.json accepts no .ts i
   it("names the tsconfig file where the chain stops when it falls back to the .js name", async () => {
     await writeFile(path.join(rootDir, "tsconfig.json"), '{ "extends": "./tsconfig.base.json" }\n');
 
-    const result = await cli(rootDir, ["scaffold", "output-says", "--then", "--from", "run-greet.stdout"]);
+    const result = await cli(rootDir, ["scaffold", "output-says", "--pattern", "the output says {text:string}", "--then", "--from", "run-greet.stdout"]);
 
     expect(result.stderr).toBe(
       'note: the import names the .js file, because the tsconfig chain stops at tsconfig.json (its extends "./tsconfig.base.json" names no file), so nothing in it says tsc accepts a .ts name; nuka loads the .ts file under that name. Once tsconfig.json is fixed and the chain sets "rewriteRelativeImportExtensions": true, scaffold imports by the .ts name\n',
@@ -528,7 +561,7 @@ describe("nuka scaffold --from: any producer key", () => {
           `import { defineStep, z } from "nukadoko";\nexport default defineStep({ description: "p", args: z.object({}), returns: z.object({ ${fields} }), run() { throw new Error("unused"); } });\n`,
         );
         try {
-          const scaffold = await cli(rootDir, ["scaffold", consumer, "--then", "--from", `${producer}.${key}`]);
+          const scaffold = await cli(rootDir, ["scaffold", consumer, "--pattern", `${consumer} is {want:string}`, "--then", "--from", `${producer}.${key}`]);
           expect(scaffold.stderr).toBe("");
           expect(scaffold.exitCode).toBe(0);
           const check = await cli(rootDir, ["check"]);

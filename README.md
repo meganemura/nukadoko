@@ -219,10 +219,10 @@ scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  failed  0.0s  the output says "Hi, Ada!"
       claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
-      record  .nukadoko/runs/run-20261024-094618-elk5/steps/step-20261024-094618-bwp3
-steps     .nukadoko/runs/run-20261024-094618-elk5/steps/  2
-summary   .nukadoko/runs/run-20261024-094618-elk5/summary.md
-run       .nukadoko/runs/run-20261024-094618-elk5/run.json
+      record  .nukadoko/runs/run-20261024-123634-z9t2/steps/step-20261024-123634-s9j0
+steps     .nukadoko/runs/run-20261024-123634-z9t2/steps/  2
+summary   .nukadoko/runs/run-20261024-123634-z9t2/summary.md
+run       .nukadoko/runs/run-20261024-123634-z9t2/run.json
 1 scenario: 0 passed, 1 failed  (0s)
 failed	scenario-failed	features/greet.feature:4	greets by name: claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
   do: nuka run features/greet.feature:4
@@ -235,26 +235,26 @@ lands on the job's summary page by itself. Its first part:
 <!-- nukadoko:run -->
 # nukadoko run failed: 1 scenario, 0 passed, 1 failed
 
-- commit: `d94f697`
+- commit: `e26cf85`
 - environment: default
 - browser: none launched
 - selection: full
 - nukadoko: 0.21.0
-- run: run-20261024-094618-elk5
-- started 2026-10-24T09:46:18.258Z, finished 2026-10-24T09:46:18.693Z (0s)
+- run: run-20261024-123634-z9t2
+- started 2026-10-24T12:36:34.018Z, finished 2026-10-24T12:36:34.449Z (0s)
 
 ## features/greet.feature
 
 | scenario | line | default | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.2s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-094618-bwp3` |
+| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-123634-s9j0` |
 
 ## Claims
 
-Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, and whether it held.
+Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does).
 
 - `features/greet.feature:6` the output says "Hi, Ada!"
-  - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken
+  - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken; measured: observed.processes[0].stdout of step-20261024-123634-plgs
 ```
 
 In CI it is one more line beside the unit tests
@@ -494,7 +494,7 @@ features/steps/the-exit-code-is.ts
 The pattern is the line as cucumber-expressions reads it: a quoted value
 becomes `{value:string}`, an integer `{value:int}`, a decimal
 `{value:float}`, and a Then line gets a claim step whose `observe` is a
-TODO. A docstring below
+TODO; a Then line that states no value gets no stub, only a note. A docstring below
 the line becomes a `docstring: z.string()` key, and a table a `table` key
 of rows. Rename `value` in the pattern and in `args` together. When a line reads more than one way
 (a registered type and a built-in both fit), or its reading would also
@@ -1291,13 +1291,20 @@ whatever their env files and `baseURL` say.
   execution and measurement stay with the tool, not with the agent
   describing them.
 - **It does not check that a claim means what its sentence says.** A typed
-  `Then` declares its claims, so the expected value comes from the sentence
-  or is labelled, and `nuka check` refuses a claim that compares a value
-  with itself. Whether `contains-text` is strong enough for a criterion
-  that meant `equal`, or whether an `observe` reads the thing the
-  sentence names, rests on PR review. Whether any other step truthfully
-  does what its description claims rests on PR review too. The tool
-  guarantees the shape of inputs and outputs and the fact of execution.
+  `Then` declares its claims, and what the tool promises is narrower than
+  proof: the record never states something false (every label names where
+  its value really came from, and every value shown is the value
+  compared), and a way to make a claim hold that a reader of the record
+  could not see is refused or broken. What a reader can see is left to
+  the reader, and the record shows it: the run summary prints each claim
+  under its sentence with its compare, its sources, and `measured: none`
+  where no recorded channel holds the value, which is what a constant
+  looks like, and it lists every scenario no claim judged. Whether
+  `contains-text` is strong enough for a criterion that meant `equal`, or
+  whether an `observe` reads the thing the sentence names, rests on PR
+  review. Whether any other step truthfully does what its description
+  claims rests on PR review too. The tool guarantees the shape of inputs
+  and outputs and the fact of execution.
 - **`mutates` is trusted, not re-derived from what the network shows.**
   The HTTP method is a proxy for write semantics, not the semantics
   itself: purely client-side state and a server that mutates on GET are
@@ -1365,9 +1372,9 @@ Everything under
 `nuka run` writes that summary as Markdown: the commit, each environment,
 the browser, one table per feature with each scenario's verdict in each
 environment, its duration, and its failing step, a Claims section listing
-every claim of every Then with its outcome, a closing section naming any step that declared
-`mutates: false` while measured making a write, and the command that reruns
-each failed scenario. On GitHub Actions it lands on the job's summary page
+every claim of every Then with its outcome and the channel it was measured in,
+the scenarios no claim judged, each step with an action the tool could not
+measure, and the command that reruns each failed scenario. On GitHub Actions it lands on the job's summary page
 with no configuration, and `nuka report --format markdown --out <path>`
 writes a copy a CI step can post as a PR comment ([docs/ci.md](docs/ci.md)). nukadoko records the
 evidence, not the approval: the summary names the commit it describes, so

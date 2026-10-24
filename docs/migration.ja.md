@@ -219,6 +219,7 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
 `Then` は、`run` を持つ step ではなく claim step に昇格させます。
 その `expect` の呼び出しは `claims` になります。
 各 claim は値を `from` か `observe` を通して読み、期待値を文から取ります。
+claim step の中では `resultOf` が throw するので、`resultOf` では読みません。
 そのため `the command succeeds` のような文は、値を述べるように書き直します(`it exits with 0`)。
 docs/spec.ja.md の「Claims」を参照してください。
 それまでは、compat の `Then` は compat の `Then` のままです。

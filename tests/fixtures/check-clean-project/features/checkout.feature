@@ -14,3 +14,4 @@ Feature: Projects
 
   Scenario: an unknown-position step is not held to Then's mutates rule
     * a project "wild" exists
+    Then the project "wild" can be looked up

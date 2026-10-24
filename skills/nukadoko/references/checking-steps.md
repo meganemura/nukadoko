@@ -111,8 +111,7 @@ parsing is data: `{ actual: "stdout", view: "json", at:
 of an array (paths inside are relative to the item), and breaks when the
 array, or what `where` selects, is empty. A `where` claim that repeats an
 item claim is refused: it would turn "every item" into "every item that
-holds". A path reads own properties only, so `constructor` or a getter
-finds nothing.
+holds". A path reads own properties only (not `constructor`, not a getter).
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `has-item`, `matches`, `greater-than`, `at-least`,
@@ -123,17 +122,18 @@ An expected text every string holds breaks too (blank under
 `contains-text`, a pattern that matches `""` under `matches`), and a
 `matches` pattern that runs past the step's deadline is stopped and
 breaks. `nuka check` reads each `from` path against the producer's
-`returns` (`claim-path-unknown`), and reports a claim whose two sides are
-one value (`claim-compares-itself`).
+`returns` (`claim-path-unknown`), reports a claim whose sides are one place
+(`claim-compares-itself`), and refuses a parameter type with a transformer
+on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 
 `observe(fixtures, args)` reads the world when no earlier step returned
-the value. It gets every args key except the ones a claim names as its
-expected value, and reading one of those throws: `observe` cannot pick
-what to read by what it will be compared with. An `observe` that throws
-records `unobserved`, never a broken claim; a claim nukadoko itself failed
-to judge is `claim_unjudged`.
+the value. It gets every args key except the ones a claim compares with,
+and reading one of those, or calling `resultOf`, throws: an earlier
+step's value reaches a claim through `from` alone. An `observe` that
+throws records `unobserved`; a claim nukadoko failed to judge is
+`claim_unjudged`.
 
 Return what you measured, never a verdict: a count, a text, a list. A
 boolean literal is refused when the actual value comes from `observe`,

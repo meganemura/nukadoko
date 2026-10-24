@@ -19,7 +19,7 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { attachStepLines, loadFeaturesFromDirs } from "../feature/load-features.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { readCheckTargets } from "./check.js";
-import { attachmentInFeatures, readPattern, refusedBelowParentConfig, stepTemplate, type StepTemplate } from "./scaffold.js";
+import { attachmentInFeatures, readPattern, refusedBelowParentConfig, stepTemplate, THEN_STATES_NO_VALUE, thenStatesValue, type StepTemplate } from "./scaffold.js";
 import { shellWord } from "../shell/shell-word.js";
 import type { RefusalCode } from "./refusal-codes.js";
 import { RefusalError, refuse, restated, type Hint } from "./refusal.js";
@@ -338,10 +338,16 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
     // out: no one args shape fits both, and check names the line that fails.
     const attachments = new Set(stub.lines.map((line) => line.attachment));
     const attachment = attachments.size === 1 ? (stub.lines[0]!.attachment ?? null) : null;
+    const captures = stripCaptureNames(stub.pattern).captures;
+    if (then && !thenStatesValue(stub.pattern, captures, attachment)) {
+      taken.delete(name);
+      notes.push(`${location(stub.lines[0]!)}: ${THEN_STATES_NO_VALUE}, so no stub was written; state the value this line checks in the line, such as a number or a quoted text, and scaffold again`);
+      continue;
+    }
     const template: StepTemplate = {
       name,
       pattern: stub.pattern,
-      captures: stripCaptureNames(stub.pattern).captures,
+      captures,
       chained: [],
       variant: then ? "then" : "when",
       entryPoint: null,

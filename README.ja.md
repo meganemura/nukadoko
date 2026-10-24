@@ -207,10 +207,10 @@ scenario 1/1  features/greet.feature:4  greets by name
   step 1/2  passed  0.1s  I run greet with "Ada"
   step 2/2  failed  0.0s  the output says "Hi, Ada!"
       claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
-      record  .nukadoko/runs/run-20261024-094618-elk5/steps/step-20261024-094618-bwp3
-steps     .nukadoko/runs/run-20261024-094618-elk5/steps/  2
-summary   .nukadoko/runs/run-20261024-094618-elk5/summary.md
-run       .nukadoko/runs/run-20261024-094618-elk5/run.json
+      record  .nukadoko/runs/run-20261024-123634-z9t2/steps/step-20261024-123634-s9j0
+steps     .nukadoko/runs/run-20261024-123634-z9t2/steps/  2
+summary   .nukadoko/runs/run-20261024-123634-z9t2/summary.md
+run       .nukadoko/runs/run-20261024-123634-z9t2/run.json
 1 scenario: 0 passed, 1 failed  (0s)
 failed	scenario-failed	features/greet.feature:4	greets by name: claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)
   do: nuka run features/greet.feature:4
@@ -224,26 +224,26 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 <!-- nukadoko:run -->
 # nukadoko run failed: 1 scenario, 0 passed, 1 failed
 
-- commit: `d94f697`
+- commit: `e26cf85`
 - environment: default
 - browser: none launched
 - selection: full
 - nukadoko: 0.21.0
-- run: run-20261024-094618-elk5
-- started 2026-10-24T09:46:18.258Z, finished 2026-10-24T09:46:18.693Z (0s)
+- run: run-20261024-123634-z9t2
+- started 2026-10-24T12:36:34.018Z, finished 2026-10-24T12:36:34.449Z (0s)
 
 ## features/greet.feature
 
 | scenario | line | default | duration | failure |
 | --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.2s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-094618-bwp3` |
+| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-123634-s9j0` |
 
 ## Claims
 
-Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, and whether it held.
+Each line is one claim of a Then: the actual value and where it came from, how it was compared, the expected value and where it came from, whether it held, and the recorded channel that holds the actual value (`measured: none` when no channel does).
 
 - `features/greet.feature:6` the output says "Hi, Ada!"
-  - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken
+  - "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text) broken; measured: observed.processes[0].stdout of step-20261024-123634-plgs
 ```
 
 CI では、ユニットテストの横に 1 行加えるだけです([docs/ci.ja.md](docs/ci.ja.md) に workflow 全体があります):
@@ -475,6 +475,7 @@ features/steps/the-exit-code-is.ts
 
 pattern は、cucumber-expressions がその行を読んだとおりのものです。
 引用符で囲んだ値は `{value:string}`、整数は `{value:int}`、小数は `{value:float}` になり、Then の行には `observe` が TODO の claim step が書かれます。
+値を述べない Then の行には stub を書かず、注記だけを出します。
 行の下の docstring は `docstring: z.string()` のキーに、table は行の配列を持つ `table` のキーになります。
 `value` の名前を変えるときは、pattern と `args` を一緒に変えてください。
 行が 2 通り以上に読めるとき(登録した型と組み込みの型の両方が当てはまるとき)や、その読み方がプロジェクトの別の行にも一致するときは、stub は行そのものを キャプチャなしの pattern にし、stderr の `note:` 行がそのことを伝えます。
@@ -1164,8 +1165,13 @@ environment はそれでも設定にすぎません。
   nukadoko がなくすのは、agent の **説明** を信頼する必要そのものです。
   実行と計測はツール側にとどまり、それを語る agent 側にはありません。
 - **claim がその文の言うとおりの意味を持つかは検査しません。**
-  型付きの `Then` は claim を宣言するので、expected の値は文から来るか、出どころのラベルが付きます。
-  また `nuka check` は、値をそれ自身と比べる claim を拒否します。
+  型付きの `Then` は claim を宣言し、ツールが約束することは証明よりも狭いものです。
+  record は偽のことを述べません(各ラベルは値が本当に来た場所を名指しし、示す値は比較した値そのものです)。
+  また、record の読み手に見えない方法で claim を成り立たせることは、拒否するか成り立たないものにします。
+  読み手に見える方法は読み手に委ね、record がそれを示します。
+  run サマリは各 claim を文の下に、比較、出所、そして記録されたどのチャネルにも値がないときの `measured: none` とともに出力します。
+  `measured: none` は定数がとる姿です。
+  また、どの claim も判定しなかった scenario をすべて並べます。
   基準が `equal` を意味していたのに `contains-text` で十分か、`observe` が文の名指すものを読んでいるかは、PR レビューに委ねられます。
   それ以外の step がその description の主張どおりに正直に動くかどうかも、PR レビューに委ねられます。
   ツールが保証するのは入出力の形と実行された事実だけです。
@@ -1217,7 +1223,7 @@ step が結び付いているかどうかは、プロジェクトがスキャン
 run サマリを読んで、何がどの commit で走ったか、そして自分が承認した基点からどの受け入れ基準と step ファイルが変わったかを、その比較が届く範囲で確かめます。
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
 `nuka run` は毎回そのサマリを Markdown で書きます。
-commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、各 Then のすべての claim をその成否とともに挙げる Claims の節、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
+commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、各 Then のすべての claim をその成否と計測したチャネルとともに挙げる Claims の節、どの claim も判定しなかった scenario、ツールが計測できない操作をした各 step、そして失敗した各 scenario を再実行するコマンドです。
 GitHub Actions では設定なしでジョブのサマリページに載り、`nuka report --format markdown --out <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
 
 nukadoko が記録するのは証跡であり、承認ではありません。

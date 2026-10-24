@@ -3,15 +3,19 @@ import { StepKeywordType, type GherkinDocument, type Scenario, type Step } from 
 // Responsibility: the two scenario shapes `nuka check` warns about that the
 // document alone decides, read before the pickle list is all a caller keeps:
 // a scenario with no Then, and an outline whose rows all share one name.
-// Boundary: it reads keywords and Examples headers only; whether a step
-// asserts anything is the step's business, so a scenario of only `*` lines
-// is left alone (its author chose not to say which steps are outcomes).
+// Boundary: it reads keywords and Examples headers only. A scenario of only
+// `*` lines has no Then either: a claim step on a `*` line is refused, so
+// such a scenario judges no claim and passes whenever its steps run. Whether
+// a Then line binds a claim step needs the vocabulary, so src/check/
+// feature-check.ts reports that half of the same warning.
 
 export interface ScenarioWithoutThen {
   readonly code: "scenario-without-then";
   readonly relativePath: string;
   readonly line: number;
   readonly name: string;
+  /** Every step of the scenario's own is a `*` line. */
+  readonly starsOnly: boolean;
 }
 
 export interface OutlineRowsShareName {
@@ -39,16 +43,13 @@ export function resolvedKeywordTypes(steps: readonly Step[]): StepKeywordType[] 
 }
 
 // The Background counts toward the Then (a conjunction in the scenario reads
-// the Background's last keyword), but only the scenario's own steps decide
-// whether its author named positions at all: a Background is shared setup, so
-// a scenario of only `*` lines under a Given Background is still left alone.
-function withoutThen(background: readonly Step[], steps: readonly Step[]): boolean {
+// the Background's last keyword). A scenario with no steps of its own is
+// not one anybody runs for an outcome, so it is left alone.
+function withoutThen(background: readonly Step[], steps: readonly Step[]): { readonly starsOnly: boolean } | null {
   const types = resolvedKeywordTypes([...background, ...steps]);
   const own = types.slice(background.length);
-  return (
-    !types.includes(StepKeywordType.OUTCOME) &&
-    own.some((type) => type === StepKeywordType.CONTEXT || type === StepKeywordType.ACTION)
-  );
+  if (own.length === 0 || types.includes(StepKeywordType.OUTCOME)) return null;
+  return { starsOnly: own.every((type) => type === StepKeywordType.UNKNOWN) };
 }
 
 function columnsOf(scenario: Scenario): string[] {
@@ -67,12 +68,14 @@ export function findScenarioShapeFindings(
   const findings: ScenarioShapeFinding[] = [];
 
   const checkScenario = (scenario: Scenario, background: readonly Step[]): void => {
-    if (withoutThen(background, scenario.steps)) {
+    const missing = withoutThen(background, scenario.steps);
+    if (missing !== null) {
       findings.push({
         code: "scenario-without-then",
         relativePath,
         line: scenario.location.line,
         name: scenario.name,
+        starsOnly: missing.starsOnly,
       });
     }
     const rows = scenario.examples.reduce((total, block) => total + block.tableBody.length, 0);

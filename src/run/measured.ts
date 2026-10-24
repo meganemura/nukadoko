@@ -9,17 +9,19 @@ import { deepEqual, type JudgedClaim } from "../step/evaluate-claims.js";
 // "Claims"): which recorded channel of which step record holds exactly the
 // raw value a claim read. A claim that reads a `from` value looks in the
 // record of the step that returned it; a claim that reads `observe` looks
-// in the claim step's own channels. The channels are the ones stage 2
-// records with their content: a process's stdout and stderr, an HTTP
-// response body, and a changed file's content. `measured` is information
-// for a reader of the record, never a condition of the claim, so a channel
-// that cannot be read is skipped without a word.
+// in the claim step's own channels. The channels are what the step record
+// holds with its content: a process's stdout, stderr, and exit code, an
+// HTTP response's status and body, and a changed file's content. A number
+// channel (an exit code, a status) matches only a number, so a constant
+// `0` in step code is not taken for an exit code. `measured` is
+// information for a reader of the record, never a condition of the claim,
+// so a channel that cannot be read is skipped without a word.
 
-/** One recorded text and where it sits in its step record. */
-export interface ChannelText {
-  readonly channel: string;
-  readonly text: string;
-}
+/** One recorded channel and where it sits in its step record: a text, or
+ * a number the record holds as a number. */
+export type ChannelText =
+  | { readonly channel: string; readonly text: string }
+  | { readonly channel: string; readonly number: number };
 
 /** What `recordedChannels` reads from a step record. */
 export interface ChannelSource {
@@ -52,12 +54,18 @@ export function recordedChannels(source: ChannelSource): readonly ChannelText[] 
       const text = file === undefined ? null : readText(path.join(source.dir, file));
       if (text !== null) channels.push({ channel: `observed.processes[${index}].${stream}`, text });
     }
+    // A process a signal ended has no exit code to have measured.
+    if (typeof entry.exit_code === "number") channels.push({ channel: `observed.processes[${index}].exit_code`, number: entry.exit_code });
   });
   if (source.http !== undefined) {
     const lines = (readText(path.join(source.dir, source.http)) ?? "").split("\n").filter((line) => line.length > 0);
     lines.forEach((line, index) => {
       try {
-        const text = keptText((JSON.parse(line) as { response_body?: KeptText }).response_body);
+        const parsed = JSON.parse(line) as { status?: unknown; response_body?: KeptText };
+        // Status 0 is a request that got no response, not a status the
+        // server answered with.
+        if (typeof parsed.status === "number" && parsed.status !== 0) channels.push({ channel: `http.jsonl[${index}].status`, number: parsed.status });
+        const text = keptText(parsed.response_body);
         if (text !== null) channels.push({ channel: `http.jsonl[${index}].response_body`, text });
       } catch {
         // A line that does not parse holds no body to compare.
@@ -71,10 +79,13 @@ export function recordedChannels(source: ChannelSource): readonly ChannelText[] 
   return channels;
 }
 
-/** Whether a recorded text is the raw value: the same string, or, for a
- * value that is not a string, the JSON the text parses to. Both sides are
- * compared redacted, since the record holds only redacted text. */
-function sameContent(raw: unknown, text: string, secrets: SecretSet): boolean {
+/** Whether a recorded channel is the raw value. A number channel is the
+ * same number. A text is the same string, or, for a value that is not a
+ * string, the JSON the text parses to; both sides are compared redacted,
+ * since the record holds only redacted text. */
+function sameContent(raw: unknown, channel: ChannelText, secrets: SecretSet): boolean {
+  if ("number" in channel) return typeof raw === "number" && raw === channel.number;
+  const text = channel.text;
   if (typeof raw === "string") return redactString(raw, secrets) === text;
   if (raw === undefined) return false;
   try {
@@ -114,7 +125,7 @@ export function withMeasured(judged: readonly JudgedClaim[], context: MeasuredCo
     const recordId = fromKey === null ? context.ownRecordId : context.fromRecordOf(fromKey);
     let measured: MeasuredChannel | null = null;
     if (recordId !== null && record.outcome !== "unobserved") {
-      const match = channelsOf(recordId).find((channel) => sameContent(rawActual, channel.text, context.secrets));
+      const match = channelsOf(recordId).find((channel) => sameContent(rawActual, channel, context.secrets));
       if (match !== undefined) measured = { step_record_id: recordId, channel: match.channel };
     }
     return { ...record, measured };

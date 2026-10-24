@@ -144,6 +144,43 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   Given や When の位置に結び付いた claim step は `claims-outside-then` で、`*` の行にあるものも同じです。
   キーワードを書いてください。
 
+- **claim step は前の step の値を `resultOf` ではなく `from` で受け取ります。**
+  `resultOf` は claim step の中で throw し、プロジェクトの fixture がそこで呼んだときも throw します。
+  メッセージはその step を名指しします。
+  `resultOf` で読んだ値には `observe:` というラベルが付いていましたが、`from` で読めば、値を返した行を record が名指しします。
+  読み取りを `from` に移し、`from` のキーに対して claim を書いてください。
+
+  ```ts
+  // Before: observe({ resultOf }) { return { createdTitle: resultOf(createTodo)?.title }; }
+  args: z.object({ title: z.string(), createdTitle: createTodo.returns.shape.title }),
+  from: { createdTitle: [createTodo, "title"] },
+  claims: [{ actual: "createdTitle", compare: "equal", expected: "title" }],
+  ```
+
+  実行する step は、これまでどおり `resultOf` を使えます。
+  `observe` が受け取る `from` の値を期待値の `{ from }` も読んでいる claim step も、`nuka check` が拒否します(`claim-compares-itself`)。
+  2 つのうち 1 つを別の step から取ってください。
+
+- **transformer を持つ parameter type は、claim の期待値を埋められません。**
+  `nuka check` はそのような pattern を `claim-expected-transformed` として報告し、それが報告されている間は `nuka run` が始まりません。
+  transformer を持たない型、たとえば `{key:string}` でキーをキャプチャし、テキストを JSON や行として読むときは claim に `expected_view` を名指ししてください。
+
+- **`scenario-without-then` が警告する scenario が増えました。**
+  `*` の行だけの scenario と、どの Then の行も claim step でない step(compat step)に結び付く scenario も報告されます。
+  `nuka check --fail-on scenario-without-then` を走らせるジョブはそれらで失敗するので、それぞれに claim step に結び付く Then の行を書いてください。
+
+- **`nuka scaffold --then` は値を述べない pattern を拒否します。**
+  これまでは `observe` が計算した値に対する claim を書いていましたが、いまは `invalid-value` で終了コード 2 を返します。
+  `--pattern` で値をキャプチャするか("the count is {count:int}")、語(`none`、`empty`)で述べるか、feature 行に docstring か table を付けてください。
+  `nuka scaffold --feature` は、そのような Then の行には stub を書かず、stderr に注記を出します。
+
+- **run.json のフィールドが 3 つ増えました。**
+  各 scenario の要素は `claims` を持ち、claim step に結び付かないものは `judged_by` も持ちます。
+  文書は `check` を持ちます。
+  scenario の要素や文書を丸ごと比べる読み手はそれらを加えてください。
+  キーを名前で読む読み手は何もしなくてかまいません。
+  run サマリには「Scenarios with no claim」、`--no-check` のときの `check: skipped` の条件の行、各 claim の行の `measured:` が加わります。
+
 - **`then-mutates` はなくなりました。**
   `nuka check --fail-on then-mutates` はそのコードを `fail-on-unknown-code` で拒否するので、外してください。
   エラーの `then-without-claims` は、フラグなしで check を失敗させます。
@@ -159,10 +196,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   Allure 2 の `categories.json` は、`nuka report --format allure` が 10 個すべてを含めて自分で書きます。
 
 - **step ファイルは `defineStep` が返した step を、そのまま export します。**
-  `defineStep` は返す step を、その claim と `from` とともに凍結するようになり、discovery はコピー(`{ ...step }`、`Object.assign({}, step)`)である default export を拒否します。
+  `defineStep` は返す step を、その claim、`from`、`parts` とともに凍結するようになり、discovery はコピー(`{ ...step }`、`Object.assign({}, step)`)である default export を拒否します。
   どちらも `step-file-import-failed` として現れます。
   オプションを変えるために step をコピーしていたファイルは、そのオプションを `defineStep` に渡します。
   `parts` に並べる step も、`defineStep` が返したものです。
+  呼び出しのあとで別の step の `parts` を変えていたファイルは import の時点で throw するため、`nuka check` は `part-cycle` を報告していた場所で `step-file-import-failed` を報告します。
 
 - **`nuka tend` は削除され、その findings は `nuka check` が報告します。**
   `nuka tend` はいま `removed-command` で拒否します。

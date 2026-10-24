@@ -122,6 +122,24 @@ export interface RunScenario {
   /** What moved in this scenario's criteria since `nuka run --since`'s
    * ref. Absent in a run.json an earlier build wrote. */
   readonly criteria?: RunCriteria;
+  /** How the claims of the scenario's claim steps came out, counted once
+   * per claim (an `each` is one claim). `unobserved` and `unjudged` are
+   * present only above 0. A claim step that did not run counts nothing.
+   * Absent in a run.json an earlier build wrote. */
+  readonly claims?: RunScenarioClaims;
+  /** Present only for a scenario that binds no claim step: `compat` when a
+   * compat step is bound in Then position, so a judgment nukadoko cannot
+   * see may have been made by a throw, and `nothing` otherwise, so the
+   * scenario passes whenever its steps run without an error. */
+  readonly judged_by?: "compat" | "nothing";
+}
+
+/** A scenario's claim counts by outcome. */
+export interface RunScenarioClaims {
+  readonly held: number;
+  readonly broken: number;
+  readonly unobserved?: number;
+  readonly unjudged?: number;
 }
 
 /** How a scenario's own criteria (its tags, steps with their effective
@@ -221,6 +239,10 @@ export type RunFields = {
   /** `partial` when a `:line` target left out some scenarios of its file,
    * so the run covers less than the files it names. */
   readonly selection: "full" | "partial";
+  /** `skipped` for a run started with `--no-check`, so no static finding
+   * held it back; `ran` otherwise. Absent in a run.json an earlier build
+   * wrote. */
+  readonly check?: "ran" | "skipped";
   /** `scenarios`, `passed`, and `failed` count executions; `not_run`
    * counts the `verdicts` cells that never ran. */
   readonly counts: { readonly scenarios: number; readonly passed: number; readonly failed: number; readonly not_run: number };

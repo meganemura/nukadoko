@@ -7,8 +7,8 @@ import { z } from "zod";
 // result held on `this` for a later step to dig back out. Promoting the
 // *producer* first is the order migration-knowhow recommends: a consumer
 // can only read a validated result once one exists, and `defineStep`'s own
-// `returns` schema is what makes this step's result citable through the
-// `resultOf` fixture instead of an unvalidated World read.
+// `returns` schema is what makes this step's result citable through
+// `from` instead of an unvalidated World read.
 export default defineStep({
   pattern: "a todo titled {title:string} is created",
   description: "Create a todo via POST /todos and return the created record",

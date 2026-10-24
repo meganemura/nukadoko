@@ -840,12 +840,13 @@ describe("nuka scaffold --command: any pattern", () => {
           const check = await cli(rootDir, ["check"]);
           // The feature is the one When line, so its only finding is the missing Then.
           expect(withoutCheckNotes(check.stdout + check.stderr)).toBe(
-            `warning\tscenario-without-then\tfeatures/${name}.feature:2\tScenario "s" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\n`,
+            `warning\tscenario-without-then\tfeatures/${name}.feature:2\tScenario "s" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.\n`,
           );
           for (const key of ["stdout", "exitCode", "stderr"]) {
             const consumer = `${name}-${key.toLowerCase()}`;
             written.push(consumer);
-            const chained = await cli(rootDir, ["scaffold", consumer, "--then", "--from", `${name}.${key}`]);
+            // A Then compares with a value its line states, so the consumer captures one.
+            const chained = await cli(rootDir, ["scaffold", consumer, "--pattern", `${consumer} is {want:string}`, "--then", "--from", `${name}.${key}`]);
             expect(chained.stderr).toBe("");
             expect(chained.exitCode).toBe(0);
           }
@@ -943,7 +944,7 @@ describe("every scaffolded variant", () => {
     );
     const variants: readonly (readonly string[])[] = [
       ["scaffold", "bare-when"],
-      ["scaffold", "bare-then", "--then"],
+      ["scaffold", "bare-then", "--pattern", "the list is empty", "--then"],
       ["scaffold", "args-when", "--pattern", "set {n:int} {w:word} {b:biginteger} {c:colour}"],
       ["scaffold", "args-then", "--pattern", "the total is {total:float}", "--then"],
       ["scaffold", "run-bare", "--command"],

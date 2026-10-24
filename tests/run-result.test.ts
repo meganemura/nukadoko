@@ -47,6 +47,7 @@ describe("nuka run: run.json", () => {
       schema_version: 3,
       nukadoko: readOwnVersion(),
       command: "run",
+      check: "skipped",
       verdict: "failed",
       findings: [
         {
@@ -91,6 +92,8 @@ describe("nuka run: run.json", () => {
           hooks: [],
           do: "nuka run features/failure/a.feature:3",
           criteria: { changed_since: null },
+          claims: { held: 0, broken: 0 },
+          judged_by: "nothing",
         },
         {
           scenario_record_id: expect.stringMatching(/^scn-/),
@@ -115,6 +118,8 @@ describe("nuka run: run.json", () => {
           ],
           hooks: [],
           criteria: { changed_since: null },
+          claims: { held: 0, broken: 0 },
+          judged_by: "nothing",
         },
       ],
       verdicts: [

@@ -159,6 +159,53 @@ This part does not change release to release.
   `examples/migration`. A claim step bound in Given or When position is
   `claims-outside-then`, and so is one on a `*` line: write its keyword.
 
+- **A claim step takes an earlier step's value through `from`, not
+  `resultOf`.** `resultOf` throws inside a claim step, also when a
+  project fixture calls it there, with a message that names the step.
+  Read through `resultOf`, the value carried the label `observe:`; read
+  through `from`, the record names the line that returned it. Move the
+  read into `from`, and claim on the `from` key:
+
+  ```ts
+  // Before: observe({ resultOf }) { return { createdTitle: resultOf(createTodo)?.title }; }
+  args: z.object({ title: z.string(), createdTitle: createTodo.returns.shape.title }),
+  from: { createdTitle: [createTodo, "title"] },
+  claims: [{ actual: "createdTitle", compare: "equal", expected: "title" }],
+  ```
+
+  A step that runs keeps `resultOf` as it was. `nuka check` also refuses
+  a claim step whose `observe` receives a `from` value that an expected
+  `{ from }` reads (`claim-compares-itself`): take one of the two from
+  another step.
+
+- **A parameter type with a transformer cannot fill a claim's expected
+  value.** `nuka check` reports such a pattern as
+  `claim-expected-transformed`, and `nuka run` refuses to start while it
+  is reported. Capture the key with a type that has no transformer, such
+  as `{key:string}`, and name `expected_view` on the claim when it reads
+  the text as JSON or as lines.
+
+- **`scenario-without-then` warns for more scenarios.** A scenario of
+  only `*` lines, and one whose Then lines each bind a step that is not a
+  claim step (a compat step), are reported now. A job that runs `nuka
+  check --fail-on scenario-without-then` fails on them: give each one a
+  Then line that binds a claim step.
+
+- **`nuka scaffold --then` refuses a pattern that states no value.** It
+  exits 2 with `invalid-value`, where it used to write a claim against a
+  value `observe` computed. Capture the value in `--pattern` ("the count
+  is {count:int}"), state it with a word (`none`, `empty`), or give the
+  feature line a docstring or a table. `nuka scaffold --feature` skips
+  such a Then line with a note on stderr instead of writing a stub.
+
+- **run.json has three more fields.** Each scenario entry has `claims`,
+  and one that binds no claim step has `judged_by`; the document has
+  `check`. A reader that compares a scenario entry or the document as a
+  whole adds them; a reader that reads keys by name has nothing to do.
+  The run summary gains "Scenarios with no claim", a `check: skipped`
+  condition line under `--no-check`, and `measured:` on every claim
+  line.
+
 - **`then-mutates` is gone.** `nuka check --fail-on then-mutates`
   refuses the code with `fail-on-unknown-code`; drop it. The error
   `then-without-claims` fails the check with no flag.
@@ -176,12 +223,14 @@ This part does not change release to release.
   all ten on its own.
 
 - **A step file exports the step `defineStep` returned, and leaves it as
-  it is.** `defineStep` now freezes the step it returns, with its claims
-  and `from`, and discovery refuses a default export that is a copy
-  (`{ ...step }`, `Object.assign({}, step)`). Both show as
+  it is.** `defineStep` now freezes the step it returns, with its claims,
+  `from`, and `parts`, and discovery refuses a default export that is a
+  copy (`{ ...step }`, `Object.assign({}, step)`). Both show as
   `step-file-import-failed`. A file that copied a step to change an
   option passes the option to `defineStep` instead; a step listed in
-  `parts` is the one `defineStep` returned, too.
+  `parts` is the one `defineStep` returned, too. A file that changed
+  another step's `parts` after the call throws at import, so `nuka check`
+  reports `step-file-import-failed` where it reported `part-cycle`.
 
 - **`nuka tend` is removed; `nuka check` reports its findings.** `nuka
   tend` now refuses with `removed-command`. A job that read

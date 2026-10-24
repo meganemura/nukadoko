@@ -1,5 +1,6 @@
 import { rmdirSync } from "node:fs";
 import path from "node:path";
+import { PickleStepType } from "@cucumber/messages";
 import { analyzeRunSelectionKeepingSteps } from "../check/analyze.js";
 import { checkBindings } from "../check/binding-check.js";
 import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback.js";
@@ -80,6 +81,7 @@ import {
   validateStepFixtures,
 } from "../fixture/validate-fixtures.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
+import { isClaimStep } from "../step/define-step.js";
 import { formatFromIssues, registeredStepPredicate, validateStepFrom } from "../step/validate-from.js";
 import { asFinding, writeCheckIssueLines } from "./check.js";
 import { formatFinding, warningSink, type Finding } from "../finding/finding.js";
@@ -682,6 +684,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // one scenario's step records at a time. The lines and step names come
     // from the pickle the record ran, found by its feature and line.
     const pickleLines = new Map<string, (index: number) => number | null>();
+    const pickleOutcomes = new Map<string, readonly boolean[]>();
     const documentLines = new Map<string, Map<string, number>>();
     for (const { feature, pickle } of flatPickles) {
       let lines = documentLines.get(feature.relativePath);
@@ -689,8 +692,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         lines = gherkinStepLines(feature.gherkinDocument);
         documentLines.set(feature.relativePath, lines);
       }
-      pickleLines.set(scenarioKey(feature.relativePath, pickle.location?.line ?? 0), pickleStepLines(pickle, lines));
+      const key = scenarioKey(feature.relativePath, pickle.location?.line ?? 0);
+      pickleLines.set(key, pickleStepLines(pickle, lines));
+      pickleOutcomes.set(key, pickle.steps.map((step) => step.type === PickleStepType.OUTCOME));
     }
+    const stepKind = (name: string): "claim" | "run" | "compat" | null => {
+      const entry = vocabulary.get(name);
+      if (entry === undefined) return null;
+      if (entry.kind === "compat") return "compat";
+      return isClaimStep(entry.step) ? "claim" : "run";
+    };
     const runScenarios: RunScenario[] = [];
     // A scenario's evidence directory is made before it runs, so its id is
     // taken on disk for every worker of the run, and most scenarios leave it
@@ -717,6 +728,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         recordPath: (stepRecordId) => path.join(RUN_FILE_DIRS.steps, stepRecordId),
         evidenceDir: relativeToRun(config.stateDir, runId, record.evidence.dir),
         rerun: formatRerunCommand(record, conditionsOf.rerunFlags(record.environment)),
+        inThen: (index) => pickleOutcomes.get(scenarioKey(record.feature, record.line))?.[index] ?? false,
+        stepKind,
       });
       const entry: RunScenario = { ...built, criteria: criteriaFor(built) };
       runScenarios.push(entry);
@@ -814,6 +827,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           base_url: condition.resolvedEnv.baseURL === undefined ? null : redactString(condition.resolvedEnv.baseURL, condition.secrets),
         })),
         selection,
+        check: options.check ? "ran" : "skipped",
         counts: countScenarios(runScenarios, verdicts),
         scenarios: runScenarios,
         verdicts,

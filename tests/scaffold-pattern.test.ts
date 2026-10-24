@@ -424,7 +424,8 @@ describe("nuka scaffold --pattern: any text", () => {
 
 // Property: the claim `--then` writes is one defineStep accepts, whatever
 // the capture and chained keys are called, so the stub fails at observe's
-// TODO and never at import. A key named like observe's own key ("actual")
+// TODO and never at import, and its expected value is never one observe
+// computes. A key named like observe's own key ("actual")
 // is the case an example would miss.
 describe("nuka scaffold --then: the claim it writes", () => {
   const keyNames = ["want", "actual", "actual2", "expected", "got", "stdout"] as const;
@@ -439,7 +440,8 @@ describe("nuka scaffold --then: the claim it writes", () => {
       const captureKeys = ordered.slice(0, captureCount);
       const chainedKeys = ordered.slice(captureCount);
       const captures = captureKeys.map((key) => ({ key, type: tc.draw(gs.sampledFrom(types)) }));
-      const pattern = ["it is", ...captures.map((capture) => `{${capture.key}:${capture.type}}`)].join(" ");
+      // A line with no capture states its value with a word, or gets no stub.
+      const pattern = ["it is", ...captures.map((capture) => `{${capture.key}:${capture.type}}`), ...(captures.length === 0 ? ["empty"] : [])].join(" ");
       const file = stepTemplate({
         name: "it-is",
         pattern,
@@ -459,6 +461,7 @@ describe("nuka scaffold --then: the claim it writes", () => {
       expect(file).not.toContain("mutates");
       const claimsLine = file.split("\n").find((line) => line.startsWith("  claims: "));
       expect(claimsLine).toBeDefined();
+      expect(claimsLine).not.toContain("observe");
       const claims = new Function(`return ${claimsLine!.slice("  claims: ".length).replace(/,$/, "")};`)() as unknown;
       const all = new Set([...captureKeys, ...chainedKeys]);
       expect(

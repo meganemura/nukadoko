@@ -1,4 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -9,6 +11,7 @@ import {
   latestRunDir,
   latestRunJson,
   removeTempDir,
+  repoRoot,
 } from "./helpers/fixtures.js";
 
 // Responsibility: what a claim step records and refuses, end to end, through
@@ -477,5 +480,310 @@ export default defineStep({
     expect(checked.stdout + checked.stderr).toContain(
       `defineStep claims[0].expected is the literal ${literal}, which the word "${word}" fixes, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone: another compare against it holds for nearly anything, and the word does not show it.`,
     );
+  });
+});
+
+describe("nuka check names a claim whose two sides read one place", () => {
+  it("refuses a claim whose at and from path read one value", async () => {
+    const rootDir = await project({
+      "features/steps/the-count-is-unchanged.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart count is unchanged",
+  args: z.object({ r: answer.returns.shape.cart }),
+  from: { r: [answer, "cart"] },
+  claims: [{ actual: "r", at: "count", compare: "equal", expected: { from: "r.count" } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart count is unchanged"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout).toContain(
+      'error\tclaim-compares-itself\tfeatures/t.feature:4\tStep "the-count-is-unchanged"\'s claims[0] reads cart of step "the-app-answers" on line 3 at count as its actual value and cart.count of step "the-app-answers" on line 3 as its expected value, one place, so it holds whatever the behaviour is\n',
+    );
+  });
+
+  it("refuses an observe that receives the value an expected from reads", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-still-holds.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart still holds what it held",
+  args: z.object({ before: answer.returns.shape.cart, now: answer.returns.shape.cart }),
+  from: { before: [answer, "cart"], now: [answer, "cart"] },
+  observe({}, { now }) {
+    return { count: now.count };
+  },
+  claims: [{ actual: "count", compare: "equal", expected: { from: "before.count" } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart still holds what it held"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout).toContain(
+      'error\tclaim-compares-itself\tfeatures/t.feature:4\tStep "the-cart-still-holds"\'s observe receives args.now, which is cart of step "the-app-answers" on line 3, and its claims[0].expected reads cart.count of step "the-app-answers" on line 3, so observe could return the value the claim compares it with. Give observe values from another step, or none from this one\n',
+    );
+  });
+
+  it("reports a path segment that names an Object.prototype member as unknown, and does not crash", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-kind-is.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart kind is {kind:string}",
+  args: z.object({ kind: z.string(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.constructor.name", compare: "equal", expected: "kind" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", 'Then the cart kind is "Object"'),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout).toContain(
+      'error\tclaim-path-unknown\tfeatures/t.feature:4\tStep "the-cart-kind-is"\'s claims[0].actual reads "cart.constructor.name", and step "the-app-answers" on line 3 returns nothing at "constructor" under cart, which has count, items. The value would be undefined, so the claim would always break\n',
+    );
+  });
+
+  it("refuses an expected key a parameter type with a transformer fills", async () => {
+    const rootDir = await project({
+      "nukadoko.config.ts":
+        'import { defineConfig } from "nukadoko";\nexport default defineConfig({ parameterTypes: [{ name: "money", regexp: /\\d+/, transformer: () => 0 }] });\n',
+      "features/steps/it-costs.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "it costs {price:money}",
+  args: z.object({ price: z.number(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "price" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then it costs 5"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout).toContain(
+      'error\tclaim-expected-transformed\tfeatures/steps/it-costs.ts\tStep "it-costs"\'s claims[0].expected is args.price, and its pattern "it costs {price:money}" fills it with the parameter type {money}, whose transformer rewrites the line\'s text before the claim reads it, so code would decide what the claim compares. Capture price with a type that has no transformer, such as {price:string}, and read it with expected_view if it needs one\n',
+    );
+  });
+});
+
+describe("observe reads the world, never an earlier step's result", () => {
+  it("throws on resultOf inside observe, so the step observed nothing", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-still-holds.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart still holds what it held",
+  args: z.object({ before: answer.returns.shape.cart }),
+  from: { before: [answer, "cart"] },
+  observe({ resultOf }) {
+    return { count: resultOf(answer)!.cart.count };
+  },
+  claims: [{ actual: "count", compare: "equal", expected: { from: "before.count" } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart still holds what it held"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const step = lastClaimStep(rootDir);
+    expect(step.error).toEqual({
+      kind: "unobserved",
+      message:
+        'the step observed nothing, so no claim was judged: resultOf is not available to step "the-cart-still-holds", a claim step: observe reads the world, and a value from an earlier step reaches a claim step only through from, where the record names its origin. Declare the value in the step\'s from instead',
+    });
+    expect(step.claims[0].outcome).toBe("unobserved");
+  });
+});
+
+describe("run.json and the summary say what judged each scenario", () => {
+  function compatThen(rootDir: string): string {
+    const compat = path.relative(path.join(rootDir, "features", "steps"), path.join(repoRoot, "src", "compat", "index.js")).split(path.sep).join("/");
+    return `import { Then } from "${compat}";\nThen("the receipt is correct", function () {});\n`;
+  }
+
+  it("counts held and broken claims, names a scenario judged by compat or by nothing, and says a check was skipped", async () => {
+    const rootDir = await project({
+      "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "it counts {code:int}",
+  args: z.object({ code: z.number(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "code" }],
+});
+`,
+      "features/t.feature": [
+        "Feature: judged",
+        "  Scenario: claims",
+        "    When the app answers",
+        "    Then it counts 1",
+        "    And it counts 2",
+        "  Scenario: compat",
+        "    When the app answers",
+        "    Then the receipt is correct",
+        "  Scenario: nothing",
+        "    When the app answers",
+        "",
+      ].join("\n"),
+    });
+    await writeFile(path.join(rootDir, "features", "steps", "receipt.ts"), compatThen(rootDir));
+    await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    const run = latestRunJson(rootDir);
+    expect(run.check).toBe("skipped");
+    expect(run.scenarios.map((scenario: Record<string, unknown>) => [scenario.scenario, scenario.claims, scenario.judged_by])).toEqual([
+      ["claims", { held: 1, broken: 1 }, undefined],
+      ["compat", { held: 0, broken: 0 }, "compat"],
+      ["nothing", { held: 0, broken: 0 }, "nothing"],
+    ]);
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain("- check: skipped (`nuka run --no-check`), so no finding of `nuka check` held this run back\n");
+    expect(summary).toContain(
+      [
+        "## Scenarios with no claim",
+        "",
+        "No line of each scenario below binds a claim step.",
+        "",
+        "- `features/t.feature:6` compat: only a compat step in Then position judged it, by throwing or not, and nukadoko cannot see what it checked",
+        "- `features/t.feature:9` nothing: nothing judged it, so it passes whenever its steps run without an error",
+      ].join("\n"),
+    );
+
+    await cli(rootDir, ["run", "features/t.feature:2"]);
+    expect(latestRunJson(rootDir).check).toBe("ran");
+    expect(await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).not.toContain("- check:");
+  });
+});
+
+describe("measured names the channel that holds a claim's actual value", () => {
+  it("names a process exit code, and says measured: none for a constant", async () => {
+    const rootDir = await project({
+      "features/steps/the-app-exits.ts": `import { defineStep, runCommand, z } from "nukadoko";
+export default defineStep({
+  description: "Run a program that exits 3",
+  pattern: "the program runs",
+  args: z.object({}),
+  returns: z.object({ exitCode: z.number().nullable() }),
+  mutates: false,
+  async run() {
+    const result = await runCommand(process.execPath, ["-e", "process.exit(3)"]);
+    return { exitCode: result.exitCode };
+  },
+});
+`,
+      "features/steps/it-exits-with.ts": `import { defineStep, z } from "nukadoko";
+import program from "./the-app-exits.ts";
+export default defineStep({
+  pattern: "it exits with {code:int}",
+  args: z.object({ code: z.number(), exitCode: z.number().nullable() }),
+  from: { exitCode: [program, "exitCode"] },
+  claims: [{ actual: "exitCode", compare: "equal", expected: "code" }],
+});
+`,
+      "features/steps/the-total-is.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the total is {total:string}",
+  args: z.object({ total: z.string() }),
+  observe() {
+    return { shown: "42" };
+  },
+  claims: [{ actual: "shown", compare: "equal", expected: "total" }],
+});
+`,
+      "features/t.feature": feature("When the program runs", "Then it exits with 3", 'And the total is "42"'),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(0);
+    const run = latestRunJson(rootDir);
+    const [producer, exits] = run.scenarios[0].steps;
+    expect(exits.claims[0].measured).toEqual({ step_record_id: producer.step_record_id, channel: "observed.processes[0].exit_code" });
+    const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    expect(summary).toContain(`  - 3 (from:the-app-exits@3.exitCode) equal 3 (sentence:code) held; measured: observed.processes[0].exit_code of ${producer.step_record_id}\n`);
+    expect(summary).toContain('  - "42" (observe:shown) equal "42" (sentence:total) held; measured: none\n');
+  });
+});
+
+describe("a polled claim step records what each reading read", () => {
+  it("keeps every reading's values, so a value that walks to the expected one is visible", async () => {
+    const rootDir = await project({
+      "features/steps/the-counter-shows.ts": `import { defineStep, z } from "nukadoko";
+let calls = 0;
+export default defineStep({
+  pattern: "the counter shows {n:int}",
+  args: z.object({ n: z.number() }),
+  poll: { timeout_ms: 10000 },
+  observe() {
+    const candidate = Math.floor(calls / 2);
+    calls += 1;
+    return { count: candidate };
+  },
+  claims: [{ actual: "count", compare: "equal", expected: "n" }],
+});
+`,
+      "features/t.feature": feature("Then the counter shows 3"),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const step = lastClaimStep(rootDir);
+    expect(step.attempts).toBe(8);
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as { readings: Record<string, unknown>[] };
+    expect(record.readings.map((reading) => [reading.attempt, reading.held, reading.actuals])).toEqual([
+      [1, false, [{ value: 0 }]],
+      [2, false, [{ value: 0 }]],
+      [3, false, [{ value: 1 }]],
+      [4, false, [{ value: 1 }]],
+      [5, false, [{ value: 2 }]],
+      [6, false, [{ value: 2 }]],
+      [7, true, [{ value: 3 }]],
+      [8, true, [{ value: 3 }]],
+    ]);
+    for (const reading of record.readings) expect(typeof reading.at).toBe("string");
+  });
+});
+
+describe("measured names an HTTP status", () => {
+  it("names the status of the response the producing step received", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(201, { "content-type": "application/json" });
+      response.end('{"id":1}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const port = (server.address() as AddressInfo).port;
+      const rootDir = await project({
+        "nukadoko.config.ts": `import { defineConfig } from "nukadoko";\nexport default defineConfig({ baseURL: "http://127.0.0.1:${port}" });\n`,
+        "features/steps/an-item-is-created.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "POST /items",
+  pattern: "an item is created",
+  args: z.object({}),
+  returns: z.object({ status: z.number() }),
+  mutates: true,
+  async run({ request }) {
+    const response = await request.post("/items", { data: {} });
+    return { status: response.status() };
+  },
+});
+`,
+        "features/steps/the-status-is.ts": `import { defineStep, z } from "nukadoko";
+import created from "./an-item-is-created.ts";
+export default defineStep({
+  pattern: "the status is {code:int}",
+  args: z.object({ code: z.number(), status: z.number() }),
+  from: { status: [created, "status"] },
+  claims: [{ actual: "status", compare: "equal", expected: "code" }],
+});
+`,
+        "features/t.feature": feature("When an item is created", "Then the status is 201"),
+      });
+      const result = await cli(rootDir, ["run", "features/t.feature"]);
+      expect(result.exitCode).toBe(0);
+      const [producer, status] = latestRunJson(rootDir).scenarios[0].steps;
+      expect(status.claims[0].measured).toEqual({ step_record_id: producer.step_record_id, channel: "http.jsonl[0].status" });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

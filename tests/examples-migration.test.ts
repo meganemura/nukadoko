@@ -143,28 +143,34 @@ describe("examples/migration", () => {
     expect(countStepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
     expect(countStepRecord.world).toBeUndefined();
 
+    // Scenario 1 binds no claim step: its Then is compat glue, which run.json
+    // says judged it. Scenario 2 holds one claim.
+    expect(records[0].claims).toEqual({ held: 0, broken: 0 });
+    expect(records[0].judged_by).toBe("compat");
+    expect(records[1].claims).toEqual({ held: 1, broken: 0 });
+    expect(records[1].judged_by).toBeUndefined();
+
     // Scenario 2 (the promoted pair): the producer's validated result is
-    // what the consumer, a claim step, reads back through resultOf in its
-    // observe.
+    // what the consumer, a claim step, reads through from.
     const scenario2 = records[1];
     const createStep = scenario2.steps[0];
-    const resultOfStep = scenario2.steps[1];
+    const consumerStep = scenario2.steps[1];
     expect(createStep.text).toContain("is created");
-    expect(resultOfStep.text).toBe('the created todo is titled "Read a book"');
+    expect(consumerStep.text).toBe('the created todo is titled "Read a book"');
 
     const createStepRecord = await readStepRecord(rootDir, createStep.step_record_id);
     expect(createStepRecord.result).toMatchObject({ title: "Read a book", done: false });
     expect(createStepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
     expect(createStepRecord.world).toBeUndefined();
 
-    const resultOfStepRecord = await readStepRecord(rootDir, resultOfStep.step_record_id);
-    expect(resultOfStepRecord.used).toEqual([
+    const consumerStepRecord = await readStepRecord(rootDir, consumerStep.step_record_id);
+    expect(consumerStepRecord.used).toEqual([
       { step_record_id: createStep.step_record_id, step: createStepRecord.step },
     ]);
-    expect(resultOfStepRecord.claims).toEqual([
+    expect(consumerStepRecord.claims).toEqual([
       {
         actual: "Read a book",
-        actual_from: "observe:created.title",
+        actual_from: `from:create-todo@${createStep.line}.title`,
         compare: "equal",
         expected: "Read a book",
         expected_from: "sentence:title",
@@ -173,9 +179,9 @@ describe("examples/migration", () => {
         measured: null,
       },
     ]);
-    expect(resultOfStepRecord.observation).toBe("observed");
-    expect(resultOfStepRecord.attempts).toBe(1);
-    expect(resultOfStepRecord.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
-    expect(resultOfStepRecord.world).toBeUndefined();
+    expect(consumerStepRecord.observation).toBe("observed");
+    expect(consumerStepRecord.attempts).toBe(1);
+    expect(consumerStepRecord.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
+    expect(consumerStepRecord.world).toBeUndefined();
   });
 });

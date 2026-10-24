@@ -87,6 +87,29 @@ describe("nuka scaffold --feature", () => {
     expect(await cli(rootDir, ["check", feature])).toEqual({ exitCode: 0, stdout: "ok: no issues found\n", stderr: "" });
   });
 
+  // A claim's expected value is one the line states (docs/spec.md
+  // "Claims"): a Then line that states none gets no stub, and one that
+  // states its value with a word compares with that word's literal.
+  it("writes no stub for a Then line that states no value, and a literal claim for one a word states", async () => {
+    const feature = await writeFeature(rootDir, "banner.feature", [
+      "Feature: banner",
+      "  Scenario: a banner",
+      "    When I open the page",
+      "    Then the banner looks right",
+      "    And the error list is empty",
+    ]);
+
+    const result = await cli(rootDir, ["scaffold", "--feature", feature]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe(["features/steps/i-open-the-page.ts", "features/steps/the-error-list-is-empty.ts", ""].join("\n"));
+    expect(result.stderr).toContain(
+      "note: features/banner.feature:4: a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, empty), so no stub was written; state the value this line checks in the line, such as a number or a quoted text, and scaffold again\n",
+    );
+    expect(existsSync(path.join(rootDir, "features", "steps", "the-banner-looks-right.ts"))).toBe(false);
+    expect(await stepFile(rootDir, "the-error-list-is-empty")).toContain('  claims: [{ actual: "actual", compare: "equal", expected: { literal: "" } }],');
+  });
+
   it("writes a When stub with its captures, and a Then stub with observe and a claim", async () => {
     const feature = await writeFeature(rootDir, "greet.feature", GREET);
 
@@ -212,7 +235,7 @@ describe("nuka scaffold --feature", () => {
     // The scenarios have no Then line, so the one warning left is that one.
     expect(await cli(rootDir, ["check", feature])).toEqual({
       exitCode: 0,
-      stdout: "warning\tscenario-without-then\tfeatures/add.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\nwarning\tscenario-without-then\tfeatures/add.feature:4\tScenario \"two\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\n",
+      stdout: "warning\tscenario-without-then\tfeatures/add.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.\nwarning\tscenario-without-then\tfeatures/add.feature:4\tScenario \"two\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.\n",
       stderr: "",
     });
   });
@@ -237,7 +260,7 @@ describe("nuka scaffold --feature", () => {
     expect(await stepFile(rootDir, "3-items-in-the-cart")).toContain('  pattern: "3 items in \\\\(the) cart",\n  // Give');
     expect(await cli(rootDir, ["check", feature])).toEqual({
       exitCode: 0,
-      stdout: "warning\tscenario-without-then\tfeatures/cart.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that checks the outcome the scenario is for.\n",
+      stdout: "warning\tscenario-without-then\tfeatures/cart.feature:2\tScenario \"one\" has no Then step, so it passes whenever its steps run without an error, and no step checks an outcome.\n  fix: Add a Then line that binds a claim step (defineStep with claims) and checks the outcome the scenario is for.\n",
       stderr: "",
     });
   });
