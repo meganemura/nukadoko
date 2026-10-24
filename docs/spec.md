@@ -3916,8 +3916,12 @@ to act on the run without opening another file:
   with the value its environment declares, `null` where it declares
   none), `outcome`
   (`pass`, `fail`, `broke`, `flaky`, or `not-run`), the `line` the last
-  three name, `runs`, the executions it holds, and for `not-run` a
-  `reason`. `left_out` counts the selected criteria the run left out
+  three name, `runs`, the executions it holds, for `fail` the `claim`
+  every run broke (its position among its step's claims, from 0) and
+  `actuals`, the actual value it saw in each run, in run order (`{ value }`,
+  `{ json_start, json_bytes }` for a value run.json cut, or `{ reason }`
+  for none), and a `reason` for `not-run` and for a control that is
+  `broke` because its proof round could not finish. `left_out` counts the selected criteria the run left out
   because `--env` named no environment that meets their conditions, 0
   without `--env`. `proof_runs` is `--proof-runs`, what a control's
   `runs` is measured against. It is the table the run summary draws.
@@ -4103,9 +4107,9 @@ or the ones a run without `--env` selects), and reports three errors:
 | cell | its executions |
 | --- | --- |
 | `pass` | every one passed |
-| `fail@<line>` | every one stopped at a claim that broke at that line, in Then position |
+| `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
 | `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a line no step matches, a claim nukadoko could not judge, or, at the scenario's line, a hook |
-| `flaky@<line>` | they disagree; the line is the first one's that did not pass |
+| `flaky@<line>` | they disagree (two that broke two claims of one line disagree too); the line is the first one's that did not pass |
 | `·` | none ran, and `reason` says why: the program did not start for its world, or a BeforeAll failed |
 
 Only a Then proves. A When that errors where the behaviour is absent says
@@ -4114,10 +4118,17 @@ nothing about whether the Then can tell the difference, so it is
 
 A required cell runs once, or `--repeat` times. A control that failed at a
 Then line runs again, in the same pass and the same world, until it has
-failed at that line `--proof-runs` times (2 by default), or until a run
-disagrees, which makes it `flaky`. One failure could be the program being
-slow once, and proof is the one verdict that reads a failure as good
-news, so it is the one that needs the failure repeated. A control that
+broken the same claim at that line `--proof-runs` times (2 by default),
+or until a run disagrees, which makes it `flaky`. One failure could be
+the program being slow once, and proof is the one verdict that reads a
+failure as good news, so it is the one that needs the failure repeated.
+Runs agree when they broke the same claim, by its position in the step,
+at the same line: two claims broken at one line are two reasons, and
+only one of them can be the switch. Agreement does not need the same
+value, since a value that legitimately differs between runs, such as a
+generated id or a timestamp, would make every proof flaky; the cell's
+`actuals` keeps each run's value, so a reader sees 503 against 404 and
+weighs it. A control that
 passed or broke is not run again. Each proof run is a `proof run <k>/<n>`
 line on stderr, apart from the numbered scenario lines, and a control's
 own scenario line ends with `(control)`.
@@ -5979,7 +5990,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               @with:/@without: tags make its cell required
                               where the environment meets them and a
                               control elsewhere; a row is held, proven (a
-                              control broke a claim at a Then line in each
+                              control broke one claim at a Then line in each
                               of --proof-runs runs, default 2), or failed,
                               and the exit code is 1 when a row is failed.
                               With nukadoko.program.ts, each environment's

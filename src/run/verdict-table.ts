@@ -1,6 +1,7 @@
 import { conditionTagText, describeConditions, HELD_TAG, readCriterionTags, roleIn, type CellRole, type Conditions } from "../condition/condition.js";
 import type { Finding } from "../finding/finding.js";
-import type { RunRowVerdict, RunScenario, RunTable, RunTableCell, RunTableRow } from "../record/run-result.js";
+import type { RunClaim, RunRowVerdict, RunScenario, RunTable, RunTableCell, RunTableRow } from "../record/run-result.js";
+import type { ClaimReadingValue } from "../record/types.js";
 import { shellWord } from "../shell/shell-word.js";
 
 // Responsibility: the verdict table (docs/spec.md "Verdicts"): from a run's
@@ -18,16 +19,22 @@ import { shellWord } from "../shell/shell-word.js";
 // the Then can tell the difference.
 //
 // A control proves only with `--proof-runs` agreeing failures: the same
-// Then line failing in each run of the cell. One failure could be the
-// program being slow once, and proof is the one verdict that reads a
-// failure as good news, so it is the one that needs the failure repeated.
-// A required cell needs no proof runs: a failure there is red whether or
-// not it repeats.
+// claim (its position among its step's claims) breaking at the same Then
+// line in each run of the cell. One failure could be the program being
+// slow once, and proof is the one verdict that reads a failure as good
+// news, so it is the one that needs the failure repeated. Two runs that
+// broke two claims of one line failed for two reasons, so they disagree.
+// The values need not agree: one that legitimately differs between runs,
+// such as a generated id, would make every proof flaky. Each run's value
+// is kept on the cell instead, for a reader to weigh. A required cell
+// needs no proof runs: a failure there is red whether or not it repeats.
 
-/** One execution, read for the table. */
+/** One execution, read for the table. A `fail` names the claim that broke,
+ * by its position among its step's claims, and the actual value it saw. */
 export type ExecutionOutcome =
   | { readonly kind: "pass" }
-  | { readonly kind: "fail" | "broke"; readonly line: number };
+  | { readonly kind: "fail"; readonly line: number; readonly claim: number; readonly actual: ClaimReadingValue }
+  | { readonly kind: "broke"; readonly line: number };
 
 type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks">;
 
@@ -40,29 +47,56 @@ export function executionOutcome(execution: Execution, inThen: (index: number) =
   const step = execution.steps[index]!;
   const line = step.line ?? execution.line;
   const claimBroken = step.status === "failed" && step.error?.kind === "claim_broken" && inThen(index);
-  return { kind: claimBroken ? "fail" : "broke", line };
+  const claims = step.claims ?? [];
+  const claim = claims.findIndex((entry) => entry.outcome === "broken");
+  // A claim_broken error names a broken claim by construction; without one
+  // to point at, the run has no claim to agree on, so it cannot prove.
+  if (!claimBroken || claim === -1) return { kind: "broke", line };
+  return { kind: "fail", line, claim, actual: brokenActual(claims[claim]!) };
+}
+
+/** The actual value a broken claim saw, as run.json carries it: whole, as
+ * the start of its JSON when run.json cut it, or why it had none. For a
+ * claim over each item, the first broken item claim's. */
+function brokenActual(claim: RunClaim): ClaimReadingValue {
+  const comparison =
+    "each" in claim
+      ? claim.each.results.flatMap((item) => (item.selected && item.outcome === "broken" ? item.claims.filter((entry) => entry.outcome === "broken") : []))[0]
+      : claim;
+  if (comparison === undefined) return { reason: claim.reason ?? "no item claim broke" };
+  const bytes = (comparison as { readonly actual_bytes?: number }).actual_bytes;
+  if (bytes !== undefined) return { json_start: String(comparison.actual), json_bytes: bytes };
+  if (Object.hasOwn(comparison, "actual")) return { value: comparison.actual };
+  return { reason: comparison.reason ?? "the actual value held nothing" };
 }
 
 function sameOutcome(a: ExecutionOutcome, b: ExecutionOutcome): boolean {
   if (a.kind === "pass" || b.kind === "pass") return a.kind === b.kind;
+  if (a.kind === "fail" && b.kind === "fail") return a.line === b.line && a.claim === b.claim;
   return a.kind === b.kind && a.line === b.line;
 }
 
 /** A cell's executions folded: what every one came to when they agree,
- * `flaky` at the first one that did not pass when they do not. Pure. */
-export function foldCell(outcomes: readonly ExecutionOutcome[]): Pick<RunTableCell, "outcome" | "line" | "runs"> {
+ * `flaky` at the first one that did not pass when they do not. A `fail`
+ * keeps the claim every run broke and the actual value each run saw, in
+ * run order. Pure. */
+export function foldCell(outcomes: readonly ExecutionOutcome[]): Pick<RunTableCell, "outcome" | "line" | "runs" | "claim" | "actuals"> {
   const first = outcomes[0];
   if (first === undefined) return { outcome: "not-run", runs: 0 };
   if (outcomes.every((outcome) => sameOutcome(outcome, first))) {
-    return first.kind === "pass" ? { outcome: "pass", runs: outcomes.length } : { outcome: first.kind, line: first.line, runs: outcomes.length };
+    if (first.kind === "pass") return { outcome: "pass", runs: outcomes.length };
+    if (first.kind === "broke") return { outcome: "broke", line: first.line, runs: outcomes.length };
+    const actuals = outcomes.map((outcome) => (outcome as Extract<ExecutionOutcome, { kind: "fail" }>).actual);
+    return { outcome: "fail", line: first.line, runs: outcomes.length, claim: first.claim, actuals };
   }
   const failing = outcomes.find((outcome) => outcome.kind !== "pass") as Exclude<ExecutionOutcome, { kind: "pass" }>;
   return { outcome: "flaky", line: failing.line, runs: outcomes.length };
 }
 
 /** Whether a cell runs once more for proof: a control whose every run so
- * far failed at the same Then line, fewer than `proofRuns` times. A pass,
- * a `broke`, or a run that disagrees ends the proof runs. Pure. */
+ * far broke the same claim at the same Then line, fewer than `proofRuns`
+ * times. A pass, a `broke`, or a run that disagrees ends the proof runs.
+ * Pure. */
 export function needsProofRun(role: CellRole, outcomes: readonly ExecutionOutcome[], proofRuns: number): boolean {
   const first = outcomes[0];
   if (role !== "control" || first === undefined || first.kind !== "fail") return false;
@@ -70,8 +104,8 @@ export function needsProofRun(role: CellRole, outcomes: readonly ExecutionOutcom
 }
 
 /** Whether a cell is proof that its criterion tells the behaviour apart:
- * a control that failed at the same Then line in `proofRuns` runs or
- * more. Pure. */
+ * a control that broke the same claim at the same Then line in
+ * `proofRuns` runs or more. Pure. */
 export function proves(cell: Pick<RunTableCell, "role" | "outcome" | "runs">, proofRuns: number): boolean {
   return cell.role === "control" && cell.outcome === "fail" && cell.runs >= proofRuns;
 }

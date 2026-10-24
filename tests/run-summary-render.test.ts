@@ -324,7 +324,20 @@ describe("renderRunSummary", () => {
     const off = (status: "passed" | "failed") =>
       scenario("features/banner.feature", 4, "the banner is shown", status, 100, {
         environment: "flag-off",
-        steps: status === "passed" ? [] : [step("the banner reads Sale", { line: 6, status: "failed", record: "steps/stp-6", error: { kind: "claim_broken", message: "banner" } })],
+        steps:
+          status === "passed"
+            ? []
+            : [
+                step("the banner reads Sale", {
+                  line: 6,
+                  status: "failed",
+                  record: "steps/stp-6",
+                  error: { kind: "claim_broken", message: "banner" },
+                  claims: [
+                    { actual: "", actual_from: "observe:banner", compare: "equal", expected: "Sale", expected_from: "sentence:text", expected_text: "Sale", outcome: "broken", measured: null },
+                  ],
+                }),
+              ],
       });
     const markdown = renderRunSummary(
       run(

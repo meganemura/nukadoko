@@ -39,8 +39,8 @@ A cell reads `pass`; `fail@<line>`, a claim broke at that Then line;
 `broke@<line>`, it stopped there before a claim was judged; `flaky@<line>`,
 its runs disagree; or `·`, it did not run, and its `reason` says why.
 `(control)` marks a control, and `(2 runs)` how often it ran. A control
-that failed at a Then line runs again until it has failed there
-`--proof-runs` times (2 by default), each a `proof run <k>/<n>` line on
+that failed at a Then line runs again until it has broken the same claim
+there `--proof-runs` times (2 by default), each a `proof run <k>/<n>` line on
 stderr. Under `--concurrency`, a proof round whose worker could not
 finish (its BeforeAll or AfterAll failed) leaves the control `broke` with
 the reason and a `proof-run-incomplete` warning: correct the hook.
@@ -54,7 +54,7 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
   `--no-check` as `criterion-without-required-cell`, whose `do:` runs it
   where it is met; add the environment, or correct the tags.
 - **`proven`**: it passed where it is required, and a control broke a
-  claim at the same Then line in each of `--proof-runs` runs: the
+  the same claim at one Then line in each of `--proof-runs` runs: the
   scenario tells the behaviour apart. Nothing to do. A control's failure
   has no `do:` and is not a failure to fix.
 - **`held`**: it passed where it is required, and nothing showed it would

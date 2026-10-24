@@ -97,8 +97,8 @@ import { serializeWorldView, type WorldView } from "../program/world-view.js";
 // the wire, but its failure is the table's to read, so it never fails the
 // pass, never counts as a failed scenario, and never joins the scenario
 // count or the repeat tallies. After a pass's workers, a control that
-// failed at a Then line runs again, in the same world, until it has failed
-// `--proof-runs` times at that line or a run disagrees: one worker per
+// failed at a Then line runs again, in the same world, until it has broken
+// the same claim at that line `--proof-runs` times or a run disagrees: one worker per
 // round, which runs every due target one after another, so a
 // `@nukadoko:serial` file still runs alone and a round never races
 // another. The caller decides which cells are due, from the records

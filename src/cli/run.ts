@@ -290,8 +290,8 @@ export interface RunRunOptions {
    * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
   repeat: number;
   /** `--proof-runs`'s raw value; default 2. A control cell whose Then
-   * failed runs again until it has failed this many times at the same
-   * line, or a run disagrees (src/run/verdict-table.ts). */
+   * failed runs again until it has broken the same claim at the same line
+   * this many times, or a run disagrees (src/run/verdict-table.ts). */
   proofRuns: number;
   /** `--since <ref>`: compare each scenario's criteria, and each step file
    * it bound to, with the commit `ref` names, and report what moved. It
@@ -836,7 +836,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // what the environments declare (src/condition/condition.ts), and each
     // cell's executions so far, read for the table: the proof runs below
     // are decided from them, so a control is run again while it keeps
-    // failing at the same Then line.
+    // breaking the same claim at the same Then line.
     const cellKey = (feature: string, line: number, environment: string): string => `${feature}\u0000${line}\u0000${environment}`;
     const roleByCell = new Map<string, CellRole>();
     for (const { feature, pickle } of flatPickles) {
@@ -1468,8 +1468,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           }
           }
           // A control whose Then failed runs again, in the same pass and the
-          // same world, until it has failed `--proof-runs` times at the
-          // same line or a run disagrees. One round at a time, so a cell
+          // same world, until it has broken the same claim at the same line
+          // `--proof-runs` times or a run disagrees. One round at a time, so a cell
           // stops at the first run that disagrees.
           for (;;) {
             const due = flatPickles.filter(({ feature, pickle }) => needsProof(feature.relativePath, pickle.location?.line ?? 0, environment));

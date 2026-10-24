@@ -20,16 +20,23 @@ import {
 // Responsibility: the verdict table's pure parts (src/run/verdict-table.ts).
 // Each verdict word comes from exactly its cell pattern, a control never
 // turns a row red, a control proves only after `--proof-runs` agreeing
-// failures at one Then line, and a cell folds its executions so that runs
-// that disagree are flaky. The exact run.json and summary shapes a real run
+// failures (the same claim broken at one Then line, whatever value each
+// run saw), and a cell folds its executions so that runs that disagree are
+// flaky. The exact run.json and summary shapes a real run
 // writes are in tests/run-verdict-table.test.ts.
 
 const line = gs.integers({ minValue: 3, maxValue: 6 });
 const outcome: Generator<ExecutionOutcome> = gs.oneOf(
   gs.just<ExecutionOutcome>({ kind: "pass" }),
-  line.map((at): ExecutionOutcome => ({ kind: "fail", line: at })),
+  gs
+    .tuples(line, gs.integers({ minValue: 0, maxValue: 1 }), gs.integers({ minValue: 400, maxValue: 503 }))
+    .map(([at, claim, value]): ExecutionOutcome => ({ kind: "fail", line: at, claim, actual: { value } })),
   line.map((at): ExecutionOutcome => ({ kind: "broke", line: at })),
 );
+/** Two executions agree: the same kind at the same line, and for a fail
+ * the same claim, whatever value each saw. */
+const agrees = (a: ExecutionOutcome, b: ExecutionOutcome): boolean =>
+  a.kind === b.kind && (a.kind === "pass" || (a.line === (b as { line: number }).line && (a.kind !== "fail" || a.claim === (b as { claim: number }).claim)));
 
 const cellOutcome = gs.sampledFrom<RunCellOutcome>(["pass", "fail", "broke", "flaky", "not-run"]);
 const cell = gs
@@ -53,11 +60,14 @@ describe("foldCell", () => {
       const outcomes = tc.draw(gs.arrays(outcome, { minSize: 1, maxSize: 5 }));
       const folded = foldCell(outcomes);
       const first = outcomes[0]!;
-      const agree = outcomes.every((entry) => entry.kind === first.kind && (entry.kind === "pass" || entry.line === (first as { line: number }).line));
+      const agree = outcomes.every((entry) => agrees(entry, first));
       expect(folded.runs).toBe(outcomes.length);
       if (agree) {
         expect(folded.outcome).toBe(first.kind);
         expect(folded.line).toBe(first.kind === "pass" ? undefined : first.line);
+        // A fail keeps the claim, and each run's value in run order.
+        expect(folded.claim).toBe(first.kind === "fail" ? first.claim : undefined);
+        expect(folded.actuals).toEqual(first.kind === "fail" ? outcomes.map((entry) => (entry as { actual: unknown }).actual) : undefined);
       } else {
         expect(folded.outcome).toBe("flaky");
         expect(folded.line).toBe((outcomes.find((entry) => entry.kind !== "pass") as { line: number }).line);
@@ -136,14 +146,14 @@ describe("--proof-runs", () => {
     return outcomes;
   }
 
-  it("makes a control fail@ and prove only after --proof-runs agreeing failures at one Then line", () =>
+  it("makes a control fail@ and prove only after --proof-runs runs that broke the same claim at one Then line", () =>
     hegel.test((tc) => {
       const runs = tc.draw(proofRuns);
       const program = tc.draw(gs.arrays(outcome, { minSize: 4, maxSize: 4 }));
       const outcomes = schedule(program, runs);
       const folded = foldCell(outcomes);
       const first = program[0]!;
-      const agreeing = first.kind === "fail" && program.slice(0, runs).every((entry) => entry.kind === "fail" && entry.line === first.line);
+      const agreeing = first.kind === "fail" && program.slice(0, runs).every((entry) => agrees(entry, first));
       expect(folded.outcome === "fail" && folded.runs >= runs).toBe(agreeing);
       expect(outcomes.length).toBeLessThanOrEqual(Math.max(1, runs));
       const verdict = judgeRow(
@@ -156,14 +166,14 @@ describe("--proof-runs", () => {
       expect(verdict).toBe(agreeing ? "proven" : "held");
     }));
 
-  it("stops at the first run that passes, breaks, or fails at another line", () =>
+  it("stops at the first run that passes, breaks, or breaks another claim or a claim at another line", () =>
     hegel.test((tc) => {
       const runs = tc.draw(proofRuns);
       const program = tc.draw(gs.arrays(outcome, { minSize: 4, maxSize: 4 }));
       const outcomes = schedule(program, runs);
       const last = outcomes.at(-1)!;
       const first = outcomes[0]!;
-      const stillAgreeing = first.kind === "fail" && last.kind === "fail" && last.line === first.line;
+      const stillAgreeing = first.kind === "fail" && agrees(last, first);
       if (outcomes.length < runs) expect(stillAgreeing).toBe(false);
     }));
 
@@ -174,23 +184,68 @@ describe("--proof-runs", () => {
 });
 
 describe("executionOutcome", () => {
-  const step = (status: "passed" | "failed" | "skipped" | "undefined", kind?: string, at?: number) => ({
+  const step = (status: "passed" | "failed" | "skipped" | "undefined", kind?: string, at?: number, claims?: object[]) => ({
     status,
     ...(at === undefined ? {} : { line: at }),
     ...(kind === undefined ? {} : { error: { kind, message: "m" } }),
+    ...(claims === undefined ? {} : { claims }),
   });
+  const held = { actual: 200, actual_from: "observe:status", compare: "equal", expected: 200, expected_from: "sentence:status", expected_text: "200", outcome: "held", measured: null };
+  const broken = (actual: unknown) => ({ ...held, actual, outcome: "broken" });
   const execution = (steps: ReturnType<typeof step>[], hooks: { status: string }[] = []) =>
     ({ status: steps.every((entry) => entry.status === "passed") && hooks.every((hook) => hook.status === "passed") ? "passed" : "failed", line: 2, steps, hooks }) as never;
   const inThen = (index: number): boolean => index === 2;
 
   it("reads a claim broken in Then as fail at its line, and any other stop as broke", () => {
     expect(executionOutcome(execution([step("passed"), step("passed"), step("passed")]), inThen)).toEqual({ kind: "pass" });
-    expect(executionOutcome(execution([step("passed"), step("passed"), step("failed", "claim_broken", 9)]), inThen)).toEqual({ kind: "fail", line: 9 });
+    expect(executionOutcome(execution([step("passed"), step("passed"), step("failed", "claim_broken", 9, [held, broken(503)])]), inThen)).toEqual({
+      kind: "fail",
+      line: 9,
+      claim: 1,
+      actual: { value: 503 },
+    });
+    // A claim_broken step with no broken claim to point at cannot prove.
+    expect(executionOutcome(execution([step("passed"), step("passed"), step("failed", "claim_broken", 9)]), inThen)).toEqual({ kind: "broke", line: 9 });
     expect(executionOutcome(execution([step("passed"), step("passed"), step("failed", "claim_unjudged", 9)]), inThen)).toEqual({ kind: "broke", line: 9 });
     expect(executionOutcome(execution([step("passed"), step("failed", "claim_broken", 8), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 8 });
     expect(executionOutcome(execution([step("failed", "step_error", 7), step("skipped"), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 7 });
     expect(executionOutcome(execution([step("undefined", undefined, 7), step("skipped"), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 7 });
     expect(executionOutcome(execution([step("passed"), step("passed"), step("passed")], [{ status: "failed" }]), inThen)).toEqual({ kind: "broke", line: 2 });
+  });
+
+  it("names the broken claim's value as run.json holds it: whole, cut to the start of its JSON, missing, or an item's", () => {
+    const outcomeOf = (claims: object[]) => executionOutcome(execution([step("passed"), step("passed"), step("failed", "claim_broken", 9, claims)]), inThen);
+    expect(outcomeOf([{ ...broken('"' + "x".repeat(10)), actual_bytes: 4000 }])).toMatchObject({ claim: 0, actual: { json_start: '"' + "x".repeat(10), json_bytes: 4000 } });
+    const { actual: _actual, ...noValue } = broken(0);
+    expect(outcomeOf([{ ...noValue, reason: "observe:status held nothing" }])).toMatchObject({ claim: 0, actual: { reason: "observe:status held nothing" } });
+    const each = {
+      actual_from: "observe:items",
+      each: {
+        claims: [],
+        items: 2,
+        selected: 2,
+        results: [
+          { index: 1, selected: true, outcome: "broken", claims: [broken("chair")] },
+          { index: 0, selected: true, outcome: "held", claims: [held] },
+        ],
+      },
+      outcome: "broken",
+      measured: null,
+    };
+    expect(outcomeOf([held, each])).toMatchObject({ claim: 1, actual: { value: "chair" } });
+  });
+
+  it("makes two runs that broke two claims of one Then line disagree, and two values of one claim agree", () => {
+    const run = (claims: object[]) => executionOutcome(execution([step("passed"), step("passed"), step("failed", "claim_broken", 9, claims)]), inThen);
+    expect(foldCell([run([broken("off"), held]), run([held, broken(503)])])).toEqual({ outcome: "flaky", line: 9, runs: 2 });
+    expect(foldCell([run([held, broken(503)]), run([held, broken(404)])])).toEqual({
+      outcome: "fail",
+      line: 9,
+      runs: 2,
+      claim: 1,
+      actuals: [{ value: 503 }, { value: 404 }],
+    });
+    expect(needsProofRun("control", [run([broken("off"), held]), run([held, broken(503)])], 3)).toBe(false);
   });
 });
 
@@ -201,8 +256,8 @@ describe("buildTable", () => {
       "b.feature:3:flag-off": [{ kind: "pass" }],
       "a.feature:9:flag-on": [{ kind: "pass" }],
       "a.feature:9:flag-off": [
-        { kind: "fail", line: 12 },
-        { kind: "fail", line: 12 },
+        { kind: "fail", line: 12, claim: 0, actual: { value: 503 } },
+        { kind: "fail", line: 12, claim: 0, actual: { value: 404 } },
       ],
     };
     const table = buildTable({
@@ -234,7 +289,17 @@ describe("buildTable", () => {
           change: null,
           conditions: ["@with:banner", "@held"],
           cells: [
-            { world: "head", environment: "flag-off", role: "control", conditions: { banner: false }, outcome: "fail", line: 12, runs: 2 },
+            {
+              world: "head",
+              environment: "flag-off",
+              role: "control",
+              conditions: { banner: false },
+              outcome: "fail",
+              line: 12,
+              runs: 2,
+              claim: 0,
+              actuals: [{ value: 503 }, { value: 404 }],
+            },
             { world: "head", environment: "flag-on", role: "required", conditions: { banner: true }, outcome: "pass", runs: 1 },
           ],
           verdict: "proven",

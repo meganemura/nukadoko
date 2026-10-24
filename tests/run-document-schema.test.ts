@@ -78,7 +78,31 @@ describe("parseRunDocument", () => {
       const document = { ...VALID, table: { ...VALID.table, rows: [{ ...VALID.table.rows[0], cells: [cell] }] } };
       const result = parseRunDocument(JSON.stringify(document));
       expect("problem" in result && result.problem).toContain("table.rows.0.cells.0.line: a fail, broke, or flaky cell names the line it stopped at");
-      expect(parseRunDocument(JSON.stringify({ ...document, table: { ...document.table, rows: [{ ...document.table.rows[0], cells: [{ ...cell, line: 4 }] }] } }))).toHaveProperty("document");
+      const fail = outcome === "fail" ? { claim: 0, actuals: [{ value: 503 }] } : {};
+      expect(parseRunDocument(JSON.stringify({ ...document, table: { ...document.table, rows: [{ ...document.table.rows[0], cells: [{ ...cell, line: 4, ...fail }] }] } }))).toHaveProperty("document");
+    }));
+
+  it("refuses a fail cell without the claim that broke or a value for each run, and any other cell with them", () =>
+    hegel.test((tc) => {
+      const outcome = tc.draw(gs.sampledFrom(["pass", "fail", "broke", "flaky", "not-run"]));
+      const runs = tc.draw(gs.integers({ minValue: 1, maxValue: 3 }));
+      const claim = tc.draw(gs.booleans());
+      const values = tc.draw(gs.integers({ minValue: 0, maxValue: 3 }));
+      const cell = {
+        world: "head",
+        environment: "default",
+        role: "control",
+        conditions: {},
+        outcome,
+        ...(outcome === "pass" || outcome === "not-run" ? {} : { line: 4 }),
+        runs,
+        ...(claim ? { claim: 0, actuals: Array.from({ length: values }, (_, index) => ({ value: index })) } : {}),
+      };
+      const document = { ...VALID, table: { ...VALID.table, rows: [{ ...VALID.table.rows[0], cells: [cell] }] } };
+      const result = parseRunDocument(JSON.stringify(document));
+      const valid = outcome === "fail" ? claim && values === runs : !claim;
+      expect("document" in result).toBe(valid);
+      if (!valid) expect("problem" in result && result.problem).toContain("a fail cell, and only a fail cell, names the claim that broke");
     }));
 
   it("refuses another schema version before it reads a field", () => {

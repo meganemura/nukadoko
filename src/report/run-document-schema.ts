@@ -217,11 +217,19 @@ const tableCell = z
     outcome: z.enum(["pass", "fail", "broke", "flaky", "not-run"]),
     line: z.number().int().optional(),
     runs: z.number().int(),
+    claim: z.number().int().min(0).optional(),
+    actuals: z
+      .array(z.union([z.looseObject({ value: z.unknown() }), z.looseObject({ json_start: z.string(), json_bytes: z.number().int() }), z.looseObject({ reason: z.string() })]))
+      .optional(),
     reason: z.string().optional(),
   })
   .refine((cell) => cell.outcome === "pass" || cell.outcome === "not-run" || cell.line !== undefined, {
     message: "a fail, broke, or flaky cell names the line it stopped at",
     path: ["line"],
+  })
+  .refine((cell) => (cell.outcome === "fail" ? cell.claim !== undefined && cell.actuals?.length === cell.runs : cell.claim === undefined && cell.actuals === undefined), {
+    message: "a fail cell, and only a fail cell, names the claim that broke and the actual value of each of its runs",
+    path: ["claim"],
   });
 
 const table = z.looseObject({

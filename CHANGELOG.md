@@ -320,9 +320,11 @@ just until 0.1.
   `@without:<condition>` on its `Feature:`, `Rule:`, `Scenario:`, or
   `Examples:` line. Its cell is `required` where the environment meets
   every tag and a `control` elsewhere. A control never turns the run red:
-  when it breaks a claim at a Then line, it runs again until it has done so
-  at the same line `--proof-runs <n>` times (2 by default), and then the
-  row is `proven`. One failure could be the program being slow once, and
+  when it breaks a claim at a Then line, it runs again until it has broken
+  the same claim at the same line `--proof-runs <n>` times (2 by default),
+  and then the row is `proven`. The values need not agree, since an id
+  that differs per run would make every proof flaky, and the cell keeps
+  each run's value in `actuals`. One failure could be the program being slow once, and
   proof is the one verdict that reads a failure as good news. Under
   `--concurrency`, a proof round runs in a worker of its own, which runs
   BeforeAll and AfterAll again; what goes wrong there makes the round's

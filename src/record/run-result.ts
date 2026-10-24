@@ -4,7 +4,7 @@ import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
 import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
-import type { ClaimRecord, ErrorKind, ObservedCounts } from "./types.js";
+import type { ClaimReadingValue, ClaimRecord, ErrorKind, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
 // own directory, `<stateDir>/runs/<run_id>/`, and what `nuka run --json`
@@ -216,8 +216,8 @@ export interface RunSince {
 }
 
 /** What one cell of the table holds after its executions: `pass` when
- * every one passed; `fail` when every one broke a claim of a Then at
- * `line`; `broke` when every one stopped at `line` before a claim there
+ * every one passed; `fail` when every one broke the same claim of a Then
+ * at `line`; `broke` when every one stopped at `line` before a claim there
  * was judged (a Given or When error, an undefined line, a claim nukadoko
  * could not judge, a hook); `flaky` when they disagree, `line` naming
  * the first that did not pass; `not-run` when none ran, with the reason. */
@@ -241,6 +241,13 @@ export interface RunTableCell {
   /** The executions the cell holds: more than 1 under `--repeat`, and for
    * a control whose Then failed, the proof runs (`--proof-runs`). */
   readonly runs: number;
+  /** For `fail`: the claim every run broke, by its position among its
+   * step's claims, counted from 0. Runs agree when they broke the same
+   * claim at the same line, whatever value each saw. */
+  readonly claim?: number;
+  /** For `fail`: the actual value the broken claim saw in each run, in
+   * run order, as a polled reading names a value. */
+  readonly actuals?: readonly ClaimReadingValue[];
   /** Why a `not-run` cell did not run. */
   readonly reason?: string;
 }

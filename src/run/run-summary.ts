@@ -183,7 +183,7 @@ function renderCondition(document: RunDocument): string[] {
   const proofRuns =
     document.table.proof_runs === DEFAULT_PROOF_RUNS
       ? []
-      : [`- proof runs: ${document.table.proof_runs} (\`--proof-runs\`: a control proves its row once it breaks a claim at the same Then line in ${document.table.proof_runs} runs)`];
+      : [`- proof runs: ${document.table.proof_runs} (\`--proof-runs\`: a control proves its row once it breaks the same claim at one Then line in ${document.table.proof_runs} runs)`];
   // Only a skipped check is said: a run whose check ran is the default, and
   // a finding of that check would have stopped it.
   const check =

@@ -40,7 +40,17 @@ const pass = (environment: string, role: "required" | "control", runs = 1, condi
   outcome: "pass",
   runs,
 });
-const fail = (environment: string, line: number, runs: number) => ({ ...head(environment), role: "control", conditions: banner(environment), outcome: "fail", line, runs });
+// A control breaks the step's one claim, reading the banner the other way.
+const fail = (environment: string, line: number, runs: number) => ({
+  ...head(environment),
+  role: "control",
+  conditions: banner(environment),
+  outcome: "fail",
+  line,
+  runs,
+  claim: 0,
+  actuals: Array.from({ length: runs }, () => ({ value: environment === "flag-on" ? "on" : "off" })),
+});
 
 function table(proofRuns: number) {
   return {
@@ -146,7 +156,7 @@ describe("nuka run: the verdict table", () => {
     expect(exitCode).toBe(0);
     expect(document.table.rows).toEqual([table(3).rows[0]]);
     expect(document.table.proof_runs).toBe(3);
-    expect(summary).toContain("\n- proof runs: 3 (`--proof-runs`: a control proves its row once it breaks a claim at the same Then line in 3 runs)\n");
+    expect(summary).toContain("\n- proof runs: 3 (`--proof-runs`: a control proves its row once it breaks the same claim at one Then line in 3 runs)\n");
     expect((document.scenarios as unknown[]).length).toBe(4);
   });
 

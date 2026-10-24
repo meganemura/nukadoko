@@ -3141,7 +3141,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   このリリースは run を他の tree と比べないからです。
   `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並びます。
   行は `feature`、`line`、`name`、`change`(`null`)、持っている condition の tag と `@held` を並べた `conditions`、列ごとに 1 つのセル、`verdict`(`held`、`proven`、`failed`)、1 文の `reason` を持ちます。
-  セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、そして `not-run` のときは `reason` を持ちます。
+  セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、`fail` のときはすべての実行が成り立たなかった `claim`(step の claim の中の位置で、0 から数えます)と、各実行で見た実際の値を実行の順に並べた `actuals`(`{ value }`、run.json が切り詰めた値には `{ json_start, json_bytes }`、値が無ければ `{ reason }`)、そして `not-run` のときと、証明の回が終わらなかったために `broke` になった対照のときは `reason` を持ちます。
   `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
   `proof_runs` は `--proof-runs` で、対照の `runs` はこれと比べて読みます。
   run サマリが描く表はこれです。
@@ -3282,9 +3282,9 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
 | セル | その実行 |
 | --- | --- |
 | `pass` | すべて通った |
-| `fail@<line>` | すべて、Then の位置のその行で成り立たなかった claim で止まった |
+| `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
 | `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、どの step にも一致しない行、nukadoko が判定できなかった claim、または scenario の行では hook |
-| `flaky@<line>` | 食い違った。行は通らなかった最初の実行のもの |
+| `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も食い違いです)。行は通らなかった最初の実行のもの |
 | `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、または BeforeAll が失敗した) |
 
 証明するのは Then だけです。
@@ -3293,9 +3293,14 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
 
 必須のセルは 1 回、または `--repeat` の回数だけ走ります。
 Then の行で失敗した対照のセルは、同じ pass の同じ world でもう一度走ります。
-その行で `--proof-runs` 回(既定は 2)失敗するか、実行が食い違って `flaky` になるまでです。
+その行で同じ claim が `--proof-runs` 回(既定は 2)成り立たなくなるか、実行が食い違って `flaky` になるまでです。
 1 回の失敗は、プログラムが一度遅かっただけかもしれません。
 証明は失敗を良い知らせとして読む唯一の断定なので、失敗の繰り返しを要するのも証明だけです。
+実行が一致するのは、同じ行で、step の中の位置が同じ claim が成り立たなかったときです。
+1 つの行で成り立たなかった 2 つの claim は 2 つの理由で、スイッチでありうるのはそのうち 1 つだけだからです。
+一致に同じ値は要りません。
+生成された id や時刻のように実行ごとに正当に違う値があれば、どの証明も `flaky` になってしまうからです。
+セルの `actuals` が各実行の値を残すので、読み手は 503 と 404 を見比べて判断できます。
 通った対照や、`broke` になった対照はもう走りません。
 各証明の実行は、番号の付いた scenario の行とは別に、stderr の `proof run <k>/<n>` の行になります。
 対照自身の scenario の行は `(control)` で終わります。
@@ -4809,7 +4814,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               @with:/@without: tags make its cell required
                               where the environment meets them and a
                               control elsewhere; a row is held, proven (a
-                              control broke a claim at a Then line in each
+                              control broke one claim at a Then line in each
                               of --proof-runs runs, default 2), or failed,
                               and the exit code is 1 when a row is failed.
                               With nukadoko.program.ts, each environment's

@@ -612,7 +612,7 @@ export async function runCli(
           default: DEFAULT_PROOF_RUNS,
           describe:
             "run a control cell (a scenario in an environment that does not meet its @with:/@without: conditions) until " +
-            "a claim in Then has broken at the same line this many times, or a run disagrees (default 2); only then does " +
+            "the same claim in Then has broken at the same line this many times, or a run disagrees (default 2); only then does " +
             "the control prove the scenario. A required cell runs once, or --repeat times",
         })
         .option("since", {
