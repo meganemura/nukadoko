@@ -45,7 +45,7 @@ const VALID = {
         name: "a",
         change: null,
         conditions: [],
-        cells: [{ world: "head", environment: "default", role: "required", outcome: "pass", runs: 1 }],
+        cells: [{ world: "head", environment: "default", role: "required", conditions: {}, outcome: "pass", runs: 1 }],
         verdict: "held",
         reason: "passes in default",
       },
@@ -67,6 +67,16 @@ describe("parseRunDocument", () => {
       const result = parseRunDocument(JSON.stringify(rest));
       expect("problem" in result && result.problem.startsWith("does not have the fields nuka report reads: ")).toBe(true);
       expect("problem" in result && result.problem.includes(`${key}: `)).toBe(true);
+    }));
+
+  it("refuses a fail, broke, or flaky cell with no line, which the summary would print as @undefined", () =>
+    hegel.test((tc) => {
+      const outcome = tc.draw(gs.sampledFrom(["fail", "broke", "flaky"]));
+      const cell = { world: "head", environment: "default", role: "required", conditions: {}, outcome, runs: 1 };
+      const document = { ...VALID, table: { ...VALID.table, rows: [{ ...VALID.table.rows[0], cells: [cell] }] } };
+      const result = parseRunDocument(JSON.stringify(document));
+      expect("problem" in result && result.problem).toContain("table.rows.0.cells.0.line: a fail, broke, or flaky cell names the line it stopped at");
+      expect(parseRunDocument(JSON.stringify({ ...document, table: { ...document.table, rows: [{ ...document.table.rows[0], cells: [{ ...cell, line: 4 }] }] } }))).toHaveProperty("document");
     }));
 
   it("refuses another schema version before it reads a field", () => {

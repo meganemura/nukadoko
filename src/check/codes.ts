@@ -290,9 +290,9 @@ const CHECK_CODES = {
   },
   "program-placeholder-unfilled": {
     description:
-      "A command or an env value in nukadoko.program.ts names a placeholder a world that nuka run with the same --env flags would start has no value for: {port} or {url} in a world with neither serve nor url, or anything but {root} in a build command.",
+      "A command or an env value in nukadoko.program.ts names a placeholder a world that nuka run with the same --env flags would start has no value for: {port} or {url} in a world with neither serve nor url, {condition.<name>} in one whose environment does not declare that condition, or anything but {root} in a build command.",
     severity: "error",
-    fix: "Remove the placeholder from the field the message names, or give the world serve or url; in a build command, write only {root}, or move the command to prepare.",
+    fix: "Remove the placeholder from the field the message names, or give the world what fills it: serve or url for {port} or {url}, the condition under its environment's conditions for {condition.<name>}; in a build command, write only {root}, or move the command to prepare.",
   },
   "scenario-without-then": {
     description:

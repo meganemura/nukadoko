@@ -165,7 +165,9 @@ export async function checkConfig(
   // starts, and the recipe alone says so. A world nothing in this
   // invocation resolves is not checked, so an environment written for
   // another use (a url world, or one that only runs `build`) never refuses
-  // a run of the others.
+  // a run of the others. The implicit default world has no conditions, so
+  // a top-level `{condition.<name>}` has no value there, and a run of the
+  // environments that declare it never starts default.
   if (program !== null) {
     for (const world of worldsToStart(program.program, envs)) {
       for (const gap of placeholderGaps(world.recipe)) {

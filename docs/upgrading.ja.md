@@ -391,6 +391,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `verdicts` を読んでいた読み手は `table.rows` を読みます。
   受け入れ基準ごとに 1 行で、`feature`、`line`、`name`(以前のセルの `scenario`)、environment ごとに 1 つのセルを並べた `cells`、行の `verdict`(`held`、`proven`、`failed`)と `reason` を持ちます。
   セルの `outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)が以前の `verdict` を、`runs` が `executions` を置き換えます。
+  セルの `conditions` は、その役割のもとになった condition を名指します。
   `passed` は無いので、それが要る読み手は `scenarios` の通ったエントリを数えます。
   condition の tag が無い run は必須(`required`)のセルだけを持ち、その行は、以前のセルが `passed` か `failed` だったとおりに `held` か `failed` になります。
   各 scenario のエントリは `role` を持ち、`counts` は `controls` を持ちます。

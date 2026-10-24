@@ -30,8 +30,17 @@ async function run(argv: readonly string[]) {
 }
 
 const head = (environment: string) => ({ world: "head", environment });
-const pass = (environment: string, role: "required" | "control", runs = 1) => ({ ...head(environment), role, outcome: "pass", runs });
-const fail = (environment: string, line: number, runs: number) => ({ ...head(environment), role: "control", outcome: "fail", line, runs });
+// A cell names the conditions its row's tags name, with the value its
+// environment declares: banner is off in flag-off and on in flag-on.
+const banner = (environment: string) => ({ banner: environment === "flag-on" });
+const pass = (environment: string, role: "required" | "control", runs = 1, conditions: Record<string, boolean> = banner(environment)) => ({
+  ...head(environment),
+  role,
+  conditions,
+  outcome: "pass",
+  runs,
+});
+const fail = (environment: string, line: number, runs: number) => ({ ...head(environment), role: "control", conditions: banner(environment), outcome: "fail", line, runs });
 
 function table(proofRuns: number) {
   return {
@@ -65,7 +74,7 @@ function table(proofRuns: number) {
         name: "the banner has a value",
         change: null,
         conditions: [],
-        cells: [pass("flag-off", "required"), pass("flag-on", "required")],
+        cells: [pass("flag-off", "required", 1, {}), pass("flag-on", "required", 1, {})],
         verdict: "held",
         reason: "passes in flag-off, flag-on",
       },
@@ -108,7 +117,7 @@ describe("nuka run: the verdict table", () => {
       expect(summary.split("\n").slice(1, 9)).toEqual([
         "# nukadoko run passed: 4 criteria in 2 environments, 2 held, 2 proven",
         "",
-        "| verdict | criterion | head flag-off | head flag-on |",
+        "| verdict | criterion | head flag-off (banner: false) | head flag-on (banner: true) |",
         "| --- | --- | --- | --- |",
         "| proven | `features/banner.feature:4` the banner is on `@with:banner` | fail@5 (control, 2 runs) | pass |",
         "| proven | `features/banner.feature:8` the banner is off `@without:banner` | pass | fail@9 (control, 2 runs) |",

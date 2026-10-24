@@ -153,3 +153,46 @@ describe("urlPort", () => {
       expect(urlPort(url)).toBe(port ?? (scheme === "https" ? 443 : 80));
     }));
 });
+
+describe("{condition.<name>}", () => {
+  const conditionName = gs.sampledFrom(["banner", "locale", "a.b-c_1"]);
+  const declared = gs
+    .arrays(gs.tuples(conditionName, gs.oneOf(gs.booleans().map((b): boolean | string => b), gs.sampledFrom<boolean | string>(["ja", "x"]))), { maxSize: 3 })
+    .map((entries) => Object.fromEntries(entries));
+
+  it("fills the environment's own value as text, and has none for a condition it does not declare", () =>
+    hegel.test((tc) => {
+      const name = tc.draw(conditionName);
+      const conditions = tc.draw(gs.optional(declared)) ?? undefined;
+      const filled = fillPlaceholders(`BANNER={condition.${name}}`, { conditions });
+      const value = conditions !== undefined && Object.hasOwn(conditions, name) ? conditions[name] : undefined;
+      expect(filled).toEqual(value === undefined ? { missing: `condition.${name}` } : { text: `BANNER=${String(value)}` });
+    }));
+
+  it("is a gap in a world whose environment does not declare the condition, and in every build", () =>
+    hegel.test((tc) => {
+      const name = tc.draw(conditionName);
+      const conditions = tc.draw(gs.optional(declared)) ?? undefined;
+      const inBuild = tc.draw(gs.booleans());
+      const env: Record<string, string> = inBuild ? {} : { FLAG: `{condition.${name}}` };
+      const recipe = {
+        build: inBuild ? [timed(`make FLAG={condition.${name}}`)] : [],
+        prepare: [],
+        reach: reachOf(tc.draw(reachKind)),
+        env,
+        conditions,
+      };
+      const isDeclared = conditions !== undefined && Object.hasOwn(conditions, name);
+      expect(placeholderGaps(recipe)).toEqual(
+        inBuild
+          ? [{ where: "build[0]", name: `condition.${name}`, why: "build runs once per tree, before any world exists" }]
+          : isDeclared
+            ? []
+            : [{ where: "env.FLAG", name: `condition.${name}`, why: `its environment declares no condition "${name}" under conditions` }],
+      );
+    }));
+
+  it("leaves a brace that only looks like one as written", () => {
+    expect(fillPlaceholders("{condition.} {condition} {conditions.a}", { conditions: { a: true } })).toEqual({ text: "{condition.} {condition} {conditions.a}" });
+  });
+});

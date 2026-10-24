@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
-import { BOOLEAN_TEXTS, CONDITION_NAME_PATTERN, CONDITION_VALUE_PATTERN } from "../condition/condition.js";
+import { BOOLEAN_TEXTS, CONDITION_NAME_PATTERN, CONDITION_VALUE_PATTERN, type Conditions } from "../condition/condition.js";
 // Responsibility: the validated shape of nukadoko.program.ts's default
 // export (docs/spec.md "Program"): how nukadoko builds, prepares, starts,
 // or reaches the program under test, the environment its processes get,
@@ -286,6 +286,9 @@ export interface ProgramRecipe {
   readonly reach: ProgramReach;
   readonly env: Readonly<Record<string, string>>;
   readonly setup: { readonly run: ProgramSetup; readonly timeout_ms: number } | undefined;
+  /** The environment's `conditions`, which fill `{condition.<name>}`
+   * (src/program/placeholders.ts); `undefined` when it declares none. */
+  readonly conditions: Conditions | undefined;
 }
 
 type UrlField = NonNullable<Program["url"]>;
@@ -316,5 +319,6 @@ export function layerProgram(program: Program, environment: ProgramEnvironment |
     reach: (environment === undefined ? undefined : reachOf(environment)) ?? reachOf(program) ?? { kind: "none" },
     env: { ...(program.env ?? {}), ...(environment?.env ?? {}) },
     setup: setupOf(environment?.setup ?? program.setup),
+    conditions: environment?.conditions,
   };
 }

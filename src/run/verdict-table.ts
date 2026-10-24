@@ -134,6 +134,13 @@ export interface TableEnvironment {
   readonly conditions: Conditions | undefined;
 }
 
+/** For each condition `tags` name, the value `declared` holds for it, or
+ * `null` when it holds none: what a cell's role came from. Pure. */
+export function conditionsOfCell(tags: readonly string[], declared: Conditions | undefined): Record<string, boolean | string | null> {
+  const names = [...new Set(readCriterionTags(tags).conditions.map((tag) => tag.name))];
+  return Object.fromEntries(names.map((name) => [name, declared !== undefined && Object.hasOwn(declared, name) ? declared[name]! : null]));
+}
+
 /** The role each cell of a criterion has, in the run's environments. */
 export function rolesOf(tags: readonly string[], environments: readonly TableEnvironment[]): CellRole[] {
   const { conditions } = readCriterionTags(tags);
@@ -168,6 +175,7 @@ export function buildTable(input: TableInput): RunTable {
         world: "head",
         environment: environment.name,
         role: roles[index]!,
+        conditions: conditionsOfCell(criterion.tags, environment.conditions),
         ...folded,
         ...(folded.outcome === "not-run" ? { reason: input.notRunReason(environment.name) ?? "no execution of it was recorded" } : {}),
       };

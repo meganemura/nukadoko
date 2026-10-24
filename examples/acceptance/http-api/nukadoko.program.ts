@@ -6,11 +6,13 @@ import { defineProgram } from "nukadoko";
 // (S8). ITEM_COUNT switches GET /items/count on; the two environments are
 // its two sides, and conditions says which side each one is, so the
 // scenario tagged @with:item_count runs in count-off as a control.
+// ITEM_COUNT is the condition itself, so the switch the server reads and
+// the side a cell counts for cannot disagree.
 export default defineProgram({
   serve: { command: "node src/server.ts", ready: "/items" },
-  env: { PORT: "{port}" },
+  env: { PORT: "{port}", ITEM_COUNT: "{condition.item_count}" },
   environments: {
     "count-off": { conditions: { item_count: false } },
-    "count-on": { env: { ITEM_COUNT: "1" }, conditions: { item_count: true } },
+    "count-on": { conditions: { item_count: true } },
   },
 });

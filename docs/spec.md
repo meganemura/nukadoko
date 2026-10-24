@@ -2794,6 +2794,7 @@ placeholder:
 | `{root}` | the root of the tree the program is built from, as an absolute path |
 | `{world}` | the world's name: the environment it runs |
 | `{token}` | 32 random hexadecimal characters made for this world |
+| `{condition.<name>}` | the value the world's environment declares for that condition under `conditions`, as text: `true`, `false`, or the string |
 
 `build` runs once per tree, before any world exists, so a `build` command
 may name `{root}` alone.
@@ -2801,10 +2802,12 @@ Every world with a URL has a port, so an environment that swaps `serve`
 for a `url` keeps a top-level `PORT: "{port}"`.
 A placeholder the world has no value for is refused by name before
 anything runs: `{port}` or `{url}` in a world with neither `serve` nor
-`url`.
+`url`, or `{condition.<name>}` in one whose environment does not declare
+that condition, the default world included, which declares none.
 The fix names only what the world lacks: `{root}` alone, or a move to
-`prepare`, for a `build` command, and `serve` or `url` for a world with
-neither.
+`prepare`, for a `build` command, `serve` or `url` for a world with
+neither, and the condition under the environment's `conditions` for
+`{condition.<name>}`.
 The recipe alone says which placeholders a world has, so the refusal does
 not wait for the world.
 `nuka check` reports `program-placeholder-unfilled`, an error, for each
@@ -2819,6 +2822,12 @@ start, before any `build`, `prepare`, or version probe runs, so a
 `build` shared by a later world does not run either.
 Any other text in braces stays as written, so a JSON value or a shell
 brace in a command needs no escape.
+
+`{condition.<name>}` is how a program reads the switch its environment
+declares, so the switch the program runs with and the side a cell counts
+for are one value: `env: { BANNER: "{condition.banner}" }` hands the
+program `false` in an environment that declares `banner: false`.
+`build` runs before any world, so it has no condition.
 
 `{token}` is for a value the program and the steps must share and nobody
 else may read, such as a seeded admin's password or a signing key.
@@ -2983,7 +2992,9 @@ holds:
   `"false"` would read as on, and the boolean is what is meant. A scenario's `@with:` and
   `@without:` tags are read against them, and they decide which runs
   prove a scenario (see "Verdicts"). They set nothing in the program: the
-  environment's `env` and env files do that.
+  environment's `env` and env files do that, and `{condition.<name>}`
+  (see "Placeholders") hands them a condition's value, so the program and
+  the declaration cannot disagree.
 
 The rules for the first three are under "Environments and secrets".
 A field an environment writes replaces the top level's, except `env`,
@@ -3790,7 +3801,7 @@ to act on the run without opening another file:
         "name": "greets by name",
         "change": null,
         "conditions": [],
-        "cells": [{ "world": "head", "environment": "default", "role": "required", "outcome": "fail", "line": 6, "runs": 1 }],
+        "cells": [{ "world": "head", "environment": "default", "role": "required", "conditions": {}, "outcome": "fail", "line": 6, "runs": 1 }],
         "verdict": "failed",
         "reason": "a claim broke at line 6 in default"
       }
@@ -3886,7 +3897,10 @@ to act on the run without opening another file:
   `feature`, `line`, and `name`, `change` (`null`), the condition tags
   and `@held` it carries as `conditions`, one cell per column, its
   `verdict` (`held`, `proven`, or `failed`), and the `reason`, one
-  sentence. A cell has its `world`, `environment`, `role`, `outcome`
+  sentence. A cell has its `world`, `environment`, `role`, the
+  `conditions` its role came from (each condition its row's tags name,
+  with the value its environment declares, `null` where it declares
+  none), `outcome`
   (`pass`, `fail`, `broke`, `flaky`, or `not-run`), the `line` the last
   three name, `runs`, the executions it holds, and for `not-run` a
   `reason`. It is the table the run summary draws.
@@ -4029,6 +4043,17 @@ In a run of `banner-on` (`conditions: { banner: true }`) and `banner-off`
 (`{ banner: false }`), the cell in `banner-on` is required and the one in
 `banner-off` is a control.
 
+`conditions` are declarations nukadoko trusts. They decide which cells
+count, and nukadoko does not check them against the program: a
+declaration that does not match the program makes a cell a control where
+it should be required, or required where it should be a control, and the
+row's verdict is read from that. A program file keeps the two the same by
+deriving the program's setting from the condition, as in `env: { BANNER:
+"{condition.banner}" }` (see "Placeholders"), so there is one value to
+edit. Each cell of `run.json`'s table names the conditions its role came
+from, and the summary's column heading shows the conditions of its
+environment, so a reader sees what each column was declared to be.
+
 A run without `--env` selects every environment that declares
 `conditions`, in the order the program file lists them, and `default`
 when none does. An environment that declares none, such as a deployment
@@ -4087,7 +4112,8 @@ cells, and a run with a control adds a `criteria: <held> held, <proven>
 proven, <failed> failed` line after it.
 
 The table is `run.json`'s `table`, and the run summary opens with it: a
-row per criterion, a column per world and environment, and under it one
+row per criterion, a column per world and environment, headed with the
+conditions that environment declares, and under it one
 line for each red row that says why, with where its execution stopped.
 The Allure results and the messages stream carry each execution's row
 verdict and cell role (see "Allure results" and "Messages stream").

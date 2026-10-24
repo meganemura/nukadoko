@@ -206,15 +206,23 @@ const scenario = z.looseObject({
 
 // The verdict table (src/run/verdict-table.ts), which the summary leads
 // with and the Allure results and the messages stream carry per scenario.
-const tableCell = z.looseObject({
-  world: z.literal("head"),
-  environment: z.string(),
-  role: z.enum(["required", "control"]),
-  outcome: z.enum(["pass", "fail", "broke", "flaky", "not-run"]),
-  line: z.number().int().optional(),
-  runs: z.number().int(),
-  reason: z.string().optional(),
-});
+// A fail, broke, or flaky cell is read as `<outcome>@<line>`, so one with
+// no line would render as `fail@undefined` rather than be refused.
+const tableCell = z
+  .looseObject({
+    world: z.literal("head"),
+    environment: z.string(),
+    role: z.enum(["required", "control"]),
+    conditions: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
+    outcome: z.enum(["pass", "fail", "broke", "flaky", "not-run"]),
+    line: z.number().int().optional(),
+    runs: z.number().int(),
+    reason: z.string().optional(),
+  })
+  .refine((cell) => cell.outcome === "pass" || cell.outcome === "not-run" || cell.line !== undefined, {
+    message: "a fail, broke, or flaky cell names the line it stopped at",
+    path: ["line"],
+  });
 
 const table = z.looseObject({
   base: z.null(),

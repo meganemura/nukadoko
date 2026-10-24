@@ -97,7 +97,8 @@ Feature: items API
   environments are the two sides of `ITEM_COUNT`, `count-off` and
   `count-on`, and each names its side in `conditions`, so a run without
   `--env` runs both, and `counting the items` is a control in
-  `count-off`. The server starts each log line with
+  `count-off`. `ITEM_COUNT` is `{condition.item_count}`, so the server
+  reads the side its environment declares. The server starts each log line with
   the request's `traceparent`, so each step record holds the server's
   lines for its own requests in `program-log.txt`.
 - `an-item-exists` (Given): POSTs a name and returns the `id` the API
@@ -135,12 +136,14 @@ import { defineProgram } from "nukadoko";
 // (S8). ITEM_COUNT switches GET /items/count on; the two environments are
 // its two sides, and conditions says which side each one is, so the
 // scenario tagged @with:item_count runs in count-off as a control.
+// ITEM_COUNT is the condition itself, so the switch the server reads and
+// the side a cell counts for cannot disagree.
 export default defineProgram({
   serve: { command: "node src/server.ts", ready: "/items" },
-  env: { PORT: "{port}" },
+  env: { PORT: "{port}", ITEM_COUNT: "{condition.item_count}" },
   environments: {
     "count-off": { conditions: { item_count: false } },
-    "count-on": { env: { ITEM_COUNT: "1" }, conditions: { item_count: true } },
+    "count-on": { conditions: { item_count: true } },
   },
 });
 ```
@@ -304,7 +307,7 @@ the table:
 ```text
 # nukadoko run passed: 8 criteria in 2 environments, 7 held, 1 proven
 
-| verdict | criterion | head count-off | head count-on |
+| verdict | criterion | head count-off (item_count: false) | head count-on (item_count: true) |
 | --- | --- | --- | --- |
 | held | `features/items.feature:10` creating an item | pass | pass |
 | held | `features/items.feature:19` reading an item back | pass | pass |
@@ -331,4 +334,5 @@ the table:
 | 2026-10-24 | Expected bodies against a shared server | claims on what the scenario created: the name it sent, an id of at least 1, the body its Given returned | the exact bodies broke as soon as an earlier scenario had created an item (measured above) | S8 |
 | 2026-10-24 | The unknown id | `0` | the API numbers items from 1, so no run reaches it; `42` exists once a run, or `--repeat`, has created 42 items | none |
 | 2026-10-24 | A criterion behind a switch | two environments, `count-off` and `count-on`, with `conditions`, and `@with:item_count` on the scenario | one run shows the scenario breaking where the switch is off, a control that proves it; a scenario that only ran with the switch on would say nothing about whether it notices the count | none |
+| 2026-10-24 | How the switch follows its side | `ITEM_COUNT: "{condition.item_count}"` in `env` | `conditions` decide which cell counts, and nukadoko does not check them against the program; with `ITEM_COUNT: "1"` written apart from them, an edit to one and not the other makes a cell count for a side its server is not on | none |
 | 2026-10-24 | How the body compares with the docstring | `args` parses the docstring, and one `equal` claim compares the two values | key order and spacing in the docstring do not count; the claim record keeps both values | none |

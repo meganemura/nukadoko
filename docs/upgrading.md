@@ -455,7 +455,8 @@ This part does not change release to release.
   `cells`, and the row's `verdict` (`held`, `proven`, or `failed`)
   and `reason`. A cell's `outcome` (`pass`, `fail`, `broke`,
   `flaky`, or `not-run`) replaces its `verdict`, and `runs` replaces
-  `executions`; there is no `passed`, so a reader that needs it counts
+  `executions`, and `conditions` names the conditions the cell's role
+  came from; there is no `passed`, so a reader that needs it counts
   the passed entries in `scenarios`. A run with no condition tag has
   only `required` cells, and its rows are `held` or `failed` as the
   old cells were `passed` or `failed`. Each scenario entry has `role`,

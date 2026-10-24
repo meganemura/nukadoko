@@ -1130,9 +1130,10 @@ run サマリの「Criteria since」の節は、unchanged ではない各 scenar
 environment はプログラムのスイッチを `conditions` として宣言でき、`--env` の無い run はそれを宣言するすべての environment を走らせます:
 
 ```ts
+env: { BANNER: "{condition.banner}" },
 environments: {
-  "banner-off": { env: { BANNER: "off" }, conditions: { banner: false } },
-  "banner-on": { env: { BANNER: "on" }, conditions: { banner: true } },
+  "banner-off": { conditions: { banner: false } },
+  "banner-on": { conditions: { banner: true } },
 },
 ```
 
@@ -1145,7 +1146,9 @@ Then はスイッチが変えるものを見ていません。
 必須のセルが通らなければ、行は `failed` で、終了コードは 1 です。
 `--env default` はトップレベルの environment を、`run.json` が名付けるとおりに名指すので、`--env default --env staging` は両方を実行します。
 environment はそれでも `nukadoko.program.ts` の設定にすぎません。
-`a` と `b` で何が違うかはそれぞれのフィールドが決め、`conditions` は何も設定しません。
+`a` と `b` で何が違うかはそれぞれのフィールドが決めます。
+`conditions` は何も設定せず、nukadoko はそれをプログラムと照らし合わせません。
+`{condition.banner}` は environment が宣言する側をプログラムに渡すので、2 つは食い違いません。
 
 ## What this does not do
 

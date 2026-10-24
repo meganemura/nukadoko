@@ -327,7 +327,7 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
         name: "never executes because BeforeAll fails first",
         change: null,
         conditions: [],
-        cells: [{ world: "head", environment: "default", role: "required", outcome: "not-run", runs: 0, reason: "a BeforeAll hook failed" }],
+        cells: [{ world: "head", environment: "default", role: "required", conditions: {}, outcome: "not-run", runs: 0, reason: "a BeforeAll hook failed" }],
         verdict: "failed",
         reason: "did not run in default: a BeforeAll hook failed",
       });

@@ -254,13 +254,19 @@ function tableCell(cell: RunTableCell): string {
 // feature path and line, so the same run reads the same way at any
 // concurrency, and a column per world and environment, in the run's
 // environment order. The verdict is the first column, since it is what a
-// reader scans for.
+// reader scans for. A column's heading names the conditions its
+// environment declares, since they decide which of its cells count, and
+// they are the environment's word, which a reader can check.
 function renderTable(document: RunDocument): string[] {
   const { worlds, rows } = document.table;
   if (rows.length === 0) return [];
+  const heading = (column: (typeof worlds)[number]): string => {
+    const declared = document.environments.find((environment) => environment.name === column.environment)?.conditions;
+    return `${column.world} ${column.environment}${declared === undefined ? "" : ` (${conditionsText(declared)})`}`;
+  };
   return [
     "",
-    `| verdict | criterion | ${worlds.map((column) => cellText(`${column.world} ${column.environment}`)).join(" | ")} |`,
+    `| verdict | criterion | ${worlds.map((column) => cellText(heading(column))).join(" | ")} |`,
     `| --- | --- | ${worlds.map(() => "---").join(" | ")} |`,
     ...rows.map((row) => {
       const tags = row.conditions.length === 0 ? "" : ` ${row.conditions.map((tag) => cellCode(tag)).join(" ")}`;

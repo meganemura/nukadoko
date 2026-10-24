@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
+import { readCriterionTags, roleIn } from "../src/condition/condition.js";
 import type { RunCellOutcome, RunTableCell } from "../src/record/run-result.js";
 import {
   buildTable,
@@ -32,6 +33,7 @@ const cell = gs
   .map(([role, cellResult, at, runs]): Omit<RunTableCell, "environment"> => ({
     world: "head",
     role,
+    conditions: {},
     outcome: cellResult,
     ...(cellResult === "pass" || cellResult === "not-run" ? {} : { line: at }),
     runs: cellResult === "not-run" ? 0 : runs,
@@ -91,7 +93,7 @@ describe("judgeRow", () => {
     }));
 
   it("says why in one sentence for each word", () => {
-    const pass = (environment: string, role: "required" | "control"): RunTableCell => ({ world: "head", environment, role, outcome: "pass", runs: 1 });
+    const pass = (environment: string, role: "required" | "control"): RunTableCell => ({ world: "head", environment, role, conditions: {}, outcome: "pass", runs: 1 });
     expect(judgeRow([pass("flag-on", "required"), { ...pass("flag-off", "control"), outcome: "fail", line: 7, runs: 2 }], 2)).toEqual({
       verdict: "proven",
       reason: "passes in flag-on, and a claim broke at line 7 in flag-off, where its conditions do not hold, in each of 2 runs",
@@ -140,7 +142,13 @@ describe("--proof-runs", () => {
       const agreeing = first.kind === "fail" && program.slice(0, runs).every((entry) => entry.kind === "fail" && entry.line === first.line);
       expect(folded.outcome === "fail" && folded.runs >= runs).toBe(agreeing);
       expect(outcomes.length).toBeLessThanOrEqual(Math.max(1, runs));
-      const verdict = judgeRow([{ world: "head", environment: "on", role: "required", outcome: "pass", runs: 1 }, { world: "head", environment: "off", role: "control", ...folded }], runs).verdict;
+      const verdict = judgeRow(
+        [
+          { world: "head", environment: "on", role: "required", conditions: {}, outcome: "pass", runs: 1 },
+          { world: "head", environment: "off", role: "control", conditions: {}, ...folded },
+        ],
+        runs,
+      ).verdict;
       expect(verdict).toBe(agreeing ? "proven" : "held");
     }));
 
@@ -221,8 +229,8 @@ describe("buildTable", () => {
           change: null,
           conditions: ["@with:banner", "@held"],
           cells: [
-            { world: "head", environment: "flag-off", role: "control", outcome: "fail", line: 12, runs: 2 },
-            { world: "head", environment: "flag-on", role: "required", outcome: "pass", runs: 1 },
+            { world: "head", environment: "flag-off", role: "control", conditions: { banner: false }, outcome: "fail", line: 12, runs: 2 },
+            { world: "head", environment: "flag-on", role: "required", conditions: { banner: true }, outcome: "pass", runs: 1 },
           ],
           verdict: "proven",
           reason: "passes in flag-on, and a claim broke at line 12 in flag-off, where its conditions do not hold, in each of 2 runs",
@@ -234,8 +242,8 @@ describe("buildTable", () => {
           change: null,
           conditions: [],
           cells: [
-            { world: "head", environment: "flag-off", role: "required", outcome: "pass", runs: 1 },
-            { world: "head", environment: "flag-on", role: "required", outcome: "pass", runs: 1 },
+            { world: "head", environment: "flag-off", role: "required", conditions: {}, outcome: "pass", runs: 1 },
+            { world: "head", environment: "flag-on", role: "required", conditions: {}, outcome: "pass", runs: 1 },
           ],
           verdict: "held",
           reason: "passes in flag-off, flag-on",
@@ -243,6 +251,30 @@ describe("buildTable", () => {
       ],
     });
   });
+
+  it("names on each cell the conditions its role came from, so the role reads back from the cell alone", () =>
+    hegel.test((tc) => {
+      const pooled = gs.sampledFrom(["a", "b"]);
+      const tags = tc.draw(
+        gs.arrays(gs.oneOf(pooled.map((n) => `@with:${n}`), pooled.map((n) => `@without:${n}`), pooled.map((n) => `@with:${n}=x`)), { maxSize: 3 }),
+      );
+      const declared = tc.draw(
+        gs.optional(gs.arrays(gs.tuples(pooled, gs.oneOf(gs.booleans().map((b): boolean | string => b), gs.just<boolean | string>("x"))), { maxSize: 2 })),
+      );
+      const conditions = declared === null || declared === undefined ? undefined : Object.fromEntries(declared);
+      const table = buildTable({
+        criteria: [{ feature: "a.feature", line: 3, name: "s", tags }],
+        environments: [{ name: "e", conditions }],
+        outcomes: () => [{ kind: "pass" }],
+        notRunReason: () => undefined,
+        proofRuns: 2,
+      });
+      const cell = table.rows[0]!.cells[0]!;
+      const named = new Set(tags.map((tag) => tag.replace(/^@with(out)?:/, "").replace(/=.*$/, "")));
+      expect(Object.keys(cell.conditions).sort()).toEqual([...named].sort());
+      const recorded = Object.fromEntries(Object.entries(cell.conditions).filter((entry): entry is [string, boolean | string] => entry[1] !== null));
+      expect(roleIn(readCriterionTags(tags).conditions, recorded)).toBe(cell.role);
+    }));
 
   it("says why a cell with no execution did not run", () => {
     const table = buildTable({

@@ -2,7 +2,7 @@
 
 A run ends in one table, run.json's `table`, and the run summary opens
 with it: one row per criterion, one column per environment
-(`head <environment>`), and one verdict per row, which the exit code
+(`head <environment>`, then the conditions it declares), and one verdict per row, which the exit code
 follows. Under the table, each red row gets one line that says why and
 where it stopped.
 
@@ -21,7 +21,11 @@ scenario on its Feature, Rule, Scenario, or Examples line:
 - `@without:<condition>`: it is off (`false`, or not declared).
 
 Its cell is required where the environment meets every tag and a control
-elsewhere; an untagged scenario is required everywhere. `nuka run`
+elsewhere; an untagged scenario is required everywhere. Each cell in
+run.json names the conditions its role came from. nukadoko trusts
+`conditions` and does not check them against the program, so derive the
+switch from them with `{condition.<name>}` (`references/program.md`).
+`nuka run`
 without `--env` runs every environment that declares `conditions`. A
 control never turns the run red. Tag only what the criteria say depends
 on the switch, and write the Then so it would fail on the other side: a

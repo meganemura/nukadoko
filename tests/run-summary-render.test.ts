@@ -347,7 +347,7 @@ describe("renderRunSummary", () => {
       "<!-- nukadoko:run -->",
       "# nukadoko run passed: 2 criteria in 2 environments, 1 held, 1 proven",
       "",
-      "| verdict | criterion | head flag-off | head flag-on |",
+      "| verdict | criterion | head flag-off (banner: false) | head flag-on (banner: true) |",
       "| --- | --- | --- | --- |",
       "| proven | `features/banner.feature:4` the banner is shown `@with:banner` | fail@6 (control, 2 runs) | pass |",
       "| held | `features/banner.feature:9` the page loads | pass | pass |",

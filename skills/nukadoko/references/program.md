@@ -41,9 +41,11 @@ no user or password in it.
 | `{root}` | the tree's root, the one placeholder `build` may name |
 | `{world}` | the environment's name |
 | `{token}` | random per world, redacted as `{{secret.WORLD_TOKEN}}` in every record |
+| `{condition.<name>}` | the value the environment declares for that condition: `true`, `false`, or the string |
 
 A placeholder a world has no value for (`{port}` or `{url}` with neither
-`serve` nor `url`, anything but `{root}` in `build`) is
+`serve` nor `url`, `{condition.<name>}` where the environment does not
+declare it, anything but `{root}` in `build`) is
 `program-placeholder-unfilled`: `nuka check` reports it for the worlds a
 `nuka run` with the same `--env` flags would start, and `nuka run` and
 `nuka do` refuse it before any command runs.
@@ -125,13 +127,16 @@ key). A feature behind a switch gets one environment per side, each
 naming its side in `conditions`:
 
 ```ts
+env: { CHECKOUT_V2: "{condition.checkout_v2}" },
 environments: {
-  "checkout-v1": { env: { CHECKOUT_V2: "" }, conditions: { checkout_v2: false } },
-  "checkout-v2": { env: { CHECKOUT_V2: "1" }, conditions: { checkout_v2: true } },
+  "checkout-v1": { conditions: { checkout_v2: false } },
+  "checkout-v2": { conditions: { checkout_v2: true } },
 },
 ```
 
-`env` sets the switch; `conditions` sets nothing, and says which side
+`conditions` sets nothing, and nukadoko does not check it against the
+program; `{condition.checkout_v2}` hands the program the declared side,
+so the two cannot disagree. It says which side
 the environment is on for a scenario's `@with:checkout_v2` or
 `@without:checkout_v2` tag (`references/verdicts.md`). `nuka run` without `--env` runs every environment that
 declares `conditions`. `url` in place of `serve` names a program

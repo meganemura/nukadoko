@@ -1256,9 +1256,10 @@ program as `conditions`, and a run without `--env` runs every
 environment that declares them:
 
 ```ts
+env: { BANNER: "{condition.banner}" },
 environments: {
-  "banner-off": { env: { BANNER: "off" }, conditions: { banner: false } },
-  "banner-on": { env: { BANNER: "on" }, conditions: { banner: true } },
+  "banner-off": { conditions: { banner: false } },
+  "banner-on": { conditions: { banner: true } },
 },
 ```
 
@@ -1272,7 +1273,9 @@ a required cell does not pass. `--env default` names the top-level
 environment, as `run.json` names it, so `--env default --env staging`
 runs both. An environment is still only configuration, in
 `nukadoko.program.ts`: what differs between `a` and `b` is whatever
-their fields say, and `conditions` sets nothing.
+their fields say. `conditions` sets nothing, and nukadoko does not check
+it against the program: `{condition.banner}` hands the program the side
+its environment declares, so the two cannot disagree.
 
 ## What this does not do
 

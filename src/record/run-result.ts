@@ -229,6 +229,12 @@ export interface RunTableCell {
   readonly world: "head";
   readonly environment: string;
   readonly role: "required" | "control";
+  /** What the role came from: for each condition the row's tags name, the
+   * value the environment declares, or `null` when it declares none,
+   * which counts as off. The environment's word, not a measurement:
+   * nukadoko does not check it against the program (docs/spec.md
+   * "Verdicts"). */
+  readonly conditions: Readonly<Record<string, boolean | string | null>>;
   readonly outcome: RunCellOutcome;
   /** The feature file line `fail`, `broke`, and `flaky` name. */
   readonly line?: number;

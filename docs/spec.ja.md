@@ -2279,13 +2279,15 @@ world はそれを待たずに失敗し、`program.log` は、関数が持ち時
 | `{root}` | プログラムを build する tree のルートの絶対パス |
 | `{world}` | world の名前。それが実行する environment |
 | `{token}` | その world のために作った 32 文字のランダムな 16 進数 |
+| `{condition.<name>}` | world の environment が `conditions` でその condition に宣言する値のテキスト。`true`、`false`、または文字列 |
 
 `build` は tree ごとに 1 回、どの world よりも前に実行するので、`build` のコマンドが名指せるのは `{root}` だけです。
 URL を持つ world はどれもポートを持つので、`serve` を `url` に替える environment も、トップレベルの `PORT: "{port}"` をそのまま使えます。
 world が値を持たないプレースホルダーは、何かを実行する前に名前を挙げて拒否されます。
-`serve` も `url` も無い world の `{port}` や `{url}` です。
+`serve` も `url` も無い world の `{port}` や `{url}`、そして environment がその condition を宣言しない world の `{condition.<name>}` です。
+default の world は condition を 1 つも宣言しないので、これに含まれます。
 fix は world に欠けているものだけを挙げます。
-`build` のコマンドには `{root}` だけにするか `prepare` に移すことを、どちらも無い world には `serve` か `url` を挙げます。
+`build` のコマンドには `{root}` だけにするか `prepare` に移すことを、どちらも無い world には `serve` か `url` を、`{condition.<name>}` にはその condition を environment の `conditions` に宣言することを挙げます。
 world がどのプレースホルダーを持つかはレシピだけで決まるので、この拒否は world を待ちません。
 `nuka check` は、同じ `--env` フラグの `nuka run` が起動する各 world のそれぞれの欠けについて、error `program-placeholder-unfilled` を報告します。
 その world とは、`--env` があるときは `--env` が名指す各 environment、無いときは `--env` の無い run が選ぶ environment(`conditions` を宣言する各 environment、どれも宣言しないときは default の world)です。
@@ -2293,6 +2295,11 @@ world がどのプレースホルダーを持つかはレシピだけで決ま�
 `nuka run` と `nuka do` は、起動する world について、どの `build`、`prepare`、version の probe よりも前に、同じコードで拒否します。
 そのため、あとの world と共有する `build` も実行されません。
 波括弧で囲まれたそれ以外のテキストは書いたまま残るので、コマンドの中の JSON の値や shell の波括弧はエスケープ不要です。
+
+`{condition.<name>}` は、environment が宣言するスイッチをプログラムが読む手段です。
+そのため、プログラムが動くスイッチと、セルがどちら側として数えられるかは 1 つの値になります。
+`env: { BANNER: "{condition.banner}" }` は、`banner: false` を宣言する environment ではプログラムに `false` を渡します。
+`build` はどの world よりも前に実行するので、condition を持ちません。
 
 `{token}` は、プログラムと step が共有し、ほかの誰にも読ませない値のためのものです。
 用意した管理者のパスワードや署名の鍵がその例です。
@@ -2425,6 +2432,7 @@ staging のサーバ、pull request ごとのプレビュー、機能を有効�
   scenario の `@with:` と `@without:` の tag はこれに照らして読まれ、どの run が scenario を証明するかを決めます(「断定」を参照)。
   プログラムには何も設定しません。
   それをするのは environment の `env` と env file です。
+  `{condition.<name>}`(「プレースホルダー」を参照)は condition の値をそこへ渡すので、プログラムと宣言は食い違いません。
 
 はじめの 3 つの規則は「Environment、secret」にあります。
 environment が書いたフィールドはトップレベルのものを置き換えます。
@@ -3054,7 +3062,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
         "name": "greets by name",
         "change": null,
         "conditions": [],
-        "cells": [{ "world": "head", "environment": "default", "role": "required", "outcome": "fail", "line": 6, "runs": 1 }],
+        "cells": [{ "world": "head", "environment": "default", "role": "required", "conditions": {}, "outcome": "fail", "line": 6, "runs": 1 }],
         "verdict": "failed",
         "reason": "a claim broke at line 6 in default"
       }
@@ -3124,7 +3132,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   このリリースは run を他の tree と比べないからです。
   `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並びます。
   行は `feature`、`line`、`name`、`change`(`null`)、持っている condition の tag と `@held` を並べた `conditions`、列ごとに 1 つのセル、`verdict`(`held`、`proven`、`failed`)、1 文の `reason` を持ちます。
-  セルは `world`、`environment`、`role`、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、そして `not-run` のときは `reason` を持ちます。
+  セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、そして `not-run` のときは `reason` を持ちます。
   run サマリが描く表はこれです。
 - `counts` は、必須のセルの実行を数える `scenarios`、`passed`、`failed` と、証明の実行を含めて対照の実行を数える `controls` と、`not-run` のセルを数える `not_run` を持ちます。
 - BeforeAll や AfterAll の失敗は、その environment を名指す `hook-failed` の所見になり、その `do` は同じ対象をその environment で走らせます。
@@ -3229,6 +3237,14 @@ Scenario: the sale banner is shown
 
 `banner-on`(`conditions: { banner: true }`)と `banner-off`(`{ banner: false }`)の run では、`banner-on` のセルが必須で、`banner-off` のセルが対照です。
 
+`conditions` は nukadoko がそのまま信じる宣言です。
+どのセルを数えるかを決めますが、nukadoko はそれをプログラムと照らし合わせません。
+プログラムと合わない宣言は、必須であるべきところでセルを対照にし、対照であるべきところで必須にし、行の断定はそこから読まれます。
+program ファイルは、プログラムの設定を condition から導くことで 2 つを同じに保ちます。
+`env: { BANNER: "{condition.banner}" }` のように書けば(「プレースホルダー」を参照)、直す値は 1 つです。
+`run.json` の表の各セルは、その役割のもとになった condition を名指し、サマリの列見出しはその environment の condition を示します。
+そのため読み手は、各列が何であると宣言されていたかを見られます。
+
 `--env` の無い run は、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に選び、1 つも宣言していなければ `default` を選びます。
 配備先のように condition を宣言しない environment は、`--env` が名指したときに走ります。
 `nuka check` は、run が選ぶ environment(`nuka check --env` が名指すもの、または `--env` の無い run が選ぶもの)に照らして tag を読み、3 つのエラーを報告します:
@@ -3280,7 +3296,7 @@ Then の行で失敗した対照のセルは、同じ pass の同じ world で�
 stderr の件数の行は必須のセルの実行を数え、対照のある run は、その後ろに `criteria: <held> held, <proven> proven, <failed> failed` の行を加えます。
 
 表は `run.json` の `table` で、run サマリはそれで始まります。
-受け入れ基準ごとに 1 行、world と environment ごとに 1 列で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
+受け入れ基準ごとに 1 行、world と environment ごとに 1 列(見出しにはその environment が宣言する condition が続きます)で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
 Allure の result と messages ストリームは、各実行の行の断定とセルの役割を持ちます(「Allure results」と「Messages stream」を参照)。
 
 ### 単体 step(agent の経路)

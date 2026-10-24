@@ -322,6 +322,12 @@ just until 0.1.
   `condition-unmet` (a scenario no selected environment meets), and
   `nuka check --env` reads the tags against the environments it names, as
   `nuka run --env` does. `@held` is read and kept, and changes nothing yet.
+  `conditions` are declarations nukadoko trusts and does not check
+  against the program, so the placeholder `{condition.<name>}` hands the
+  program its environment's value as text (`env: { BANNER:
+  "{condition.banner}" }`), and the switch and the declaration cannot
+  disagree. Each table cell names the conditions its role came from, and
+  the summary's column heading shows each environment's.
   Each Allure result carries the row's `verdict` and the cell's `role` as
   `excluded` parameters, and each messages test case a `verdict.json`
   attachment (`application/vnd.nukadoko.verdict+json`), since a control
@@ -333,8 +339,8 @@ just until 0.1.
   `build` (commands run once per run in the tree's root), `prepare`
   (once per world, with the world's env), `serve` (`command`, `port`,
   `ready`, `timeout_ms`) or `url`, `env` with the placeholders
-  `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, and `{token}`,
-  `setup(world)`, and `environments`. A command is an argv array or a
+  `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, `{token}`, and
+  `{condition.<name>}`, `setup(world)`, and `environments`. A command is an argv array or a
   string split on whitespace, never a shell. Every phase has a limit:
   600 s for each `build` or `prepare` command, and 60 s for `setup`
   and a `url` function, each changed with `timeout_ms` (`{ command,

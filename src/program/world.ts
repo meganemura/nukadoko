@@ -354,6 +354,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           token,
           ...(port === undefined ? {} : { port: String(port) }),
           ...(url === undefined ? {} : { url }),
+          conditions: recipe.conditions,
         };
         const worldEnv: Record<string, string> = {};
         for (const [key, value] of Object.entries(recipe.env)) worldEnv[key] = filledText(value, values, `env.${key}`);
