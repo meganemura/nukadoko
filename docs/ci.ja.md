@@ -49,6 +49,7 @@ jobs:
 
 これは 1 つのファイル、`.github/workflows/nukadoko.yml` です。
 すべての push と pull request で `nuka check` を実行し(数秒、ブラウザ不要)、それが通ったら `nuka run` を実行します(実際に実行するゲート)。
+pull request では、pull request の基点に対して `nuka run --base` を実行するので、run は変更が各受け入れ基準に何をしたかを断定します。
 対象を指定しない `nuka check` は、壊れているものではなく腐りつつあるものについての注記も出力します。
 注記は、`--fail-on` がその code を名指さない限り job を失敗させません。
 2 つのコマンドを 2 つの job に分けているので、check が失敗すればブラウザをインストールする前に止まります。
@@ -111,8 +112,27 @@ jobs:
       # Merge/deploy gate: executes, writes step records. Its Markdown
       # run summary appears on this job's summary page by itself, since
       # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
-      - run: npx nuka run features/
+      - if: github.event_name != 'pull_request'
+        run: npx nuka run features/
+      # On a pull request, compare with its base (docs/spec.md
+      # "Verdicts"). The checkout is shallow, so fetch the base's one
+      # commit first. The branch name goes through env, never straight
+      # into the script.
+      - if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          npx nuka run features/ --base "origin/$BASE_REF"
 ```
+
+`pull_request` イベントでは、checkout はブランチと基点のブランチの先端から GitHub が作った merge コミットです。
+そのため `origin/<base branch>` と比べると、pull request が変えたものをちょうど比べます。
+新しいか変わった受け入れ基準は基点のコードに対しても走り、run はそれを基点自身の `nukadoko.program.ts` から、run ディレクトリの下の tree で build します。
+変わっていない受け入れ基準は、step が変わったとき基点の step のもとで走ります。
+そのため job には基点の build に要るものが必要で、基点はこの checkout の `node_modules` からパッケージを解決します。
+base や old の world を要する行だけがそこで走るので、増える時間は 1 回の build と変わった scenario、そして step ファイルが変わったときは変わっていないすべての scenario です。
+fetch が無ければ、`nuka run` は `base-shallow` で拒否し、同じ `git fetch` を `do:` の行に出します。
 
 ## 上の workflow が action を固定し、インストールスクリプトを止め、権限を絞る理由
 
@@ -184,29 +204,13 @@ jobs:
   ジョブのサマリページにはすでに表示されますが、レビュアーが読むのは pull request です。
   差分の中の feature と、その横のサマリを読みます。
   サマリは、その commit で何が走ったかの証跡です。
-  `nuka run --since <base commit>` を走らせると、承認された基点から受け入れ基準の何が動いたかも、その比較が届く範囲で加わります(何を比べるかは docs/spec.ja.md の「実行」が述べます)。
-  基点は checkout の中になければならず、名指すコミットは、基点のブランチがその後どこまで進んだかではなく、ブランチが分かれたところです。
-
-  ```yaml
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # the base branch and the history merge-base needs
-      # ...
-      - run: npx nuka run --since "$(git merge-base HEAD origin/${{ github.base_ref }})"
-  ```
-
-  `git merge-base` はブランチが分かれたコミットを名指すので、その後に基点のブランチへ入った変更を、この pull request が戻したものとして報告しません。
-  `pull_request` イベントでは、checkout はブランチと基点のブランチの先端から GitHub が作った merge コミットで、その merge base は先端そのものなので、同じ行がそこでも正しく働きます。
-  浅い checkout(既定の `fetch-depth: 1`)には `merge-base` が使う履歴がありません。
-  `git fetch origin <base branch>` だけのときは `origin/<base branch>` を直に名指します。
-  これは merge コミットのときだけ正しく働きます。
+  上の `--base` の run からは、pull request の基点に対して各受け入れ基準がどうなったかも分かります。
   承認をどこに記録するか(pull request のレビューなど)はチームのプロセスで、nukadoko が記録するのは証跡であり承認ではありません(docs/spec.ja.md の「レビュー」を参照)。
   `nuka report --format markdown --out <path>` は最新の run の同じ Markdown をファイルに書き、もう 1 つの step がそれを投稿します。
 
   ```yaml
   # in the `run` job, which then needs `pull-requests: write` beside
-  # `contents: read`
-  - run: npx nuka run features/
+  # `contents: read`, after its `nuka run` steps
   - run: npx nuka report --format markdown --out nukadoko-summary.md
     if: always()
   - name: Comment the run summary on the pull request

@@ -3,7 +3,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
 import { readCriterionTags, roleIn } from "../src/condition/condition.js";
-import type { RunCellOutcome, RunTableCell } from "../src/record/run-result.js";
+import { RED_VERDICTS, type RunCellOutcome, type RunRowVerdict, type RunTableCell } from "../src/record/run-result.js";
 import {
   buildTable,
   executionOutcome,
@@ -12,9 +12,11 @@ import {
   judgeRow,
   leftOutText,
   needsProofRun,
+  plannedWorldCells,
   rolesOf,
   rowsWithoutRequiredCell,
   type ExecutionOutcome,
+  type RowContext,
 } from "../src/run/verdict-table.js";
 
 // Responsibility: the verdict table's pure parts (src/run/verdict-table.ts).
@@ -22,7 +24,10 @@ import {
 // turns a row red, a control proves only after `--proof-runs` agreeing
 // failures (the same claim broken at one Then line, whatever value each
 // run saw), and a cell folds its executions so that runs that disagree are
-// flaky. The exact run.json and summary shapes a real run
+// flaky. Under `--base`, a base or an old cell joins the row: moved comes
+// only from an unchanged row, unproven only from a new or changed one, and
+// the cells a row plans in each world follow its change. The exact run.json
+// and summary shapes a real run
 // writes are in tests/run-verdict-table.test.ts.
 
 const line = gs.integers({ minValue: 3, maxValue: 6 });
@@ -277,6 +282,7 @@ describe("buildTable", () => {
     expect(table).toEqual({
       base: null,
       mapping_changed: null,
+      mapping_changes: null,
       worlds: [
         { world: "head", environment: "flag-off" },
         { world: "head", environment: "flag-on" },
@@ -436,5 +442,146 @@ describe("buildTable", () => {
     });
     expect(table.rows[0]!.cells.map((entry) => entry.reason)).toEqual(["a BeforeAll hook failed", "no execution of it was recorded"]);
     expect(table.rows[0]!.reason).toBe("did not run in one: a BeforeAll hook failed");
+  });
+});
+
+describe("judgeRow under --base", () => {
+  // A base or an old cell stands in a required head cell's environment,
+  // so it carries the required role.
+  const worldCell = (world: "base" | "old") =>
+    gs.tuples(cellOutcome, line, gs.integers({ minValue: 1, maxValue: 4 }), gs.integers({ minValue: 0, maxValue: 3 })).map(
+      ([cellResult, at, runs, index]): RunTableCell => ({
+        world,
+        environment: `env-${index}`,
+        role: "required",
+        conditions: {},
+        outcome: cellResult,
+        ...(cellResult === "pass" || cellResult === "not-run" ? {} : { line: at }),
+        runs: cellResult === "not-run" ? 0 : runs,
+      }),
+    );
+  const context = gs
+    .tuples(gs.sampledFrom(["unchanged", "changed", "new"] as const), gs.booleans(), gs.booleans())
+    .map(([change, held, mappingChanged]): RowContext => ({ change, held, mappingChanged }));
+  const row = gs
+    .tuples(cells, gs.arrays(worldCell("base"), { maxSize: 3 }), gs.arrays(worldCell("old"), { maxSize: 3 }))
+    .map(([head, base, old]) => [...head, ...base, ...old]);
+  const proof = (cell: RunTableCell, runs: number): boolean => cell.outcome === "fail" && cell.runs >= runs;
+
+  // Each word, as docs/spec.md "Verdicts" states its pattern.
+  function expectedWord(all: readonly RunTableCell[], runs: number, given: RowContext): RunRowVerdict {
+    const head = all.filter((cell) => cell.world === "head");
+    const required = head.filter((cell) => cell.role === "required");
+    if (required.length === 0 || required.some((cell) => cell.outcome !== "pass")) return "failed";
+    if (given.change === "unchanged") {
+      if (!given.mappingChanged) return "held";
+      const old = all.filter((cell) => cell.world === "old");
+      return old.length > 0 && old.every((cell) => cell.outcome === "pass") ? "held" : "moved";
+    }
+    const base = all.filter((cell) => cell.world === "base");
+    if (base.some((cell) => proof(cell, runs))) return "proven";
+    if (head.some((cell) => cell.role === "control" && proof(cell, runs))) return "proven";
+    if (given.held && base.length > 0 && base.every((cell) => cell.outcome === "pass")) return "held";
+    return "unproven";
+  }
+
+  it("gives each word from exactly its pattern of worlds and cells", () =>
+    hegel.test((tc) => {
+      const all = tc.draw(row);
+      const runs = tc.draw(proofRuns);
+      const given = tc.draw(context);
+      expect(judgeRow(all, runs, given).verdict).toBe(expectedWord(all, runs, given));
+    }));
+
+  it("never turns a row red for a control: a row red with its controls is red with them gone", () =>
+    hegel.test((tc) => {
+      const all = tc.draw(row);
+      const runs = tc.draw(proofRuns);
+      const given = tc.draw(context);
+      const withoutControls = all.filter((cell) => !(cell.world === "head" && cell.role === "control"));
+      if (RED_VERDICTS.has(judgeRow(all, runs, given).verdict)) expect(RED_VERDICTS.has(judgeRow(withoutControls, runs, given).verdict)).toBe(true);
+    }));
+
+  it("says moved only for an unchanged row, unproven only for a new or changed one, and removed never for a row head holds", () =>
+    hegel.test((tc) => {
+      const all = tc.draw(row);
+      const given = tc.draw(context);
+      const { verdict } = judgeRow(all, tc.draw(proofRuns), given);
+      if (verdict === "moved") expect(given.change).toBe("unchanged");
+      if (verdict === "unproven") expect(given.change).not.toBe("unchanged");
+      expect(verdict).not.toBe("removed");
+    }));
+
+  it("gives a run without --base only held, proven, or failed", () =>
+    hegel.test((tc) => {
+      expect(["held", "proven", "failed"]).toContain(judgeRow(tc.draw(row), tc.draw(proofRuns)).verdict);
+    }));
+
+  it("plans a base cell only for a new or changed row and an old cell only for an unchanged one under a changed mapping, each where head passed", () =>
+    hegel.test((tc) => {
+      const head = tc.draw(cells);
+      const runs = tc.draw(proofRuns);
+      const given = tc.draw(context);
+      const planned = plannedWorldCells(head, runs, given);
+      const required = head.filter((cell) => cell.role === "required");
+      const green = required.length > 0 && required.every((cell) => cell.outcome === "pass");
+      const passedIn = required.map((cell) => cell.environment);
+      const controlProves = head.some((cell) => cell.role === "control" && proof(cell, runs));
+      expect(planned.old).toEqual(green && given.change === "unchanged" && given.mappingChanged ? passedIn : []);
+      expect(planned.base).toEqual(green && given.change !== "unchanged" && (given.held || !controlProves) ? passedIn : []);
+      expect(plannedWorldCells(head, runs, undefined)).toEqual({ base: [], old: [] });
+    }));
+
+  it("runs a base cell again for proof as it runs a head control, and never an old cell", () =>
+    hegel.test((tc) => {
+      const runs = tc.draw(proofRuns);
+      const outcomes = tc.draw(gs.arrays(outcome, { maxSize: 4 }));
+      expect(needsProofRun("required", outcomes, runs, "base")).toBe(needsProofRun("control", outcomes, runs, "head"));
+      expect(needsProofRun("required", outcomes, runs, "old")).toBe(false);
+    }));
+
+  it("says why in one sentence for each word", () => {
+    const head: RunTableCell = { world: "head", environment: "default", role: "required", conditions: {}, outcome: "pass", runs: 1 };
+    const at = (world: "base" | "old", outcomeOf: RunCellOutcome, extra: Partial<RunTableCell> = {}): RunTableCell => ({ world, environment: "default", role: "required", conditions: {}, outcome: outcomeOf, runs: 1, ...extra });
+    expect(judgeRow([head], 2, { change: "unchanged", held: false, mappingChanged: false })).toEqual({
+      verdict: "held",
+      reason: "passes in default, and neither it nor the mapping changed since the base",
+    });
+    expect(judgeRow([head, at("old", "pass")], 2, { change: "unchanged", held: false, mappingChanged: true })).toEqual({
+      verdict: "held",
+      reason: "passes in default, and in the old world, where the base's mapping runs head's code",
+    });
+    expect(judgeRow([head, at("old", "broke", { line: 4 })], 2, { change: "unchanged", held: false, mappingChanged: true })).toEqual({
+      verdict: "moved",
+      reason: "passes in default, but the mapping changed since the base, and it stopped at line 4 of the base's feature file in the old world in default before a claim there was judged",
+    });
+    expect(judgeRow([head, at("old", "not-run", { runs: 0, reason: "its step files did not load" })], 2, { change: "unchanged", held: false, mappingChanged: true })).toEqual({
+      verdict: "moved",
+      reason: "passes in default, but the mapping changed since the base, and it did not run in the old world in default: its step files did not load",
+    });
+    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 2 })], 2, { change: "changed", held: false, mappingChanged: false })).toEqual({
+      verdict: "proven",
+      reason: "passes in default, and a claim broke at line 9 at the base in default in each of 2 runs",
+    });
+    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 2 })], 2, { change: "new", held: true, mappingChanged: false })).toEqual({
+      verdict: "proven",
+      reason: "passes in default, and a claim broke at line 9 at the base in default in each of 2 runs, so the base does not have this behaviour and @held is not needed",
+    });
+    expect(judgeRow([head, at("base", "pass")], 2, { change: "new", held: true, mappingChanged: false })).toEqual({
+      verdict: "held",
+      reason: "passes in default and at the base, as @held says",
+    });
+    expect(judgeRow([head, at("base", "broke", { line: 7 })], 2, { change: "new", held: true, mappingChanged: false })).toEqual({
+      verdict: "unproven",
+      reason: "passes in default, and @held says the base has this behaviour, but it stopped at line 7 at the base in default before a claim there was judged",
+    });
+    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 1 })], 2, { change: "new", held: false, mappingChanged: false })).toEqual({
+      verdict: "unproven",
+      reason: "passes in default, and nothing shows a Then failing where its behaviour is absent (base default: fail@9)",
+    });
+    expect(judgeRow([head], 2, { change: "new", held: false, mappingChanged: false })).toEqual({
+      verdict: "unproven",
+      reason: "passes in default, and no world where its behaviour is absent ran it, so nothing shows a Then failing without the change",
+    });
   });
 });

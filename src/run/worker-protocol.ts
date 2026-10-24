@@ -15,9 +15,10 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 //   { "kind": "scenario-started", "feature": string, "line": number, "name": string }
 //   { "kind": "scenario", "record": ScenarioRecord, "stepLines": string[], "notes": string[] }
 //   { "kind": "note", "text": string }
+//   { "kind": "not-run", "reason": string }
 //
 // Argv contract (never yargs — this is not a CLI command):
-//   <rootDir> <runId> <env|""> <featureListPath> <repeat> <worldPath|"">
+//   <rootDir> <runId> <env|""> <featureListPath> <repeat> <worldPath|""> <treePath|"">
 // `featureListPath` names a temp file, one repo-relative `.feature` path per
 // line, in the exact order this worker should run them. `repeat` is how
 // many times the worker runs that whole list (`nuka run --repeat`), a
@@ -25,7 +26,9 @@ import type { ScenarioRecord } from "../record/scenario-record.js";
 // `worldPath` names a temp file holding the world the parent started for
 // this pass (src/program/world-view.ts), or is empty when the tree has no
 // program file. The parent owns the program: every worker of a pass sends
-// its requests to the one server the parent started.
+// its requests to the one server the parent started. `treePath` names a
+// temp file holding a `WorkerTree` when the worker runs a pass in a tree
+// of `nuka run --base` (src/run/tree-pass.ts), or is empty.
 //
 // Framing choice, decided once here rather than reargued at each call site:
 // both a finished scenario's own record *and* its progress text ride the
@@ -96,7 +99,32 @@ export interface WorkerBeforeAllFailedEnvelope {
   readonly kind: "before-all-failed";
 }
 
-export type WorkerEnvelope = WorkerScenarioStartedEnvelope | WorkerScenarioEnvelope | WorkerNoteEnvelope | WorkerBeforeAllFailedEnvelope;
+/** Sent instead of any scenario by a worker in a tree whose config,
+ * program file, or step files do not load or check: nothing of the pass
+ * ran, and `reason` says why, for every cell the pass was to fill. */
+export interface WorkerNotRunEnvelope {
+  readonly kind: "not-run";
+  readonly reason: string;
+}
+
+export type WorkerEnvelope =
+  | WorkerScenarioStartedEnvelope
+  | WorkerScenarioEnvelope
+  | WorkerNoteEnvelope
+  | WorkerBeforeAllFailedEnvelope
+  | WorkerNotRunEnvelope;
+
+/** What a worker in a tree of `nuka run --base` needs beyond its tree's
+ * root: head's root and state directory, where the run's records go and
+ * where the env files are read (they are the environment's, untracked,
+ * and no tree holds them), and whether `nuka check` runs over the
+ * tree's selection first. */
+export interface WorkerTree {
+  readonly world: "base" | "old";
+  readonly headRoot: string;
+  readonly headStateDir: string;
+  readonly check: boolean;
+}
 
 export function serializeWorkerEnvelope(envelope: WorkerEnvelope): string {
   return `${JSON.stringify(envelope)}\n`;
@@ -118,7 +146,7 @@ export function parseWorkerEnvelope(line: string): WorkerEnvelope | undefined {
     return undefined;
   }
   const kind = (parsed as { kind?: unknown }).kind;
-  if (kind === "scenario-started" || kind === "scenario" || kind === "note" || kind === "before-all-failed") {
+  if (kind === "scenario-started" || kind === "scenario" || kind === "note" || kind === "before-all-failed" || kind === "not-run") {
     return parsed as WorkerEnvelope;
   }
   return undefined;

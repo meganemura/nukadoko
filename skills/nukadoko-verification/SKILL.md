@@ -153,19 +153,21 @@ has run.
    scenario does not say what the report says, or the report is about
    something else: ask. Do not edit the Then until it goes red.
 4. Fix, run again, and open the pull request with
-   `nuka run --since <base>`: its summary quotes the new criterion beside
-   the green run.
+   `nuka run --base <base>`: the new criterion runs against the base's
+   code too, and its row is `proven` when its Then fails there in each of
+   `--proof-runs` runs.
 5. Link the scenario from the map's sub-feature.
 
-Showing red before and green after takes two checkouts: put the commit
-before the fix and the fix commit in separate worktrees and run the same
-scenario against each. When the scenario lives outside the product's
-repository, the run's `commit` is the scenario project's, not the
-product's; bind the evidence to the product by returning the product's
-`git rev-parse HEAD` from the environment's `version` probe, which the
-summary shows as the target version. `--since` compares criteria only when
-the feature file lives in the product's repository; outside it, every
-scenario reads `new`.
+When the scenario and the program file live in the product's repository,
+`nuka run --base <the commit before the fix>` shows red before and green
+after in one run: the base world builds the base's code from its program
+file. When the scenario lives outside the product's repository, `--base`
+compares the scenario project's commits, not the product's, so showing
+both takes two checkouts: put the commit before the fix and the fix commit
+in separate worktrees and run the same scenario against each. The run's
+`commit` is then the scenario project's; bind the evidence to the product
+by returning the product's `git rev-parse HEAD` from the environment's
+`version` probe, which the summary shows as the target version.
 
 When the fix sits behind a switch the program reads (a flag, a setting),
 one run shows both sides instead: declare the switch in `conditions` on
@@ -195,8 +197,9 @@ says (`skills/nukadoko/references/verdicts.md`).
   editing anything, and never edit a Then to match the product. A `held`
   row whose control passed is a scenario that no longer tells its switch
   apart.
-- `nuka run --since <ref>`: which criteria changed since the map was last
-  checked.
+- `nuka run --base <ref>`: which criteria changed since the map was last
+  checked, and, when the steps changed, whether an unchanged one still
+  means what it meant (a `moved` row says it does not).
 
 What remains for a pass that drives the app by hand is the sub-features
 marked `no scenario`, and features missing from the map.

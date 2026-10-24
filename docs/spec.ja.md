@@ -2118,11 +2118,11 @@ export default defineProgram({
 });
 ```
 
-2 つのファイルを分けるのは、run が commit をまたいで criteria を比べるからです(`--since`、サマリの変わった criteria)。
+2 つのファイルを分けるのは、run が commit をまたいで受け入れ基準を比べるからです(`nuka run --base`、「断定」を参照)。
 手順が config にあると、プログラムの build の仕方を変えただけで、すべての criterion が変わったことになりました。
 また、古い tree の config を読んだ run は、手順をまったく見つけられませんでした。
 nukadoko はプログラムのファイルを、build する tree から読みます。
-このリリースでは、run を始めた tree です。
+run を始めた tree と、`--base` のもとでは base の tree もそうで、base の tree は基点のコードを基点のプログラムのファイルで build します。
 
 プログラムのファイルが無い tree には、起動するプログラムがありません。
 run は world を起動せず、`run.json` は `worlds: []` を持ち、各 step record の `world_name` は `null` です。
@@ -2332,7 +2332,8 @@ step が world の `env` を読むのは、ファイルの読み込み時では�
 ### World
 
 world は、1 つのプログラムに対する run の 1 回の pass です。
-このリリースでは、run は選んだ environment ごとに 1 つの world を、run を始めた tree から起動します。
+run は選んだ environment ごとに 1 つの world を、run を始めた tree から起動します。
+`--base` のもとでは、base の tree か old の tree に走らせるセルがある environment ごとに、もう 1 つの world を起動します(「断定」を参照)。
 pass のすべての scenario は同じプログラムに届くので、ある scenario が書いた状態は、そのあとの scenario にも残ります。
 状態を読む scenario は、まずその状態を自分で作り、自分が作ったものだけを claim で確かめます。
 
@@ -2398,7 +2399,8 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
 ]
 ```
 
-- `tree` はプログラムを build した tree で、run を始めた tree を表す `head` です。
+- `tree` はプログラムを build した tree で、run を始めた tree を表す `head`、または `--base` のもとでは `base` か `old` です(「断定」を参照)。
+  基点にプログラムのファイルが無く、head のものから build して起動した base の world は `program_from_head: true` を持ちます。
 - `commands` は world が実行したものを、プレースホルダーを埋め、redact して並べます。
   `build` は、それを実行した最初の world に現れます。
 - `timings` は、実行した段階ごとにキーを持ちます。
@@ -2470,13 +2472,21 @@ export default defineProgram({
 
 `url` は、nukadoko が動かさない場所で動いているプログラムを名指します。
 配備されたサーバや、pull request ごとのプレビューです。
-関数は、何かに届く前に world の `{ name, root, dir, signal }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照):
+関数は、何かに届く前に world の `{ name, root, dir, signal, tree }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照):
 
 ```ts
 environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
 },
 ```
+
+`tree` は、基点のコードを走らせる `nuka run --base` の base の world では `"base"` で、それ以外のどの world でも `"head"` です。
+基点がどこに配備されているかを知っている関数は、base の world にその URL を返します。
+知らない関数は何も返しません(`undefined`、`null`、`""`)。
+そのとき base の world は何も起動せず、そのセルは届く URL が無いと述べます。
+固定の `url` は head のコードが動いている場所なので、base の world はそこへ届きません。
+そのセルも同じことを述べ、何も build しません。
+head では、何も返さない関数は world を `program-start-failed` で失敗させます。
 
 `url` は、ユーザーもパスワードも含まない `http:` か `https:` の URL です。
 文字列で書いたそれ以外のものは、ファイルを読んだ時点で `config-invalid` で拒否されます。
@@ -2705,7 +2715,7 @@ export default defineProgram({
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--since <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -2828,33 +2838,10 @@ step record には、各 step 自身の `mutates` の宣言が載っています
 節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
 scenario の status も終了コードも変えません。
 
-`--since <git ref>` は、人が承認した基点(pull request の向かう先のブランチなど)から、受け入れ基準の何が動いたかを、以下の比較が届く範囲で述べます。
-何かを実行する前に、run が対象にした feature ファイルを、ref が名指すコミットと比べます。
-対象がディレクトリなら、コミットがその下に持つすべての `.feature` ファイルも比べるので、ref の後で消したファイルの受け入れ基準は removed になります。
-対象がファイルなら、そのファイルだけを比べ、`since.compared` が対象を名指します。
-scenario の受け入れ基準は、その scenario がどう走るかを決めるもので、ファイルではなくコンパイルした scenario から読みます。
-それは、scenario が持つすべての tag(Feature、Rule、Scenario、Examples の tag で、hook、直列の実行、選択を決めます)、その feature と Rule のすべての Background の step、scenario 自身の step です。
-step は、実効の keyword(`And` と `But` は続けている keyword を取ります)、本文、docstring の中身と media type、data table のセルで比べ、Scenario Outline の行については Examples の見出しとその行も比べます。
-インデント、空行、コメント、docstring の区切り、他の scenario の順番は、変わっても変更とは数えません。
-比べるのはこの構造なので、`|` を含む表のセルが 2 つのセルと取り違えられることはありません。
-ref の側の scenario は、Rule と名前で見つけます。
-Examples の行は、見出しと値で見つけます。
-名前が ref か今のどちらかで重なるときは、その名前の scenario をまず中身で対応づけます。
-その中の 1 つだけを書き換えたなら、それは `changed` です。
-中身で 1 対 1 に対応づけられないときは、対応しない各 scenario を位置で対応づけず、`reason` を添えて `ambiguous` にします。
-各 scenario の `run.json` のエントリは `criteria.changed_since` を持ちます。
-値は `unchanged`、`changed`、`new`(名前を変えた scenario、値が変わった行、ref にないファイル)、`ambiguous`、`unknown`(ref でファイルが parse できないもので、`reason` を持ちます)のどれかです。
-unchanged ではない scenario は現在の `lines` を持ち、どの scenario も `step_files` を持ちます。
-`step_files` は、その行が束ねた step を登録するファイル、その step が宣言する part のファイル、そしてその step が config の定義する fixture を必要とするときの config ファイルです。
-それらのファイルが import するものは比べません。
-`since` は、ref、そのコミット、比べた対象の `compared`、消えた受け入れ基準の `removed`(各々の feature、Rule、scenario、ref での `lines`)、各 step ファイルの `change` を名指し、最初の scenario が走る前に読みます。
-`change` は、`git diff` がファイルをコミットと比べた結果の `unchanged` か `changed` で(そのため改行コードとフィルタが効きます)、コミットがそのファイルを持たなければ `untracked` です。
-サマリの「Criteria since」の節は、それぞれの数を数え、何を比べたかを述べ、unchanged ではない各 scenario と消えた各受け入れ基準を引用し、変わった各 step ファイルの下に、それを名指すすべての scenario を unchanged のものも含めて並べます。
-そのため変更を承認する人はその行を読み、変わらなかった行の下でどの step ファイルが動いたかを見られます。
-これは報告するだけです。
-変更を失敗に変えるフラグはなく、終了コードは run のものです。
-コミットを名指さない ref は `since-ref-unknown` で、git の外のプロジェクトは `since-outside-git` で、それ以外の git の失敗(git がない、またはコミットがファイルを持たないこと以外の理由で失敗したコマンド)は `since-git-failed` で、何かを実行する前に拒否されます。
-フラグがないとき、すべての scenario は `criteria: { changed_since: null }` を持ち、`since` は `null` です。
+`--base <git ref>` は、pull request の向かう先など、ref が名指すコミットと run を比べます。
+新しいか変わった受け入れ基準は基点のコードに対しても走り、そこで Then が失敗しなければ証明されません。
+対応づけが変わったときは、変わっていない受け入れ基準も基点の受け入れ基準と対応づけのもとで走り、そこで通らなければなりません。
+world、それが走る tree、それが導く断定は「断定」にあります。
 
 `--env` は繰り返せます。
 `nuka run --env a --env b` は、1 つの `run_id`、1 つの `run.json`、1 つのサマリ、1 つの終了コードを持つ 1 回の run で、選ばれたすべての scenario を各 environment で 1 回ずつ実行します。
@@ -3061,6 +3048,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   "table": {
     "base": null,
     "mapping_changed": null,
+    "mapping_changes": null,
     "worlds": [{ "world": "head", "environment": "default" }],
     "rows": [
       {
@@ -3098,6 +3086,10 @@ run が終わったとき、最後の step record と run サマリの後に、�
 - `selection` は、`:line` の対象がそのファイルの scenario を 1 つでも外したとき `partial` で、それ以外は `full` です。
   部分実行はデバッグの結果であり、レビュアーが feature が通ったと読むべきものではありません(「レビュー」を参照)。
 - `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` と、そのセルの役割である `role`(`required` か `control` で、「断定」を参照)を持ちます。
+  `--base` のもとでは、base か old の world の実行は `world`(`base` か `old`)と、それがセルである head の行の `feature` と `line` を持つ `row` を持ちます。
+  old の実行自身の `feature` と `line` は基点のもので、その step は `step` を名指しません。
+  head の語彙がそれを結び付けたのではないからです。
+  `counts`、Allure の result、messages ストリーム、表を除くサマリのどの節も、head の実行だけを読みます。
   各 step は、feature ファイルでの `line`、`text`、一致した `step`(一致がないか複数あれば `null`)、`status` を持ちます。
   始まった step は、`step_record_id`(`nuka do --use` が受け取る値)と、step record のディレクトリである `record` を持ち、その `mutates` の宣言と `observed` の計測も持ちます。
   step record を読み戻せなかった step は、その代わりに `record_unreadable: true` を持ち、`step-record-unreadable` の警告がそのファイルを名指します。
@@ -3127,29 +3119,28 @@ run が終わったとき、最後の step record と run サマリの後に、�
   その失敗は、表が証明として読むものだからです。
   自分の evidence(最終スクリーンショット、hook の trace や添付)を書いた scenario は、run の `scenarios/` の下のそのディレクトリを `evidence` に持ちます。
   何も書かなかった scenario は `evidence` を持たず、その空のディレクトリは run の終わりに消されます。
-- すべての scenario は `criteria` を持ちます。
-  `changed_since` は、`--since` がなければ `null` です。
-  あれば `unchanged`、`changed`、`new`、`ambiguous`、`unknown` のどれかで、後の 2 つは `reason` を持ちます。
-  unchanged ではない scenario は現在の `lines` を、どれも名指す `step_files` を持ちます。
-  `since` は、フラグがなければ `null` です。
-  あれば `ref`、その `commit`、比べた対象の `compared`、消えた受け入れ基準の `removed`、各 step ファイルの `file` とその `change`(`unchanged`、`changed`、`untracked`)を持ちます。
 - `findings` は、run が出したすべての所見を持ちます。
   失敗した各 scenario と、各 note と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
 - `table` は断定の表です(「断定」を参照)。
-  `worlds` はその列 `{ world, environment }` を run の environment の順に並べます。
-  world は `head` で、`base` と `mapping_changed` は `null` です。
-  このリリースは run を他の tree と比べないからです。
-  `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並びます。
-  行は `feature`、`line`、`name`、`change`(`null`)、持っている condition の tag と `@held` を並べた `conditions`、列ごとに 1 つのセル、`verdict`(`held`、`proven`、`failed`)、1 文の `reason` を持ちます。
-  セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、`fail` のときはすべての実行が成り立たなかった `claim`(step の claim の中の位置で、0 から数えます)と、各実行で見た実際の値を実行の順に並べた `actuals`(`{ value }`、run.json が切り詰めた値には `{ json_start, json_bytes }`、値が無ければ `{ reason }`)、そして `not-run` のときと、証明の回が終わらなかったために `broke` になった対照のときは `reason` を持ちます。
+  `base` は `--base` が無ければ `null` で、あれば与えられたままの `ref` と、それが名指した `commit` です。
+  `mapping_changed` は `--base` が無ければ `null` で、あれば対応づけが変わったかどうかです。
+  `mapping_changes` は何が変わったかを述べます。
+  features ディレクトリの下の `files`(プロジェクトのルートからのパス)、config の対応づけの部分が変わったかどうかの `config`、`conditions` が変わった environment、`default_environments` が変わったかどうかです。
+  `worlds` はその列 `{ world, environment }` を並べます。
+  run の各 environment の `head` を run の順に、そのあとに、ある行がセルを持つ各 environment の `base` と `old` です。
+  `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並び、そのあとに消えた受け入れ基準ごとに 1 行が続きます。
+  行は `feature`、`line`、`name`、`change`(`--base` が無ければ `null`、あれば `unchanged`、`changed`、`new`、`removed`)、基点が別の同一性のもとで持つ変わっていない行の `renamed_from`(基点での `{ feature, name }`)、持っている condition の tag と `@held` を並べた `conditions`、走った world と environment ごとに 1 つのセル、`verdict`(`held`、`proven`、`removed`、`failed`、`unproven`、`moved`)、1 文の `reason` を持ちます。
+  消えた行はセルを持たず、その `line` は基点のもので、`lines` が基点での文を持ちます。
+  セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、head の environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、`fail` のときはすべての実行が成り立たなかった `claim`(step の claim の中の位置で、0 から数えます)と、各実行で見た実際の値を実行の順に並べた `actuals`(`{ value }`、run.json が切り詰めた値には `{ json_start, json_bytes }`、値が無ければ `{ reason }`)、そして `not-run` のときと、証明の回が終わらなかったために `broke` になった対照のときは `reason` を持ちます。
   `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
-  `proof_runs` は `--proof-runs` で、対照の `runs` はこれと比べて読みます。
+  `proof_runs` は `--proof-runs` で、対照と base のセルの `runs` はこれと比べて読みます。
   run サマリが描く表はこれです。
-- `counts` は、必須のセルの実行を数える `scenarios`、`passed`、`failed` と、`not-run` の必須のセルを数える `not_run` と、証明の実行を含めて対照の実行を数える `controls` と、`not-run` の対照のセルを数える `controls_not_run` を持ちます。
+- `counts` は、必須の head のセルの実行を数える `scenarios`、`passed`、`failed` と、`not-run` の必須の head のセルを数える `not_run` と、証明の実行を含めて head の対照の実行を数える `controls` と、`not-run` の head の対照のセルを数える `controls_not_run` を持ちます。
   対照はゲートするテストではなく証拠なので、別に数えます。
+  base と old の実行は、表が読むものです。
 - BeforeAll や AfterAll の失敗は、その environment を名指す `hook-failed` の所見になり、その `do` は同じ対象をその environment で走らせます。
 - `verdict` は終了コードの断定です。
-  どの scenario も持たない BeforeAll や AfterAll の失敗と、必須のセルを持たない行も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
+  どの scenario も持たない BeforeAll や AfterAll の失敗、必須のセルを持たない行、`unproven` か `moved` の行も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
 
 `run.json` の中のパス(step の `record`、`used` のエントリの `record`、scenario の `evidence.dir`)はすべて、`run.json` 自身を持つ run ディレクトリからの相対パスです。
 CI からアップロードした run ディレクトリを別の場所にダウンロードしても、同じように読めるからです。
@@ -3215,13 +3206,18 @@ feature のバックログが語彙の成長を駆動します。
 run は 1 つの表で終わります。
 行は 1 つの受け入れ基準で、1 つの scenario か、outline の Examples の 1 行です。
 列は 1 つの world と environment の組です。
-このリリースの world は run を始めた tree である `head` だけなので、列は run の environment 1 つに当たります。
+world の `head` は run を始めた tree で、どの run もそこに自分の environment ごとの列を持ちます。
+`nuka run --base <ref>` は world の `base` と `old` を加えます(下記)。
 行と列が交わるところがセルで、各行は 1 つの断定を持ち、終了コードはそれに従います。
 
 すべての environment で通る scenario は、コードが言うとおりに動くことを示します。
 しかし、そうでなかったときに scenario が気付くことは示しません。
-スイッチの後ろにある機能では、この問いに答えがあります。
+その答えが見える場所は 2 つあります。
+1 つはスイッチの後ろにある機能です。
 スイッチが切れているところで scenario を走らせ、そこで Then が失敗すれば、scenario が 2 つを見分けることが分かります。
+もう 1 つは変更の前のコードです。
+新しいか変わった scenario を基点のコードに対して走らせ、そこで Then が失敗すれば、同じことが分かります。
+
 そこで environment はプログラムのスイッチを `conditions` として宣言し(「テスト対象のプログラム」を参照)、scenario は必要とする condition を `Feature:`、`Rule:`、`Scenario:`、`Examples:` の行の tag で名指します。
 tag は Gherkin の tag と同じように積み重なります:
 
@@ -3238,7 +3234,9 @@ Gherkin はそこで tag を終えるからです。
 condition の tag を持たない行は、すべての environment で必須です。
 対照のセルはほかのセルと同じように走り、run を赤にすることはありません。
 そこでは condition が成り立たないので、そこで失敗する Then は scenario の証拠になり、そこで通る Then は何の証拠にもならないからです。
-`@held` は読まれて行の `conditions` に残りますが、どのセルもどの断定も変えません。
+`@held` は、基点がすでにその振る舞いを持つと述べます。
+すでに動いているコードのために書いた scenario のように、振る舞いの変わらない新しいか変わった受け入れ基準のためのものです。
+`@held` は行の `conditions` に残り、それを読むのは `--base` だけです。
 
 ```gherkin
 @with:banner
@@ -3276,6 +3274,65 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
   その選択はプログラムのファイルが決めたもので、tag が名指すすべての condition を覆うことが期待されるからです。
   `--env` のもとでは、そのような scenario は代わりに run から外れます。
 
+**受け入れ基準とその変化。**
+`nuka run --base <ref>` は、選んだ各受け入れ基準を、pull request の向かう先など、ref が名指すコミットと比べます。
+受け入れ基準の同一性は、その feature ファイルと名前です。
+その中身は、人が承認したものです。
+step の並び(Background の step が先で、各 step は実効の keyword、本文、docstring、表を持ち、`And` と `But` は続けている keyword を取ります)、Examples の行、そしてどこで成り立たなければならないかを決める condition の tag と `@held` です。
+ほかの tag、名前、ファイルの中の位置は中身に入りません。
+そのため、名前を変えた scenario、別のファイルへ移した scenario、`@smoke` を付けた scenario は、言っていたことをそのまま言っています。
+基点と比べて、受け入れ基準は次のどれかです:
+
+- `unchanged`: 同一性と中身が同じもの、または別の同一性のもとで中身が同じもの。
+  後者は行が `renamed_from` で名指します(同じファイルの中の一致が先です)。
+- `changed`: 同一性が同じで、中身が違うもの。
+- `new`: head にあり、そのどちらでもないもの。
+- `removed`: 基点にあり、もう head に無いもの。
+
+両側で中身の違う同じ名前が重なるときは、位置で対にせず、`new` と `removed` のままにします。
+基点の受け入れ基準は、run の対象にある基点の feature ファイルから読み、run が対象を名指さないときは基点の features ディレクトリ全体から読みます。
+parse できない基点の feature ファイルは `base-feature-unparsed` の警告になり、その中の head の受け入れ基準は `new` と数えます。
+
+**対応づけ。**
+対応づけは、文を実行されるものへ変えるものです。
+features ディレクトリの `.feature` 以外のすべてのファイル(step ファイル、その補助、support のコード、データ)、config の `fixtures`、`parameterTypes`、`secrets`、`worldParameters`、そしてプログラムのファイルの各 environment の `conditions` と `defaultEnvironments` です。
+最後の 2 つは、受け入れ基準のどのセルが必須かを決めます。
+対応づけは 1 つの単位として比べます。
+run が知るのは対応づけが変わったか変わらなかったかだけで、変わった補助がどの受け入れ基準に届くかは知りません。
+基点で読み込めない config やプログラムのファイルは、変わったと数えます。
+features ディレクトリの外のコードはプログラムのもので、それは base の world が測ります。
+`featuresDir` がプロジェクトのルートであるプロジェクトには、コードから離れた対応づけが無いので、`--base` は `base-features-at-root` で拒否します。
+
+**world。**
+`--base` は 2 つの world を加えます。
+それぞれ run ディレクトリの下の自分の tree、`trees/base` と `trees/old` で走り、run は終わるときにそれを取り除きます:
+
+- `base` は、head の受け入れ基準と対応づけのもとで基点のコードを走らせます。
+  その tree は基点の git worktree で、基点の features ディレクトリと config の上に head のものを写します。
+  プログラムのファイルはコードと一緒に動きます。
+  base の tree は基点のものを持ち、基点に無いときだけ head のものを取ります(その world は `program_from_head: true` を持ちます)。
+  base の world は、environment とその condition を、そのファイルから読みます。
+- `old` は、基点の受け入れ基準と対応づけのもとで head のコードを走らせます。
+  その tree は head の作業ツリー(追跡しているファイルと、git が無視しない追跡していないファイル)の写しで、head の features ディレクトリと config の上に基点のものを置き、head のプログラムの手順で起動します。
+  承認された文が、承認されたときの step で読んで、今も同じ意味であるかを示します。
+
+どちらの tree も `node_modules` や git が無視するほかのものを持たず、何もインストールしません。
+各 tree は自分のプログラムを自分の `build` のコマンドで build し、どちらも head のプロジェクトの中にあるので、tree のファイルが import するパッケージは、nukadoko も含めて head のものに解決されます。
+依存も変えた変更では、基点を head の版で build します。
+プロジェクトの外の依存(Ruby の gem、システムのツール)はマシンのものです。
+tree の world のディレクトリは `worlds/<environment>@base` か `worlds/<environment>@old` で、`url` の関数はどの tree のために答えるのかを知ります(「テスト対象のプログラム」を参照)。
+tree の scenario は、`--concurrency` にかかわらず、その tree で始めた worker プロセスで走ります。
+各 worker は、`--no-check` でなければ、まず tree のファイルに `nuka check` を走らせます。
+ファイルが読み込めないか check を通らない tree のセルは、理由を添えて走らないままです。
+
+行が world を必要とするのは、断定を変えうるところだけで、head が通ったあとだけです:
+
+- `new` か `changed` の行は、head のセルが必須で通った各 environment で、base の world で走ります。
+  ただし head の対照がすでに証明しているときは走りません。
+  `@held` の付いた行は、基点がその振る舞いを持つことを示せるのは基点だけなので、常にそこで走ります。
+- `unchanged` の行は、対応づけが変わったとき、そうした各 environment で、基点の feature ファイルが与える行で、old の world で走ります。
+- 必須の head のセルが通らなかった行は、どちらでも走りません。
+
 **セル。**
 セルは、その実行がどうなったかです:
 
@@ -3285,7 +3342,7 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
 | `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
 | `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim、または scenario の行では hook |
 | `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も食い違いです)。行は通らなかった最初の実行のもの |
-| `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、または BeforeAll が失敗した) |
+| `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、BeforeAll が失敗した、または tree のファイルが読み込めなかった) |
 
 証明するのは Then だけです。
 振る舞いが無いところでエラーになる When は、Then が違いを見分けられるかどうかについて何も言いません。
@@ -3293,9 +3350,10 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
 証明するのは claim だけでもあります。
 Then の位置に結び付けられた compat の step や `run` を持つ step は claim を判定しないので、その失敗したアサーションは `broke` です。
 そのため compat のスイートの受け入れ基準は、その Then が claim step になるまで、`held` か `failed` で、`proven` にはなりません(「Claims」を参照)。
+old のセルの行は、old の world が走らせる基点の feature ファイルのものです。
 
-必須のセルは 1 回、または `--repeat` の回数だけ走ります。
-Then の行で失敗した対照のセルは、同じ pass の同じ world でもう一度走ります。
+必須の head のセルは 1 回、または `--repeat` の回数だけ走り、base と old のセルは 1 回走ります。
+振る舞いが無いところのセル(head の対照か、base のセル)が Then の行で失敗したときは、同じ pass の同じ world でもう一度走ります。
 その行で同じ claim が `--proof-runs` 回(既定は 2)成り立たなくなるか、実行が食い違って `flaky` になるまでです。
 1 回の失敗は、プログラムが一度遅かっただけかもしれません。
 証明は失敗を良い知らせとして読む唯一の断定なので、失敗の繰り返しを要するのも証明だけです。
@@ -3304,9 +3362,9 @@ Then の行で失敗した対照のセルは、同じ pass の同じ world で�
 一致に同じ値は要りません。
 生成された id や時刻のように実行ごとに正当に違う値があれば、どの証明も `flaky` になってしまうからです。
 セルの `actuals` が各実行の値を残すので、読み手は 503 と 404 を見比べて判断できます。
-通った対照や、`broke` になった対照はもう走りません。
+通ったセルや、`broke` になったセルはもう走りません。
 各証明の実行は、番号の付いた scenario の行とは別に、stderr の `proof run <k>/<n>` の行になります。
-対照自身の scenario の行は `(control)` で終わります。
+対照自身の scenario の行は `(control)` で終わり、tree の scenario の行は `base <environment>` か `old <environment>` で始まります。
 
 `--concurrency` のもとでは、各証明の回は自分の worker で走り、その worker は `BeforeAll` と `AfterAll` をもう一度実行します。
 回の中でうまくいかなかったこと(それらの hook の失敗、または与えられたセルの record を書かずに worker が終了したこと)は、その回のセルが負い、run は負いません。
@@ -3315,31 +3373,60 @@ run を赤にすることはありません。
 終わらなかった証明は何も証明しないので、行は `held` です。
 
 **断定。**
-行は次のどれかです:
+行は 6 つの語のどれかです。
+3 つは緑です:
 
-- `failed`: 必須のセルが `pass` でないとき、または行が必須のセルを持たないとき。
+- `held`: 必須の head のセルがすべて `pass` で、それ以上を求められないとき。
+  `--base` が無ければ、それを証明する対照がないときです。
+  `--base` のもとでは、`unchanged` で対応づけが変わらなかったとき、old の world でも通ったとき、または `@held` の付いた `new` か `changed` の行が基点で通り、それを証明する対照がないときです。
+- `proven`: 必須の head のセルがすべて `pass` で、振る舞いが無いところのセルが `--proof-runs` 回以上 `fail` だったとき。
+  そのセルは対照か、`new` か `changed` の行では base のセルです。
+  このように証明された `@held` の行は、その tag が要らないと述べます。
+- `removed`: 基点がその受け入れ基準を持ち、head が持たないとき。
+  行はセルを持たず、基点での文を引用するので、読み手は何が落とされたかを見られます。
+
+3 つは赤です:
+
+- `failed`: 必須の head のセルが `pass` でないとき、または行が必須のセルを持たないとき。
   後者は `nuka check` が `condition-unmet` を報告するので、`--env` の無い `--no-check` の run でだけ起きます。
   そのような行は `criterion-without-required-cell` の finding を持ちます。
   その `do:` 行は、プログラムのファイルの中でその行を満たす environment で scenario を走らせ、そのような environment が無ければそのファイルに `nuka check` を走らせます。
-- `proven`: 必須のセルがすべて `pass` で、ある対照が `--proof-runs` 回以上 `fail` だったとき。
-- `held`: それ以外。
-  必須のセルがすべて `pass` で、それを証明する対照がないときです。
+- `unproven`: `new` か `changed` の行が head で通り、その振る舞いが無いところで Then が失敗したことを示すものが無いとき。
+  base のセルが通った、`broke` になった、食い違った、`--proof-runs` 回より少なくしか失敗しなかった、または走らなかったときで、それを証明する対照も無いときです。
+  base のセルが `pass` でない `@held` の行も、振る舞いが無いところのセルがそれを証明しない限り `unproven` です。
+- `moved`: `unchanged` の行が head で通り、対応づけが変わり、old の world で通らなかったとき。
+  承認された文を、承認された step で読むと、もう head のコードに対して成り立たず、その意味がその下で動いたということです。
+  基点の対応づけが head に対して読み込めないか check を通らないために走らなかった old のセルも、その理由を添えて行を `moved` にします。
+  文が今も同じ意味であることを示すものが無いからです。
 
-行が `failed` のとき、または run がどの scenario の外でも失敗したとき(hook、world、worker)、終了コードは 1 です。
+`--base` が無ければ変化は分からないので、行は `held`、`proven`、`failed` のどれかです。
+行が赤のとき、または run がどの scenario の外でも失敗したとき(hook、world、worker)、終了コードは 1 です。
 environment の回で失敗した `BeforeAll` や `AfterAll` は、どの `--concurrency` でも run を失敗にし、証明の回の worker で失敗したものは失敗にしません。
-`held` と `proven` はどちらも green です。
 対照が通った `held` の行は、読むべき行です。
 スイッチが Then の確かめるものに届いていないか、Then がスイッチの変えるものを確かめていないかのどちらかです。
-stderr の件数の行は必須のセルだけを数えます。
+stderr の件数の行は必須の head のセルだけを数えます。
 その実行と、走らなかったセルです。
-対照のある run は、その後ろに 2 行を加えます。
-対照を同じように数える `<n> control runs, <k> not run` と、`criteria: <held> held, <proven> proven, <failed> failed` です。
+対照のある run は、その後ろに、対照を同じように数える `<n> control runs, <k> not run` の行と、`criteria: <held> held, <proven> proven, <failed> failed` の行を加えます。
+`--base` のもとではどの run もこの `criteria:` の行を持ち、そのあとに `unproven`、`moved`、`removed` の数が続きます。
+
+`proven` に届かない変更もあります。
+間欠的なバグの修正は、基点でも十分な頻度で通るので、そこで毎回失敗する Then はありません。
+基点が一度も持たず、どのスイッチも切らない振る舞いの最初の受け入れ基準は、base のセルでだけ証明され、それには基点が走る必要があります。
+step ファイルのリファクタリングは対応づけを変えるので、そのとき変わっていない行はすべて old の world に頼ります。
+基点の step がもう head のコードに対して読み込めないときは、そうした行はすべて `moved` になり、理由がそのわけを述べます。
 
 表は `run.json` の `table` で、run サマリはそれで始まります。
-受け入れ基準ごとに 1 行、world と environment ごとに 1 列(見出しにはその environment が宣言する condition が続きます)で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
+`--base` のもとでは何を比べたかを名指す 1 行があり、そのあとに受け入れ基準ごとに 1 行、world と environment ごとに 1 列(head の列の見出しにはその environment が宣言する condition が続きます)で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
 ゲートは `nuka run` の終了コードで、対照がそれを赤にすることはありません。
 Allure の result は各対照を走った結果のままの状態で、対照と分かる形で残すので、失敗した対照はそこでは設計どおり失敗した result です。
 JUnit を読む CI がゲートにする messages ストリームは、対照を外します(「Allure results」と「Messages stream」を参照)。
+どちらも head の実行だけを持ちます。
+
+`--base` は、プロジェクトのリポジトリで git が解決するコミットを名指すものを取ります。
+ブランチ、tag、`origin/main` のようなリモート追跡の名前、またはコミットです。
+プロジェクトが git のリポジトリの中に無いとき(`base-outside-git`)、ref がコミットを名指さないとき(`base-ref-unknown`)、git が失敗したとき(`base-git-failed`)は、何かを走らせる前に拒否します。
+そのコミットを持たない浅いクローンでは拒否は `base-shallow` で、その `do` はそれを取ってくる `git fetch` です。
+`origin/main` は `main` を `refs/remotes/origin/main` へ取ってきて、コミットはそのハッシュで取ってきて、ほかの名前は `origin` から同じ名前で取ってきます。
 
 ### 単体 step(agent の経路)
 
@@ -3945,21 +4032,24 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 
 - 先頭の `<!-- nukadoko:run -->` という行。
   CI の step は、これで前に投稿した pull request のコメントを見つけて更新できます。
-- run の断定、受け入れ基準の数、`held`、`proven`、`failed` の行の数を載せた表題。
+- run の断定、受け入れ基準の数、ある行が持つ語ごとの行の数を載せた表題。
   断定は終了コードのものです。
   そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗が走ったどの scenario の外で起きたかを述べる 1 文が付きます。
   その文は、プログラムが起動しなかった world をそのログとともに名指します。
+- `--base` のもとでは 1 行。
+  ref とその短いコミットを名指し、`unchanged`、`changed`、`new`、`removed` の受け入れ基準を数え、対応づけが変わったかどうかを、変わったもの(変わった各ファイル、config の対応づけの部分、condition が変わった environment、`defaultEnvironments`)を名指して述べます。
 - 断定の表(「断定」を参照)。
-  受け入れ基準ごとに 1 行を feature のパスと行の順に並べ、その断定、場所、名前、condition の tag を載せます。
-  world と environment ごとに 1 列で、列名は `head <environment>` です。
+  受け入れ基準ごとに 1 行を feature のパスと行の順に並べ、そのあとに消えたものを並べて、その断定、場所、名前、condition の tag を載せます。
+  `--base` のもとでは `change` の列があり、名前が変わった行には `renamed from` と基点での場所が付きます。
+  world と environment ごとに 1 列で、列名は `head <environment>`、`base <environment>`、`old <environment>` です。
   セルは `pass`、`fail@<line>`、`broke@<line>`、`flaky@<line>`、`·` と読め、対照には `(control)` が、2 回以上走ったときは実行の数が付きます。
 - 赤い行ごとに 1 行。
   その場所、名前、行の理由を載せます。
-  その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
+  その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せ、base か old の world のセルではその前に `base:` か `old:` を付けます。
 - 条件。
   短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`--proof-runs` が 2 でないときの `proof runs: <n>`、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
-- `--since` のときは「Criteria since `<ref>`」。
-  unchanged、changed、new の scenario の数、消えた受け入れ基準の数(ambiguous か比べられなかったものがあればその数も)、比べた対象と step ファイル、変わった step ファイル、unchanged ではない各 scenario と消えた各受け入れ基準の行を `gherkin` のブロックで、そして変わった各 step ファイルの下にそれを名指すすべての scenario を載せます。
+- `--base` のもとでは「Removed criteria」。
+  消えた各受け入れ基準の場所と名前、そして基点での文を `gherkin` のブロックで載せます。
 - 「Claims」。
   claim を宣言した Then ごとに 1 つの項目で、その場所と文、複数の environment の run ならその environment、対照のものなら `control`、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
@@ -4286,13 +4376,13 @@ nukadoko はその人に 2 つの読み物を渡します。
 feature ファイルと run サマリです(「Records」の run サマリの説明を参照)。
 feature は、何が合意されたかをレビュアー自身の言葉で述べます。
 run はその証跡であり、サマリはその証跡を述べます。
-これらの scenario がこのコミットで、この条件のもとで、この計測とともに走ったこと、そして `nuka run --since <ref>` のもとでは、承認された基点から、どの受け入れ基準が変わり、増え、消えたか、そしてその step の背後のどのファイルが変わったかです。
-それは「実行」の比較が届く範囲のことです。
+これらの scenario がこのコミットで、この条件のもとで、この計測とともに走ったこと、そして `nuka run --base <ref>` のもとでは、基点から、どの受け入れ基準が変わらず、変わり、増え、消えたかです。
+新しいか変わった各受け入れ基準が基点のコードに対して Then で失敗したかどうか、そして step が変わったときに、変わっていない各受け入れ基準が基点の step のもとで今も通ったかどうかも述べます(「断定」を参照)。
 nukadoko が述べるのはこの主張だけです。
 誰が承認するかは決めず、承認も記録しません。
 承認をどこに記録するかはチームのプロセスで、nukadoko の外にあります。
 pull request のレビューも、変更チケットも、監査ログも、サマリが名指すコミットと run id でその run を指せます。
-後の変更は、自分の「Criteria since」の節を持つ新しい run として現れます。
+後の変更は、自分の表を持つ新しい run として現れます。
 
 green の run は「この scenario はコミット X で通った」という過去形の主張です。
 サマリもそのように述べます。
@@ -4335,11 +4425,12 @@ agent は、チケットの受け入れ基準に対して次の手順を実行�
    その run サマリは選んだ scenario しか扱いません。
 6. pull request などで、変更をレビューに出します。
    CI が feature を実行し、run サマリをその横に公開します(`docs/ci.ja.md` を参照)。
-   `--since <base>` には、最後に承認された基点を名指します。
+   `--base <base>` には、変更の基点を名指します。
 7. 人が feature とサマリを読みます。
    run が証跡です。
    その人が承認をどこに記録するかは、チームのプロセスです。
-   サマリの冒頭の表は、受け入れ基準ごとに、condition が成り立たない run がそれを失敗させたか(`proven`)、通ったことだけを示すか(`held`)を述べます(「断定」を参照)。
+   サマリの冒頭の表は、受け入れ基準ごとに、基点から何が変わったかを述べます。
+   そして、振る舞いが無い world がそれを失敗させたか(`proven`)、通ったことだけを示すか(`held`)、どちらでもないか(`unproven`)を述べ、変わっていないものが今も同じ意味か(そうでなければ `moved`)を述べます(「断定」を参照)。
 
 手順 1 から 4 に作業があります。
 新しい型付き step と feature は通常のレビューの題材です。
@@ -4891,19 +4982,22 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
-                              --since <git ref> compares each scenario's
-                              criteria (tags, steps with their effective
-                              keyword, docstrings, tables, its Examples row)
-                              and the files that register its steps, their
-                              parts, and the fixtures they need with the
-                              commit the ref names: criteria.changed_since is
-                              unchanged, changed, new, ambiguous, or unknown,
-                              since lists the removed criteria and the step
-                              files that changed, and the summary quotes what
-                              moved. It reports only. An unknown ref
-                              (since-ref-unknown), a project outside git
-                              (since-outside-git), or another git failure
-                              (since-git-failed) is refused.
+                              --base <git ref> compares each criterion with
+                              the commit the ref names: a new or changed one
+                              also runs against the base's code (the base
+                              world), and, when the mapping (step files,
+                              support code, the config's mapping part, the
+                              program's conditions) changed, an unchanged one
+                              runs under the base's criteria and steps (the
+                              old world). Each row gets held, proven,
+                              removed, failed, unproven, or moved, and the
+                              run exits 1 on failed, unproven, or moved. A
+                              project outside git (base-outside-git), an
+                              unknown ref (base-ref-unknown), a shallow clone
+                              without the commit (base-shallow, with the
+                              fetch), a git failure (base-git-failed), and a
+                              featuresDir at the project root
+                              (base-features-at-root) are refused.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set, and writes

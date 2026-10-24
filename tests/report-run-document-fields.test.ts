@@ -74,15 +74,35 @@ describe("nuka report on a run.json with one field deleted or null", () => {
     ];
     failed.evidence = { dir: `scenarios/${failed.scenario_record_id}`, screenshots: [{ file: "final.png", at: failed.finished_at }] };
     failed.teardown_errors = [{ fixture: "db", message: "gone" }];
-    // What `--since` adds, so its fields are tried too.
-    document.since = {
-      ref: "main",
-      commit: "0123456789abcdef0123456789abcdef01234567",
-      compared: ["features"],
-      removed: [{ feature: "features/gone.feature", rule: null, scenario: "gone", lines: ["Given a step"] }],
-      step_files: [{ file: "features/steps/a.ts", change: "changed" }],
-    };
-    first.criteria = { changed_since: "ambiguous", reason: "two of one name", lines: ["Given a step"], step_files: ["features/steps/a.ts"] };
+    // What `--base` adds, so its fields are tried too: the base and the
+    // mapping, a base cell and an old cell, a renamed row, a removed row,
+    // and an execution of the old world.
+    document.table.base = { ref: "main", commit: "0123456789abcdef0123456789abcdef01234567" };
+    document.table.mapping_changed = true;
+    document.table.mapping_changes = { files: ["features/steps/a.ts"], config: false, conditions: ["staging"], default_environments: false };
+    document.table.worlds = [...document.table.worlds, { world: "base", environment: "default" }, { world: "old", environment: "default" }];
+    const [row] = document.table.rows;
+    row.change = "unchanged";
+    row.renamed_from = { feature: "features/old.feature", name: "an earlier name" };
+    row.cells = [
+      ...row.cells,
+      { world: "base", environment: "default", role: "required", conditions: {}, outcome: "broke", line: 4, runs: 1 },
+      { world: "old", environment: "default", role: "required", conditions: {}, outcome: "not-run", runs: 0, reason: "it did not load" },
+    ];
+    row.verdict = "moved";
+    document.table.rows.push({
+      feature: "features/gone.feature",
+      line: 3,
+      name: "gone",
+      change: "removed",
+      conditions: ["@with:banner"],
+      cells: [],
+      verdict: "removed",
+      reason: "the base holds this criterion, and head no longer does",
+      lines: ["Given a step"],
+    });
+    document.worlds = [{ name: "default", tree: "base", url: null, commands: [], timings: {}, log: null, error: "it did not start", program_from_head: true }];
+    document.scenarios.push({ ...structuredClone(first), world: "old", row: { feature: first.feature, line: first.line } });
     base = document as Json;
   }, 120_000);
 

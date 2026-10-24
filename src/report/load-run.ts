@@ -222,6 +222,12 @@ export function loadRun(runDir: string, rootDir: string, stateDir: string | null
   }
   const scenarios: LoadedScenario[] = [];
   for (const scenario of document.scenarios) {
+    // An execution of the base or the old world of `nuka run --base` is a
+    // cell of the table, not a test result: a base cell that fails is how a
+    // row is proven, and an old one ran the base's feature file, which
+    // sources.json does not hold. The formats render head's executions,
+    // each with its row's verdict.
+    if (scenario.world !== undefined) continue;
     const match = pickles.get(pickleKey(scenario.feature, scenario.line));
     if (match === undefined) {
       problems.push(`${scenario.feature}:${scenario.line} (${scenario.scenario_record_id}) matches no scenario in sources.json`);

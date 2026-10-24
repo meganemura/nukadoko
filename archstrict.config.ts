@@ -306,9 +306,8 @@ export default {
       name: "run",
       glob: "src/run/**",
       surface: [
-        "criteria-since.ts",
+        "base-run.ts",
         "execute-typed-step.ts",
-        "git-since.ts",
         "match-step.ts",
         "probe-git.ts",
         "verdict-table.ts",
@@ -322,6 +321,7 @@ export default {
         "run-summary.ts",
         "select-pickles.ts",
         "step-stdout.ts",
+        "tree-pass.ts",
       ],
     },
     { name: "cli", glob: "src/cli/**", surface: ["run-cli.ts"] },

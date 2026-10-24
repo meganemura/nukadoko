@@ -49,6 +49,14 @@ export interface SpawnRunWorkerOptions {
   /** Absolute path to a temp file holding the pass's world
    * (src/program/world-view.ts), or `null` when the pass has none. */
   readonly worldPath: string | null;
+  /** Absolute path to a temp file holding a `WorkerTree`
+   * (src/run/worker-protocol.ts) for a pass in a tree of `nuka run
+   * --base`, or absent. */
+  readonly treePath?: string;
+  /** The worker's working directory: a tree's project root, so a step
+   * that names a path relative to it reaches the tree's files. The
+   * parent's when absent. */
+  readonly cwd?: string;
 }
 
 // `detached` on POSIX puts each worker in its own process group, so a
@@ -66,7 +74,7 @@ export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessBySt
   const here = fileURLToPath(import.meta.url);
   const ext = path.extname(here);
   const workerEntry = path.join(path.dirname(here), `run-worker-entry${ext}`);
-  const args = [rootDir, runId, env ?? "", featureListPath, String(repeat), worldPath ?? ""];
+  const args = [rootDir, runId, env ?? "", featureListPath, String(repeat), worldPath ?? "", options.treePath ?? ""];
   const nodeArgs =
     ext === ".ts" ? ["--import", loaderUrl, workerEntry] : [workerEntry];
 
@@ -75,5 +83,6 @@ export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessBySt
   return spawn(process.execPath, [...nodeArgs, ...args], {
     stdio: ["ignore", "pipe", "pipe", "ipc"],
     detached,
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
   }) as ChildProcessByStdio<null, Readable, Readable>;
 }

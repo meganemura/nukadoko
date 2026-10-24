@@ -254,6 +254,11 @@ interface ChainEntry {
 export interface RunScenarioOptions {
   readonly rootDir: string;
   readonly config: NukadokoConfig;
+  /** Where the run's records go: the state directory `stateDir` names,
+   * relative to `root`. `rootDir` and `config.stateDir` when absent. A
+   * pass in a tree of `nuka run --base` runs from the tree and records
+   * into head's run (src/run/tree-pass.ts). */
+  readonly records?: { readonly root: string; readonly stateDir: string };
   /** The world this scenario runs against: its URL is the base URL every
    * page and request resolves against, and its name goes on each step
    * record. `null` when the tree has no program file. Not the compat
@@ -729,12 +734,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   // dispose()` — a scenario-scope fixture may itself hold `page`/`context`/
   // `request` and needs them still open during its own teardown code).
   const fixtureScenarioCache = createFixtureCache();
+  const recordsRoot = options.records?.root ?? rootDir;
+  const recordsStateDir = options.records?.stateDir ?? config.stateDir;
 
   const { id: scenarioId, dir: scenarioDir } = await createRecordDir(
-    path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios),
+    path.join(recordsRoot, runRelativeDir(recordsStateDir, runId), RUN_FILE_DIRS.scenarios),
     generateScenarioId,
   );
-  const relativeScenarioDir = scenarioRelativeDir(config.stateDir, runId, scenarioId);
+  const relativeScenarioDir = scenarioRelativeDir(recordsStateDir, runId, scenarioId);
   // This pickle's own step keywords, for each step's own trace chunk title
   // (this file's own header, just above) — built once per pickle, the same
   // "cheap, rebuilt per call" convention `stepNameOf` below already follows.
@@ -872,6 +879,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     worldDir: programWorld?.dir,
     evidenceDir: scenarioDir,
     rootDir,
+    ...(options.records === undefined ? {} : { recordsDir: path.join(recordsRoot, recordsStateDir) }),
     env,
     secrets,
     resultOf: readChain,
@@ -1011,8 +1019,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         return typeof origin === "object" ? origin.from.step_record_id : null;
       },
       channelsOf: (id) => {
-        const record = readStepRecord(path.join(rootDir, stepRecordRelativeDir(config.stateDir, runId, id)));
-        return record === null ? [] : channelsOfStepRecord(rootDir, record);
+        const record = readStepRecord(path.join(recordsRoot, stepRecordRelativeDir(recordsStateDir, runId, id)));
+        return record === null ? [] : channelsOfStepRecord(recordsRoot, record);
       },
       secrets,
     });
@@ -1819,10 +1827,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // written from here, whatever happens (mirrors cli/do.ts's own
         // execution phase). ---
         const { id: recordId, dir: recordDir } = await createRecordDir(
-          path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.steps),
+          path.join(recordsRoot, runRelativeDir(recordsStateDir, runId), RUN_FILE_DIRS.steps),
           generateStepRecordId,
         );
-        const relativeRecordDir = stepRecordRelativeDir(config.stateDir, runId, recordId);
+        const relativeRecordDir = stepRecordRelativeDir(recordsStateDir, runId, recordId);
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — the trace chunk `ctx.page()` opens lazily
         // during this step, if it does, self-identifies the same way.
@@ -2006,10 +2014,10 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // no args/returns schema exists to validate against, so there is no
         // binding-failure branch here the way there is for a typed step.
         const { id: recordId, dir: recordDir } = await createRecordDir(
-          path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.steps),
+          path.join(recordsRoot, runRelativeDir(recordsStateDir, runId), RUN_FILE_DIRS.steps),
           generateStepRecordId,
         );
-        const relativeRecordDir = stepRecordRelativeDir(config.stateDir, runId, recordId);
+        const relativeRecordDir = stepRecordRelativeDir(recordsStateDir, runId, recordId);
         // Titled with this step's own gherkin text, keyword included (this
         // file's own header) — same as the typed branch above.
         await contextHandle.beginStep(recordDir, stepChunkTitle(stepKeywords, pickleStep));

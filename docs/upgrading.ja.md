@@ -413,6 +413,52 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   messages の各 test case は、media type が `application/vnd.nukadoko.verdict+json` の `verdict.json` 添付を 1 つ多く持ちます。
   test case の添付を数える消費者は、1 つ多く数えます。
 
+- **`nuka run --since` はなくなり、`--since` が報告していたことを `nuka run --base <ref>` が断定します。**
+  `nuka run --since` は `removed-flag` で拒否されます。
+  同じ ref を `--base` に渡します。
+  `npx nuka run --since "$(git merge-base HEAD origin/main)"` の代わりに `npx nuka run --base origin/main` です。
+  `--since` は報告するだけで、run を失敗させませんでした。
+  `--base` は、新しいか変わった受け入れ基準を基点のコードに対して走らせ、対応づけが変わったときは変わっていない受け入れ基準を基点の step のもとで走らせ、`unproven` か `moved` の行があれば 1 で終わります(docs/spec.ja.md の「断定」)。
+  浅いクローンの CI のジョブは、先に基点を取ってきます。
+  `base-shallow` の拒否の `do` がそのコマンドです。
+  `featuresDir` がプロジェクトのルートであるプロジェクトは、`--base` を使う前に feature と step を専用のディレクトリへ移します。
+
+- **run.json は `since` を持たず、scenario のエントリは `criteria` を持ちません。**
+  `criteria.changed_since` を読んでいた読み手は、`table.rows` の行の `change`(`unchanged`、`changed`、`new`、`removed`、そして名前を変えたか移した受け入れ基準の `renamed_from`)を読みます。
+  `ambiguous` と `unknown` はなくなりました。
+  中身で対にできない同じ名前の scenario は `new` と `removed` になり、parse できない基点の feature ファイルは `base-feature-unparsed` の警告を出して、その受け入れ基準を `new` と数えます。
+  `since.removed` を読んでいた読み手は `removed` の行を読み、その `lines` が基点での文を持ちます。
+  `since.step_files` に後継はありません。
+  対応づけは 1 つの単位として比べ、`table.mapping_changes` が変わったファイルを名指します。
+  `--base` のもとでは、`scenarios` は base と old の world の実行も持ち、それぞれ `world` と `row` を持ちます。
+  head の実行を数える読み手は、`counts` と同じように `world` を持つエントリを飛ばします。
+
+- **run サマリに「Criteria since」の節はありません。**
+  `--base` のもとでは、表の上の 1 行が何が変わったかを数え、対応づけが変わったかどうかを述べます。
+  表は `change` の列と、base と old の environment ごとの列を持ち、「Removed criteria」が消えた各受け入れ基準を引用します。
+
+- **`since-*` の拒否のコードはなくなりました。**
+  `since-ref-unknown`、`since-outside-git`、`since-git-failed` は `base-ref-unknown`、`base-outside-git`、`base-git-failed` になり、`base-shallow` と `base-features-at-root` が新しく加わりました。
+  `since-*` のコードに一致させていたスクリプトは、`base-*` のものに一致させます。
+
+- **step ファイルのリファクタリングは、変わっていないすべての受け入れ基準を old の world で走らせます。**
+  old の world は、基点の feature ファイルと基点の step のもとでの head のコードです。
+  そのため、対応づけを変えるリファクタリング(step ファイル、features ディレクトリの下の補助、config の `fixtures`、environment の `conditions`)では、変わっていない各行が、今も同じ意味であることを示します。
+  基点の step が head のコードに対して走り、通れば行は `held` です。
+  features ディレクトリの下の基点の補助は基点の step と一緒に動くので、そこで補助を移したり名前を変えたりしても step は壊れません。
+  step を壊すのは、基点の step が import していて head が変えた、features ディレクトリの外のコードです。
+  step が手を伸ばすプログラムのモジュールの名前を変えたり移したりしたときです。
+  そのとき古い対応づけは読み込めず、変わっていない行はすべて `moved` になり、理由が失敗した import を名指します。
+  リファクタリングのあいだその import を動くままにする(古いパスに再 export を残す)か、step が import するものを 1 つの変更で変え、プログラムをその後の変更で変えます。
+  どちらもしないリファクタリングでは、その変更のゲートは赤のままです。
+  それでも取り込むチームは nukadoko の外でそう決め、次の変更は新しい step を持つ基点と比べます。
+
+- **`url` の関数は `tree` を受け取り、基点には何も返さなくてかまいません。**
+  `tree` は `--base` の base の world では `"base"`、それ以外では `"head"` です。
+  基点の URL を持たない関数は `undefined`、`null`、`""` を返し、base の world はどのセルも走らせません。
+  head に何も返さない関数は、これまでどおり world を `program-start-failed` で失敗させます。
+  environment に固定の `url` を書いた base の world も、その URL は head のものなので、どのセルも走らせません。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

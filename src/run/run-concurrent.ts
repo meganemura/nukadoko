@@ -318,6 +318,14 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       return;
     }
 
+    // Only a worker in a tree of `nuka run --base` sends it
+    // (src/run/tree-pass.ts), and this module starts none; one here is
+    // reported, so nothing a worker says is lost.
+    if (envelope.kind === "not-run") {
+      warn({ severity: "warning", code: "worker-output-unreadable", message: envelope.reason });
+      return;
+    }
+
     if (envelope.kind === "scenario-started") {
       writeScenarioStarted(progress, {
         worker,

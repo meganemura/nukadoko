@@ -152,8 +152,11 @@ there is not checked and not run, and the skip reports nothing.
 
 Push the feature and its steps and open the pull request. CI runs the
 feature and posts the run summary on it (`docs/ci.md` in the nukadoko
-package has the workflow); `--since <base>` adds which criteria and step
-files changed since the approved base, as far as its comparison reaches.
+package has the workflow) from `nuka run --base <the base>`: its table
+says what changed in each criterion since the base and whether a world
+where the behaviour is absent shows its Then failing
+(`references/verdicts.md`). In a shallow clone, fetch the base first;
+the refusal's `do:` line is the command.
 A person reads the feature and the summary: the run is the evidence. The
 team records the approval where it records approvals; nukadoko writes or
 commits nothing else for it. Whether the criteria still hold later is a

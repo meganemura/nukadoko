@@ -157,8 +157,7 @@ function ownString(error: unknown, key: "fix" | "do"): string | undefined {
  * command that runs as written and lists every flag the command takes.
  * A hint that names only a `do` keeps the code's general fix beside it:
  * the `do` is the next command, and the fix is what the refusal asks to
- * change, so a `do` alone once hid that `since-ref-unknown` wants the
- * ref fetched.
+ * change, so a `do` alone would hide what the change is for.
  */
 export function refusalOf(error: unknown, code: RefusalCode, command: string, hint?: Hint): Finding {
   const message = error instanceof Error ? error.message : String(error);

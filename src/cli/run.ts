@@ -1,3 +1,4 @@
+import type { ChildProcess } from "node:child_process";
 import { rmdirSync } from "node:fs";
 import path from "node:path";
 import { PickleStepType } from "@cucumber/messages";
@@ -7,7 +8,7 @@ import { declaresDoneCallback, RUN_HOOK_ARG_COUNT } from "../check/done-callback
 import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
-import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
+import { loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
 import { placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
@@ -46,8 +47,10 @@ import {
   type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
-import { buildTable, executionOutcome, hasRequiredCell, leftOutText, needsProofRun, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome } from "../run/verdict-table.js";
+import { buildTable, executionOutcome, foldCell, hasRequiredCell, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
+import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
+import { runTreePass, type TreeTarget } from "../run/tree-pass.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
@@ -62,16 +65,14 @@ import { writeRunSources } from "../record/run-sources.js";
 import { resolveProjectName } from "../report/allure/identity.js";
 import {
   countScenarios,
+  RED_VERDICTS,
   runResultRelativePath,
   writeRunResult,
-  type RunCriteria,
   type RunFields,
   type RunScenario,
-  type RunSince,
   type RunWorld,
+  type RunWorldName,
 } from "../record/run-result.js";
-import { compareSince, scenarioKey, sinceStepFiles, type SinceComparison } from "../run/criteria-since.js";
-import { resolveSince, SinceGitError } from "../run/git-since.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { applyRetention, formatRetention } from "../record/retention.js";
 import {
@@ -219,6 +220,19 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // names one feature file drops concurrency back to 1 instead of refusing
 // (the comment above that branch says why). From there, the execution-phase code below is what a concurrency-1
 // run always takes.
+//
+// `--base <ref>` adds the base and the old world (docs/spec.md "Verdicts").
+// The ref is resolved before the config loads, so a ref that names nothing,
+// or a shallow clone that lacks it, is refused before anything runs. The
+// comparison and the trees are made once the run has an id and before
+// head's pass (src/run/base-run.ts), so the trees hold head's working tree
+// as the run found it. After head's pass, its proof runs included, each
+// row's head cells decide which base and old cells it needs
+// (src/run/verdict-table.ts's `plannedWorldCells`), and each tree runs
+// them, one environment at a time, against a world built from that tree
+// (src/run/tree-pass.ts). Their records are run.json entries with
+// `world`, keyed to the head row they are a cell of, and the trees are
+// removed before run.json is written.
 
 /** The `nuka check` codes that mean a step's pattern did not build at all
  * (src/check/binding-check.ts's own classification of a pattern error, plus
@@ -293,10 +307,10 @@ export interface RunRunOptions {
    * failed runs again until it has broken the same claim at the same line
    * this many times, or a run disagrees (src/run/verdict-table.ts). */
   proofRuns: number;
-  /** `--since <ref>`: compare each scenario's criteria, and each step file
-   * it bound to, with the commit `ref` names, and report what moved. It
-   * reports only; the exit code is unchanged. `undefined` without it. */
-  since?: string;
+  /** `--base <ref>`: compare each criterion with the commit `ref` names,
+   * and run the base and the old world for the rows that need them.
+   * `undefined` without it. */
+  base?: string;
   /** `$GITHUB_STEP_SUMMARY` as the CLI read it, `undefined` when unset or
    * empty. Passed in rather than read here so a test decides it. */
   stepSummaryPath: string | undefined;
@@ -363,16 +377,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   }
   // Resolved once, before anything runs: a ref that names nothing, or a
   // project outside git, has nothing to compare against, and a run that
-  // reported every scenario `new` would claim a comparison it did not make.
-  let since: { ref: string; commit: string } | undefined;
-  if (options.since !== undefined) {
-    const resolved = await resolveSince(rootDir, options.since);
+  // judged every row `new` would claim a comparison it did not make. A
+  // shallow clone that lacks the ref is told how to fetch it.
+  let baseRef: { ref: string; commit: string } | undefined;
+  if (options.base !== undefined) {
+    const resolved = await resolveRef(rootDir, options.base);
     if ("problem" in resolved) {
-      if (resolved.problem === "outside-git") return refused(resolved.message, "since-outside-git");
-      if (resolved.problem === "git-failed") return refused(resolved.message, "since-git-failed");
-      return refused(resolved.message, "since-ref-unknown", { do: "git log --oneline" });
+      if (resolved.problem === "outside-git") return refused(resolved.message, "base-outside-git");
+      if (resolved.problem === "git-failed") return refused(projectRelativeText(resolved.message, rootDir), "base-git-failed");
+      if (resolved.problem === "shallow") return refused(resolved.message, "base-shallow", resolved.fetch === undefined ? undefined : { do: resolved.fetch });
+      return refused(resolved.message, "base-ref-unknown", { do: "git log --oneline" });
     }
-    since = { ref: options.since, commit: resolved.commit };
+    baseRef = { ref: options.base, commit: resolved.commit };
   }
 
   // This whole invocation's own start — read
@@ -434,6 +450,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // nothing has been built. `stop()` in the `finally` below removes it
   // on a normal return.
   let processSignal: ProcessSignal | undefined;
+  // The trees of `--base`, removed on every way out of the run.
+  let prepared: PreparedBase | undefined;
   try {
     const select = (): ReturnType<typeof selectPickles> | { refused: unknown } => {
       try {
@@ -744,10 +762,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // Stops the pass's world. Every scenario of the pass has its entry by
     // now, so the stop can find each step's lines of the program's log that
     // arrived after its record was written, and those entries say so.
-    const stopWorld = async (world: StartedWorld): Promise<void> => {
+    const stopWorld = async (world: StartedWorld, tree: RunWorldName = "head"): Promise<void> => {
       const name = world.view.name;
+      const inWorld = (scenario: RunScenario): boolean => scenario.environment === name && (scenario.world ?? "head") === tree;
       const steps: WorldStep[] = runScenarios
-        .filter((scenario) => scenario.environment === name)
+        .filter(inWorld)
         .flatMap((scenario) =>
           scenario.steps.flatMap((step) => {
             const slice = step.observed?.program_log;
@@ -759,7 +778,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       worlds.push(world.record());
       if (late.size > 0) {
         for (const [index, scenario] of runScenarios.entries()) {
-          if (scenario.environment !== name) continue;
+          if (!inWorld(scenario)) continue;
           runScenarios[index] = {
             ...scenario,
             steps: scenario.steps.map((step) => {
@@ -769,51 +788,57 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           };
         }
       }
-      if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${name}: ${exitedEarly}` });
+      if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${tree === "head" ? name : `${name} (${tree})`}: ${exitedEarly}` });
     };
     const git = await probeGitState(rootDir);
-    // Under `--since`, each selected scenario's criteria and each step
-    // file's text are compared with the ref before the first scenario runs,
-    // so a step that edits a file mid-run does not change what the run
-    // reports about the files it started from.
+    // Under `--base`, the criteria and the mapping are compared with the
+    // ref, and the trees made, before the first scenario runs (this file's
+    // header). A failure here still writes nothing: no scenario ran.
     const projectRelative = (filePath: string): string => path.relative(rootDir, path.resolve(rootDir, filePath));
-    const stepFiles = sinceStepFiles({
-      rootDir,
-      vocabulary,
-      configFile: resolveConfigFileName(rootDir),
-      definedFixtures: new Set(Object.keys(config.fixtures)),
-    });
-    let comparison: SinceComparison | undefined;
-    if (since !== undefined) {
+    if (baseRef !== undefined) {
       try {
-        comparison = await compareSince({
+        prepared = await prepareBase({
           rootDir,
-          commit: since.commit,
+          config,
+          headProgram: program,
+          ref: baseRef.ref,
+          commit: baseRef.commit,
+          runDir: runDirAbsolute,
           // Every targeted file, the left out included: a file the run
           // left out entirely is still in the ref's comparison, and its
           // criteria are not removed.
           features: targetedFeatures.map((feature) => ({ relativePath: feature.relativePath, source: feature.source })),
-          targets: [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
-          stepFiles: stepFiles.all,
+          selected: new Set(flatPickles.map(({ feature, pickle }) => criterionKey(feature.relativePath, pickle.location?.line ?? 0))),
+          targets:
+            options.featureArgs.length === 0
+              ? null
+              : [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
         });
       } catch (error) {
-        if (error instanceof SinceGitError) return refused(`nuka run --since ${since.ref} could not read the ref: ${error.message}`, "since-git-failed");
+        try {
+          rmdirSync(runDirAbsolute);
+        } catch {
+          // Not empty, or never made.
+        }
+        if (error instanceof BaseSetupError) return refused(error.message, "base-features-at-root");
+        // git names the base tree by its absolute path; the refusal names
+        // it from the project root, as every printed path is.
+        if (error instanceof GitRefError) {
+          return refused(projectRelativeText(`nuka run --base ${baseRef.ref} could not compare with the base: ${error.message}`, rootDir), "base-git-failed");
+        }
         throw error;
       }
+      for (const entry of prepared.unparsed) {
+        warn({
+          severity: "warning",
+          code: "base-feature-unparsed",
+          file: entry.feature,
+          message: projectRelativeText(`the base's copy of this feature file does not parse, so its criteria were not compared and count as new: ${entry.message}`, rootDir),
+        });
+      }
     }
-    const boundStepFiles = (scenario: RunScenario): string[] => {
-      const files = new Set<string>();
-      for (const step of scenario.steps) if (step.step !== null) for (const file of stepFiles.ofEntry(step.step)) files.add(file);
-      return [...files].sort((a, b) => a.localeCompare(b));
-    };
-    const criteriaFor = (scenario: RunScenario): RunCriteria => {
-      if (comparison === undefined) return { changed_since: null };
-      const found = comparison.criteria.get(scenarioKey(scenario.feature, scenario.line));
-      // Every selected pickle was compared before the run started, so a
-      // scenario without criteria is a bug here, never a `new` scenario.
-      if (found === undefined) throw new Error(`${scenario.feature}:${scenario.line} ran but was not compared with the --since ref`);
-      return { ...found, step_files: boundStepFiles(scenario) };
-    };
+    const base = prepared;
+    const old = base === undefined ? undefined : oldPlaces(base.criteria.changes);
     // Each scenario's run.json entry is built when its record arrives, from
     // the step records it cites, so a `--repeat` run never holds more than
     // one scenario's step records at a time. The lines and step names come
@@ -827,17 +852,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         lines = gherkinStepLines(feature.gherkinDocument);
         documentLines.set(feature.relativePath, lines);
       }
-      const key = scenarioKey(feature.relativePath, pickle.location?.line ?? 0);
+      const key = criterionKey(feature.relativePath, pickle.location?.line ?? 0);
       pickleLines.set(key, pickleStepLines(pickle, lines));
       pickleOutcomes.set(key, pickle.steps.map((step) => step.type === PickleStepType.OUTCOME));
     }
-    const inThenOf = (feature: string, line: number) => (index: number): boolean => pickleOutcomes.get(scenarioKey(feature, line))?.[index] ?? false;
+    const inThenOf = (feature: string, line: number) => (index: number): boolean => pickleOutcomes.get(criterionKey(feature, line))?.[index] ?? false;
     // Each selected criterion's role in each environment, from its tags and
     // what the environments declare (src/condition/condition.ts), and each
     // cell's executions so far, read for the table: the proof runs below
     // are decided from them, so a control is run again while it keeps
-    // breaking the same claim at the same Then line.
-    const cellKey = (feature: string, line: number, environment: string): string => `${feature}\u0000${line}\u0000${environment}`;
+    // breaking the same claim at the same Then line. A base or an old cell
+    // is keyed by its row's head feature and line, and its world.
+    const cellKey = (feature: string, line: number, environment: string, world: RunWorldName = "head"): string =>
+      `${feature}\u0000${line}\u0000${environment}\u0000${world}`;
     const roleByCell = new Map<string, CellRole>();
     for (const { feature, pickle } of flatPickles) {
       const line = pickle.location?.line ?? 0;
@@ -849,10 +876,20 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // Why a proof round could not record a control's run, under
     // --concurrency (src/run/run-concurrent.ts).
     const proofProblems = new Map<string, string>();
-    const needsProof = (feature: string, line: number, environment: string): boolean =>
-      needsProofRun(roleOf(feature, line, environment), cellOutcomes.get(cellKey(feature, line, environment)) ?? [], proofRuns);
+    const needsProof = (feature: string, line: number, environment: string, world: RunWorldName = "head"): boolean =>
+      needsProofRun(roleOf(feature, line, environment), cellOutcomes.get(cellKey(feature, line, environment, world)) ?? [], proofRuns, world);
     // Why a pass ran no scenario, for its cells that did not run.
     const beforeAllFailedIn = new Set<string>();
+    // Why a pass of a tree left cells that did not run, by world and
+    // environment.
+    const treeNotRun = new Map<string, string>();
+    const treeKey = (world: RunWorldName, environment: string): string => `${world}\u0000${environment}`;
+    // Each selected row by its key, for an old record, which names the
+    // ref's file and line.
+    const rowByKey = new Map<string, { feature: string; line: number }>();
+    for (const { feature, pickle } of flatPickles) {
+      rowByKey.set(criterionKey(feature.relativePath, pickle.location?.line ?? 0), { feature: feature.relativePath, line: pickle.location?.line ?? 0 });
+    }
     const stepKind = (name: string): "claim" | "run" | "compat" | null => {
       const entry = vocabulary.get(name);
       if (entry === undefined) return null;
@@ -865,7 +902,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // empty. Those are removed once the run is over, not when the scenario
     // ends: a later scenario of the same run must not draw the same id.
     const emptyEvidenceDirs: string[] = [];
-    const noteRecord = (record: ScenarioRecord): void => {
+    // A record of the base or the old world (`tree`): a cell of the row
+    // `row` names, whose lines are where it ran in its tree. Its step names
+    // are head's only in the base world, whose mapping is head's; it gets
+    // no rerun line, since a rerun runs head.
+    interface TreeRecord {
+      readonly world: "base" | "old";
+      readonly row: { readonly feature: string; readonly line: number };
+      readonly stepLine: (index: number) => number | null;
+      readonly inThen: (index: number) => boolean;
+    }
+    const noteRecord = (record: ScenarioRecord, tree?: TreeRecord): void => {
       const stepRecords = readStepRecordsForScenario(rootDir, config.stateDir, record);
       for (const [stepRecordId, stepRecord] of stepRecords) {
         if (stepRecord !== null) continue;
@@ -875,27 +922,33 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           message: `${stepRecordRelativeDir(config.stateDir, runId, stepRecordId)}/record.json of ${record.feature}:${record.line} could not be read, so run.json has no declaration or measurement for that step`,
         });
       }
+      const row = tree?.row ?? { feature: record.feature, line: record.line };
+      const inThen = tree?.inThen ?? inThenOf(record.feature, record.line);
       const built = buildRunScenario(record, {
         stepRecords,
-        stepLine: pickleLines.get(scenarioKey(record.feature, record.line)) ?? (() => null),
+        stepLine: tree?.stepLine ?? pickleLines.get(criterionKey(record.feature, record.line)) ?? (() => null),
         stepName: (text) => {
+          if (tree?.world === "old") return null;
           const { stepNames } = matchPickleStepText(text, patterns);
           return stepNames.length === 1 ? stepNames[0]! : null;
         },
         recordPath: (stepRecordId) => path.join(RUN_FILE_DIRS.steps, stepRecordId),
         evidenceDir: relativeToRun(config.stateDir, runId, record.evidence.dir),
         rerun: formatRerunCommand(record, conditionsOf.rerunFlags(record.environment)),
-        inThen: inThenOf(record.feature, record.line),
+        inThen,
         stepKind,
       });
       // A control's failure is what the table reads as proof, so it gets no
       // rerun line: the reruns a reader is offered are of failures.
-      const role = roleOf(record.feature, record.line, record.environment);
+      const role = roleOf(row.feature, row.line, record.environment);
       const { do: rerun, ...withoutRerun } = built;
-      const entry: RunScenario = { ...(role === "control" || rerun === undefined ? withoutRerun : built), role, criteria: criteriaFor(built) };
+      const entry: RunScenario =
+        tree === undefined
+          ? { ...(role === "control" || rerun === undefined ? withoutRerun : built), role }
+          : { ...withoutRerun, role, world: tree.world, row: { feature: row.feature, line: row.line } };
       runScenarios.push(entry);
-      const key = cellKey(record.feature, record.line, record.environment);
-      cellOutcomes.set(key, [...(cellOutcomes.get(key) ?? []), executionOutcome(entry, inThenOf(record.feature, record.line))]);
+      const key = cellKey(row.feature, row.line, record.environment, tree?.world ?? "head");
+      cellOutcomes.set(key, [...(cellOutcomes.get(key) ?? []), executionOutcome(entry, inThen)]);
       if (entry.evidence === undefined) emptyEvidenceDirs.push(path.join(rootDir, record.evidence.dir));
       stdout.write(`${JSON.stringify(entry)}\n`);
     };
@@ -922,20 +975,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // added after the summary is rendered, and before the document is
     // printed. Returns the root-relative path of the summary in the
     // run directory, or `null`, and the exit code.
-    const sinceOf = (resolved: { ref: string; commit: string }, compared: SinceComparison): RunSince => {
-      const files = [...new Set(runScenarios.flatMap((scenario) => scenario.criteria?.step_files ?? []))].sort((a, b) => a.localeCompare(b));
-      return {
-        ref: resolved.ref,
-        commit: resolved.commit,
-        compared: [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
-        removed: compared.removed,
-        step_files: files.map((file) => {
-          const change = compared.stepFiles.get(file);
-          if (change === undefined) throw new Error(`${file} was named by a scenario but not compared with the --since ref`);
-          return { file, change };
-        }),
-      };
-    };
     const finishRun = async (
       verdict: "passed" | "failed",
       failedScenarios: readonly FailedScenario[],
@@ -958,7 +997,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // cite, which are on disk by now, so the notes reach run.json in its
       // one write, and a run another process finishes meanwhile is never
       // the one measured.
-      const notes = findRepeatedScenarioPrefixes(path.join(rootDir, runRelativeDir(config.stateDir, runId)), runScenarios, selected.features);
+      // Head's executions only: the trees ran other code or other steps.
+      const notes = findRepeatedScenarioPrefixes(
+        path.join(rootDir, runRelativeDir(config.stateDir, runId)),
+        runScenarios.filter((scenario) => scenario.world === undefined),
+        selected.features,
+      );
       runFindings.push(...failedScenarioFindings(failedScenarios, conditionsOf), ...notes);
       // The run's `scenarios/` goes too once no scenario left evidence in it.
       for (const dir of [...emptyEvidenceDirs, path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios)]) {
@@ -989,15 +1033,42 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           tags: pickle.tags.map((tag) => tag.name),
         })),
         environments: tableEnvironments,
-        outcomes: (feature, line, environment) => cellOutcomes.get(cellKey(feature, line, environment)) ?? [],
-        notRunReason: (environment) => {
-          if (worlds.some((world) => world.name === environment && world.error !== null)) return "the program did not start for its world";
+        outcomes: (feature, line, environment, world = "head") => cellOutcomes.get(cellKey(feature, line, environment, world)) ?? [],
+        notRunReason: (environment, world = "head") => {
+          if (world !== "head") return treeNotRun.get(treeKey(world, environment));
+          if (worlds.some((entry) => entry.tree === "head" && entry.name === environment && entry.error !== null)) return "the program did not start for its world";
           if (beforeAllFailedIn.has(environment)) return "a BeforeAll hook failed";
           return undefined;
         },
         proofRuns,
         leftOut,
         proofProblem: (feature, line, environment) => proofProblems.get(cellKey(feature, line, environment)),
+        ...(base === undefined
+          ? {}
+          : {
+              base: {
+                ref: base.ref,
+                commit: base.commit,
+                mapping: base.mappingChanges,
+                mappingChanged: base.mapping.changed,
+                changeOf: (feature: string, line: number) => {
+                  const found = base.criteria.changes.get(criterionKey(feature, line));
+                  // Every selected pickle was compared before the run
+                  // started, so a row without a change is a bug here.
+                  if (found === undefined) throw new Error(`${feature}:${line} ran but was not compared with the base`);
+                  return found.change === "unchanged"
+                    ? { change: "unchanged" as const, ...(found.renamedFrom === undefined ? {} : { renamedFrom: found.renamedFrom }) }
+                    : { change: found.change };
+                },
+                removed: base.criteria.removed.map((criterion) => ({
+                  feature: criterion.feature,
+                  line: criterion.line,
+                  name: criterion.name,
+                  tags: criterion.tags,
+                  lines: criterion.lines,
+                })),
+              },
+            }),
       });
       // A red row with no required cell has no failed execution to carry
       // its finding, so it gets one of its own. An environment the run did
@@ -1020,7 +1091,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // Unlike a scenario record, run.json is not redacted as a whole,
           // and a version probe can answer with a secret value.
           target_version: pass.targetVersion === undefined ? null : redactString(pass.targetVersion, pass.secrets),
-          base_url: worlds.find((world) => world.name === pass.resolvedEnv.name)?.url ?? null,
+          base_url: worlds.find((world) => world.tree === "head" && world.name === pass.resolvedEnv.name)?.url ?? null,
           ...(pass.resolvedEnv.conditions === undefined ? {} : { conditions: pass.resolvedEnv.conditions }),
         })),
         // Each world's record is redacted with its own values already.
@@ -1030,12 +1101,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         counts: countScenarios(runScenarios, table),
         scenarios: runScenarios,
         table,
-        since: since === undefined || comparison === undefined ? null : sinceOf(since, comparison),
       };
       // The gate: red when the run failed outside the table, or when a row
       // is red, which a run with no failed execution can still have: a
-      // criterion no environment of the run meets, under `--no-check`.
-      let exitCode = verdict === "passed" && !table.rows.some((row) => row.verdict === "failed") ? 0 : 1;
+      // criterion no environment of the run meets, under `--no-check`, or,
+      // under `--base`, one nothing proves or whose meaning moved.
+      let exitCode = verdict === "passed" && !table.rows.some((row) => RED_VERDICTS.has(row.verdict)) ? 0 : 1;
       // sources.json first, before anything is serialized, so a failure to
       // write it is a finding in the summary, in run.json, and in the
       // `--json` document alike. It fails the run, as run.json does: without
@@ -1092,16 +1163,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
       if (options.json) options.stdout.write(document);
-      // The criteria line is for a run with a control cell, the only kind
-      // whose verdicts the scenario count above it cannot tell.
+      // The criteria line is for a run with a control cell or a base, the
+      // only kinds whose verdicts the scenario count above it cannot tell.
       const withControl = table.rows.some((row) => row.cells.some((cell) => cell.role === "control"));
-      const criteria = withControl
-        ? {
-            held: table.rows.filter((row) => row.verdict === "held").length,
-            proven: table.rows.filter((row) => row.verdict === "proven").length,
-            failed: table.rows.filter((row) => row.verdict === "failed").length,
-          }
-        : null;
+      const count = (word: (typeof table.rows)[number]["verdict"]): number => table.rows.filter((row) => row.verdict === word).length;
+      const criteria =
+        base !== undefined
+          ? { held: count("held"), proven: count("proven"), failed: count("failed"), unproven: count("unproven"), moved: count("moved"), removed: count("removed") }
+          : withControl
+            ? { held: count("held"), proven: count("proven"), failed: count("failed") }
+            : null;
       return {
         summaryPath,
         retention,
@@ -1209,6 +1280,151 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       }
     };
 
+    // The base and the old world of `--base`, after head's pass (this
+    // file's header): each row's head cells decide which of their cells it
+    // needs, and each tree runs those, one environment at a time, against
+    // a world built from that tree. The base world builds and starts the
+    // base tree's program file, from which it reads its environments and
+    // their conditions; the old world runs head's code, so it starts
+    // head's recipe in the old tree. A signal stops the workers and removes
+    // the trees.
+    const runOtherWorlds = async (): Promise<void> => {
+      if (base === undefined || old === undefined) return;
+      const live = new Set<ChildProcess>();
+      processSignal ??= installProcessSignalHandlers();
+      processSignal.setProcessCleanup(async () => {
+        for (const child of live) child.kill("SIGTERM");
+        await base.cleanup();
+      });
+      const serialOf = (document: { readonly feature?: { readonly tags: readonly { readonly name: string }[] } }): boolean =>
+        document.feature?.tags.some((tag) => tag.name === "@nukadoko:serial") ?? false;
+      const planned = new Map<string, ReturnType<typeof plannedWorldCells>>();
+      for (const { feature, pickle } of flatPickles) {
+        const line = pickle.location?.line ?? 0;
+        const key = criterionKey(feature.relativePath, line);
+        const change = base.criteria.changes.get(key)?.change ?? "new";
+        const headCells = tableEnvironments.map((environment) => ({
+          environment: environment.name,
+          role: roleOf(feature.relativePath, line, environment.name),
+          ...foldCell(cellOutcomes.get(cellKey(feature.relativePath, line, environment.name)) ?? []),
+        }));
+        const context = { change, held: readCriterionTags(pickle.tags.map((tag) => tag.name)).held, mappingChanged: base.mapping.changed };
+        planned.set(key, plannedWorldCells(headCells, proofRuns, context));
+      }
+      const trees = [
+        { world: "base" as const, tree: base.base },
+        { world: "old" as const, tree: base.old },
+      ];
+      for (const { world, tree } of trees) {
+        if (tree === null) continue;
+        const starter = createWorldStarter({
+          rootDir: tree.root,
+          // `@` is in no environment name, so a tree's world directory
+          // never meets head's.
+          worldDir: (name) => path.join(runDirAbsolute, "worlds", `${name}@${world}`),
+          recordPath: (absolutePath) => path.relative(runDirAbsolute, absolutePath).split(path.sep).join("/"),
+          displayPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
+          progress,
+          tree: world,
+          programFromHead: world === "base" && base.base?.programFromHead === true,
+        });
+        for (const pass of passes) {
+          const environment = pass.resolvedEnv.name;
+          const targets: TreeTarget[] = [];
+          for (const { feature, pickle } of flatPickles) {
+            const key = criterionKey(feature.relativePath, pickle.location?.line ?? 0);
+            if (!(planned.get(key)?.[world] ?? []).includes(environment)) continue;
+            if (world === "base") {
+              targets.push({ feature: feature.relativePath, line: pickle.location?.line ?? 0, serial: serialOf(feature.gherkinDocument) });
+            } else {
+              const at = old.at.get(key);
+              if (at === undefined) continue;
+              const document = base.refFeatures.get(at.feature)?.gherkinDocument;
+              targets.push({ feature: at.feature, line: at.line, serial: document === undefined ? false : serialOf(document) });
+            }
+          }
+          if (targets.length === 0) continue;
+          let recipe = pass.resolvedEnv.program;
+          if (world === "base") {
+            try {
+              const baseProgram = (await loadProgram(tree.root))?.program ?? null;
+              recipe = resolveEnvironment(config, baseProgram, environment, !implicitDefault).program;
+            } catch (error) {
+              treeNotRun.set(
+                treeKey(world, environment),
+                projectRelativeText(`the base tree's program file does not give this environment: ${error instanceof Error ? error.message : String(error)}`, rootDir),
+              );
+              continue;
+            }
+          }
+          let started: StartedWorld | null = null;
+          if (recipe !== null) {
+            const result = await starter.start(environment, recipe, pass.secrets);
+            if (!result.ok) {
+              if (result.unavailable === true) {
+                treeNotRun.set(treeKey(world, environment), `the ${world} world has no URL to reach: ${result.message}`);
+              } else {
+                worlds.push(result.record());
+                treeNotRun.set(treeKey(world, environment), `the program did not start for the ${world} world`);
+                if (!result.aborted) warn({ severity: "warning", code: "program-start-failed", message: result.message });
+              }
+              continue;
+            }
+            started = result;
+          }
+          const result = await runTreePass({
+            world,
+            treeRoot: tree.root,
+            headRoot: rootDir,
+            headStateDir: config.stateDir,
+            runId,
+            envArg: pass.envArg,
+            environment,
+            check: options.check,
+            concurrency,
+            targets,
+            view: started?.view ?? null,
+            needsProof: (feature, line) => world === "base" && needsProof(feature, line, environment, "base"),
+            runsOf: (feature, line) => cellOutcomes.get(cellKey(feature, line, environment, world))?.length ?? 0,
+            proofRuns,
+            onRecord: (record) => {
+              if (world === "base") {
+                noteRecord(record, {
+                  world,
+                  row: { feature: record.feature, line: record.line },
+                  stepLine: pickleLines.get(criterionKey(record.feature, record.line)) ?? (() => null),
+                  inThen: inThenOf(record.feature, record.line),
+                });
+                return;
+              }
+              const rowKey = old.rowOf(record.feature, record.line);
+              const row = rowKey === undefined ? undefined : rowByKey.get(rowKey);
+              const refFeature = base.refFeatures.get(record.feature);
+              const refPickle = refFeature?.pickles.find((pickle) => pickle.location?.line === record.line);
+              if (row === undefined || refFeature === undefined || refPickle === undefined) {
+                warn({ severity: "warning", code: "record-unmatched", file: record.feature, line: record.line, message: "No row of the table matches the record the old world reported here" });
+                return;
+              }
+              noteRecord(record, {
+                world,
+                row,
+                stepLine: pickleStepLines(refPickle, gherkinStepLines(refFeature.gherkinDocument)),
+                inThen: (index) => refPickle.steps[index]?.type === PickleStepType.OUTCOME,
+              });
+            },
+            progress,
+            warn,
+            stderr,
+            live,
+          });
+          if (result.notRun !== null) treeNotRun.set(treeKey(world, environment), result.notRun);
+          if (started !== null) await stopWorld(started, world);
+        }
+      }
+      processSignal.setProcessCleanup(null);
+      await base.cleanup();
+    };
+
     // A target naming one file has nothing to distribute across more than
     // one worker, so `--concurrency` drops back to 1 with a one-line
     // reason (docs/spec.md "Scenarios (the scripted path)",
@@ -1268,6 +1484,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         writeRunEnd(stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null, runResultWritten: false });
         return exitCodeForSignal(interruptedBy);
       }
+      await runOtherWorlds();
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
         stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten),
@@ -1526,6 +1743,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         if (!passPassed) allPassed = false;
       }
 
+      await runOtherWorlds();
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
         stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten),
@@ -1540,6 +1758,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       restoreAllureRuntime();
     }
   } finally {
+    await prepared?.cleanup();
     processSignal?.stop();
   }
 }

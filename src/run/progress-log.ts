@@ -273,6 +273,9 @@ export interface ProofRunBoundary {
   /** Which run of the cell this is, and how many `--proof-runs` asks. */
   readonly run: number;
   readonly of: number;
+  /** Where the cell stands: a head control, or a world of `nuka run
+   * --base`. A control when absent. */
+  readonly where?: "control" | "base" | "old";
 }
 
 /** One line before a control cell runs again for proof
@@ -281,7 +284,7 @@ export interface ProofRunBoundary {
  * reads as one scenario more than the run selected. */
 export function writeProofRunBoundary(stderr: WritableSink, boundary: ProofRunBoundary): void {
   stderr.write(
-    `proof run ${boundary.run}/${boundary.of}  ${boundary.relativeFeaturePath}:${boundary.line}  ${boundary.name}  (control in ${boundary.environment})\n`,
+    `proof run ${boundary.run}/${boundary.of}  ${boundary.relativeFeaturePath}:${boundary.line}  ${boundary.name}  (${boundary.where ?? "control"} in ${boundary.environment})\n`,
   );
 }
 
@@ -444,14 +447,21 @@ export interface CriteriaCounts {
   readonly held: number;
   readonly proven: number;
   readonly failed: number;
+  /** The words only `nuka run --base` gives, present in such a run. */
+  readonly unproven?: number;
+  readonly moved?: number;
+  readonly removed?: number;
 }
 
-/** The line after the scenario count for a run with a control cell:
- * `criteria: <held> held, <proven> proven, <failed> failed`, the table's
+/** The line after the scenario count for a run with a control cell or a
+ * base: `criteria: <held> held, <proven> proven, <failed> failed`, and
+ * under `--base` the unproven, moved, and removed counts too: the table's
  * verdicts, which the count of required executions above it does not
  * show. */
 export function writeCriteriaCounts(stderr: WritableSink, counts: CriteriaCounts): void {
-  stderr.write(`criteria: ${counts.held} held, ${counts.proven} proven, ${counts.failed} failed\n`);
+  const based =
+    counts.unproven === undefined ? "" : `, ${counts.unproven} unproven, ${counts.moved ?? 0} moved, ${counts.removed ?? 0} removed`;
+  stderr.write(`criteria: ${counts.held} held, ${counts.proven} proven, ${counts.failed} failed${based}\n`);
 }
 
 export interface RepeatTally {

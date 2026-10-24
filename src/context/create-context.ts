@@ -544,6 +544,11 @@ export interface CreateStepContextOptions {
    * `nuka` was started there or with another working directory. Defaults
    * to the current working directory. */
   rootDir?: string;
+  /** Where the run's records go when that is not `rootDir`'s state
+   * directory: a pass in a tree of `nuka run --base` records into head's.
+   * Left out of what a step is measured writing, as the state directory
+   * is. */
+  recordsDir?: string;
   /** The merged env map the executor loaded from every configured envFile.
    * This module never reads an envFile itself, so a run's env files are
    * parsed exactly once no matter how many contexts get created from them.
@@ -684,7 +689,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const worldOrigin = originOf(baseURL);
   const trace = worldOrigin === undefined ? undefined : { prefix: options.tracePrefix ?? newTracePrefix(), origin: worldOrigin };
   const observed = createObservedCollector({
-    unwatchedDirs: config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)],
+    unwatchedDirs: [
+      ...(config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)]),
+      ...(options.recordsDir === undefined ? [] : [path.resolve(options.recordsDir)]),
+    ],
     ...(options.worldDir === undefined ? {} : { watchedDirs: [options.worldDir] }),
     outputDir: () => boundaryDir,
     secrets,

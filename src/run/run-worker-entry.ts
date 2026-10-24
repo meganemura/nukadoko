@@ -34,7 +34,10 @@ import { divertProcessStdoutToStderr } from "./step-stdout.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
-import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
+import { serializeWorkerEnvelope, type WorkerEnvelope, type WorkerTree } from "./worker-protocol.js";
+import { analyzeRunSelectionKeepingSteps } from "../check/analyze.js";
+import type { SelectedFeature } from "./select-pickles.js";
+import type { Pickle } from "@cucumber/messages";
 import { finalizeOpenRequests, installChannelPatches } from "../context/create-context.js";
 
 // Responsibility: one `nuka run --concurrency <n>` worker's own process
@@ -85,8 +88,20 @@ import { finalizeOpenRequests, installChannelPatches } from "../context/create-c
 // what the parent wrote about it, sets the world's env on itself for the
 // steps and their children, and sends every request to the world's URL.
 // It starts no program of its own.
+//
+// In a tree of `nuka run --base` (src/run/tree-pass.ts) the worker runs
+// from the tree, whose config, program file, and step files the parent has
+// not loaded, so it runs `nuka check` over its selection itself, unless the
+// run was given `--no-check`. A tree whose files do not load or check is
+// not a crash of the run: the worker says why in one `not-run` envelope
+// and runs nothing, and the cells it was to fill say why. The condition
+// findings are left out of that check: which cells are required is decided
+// by head's program file, and a condition only head declares is the usual
+// case for a change that adds one. Its records go to head's run, and the
+// env files are read from head's root, since they hold the environment's
+// values and no tree holds them.
 
-const [rootDirArg, runIdArg, envArg0, featureListPathArg, repeatRawArg, worldPathArg] = process.argv.slice(2);
+const [rootDirArg, runIdArg, envArg0, featureListPathArg, repeatRawArg, worldPathArg, treePathArg] = process.argv.slice(2);
 
 if (
   rootDirArg === undefined ||
@@ -95,6 +110,7 @@ if (
   featureListPathArg === undefined ||
   repeatRawArg === undefined ||
   worldPathArg === undefined ||
+  treePathArg === undefined ||
   !/^[1-9][0-9]*$/.test(repeatRawArg)
 ) {
   process.exit(1);
@@ -111,6 +127,27 @@ const featureListPath: string = featureListPathArg;
 const env = envArg0 === "" ? null : envArg0;
 const repeat: number = Number(repeatRawArg);
 const worldPath = worldPathArg === "" ? null : worldPathArg;
+const tree: WorkerTree | null = treePathArg === "" ? null : (JSON.parse(readFileSync(treePathArg, "utf8")) as WorkerTree);
+// Where the records go and the env files are read (this file's header).
+const envRoot: string = tree?.headRoot ?? rootDir;
+
+/** A tree that cannot run its pass: the reason goes to the parent in a
+ * `not-run` envelope. */
+class TreeNotRun extends Error {}
+
+function errorText(error: unknown): string {
+  return formatVocabularyError(error).replace(/\s+$/, "");
+}
+
+/** `work`, or, in a tree, a TreeNotRun that says what did not load. */
+async function inTree<T>(what: string, work: () => Promise<T> | T): Promise<T> {
+  if (tree === null) return await work();
+  try {
+    return await work();
+  } catch (error) {
+    throw new TreeNotRun(`${what} in the ${tree.world} tree: ${errorText(error)}`);
+  }
+}
 
 const envelopeStdout = divertProcessStdoutToStderr();
 const parentPid = process.ppid;
@@ -153,13 +190,33 @@ async function main(): Promise<void> {
   // the channel patches (src/context/channels.ts) see only calls that go
   // through them.
   installChannelPatches();
-  const config = await loadConfig(rootDir);
-  const program = (await loadProgram(rootDir))?.program ?? null;
-  const resolvedEnv = resolveEnvironment(config, program, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
+  const config = await inTree("the config file did not load", () => loadConfig(rootDir));
+  const program = await inTree("the program file did not load", async () => (await loadProgram(rootDir))?.program ?? null);
+  const resolvedEnv = await inTree("the environment did not resolve", () =>
+    resolveEnvironment(config, program, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null),
+  );
   const world: WorldView | null = worldPath === null ? null : parseWorldView(readFileSync(worldPath, "utf8"));
 
-  const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
-    await discoverSteps(rootDir, config.featuresDir);
+  const relativeFilePaths = readFeatureList();
+  const features: SelectedFeature[] = await inTree("a feature file did not load", () =>
+    relativeFilePaths.flatMap((relativePath) => selectPickles(rootDir, relativePath).features),
+  );
+  const discovery =
+    tree !== null && tree.check
+      ? await (async () => {
+          const analysis = await inTree("nuka check did not finish", () => analyzeRunSelectionKeepingSteps(rootDir, features, [resolvedEnv.name]));
+          const errors = analysis.report.errors.filter((issue) => !issue.code.startsWith("condition-"));
+          const first = errors[0];
+          if (first !== undefined) {
+            const where = first.file === undefined ? "" : ` at ${first.file}${first.line === undefined ? "" : `:${first.line}`}`;
+            throw new TreeNotRun(
+              `nuka check reports ${errors.length} ${errors.length === 1 ? "error" : "errors"} in the ${tree.world} tree, the first ${first.code}${where}: ${first.message.replace(/[.\s]*$/, "")}`,
+            );
+          }
+          return analysis.discovery;
+        })()
+      : await inTree("the step files did not load", () => discoverSteps(rootDir, config.featuresDir));
+  const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } = discovery;
   // After the step files load, as at `--concurrency 1`, where the parent
   // imports them before it starts the world: a module reads the same
   // environment at import in both modes, and the world's env at step time.
@@ -169,11 +226,7 @@ async function main(): Promise<void> {
   const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   const fixtureGraph = buildFixtureGraph(config);
 
-  const relativeFilePaths = readFeatureList();
-  const flatPickles = relativeFilePaths.flatMap((relativePath) => {
-    const selected = selectPickles(rootDir, relativePath);
-    return selected.features.flatMap((feature) => feature.pickles.map((pickle) => ({ feature, pickle })));
-  });
+  const flatPickles: { feature: SelectedFeature; pickle: Pickle }[] = features.flatMap((feature) => feature.pickles.map((pickle) => ({ feature, pickle })));
   // Same gate src/cli/run.ts applies at `--concurrency 1`: a file with no
   // scenario at all (a Background-only feature, a real but unusual case)
   // must not trigger this worker's own BeforeAll/AfterAll: there is
@@ -181,9 +234,9 @@ async function main(): Promise<void> {
   const hasPickles = flatPickles.length > 0;
 
   const envFiles = resolvedEnv.envFiles;
-  const envVars = { ...loadEnvFiles(rootDir, envFiles), ...(world?.env ?? {}) };
-  const classification = await classifyEnvFiles(rootDir, envFiles);
-  const envSecrets = buildSecretSet(rootDir, {
+  const envVars = { ...loadEnvFiles(envRoot, envFiles), ...(world?.env ?? {}) };
+  const classification = await classifyEnvFiles(envRoot, envFiles);
+  const envSecrets = buildSecretSet(envRoot, {
     secretSourceFiles: classification.secretSource,
     trackedFiles: classification.tracked,
     publicKeys: config.secrets.public,
@@ -316,12 +369,13 @@ async function main(): Promise<void> {
               return true;
             },
           },
-          { stateDir: config.stateDir, runId },
+          { stateDir: tree?.headStateDir ?? config.stateDir, runId },
         );
 
         const record = await runScenario({
           rootDir,
           config,
+          ...(tree === null ? {} : { records: { root: tree.headRoot, stateDir: tree.headStateDir } }),
           programWorld: world,
           pickle,
           relativeFeaturePath: feature.relativePath,
@@ -395,6 +449,13 @@ async function main(): Promise<void> {
 try {
   await main();
 } catch (error) {
-  note({ severity: "error", code: "unexpected-error", message: formatVocabularyError(error) });
-  process.exitCode = 1;
+  if (error instanceof TreeNotRun) {
+    emit({ kind: "not-run", reason: error.message });
+  } else {
+    note({ severity: "error", code: "unexpected-error", message: formatVocabularyError(error) });
+    process.exitCode = 1;
+  }
 }
+// A failure before main's own teardown leaves the IPC channel open, and an
+// open channel keeps this process alive with the parent waiting on it.
+if (process.connected) process.disconnect?.();

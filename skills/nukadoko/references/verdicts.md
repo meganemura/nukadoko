@@ -1,10 +1,13 @@
 # Reading the verdict table
 
 A run ends in one table, run.json's `table`, and the run summary opens
-with it: one row per criterion, one column per environment
-(`head <environment>`, then the conditions it declares), and one verdict per row, which the exit code
+with it: one row per criterion, one column per world and environment
+(`head <environment>`, then the conditions it declares, and under
+`--base` also `base <environment>` and `old <environment>`), and one
+verdict per row, which the exit code
 follows. Under the table, each red row gets one line that says why and
-where it stopped.
+where it stopped. `failed`, `unproven`, and `moved` are red; `held`,
+`proven`, and `removed` are green.
 
 ## A scenario behind a switch
 
@@ -33,6 +36,25 @@ it (`<n> criteria not run`). A control never turns the run red. Tag only what th
 on the switch, and write the Then so it would fail on the other side: a
 When that errors there proves nothing.
 
+## Compared with the base
+
+`nuka run --base <the base>` is the run a pull request carries. It
+compares each criterion with the base: `unchanged` (a rename, a move, or
+a tag such as `@smoke` changes nothing), `changed` (an edit to a step, a
+table, a docstring, an Examples row, or a condition tag), `new`, or
+`removed`. The summary's first line says what changed, and whether the
+mapping did: a step file or helper under the features directory, the
+config's fixtures or parameter types, an environment's conditions.
+
+- A `new` or `changed` row also runs in the `base` world, the base's
+  code under your criteria and steps. Its Then has to fail there, at one
+  line in each of `--proof-runs` runs, for the row to be `proven`. Write
+  the Then so it fails without the change: a When that errors there
+  proves nothing.
+- An `unchanged` row, when the mapping changed, also runs in the `old`
+  world, your code under the base's feature file and steps, and has to
+  pass there. A rewritten step that now checks less is what this catches.
+
 ## The cells
 
 A cell reads `pass`; `fail@<line>`, a claim broke at that Then line;
@@ -50,7 +72,7 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
 
 ## What to do for each verdict
 
-- **`failed`**: a required cell did not pass. Diagnose it like any
+- **`failed`**: a required head cell did not pass. Diagnose it like any
   failure (`references/diagnosing.md`). A row with no required cell is
   `failed` too: no environment of the default selection meets its tags.
   `nuka check` reports that first as `condition-unmet`, and a run under
@@ -68,7 +90,25 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
   calling the criterion covered, and do not rewrite the Then on your own
   to make the control fail. A control that is `broke@<line>` proves
   nothing either: a Given or When failed where the behaviour is absent,
-  before any Then was judged.
+  before any Then was judged. Under `--base`, an `unchanged` row is
+  `held` when the mapping did not change or the old world passed it, and
+  a `@held` row when the base passed it.
+- **`unproven`** (red): a `new` or `changed` row passed, and nothing
+  shows its Then failing without the change: the base passed it, broke
+  before a Then, or did not run. When the base already had the
+  behaviour (a scenario written for code that works), tag it `@held`
+  and ask the person to confirm; otherwise the Then does not see what
+  the change did, which is the person's to hear about, not a Then to
+  weaken.
+- **`moved`** (red): an `unchanged` row passed at head, but not under
+  the base's steps, so the approved sentence no longer means what it
+  meant. Read the reason: a step that now checks something else is a
+  change to report to the person; a reason that says the base's steps
+  did not load (a module of the program they import moved) means the
+  refactor broke the old steps, and docs/upgrading.md in the package says
+  how to land one.
+- **`removed`**: the base had the criterion and you dropped it. The
+  summary quotes it under "Removed criteria" so the person sees it went.
 
 ## The findings
 
@@ -79,4 +119,5 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
 switch was removed, the side whose code stayed decides, so the `@with:`
 side keeps the scenario and the tag goes, and the other side means the
 scenario goes. `condition-unmet` is a scenario no environment of the
-default selection meets; under `--env` it is left out, not reported. `@held` is read and kept in the row, and changes nothing yet.
+default selection meets; under `--env` it is left out, not reported.
+`@held` is kept in the row's `conditions`, and only `--base` reads it.

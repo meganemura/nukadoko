@@ -57,7 +57,9 @@ errors the run would stop on for them.
 
 This is one file, `.github/workflows/nukadoko.yml`. It runs `nuka check` on
 every push and pull request (seconds, no browser), `nuka run` after it
-passes (the gate that actually executes). With no target, `nuka check`
+passes (the gate that actually executes), and on a pull request `nuka run
+--base` against the pull request's base, so the run judges what the
+change did to each criterion. With no target, `nuka check`
 also prints notes, what is rotting rather than what is broken; they never
 fail the job unless `--fail-on` names their code. The two commands sit in
 two jobs so a failed check stops the work before a browser
@@ -122,8 +124,32 @@ jobs:
       # Merge/deploy gate: executes, writes step records. Its Markdown
       # run summary appears on this job's summary page by itself, since
       # `nuka run` appends to $GITHUB_STEP_SUMMARY whenever it is set.
-      - run: npx nuka run features/
+      - if: github.event_name != 'pull_request'
+        run: npx nuka run features/
+      # On a pull request, compare with its base (docs/spec.md
+      # "Verdicts"). The checkout is shallow, so fetch the base's one
+      # commit first. The branch name goes through env, never straight
+      # into the script.
+      - if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF:refs/remotes/origin/$BASE_REF"
+          npx nuka run features/ --base "origin/$BASE_REF"
 ```
+
+On a `pull_request` event the checkout is the merge commit GitHub made of
+the branch and the base branch's tip, so comparing it with
+`origin/<base branch>` compares exactly what the pull request changes. A
+new or changed criterion also runs against the base's code, which the run
+builds from the base's own `nukadoko.program.ts` in a tree under the run
+directory, and an unchanged one runs under the base's steps when they
+changed. The job therefore needs what building the base needs; the base
+resolves packages from this checkout's `node_modules`. Only the rows that
+need the base or the old world run there, so the extra time is one build
+and the scenarios that changed, plus every unchanged scenario when the
+step files changed. Without the fetch, `nuka run` refuses with
+`base-shallow` and prints the same `git fetch` as its `do:` line.
 
 ## Why the workflow above pins actions, skips install scripts, and limits permissions
 
@@ -215,29 +241,8 @@ Five things the workflow above leaves to the team, each small.
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
   the diff and the summary beside it, which is the evidence of what ran at
-  that commit. `nuka run --since <base commit>` adds what moved in the
-  criteria since the approved base, as far as its comparison reaches
-  ("Running" in [docs/spec.md](spec.md#running) says what it compares). The base
-  has to be in the checkout, and the commit to name is where the branch
-  left it, not wherever the base branch has moved since:
-
-  ```yaml
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # the base branch and the history merge-base needs
-      # ...
-      - run: npx nuka run --since "$(git merge-base HEAD origin/${{ github.base_ref }})"
-  ```
-
-  `git merge-base` names the commit the branch started from, so a change
-  that landed on the base branch afterward is not reported as one this
-  pull request reverts. On a `pull_request` event, the checkout is the
-  merge commit GitHub made of the branch and the base branch's tip, and
-  the merge base of that is the tip itself, so the same line is right for
-  it too. A shallow checkout (`fetch-depth: 1`, the default) has no
-  history for `merge-base`; with only `git fetch origin <base branch>`,
-  name `origin/<base branch>` directly, which is right for the merge
-  commit and only for it. Where the approval is recorded, the pull request review or
+  that commit, and, from the `--base` run above, what each criterion came
+  to against the pull request's base. Where the approval is recorded, the pull request review or
   anything else, is the team's process; nukadoko records the evidence, not
   the approval (see "Review" in [docs/spec.md](spec.md#review)).
   `nuka report --format markdown --out <path>` writes the same Markdown of
@@ -245,8 +250,7 @@ Five things the workflow above leaves to the team, each small.
 
   ```yaml
   # in the `run` job, which then needs `pull-requests: write` beside
-  # `contents: read`
-  - run: npx nuka run features/
+  # `contents: read`, after its `nuka run` steps
   - run: npx nuka report --format markdown --out nukadoko-summary.md
     if: always()
   - name: Comment the run summary on the pull request

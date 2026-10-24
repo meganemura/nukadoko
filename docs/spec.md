@@ -2594,12 +2594,13 @@ export default defineProgram({
 ```
 
 The two files are apart because a run compares criteria across commits
-(`--since`, the summary's changed criteria).
+(`nuka run --base`, see "Verdicts").
 With the recipe in the config, a change to how the program builds counted
 as a change to every criterion, and a run that read an older tree's
 config found no recipe at all.
-nukadoko reads the program file from the tree it builds: in this release,
-the tree the run was started in.
+nukadoko reads the program file from the tree it builds: the tree the run
+was started in, and under `--base` the base tree too, which builds the
+base's code from the base's program file.
 
 A tree with no program file has no program to start.
 The run starts no world, `run.json` holds `worlds: []`, and each step
@@ -2865,8 +2866,9 @@ A step reads the world's `env` when it runs, from `process.env` or the
 ### Worlds
 
 A world is one pass of a run against one program.
-In this release a run starts one world for each environment it selects,
-of the tree it was started in.
+A run starts one world for each environment it selects, of the tree it
+was started in, and under `--base` one more for each environment where
+the base tree or the old tree has a cell to run (see "Verdicts").
 Every scenario of the pass reaches the same program, so the state one
 scenario writes is there for the scenarios after it; a scenario that
 reads state creates it first and claims only on what it created.
@@ -2951,7 +2953,9 @@ them:
 ```
 
 - `tree` is the tree the program was built from: `head`, the tree the run
-  was started in.
+  was started in, or under `--base`, `base` or `old` (see "Verdicts").
+  A base world whose ref has no program file, and was built and started
+  from head's, has `program_from_head: true`.
 - `commands` lists what the world ran, placeholders filled and redacted.
   A `build` appears in the first world that ran it.
 - `timings` holds a key for each phase that ran: `build_ms`,
@@ -3038,15 +3042,25 @@ with and is not in `defaultEnvironments`.
 
 `url` names a program that runs somewhere nukadoko does not: a deployed
 server, a preview per pull request.
-A function receives the world's `{ name, root, dir, signal }` before
-anything is reached, so one entry covers every preview (`signal` is
-aborted when the function is abandoned, see "Limits"):
+A function receives the world's `{ name, root, dir, signal, tree }`
+before anything is reached, so one entry covers every preview (`signal`
+is aborted when the function is abandoned, see "Limits"):
 
 ```ts
 environments: {
   "pr-1234": { url: ({ name }) => `https://${name}.preview.acme.example` },
 },
 ```
+
+`tree` is `"base"` for the base world of `nuka run --base`, which runs the
+base's code, and `"head"` for every other world.
+A function that knows where the base is deployed returns that URL for it,
+and one that does not returns nothing (`undefined`, `null`, or `""`): the
+base world then starts nothing, and its cells say it has no URL to reach.
+A fixed `url` is where head's code runs, so a base world never reaches
+it: its cells say the same, and nothing is built.
+For head, a function that returns nothing fails the world with
+`program-start-failed`.
 
 `url` is an `http:` or `https:` URL with no user and no password.
 Anything else written as a string is refused when the file is read, with
@@ -3361,7 +3375,7 @@ Rails lines of its own requests.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--since <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--base <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -3520,53 +3534,13 @@ HTTP API project. Naming a saving would be claiming the lift is possible,
 which nothing here measured. It never changes a scenario's status or the
 exit code.
 
-`--since <git ref>` says what moved in the criteria since a base a person
-approved, such as the target branch of a pull request, as far as the
-comparison below reaches. Before anything runs, the feature files the run
-targets are compared with the commit the ref names. A directory target
-also brings in every `.feature` file the commit holds under it, so a file
-deleted since the ref has its criteria removed; a file target compares
-that file only, and `since.compared` names the targets. A scenario's
-criteria are what decides how it runs, read from the compiled scenario
-rather than the file: every tag it carries (Feature, Rule, Scenario, and
-Examples tags, since they choose hooks, serial runs, and selection), every
-Background step of its feature and of its Rule, its own steps with their
-effective keyword (an `And` or `But` takes the keyword it continues), their
-text, their docstring's content and media type, and their data table's
-cells, and for a Scenario Outline row the Examples header and that row.
-Indentation, blank lines, comments, a docstring's delimiter, and the order
-of other scenarios never count. The comparison is of that structure, so a
-table cell that holds `|` is not two cells. A scenario is found at the ref
-by its Rule and its name; an Examples row by its header and values. When a
-name repeats, at the ref or now, the scenarios of that name are matched by
-content first; one edited scenario among them is `changed`, and when
-content cannot pair them one to one, each unpaired one is `ambiguous`,
-with a `reason`, rather than matched by position. Each scenario's
-`run.json` entry gets `criteria.changed_since`: `unchanged`, `changed`,
-`new` (a renamed scenario, a row whose values changed, or a file the ref
-lacks), `ambiguous`, or `unknown` (the file does not parse at the ref,
-with a `reason`), with the current `lines` of every scenario that is not
-unchanged and its `step_files`: the files that register the steps its
-lines bound to, the files of the parts those steps declare, and the config
-file when one of those steps needs a fixture it defines. What those files
-import is not compared. `since` names the ref, its commit, the `compared`
-targets, the `removed` criteria (each with its feature, Rule, scenario,
-and the `lines` it had at the ref), and each step file's `change`:
-`unchanged` or `changed` as `git diff` compares the file with the commit
-(so line endings and filters apply), or `untracked` when the commit does
-not hold it, read before the first scenario runs. The summary's "Criteria
-since" section counts each kind, says what was compared, quotes every
-scenario that is not unchanged and every removed criterion, and lists
-under each changed step file every scenario that names it, unchanged ones
-included, so whoever approves the change reads those lines and sees which
-step files moved under the ones that did not. It reports only: no flag
-turns a change into a failure, and the exit code is the run's. A ref that
-names no commit is refused with `since-ref-unknown`, a project outside git
-with `since-outside-git`, and any other git failure (git missing, or a
-command that fails for a reason other than a file the commit does not
-hold) with `since-git-failed`, before anything runs. Without the flag,
-every scenario has `criteria: { changed_since: null }` and `since` is
-`null`.
+`--base <git ref>` compares the run with the commit the ref names, such
+as the base of a pull request: a new or changed criterion also runs
+against the base's code, where a Then has to fail for the criterion to
+be proven, and when the mapping changed, an unchanged one also runs
+under the base's criteria and mapping, where it has to pass. The worlds,
+the trees they run in, and the verdicts they lead to are under
+"Verdicts".
 
 `--env` may repeat: `nuka run --env a --env b` is one run, with one
 `run_id`, one `run.json`, one summary, and one exit code, that runs every
@@ -3805,6 +3779,7 @@ to act on the run without opening another file:
   "table": {
     "base": null,
     "mapping_changed": null,
+    "mapping_changes": null,
     "worlds": [{ "world": "head", "environment": "default" }],
     "rows": [
       {
@@ -3847,7 +3822,13 @@ to act on the run without opening another file:
   what a reviewer should read as the feature passing (see "Review").
 - `scenarios` has one entry per scenario execution, in the order each
   finished, with the `environment` it ran in and the `role` of its cell,
-  `required` or `control` (see "Verdicts"). Each step has its `line` in the feature file, its `text`, the
+  `required` or `control` (see "Verdicts"). Under `--base`, an execution
+  of the base or the old world has `world` (`base` or `old`) and `row`,
+  the `feature` and `line` of the head row it is a cell of; an old
+  execution's own `feature` and `line` are the ref's, and its steps name
+  no `step`, since head's vocabulary did not bind them. `counts`, the
+  Allure results, the messages stream, and every summary section but the
+  table read head's executions alone. Each step has its `line` in the feature file, its `text`, the
   `step` it matched (`null` when none or more than one), and its `status`.
   A step that began has a `step_record_id` (the value `nuka do --use`
   takes) and a `record`, the step record's directory, with its `mutates`
@@ -3892,50 +3873,57 @@ to act on the run without opening another file:
   has `evidence`, its directory under the run's `scenarios/`. A scenario
   that wrote none has no `evidence`, and its empty directory is removed
   when the run ends.
-- Every scenario has `criteria`. `changed_since` is `null` without
-  `--since`; with it, `unchanged`, `changed`, `new`, `ambiguous`, or
-  `unknown`, with a `reason` for the last two, the current `lines` of every
-  scenario that is not unchanged, and the `step_files` it names. `since` is
-  `null` without the flag; with it, the `ref`, its `commit`, the `compared`
-  targets, the `removed` criteria, and each step file's `file` and its
-  `change` (`unchanged`, `changed`, or `untracked`).
 - `findings` holds every finding the run raised: each failed scenario, each
   note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
   in text.
-- `table` is the verdict table (see "Verdicts"). `worlds` lists its
-  columns, `{ world, environment }`, in the run's environment order; the
-  world is `head`, and `base` and `mapping_changed` are `null`, since
-  this release compares the run with no other tree. `rows` has one row
-  per selected criterion, features by path and scenarios by line: its
-  `feature`, `line`, and `name`, `change` (`null`), the condition tags
-  and `@held` it carries as `conditions`, one cell per column, its
-  `verdict` (`held`, `proven`, or `failed`), and the `reason`, one
-  sentence. A cell has its `world`, `environment`, `role`, the
-  `conditions` its role came from (each condition its row's tags name,
-  with the value its environment declares, `null` where it declares
-  none), `outcome`
-  (`pass`, `fail`, `broke`, `flaky`, or `not-run`), the `line` the last
-  three name, `runs`, the executions it holds, for `fail` the `claim`
-  every run broke (its position among its step's claims, from 0) and
-  `actuals`, the actual value it saw in each run, in run order (`{ value }`,
+- `table` is the verdict table (see "Verdicts"). `base` is `null`
+  without `--base`, and under it the `ref` as given and the `commit` it
+  named. `mapping_changed` is `null` without `--base`, and under it
+  whether the mapping changed; `mapping_changes` says what did: the
+  `files` under the features directory, by their path from the project
+  root, whether the `config`'s mapping part changed, the environments
+  whose `conditions` changed, and whether `default_environments` did.
+  `worlds` lists its columns, `{ world, environment }`: `head` in each of
+  the run's environments, in the run's order, then `base` and `old` in
+  each environment where some row has a cell. `rows` has one row per
+  selected criterion, features by path and scenarios by line, then one
+  per removed criterion: its `feature`, `line`, and `name`, `change`
+  (`null` without `--base`; `unchanged`, `changed`, `new`, or
+  `removed` under it), `renamed_from` (`{ feature, name }` at the ref)
+  for an unchanged row the ref holds under another identity, the
+  condition tags and `@held` it carries as `conditions`, one cell per
+  world and environment it ran in, its `verdict` (`held`, `proven`,
+  `removed`, `failed`, `unproven`, or `moved`), and the `reason`, one
+  sentence. A removed row has no cells, its `line` is the ref's, and
+  `lines` holds its sentences at the ref. A cell has its `world`,
+  `environment`, `role`, the `conditions` its role came from (each
+  condition its row's tags name, with the value head's environment
+  declares, `null` where it declares none), `outcome` (`pass`, `fail`,
+  `broke`, `flaky`, or `not-run`), the `line` the last three name,
+  `runs`, the executions it holds, for `fail` the `claim` every run
+  broke (its position among its step's claims, from 0) and `actuals`,
+  the actual value it saw in each run, in run order (`{ value }`,
   `{ json_start, json_bytes }` for a value run.json cut, or `{ reason }`
   for none), and a `reason` for `not-run` and for a control that is
-  `broke` because its proof round could not finish. `left_out` counts the selected criteria the run left out
-  because `--env` named no environment that meets their conditions, 0
-  without `--env`. `proof_runs` is `--proof-runs`, what a control's
-  `runs` is measured against. It is the table the run summary draws.
+  `broke` because its proof round could not finish. `left_out` counts
+  the selected criteria the run left out because `--env` named no
+  environment that meets their conditions, 0 without `--env`.
+  `proof_runs` is `--proof-runs`, what the `runs` of a control and of a
+  base cell are measured against. It is the table the run summary draws.
 - `counts` holds `scenarios`, `passed`, and `failed`, which count the
-  executions of required cells, and `not_run`, which counts the required
-  cells that are `not-run`; `controls` counts the executions of
-  controls, proof runs included, and `controls_not_run` the control
-  cells that are `not-run`. A control is evidence, not a test that
-  gates, so it is counted apart.
+  executions of required head cells, and `not_run`, which counts the
+  required head cells that are `not-run`; `controls` counts the
+  executions of head controls, proof runs included, and
+  `controls_not_run` the head control cells that are `not-run`. A
+  control is evidence, not a test that gates, so it is counted apart, and
+  a base or an old execution is the table's to read.
 - A BeforeAll or AfterAll failure is a `hook-failed` finding that names
   its environment, with a `do` that runs the same targets in it.
 - `verdict` is the exit code's: it also counts a BeforeAll or AfterAll
-  failure that no scenario carries, and a row with no required cell, so it
-  can be `failed` while `counts.failed` is 0.
+  failure that no scenario carries, a row with no required cell, and an
+  `unproven` or `moved` row, so it can be `failed` while `counts.failed`
+  is 0.
 
 Every path in `run.json` (a step's `record`, a `used` entry's `record`, a
 scenario's `evidence.dir`) is relative to the run directory, the one that
@@ -4026,19 +4014,24 @@ vocabulary growth.
 ### Verdicts
 
 A run ends in one table. A row is one criterion: one scenario, or one
-Examples row of an outline. A column is one world and environment. In this
-release the one world is `head`, the tree the run was started in, so a
-column is one environment of the run. Where a row meets a column is a
+Examples row of an outline. A column is one world and environment. The
+world `head` is the tree the run was started in, and every run has a
+column for each of its environments there; `nuka run --base <ref>` adds
+the worlds `base` and `old` (below). Where a row meets a column is a
 cell, and each row has one verdict, which the exit code follows.
 
 A scenario that passes in every environment shows the code does what it
-says, but not that the scenario would notice if it did not. A feature
-behind a switch is where that question has an answer: run the scenario
-where the switch is off, and a Then that fails there shows the scenario
-tells the two apart. So an environment declares the switches of its
-program as `conditions` (see "Program"), and a scenario names the
-conditions it needs with tags on its `Feature:`, `Rule:`, `Scenario:`, or
-`Examples:` line, which add up the way Gherkin tags do:
+says, but not that the scenario would notice if it did not. There are
+two places where the answer can be seen. One is a feature behind a
+switch: run the scenario where the switch is off, and a Then that fails
+there shows the scenario tells the two apart. The other is the code
+before the change: run a new or changed scenario against the base's
+code, and a Then that fails there shows the same.
+
+So an environment declares the switches of its program as `conditions`
+(see "Program"), and a scenario names the conditions it needs with tags
+on its `Feature:`, `Rule:`, `Scenario:`, or `Examples:` line, which add
+up the way Gherkin tags do:
 
 - `@with:<condition>` needs the condition on: `true`, or any value.
 - `@with:<condition>=<value>` needs that value. `@with:x=true` and
@@ -4052,8 +4045,10 @@ condition tag of its row, and a `control` elsewhere. A row with no
 condition tag is required in every environment. A control runs like any
 cell and never turns the run red: its conditions do not hold, so a Then
 that fails there is evidence for the scenario, and one that passes there
-is evidence of nothing. `@held` is read and kept in the row's
-`conditions`; it changes no cell and no verdict.
+is evidence of nothing. `@held` says the base already has the behaviour,
+for a new or changed criterion whose behaviour did not change, such as a
+scenario written for code that already works; it is kept in the row's
+`conditions`, and only `--base` reads it.
 
 ```gherkin
 @with:banner
@@ -4102,6 +4097,85 @@ or the ones a run without `--env` selects), and reports three errors:
   alone, which the program file chose and is expected to cover; under
   `--env`, such a scenario is left out of the run instead.
 
+**Criteria and how they change.** `nuka run --base <ref>` compares each
+selected criterion with the commit the ref names, such as the base of a
+pull request. A criterion's identity is its feature file and its name. Its
+content is what a person approved: its steps in order, Background steps
+first, each with its effective keyword (an `And` or `But` takes the
+keyword it continues), its text, its docstring, and its table; its
+Examples row; and its condition tags and `@held`, which decide where it
+has to hold. Other tags, the name, and where it stands in the file are
+not content, so a scenario renamed, moved to another file, or tagged
+`@smoke` still says what it said. Against the ref, a criterion is:
+
+- `unchanged`: the same identity and content, or the same content under
+  another identity, which the row names in `renamed_from` (a match in the
+  same file first);
+- `changed`: the same identity, other content;
+- `new`: neither, at head;
+- `removed`: at the ref, and no longer at head.
+
+A name that repeats with differing content on both sides is left `new`
+and `removed`, not paired by position. The ref's criteria are read from
+its feature files at the run's targets, or its whole features directory
+when the run names none. A ref feature file that does not parse is a
+`base-feature-unparsed` warning, and head's criteria in it count as
+`new`.
+
+**The mapping.** The mapping is what turns a sentence into what runs:
+every file under the features directory except the `.feature` files (the
+step files, their helpers, support code, data), the config's `fixtures`,
+`parameterTypes`, `secrets`, and `worldParameters`, and the program file's
+`conditions` on each environment and its `defaultEnvironments`, which
+decide which cells of a criterion are required. It is compared as one
+unit: the run knows only that the mapping changed or that it did not,
+never which criterion a changed helper reaches. A config or program file
+that does not load at the ref counts as changed. Code outside the features
+directory is the program's, which the base world measures. A project whose
+`featuresDir` is the project root has no mapping apart from its code, and
+`--base` refuses it with `base-features-at-root`.
+
+**Worlds.** `--base` adds two worlds, each in a tree of its own under the
+run directory, `trees/base` and `trees/old`, which the run removes when it
+ends:
+
+- `base` runs the ref's code under head's criteria and mapping. Its tree
+  is a git worktree of the ref, with head's features directory and config
+  copied over the ref's. The program file goes with the code: the base
+  tree keeps the ref's, and takes head's only when the ref has none
+  (`program_from_head: true` on its world). The base world reads its
+  environments, their conditions included, from that file.
+- `old` runs head's code under the ref's criteria and mapping. Its tree is
+  a copy of head's working tree (its tracked files and the untracked files
+  git does not ignore) with the ref's features directory and config over
+  head's, and it starts head's program recipe. It shows whether an approved
+  sentence still means what it meant, read through the steps it was
+  approved with.
+
+Neither tree holds `node_modules` or anything else git ignores, and
+nothing is installed: each tree builds its program with its own `build`
+commands, and both sit inside head's project, so a package a tree's file
+imports, nukadoko included, resolves to head's. A change that also changed
+the dependencies builds the base against head's versions. A dependency
+outside the project (a Ruby gem, a system tool) is the machine's. A world
+of a tree has its directory at `worlds/<environment>@base` or
+`worlds/<environment>@old`, and a `url` function learns which tree it
+answers for (see "Program"). A tree's scenarios run in worker processes
+started in the tree, at any `--concurrency`; each worker runs `nuka check`
+on the tree's files first, unless `--no-check`, and a tree whose files do
+not load or check leaves its cells not run, with the reason.
+
+A row needs a world only where it can change the verdict, and only once
+head passed:
+
+- A `new` or `changed` row runs in the base world in each environment
+  where its head cell is required and passed, unless a head control
+  already proves it. A row tagged `@held` always runs there, since only
+  the base can show the base has the behaviour.
+- An `unchanged` row runs in the old world in each such environment when
+  the mapping changed, at the line the ref's feature file gives it.
+- A row whose required head cell did not pass runs in neither.
+
 **Cells.** A cell is what its executions came to:
 
 | cell | its executions |
@@ -4110,7 +4184,7 @@ or the ones a run without `--env` selects), and reports three errors:
 | `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
 | `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, a claim nukadoko could not judge, or, at the scenario's line, a hook |
 | `flaky@<line>` | they disagree (two that broke two claims of one line disagree too); the line is the first one's that did not pass |
-| `·` | none ran, and `reason` says why: the program did not start for its world, or a BeforeAll failed |
+| `·` | none ran, and `reason` says why: the program did not start for its world, a BeforeAll failed, or a tree's files did not load |
 
 Only a Then proves. A When that errors where the behaviour is absent says
 nothing about whether the Then can tell the difference, so it is
@@ -4118,24 +4192,27 @@ nothing about whether the Then can tell the difference, so it is
 with `run` bound in Then position judges no claim, so its failed
 assertion is `broke`, and a compat suite's criteria are `held` or
 `failed`, never `proven`, until their Thens become claim steps (see
-"Claims").
+"Claims"). An old cell's line is in the ref's feature file, which the old
+world runs.
 
-A required cell runs once, or `--repeat` times. A control that failed at a
-Then line runs again, in the same pass and the same world, until it has
-broken the same claim at that line `--proof-runs` times (2 by default),
-or until a run disagrees, which makes it `flaky`. One failure could be
-the program being slow once, and proof is the one verdict that reads a
-failure as good news, so it is the one that needs the failure repeated.
-Runs agree when they broke the same claim, by its position in the step,
-at the same line: two claims broken at one line are two reasons, and
-only one of them can be the switch. Agreement does not need the same
-value, since a value that legitimately differs between runs, such as a
-generated id or a timestamp, would make every proof flaky; the cell's
-`actuals` keeps each run's value, so a reader sees 503 against 404 and
-weighs it. A control that
-passed or broke is not run again. Each proof run is a `proof run <k>/<n>`
-line on stderr, apart from the numbered scenario lines, and a control's
-own scenario line ends with `(control)`.
+A required head cell runs once, or `--repeat` times, and a base or an
+old cell once. A cell where the behaviour is absent (a head control, or a
+base cell) that failed at a Then line runs again, in the same pass and
+the same world, until it has broken the same claim at that line
+`--proof-runs` times (2 by default), or until a run disagrees, which
+makes it `flaky`. One failure could be the program being slow once, and
+proof is the one verdict that reads a failure as good news, so it is the
+one that needs the failure repeated. Runs agree when they broke the same
+claim, by its position in the step, at the same line: two claims broken
+at one line are two reasons, and only one of them can be the switch.
+Agreement does not need the same value, since a value that legitimately
+differs between runs, such as a generated id or a timestamp, would make
+every proof flaky; the cell's `actuals` keeps each run's value, so a
+reader sees 503 against 404 and weighs it. A cell that passed or broke is
+not run again. Each proof run is a `proof run <k>/<n>` line on stderr,
+apart from the numbered scenario lines, and a control's own scenario line
+ends with `(control)`; a tree's scenario lines start with
+`base <environment>` or `old <environment>`.
 
 Under `--concurrency`, each proof round runs in a worker of its own,
 which runs `BeforeAll` and `AfterAll` again. What goes wrong in a round
@@ -4146,39 +4223,85 @@ in that environment stop, and a `proof-run-incomplete` warning says what
 happened. It never turns the run red, and a proof that could not finish
 proves nothing, so the row is `held`.
 
-**Verdicts.** A row is:
+**Verdicts.** A row is one of six words. Three are green:
 
-- `failed` when a required cell is not `pass`, or when the row has no
+- `held`: every required head cell is `pass`, and nothing more is asked
+  of it: without `--base`, no control proves it; under `--base`, it is
+  `unchanged` and the mapping did not change, or it passed in the old
+  world too, or it is a `new` or `changed` row tagged `@held` that
+  passed at the base and no control proves.
+- `proven`: every required head cell is `pass`, and a cell where its
+  behaviour is absent is `fail` in `--proof-runs` runs or more: a control,
+  or, for a `new` or `changed` row, its base cell. A row tagged `@held`
+  that is proven this way says the tag is not needed.
+- `removed`: the ref holds the criterion and head does not. The row has
+  no cells and quotes the sentences the ref had, so a reader sees what
+  was dropped.
+
+Three are red:
+
+- `failed`: a required head cell is not `pass`, or the row has no
   required cell, which only a run under `--no-check` without `--env`
   reaches, since `nuka check` reports `condition-unmet`. Such a row has
   a `criterion-without-required-cell` finding, whose `do:` line runs the
   scenario in an environment of the program file that meets it, or runs
-  `nuka check` on its file when none does;
-- `proven` when every required cell is `pass` and a control is `fail` in
-  `--proof-runs` runs or more;
-- `held` otherwise: every required cell is `pass`, and no control proves it.
+  `nuka check` on its file when none does.
+- `unproven`: a `new` or `changed` row passes at head, and nothing shows
+  a Then failing where its behaviour is absent: its base cells passed,
+  broke, were flaky, failed in fewer than `--proof-runs` runs, or did not
+  run, and no control proves it. A row tagged `@held` whose base cell is
+  not `pass` is `unproven` too, unless a cell where its behaviour is
+  absent proves it.
+- `moved`: an `unchanged` row passes at head, the mapping changed, and
+  the old world did not pass it: the approved sentence, read through the
+  approved steps, no longer holds against head's code, so its meaning
+  moved under it. An old cell that did not run, because the ref's mapping
+  does not load or check against head, makes the row `moved` with that
+  reason, since nothing shows the sentence still means what it meant.
 
-The exit code is 1 when a row is `failed`, or when the run failed outside
-every scenario (a hook, a world, a worker): a `BeforeAll` or `AfterAll`
-that fails in an environment's pass fails the run at any `--concurrency`,
-and one that fails in a proof round's worker does not. `held` and
-`proven` are both green. A `held` row whose control passed is the one to read: the switch
-does not reach what the Then checks, or the Then does not check what the
-switch changes. The stderr count line counts the required cells alone:
-their executions, and the cells that did not run. A run with a control
-adds two lines after it: `<n> control runs, <k> not run`, which counts
-the controls the same way, and `criteria: <held> held, <proven> proven,
-<failed> failed`.
+Without `--base` no change is known, so a row is `held`, `proven`, or
+`failed`. The exit code is 1 when a row is red, or when the run failed
+outside every scenario (a hook, a world, a worker): a `BeforeAll` or
+`AfterAll` that fails in an environment's pass fails the run at any
+`--concurrency`, and one that fails in a proof round's worker does not.
+A `held` row whose control passed is the one to read: the switch does
+not reach what the Then checks, or the Then does not check what the
+switch changes. The stderr count line counts the required head cells
+alone: their executions, and the cells that did not run. A run with a
+control adds `<n> control runs, <k> not run` after it, which counts the
+controls the same way, and `criteria: <held> held, <proven> proven,
+<failed> failed`, a line every run under `--base` has too, with the
+`unproven`, `moved`, and `removed` counts after them.
 
-The table is `run.json`'s `table`, and the run summary opens with it: a
-row per criterion, a column per world and environment, headed with the
-conditions that environment declares, and under it one
-line for each red row that says why, with where its execution stopped.
-`nuka run`'s exit code is the gate, and a control never turns it red.
-The Allure results keep each control with the status it ran to, marked
-as a control, so a control that failed is a failed result there by
-design; the messages stream, which a JUnit-reading CI gates on, leaves
-the controls out (see "Allure results" and "Messages stream").
+Some changes cannot reach `proven`. A fix for an intermittent bug passes
+at the base too, often enough, so no Then fails there in every run. A
+first criterion for behaviour the base never had and no switch turns off
+proves only through a base cell, which needs the base to run. A refactor
+of step files changes the mapping, so every unchanged row then depends on
+the old world: when the ref's steps no longer load against head's code,
+every such row is `moved`, and the reason says why.
+
+The table is `run.json`'s `table`, and the run summary opens with it:
+under `--base` a line that names what was compared, then a row per
+criterion, a column per world and environment, a head column headed with
+the conditions its environment declares, and under it one line for each
+red row that says why, with where its execution stopped. `nuka run`'s
+exit code is the gate, and a control never turns it red. The Allure
+results keep each control with the status it ran to, marked as a
+control, so a control that failed is a failed result there by design;
+the messages stream, which a JUnit-reading CI gates on, leaves the
+controls out (see "Allure results" and "Messages stream"). Both carry
+head's executions alone.
+
+`--base` names a commit-ish git resolves in the project's repository:
+a branch, a tag, a remote-tracking name such as `origin/main`, or a
+commit. It is refused before anything runs when the project is not in a
+git repository (`base-outside-git`), when the ref names no commit
+(`base-ref-unknown`), or when git fails (`base-git-failed`). In a shallow
+clone that lacks the commit, the refusal is `base-shallow`, and its `do`
+is the `git fetch` that gets it: `origin/main` fetches `main` into
+`refs/remotes/origin/main`, a commit is fetched by its hash, and another
+name is fetched from `origin` under its own name.
 
 ### Single steps (the agent path)
 
@@ -5046,13 +5169,20 @@ holds:
   with every scenario green still reads `failed`, with a sentence saying the
   failure was outside every scenario that ran, which names each world whose
   program did not start, with its log), how many criteria, and how many
-  rows are `held`, `proven`, and `failed`;
+  rows have each word that some row has;
+- under `--base`, one line that names the ref and its short commit, counts
+  the criteria `unchanged`, `changed`, `new`, and `removed`, and says
+  whether the mapping changed, naming what did (each changed file, the
+  config's mapping part, the environments whose conditions changed,
+  `defaultEnvironments`);
 - the verdict table (see "Verdicts"): a row per criterion, by feature path
-  and line, with its verdict, its location, name, and condition tags, and
-  a column per world and environment, named `head <environment>`, whose
-  cell reads `pass`, `fail@<line>`, `broke@<line>`, `flaky@<line>`, or
-  `·`, with `(control)` for a control and the number of runs when there
-  is more than one;
+  and line, then the removed ones, with its verdict, its location, name,
+  and condition tags, under `--base` a `change` column (with `renamed
+  from` and the ref's place for a renamed row), and a column per world and
+  environment, named `head <environment>`, `base <environment>`, or `old
+  <environment>`, whose cell reads `pass`, `fail@<line>`,
+  `broke@<line>`, `flaky@<line>`, or `·`, with `(control)` for a
+  control and the number of runs when there is more than one;
 - one line for each red row: its location, its name, and the row's
   reason, and under it, for a cell that ran, where its first execution
   that did not pass stopped (the first step that did not pass or skip,
@@ -5060,7 +5190,8 @@ holds:
   `used` step whose process exited nonzero with its exit code and the
   first line of its stderr, or of its stdout when stderr is empty (as on
   stderr), the last command the step ran through `runCommand` that did
-  not exit 0, and the record's path;
+  not exit 0, and the record's path, after `base:` or `old:` for a cell of
+  that world;
 - the condition: the short commit sha and whether the tree had uncommitted
   changes (from `commit`, or "unknown" without one), each environment and its
   target version, a line for each world whose program log was not read,
@@ -5070,13 +5201,8 @@ holds:
   file), `proof runs: <n>` when `--proof-runs` is not 2, `check: skipped`
   under `nuka run --no-check` (nothing when the check ran), the nukadoko
   version, the run id, and the start and finish times;
-- under `--since`, "Criteria since `<ref>`": how many scenarios are
-  unchanged, changed, and new, how many criteria were removed (and how many
-  are ambiguous or not compared, when any are), which targets and which
-  step files were compared, the step files that changed, the lines of each
-  scenario that is not unchanged and of each removed criterion in a
-  `gherkin` block, and under each changed step file every scenario that
-  names it;
+- under `--base`, "Removed criteria": each removed criterion's location
+  and name, and its sentences at the ref in a `gherkin` block;
 - "Claims", one entry per Then that declared claims: its location and
   sentence, its environment in a run of several, `control` for a
   control's, the number of readings when there was more than one, and under
@@ -5467,15 +5593,15 @@ summary (see the run summary under "Records"). The feature says what was
 agreed, in the reviewer's own words. The run is the evidence for it, and
 the summary states that evidence: these scenarios ran at this commit,
 under these conditions, with these measurements, and, under
-`nuka run --since <ref>`, these criteria changed, appeared, or went, and
-these files behind their steps changed, since the base that was approved,
-as far as the comparison under "Running" reaches. nukadoko makes
+`nuka run --base <ref>`, these criteria are unchanged, changed, new, or
+removed since the base, each new or changed one failed a Then against
+the base's code or did not, and each unchanged one still passed under
+the base's steps when the steps changed (see "Verdicts"). nukadoko makes
 that claim and no other: it does not decide who approves, and it does
 not record the approval. Where approval is recorded is the team's
 process, outside nukadoko: a pull request review, a change ticket, or an
 audit log can each point at the run by the commit and run id the summary
-names, and a later change shows up as a new run with its own "Criteria
-since" section.
+names, and a later change shows up as a new run with a table of its own.
 
 A green run is a past-tense claim, "these scenarios passed at commit X", and
 the summary states it that way: the commit, whether the tree had uncommitted
@@ -5523,12 +5649,14 @@ An agent follows this process for a ticket's acceptance criteria:
    debugging; its summary covers only the scenarios it selected.
 6. Open the change for review, such as a pull request. CI runs the
    feature and publishes the run summary beside it (see `docs/ci.md`),
-   with `--since <base>` naming the base that was last approved.
+   with `--base <base>` naming the change's base.
 7. A person reads the feature and the summary. The run is the evidence;
    where the person records their approval is the team's process. The
-   table the summary opens with says, for each criterion, whether a run
-   where its conditions do not hold showed it fail (`proven`) or only
-   that it passed (`held`) (see "Verdicts").
+   table the summary opens with says, for each criterion, what changed
+   since the base and whether a world where its behaviour is absent
+   showed it fail (`proven`), only that it passed (`held`), or neither
+   (`unproven`), and whether an unchanged one still means what it meant
+   (`moved` when it does not) (see "Verdicts").
 
 Steps 1 through 4 contain the work. New typed steps and the feature are
 ordinary review material. Steps 5 and 6 are mechanical. Step 7 is the
@@ -6068,19 +6196,22 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs 
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
-                              --since <git ref> compares each scenario's
-                              criteria (tags, steps with their effective
-                              keyword, docstrings, tables, its Examples row)
-                              and the files that register its steps, their
-                              parts, and the fixtures they need with the
-                              commit the ref names: criteria.changed_since is
-                              unchanged, changed, new, ambiguous, or unknown,
-                              since lists the removed criteria and the step
-                              files that changed, and the summary quotes what
-                              moved. It reports only. An unknown ref
-                              (since-ref-unknown), a project outside git
-                              (since-outside-git), or another git failure
-                              (since-git-failed) is refused.
+                              --base <git ref> compares each criterion with
+                              the commit the ref names: a new or changed one
+                              also runs against the base's code (the base
+                              world), and, when the mapping (step files,
+                              support code, the config's mapping part, the
+                              program's conditions) changed, an unchanged one
+                              runs under the base's criteria and steps (the
+                              old world). Each row gets held, proven,
+                              removed, failed, unproven, or moved, and the
+                              run exits 1 on failed, unproven, or moved. A
+                              project outside git (base-outside-git), an
+                              unknown ref (base-ref-unknown), a shallow clone
+                              without the commit (base-shallow, with the
+                              fetch), a git failure (base-git-failed), and a
+                              featuresDir at the project root
+                              (base-features-at-root) are refused.
                               Every run writes a Markdown run summary to
                               runs/<run_id>/summary.md and appends it
                               to $GITHUB_STEP_SUMMARY when set, and writes

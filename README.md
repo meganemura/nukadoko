@@ -15,8 +15,10 @@ Everything between those sentences and the system under test is typed,
 checked before execution, and reviewable in a diff. Every run ends in a
 Markdown run summary, and the run is the evidence for its criteria: these
 scenarios ran at this commit, under these conditions, and, with
-`nuka run --since <ref>`, these criteria and step files changed since the
-base a person approved, as far as its comparison reaches. A person reads the `.feature` and that summary.
+`nuka run --base <ref>`, these criteria are new, changed, unchanged, or
+removed since the base, each new or changed one failed a Then against the
+base's code or did not, and each unchanged one still holds under the
+steps it was approved with. A person reads the `.feature` and that summary.
 Where their approval is recorded, a pull request review, a change ticket,
 or an audit log, is the team's choice and stays outside nukadoko.
 
@@ -1230,25 +1232,6 @@ invocation, for a failure that reproduces one time in several. Each
 execution is its own record under one run id, and a scenario that failed
 at least once is tallied after the summary, `<passed> of <n> passed`.
 
-`nuka run --since <git ref>` says what moved in the criteria since a base
-a person approved, such as `origin/main`, as far as its comparison
-reaches. Each scenario's criteria (its
-tags, its Background and own steps with their effective keyword,
-docstrings, and tables, and its Examples row, read from the compiled
-scenario so indentation, comments, and a docstring's delimiter do not
-count) are compared with the same scenario at that commit, and `run.json`
-gives each one `criteria.changed_since`: `unchanged`, `changed`, `new`,
-`ambiguous` (scenarios of one name that content cannot pair), or `unknown`
-(the file does not parse at the ref). `since` lists the criteria the ref
-held that are gone, what was compared (the run's targets: a directory
-target brings in the files the ref held under it), and each file that
-registers a bound step, its parts, or the fixtures it needs, with whether
-git sees it `changed` or `untracked` at the ref. The run summary's
-"Criteria since" section quotes every scenario that is not unchanged and
-every removed criterion, which is what the reader is asked to approve
-again, and lists the scenarios under each changed step file. It reports
-only; the exit code stays the run's.
-
 `nuka run --env a --env b` runs every selected scenario once in each
 environment, in one run with one run id: all of `a` first, then all of
 `b`, each with its own env files, secrets, version probe, program,
@@ -1280,6 +1263,26 @@ runs both. An environment is still only configuration, in
 their fields say. `conditions` sets nothing, and nukadoko does not check
 it against the program: `{condition.banner}` hands the program the side
 its environment declares, so the two cannot disagree.
+
+`nuka run --base <git ref>` compares each criterion with the commit the
+ref names, such as `origin/main`, and adds two worlds where a row needs
+them. A criterion is its feature file and name, and its content is what a
+person approved (its steps, its Examples row, its condition tags), so a
+renamed or retagged scenario stays `unchanged`. A `new` or `changed`
+one also runs in the `base` world, the base's code under head's
+criteria and steps, and its Then has to fail there, in each of two runs,
+for the row to be `proven`; when nothing shows that, the row is
+`unproven`, and `@held` says the base already had the behaviour. When
+the mapping changed (a step file or helper under the features directory,
+the config's fixtures or parameter types, an environment's conditions),
+an `unchanged` one also runs in the `old` world, head's code under the
+base's criteria and steps, and has to pass there; when it does not, the
+row is `moved`: the approved sentence no longer means what it meant.
+Each world runs in a tree under the run directory, built from that
+tree's program file, and resolves packages from head's project. The exit
+code is 1 on a `failed`, `unproven`, or `moved` row, and a `removed`
+row quotes the criterion that went. In a shallow clone, fetch the base
+first; the refusal names the command.
 
 ## What this does not do
 

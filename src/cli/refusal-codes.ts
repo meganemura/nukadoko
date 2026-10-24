@@ -16,6 +16,26 @@ export interface RefusalCodeInfo {
 }
 
 const REFUSAL_CODES = {
+  "base-features-at-root": {
+    description: "nuka run --base needs the scenarios and their steps in a directory of their own, and featuresDir is the project root, where the program's code is too.",
+    fix: "Move the feature files and the step files into a directory of their own, such as features/, and set featuresDir to it.",
+  },
+  "base-git-failed": {
+    description: "nuka run --base could not ask git what it needs, or could not check the base out into the run's directory: git is missing, or a git command failed.",
+    fix: "Run the git command the message names to see its error, or install git.",
+  },
+  "base-outside-git": {
+    description: "nuka run --base compares with a git commit, and the project is not inside a git repository.",
+    fix: "Run nuka run --base inside the git repository that holds the project, or run without --base.",
+  },
+  "base-ref-unknown": {
+    description: "nuka run --base names a ref that is no commit in the project's repository.",
+    fix: "Name a branch, tag, or commit the repository holds, such as the pull request's base.",
+  },
+  "base-shallow": {
+    description: "nuka run --base names a ref that this shallow clone does not hold, because it holds only part of the history.",
+    fix: "Fetch the base first with the command the refusal names, or fetch-depth: 0 on actions/checkout.",
+  },
   "check-errors": {
     description: "nuka run did not start, because nuka check reports errors for the selected scenarios.",
     fix: "Correct each error the findings name, or pass --no-check to run anyway.",
@@ -136,18 +156,6 @@ const REFUSAL_CODES = {
   "run-sources-missing": {
     description: "The run directory holds no sources.json, the feature text nuka report --format allure and messages parse the run's scenarios from. A run an earlier release wrote has none.",
     fix: "Run the scenarios again with this release, and render that run.",
-  },
-  "since-git-failed": {
-    description: "nuka run --since could not read what it compares from git: git is missing, or a git command failed for a reason other than a file the commit does not hold.",
-    fix: "Run the git command the message names to see its error, install git, or drop --since.",
-  },
-  "since-outside-git": {
-    description: "nuka run --since compares with a git commit, and the project is not inside a git repository.",
-    fix: "Run nuka run --since inside the git repository that holds the project, or drop --since.",
-  },
-  "since-ref-unknown": {
-    description: "nuka run --since names a ref that is no commit in the project's repository.",
-    fix: "Name a branch, tag, or commit the repository holds, such as the base the criteria were approved at. In CI, fetch it first: git fetch origin <base branch>, or fetch-depth: 0 on actions/checkout.",
   },
   "step-args-invalid": {
     description: "nuka do has no --args, or --args is not valid JSON.",

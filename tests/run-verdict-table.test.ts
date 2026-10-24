@@ -58,6 +58,7 @@ function table(proofRuns: number) {
   return {
     base: null,
     mapping_changed: null,
+    mapping_changes: null,
     worlds: [head("flag-off"), head("flag-on")],
     rows: [
       {

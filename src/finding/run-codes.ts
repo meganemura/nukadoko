@@ -14,6 +14,12 @@ export interface RunCodeInfo {
 }
 
 const RUN_CODES = {
+  "base-feature-unparsed": {
+    severity: "warning",
+    description:
+      "Under nuka run --base, the base's copy of a feature file does not parse, so its criteria were not compared with head's and each counts as new.",
+    fix: "Nothing needs changing at head. Each criterion of the file is judged as new, so its base cell has to show a Then failing; to compare them with the base, name a base whose copy of the file parses.",
+  },
   "contract-unreadable": {
     severity: "failed",
     description:
@@ -127,7 +133,7 @@ const RUN_CODES = {
   },
   "worker-output-unreadable": {
     severity: "warning",
-    description: "A worker under --concurrency wrote a line on its stdout that is not one of its messages.",
+    description: "A worker, under --concurrency or in a tree of nuka run --base, wrote a line on its stdout that is not one of its messages.",
     fix: "Remove the code that writes to process.stdout from the step files or the code they import.",
   },
 } as const satisfies Record<string, RunCodeInfo>;

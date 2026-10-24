@@ -3,11 +3,10 @@ import path from "node:path";
 import { DEFAULT_PROOF_RUNS } from "../condition/condition.js";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
-import type { RunClaim, RunDocument, RunScenario, RunTableCell, RunTableRow } from "../record/run-result.js";
+import { RED_VERDICTS, type RunClaim, type RunDocument, type RunScenario, type RunTableCell, type RunTableRow, type RunWorld } from "../record/run-result.js";
 import type { MeasuredChannel } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
-import { scenarioKey } from "./criteria-since.js";
 import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
 import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 
@@ -16,7 +15,15 @@ import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 // `$GITHUB_STEP_SUMMARY` when that is set, and wherever
 // `nuka report --format markdown` is pointed later. It says what ran, at which commit, under which condition, and how
 // each criterion came out: the verdict table first, then why each red row
-// is red.
+// is red. Under `nuka run --base` the table says what each criterion's
+// change is, the line above it what the run compared with and whether the
+// mapping changed, and a section after the reasons quotes each removed
+// criterion, since head no longer holds its sentences.
+//
+// Only head's executions feed the sections after the table (claims,
+// unmeasured actions, scenarios with no claim, reruns): an execution of
+// the base or the old world is a cell of the table, read there, and its
+// claims are about code or steps the change replaced.
 //
 // The renderer reads run.json and nothing else, so the summary is a view of
 // the run's one record and can never say something run.json does not. The
@@ -73,6 +80,20 @@ function codeSpan(text: string): string {
 /** The findings the verdict table already shows: a failed scenario is its
  * cell, and a row with no required cell is its reason line. */
 const TABLE_CODES: ReadonlySet<string> = new Set(["scenario-failed", "criterion-without-required-cell"]);
+/** Head's executions: the base and the old world's are the table's. */
+function headScenarios(document: RunDocument): readonly RunScenario[] {
+  return document.scenarios.filter((scenario) => scenario.world === undefined);
+}
+
+/** A world as a line names it: its environment, and its tree when that is
+ * not head's. */
+function worldName(world: Pick<RunWorld, "name" | "tree">): string {
+  return world.tree === undefined || world.tree === "head" ? world.name : `${world.name} (${world.tree})`;
+}
+
+function scenarioKey(feature: string, line: number): string {
+  return `${feature}\u0000${line}`;
+}
 
 /** Findings the scenario tables do not already show. */
 function runFindings(document: RunDocument): readonly Finding[] {
@@ -84,7 +105,7 @@ function runFindings(document: RunDocument): readonly Finding[] {
  * reason is; any other failure outside every scenario is a hook's or a
  * worker's, which the findings name. */
 function outsideScenarios(document: RunDocument): string[] {
-  const unstarted = (document.worlds ?? []).filter((world) => world.error !== null);
+  const unstarted = (document.worlds ?? []).filter((world) => (world.tree ?? "head") === "head" && world.error !== null);
   if (unstarted.length === 0) {
     return [
       "No scenario that ran failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, " +
@@ -115,14 +136,16 @@ function renderTitle(document: RunDocument): string[] {
   const criteria = countOf(rows.length, "criterion", "criteria");
   const scope = document.environments.length > 1 ? `${criteria} in ${document.environments.length} environments` : criteria;
   const counts = [scope, `${count("held")} held`];
-  if (count("proven") > 0) counts.push(`${count("proven")} proven`);
-  if (count("failed") > 0) counts.push(`${count("failed")} failed`);
+  for (const word of ["proven", "removed", "failed", "unproven", "moved"] as const) {
+    if (count(word) > 0) counts.push(`${count(word)} ${word}`);
+  }
   const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
   // A red row whose red cells all did not run says why in its reason, but
   // not where to look: a world that did not start names its log here. A row
   // red for a cell that ran, or for having no required cell, is the table's
   // own to explain.
   const explained = rows.some((row) => {
+    if (row.verdict === "unproven" || row.verdict === "moved") return true;
     if (row.verdict !== "failed") return false;
     const required = row.cells.filter((cell) => cell.role === "required");
     return required.length === 0 || required.some((cell) => cell.outcome !== "pass" && cell.outcome !== "not-run");
@@ -153,12 +176,12 @@ function renderCondition(document: RunDocument): string[] {
   const programLogs = (document.worlds ?? []).flatMap((world) => {
     const log = world.program_log;
     if (log === null) {
-      return [`- program log of world ${world.name}: not read, since the program runs at ${world.url ?? "a URL"}, which nukadoko did not start`];
+      return [`- program log of world ${worldName(world)}: not read, since the program runs at ${world.url ?? "a URL"}, which nukadoko did not start`];
     }
     if (log === undefined || log.stamped === 0) return [];
-    if (log.tagged === 0) return [`- program log of world ${world.name}: carries no trace ids, so each step's slice of it is empty`];
+    if (log.tagged === 0) return [`- program log of world ${worldName(world)}: carries no trace ids, so each step's slice of it is empty`];
     if (log.late > 0) {
-      const fact = `- program log of world ${world.name}: ${countOf(log.late, "line", "lines")} carrying a step's trace id arrived after that step ended (\`program-log-late.txt\`).`;
+      const fact = `- program log of world ${worldName(world)}: ${countOf(log.late, "line", "lines")} carrying a step's trace id arrived after that step ended (\`program-log-late.txt\`).`;
       if (log.lines > 0) return [fact];
       return [
         `${fact} None of the steps' lines arrived in time, which is what a program that buffers its output on a pipe looks like; ` +
@@ -266,32 +289,66 @@ function tableCell(cell: RunTableCell): string {
 // feature path and line, so the same run reads the same way at any
 // concurrency, and a column per world and environment, in the run's
 // environment order. The verdict is the first column, since it is what a
-// reader scans for. A column's heading names the conditions its
+// reader scans for. A head column's heading names the conditions its
 // environment declares, since they decide which of its cells count, and
-// they are the environment's word, which a reader can check.
+// they are the environment's word, which a reader can check. A base or an
+// old column names none: its cells take their roles from head's.
 function renderTable(document: RunDocument): string[] {
-  const { worlds, rows } = document.table;
+  const { worlds, rows, base } = document.table;
   if (rows.length === 0) return [];
   const heading = (column: (typeof worlds)[number]): string => {
-    const declared = document.environments.find((environment) => environment.name === column.environment)?.conditions;
+    const declared = column.world === "head" ? document.environments.find((environment) => environment.name === column.environment)?.conditions : undefined;
     return `${column.world} ${column.environment}${declared === undefined ? "" : ` (${conditionsText(declared)})`}`;
   };
+  // The change column only under `--base`: without a base nothing is
+  // known about it.
+  const change = (row: RunTableRow): string[] => {
+    if (base === null) return [];
+    const renamed = row.renamed_from === undefined ? "" : `, renamed from ${cellCode(row.renamed_from.feature)} ${cellText(row.renamed_from.name)}`;
+    return [`${row.change ?? ""}${renamed}`];
+  };
   return [
+    ...renderBase(document),
     "",
-    `| verdict | criterion | ${worlds.map((column) => cellText(heading(column))).join(" | ")} |`,
-    `| --- | --- | ${worlds.map(() => "---").join(" | ")} |`,
+    `| verdict | criterion | ${base === null ? "" : "change | "}${worlds.map((column) => cellText(heading(column))).join(" | ")} |`,
+    `| --- | --- | ${base === null ? "" : "--- | "}${worlds.map(() => "---").join(" | ")} |`,
     ...rows.map((row) => {
       const tags = row.conditions.length === 0 ? "" : ` ${row.conditions.map((tag) => cellCode(tag)).join(" ")}`;
       const cells = worlds.map((column) => {
         const cell = row.cells.find((entry) => entry.world === column.world && entry.environment === column.environment);
         return cell === undefined ? "" : tableCell(cell);
       });
-      return `| ${row.verdict} | ${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags} | ${cells.join(" | ")} |`;
+      return `| ${[row.verdict, `${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags}`, ...change(row), ...cells].join(" | ")} |`;
     }),
     // A criterion `--env` left out has no row, so the table says how many
     // there were, or the run would read as covering the whole selection.
     ...(document.table.left_out > 0 ? ["", leftOutText(document.table.left_out)] : []),
   ];
+}
+
+// The line above the table under `--base`: what the run compared with, how
+// many criteria changed, and whether the mapping changed and what in it,
+// since an unchanged criterion over a changed mapping is what the old
+// world was run for.
+function renderBase(document: RunDocument): string[] {
+  const { base, rows } = document.table;
+  if (base === null) return [];
+  const count = (change: RunTableRow["change"]): number => rows.filter((row) => row.change === change).length;
+  const changes = `${count("unchanged")} unchanged, ${count("changed")} changed, ${count("new")} new, ${count("removed")} removed`;
+  const mapping = document.table.mapping_changes;
+  const parts = mapping === null
+    ? []
+    : [
+        ...(mapping.files.length === 0 ? [] : [`${mapping.files.length === 1 ? "file" : "files"} ${mapping.files.map((file) => cellCode(file)).join(", ")}`]),
+        ...(mapping.config ? ["the config's mapping part"] : []),
+        ...(mapping.conditions.length === 0 ? [] : [`the conditions of ${mapping.conditions.map((name) => cellCode(name)).join(", ")}`]),
+        ...(mapping.default_environments ? ["defaultEnvironments"] : []),
+      ];
+  const mappingLine =
+    document.table.mapping_changed === true
+      ? `The mapping changed (${parts.length === 0 ? "the base's could not be read" : parts.join("; ")}), so the old world ran each unchanged criterion under the base's steps.`
+      : "The mapping did not change, so no unchanged criterion needed the old world.";
+  return ["", `Compared with ${cellCode(base.ref)} (\`${base.commit.slice(0, 7)}\`): ${changes}. ${mappingLine}`];
 }
 
 // One line per red row, under the table: the reason the row is red, and,
@@ -300,87 +357,47 @@ function renderTable(document: RunDocument): string[] {
 // reader opens next. A held or proven row's reason is in run.json; its
 // cells already say what it came to.
 function renderReasons(document: RunDocument): string[] {
-  const red = document.table.rows.filter((row) => row.verdict === "failed");
+  const red = document.table.rows.filter((row) => RED_VERDICTS.has(row.verdict));
   if (red.length === 0) return [];
   const lines = [""];
   for (const row of red) {
     lines.push(`- ${codeSpan(`${row.feature}:${row.line}`)} ${cellText(row.name)}: ${cellText(row.reason)}`);
-    const cell = row.cells.find((entry) => entry.role === "required" && entry.outcome !== "pass" && entry.outcome !== "not-run");
+    // The cell the reason names: a required head cell for `failed`, an old
+    // cell for `moved`, a base cell for `unproven`.
+    const world = row.verdict === "moved" ? "old" : row.verdict === "unproven" ? "base" : "head";
+    const cell = row.cells.find(
+      (entry) => entry.world === world && entry.role === "required" && entry.outcome !== "pass" && entry.outcome !== "not-run",
+    );
     const execution =
       cell === undefined
         ? undefined
-        : document.scenarios.find(
-            (scenario) => scenario.feature === row.feature && scenario.line === row.line && scenario.environment === cell.environment && scenario.status === "failed",
-          );
+        : document.scenarios.find((scenario) => {
+            const at = scenario.row ?? { feature: scenario.feature, line: scenario.line };
+            return (
+              at.feature === row.feature &&
+              at.line === row.line &&
+              (scenario.world ?? "head") === world &&
+              scenario.environment === cell.environment &&
+              scenario.status === "failed"
+            );
+          });
     const failure = execution === undefined ? undefined : describeFailure(execution);
-    if (failure !== undefined) lines.push(`  - ${renderFailure(failure)}`);
+    if (failure !== undefined) lines.push(`  - ${world === "head" ? "" : `${world}: `}${renderFailure(failure)}`);
   }
   return lines;
 }
 
-// What moved in the criteria since `--since`'s ref, for the person who
-// approved that base: one row per scenario (environments and repeats of it
-// counted once), the text of each scenario that is not unchanged quoted in
-// full, since that text is what they are asked to approve again, the
-// criteria the ref held that are gone, and, under each step file that
-// changed, every scenario that names it, unchanged ones included, since
-// unchanged criteria over a changed step file is the case a reader would
-// otherwise not see. It says what was compared, so a partial comparison is
-// not read as the whole project's.
-function renderCriteriaSince(document: RunDocument): string[] {
-  const since = document.since;
-  if (since === undefined || since === null) return [];
-  const byScenario = new Map<string, RunScenario>();
-  for (const scenario of document.scenarios) {
-    const key = scenarioKey(scenario.feature, scenario.line);
-    if (!byScenario.has(key)) byScenario.set(key, scenario);
-  }
-  const scenarios = [...byScenario.values()].sort((a, b) => a.feature.localeCompare(b.feature) || a.line - b.line);
-  const count = (change: string): number => scenarios.filter((scenario) => scenario.criteria?.changed_since === change).length;
-  const filesWith = (change: string): string[] => since.step_files.filter((entry) => entry.change === change).map((entry) => entry.file);
-  const changedFiles = filesWith("changed");
-  const untrackedFiles = filesWith("untracked");
-  const counts = [
-    `${count("unchanged")} unchanged`,
-    `${count("changed")} changed`,
-    `${count("new")} new`,
-    `${since.removed.length} removed`,
-    ...(count("ambiguous") > 0 ? [`${count("ambiguous")} ambiguous`] : []),
-    ...(count("unknown") > 0 ? [`${count("unknown")} not compared`] : []),
-  ];
-  const fenced = (text: readonly string[]): string[] => {
+// Each criterion the base holds and head does not, with its sentences at
+// the base: a reader approving the change sees what it drops.
+function renderRemoved(document: RunDocument): string[] {
+  const removed = document.table.rows.filter((row) => row.verdict === "removed");
+  if (removed.length === 0) return [];
+  const lines = ["", "## Removed criteria", "", "Each criterion below is in the base and not in head, quoted as the base has it."];
+  for (const row of removed) {
+    const text = row.lines ?? [];
     const longestRun = Math.max(2, ...text.flatMap((line) => line.match(/`+/g) ?? []).map((run) => run.length));
     const fence = "`".repeat(longestRun + 1);
-    return [`${fence}gherkin`, ...text, fence];
-  };
-  const lines = [
-    "",
-    `## Criteria since ${cellCode(since.ref)} (\`${since.commit.slice(0, 7)}\`)`,
-    "",
-    `${counts.join(", ")}.`,
-    `Compared: the feature files in ${since.compared.map((target) => cellCode(target)).join(", ")} at the ref and in the working tree; a feature file outside them is not compared.`,
-    "Step files compared: the files that register the bound steps, the files of their parts, and the config file when a step needs a fixture it defines, not the files those import.",
-    changedFiles.length === 0 ? "No step file changed." : `Step files changed: ${changedFiles.map((file) => cellCode(file)).join(", ")}.`,
-    ...(untrackedFiles.length === 0 ? [] : [`Not in the ref's commit: ${untrackedFiles.map((file) => cellCode(file)).join(", ")}.`]),
-  ];
-  const headings: Record<string, string> = { changed: "Changed", new: "New", ambiguous: "Ambiguous", unknown: "Not compared" };
-  for (const scenario of scenarios) {
-    const change = scenario.criteria?.changed_since;
-    if (change === undefined || change === null || change === "unchanged") continue;
-    lines.push("", `### ${headings[change]}: ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}`, "");
-    if (scenario.criteria?.reason !== undefined) lines.push(`${cellText(scenario.criteria.reason)}.`, "");
-    lines.push(...fenced(scenario.criteria?.lines ?? []));
-  }
-  for (const removed of since.removed) {
-    const name = removed.rule === null ? removed.scenario : `${removed.rule} / ${removed.scenario}`;
-    lines.push("", `### Removed: ${cellCode(removed.feature)} ${cellText(name)}`, "", ...fenced(removed.lines));
-  }
-  for (const file of [...changedFiles, ...untrackedFiles]) {
-    lines.push("", `### Step file ${changedFiles.includes(file) ? "changed" : "not in the ref's commit"}: ${cellCode(file)}`, "");
-    for (const scenario of scenarios) {
-      if (!(scenario.criteria?.step_files ?? []).includes(file)) continue;
-      lines.push(`- ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}, criteria ${scenario.criteria?.changed_since === "unknown" ? "not compared" : scenario.criteria?.changed_since}`);
-    }
+    lines.push("", `### ${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}`, "", `${fence}gherkin`, ...text, fence);
   }
   return lines;
 }
@@ -432,7 +449,7 @@ function renderUnmeasured(document: RunDocument): string[] {
   const named = document.environments.length > 1;
   const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
   let anyLateLog = false;
-  for (const scenario of document.scenarios) {
+  for (const scenario of headScenarios(document)) {
     for (const step of scenario.steps) {
       const unmeasured = step.observed?.unmeasured ?? [];
       const late = afterStepEndItem(step);
@@ -476,7 +493,7 @@ function renderUnmeasured(document: RunDocument): string[] {
 // Under `--repeat` or several environments the scenario is one line.
 function renderUnjudged(document: RunDocument): string[] {
   const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
-  for (const scenario of document.scenarios) {
+  for (const scenario of headScenarios(document)) {
     if (scenario.judged_by === undefined) continue;
     const key = scenarioKey(scenario.feature, scenario.line);
     if (lines.has(key)) continue;
@@ -529,7 +546,7 @@ function renderClaims(document: RunDocument): string[] {
   const named = document.environments.length > 1;
   let anyControl = false;
   const entries = new Map<string, { readonly sortKey: [string, number]; readonly lines: readonly string[] }>();
-  for (const scenario of document.scenarios) {
+  for (const scenario of headScenarios(document)) {
     for (const step of scenario.steps) {
       if (step.claims === undefined) continue;
       const where = `${scenario.feature}:${step.line ?? scenario.line}`;
@@ -572,7 +589,7 @@ function renderFindings(document: RunDocument): string[] {
 
 function renderRerun(document: RunDocument): string[] {
   const commands = new Set<string>();
-  for (const scenario of document.scenarios) {
+  for (const scenario of headScenarios(document)) {
     if (scenario.do !== undefined) commands.add(scenario.do);
   }
   if (commands.size === 0) return [];
@@ -587,7 +604,7 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderTable(document),
     ...renderReasons(document),
     ...renderCondition(document),
-    ...renderCriteriaSince(document),
+    ...renderRemoved(document),
     ...renderClaims(document),
     ...renderUnjudged(document),
     ...renderUnmeasured(document),

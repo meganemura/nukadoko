@@ -23,9 +23,9 @@
       "note": "run と run サマリが受け入れ基準について述べる主張(どの commit で、どの条件で、何が走ったか)。step record の evidence フィールドは英語のまま(keep_english の evidence)"
     },
     {
-      "en": ["approved base"],
-      "ja": "承認された基点",
-      "note": "nuka run --since <ref> が名指す、人が最後に承認した commit。人が承認した基点、とも書く"
+      "en": ["base", "approved base"],
+      "ja": "基点",
+      "note": "nuka run --base <ref> が名指す commit。pull request の向かう先など。人が承認した基点、とも書く。world の名前 `base` と run.json の `table.base` はコードスパンで英語のまま"
     },
     { "en": ["problem"], "ja": "課題", "context": "節タイトル" },
     { "en": ["running"], "ja": "実行", "context": "scenario の実行を指す節タイトル" },
@@ -260,7 +260,7 @@
     {
       "en": ["proven", "prove", "proves", "proof"],
       "ja": "証明された / 証明する / 証明",
-      "note": "行の断定の一つ。必須のセルがすべて通り、対照のセルが Then の同じ行で --proof-runs 回失敗したこと。値 `proven` はコードスパンで英語のまま"
+      "note": "行の断定の一つ。必須のセルがすべて通り、振る舞いが無いところのセル(対照のセル、または新しいか変わった行の基点のセル)が Then の同じ行で --proof-runs 回失敗したこと。値 `proven` はコードスパンで英語のまま"
     },
     {
       "en": ["proof run", "proof runs"],
@@ -459,7 +459,7 @@
     {
       "en": ["held", "holds"],
       "ja": "成り立つ",
-      "note": "claim の比較が真だったこと。claim record の `outcome` の値 `held` はコードスパンで英語のまま。成否(outcome)は fixture の pass/fail を指す別語。断定の表の行の断定 `held` も 成り立った と書く(必須のセルがすべて通り、それを証明する対照がない)"
+      "note": "claim の比較が真だったこと。claim record の `outcome` の値 `held` はコードスパンで英語のまま。成否(outcome)は fixture の pass/fail を指す別語。断定の表の行の断定 `held` も 成り立った と書く(必須のセルがすべて通り、それ以上を求められない。--base のもとでは、変わっていないか、old の world でも通ったか、@held の付いた行が基点でも通った)"
     },
     {
       "en": ["broken", "breaks", "a broken claim"],
@@ -535,6 +535,41 @@
       "en": ["abandon", "abandoned"],
       "ja": "見捨てる",
       "note": "持ち時間を過ぎた setup や url の関数を待たずに world を失敗させること。nukadoko は関数を止められないので、関数は `signal` に従わない限り動き続ける。止める(stop)とは別の語"
+    },
+    {
+      "en": ["mapping", "the mapping"],
+      "ja": "対応づけ",
+      "note": "文を実行へ変える層: features ディレクトリの .feature 以外のファイル(step ファイル、補助コード、データ)、config の fixtures、parameterTypes、secrets、worldParameters、プログラムのファイルの各 environment の conditions と defaultEnvironments。--base はこれを 1 つの単位として基点と比べる。run.json の `mapping_changed` と `mapping_changes` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["identity (of a criterion)"],
+      "ja": "同一性",
+      "note": "--base が受け入れ基準を基点で見つける鍵で、feature ファイルと名前の組。比べるものは 中身(content)と書く"
+    },
+    {
+      "en": ["content (of a criterion)"],
+      "ja": "中身",
+      "note": "人が承認したもの: step の並び、Examples の行、condition の tag と @held。名前、ほかの tag、ファイルの中の位置は中身に入らない"
+    },
+    {
+      "en": ["change kind", "unchanged", "changed", "new", "renamed"],
+      "ja": "変化の種類 / 変わっていない / 変わった / 新しい / 名前が変わった",
+      "note": "--base が受け入れ基準を基点と比べた結果。値 `unchanged`、`changed`、`new`、`removed` と、名前や場所だけが違う同じ中身を名指す `renamed_from` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["removed (criterion)"],
+      "ja": "消えた",
+      "note": "変化の種類と行の断定の一つ。基点にあって head に無い受け入れ基準。値 `removed` はコードスパンで英語のまま。緑"
+    },
+    {
+      "en": ["unproven"],
+      "ja": "証明されていない",
+      "note": "行の断定の一つ。新しいか変わった受け入れ基準が head で通り、その振る舞いが無いところで Then が失敗したことを示すものが無い。値 `unproven` はコードスパンで英語のまま。赤"
+    },
+    {
+      "en": ["moved"],
+      "ja": "意味が動いた",
+      "note": "行の断定の一つ。変わっていない受け入れ基準が head で通るのに、対応づけが変わり、old の world で通らない。承認された文の意味がその下で動いた。値 `moved` はコードスパンで英語のまま。赤"
     }
   ],
   "keep_english": [
@@ -683,6 +718,10 @@
     {
       "term": "span id",
       "why": "`traceparent` の 16 桁の部分。nukadoko では step(と hook)の境界 1 つにつき 1 つ。program.log の行を step に振り分ける鍵"
+    },
+    {
+      "term": "tree",
+      "why": "world が build するコードの置き場所。run.json の `worlds[].tree` の値 `head`、`base`、`old` と、run ディレクトリの `trees/base`、`trees/old` と直接対応する。小文字の tree と書く。プロセスのツリーやディレクトリのツリーの ツリー とは別の語"
     }
   ],
   "identifiers": {

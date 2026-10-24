@@ -227,9 +227,11 @@ just until 0.1.
   cell reads `pass`, `fail@<line>` (a claim broke at a Then line),
   `broke@<line>` (it stopped before a claim was judged), `flaky@<line>`
   (its runs disagree), or `·` (it did not run, with the reason), and each
-  row is `held`, `proven`, or `failed`, with one sentence that says
-  why. The exit code is 1 when a row is `failed`. run.json's `table`
-  holds it, with `base: null` until a run compares two trees, each
+  row is `held`, `proven`, or `failed` (and under `nuka run --base`,
+  below, `removed`, `unproven`, or `moved`), with one sentence that
+  says why. The exit code is 1 when a row is red: `failed`, `unproven`,
+  or `moved`. run.json's `table` holds it, with `base: null` unless the
+  run compares with a base, each
   scenario entry names its cell's `role`, and `counts` gains
   `controls` and `controls_not_run`, while `scenarios`, `passed`,
   `failed`, and `not_run` count required cells alone, as the stderr count
@@ -250,6 +252,15 @@ just until 0.1.
   and still stay out of every local run.
 
 ### Removed
+
+- **`nuka run --since` is removed; `nuka run --base` replaces it.**
+  `--since` quoted what moved in the criteria since a base and the step
+  files behind them, and never failed a run, so a criterion approved at
+  the base could change meaning under a rewritten step with nothing red.
+  `nuka run --since` now refuses with `removed-flag` and names
+  `--base`. run.json's `since` and each scenario's `criteria` are gone,
+  with the summary's "Criteria since" section and the refusal codes
+  `since-ref-unknown`, `since-outside-git`, and `since-git-failed`.
 
 - **`nuka tend` is removed.** Its findings are notes and warnings of
   `nuka check`, its `--fail-on` is `nuka check --fail-on`, and its
@@ -311,6 +322,39 @@ just until 0.1.
 
 ### Added
 
+- **`nuka run --base <ref>` compares each criterion with the base and
+  judges it.** A criterion is its feature file and name; its content is
+  its steps with their effective keywords, docstrings, and tables, its
+  Examples row, and its condition tags and `@held`, so a rename, a move,
+  or a tag such as `@smoke` leaves it `unchanged` (with `renamed_from`),
+  and any edit to what a person approved makes it `changed`; the others
+  are `new` or `removed`. The mapping (the files under the features
+  directory other than `.feature` files, the config's `fixtures`,
+  `parameterTypes`, `secrets`, and `worldParameters`, and each
+  environment's `conditions` and the `defaultEnvironments` list) is
+  compared as one unit. Two more worlds run where a row needs them, each
+  in a tree under the run directory that the run removes: `base`, the
+  ref's code under head's criteria and mapping, runs a new or changed row,
+  and its Then has to fail there in `--proof-runs` runs for the row to
+  be `proven`; `old`, head's code under the ref's criteria and mapping,
+  runs an unchanged row when the mapping changed, and it has to pass
+  there. The rows are `held`, `proven`, `removed`, `failed`,
+  `unproven` (nothing shows a Then failing without the change), or
+  `moved` (an approved sentence no longer holds under the steps it was
+  approved with), and the gate is red on the last three. The base world
+  builds the ref's program file, a `url` function receives `tree` to say
+  where the base is deployed, and neither tree installs anything: both
+  resolve packages from head's project. run.json's `table` gains `base`,
+  `mapping_changed`, and `mapping_changes`, a row gains `change`,
+  `renamed_from`, and, removed, `lines`, and a base or old execution
+  names its `world` and its `row`. The summary opens with what was
+  compared, adds a `change` column and the base and old columns, and
+  quotes each removed criterion. A shallow clone that lacks the base is
+  refused with `base-shallow` and the `git fetch` that gets it; a ref
+  that names no commit, a project outside git, a git failure, and a
+  `featuresDir` at the project root are refused too. A base feature file
+  that does not parse is the warning `base-feature-unparsed`.
+
 - **Conditions, and controls that prove a scenario.** An environment in
   `nukadoko.program.ts` declares the switches of its program as
   `conditions` (`true`, `false`, or a string a tag can name: no
@@ -339,7 +383,9 @@ just until 0.1.
   so in one line, so a hook failure's `do:` line, which names one
   environment, runs as printed. A row with no required cell, which only a
   run under `--no-check` reaches, has a `criterion-without-required-cell`
-  finding whose `do:` line runs the scenario where it is met. `@held` is read and kept, and changes nothing yet.
+  finding whose `do:` line runs the scenario where it is met. `@held`
+  says the base already has the behaviour, which `nuka run --base`
+  checks.
   `conditions` are declarations nukadoko trusts and does not check
   against the program, so the placeholder `{condition.<name>}` hands the
   program its environment's value as text (`env: { BANNER:

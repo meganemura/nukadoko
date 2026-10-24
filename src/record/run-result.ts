@@ -140,9 +140,14 @@ export interface RunScenario {
    * tags name, `control` where it does not. Absent in a run.json an
    * earlier build wrote. */
   readonly role?: "required" | "control";
-  /** What moved in this scenario's criteria since `nuka run --since`'s
-   * ref. Absent in a run.json an earlier build wrote. */
-  readonly criteria?: RunCriteria;
+  /** The world this execution ran in, for an execution of the base or the
+   * old world of `nuka run --base`; absent for head's. */
+  readonly world?: "base" | "old";
+  /** For an execution of the base or the old world: the row of the table
+   * it is a cell of. `feature` and `line` above, and each step's
+   * `line`, are where it ran, in that world's own feature file, which for
+   * the old world is the ref's. */
+  readonly row?: { readonly feature: string; readonly line: number };
   /** How the claims of the scenario's claim steps came out, counted once
    * per claim (an `each` is one claim). `unobserved` and `unjudged` are
    * present only above 0. A claim step that did not run counts nothing.
@@ -164,57 +169,6 @@ export interface RunScenarioClaims {
   readonly unjudged?: number;
 }
 
-/** How a scenario's own criteria (its tags, steps with their effective
- * keyword, docstrings and tables, and its Examples row) compare with the
- * same scenario at the `--since` ref: `ambiguous` when scenarios of one
- * name differ in content and cannot be paired, `unknown` when the ref's
- * file does not parse. src/run/criteria-since.ts says what counts. */
-export type CriteriaChange = "unchanged" | "changed" | "new" | "ambiguous" | "unknown";
-
-export interface RunCriteria {
-  /** `null` for a run without `--since`. */
-  readonly changed_since: CriteriaChange | null;
-  /** Why an `ambiguous` or `unknown` scenario could not be decided. */
-  readonly reason?: string;
-  /** The scenario's criteria in the working tree, as a person reads them,
-   * for any scenario that is not `unchanged`: what a reader approves. */
-  readonly lines?: readonly string[];
-  /** Under `--since`: the files that register the steps the scenario's
-   * lines bound to, the files of the parts those steps declare, and the
-   * config file when a step needs a fixture it defines, relative to the
-   * project root. `since.step_files` says which changed. */
-  readonly step_files?: readonly string[];
-}
-
-/** How a step file compares with the `--since` commit, as git compares
- * them: `untracked` when the commit does not hold it. */
-export type StepFileChange = "unchanged" | "changed" | "untracked";
-
-/** A criterion the ref held that nothing in the run matches. */
-export interface RemovedCriterion {
-  readonly feature: string;
-  readonly rule: string | null;
-  readonly scenario: string;
-  /** The criterion at the ref, as a person reads it. */
-  readonly lines: readonly string[];
-}
-
-/** The ref `nuka run --since` compared against. */
-export interface RunSince {
-  /** The ref as given. */
-  readonly ref: string;
-  /** The commit it named when the run started. */
-  readonly commit: string;
-  /** The run's targets, relative to the project root, without a `:line`:
-   * what was compared. A feature file outside them is not. */
-  readonly compared: readonly string[];
-  /** Criteria the ref held in the compared files that are gone. */
-  readonly removed: readonly RemovedCriterion[];
-  /** Every file a scenario's `step_files` names, and how it compares with
-   * the commit. */
-  readonly step_files: readonly { readonly file: string; readonly change: StepFileChange }[];
-}
-
 /** What one cell of the table holds after its executions: `pass` when
  * every one passed; `fail` when every one broke the same claim of a Then
  * at `line`; `broke` when every one stopped at `line` before a claim there
@@ -223,10 +177,14 @@ export interface RunSince {
  * the first that did not pass; `not-run` when none ran, with the reason. */
 export type RunCellOutcome = "pass" | "fail" | "broke" | "flaky" | "not-run";
 
+/** A world of the run (docs/spec.md "Verdicts"): `head`, the tree the run
+ * was started in; `base`, the ref's code under head's criteria and
+ * mapping; `old`, head's code under the ref's criteria and mapping. */
+export type RunWorldName = "head" | "base" | "old";
+
 /** One criterion in one world and environment (src/run/verdict-table.ts). */
 export interface RunTableCell {
-  /** The world the cell ran in: `head`, the tree the run was started in. */
-  readonly world: "head";
+  readonly world: RunWorldName;
   readonly environment: string;
   readonly role: "required" | "control";
   /** What the role came from: for each condition the row's tags name, the
@@ -252,37 +210,66 @@ export interface RunTableCell {
   readonly reason?: string;
 }
 
-/** What the table says of one criterion: green `held` or `proven`, red
- * `failed`. */
-export type RunRowVerdict = "held" | "proven" | "failed";
+/** What the table says of one criterion: green `held`, `proven`, or
+ * `removed`; red `failed`, `unproven`, or `moved`. */
+export type RunRowVerdict = "held" | "proven" | "removed" | "failed" | "unproven" | "moved";
+
+/** The verdicts that turn the gate red. */
+export const RED_VERDICTS: ReadonlySet<RunRowVerdict> = new Set(["failed", "unproven", "moved"]);
+
+/** How a criterion compares with `nuka run --base`'s ref. */
+export type RunRowChange = "unchanged" | "changed" | "new" | "removed";
 
 /** One criterion: one scenario, or one Examples row of an outline. */
 export interface RunTableRow {
   readonly feature: string;
   readonly line: number;
   readonly name: string;
-  /** How the criterion compares with a base ref: `null`, since this
-   * release compares none. */
-  readonly change: null;
+  /** How the criterion compares with `--base`'s ref, `null` without
+   * one. */
+  readonly change: RunRowChange | null;
+  /** For an `unchanged` criterion the ref holds under another name or in
+   * another file: where. */
+  readonly renamed_from?: { readonly feature: string; readonly name: string };
   /** The criterion's condition tags and `@held`, as written, each once. */
   readonly conditions: readonly string[];
-  /** One cell per environment, in the run's order. */
+  /** One cell per world and environment the criterion runs in, in the
+   * order of `worlds`. A `removed` criterion has none. */
   readonly cells: readonly RunTableCell[];
   readonly verdict: RunRowVerdict;
   /** Why the row has its verdict, in one sentence. */
   readonly reason: string;
+  /** For a `removed` criterion: its sentences at the ref, as a person
+   * reads them, since head no longer holds them. */
+  readonly lines?: readonly string[];
+}
+
+/** What changed in the mapping since `nuka run --base`'s ref. */
+export interface RunMappingChanges {
+  readonly files: readonly string[];
+  readonly config: boolean;
+  readonly conditions: readonly string[];
+  readonly default_environments: boolean;
 }
 
 /** run.json's `table`: one row per criterion, one cell per world and
  * environment (docs/spec.md "Verdicts"). */
 export interface RunTable {
-  /** The ref the run compared against: `null`, since this release
-   * compares none. */
-  readonly base: null;
-  /** Whether the mapping changed since the base: `null` without one. */
-  readonly mapping_changed: null;
+  /** The ref `nuka run --base` compared against, and the commit it named
+   * when the run started; `null` without `--base`. */
+  readonly base: { readonly ref: string; readonly commit: string } | null;
+  /** Whether the mapping (every file under the features directory but the
+   * `.feature` files, and the config's mapping part) changed since the
+   * base; `null` without one. */
+  readonly mapping_changed: boolean | null;
+  /** What changed in the mapping since the base, `null` without one:
+   * each file under the features directory but a `.feature` file that was
+   * added, removed, or edited, relative to the project root; whether the
+   * config's mapping part changed; each environment whose `conditions`
+   * changed; and whether `defaultEnvironments` changed. */
+  readonly mapping_changes: RunMappingChanges | null;
   /** The table's columns, in order: each world and environment. */
-  readonly worlds: readonly { readonly world: "head"; readonly environment: string }[];
+  readonly worlds: readonly { readonly world: RunWorldName; readonly environment: string }[];
   readonly rows: readonly RunTableRow[];
   /** How many selected criteria the run left out because `--env` named
    * no environment that meets their conditions: each would have had no
@@ -315,14 +302,16 @@ export interface RunWorldCommand {
   readonly argv: readonly string[];
 }
 
-/** One pass of the run against one program (docs/spec.md "Program"): in
- * this release, one per environment, of the tree the run was started in. */
+/** One pass of the run against one program (docs/spec.md "Program"): one
+ * per environment of each tree the run builds. */
 export interface RunWorld {
   /** The environment the world ran, the `environment` of its scenarios. */
   readonly name: string;
-  /** Which tree the program was built from: `head`, the tree the run was
-   * started in. */
-  readonly tree: "head";
+  /** Which tree the program was built from (`RunWorldName`). */
+  readonly tree: RunWorldName;
+  /** `true` on a base world whose ref holds no program file, so it was
+   * built and started from head's. */
+  readonly program_from_head?: true;
   /** The base URL every page and request resolved against: the port
    * nukadoko gave `serve`, or the program file's `url`. `null` for a world
    * with neither. */
@@ -406,9 +395,6 @@ export type RunFields = {
   /** The verdict table: what each criterion's cells came to, and the
    * verdict the exit code follows. */
   readonly table: RunTable;
-  /** `nuka run --since`'s ref, or `null` without it. Absent in a run.json
-   * an earlier build wrote. */
-  readonly since?: RunSince | null;
 };
 
 /** run.json as a reader gets it: the envelope every `--json` shares, and
@@ -421,23 +407,25 @@ export interface RunDocument extends RunFields {
   readonly findings: readonly Finding[];
 }
 
-/** The counts of `scenarios` and `table`. An entry without a `role`
- * counts as required. */
-export function countScenarios(scenarios: readonly Pick<RunScenario, "status" | "role">[], table: Pick<RunTable, "rows">): RunFields["counts"] {
-  const required = scenarios.filter((scenario) => scenario.role !== "control");
+/** The counts of `scenarios` and `table`, of head's executions and
+ * cells: the base and the old world are the table's to read. An entry
+ * without a `role` counts as required. */
+export function countScenarios(scenarios: readonly Pick<RunScenario, "status" | "role" | "world">[], table: Pick<RunTable, "rows">): RunFields["counts"] {
+  const head = scenarios.filter((scenario) => scenario.world === undefined);
+  const required = head.filter((scenario) => scenario.role !== "control");
   const passed = required.filter((scenario) => scenario.status === "passed").length;
   return {
     scenarios: required.length,
     passed,
     failed: required.length - passed,
     not_run: notRunCells(table, "required"),
-    controls: scenarios.length - required.length,
+    controls: head.length - required.length,
     controls_not_run: notRunCells(table, "control"),
   };
 }
 
 function notRunCells(table: Pick<RunTable, "rows">, role: RunTableCell["role"]): number {
-  return table.rows.reduce((total, row) => total + row.cells.filter((cell) => cell.role === role && cell.outcome === "not-run").length, 0);
+  return table.rows.reduce((total, row) => total + row.cells.filter((cell) => cell.world === "head" && cell.role === role && cell.outcome === "not-run").length, 0);
 }
 
 export function runResultPath(rootDir: string, stateDir: string, runId: string): string {

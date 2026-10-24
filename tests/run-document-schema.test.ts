@@ -37,6 +37,7 @@ const VALID = {
   table: {
     base: null,
     mapping_changed: null,
+    mapping_changes: null,
     worlds: [{ world: "head", environment: "default" }],
     rows: [
       {

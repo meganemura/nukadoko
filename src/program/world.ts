@@ -7,7 +7,7 @@ import { commandWords, programUrlProblem, urlPort, type Command, type ProgramRec
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
-import type { RunWorld, RunWorldCommand } from "../record/run-result.js";
+import type { RunWorld, RunWorldCommand, RunWorldName } from "../record/run-result.js";
 import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
@@ -66,6 +66,14 @@ import type { WorldView } from "./world-view.js";
 // phase's group at once, abandons a running function the same way, and
 // returns a failed world marked `aborted`, which no finding reports.
 //
+// A starter builds one tree. `nuka run --base` makes one starter per tree
+// (src/run/base-run.ts): the base world runs the ref's code and the old
+// world head's, each built in its own tree. A world at a URL nukadoko does
+// not start can run the base's code only where a `url` function says
+// where it is: a fixed `url` is where head's code runs, so a base world
+// with one is `unavailable`, as is one whose function gives nothing back
+// for the base, and its cells say why instead of measuring head's code.
+//
 // `setup` and a `url` function run in nukadoko's own process, so what
 // they print would reach the terminal unredacted, a `{token}` included.
 // What the function's own async work prints goes to the progress sink and
@@ -119,6 +127,9 @@ export interface FailedWorld {
   readonly message: string;
   /** The caller aborted the start; nothing failed on the program's side. */
   readonly aborted: boolean;
+  /** A base world with no URL to reach the base's code at (module
+   * header): nothing was started, and nothing failed. */
+  readonly unavailable?: true;
   record(): RunWorld;
 }
 
@@ -134,6 +145,11 @@ export interface WorldStarterOptions {
   readonly displayPath: (absolutePath: string) => string;
   /** One line per world that ran something, as it is ready. */
   readonly progress: WritableSink;
+  /** Which tree this starter builds: `head` when absent. */
+  readonly tree?: RunWorldName;
+  /** `true` for a base tree whose ref has no program file, built and
+   * started from head's. */
+  readonly programFromHead?: boolean;
 }
 
 export interface WorldStarter {
@@ -152,6 +168,8 @@ class WorldStartError extends Error {}
 
 /** A phase reached its limit. */
 class WorldStartLimit extends WorldStartError {}
+/** A base world has no URL to reach the base's code at. */
+class WorldUnavailable extends Error {}
 
 /** The caller aborted the start. */
 class WorldStartAborted extends Error {}
@@ -235,9 +253,11 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       let server: ServeProcess | undefined;
       let programLog: RunWorld["program_log"];
 
+      const tree = options.tree ?? "head";
       const record = (error: string | null): RunWorld => ({
         name,
-        tree: "head",
+        tree,
+        ...(options.programFromHead === true ? { program_from_head: true as const } : {}),
         url: url === undefined ? null : redactString(url, allSecrets),
         commands: commands.map((command) => ({ phase: command.phase, argv: command.argv.map((word) => redactString(word, allSecrets)) })),
         timings: { ...timings },
@@ -252,7 +272,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       // One line per phase as it starts, redacted: a `{token}` can be in a
       // command's words.
       const announce = (text: string): void => {
-        options.progress.write(`${redactString(`world ${name}: ${text}`, allSecrets)}\n`);
+        options.progress.write(`${redactString(`world ${tree === "head" ? name : `${name} (${tree})`}: ${text}`, allSecrets)}\n`);
       };
       // What `setup` or a `url` function prints, redacted, on the
       // terminal and in the log.
@@ -297,6 +317,11 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         // earlier still, for every world they start (src/cli/run.ts).
         const gap = placeholderGaps(recipe)[0];
         if (gap !== undefined) throw new WorldStartError(describePlaceholderGap(gap));
+        // Before the build, which a base world with a fixed URL would run
+        // for nothing.
+        if (tree === "base" && recipe.reach.kind === "url" && typeof recipe.reach.url === "string") {
+          throw new WorldUnavailable("its url is a fixed URL, where head's code runs, and only a url function can say where the base's code runs");
+        }
         const buildCommands = recipe.build.map((entry, index) => ({
           argv: filledArgv(entry.command, { root: options.rootDir }, `build[${index}]`),
           timeoutMs: entry.timeout_ms,
@@ -331,19 +356,27 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         const reach = recipe.reach;
         let port =
           reach.kind !== "serve" ? undefined : reach.serve.port === "auto" ? await freePort() : await portNobodyAnswers(reach.serve.port);
-        const place = { name, root: options.rootDir, dir };
+        // The old world runs head's code, so a `url` function answers
+        // for it as for head.
+        const place = { name, root: options.rootDir, dir, tree: tree === "base" ? ("base" as const) : ("head" as const) };
         if (reach.kind === "serve") {
           url = `http://localhost:${port}`;
         } else if (reach.kind === "url") {
           const reachUrl = reach.url;
-          url =
-            typeof reachUrl === "string"
-              ? reachUrl
-              : await inProcess("the url function", reach.timeout_ms, async (signal) => reachUrl({ ...place, signal }));
-          // A string `url` was checked at load; what a function returns
-          // is checked here, by the same rule, without quoting it.
-          const problem = programUrlProblem(String(url));
-          if (problem !== undefined) throw new WorldStartError(`the url function's answer ${problem}`);
+          if (typeof reachUrl === "string") {
+            url = reachUrl;
+          } else {
+            const answer = await inProcess("the url function", reach.timeout_ms, async (signal) => reachUrl({ ...place, signal }));
+            if (answer === undefined || answer === null || answer === "") {
+              if (tree === "base") throw new WorldUnavailable("its url function gave no URL for the base");
+              throw new WorldStartError("the url function gave no URL");
+            }
+            url = answer;
+            // A string `url` was checked at load; what a function returns
+            // is checked here, by the same rule, without quoting it.
+            const problem = programUrlProblem(String(url));
+            if (problem !== undefined) throw new WorldStartError(`the url function's answer ${problem}`);
+          }
           // Every world with a URL has a port (src/program/placeholders.ts).
           port = urlPort(url);
         }
@@ -433,6 +466,10 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           record: () => record(null),
         };
       } catch (error) {
+        if (error instanceof WorldUnavailable) {
+          log.close();
+          return { ok: false, message: error.message, aborted: false, unavailable: true, record: () => record(error.message) };
+        }
         const aborted = error instanceof WorldStartAborted || abort?.aborted === true;
         if (aborted) server?.kill();
         await server?.stop();
@@ -444,7 +481,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         const tail = log.tail();
         log.close();
         const message = redactString(
-          `the program did not start for world ${name}: ${cause}${tail === "" ? "" : `. The end of ${options.displayPath(log.path)}:\n${tail}`}`,
+          `the program did not start for world ${tree === "head" ? name : `${name} (${tree})`}: ${cause}${tail === "" ? "" : `. The end of ${options.displayPath(log.path)}:\n${tail}`}`,
           allSecrets,
         );
         return { ok: false, message, aborted, record: () => record(cause) };

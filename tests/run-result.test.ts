@@ -94,7 +94,6 @@ describe("nuka run: run.json", () => {
           hooks: [],
           do: "nuka run features/failure/a.feature:3",
           role: "required",
-          criteria: { changed_since: null },
           claims: { held: 0, broken: 0 },
           judged_by: "nothing",
         },
@@ -121,7 +120,6 @@ describe("nuka run: run.json", () => {
           ],
           hooks: [],
           role: "required",
-          criteria: { changed_since: null },
           claims: { held: 0, broken: 0 },
           judged_by: "nothing",
         },
@@ -129,6 +127,7 @@ describe("nuka run: run.json", () => {
       table: {
         base: null,
         mapping_changed: null,
+        mapping_changes: null,
         worlds: [{ world: "head", environment: "default" }],
         rows: [
           {
@@ -155,7 +154,6 @@ describe("nuka run: run.json", () => {
         left_out: 0,
         proof_runs: 2,
       },
-      since: null,
     });
     // Paths in run.json are relative to the run directory.
     expect(existsSync(path.join(rootDir, ".nukadoko", "runs", runId, passedStep.record, "record.json"))).toBe(true);
@@ -224,28 +222,44 @@ describe("nuka run: run.json", () => {
     }
   });
 
-  it("counts the required executions and cells that never ran, and the controls' apart, for any mix of outcomes", () =>
+  it("counts head's required executions and cells that never ran, and the controls' apart, for any mix of outcomes and worlds", () =>
     hegel.test((tc) => {
       const executions = tc.draw(
-        gs.arrays(gs.tuples(gs.sampledFrom(["passed", "failed"] as const), gs.sampledFrom(["required", "control", undefined] as const)), { maxSize: 12 }),
+        gs.arrays(
+          gs.tuples(
+            gs.sampledFrom(["passed", "failed"] as const),
+            gs.sampledFrom(["required", "control", undefined] as const),
+            gs.sampledFrom([undefined, "base", "old"] as const),
+          ),
+          { maxSize: 12 },
+        ),
       );
       const rows = tc.draw(
-        gs.arrays(gs.arrays(gs.tuples(gs.sampledFrom(["pass", "fail", "not-run"] as const), gs.sampledFrom(["required", "control"] as const)), { maxSize: 3 }), { maxSize: 4 }),
+        gs.arrays(
+          gs.arrays(
+            gs.tuples(gs.sampledFrom(["pass", "fail", "not-run"] as const), gs.sampledFrom(["required", "control"] as const), gs.sampledFrom(["head", "base", "old"] as const)),
+            { maxSize: 3 },
+          ),
+          { maxSize: 4 },
+        ),
       );
-      const notRun = (role: string) => rows.flat().filter(([outcome, cellRole]) => outcome === "not-run" && cellRole === role).length;
-      const required = executions.filter(([, role]) => role !== "control");
+      // A base or old execution, or cell, is evidence for a row, not one of
+      // head's, so it never counts.
+      const notRun = (role: string) => rows.flat().filter(([outcome, cellRole, world]) => outcome === "not-run" && cellRole === role && world === "head").length;
+      const head = executions.filter(([, , world]) => world === undefined);
+      const required = head.filter(([, role]) => role !== "control");
       const failed = required.filter(([status]) => status === "failed").length;
       expect(
         countScenarios(
-          executions.map(([status, role]) => (role === undefined ? { status } : { status, role })),
-          { rows: rows.map((cells) => ({ cells: cells.map(([outcome, role]) => ({ outcome, role })) })) as never },
+          executions.map(([status, role, world]) => ({ status, ...(role === undefined ? {} : { role }), ...(world === undefined ? {} : { world }) })),
+          { rows: rows.map((cells) => ({ cells: cells.map(([outcome, role, world]) => ({ outcome, role, world })) })) as never },
         ),
       ).toEqual({
         scenarios: required.length,
         passed: required.length - failed,
         failed,
         not_run: notRun("required"),
-        controls: executions.length - required.length,
+        controls: head.length - required.length,
         controls_not_run: notRun("control"),
       });
     }));

@@ -93,9 +93,9 @@ interface DoArgs {
 
 interface RunArgs {
   feature?: string[];
-  /** `--since <git ref>`: what moved in each scenario's criteria since that
-   * commit. */
-  since?: string;
+  /** `--base <git ref>`: compare with the commit the ref names, and add
+   * the base and the old world (docs/spec.md "Verdicts"). */
+  base?: string;
   /** `false` under `--no-check` (yargs' own boolean negation). */
   check?: boolean;
   /** `--env`: one name, or every name when the flag repeats (yargs-parser
@@ -555,6 +555,10 @@ export async function runCli(
         probe:
           "nuka run --probe is removed: a Then is judged from its step record and its step file, not from a second run " +
           "with a changed value.",
+        since:
+          "nuka run --since is removed: nuka run --base <ref> compares with the commit the ref names, runs a new or " +
+          "changed scenario where the base's code runs, and an unchanged one under the base's steps when they changed, " +
+          "and the verdict table says what each criterion came to.",
       })
         .positional("feature", {
           type: "string",
@@ -615,17 +619,17 @@ export async function runCli(
             "the same claim in Then has broken at the same line this many times, or a run disagrees (default 2); only then does " +
             "the control prove the scenario. A required cell runs once, or --repeat times",
         })
-        .option("since", {
+        .option("base", {
           type: "string",
           nargs: 1,
           describe:
-            "compare each scenario's criteria (its tags, its Background and own steps with their effective keyword, " +
-            "docstrings and tables, its Examples row) and the files that register its steps, their parts, and the fixtures " +
-            "they need with the commit a git ref names: run.json gives each scenario criteria.changed_since (unchanged, " +
-            "changed, new, ambiguous, or unknown) and lists the criteria the ref held that are gone, and the summary quotes " +
-            "what moved. Compares the feature files the run targets. Reports only; never changes the exit code",
+            "compare each scenario with the commit a git ref names (the pull request's base): a new or changed scenario " +
+            "also runs against the base's code, where a Then has to fail for it to be proven, and when the steps changed, " +
+            "an unchanged one also runs under the base's steps, where it has to pass. The table gives each criterion its " +
+            "change and one of held, proven, removed, failed, unproven, or moved, and the run fails on failed, unproven, " +
+            "or moved. A shallow clone has to fetch the base first",
         })
-        .check(rejectRepeatedFlags(["concurrency", "repeat", "proof-runs", "since"])) as Argv<RunArgs>,
+        .check(rejectRepeatedFlags(["concurrency", "repeat", "proof-runs", "base"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
@@ -640,7 +644,7 @@ export async function runCli(
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
         proofRuns: args["proof-runs"] ?? DEFAULT_PROOF_RUNS,
-        ...(args.since !== undefined ? { since: args.since } : {}),
+        ...(args.base !== undefined ? { base: args.base } : {}),
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
         stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,

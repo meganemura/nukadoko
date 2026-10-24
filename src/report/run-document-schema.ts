@@ -184,14 +184,8 @@ const scenario = z.looseObject({
     .optional(),
   teardown_errors: z.array(z.looseObject({ fixture: z.string(), message: z.string() })).optional(),
   do: z.string().optional(),
-  criteria: z
-    .looseObject({
-      changed_since: z.enum(["unchanged", "changed", "new", "ambiguous", "unknown"]).nullable(),
-      reason: z.string().optional(),
-      lines: z.array(z.string()).optional(),
-      step_files: z.array(z.string()).optional(),
-    })
-    .optional(),
+  world: z.enum(["base", "old"]).optional(),
+  row: z.looseObject({ feature: z.string(), line: z.number().int() }).optional(),
   claims: z
     .looseObject({
       held: z.number().int(),
@@ -206,11 +200,13 @@ const scenario = z.looseObject({
 
 // The verdict table (src/run/verdict-table.ts), which the summary leads
 // with and the Allure results and the messages stream carry per scenario.
+const worldName = z.enum(["head", "base", "old"]);
+
 // A fail, broke, or flaky cell is read as `<outcome>@<line>`, so one with
 // no line would render as `fail@undefined` rather than be refused.
 const tableCell = z
   .looseObject({
-    world: z.literal("head"),
+    world: worldName,
     environment: z.string(),
     role: z.enum(["required", "control"]),
     conditions: z.record(z.string(), z.union([z.boolean(), z.string(), z.null()])),
@@ -233,19 +229,24 @@ const tableCell = z
   });
 
 const table = z.looseObject({
-  base: z.null(),
-  mapping_changed: z.null(),
-  worlds: z.array(z.looseObject({ world: z.literal("head"), environment: z.string() })),
+  base: z.looseObject({ ref: z.string(), commit: z.string() }).nullable(),
+  mapping_changed: z.boolean().nullable(),
+  mapping_changes: z
+    .looseObject({ files: z.array(z.string()), config: z.boolean(), conditions: z.array(z.string()), default_environments: z.boolean() })
+    .nullable(),
+  worlds: z.array(z.looseObject({ world: worldName, environment: z.string() })),
   rows: z.array(
     z.looseObject({
       feature: z.string(),
       line: z.number().int(),
       name: z.string(),
-      change: z.null(),
+      change: z.enum(["unchanged", "changed", "new", "removed"]).nullable(),
+      renamed_from: z.looseObject({ feature: z.string(), name: z.string() }).optional(),
       conditions: z.array(z.string()),
       cells: z.array(tableCell),
-      verdict: z.enum(["held", "proven", "failed"]),
+      verdict: z.enum(["held", "proven", "removed", "failed", "unproven", "moved"]),
       reason: z.string(),
+      lines: z.array(z.string()).optional(),
     }),
   ),
   left_out: z.number().int(),
@@ -275,6 +276,7 @@ const document = z.looseObject({
     .array(
       z.looseObject({
         name: z.string(),
+        tree: worldName.optional(),
         url: z.string().nullable(),
         program_log: z
           .looseObject({ stamped: z.number().int(), lines: z.number().int(), late: z.number().int(), tagged: z.number().int() })
@@ -305,16 +307,6 @@ const document = z.looseObject({
       step: z.string().optional(),
     }),
   ),
-  since: z
-    .looseObject({
-      ref: z.string(),
-      commit: z.string(),
-      compared: z.array(z.string()),
-      removed: z.array(z.looseObject({ feature: z.string(), rule: z.string().nullable(), scenario: z.string(), lines: z.array(z.string()) })),
-      step_files: z.array(z.looseObject({ file: z.string(), change: z.enum(["unchanged", "changed", "untracked"]) })),
-    })
-    .nullable()
-    .optional(),
 });
 
 /** The run.json text as a document a report can read, or why not. */

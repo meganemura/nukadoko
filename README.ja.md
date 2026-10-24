@@ -12,7 +12,9 @@ nukadoko は、型付き step の契約のもとで Gherkin の scenario を実�
 受け入れ基準は、それを定めた人たちが使う言語のまま残ります。
 その文と検証対象のシステムとのあいだにあるものはすべて型を持ち、実行前に検査され、diff でレビューできます。
 どの run も Markdown の run サマリで終わり、run はその受け入れ基準の証跡です。
-これらの scenario がこの commit で、この条件のもとで走ったこと、そして `nuka run --since <ref>` を使えば、人が承認した基点からどの受け入れ基準と step ファイルが変わったかを、その比較が届く範囲で示します。
+これらの scenario がこの commit で、この条件のもとで走ったことを示します。
+`nuka run --base <ref>` を使えば、基点からどの受け入れ基準が新しく、変わり、変わらず、消えたかも示します。
+新しいか変わった各受け入れ基準が基点のコードに対して Then で失敗したかどうか、そして変わっていない各受け入れ基準が、承認されたときの step のもとで今も成り立つかどうかもです。
 人は `.feature` とそのサマリを読みます。
 その承認をどこに記録するか(pull request のレビュー、変更チケット、監査ログ)はチームが選ぶことで、nukadoko の外にあります。
 
@@ -1115,15 +1117,6 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 各実行は 1 つの run id の下でそれぞれ自分の record になります。
 1 回でも失敗した scenario は、summary の後に `<passed> of <n> passed` の形で集計されます。
 
-`nuka run --since <git ref>` は、人が承認した基点(`origin/main` など)から、受け入れ基準の何が動いたかを、その比較が届く範囲で述べます。
-各 scenario の受け入れ基準(tag、実効の keyword を持つ Background と scenario 自身の step、docstring、table、Examples の行)を、そのコミットの同じ scenario と比べます。
-受け入れ基準はコンパイルした scenario から読むので、インデント、コメント、docstring の区切りは数えません。
-`run.json` は各 scenario に `criteria.changed_since` を与え、値は `unchanged`、`changed`、`new`、`ambiguous`(中身で対応づけられない、同じ名前の scenario)、`unknown`(ref でファイルが parse できない)のどれかです。
-`since` は、ref にあって今は消えた受け入れ基準、比べたもの(run の対象で、ディレクトリを対象にすると ref がその下に持っていたファイルも比べます)、そして束ねた step、その part、それが必要とする fixture を登録する各ファイルと、git から見てそれが `changed` か ref で `untracked` かを並べます。
-run サマリの「Criteria since」の節は、unchanged ではない各 scenario と消えた各受け入れ基準を引用し、読み手がもう一度承認するのはその行です。
-変わった各 step ファイルの下には、それを名指す scenario を並べます。
-これは報告するだけで、終了コードは run のものから変わりません。
-
 `nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。
 まず `a` ですべてを実行し、次に `b` ですべてを実行します。
 それぞれの environment が、自分の env file、secret、version の probe、プログラム、BeforeAll と AfterAll、process スコープの fixture を持ちます。
@@ -1151,6 +1144,19 @@ environment はそれでも `nukadoko.program.ts` の設定にすぎません。
 `a` と `b` で何が違うかはそれぞれのフィールドが決めます。
 `conditions` は何も設定せず、nukadoko はそれをプログラムと照らし合わせません。
 `{condition.banner}` は environment が宣言する側をプログラムに渡すので、2 つは食い違いません。
+
+`nuka run --base <git ref>` は、`origin/main` など、ref が名指すコミットと各受け入れ基準を比べ、行が必要とするところに 2 つの world を加えます。
+受け入れ基準はその feature ファイルと名前で、その中身は人が承認したもの(step、Examples の行、condition の tag)なので、名前や tag を変えた scenario は `unchanged` のままです。
+`new` か `changed` の受け入れ基準は `base` の world、つまり head の受け入れ基準と step のもとでの基点のコードでも走ります。
+その Then がそこで 2 回の実行のそれぞれで失敗すれば、行は `proven` です。
+それを示すものが無ければ行は `unproven` で、`@held` は基点がすでにその振る舞いを持っていたと述べます。
+対応づけ(features ディレクトリの下の step ファイルや補助、config の fixture や parameter type、environment の condition)が変わったときは、`unchanged` の受け入れ基準が `old` の world、つまり基点の受け入れ基準と step のもとでの head のコードでも走り、そこで通らなければなりません。
+通らなければ行は `moved` です。
+承認された文が、もう承認されたときの意味ではないということです。
+各 world は run ディレクトリの下の tree で、その tree のプログラムのファイルから build して走り、パッケージは head のプロジェクトから解決します。
+`failed`、`unproven`、`moved` の行があれば終了コードは 1 で、`removed` の行は消えた受け入れ基準を引用します。
+浅いクローンでは先に基点を取ってきます。
+拒否がそのコマンドを名指します。
 
 ## What this does not do
 

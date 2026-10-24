@@ -80,6 +80,11 @@ export interface ProgramWorldPlace {
    * when a signal stops the start. nukadoko cannot stop a function from
    * outside, so one that does not honour this signal goes on running. */
   readonly signal: AbortSignal;
+  /** Whose code the world runs: `"base"` for the base world of `nuka run
+   * --base`, built from the ref, and `"head"` for every other world. A
+   * `url` function that has no URL for the base gives nothing back, and
+   * the base world then runs no cell (docs/spec.md "Verdicts"). */
+  readonly tree: "head" | "base";
 }
 
 /** The world `setup` receives, once its program answers. */
@@ -94,7 +99,10 @@ export interface ProgramWorld extends ProgramWorldPlace {
   readonly env: Readonly<Record<string, string>>;
 }
 
-export type ProgramUrl = string | ((world: ProgramWorldPlace) => string | Promise<string>);
+/** What a `url` function gives back: a URL, or nothing, which only a base
+ * world may be given. */
+export type ProgramUrlAnswer = string | undefined | null;
+export type ProgramUrl = string | ((world: ProgramWorldPlace) => ProgramUrlAnswer | Promise<ProgramUrlAnswer>);
 export type ProgramSetup = (world: ProgramWorld) => unknown;
 
 const HTTP_URL = 'must be an http: or https: URL, such as "http://localhost:3000"';
@@ -179,7 +187,7 @@ const serveSchema = z
 
 const functionSchema = <T>(message: string) => z.custom<T>((value) => typeof value === "function", { message });
 
-const urlFunctionSchema = functionSchema<(world: ProgramWorldPlace) => string | Promise<string>>("must be a URL or a function returning one");
+const urlFunctionSchema = functionSchema<(world: ProgramWorldPlace) => ProgramUrlAnswer | Promise<ProgramUrlAnswer>>("must be a URL or a function returning one");
 const setupFunctionSchema = functionSchema<ProgramSetup>("must be a function");
 
 const programFields = {

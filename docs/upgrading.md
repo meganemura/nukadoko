@@ -486,6 +486,73 @@ This part does not change release to release.
   `application/vnd.nukadoko.verdict+json`. A consumer that counts a test
   case's attachments counts one more.
 
+- **`nuka run --since` is removed; `nuka run --base <ref>` judges what
+  `--since` reported.** `nuka run --since` is refused with
+  `removed-flag`. Replace it with `--base` and the same ref: `npx nuka
+  run --base origin/main` in place of `npx nuka run --since "$(git
+  merge-base HEAD origin/main)"`. `--since` only reported and never
+  failed a run; `--base` runs a new or changed criterion against the
+  base's code and an unchanged one under the base's steps when the
+  mapping changed, and exits 1 on an `unproven` or `moved` row
+  (docs/spec.md "Verdicts"). A CI job on a shallow clone fetches the base
+  first: the `base-shallow` refusal's `do` is the command. A project
+  whose `featuresDir` is the project root moves its features and steps
+  into a directory of their own before it can use `--base`.
+
+- **run.json has no `since`, and a scenario entry has no `criteria`.**
+  A reader of `criteria.changed_since` reads the row's `change` in
+  `table.rows` (`unchanged`, `changed`, `new`, or `removed`, and
+  `renamed_from` for a criterion renamed or moved). `ambiguous` and
+  `unknown` are gone: a repeated name whose scenarios content cannot pair
+  is `new` and `removed`, and a base feature file that does not parse
+  gives a `base-feature-unparsed` warning and counts its criteria as
+  `new`. A reader of `since.removed` reads the `removed` rows, whose
+  `lines` hold the base's sentences. `since.step_files` has no
+  successor: the mapping is compared as one unit, and `table.mapping_changes`
+  names the files that changed. Under `--base`, `scenarios` also holds
+  the executions of the base and the old world, each with `world` and
+  `row`; a reader that counts head's executions skips the entries that
+  have `world`, as `counts` does.
+
+- **The run summary has no "Criteria since" section.** Under `--base`,
+  one line above the table counts what changed and says whether the
+  mapping changed, the table has a `change` column and a column per base
+  and old environment, and "Removed criteria" quotes each removed
+  criterion.
+
+- **The `since-*` refusal codes are gone.** `since-ref-unknown`,
+  `since-outside-git`, and `since-git-failed` are `base-ref-unknown`,
+  `base-outside-git`, and `base-git-failed`, and `base-shallow` and
+  `base-features-at-root` are new. A script that matched a `since-*`
+  code matches the `base-*` one.
+
+- **A step-file refactor runs every unchanged criterion in the old
+  world.** The old world is head's code under the base's feature files and
+  the base's steps, so a refactor that changes the mapping (a step file,
+  a helper under the features directory, the config's `fixtures`, an
+  environment's `conditions`) makes each unchanged row prove it still
+  means what it meant: the base's steps run against head's code, and the
+  row is `held` when they pass. The base's helpers under the features
+  directory travel with the base's steps, so a helper moved or renamed
+  there does not break them. What breaks them is code outside the
+  features directory that the base's steps import and head changed: a
+  module of the program they reach into, renamed or moved. The old
+  mapping then does not load, every unchanged row is `moved`, and the
+  reason names the import that failed. Keep that import working through
+  the refactor (leave a re-export at the old path), or change what the
+  steps import in one change and the program in a later one. A refactor
+  that does neither leaves the gate red for its change, and a team that
+  lands it anyway decides that outside nukadoko; the next change compares
+  with a base that has the new steps.
+
+- **A `url` function receives `tree`, and may return nothing for the
+  base.** `tree` is `"base"` for the base world of `--base` and
+  `"head"` otherwise. A function that has no URL for the base returns
+  `undefined`, `null`, or `""`, and the base world runs no cell; a
+  function that returns nothing for head fails the world with
+  `program-start-failed`, as it did. A base world whose environment
+  writes a fixed `url` runs no cell either, since that URL is head's.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and
