@@ -217,7 +217,7 @@ async function verifyDeclarationEmit(projectDir, nukaBin) {
   await runInherit(nukaBin, ["scaffold", "run-tool", "--pattern", "I run the tool", "--command"], { cwd: projectDir });
   await runInherit(
     nukaBin,
-    ["scaffold", "tool-printed", "--pattern", "the tool printed it", "--then", "--from", "run-tool.stdout"],
+    ["scaffold", "tool-printed", "--pattern", "the tool printed {text:string}", "--then", "--from", "run-tool.stdout"],
     { cwd: projectDir },
   );
   const chained = await readFile(path.join(projectDir, "features", "steps", "tool-printed.ts"), "utf8");
@@ -254,9 +254,16 @@ async function verifyDeclarationEmit(projectDir, nukaBin) {
   if (code !== 0) {
     throw new Error(`step files failed to emit declarations:\n${await readFile(outputPath, "utf8")}`);
   }
-  const emitted = await readFile(path.join(projectDir, "declarations-out", "features", "steps", "output-is-empty.d.ts"), "utf8");
-  if (!emitted.includes('import("nukadoko").DefaultReturns') || emitted.includes("node_modules")) {
-    throw new Error(`a step's emitted declaration does not name the package entry:\n${emitted}`);
+  // A step that runs and declares no `returns` reaches DefaultReturns; a
+  // claim step reaches ClaimStep. Both have to come from the package entry.
+  for (const [file, name] of [
+    ["plain-stub.d.ts", "DefaultReturns"],
+    ["output-is-empty.d.ts", "ClaimStep"],
+  ]) {
+    const emitted = await readFile(path.join(projectDir, "declarations-out", "features", "steps", file), "utf8");
+    if (!emitted.includes(`import("nukadoko").${name}`) || emitted.includes("node_modules")) {
+      throw new Error(`a step's emitted declaration does not name the package entry:\n${emitted}`);
+    }
   }
   log("step files emitted declarations that name the package entry");
 }
