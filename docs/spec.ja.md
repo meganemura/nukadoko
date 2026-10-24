@@ -2468,6 +2468,8 @@ step が world へ送るすべての HTTP リクエストは W3C の `traceparen
 trace id は step 1 つにつき 1 つで、span id はリクエスト 1 つにつき 1 つです。
 1 つの world の trace id はどれも、その world のために作った同じ 16 進数 8 文字で始まります。
 hook は専用の trace id を持つので、その行はどの step のものにもなりません。
+Before、AfterStep、After の hook のリクエストは、step のものと同じく、下に挙げるどのクライアントでもその trace id を運びます。
+BeforeAll と AfterAll はどの scenario の外でも、どの step や hook の境界の中でもないところで実行されるので、そのリクエストは `traceparent` を運びません。
 
 - ヘッダは、`fetch`、`node:http`、`node:https`、`request` fixture、`page.request`、`context.request` を通るリクエストと、Chromium の page のドキュメント、`fetch` の呼び出し、XMLHttpRequest、EventSource に付きます。
 - 付くのは、world のオリジン、つまり URL のスキーム、ホスト、ポートへのリクエストだけです。
@@ -2632,6 +2634,10 @@ id が行のテキストにあれば、形は何でも構いません。
 - service worker のリクエストは `traceparent` を運びません。
   nukadoko が付けるのはページ自身のリクエストで、service worker はどのページとも別にリクエストを送るからです。
 - Firefox と WebKit のページのリクエストも運ばず、Chromium のポップアップの最初のリクエストも運びません(上記)。
+- BeforeAll と AfterAll の hook のリクエストも運びません。
+  これらの hook はどの境界の中でも実行されないからです。
+  fixture の setup と teardown が `fetch`、`node:http`、`node:https` で送るリクエストも運びません。
+  それらは step の本体の外で実行されます(「Records」を参照)。
 - `port: "auto"` では、nukadoko は見つけた空きポートをプログラムの起動前に閉じます。
   そのポートで `ready` に答えるサーバが自分の起動したものであることは確かめません。
   その間にポートを取ったプロセスがあれば、そのプロセスが代わりに答えます。
@@ -3340,7 +3346,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   どの差し替えも届かないもの(この項目の終わり)については、何も言いません。
   step が書き込んだかどうかを述べるフィールドはありません(「キーワードの意味論」を参照)。
   POST はリクエストであって書き込みではなく、ファイルが `files` に載るのはディスク上のそのファイルの同一性が変わったからです。
-  チャネルを記録するのは、step 自身の `run`、それが呼ぶ part、compat step の関数の中です。
+  チャネルを記録するのは、step 自身の `run`、それが呼ぶ part、compat step の関数、Before、AfterStep、After の hook の関数の中です。
+  hook の行は scenario の record ディレクトリに書かれます。
   executor はその周りにスコープを開きます。
   nukadoko は `fetch`、`node:http`、`node:https`、`node:child_process`、`net.Socket#connect` と `write` と `end`、`node:fs` の書き込み、`worker_threads.Worker`、`dgram.Socket#send` をプロセスごとに 1 回だけ差し替え、そのスコープに記録します。
   step の外では、差し替えたものは元の関数を呼ぶだけで、何も記録しません。

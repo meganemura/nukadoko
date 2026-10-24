@@ -1459,8 +1459,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       hookErrorKind = "unsupported";
     } else {
       try {
+        // The hook's body runs in its own boundary's recording scope, as a
+        // step's does, here and in the AfterStep and After loops: a request
+        // it sends to the world through `fetch`, `node:http`, or
+        // `node:https` carries the hook's own trace id, so the program's
+        // lines for it belong to no step. BeforeAll and AfterAll run in no
+        // boundary, so their requests go without one.
         const returnValue = await runWithTimeout(
-          () => Promise.resolve(hook.fn.call(world, hookParameter)),
+          () => contextHandle.recordingProcesses(() => Promise.resolve(hook.fn.call(world, hookParameter))),
           hook.timeoutMs ?? defaultTimeoutMs,
           "Hook",
           title,
@@ -1615,7 +1621,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       } else {
         try {
           const returnValue = await runWithTimeout(
-            () => Promise.resolve(hook.fn.call(world, hookParameter)),
+            () => contextHandle.recordingProcesses(() => Promise.resolve(hook.fn.call(world, hookParameter))),
             hook.timeoutMs ?? defaultTimeoutMs,
             "Hook",
             title,
@@ -2323,7 +2329,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     } else {
       try {
         const returnValue = await runWithTimeout(
-          () => Promise.resolve(hook.fn.call(world, hookParameter)),
+          () => contextHandle.recordingProcesses(() => Promise.resolve(hook.fn.call(world, hookParameter))),
           hook.timeoutMs ?? defaultTimeoutMs,
           "Hook",
           title,

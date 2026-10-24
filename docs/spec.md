@@ -3034,6 +3034,10 @@ and a span id for each request.
 Every trace id of one world starts with the same eight hexadecimal
 characters, made for that world.
 A hook gets a trace id of its own, so its lines belong to no step.
+A Before, AfterStep, or After hook's requests carry it through every
+client below, as a step's do.
+BeforeAll and AfterAll run outside every scenario, in no step's or
+hook's boundary, so their requests go without a `traceparent`.
 
 - The header goes on requests through `fetch`, `node:http`,
   `node:https`, the `request` fixture, `page.request`, and
@@ -3267,6 +3271,11 @@ What this does not reach, in one list:
   apart from any page.
 - A Firefox or WebKit page's requests go without one, and so do a
   Chromium popup's first requests (above).
+- A BeforeAll or AfterAll hook's requests go without one: those hooks run
+  in no boundary.
+  So do the `fetch`, `node:http`, and `node:https` requests a fixture's
+  setup or teardown sends, which run outside the step's body (see
+  "Records").
 - With `port: "auto"`, nukadoko closes the free port it found before the
   program starts, and it does not prove that the server answering
   `ready` there is the one it started: a process that took the port in
@@ -4167,8 +4176,9 @@ its scenario record's id, so either record leads to the other.
   semantics"): a POST is a request, never a write, and a file is in
   `files` because its identity changed on disk.
   The channels are recorded inside the step's own `run`, the parts it
-  calls, and a compat step's function: the executor opens a scope around
-  it, and nukadoko patches `fetch`, `node:http`, `node:https`,
+  calls, a compat step's function, and a Before, AfterStep, or After
+  hook's function, whose lines go to the scenario's record directory:
+  the executor opens a scope around it, and nukadoko patches `fetch`, `node:http`, `node:https`,
   `node:child_process`, `net.Socket#connect`, `write`, and `end`, the
   `node:fs` writes, `worker_threads.Worker`, and `dgram.Socket#send`,
   once per process, to record into that scope.

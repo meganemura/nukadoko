@@ -139,6 +139,45 @@ describe("trace context and the program's log", () => {
     expect(summary).not.toContain("program log of world");
   });
 
+  it("stamps a Before, AfterStep, or After hook's requests with a trace id of the hook's own, and BeforeAll's and AfterAll's with none", async () => {
+    await writeFile(path.join(rootDir, "nukadoko-compat-shim.ts"), 'export * from "../../../src/compat/index.js";\n');
+    await writeFile(
+      path.join(rootDir, "features", "steps", "hooks.ts"),
+      [
+        'import { After, AfterAll, AfterStep, Before, BeforeAll } from "../../nukadoko-compat-shim.js";',
+        "const hit = async (where: string) => { await (await fetch(`http://localhost:${process.env.PORT}/${where}`)).text(); };",
+        'BeforeAll(async function () { await hit("before-all"); });',
+        'Before(async function () { await hit("before"); });',
+        'AfterStep(async function () { await hit("after-step"); });',
+        'After(async function () { await hit("after"); });',
+        'AfterAll(async function () { await hit("after-all"); });',
+        "",
+      ].join("\n"),
+    );
+    const { exitCode } = await cli(rootDir, ["run"]);
+
+    expect(exitCode).toBe(0);
+    const lines = readFileSync(path.join(latestRunDir(rootDir), "worlds", "default", "program.log"), "utf8").split("\n");
+    const tagged = (where: string): string[] =>
+      lines.flatMap((line) => {
+        const match = /^\[00-([0-9a-f]{32})-[0-9a-f]{16}-01\] GET \/(.+)$/.exec(line);
+        return match !== null && match[2] === where ? [match[1]!] : [];
+      });
+    expect(lines).toContain("GET /before-all");
+    expect(lines).toContain("GET /after-all");
+    const hookIds = [...tagged("before"), ...tagged("after-step"), ...tagged("after")];
+    expect([tagged("before").length, tagged("after-step").length, tagged("after").length]).toEqual([1, 4, 1]);
+    expect(new Set(hookIds).size).toBe(6);
+    const steps = stepsByName(rootDir);
+    const stepIds = ["fetch-program", "node-http-program", "request-program", "page-program"].map((name) => only(steps.get(name)).observed.program_log!.trace_id);
+    for (const id of hookIds) {
+      expect(id.slice(0, 8)).toBe(stepIds[0]!.slice(0, 8));
+      expect(stepIds).not.toContain(id);
+    }
+    // A hook's lines are in no step's slice.
+    expect(sliceOf(only(steps.get("fetch-program")))).toEqual([expect.stringMatching(/\] GET \/fetch$/)]);
+  });
+
   it("gives each step a trace id of its own under --concurrency, read from the log the parent writes", async () => {
     await copyFile(path.join(rootDir, "features", "trace.feature"), path.join(rootDir, "features", "trace-again.feature"));
     const { exitCode } = await cli(rootDir, ["run", "--concurrency", "2"]);

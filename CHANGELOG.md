@@ -350,8 +350,12 @@ just until 0.1.
   W3C `traceparent` with the step's own trace id and a span id per
   request: through `fetch`, `node:http`, `node:https`, a Playwright
   request context, and a Chromium page's documents, fetches, XHRs, and
-  EventSources. For a `localhost` world, a name below `localhost` at the
-  same port counts as the world's origin. A request that sets its own
+  EventSources. A Before, AfterStep, or After hook's requests carry a
+  trace id of the hook's own, through the same clients, and are recorded
+  in the scenario's directory; a BeforeAll or AfterAll hook's go without
+  one, as do the `fetch`, `node:http`, and `node:https` requests of a
+  fixture's setup or teardown. For a `localhost` world, a name below
+  `localhost` at the same port counts as the world's origin. A request that sets its own
   `traceparent`, or whose request context's `extraHTTPHeaders` set one,
   keeps it; a `node:http` request is stamped as its headers are sent, so
   one the step sets after creating the request is the one kept. A
