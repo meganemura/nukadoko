@@ -37,7 +37,8 @@ values and where each came from. Check that the actual value's source is
 the thing the criterion means before you suspect the implementation; the
 step record's `claims` give each claim's `measured`, the channel that
 holds the raw value. `unobserved` means `observe` threw, so no claim was
-judged. `claim_unjudged` means nukadoko itself failed while judging (its
+judged. A claim step's `timeout` leaves each claim `unjudged`, beside the
+readings read before the deadline. `claim_unjudged` means nukadoko itself failed while judging (its
 reason names the failure): nothing is known about that criterion yet. Open that path's `record.json` rather than
 searching the records directory.
 

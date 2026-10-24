@@ -17,6 +17,7 @@ import {
   evaluateClaims,
   failedReading,
   pollReadings,
+  POLL_INTERVAL_MS,
   readerOf,
   readingOf,
   readKey,
@@ -366,18 +367,29 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     const kind = records.some((record) => record.outcome === "unjudged") ? "claim_unjudged" : "claim_broken";
     return { status: "failed", error: { message: brokenClaimsMessage(records), kind }, thrown: undefined, fixtureUsage, claims };
   };
-  // What a step that read nothing records: `unobserved` as the kind only
-  // when `observe` itself threw; a deadline is `timeout` and a fixture that
-  // failed to set up is the step's own error, as for a step that runs.
-  const readNothing = (error: unknown, observeThrew: boolean): ValidatedStepOutcome => {
+  // What a step whose reading did not end records: `unobserved` only when
+  // `observe` itself threw; a fixture that failed to set up is the step's
+  // own error, as for a step that runs. A deadline that passed while
+  // `observe` ran, or between two readings, is `timeout`, and it is
+  // nukadoko's limit rather than `observe` failing, so each claim is
+  // `unjudged`, with the readings read so far.
+  const readNothing = (error: unknown, whileObserving: boolean): ValidatedStepOutcome => {
     const caught = classifyCaughtError(error);
-    const kind = caught === "timeout" ? "timeout" : observeThrew ? "unobserved" : caught;
+    const kind = caught === "timeout" ? "timeout" : whileObserving ? "unobserved" : caught;
+    const timedOut = caught === "timeout" && whileObserving;
+    const why =
+      readings === undefined
+        ? `${messageOf(error)} while observe ran, so no claim was judged`
+        : `${messageOf(error)} while the poll read, so no claim was judged; the readings show what each reading before it read`;
+    const judged = timedOut ? claimsEndedEarly(step.claims, claimInputs(noObservation), "unjudged", why) : unobservedClaims(step.claims, claimInputs(noObservation));
+    // A poll that read a value before the deadline did observe.
+    const read = readings !== undefined && readings.kept().readings.some((reading) => reading.error === undefined);
     return {
       status: "failed",
       error: { message: kind === "unobserved" ? `the step observed nothing, so no claim was judged: ${messageOf(error)}` : messageOf(error), kind },
       thrown: error,
       fixtureUsage,
-      claims: { judged: unobservedClaims(step.claims, claimInputs(noObservation)), observation: "unobserved", attempts, ...readingsField() },
+      claims: { judged, observation: timedOut && read ? "observed" : "unobserved", attempts, ...readingsField() },
     };
   };
   // Static, so before any fixture is set up: a line whose docstring or
@@ -488,10 +500,15 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     log.add(reading);
     return reading.held;
   };
+  // A poll does not outlast the step: the deadline's timer starts with the
+  // poll, and the poll stops one interval before it, so its last reading
+  // starts in time and is judged, where a poll longer than the step would
+  // always end in the deadline, with no reading judged.
+  const pollTimeout = deadline.ms === undefined ? poll.timeout_ms : Math.max(0, Math.min(poll.timeout_ms, deadline.ms - POLL_INTERVAL_MS));
   let polled: { readonly last: Reading; readonly attempts: number };
   try {
     polled = await runWithTimeout(
-      () => handle.recordingProcesses(() => pollReadings(read, holds, poll.timeout_ms, clock)),
+      () => handle.recordingProcesses(() => pollReadings(read, holds, pollTimeout, clock)),
       deadline.ms,
       "Step",
       name,

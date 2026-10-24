@@ -72,7 +72,9 @@ just until 0.1.
   args key except the ones a claim compares with, and `resultOf` throws
   inside a claim step, so an earlier step's value reaches a claim only
   through `from`, under a label that names it. `poll: { timeout_ms }`
-  reads again until every claim holds on two readings in a row.
+  reads again until every claim holds on two readings in a row, and
+  stops 100 milliseconds before the step's deadline when its timeout
+  would run past it, so its last reading is judged.
   nukadoko compares and records each claim. Before
   this, a Then was code that called `expect`: in ten small projects that
   use nukadoko, 32 of 35 Thens kept the expected value in step code, where
@@ -433,7 +435,9 @@ just until 0.1.
   and the message `claim broken: <actual> (<actual_from>) <compare>
   <expected> (<expected_from>)`; an `observe` that throws is
   `unobserved`, and no claim is judged; a claim nukadoko failed to judge
-  is `claim_unjudged`. Allure has ten categories, one per kind, and
+  is `claim_unjudged`. A deadline that passes while `observe` runs or a
+  poll reads is `timeout`, and each claim is `unjudged` with the reason,
+  beside the readings read before it. Allure has ten categories, one per kind, and
   `nuka init --allure` writes ten rules.
 
 - **Reports show each claim.** An Allure step gets one zero-width child

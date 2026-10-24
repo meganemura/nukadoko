@@ -1587,7 +1587,10 @@ throw した `observe` は、その step をエラーとともに `unobserved` �
 これは成り立たない claim とは別の結果です。
 `observe` の中で throw するガードは、計測しなかったこととして見え、成り立った claim や成り立たなかった claim としては見えません。
 `unobserved` は、`observe` が throw したことだけを意味します。
-step の締め切りが先に来た場合は `timeout`、fixture を用意できなかった場合はどの step とも同じく step 自身のエラーであり、`observe` のない step が `unobserved` になることはありません。
+`observe` の実行中、または poll の読み取りの途中で step の締め切りが過ぎた場合は `timeout` で、各 claim は理由とともに `unjudged` です。
+締め切りは nukadoko の上限であって世界の読み取りではないので、受け入れ基準については何もわからないからです。
+poll の record は締め切りまでに読んだ読み取りを残し、そのどれかが値を読んでいれば `observation` は `observed` です。
+fixture を用意できなかった場合はどの step とも同じく step 自身のエラーであり、`observe` のない step が `unobserved` になることはありません。
 `observe` が返ったあとで nukadoko が claim を判定できないとき、その claim の `outcome` は理由とともに `unjudged` で、step は `claim_broken` でも claim を持たない step のエラーでもなく、`claim_unjudged` で失敗します。
 受け入れ基準については何もわからないからです。
 これには、`matches` を試す worker が止まったときや起動できないとき(`--allow-worker` のない `node --permission` の下など)、スナップショットを取れない値、判定の途中で step の締め切りが過ぎたとき、claim の判定中のその他の失敗が含まれます。
@@ -1601,6 +1604,9 @@ step の締め切りが先に来た場合は `timeout`、fixture を用意でき
 `poll: false`、または `poll` がないときは、一度だけ読みます。
 前の step の値は読み取りの間に変わらないので、`poll` には `observe` が必要です。
 タイムアウトは step の締め切りの上限を超えられません。
+step の締め切りは step が読み始めたときに始まり、タイムアウトがそれを越える poll は、代わりに締め切りの 100 ミリ秒前に止まります。
+そうすれば最後の読み取りが間に合って始まり、判定されます。
+締め切りにぶつかった poll は、どの読み取りも判定されないまま終わります。
 
 `poll` は、直前の読み取りが成り立ったかどうかを `observe` に伝えます。
 claim が成り立たない間だけ、もう一度呼ぶからです。
@@ -1675,7 +1681,7 @@ claim step の record には、次の固有のフィールドがあります(「
 
 - `claims`: step が宣言した順の、各 claim です。
   比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
-  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値)にあります。
+  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、どの claim も読まない行が述べる値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値、読み取りの途中で過ぎた step の締め切り)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。

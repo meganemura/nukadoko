@@ -801,7 +801,7 @@ export default defineStep({
 });
 
 describe("a claim step's error kind says what failed", () => {
-  it("is unobserved when observe threw, and timeout when observe ran past the deadline", async () => {
+  it("is unobserved when observe threw, and timeout, with each claim unjudged, when observe ran past the deadline", async () => {
     const rootDir = await project({
       "features/steps/it-throws.ts": `import { defineStep, z } from "nukadoko";
 export default defineStep({
@@ -835,7 +835,65 @@ export default defineStep({
     expect(threw.error).toEqual({ kind: "unobserved", message: "the step observed nothing, so no claim was judged: no page" });
     expect(threw.claims[0].outcome).toBe("unobserved");
     expect(hung.error.kind).toBe("timeout");
-    expect(hung.claims[0].outcome).toBe("unobserved");
+    expect(hung.claims[0]).toMatchObject({ outcome: "unjudged" });
+    expect(hung.claims[0].reason).toMatch(/ timed out after 200ms \(the step's own timeout\) while observe ran, so no claim was judged$/);
+    expect(hung.observation).toBe("unobserved");
+  });
+
+  it("leaves each claim unjudged when the deadline passes while a poll reads, and keeps the readings read before it", async () => {
+    const rootDir = await project({
+      "features/steps/the-counter-shows.ts": `import { defineStep, z } from "nukadoko";
+let calls = 0;
+export default defineStep({
+  pattern: "the counter shows {n:int}",
+  args: z.object({ n: z.number() }),
+  timeout: 1000,
+  poll: { timeout_ms: 10000 },
+  observe() {
+    calls += 1;
+    return calls <= 2 ? { count: 0 } : new Promise(() => {});
+  },
+  claims: [{ actual: "count", compare: "equal", expected: "n" }],
+});
+`,
+      "features/t.feature": feature("Then the counter shows 3"),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("timeout");
+    expect(step.claims[0]).toMatchObject({ outcome: "unjudged" });
+    expect(step.claims[0].reason).toMatch(
+      / timed out after 1000ms \(the step's own timeout\) while the poll read, so no claim was judged; the readings show what each reading before it read$/,
+    );
+    expect(step.observation).toBe("observed");
+    expect(step.attempts).toBe(3);
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as { readings: Record<string, unknown>[] };
+    expect(record.readings.map((reading) => [reading.attempt, reading.held, reading.actuals])).toEqual([
+      [1, false, [{ value: 0 }]],
+      [2, false, [{ value: 0 }]],
+    ]);
+  });
+
+  it("ends a poll whose timeout is longer than the step's deadline before the deadline, and judges its last reading", async () => {
+    const rootDir = await project({
+      "features/steps/the-counter-shows.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the counter shows {n:int}",
+  args: z.object({ n: z.number() }),
+  timeout: 1000,
+  poll: { timeout_ms: 10000 },
+  observe() { return { count: 0 }; },
+  claims: [{ actual: "count", compare: "equal", expected: "n" }],
+});
+`,
+      "features/t.feature": feature("Then the counter shows 3"),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("claim_broken");
+    expect(step.claims[0]).toMatchObject({ actual: 0, expected: 3, outcome: "broken" });
+    expect(step.observation).toBe("observed");
+    expect(step.attempts).toBeGreaterThan(1);
   });
 });
 

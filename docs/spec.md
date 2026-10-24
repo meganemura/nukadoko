@@ -1948,9 +1948,14 @@ An `observe` that throws records the step as `unobserved`, with the error,
 and judges no claim. That is a different result from a broken claim: a
 guard inside `observe` that throws is visible as not having measured,
 never as a claim that held or broke. `unobserved` means exactly that
-`observe` threw. A step deadline that passes first is `timeout`, a
-fixture that cannot be set up is the step's own error, as for any step,
-and a step with no `observe` is never `unobserved`. When nukadoko cannot
+`observe` threw. A step deadline that passes while `observe` runs, or
+while a poll reads, is `timeout`, and each claim is `unjudged` with the
+reason: the deadline is nukadoko's limit, not a reading of the world, so
+nothing is known about the criterion. A poll's record keeps the readings
+read before the deadline, and `observation` is `observed` when one of
+them read a value. A fixture that cannot be set up is the step's own
+error, as for any step, and a step with no `observe` is never
+`unobserved`. When nukadoko cannot
 judge a claim after `observe` returned, the claim's outcome is `unjudged`
 with the reason, and the step fails with `claim_unjudged`, never
 `claim_broken` and never a step error with no claims: nothing is known
@@ -1968,7 +1973,11 @@ readings. One reading that holds is never enough: a page between two
 renders can show the expected state for one frame. `poll: false`, or no
 `poll`, reads once. `poll` needs an `observe`, since values from earlier
 steps do not change between readings, and its timeout cannot exceed the
-step deadline's limit.
+step deadline's limit. The step's deadline starts when the step begins
+reading, and a poll whose timeout would run past it stops 100
+milliseconds before it instead, so its last reading starts in time and is
+judged. A poll that ran into the deadline would end with no reading
+judged.
 
 `poll` tells `observe` whether its last reading held: it is called again
 only while the claims do not hold. Any read-until-it-holds has this
@@ -2078,7 +2087,8 @@ A claim step's record has these fields of its own (see "Records"):
   itself, a value the line states that no claim reads) or when nukadoko
   could not judge it (a value that is not plain
   JSON, a `Proxy`, a value nested too deep, an input `observe` could
-  not receive as a copy, a value the args schema changed), `measured`, and `expected_measured` when the expected value
+  not receive as a copy, a value the args schema changed, the step's
+  deadline passing while it read), `measured`, and `expected_measured` when the expected value
   came from `from` or `observe`. An `each` claim carries `actual_from`,
   the `each` declarations (each with `expected_measured` on the same
   terms), counts (`items` is the array's length whenever the array was
