@@ -92,8 +92,12 @@ function setOwn(target: Record<string, unknown>, key: string, value: unknown): v
  * integer beyond `Number.MAX_SAFE_INTEGER`, an array with no holes and no
  * other keys, or an object whose prototype is `Object.prototype` or `null`
  * and whose own properties are all enumerable data properties with string
- * keys, nested at most `maxDepth` containers deep. A Proxy is refused at any
- * depth, before anything is read through it. Pure.
+ * keys, nested at most `maxDepth` containers deep. An object key whose value
+ * is `undefined` is left out of the copy, as `JSON.stringify` leaves it
+ * out of the record, so a row with an optional field that is not set is
+ * the row the record shows; an array item that is `undefined` is refused,
+ * since JSON would write it as `null`, another value. A Proxy is refused at
+ * any depth, before anything is read through it. Pure.
  */
 export function snapshot(value: unknown, maxDepth = SNAPSHOT_MAX_DEPTH): Snapshot {
   const ancestors = new Set<object>();
@@ -142,6 +146,7 @@ export function snapshot(value: unknown, maxDepth = SNAPSHOT_MAX_DEPTH): Snapsho
         const descriptor = Object.getOwnPropertyDescriptor(current, key)!;
         if (!("value" in descriptor)) return refuse([...at, key], "is a getter");
         if (descriptor.enumerable !== true) return refuse([...at, key], "is not enumerable");
+        if (descriptor.value === undefined) continue;
         const item = copy(descriptor.value, [...at, key]);
         if (refusal !== null) return undefined;
         setOwn(out, key, item);

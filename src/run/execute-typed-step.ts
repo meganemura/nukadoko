@@ -26,6 +26,7 @@ import {
   judgingBudget,
   type ArgSide,
   type ClaimInputs,
+  type ClaimReads,
   type JudgingBudget,
   type JudgedClaim,
   type PatternTester,
@@ -153,19 +154,47 @@ export function snapshotClaimArgs(step: Step, rawArgs: unknown, refusedFrom: Rea
   return reads;
 }
 
-/** Which args values a claim reads came out of the args schema other than
- * nukadoko read them before it ran. A value the snapshot could not take is
- * left to that refusal. */
-function changedBySchema(before: ReadonlyMap<string, Read>, paths: readonly (readonly string[])[], after: unknown): (segments: readonly string[]) => boolean {
-  const changed = new Set<string>();
-  for (const segments of paths) {
+/** Whether two reads of one place found one value. */
+function sameRead(before: Read, now: Read): boolean {
+  if ("missing" in before) return "missing" in now;
+  return "value" in before && "value" in now && deepEqual(before.value, now.value);
+}
+
+/** Where the args schema's output differs from what nukadoko read before
+ * it ran, at the places the claims read and nowhere else: a value a claim
+ * compares whole, and inside each item of an array an `each` reads, the
+ * places its `where` and item claims read, with the item count. A key the
+ * schema strips that no claim reads changes nothing a claim judges. A
+ * value the snapshot could not take is left to that refusal. */
+function changedBySchema(before: ReadonlyMap<string, Read>, reads: ClaimReads, after: unknown): ClaimInputs["schemaChanged"] {
+  const whole = new Map<string, readonly string[]>();
+  for (const segments of reads.argValues) {
     const read = before.get(readKey(segments));
     if (read === undefined || "refused" in read) continue;
-    const now = readAt(after, segments);
-    const same = "missing" in read ? "missing" in now : "value" in now && deepEqual(read.value, now.value);
-    if (!same) changed.add(readKey(segments));
+    if (!sameRead(read, readAt(after, segments))) whole.set(readKey(segments), segments);
   }
-  return (segments) => changed.has(readKey(segments));
+  const itemwise = new Map<string, readonly string[]>();
+  for (const { segments, inside } of reads.argItems) {
+    const read = before.get(readKey(segments));
+    if (read === undefined || !("value" in read) || !Array.isArray(read.value)) continue;
+    const items: readonly unknown[] = read.value;
+    // An item past the end that is there now is an item the schema added.
+    const added = readAt(after, [...segments, String(items.length)]);
+    if (!("missing" in added)) {
+      itemwise.set(readKey(segments), segments);
+      continue;
+    }
+    found: for (let index = 0; index < items.length; index += 1) {
+      for (const path of inside) {
+        const place = [...segments, String(index), ...path];
+        if (!sameRead(readAt(items[index], path), readAt(after, place))) {
+          itemwise.set(readKey(segments), place);
+          break found;
+        }
+      }
+    }
+  }
+  return (segments, byItem) => (byItem ? itemwise : whole).get(readKey(segments)) ?? null;
 }
 
 /** Runs `step` with args that already validated. Never throws: every
@@ -299,7 +328,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   // A caller that took no snapshot before the schema ran (none does) gets
   // one of the validated args, so no claim reads a live value either way.
   const argReads = input.claimArgs ?? takeReads(args, reads.args);
-  const schemaChanged = changedBySchema(argReads, reads.args, args);
+  const schemaChanged = changedBySchema(argReads, reads, args);
   const noObservation: Reader = readerOf(new Map());
   const withheld = expectedKeys(step.claims);
   const observeReceived = step.observe === undefined ? [] : Object.keys(args).filter((key) => !withheld.has(key));

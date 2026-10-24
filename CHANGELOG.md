@@ -31,9 +31,14 @@ just until 0.1.
   judged as one plain JSON snapshot, taken where the value comes from:
   when `observe` returns, at each poll reading, when the producing step
   returns for a `from` value (each later step receives a fresh copy of
-  it), and before the args schema runs for a sentence value. The record
-  shows that snapshot, and an args schema that still changes a value a
-  claim reads breaks the claim. `observe` receives a structured clone
+  it), and before the args schema runs for a sentence value. The
+  snapshot is of the place the claim reads alone (the path with its
+  `at`, or the array of an `each`), so `users.0.name` and `users` at
+  `0.name` record one value, and an object key set to `undefined` is
+  absent, as in JSON. The record shows that snapshot. An args schema
+  that still changes a value at a place a claim reads leaves the claim
+  `unjudged`; one that strips a key no claim reads changes nothing.
+  `observe` receives a structured clone
   of its inputs, made again for each call; an input that cannot be
   cloned (a `Proxy`, a class instance that holds a function) leaves
   every claim `unjudged`, naming the key, and `observe` does not run. A `Date`, a

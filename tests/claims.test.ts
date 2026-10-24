@@ -108,7 +108,7 @@ function inputs(args: Record<string, unknown>, observation: unknown, fromKeys: r
   return {
     args: readerNow(args),
     observed: readerNow(observation),
-    schemaChanged: () => false,
+    schemaChanged: () => null,
     observeReceived: [],
     fromKeys: new Set(fromKeys),
     argSide: (key) =>
@@ -326,7 +326,7 @@ describe("the plain-JSON gate", () => {
         : await judgeOne({ actual: "value", compare: "equal", expected: "want" }, { want: value }, { value: other });
       expect(record.outcome).toBe("unjudged");
       expect(record.reason).toContain(named);
-      expect(record.reason).toContain("which is not plain JSON, so the claim was not judged: the record could not show the value that was compared");
+      expect(record.reason).toContain("which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads");
       expect(record).not.toHaveProperty(onActual ? "actual" : "expected");
     }));
 });
@@ -365,6 +365,30 @@ describe("canonical places", () => {
       expect(samePlace(shorter, once)).toBe(false);
       expect(placesOverlap(shorter, once)).toBe(true);
       expect(samePlace(placeViewed(shorter, "json"), shorter)).toBe(false);
+    }));
+
+  it("a dotted actual and the same path split into actual and at read one place and record one value, whatever sits beside it", () =>
+    hegel.testAsync(async (tc) => {
+      const { root, path, value } = tc.draw(rootWithPath);
+      const segments = path.split(".");
+      if (segments.length < 2) return;
+      const split = tc.draw(gs.integers({ minValue: 1, maxValue: segments.length - 1 }));
+      const head = segments.slice(0, split);
+      // A part that is not plain JSON beside the place read, inside the
+      // value `actual` names: only the place read is taken.
+      const parent = readAt(root, segments.slice(0, -1));
+      const args: Record<string, unknown> = { ...(snapshot(root) as { value: Record<string, unknown> }).value, want: value };
+      if ("value" in parent && typeof parent.value === "object" && parent.value !== null && !Array.isArray(parent.value) && segments.at(-1) !== "zz") {
+        let holder: any = args;
+        for (const segment of segments.slice(0, -1)) holder = holder[segment];
+        holder.zz = new Date(0);
+      }
+      const fromKeys = Object.keys(root);
+      const dotted = await judgeOne({ actual: path, compare: "equal", expected: "want" }, args, undefined, fromKeys);
+      const { at, ...byAt } = (await judgeOne({ actual: head.join("."), at: segments.slice(split).join("."), compare: "equal", expected: "want" }, args, undefined, fromKeys)) as unknown as Record<string, unknown>;
+      expect(at).toBe(segments.slice(split).join("."));
+      expect(byAt).toEqual(dotted);
+      expect(dotted).toMatchObject({ outcome: "held" });
     }));
 
   it("the any-index segment is the same as every decimal index and as no key", () =>
@@ -861,7 +885,7 @@ describe("judging is bounded by one budget", () => {
 
 describe("the record of a claim", () => {
   const base: Omit<ClaimInputs, "args" | "observed"> = {
-    schemaChanged: () => false,
+    schemaChanged: () => null,
     observeReceived: [],
     fromKeys: new Set(["result"]),
     argSide: (key: string) =>

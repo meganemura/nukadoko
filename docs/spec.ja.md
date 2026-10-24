@@ -1465,14 +1465,25 @@ step のコードがまだ持っている値は、読んだあとで変わるこ
   `expected_view` はそのあとでコピーを読みます。
 - poll の各読み取りは、読んだときに取る、それぞれのコピーです。
 
+コピーは、claim が読む場所だけのもので、その隣のものは含みません。
+その場所とは、`view` が間に立たないときは `at` をつないだ `actual` のパス、期待値のパス、`each` では配列です。
+`actual: "users.0.name"` と `actual: "users", at: "0.name"` は 1 つの場所を読んで 1 つの値を記録し、同じユーザーの別のキーにある `Date` は、どちらの claim も止めません。
+値が `undefined` であるオブジェクトのキーは、JSON が record から落とすのと同じく、コピーから落とします。
+そのため、任意のフィールドが設定されていない行は、record が示す行と同じです。
+`undefined` である配列の要素は拒否します。
+JSON はそれを `null` という別の値として書くからです。
+
 `observe` は入力を、呼び出しごとに作り直す structured clone として受け取ります。
 そのため `observe` が入力にすることは、claim が読むもの、前の step の結果、次の読み取りのどれにも届きません。
 structured clone がコピーできない入力(`Proxy`、関数、関数を持つクラスのインスタンス)があると、どの claim も `unjudged` になり、`observe` は動きません(`observe would receive args.client, which holds a function at send, and observe receives only copies of its inputs, so observe did not run and no claim was judged`)。
 エラーの種類は `claim_unjudged` です。
 
 args スキーマはいまも動き、`observe` が受け取るのはその出力のコピーです。
-スキーマが動いたあと、nukadoko は、claim が読むすべての場所で、その出力をコピーと比べます。
-2 つが違う場所では claim は成り立たず、理由がそのキーを名指しします(`the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim judged nothing`)。
+スキーマが動いたあと、nukadoko は、claim が読む場所でだけ、その出力をコピーと比べます。
+その場所とは、各辺の場所と、`each` では要素の数と、各要素の中で `where` と要素の claim が読む場所です。
+どの claim も読まないキーをスキーマが落としても、何も変わりません。
+そのため、claim が読むフィールドだけを名指しする args スキーマは、データのとおりに判定されます。
+2 つが違う場所では、判定基準について何もわからないので、claim は `unjudged` になり、理由がその場所を名指しします(`the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim was not judged`)。
 import の時点の拒否は、よくある書き換えを先に名指しします。
 record を正しく保つのはこの比較であり、`defineStep` が返ったあとで step ファイルが変えたスキーマもこの比較が見つけます。
 
@@ -1649,8 +1660,8 @@ claim step の record には、次の固有のフィールドがあります(「
 
 - `claims`: step が宣言した順の、各 claim です。
   比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
-  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、args スキーマが変えた値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力)にあります。
-  `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
+  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力、args スキーマが変えた値)にあります。
+  `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数(配列を読んだときは、何が claim を終わらせても、`items` は配列の長さです)と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。
 - `attempts`: step が値を読んだ回数です。
@@ -1658,7 +1669,8 @@ claim step の record には、次の固有のフィールドがあります(「
 - `readings`: poll するときだけあり、step が残した読み取りです(「poll」を参照)。
   すべては残さなかったときは `readings_left_out` もあります。
 
-`measured` は、`view` と `at` を通す前の生の実際の値と内容が等しい、記録されたチャネルを名指しします。
+`measured` は、生の実際の値と内容が等しい、記録されたチャネルを名指しします。
+生の実際の値とは、`actual` が読む場所の値で、`view` とそのあとの `at` を通す前のものです(`view` のない `at` は場所の一部です)。
 形は `{ "step_record_id", "channel" }` で、チャネルはその step record の中のパスです。
 プロセスの `observed.processes[0].stdout`、`.stderr`、`.exit_code`、レスポンスの `http.jsonl[1].response_body`、`.status`、変わったファイルの `observed.files[0].content` があります。
 終了コードとステータスは数値とだけ一致し、ステータス 0(レスポンスのない request)はチャネルになりません。

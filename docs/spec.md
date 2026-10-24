@@ -1767,6 +1767,16 @@ and the next another, so two reads of it are not one value.
   and before the args schema runs. `expected_view` then reads the copy.
 - Each reading of a poll is its own copy, taken when it is read.
 
+The copy is of the place the claim reads and nothing beside it: the
+`actual` path joined with its `at` when no `view` stands between them,
+the expected path, and for an `each`, the array. `actual:
+"users.0.name"` and `actual: "users", at: "0.name"` read one place and
+record one value, and a `Date` in another key of the same user does not
+stop either claim. An object key whose value is `undefined` is left out
+of the copy, as JSON leaves it out of the record, so a row whose
+optional field is not set is the row the record shows. An array item
+that is `undefined` is refused, since JSON would write it as `null`.
+
 `observe` receives its inputs as a structured clone, made again for each
 call, so nothing it does to them reaches what a claim reads, an earlier
 step's result, or its next reading. An input that a structured clone
@@ -1778,10 +1788,15 @@ judged`. The error kind is `claim_unjudged`.
 
 The args schema still runs, and a copy of its output is what `observe`
 receives.
-After it runs, nukadoko compares its output with the copy, at every place
-a claim reads. Where the two differ, the claim breaks, and the reason
-names the key: `the args schema changed args.cart at count from the value
-nukadoko read before it ran, so the claim judged nothing`. The refusals at
+After it runs, nukadoko compares its output with the copy at the places
+a claim reads and nowhere else: each side's place, and for an `each`,
+the item count and the places its `where` and item claims read inside
+each item. A key the schema strips that no claim reads changes nothing,
+so an args schema that names only the fields the claims read is
+judged on the data. Where the two differ, nothing is known about the
+criterion, so the claim is `unjudged`, and the reason names the place:
+`the args schema changed args.cart at count from the value nukadoko read
+before it ran, so the claim was not judged`. The refusals at
 import name the usual rewrites earlier. This comparison is what keeps the
 record true, and it also catches a schema that a step file changed after
 `defineStep` returned.
@@ -2032,12 +2047,14 @@ A claim step's record has these fields of its own (see "Records"):
   `unjudged`), a `reason` when it broke for something other than the
   comparison itself (an undefined value, two JSON types, an expected text
   every string holds, a view that could not apply, a side compared with
-  itself, a value the args schema changed) or when nukadoko could not
-  judge it (a value that is not plain JSON, a `Proxy`, a value nested
-  too deep, an input `observe` could not receive as a copy), `measured`, and `expected_measured` when the expected value
+  itself) or when nukadoko could not judge it (a value that is not plain
+  JSON, a `Proxy`, a value nested too deep, an input `observe` could
+  not receive as a copy, a value the args schema changed), `measured`, and `expected_measured` when the expected value
   came from `from` or `observe`. An `each` claim carries `actual_from`,
   the `each` declarations (each with `expected_measured` on the same
-  terms), counts, and item results, and the same `outcome`, `reason`,
+  terms), counts (`items` is the array's length whenever the array was
+  read, whatever ended the claim), and item results, and the same
+  `outcome`, `reason`,
   and `measured`.
 - `observation`: `observed` when the step read its values, `unobserved`
   when it could not. The step's `error` then says why.
@@ -2048,7 +2065,9 @@ A claim step's record has these fields of its own (see "Records"):
   and `readings_left_out` when it did not keep them all.
 
 `measured` names the recorded channel whose content equals the raw actual
-value, before `view` and `at`: `{ "step_record_id", "channel" }`, where the
+value, the place `actual` reads before a `view` and the `at` after it
+(an `at` with no `view` is part of the place): `{ "step_record_id",
+"channel" }`, where the
 channel is a path inside that step record: a process's
 `observed.processes[0].stdout`, `.stderr`, or `.exit_code`, a response's
 `http.jsonl[1].response_body` or `.status`, or a changed file's

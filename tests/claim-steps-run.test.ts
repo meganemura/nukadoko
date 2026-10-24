@@ -183,7 +183,7 @@ export default defineStep({
       expected_from: "sentence:date",
       expected_text: '"1970-01-01"',
       outcome: "unjudged",
-      reason: "observe:when is a Date, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+      reason: "observe:when is a Date, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads",
       measured: null,
     });
     expect(step.error.kind).toBe("claim_unjudged");
@@ -204,7 +204,7 @@ export default defineStep({
     await cli(rootDir, ["run", "features/t.feature"]);
     expect(lastClaimStep(rootDir).claims[0]).toMatchObject({
       outcome: "unjudged",
-      reason: "observe:total is the bigint 12345678901234567890n, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+      reason: "observe:total is the bigint 12345678901234567890n, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads",
     });
   });
 
@@ -228,7 +228,7 @@ export default defineStep({
     expect(step.error.kind).toBe("claim_unjudged");
     expect(step.claims[0]).toMatchObject({
       outcome: "unjudged",
-      reason: "observe:history.0 is undefined, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+      reason: "observe:history.0 is undefined, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads",
     });
   });
 });
@@ -290,7 +290,7 @@ export default defineStep({
 });
 
 describe("a claim judges one snapshot per side, taken where the value comes from", () => {
-  it("breaks when the args schema changed a value a claim reads after defineStep, and records the value it was given", async () => {
+  it("leaves the claim unjudged when the args schema changed a value a claim reads after defineStep, and records the value it was given", async () => {
     const rootDir = await project({
       "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -309,12 +309,12 @@ export default step;
     const result = await cli(rootDir, ["run", "features/t.feature"]);
     expect(result.exitCode).toBe(1);
     const step = lastClaimStep(rootDir);
-    expect(step.error.kind).toBe("claim_broken");
+    expect(step.error.kind).toBe("claim_unjudged");
     expect(step.claims[0]).toMatchObject({
       actual: 1,
       expected: 5,
-      outcome: "broken",
-      reason: "the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim judged nothing",
+      outcome: "unjudged",
+      reason: "the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim was not judged",
     });
   });
 
@@ -477,13 +477,13 @@ export default defineStep({
     expect(inside.error.kind).toBe("claim_unjudged");
     expect(inside.claims[0]).toMatchObject({
       outcome: "unjudged",
-      reason: "observe:list is a Proxy, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+      reason: "observe:list is a Proxy, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads",
     });
     expect(inside.claims[0]).not.toHaveProperty("actual");
     expect(root.error.kind).toBe("claim_unjudged");
     expect(root.claims[0]).toMatchObject({
       outcome: "unjudged",
-      reason: "the value observe returned is a Proxy, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+      reason: "the value observe returned is a Proxy, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads",
     });
   });
 
@@ -559,6 +559,118 @@ export default defineStep({
     const step = lastClaimStep(rootDir);
     const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as { readings: Record<string, unknown>[] };
     expect(record.readings.map((reading) => reading.actuals)).toEqual([[{ value: ["x"] }], [{ value: ["y"] }], [{ value: ["milk"] }], [{ value: ["milk"] }]]);
+  });
+});
+
+/** A step that lists rows the way code that maps a database row does: an
+ * optional field that is not set is a key whose value is undefined. */
+const USERS_STEP = `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "Lists the users",
+  pattern: "I list the users",
+  args: z.object({}),
+  returns: z.object({ users: z.array(z.object({ name: z.string(), active: z.boolean(), nickname: z.string().optional(), title: z.string() })) }),
+  mutates: false,
+  run() {
+    const rows = [{ name: "a", active: true, nickname: "al", title: "x" }, { name: "b", active: true, title: "y" }];
+    return { users: rows.map((row) => ({ name: row.name, active: row.active, nickname: row.nickname, title: row.title })) };
+  },
+});
+`;
+
+describe("a claim takes a snapshot of the place it reads, and the args schema is compared there alone", () => {
+  it("reads and records one value for a dotted path and for the same path through at, beside a key that is undefined", async () => {
+    const step = (name: string, claim: string) => `import { defineStep, z } from "nukadoko";
+import list from "./i-list-the-users.ts";
+export default defineStep({
+  pattern: "the first user is named {name:string} ${name}",
+  args: z.object({ users: list.returns.shape.users, name: z.string() }),
+  from: { users: [list, "users"] },
+  claims: [${claim}],
+});
+`;
+    const rootDir = await project({
+      "features/steps/i-list-the-users.ts": USERS_STEP,
+      "features/steps/first-dotted.ts": step("dotted", '{ actual: "users.0.name", compare: "equal", expected: "name" }'),
+      "features/steps/first-at.ts": step("by at", '{ actual: "users", at: "0.name", compare: "equal", expected: "name" }'),
+      "features/t.feature": feature("When I list the users", 'Then the first user is named "a" dotted', 'And the first user is named "a" by at'),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(0);
+    const [, dotted, byAt] = latestRunJson(rootDir).scenarios[0].steps;
+    expect(dotted.claims[0]).toMatchObject({ actual: "a", actual_from: "from:i-list-the-users@3.users.0.name", outcome: "held" });
+    expect(byAt.claims[0]).toMatchObject({ actual: "a", actual_from: "from:i-list-the-users@3.users.0.name", at: "0.name", outcome: "held" });
+    expect(byAt.claims[0].measured).toEqual(dotted.claims[0].measured);
+  });
+
+  it("judges every item of an array whose items leave an optional key undefined, and names the place of a value that is not JSON", async () => {
+    const rootDir = await project({
+      "features/steps/i-list-the-users.ts": USERS_STEP,
+      "features/steps/every-user-is-active.ts": `import { defineStep, z } from "nukadoko";
+import list from "./i-list-the-users.ts";
+export default defineStep({
+  pattern: "every user is active true",
+  args: z.object({ users: list.returns.shape.users }),
+  from: { users: [list, "users"] },
+  claims: [{ actual: "users", each: { claims: [{ actual: "active", compare: "equal", expected: { literal: true } }] } }],
+});
+`,
+      "features/steps/the-user-is-named.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the user is named {name:string}",
+  args: z.object({ name: z.string() }),
+  observe() { return { user: { name: "a", seen: new Date(0) }, other: { name: "a", seen: new Date(0) } }; },
+  claims: [{ actual: "user", at: "name", compare: "equal", expected: "name" }, { actual: "other", compare: "not-equal", expected: "name" }],
+});
+`,
+      "features/t.feature": feature("When I list the users", "Then every user is active true"),
+      "features/u.feature": feature('Then the user is named "a"'),
+    });
+    expect((await cli(rootDir, ["run", "features/t.feature"])).exitCode).toBe(0);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({ outcome: "held", each: { items: 2, selected: 2 } });
+    expect((await cli(rootDir, ["run", "features/u.feature"])).exitCode).toBe(1);
+    const claims = lastClaimStep(rootDir).claims;
+    expect(claims[0]).toMatchObject({ actual: "a", outcome: "held" });
+    expect(claims[1]).toMatchObject({
+      outcome: "unjudged",
+      reason: "observe:other.seen is a Date, which is not plain JSON, so the claim was not judged: a claim judges a plain JSON copy of the value it reads",
+    });
+  });
+
+  it("judges an each through an args schema that names only the field its claims read, and leaves it unjudged when the schema changed a place a where reads", async () => {
+    const rootDir = await project({
+      "features/steps/i-list-the-users.ts": USERS_STEP,
+      "features/steps/every-user-is-active.ts": `import { defineStep, z } from "nukadoko";
+import list from "./i-list-the-users.ts";
+export default defineStep({
+  pattern: "every user is active true",
+  args: z.object({ users: z.array(z.object({ active: z.boolean() })) }),
+  from: { users: [list, "users"] },
+  claims: [{ actual: "users", each: { claims: [{ actual: "active", compare: "equal", expected: { literal: true } }] } }],
+});
+`,
+      "features/steps/every-titled-user-is-active.ts": `import { defineStep, z } from "nukadoko";
+import list from "./i-list-the-users.ts";
+export default defineStep({
+  pattern: "every user titled {title:string} is active true",
+  args: z.object({ title: z.string(), users: z.array(z.object({ active: z.boolean() })) }),
+  from: { users: [list, "users"] },
+  claims: [{ actual: "users", each: { where: [{ actual: "title", compare: "equal", expected: "title" }], claims: [{ actual: "active", compare: "equal", expected: { literal: true } }] } }],
+});
+`,
+      "features/t.feature": feature("When I list the users", "Then every user is active true"),
+      "features/u.feature": feature("When I list the users", 'Then every user titled "x" is active true'),
+    });
+    expect((await cli(rootDir, ["run", "features/t.feature"])).exitCode).toBe(0);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({ outcome: "held", each: { items: 2, selected: 2 } });
+    expect((await cli(rootDir, ["run", "--no-check", "features/u.feature"])).exitCode).toBe(1);
+    const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("claim_unjudged");
+    expect(step.claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: "the args schema changed args.users at 0.title from the value nukadoko read before it ran, so the claim was not judged",
+      each: { items: 2, selected: 0, results: [] },
+    });
   });
 });
 
@@ -1154,7 +1266,7 @@ export default defineStep({
       outcome: "broken",
       reason:
         "observe received args.now, which is from:the-app-answers@3.cart, and each.claims[0]'s expected value reads from:the-app-answers@3.cart.items.0.paid, so observe could return the value the claim compares it with",
-      each: { items: 0, selected: 0, results: [] },
+      each: { items: 1, selected: 0, results: [] },
     });
   });
 

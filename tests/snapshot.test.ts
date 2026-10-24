@@ -82,12 +82,16 @@ const nonJsonParts: Generator<{ make: () => unknown; problem: string }> = gs.sam
   { make: () => 2 ** 60, problem: "is the integer 1152921504606847000, beyond Number.MAX_SAFE_INTEGER" },
   { make: () => 12n, problem: "is the bigint 12n" },
   { make: () => () => 1, problem: "is a function" },
-  { make: () => undefined, problem: "is undefined" },
   { make: () => new Date(0), problem: "is a Date" },
   { make: () => new (class Order {})(), problem: "is an Order" },
   { make: () => new Proxy({ a: 1 }, {}), problem: "is a Proxy" },
   { make: () => new Proxy([1], {}), problem: "is a Proxy" },
 ]);
+
+function holdsUndefinedKey(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  return Object.entries(value).some(([, entry]) => entry === undefined || holdsUndefinedKey(entry));
+}
 
 describe("snapshot", () => {
   it("copies every JSON value to an equal value that shares no object with it", () =>
@@ -115,6 +119,21 @@ describe("snapshot", () => {
       const part = tc.draw(nonJsonParts);
       const { value, at } = tc.draw(withPart(part.make));
       expect(snapshot(value)).toEqual({ refused: { at, problem: part.problem } });
+    }));
+
+  it("leaves out an object key whose value is undefined, as the record's JSON does, and refuses an array item that is undefined", () =>
+    hegel.test((tc) => {
+      const { value } = tc.draw(withPart(() => ({ kept: 1, unset: undefined })));
+      const taken = snapshot(value);
+      // JSON.stringify leaves an undefined key out and writes -0 as 0, as
+      // the record does, so the copy's JSON is the value's, and the copy
+      // holds no undefined key of its own either.
+      expect("value" in taken).toBe(true);
+      const copy = (taken as { value: unknown }).value;
+      expect(JSON.stringify(copy)).toBe(JSON.stringify(value));
+      expect(holdsUndefinedKey(copy)).toBe(false);
+      const inArray = tc.draw(withPart(() => [undefined]));
+      expect(snapshot(inArray.value)).toEqual({ refused: { at: [...inArray.at, "0"], problem: "is undefined" } });
     }));
 
   it("refuses a value exactly when it nests deeper than the limit, and names the limit", () =>
