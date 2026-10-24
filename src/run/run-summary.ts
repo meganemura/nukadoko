@@ -348,7 +348,9 @@ function renderBase(document: RunDocument): string[] {
     document.table.mapping_changed === true
       ? `The mapping changed (${parts.length === 0 ? "the base's could not be read" : parts.join("; ")}), so the old world ran each unchanged criterion under the base's steps.`
       : "The mapping did not change, so no unchanged criterion needed the old world.";
-  return ["", `Compared with ${cellCode(base.ref)} (\`${base.commit.slice(0, 7)}\`): ${changes}. ${mappingLine}`];
+  // A ref that is itself an abbreviated hash would only repeat.
+  const compared = base.commit.startsWith(base.ref) ? cellCode(base.ref) : `${cellCode(base.ref)} (\`${base.commit.slice(0, 7)}\`)`;
+  return ["", `Compared with ${compared}: ${changes}. ${mappingLine}`];
 }
 
 // One line per red row, under the table: the reason the row is red, and,
