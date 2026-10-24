@@ -158,10 +158,37 @@ describe("a program nukadoko serves", () => {
     expect(stderr).toContain("no database\n");
     expect(stepRecordIds(rootDir)).toEqual([]);
     const run = latestRunJson(rootDir);
+    // The terminal and the summary name the log from the project root.
+    const log = `${run.run_dir}/worlds/default/program.log`;
+    expect(stderr).toContain(`. The end of ${log}: $ node -e`);
+    expect(readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).toContain(
+      `No scenario failed, but the run did. The program did not start for world default (\`program-start-failed\`), so no scenario ran there; its log is \`${log}\`.`,
+    );
     expect(run.worlds).toEqual([
       expect.objectContaining({ name: "default", error: expect.stringContaining("exited with code 4"), log: "worlds/default/program.log" }),
     ]);
     expect(run.counts.passed).toBe(0);
+  });
+
+  it("names the log from the project root when the program exits during the pass", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      [
+        'import { defineProgram } from "./nukadoko-shim.js";',
+        "// Answers the ready check, then exits.",
+        "export default defineProgram({",
+        '  serve: { command: ["node", "-e", "require(\'http\').createServer((q, s) => { s.end(\'{}\'); setTimeout(() => process.exit(3), 20); }).listen(process.env.PORT)"] },',
+        '  env: { PORT: "{port}" },',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const { stderr } = await cli(rootDir, ["run"]);
+
+    const run = latestRunJson(rootDir);
+    expect(stderr).toContain(
+      `warning\tprogram-exited\t-\tworld default: the program exited with code 3 during the pass; see ${run.run_dir}/worlds/default/program.log\n`,
+    );
   });
 
   it("nuka do starts the head world for its one step, and stops it after", async () => {

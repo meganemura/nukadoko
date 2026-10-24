@@ -43,6 +43,7 @@ function starter(progress = createCaptureSink()) {
     rootDir,
     worldDir: (name) => path.join(runDir, "worlds", name),
     recordPath: (absolutePath) => path.relative(runDir, absolutePath).split(path.sep).join("/"),
+    displayPath: (absolutePath) => `project/${path.relative(runDir, absolutePath).split(path.sep).join("/")}`,
     progress,
   });
 }
@@ -84,7 +85,7 @@ describe("a world nukadoko serves", () => {
     expect(world.view.log).toBe(path.join(dir, "program.log"));
     expect(await (await fetch(`${world.view.url}/hello`)).json()).toEqual({ path: "/hello", db: `${dir}/db.sqlite3`, token: world.view.env.TOKEN });
     expect(progress.text()).toMatch(
-      new RegExp(`^world default: serve \\d+\\.\\ds, http://localhost:${port} {2}\\(log ${path.relative(rootDir, dir).split(path.sep).join("\\/").replaceAll(".", "\\.")}/program\\.log\\)\\n$`),
+      new RegExp(`^world default: serve \\d+\\.\\ds, http://localhost:${port} {2}\\(log project/worlds/default/program\\.log\\)\\n$`),
     );
 
     expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map() });
@@ -132,7 +133,7 @@ describe("a world nukadoko serves", () => {
     writeFileSync(path.join(rootDir, "brief.mjs"), `${SERVER}setTimeout(() => process.exit(7), 300);\n`);
     const world = await startOk(await starter().start("default", recipe({ ...SERVE, serve: { command: "node brief.mjs" } }), []));
     await new Promise((resolve) => setTimeout(resolve, 600));
-    expect((await world.stop()).exitedEarly).toBe("the program exited with code 7 during the pass; see worlds/default/program.log");
+    expect((await world.stop()).exitedEarly).toBe("the program exited with code 7 during the pass; see project/worlds/default/program.log");
   });
 });
 
@@ -144,7 +145,7 @@ describe("a world that does not start", () => {
     if (world.ok) return;
     expect(world.message).toBe(
       "the program did not start for world default: prepare command node migrate.mjs exited with code 3. " +
-        "The end of worlds/default/program.log:\n$ node migrate.mjs\nmigrating {{secret.WORLD_TOKEN}}",
+        "The end of project/worlds/default/program.log:\n$ node migrate.mjs\nmigrating {{secret.WORLD_TOKEN}}",
     );
     expect(world.record()).toMatchObject({ url: expect.stringMatching(/^http:\/\/localhost:\d+$/), commands: [{ phase: "prepare" }], error: expect.stringContaining("exited with code 3") });
   });
@@ -204,7 +205,7 @@ describe("a world that does not start", () => {
       }),
       [],
     );
-    expect(world.ok ? null : world.message).toBe("the program did not start for world default: setup threw: no admin user. The end of worlds/default/program.log:\n$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}");
+    expect(world.ok ? null : world.message).toBe("the program did not start for world default: setup threw: no admin user. The end of project/worlds/default/program.log:\n$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}");
     expect(await answers(port)).toBe(false);
   });
 });

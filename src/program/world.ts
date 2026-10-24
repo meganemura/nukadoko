@@ -95,6 +95,9 @@ export interface WorldStarterOptions {
   readonly worldDir: (name: string) => string;
   /** A path inside a world's directory as its record names it. */
   readonly recordPath: (absolutePath: string) => string;
+  /** A path as the terminal and a finding name it: relative to the
+   * project root, wherever the record's own paths are relative to. */
+  readonly displayPath: (absolutePath: string) => string;
   /** One line per world that ran something, as it is ready. */
   readonly progress: WritableSink;
 }
@@ -242,7 +245,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         }
 
         if (commands.length > 0 || recipe.setup !== undefined) {
-          options.progress.write(`${readyLine(name, timings, url, log.written ? path.relative(options.rootDir, log.path) : null)}\n`);
+          options.progress.write(`${readyLine(name, timings, url, log.written ? options.displayPath(log.path) : null)}\n`);
         }
         const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix };
         const running = server;
@@ -271,7 +274,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
               };
             }
             return {
-              exitedEarly: exitedEarly === null ? null : redactString(`${exitedEarly}; see ${options.recordPath(log.path)}`, allSecrets),
+              exitedEarly: exitedEarly === null ? null : redactString(`${exitedEarly}; see ${options.displayPath(log.path)}`, allSecrets),
               late,
             };
           },
@@ -283,7 +286,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         const tail = log.tail();
         log.close();
         const message = redactString(
-          `the program did not start for world ${name}: ${cause}${tail === "" ? "" : `. The end of ${options.recordPath(log.path)}:\n${tail}`}`,
+          `the program did not start for world ${name}: ${cause}${tail === "" ? "" : `. The end of ${options.displayPath(log.path)}:\n${tail}`}`,
           allSecrets,
         );
         return { ok: false, message, record: () => record(cause) };

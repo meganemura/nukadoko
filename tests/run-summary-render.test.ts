@@ -310,6 +310,21 @@ describe("renderRunSummary", () => {
     );
   });
 
+  it("names a world whose program did not start, with its log, and a hook failure beside it", () => {
+    const unstarted = { ...world("default", "http://localhost:41563"), log: "worlds/default/program.log", error: "serve command node app/server.mjs exited with code 4" };
+    const failedStart = { severity: "failed" as const, code: "program-start-failed", message: "the program did not start for world default" };
+    const headline = (findings: RunDocument["findings"]): string =>
+      renderRunSummary(run({ verdict: "failed", run_dir: ".nukadoko/runs/run-1", worlds: [unstarted], findings, scenarios: [] })).split("\n")[3]!;
+
+    expect(headline([failedStart])).toBe(
+      "No scenario failed, but the run did. The program did not start for world default (`program-start-failed`), so no scenario ran there; " +
+        "its log is `.nukadoko/runs/run-1/worlds/default/program.log`. The findings below say why.",
+    );
+    expect(headline([failedStart, { severity: "failed", code: "hook-failed", message: "AfterAll: x" }])).toContain(
+      "A BeforeAll or AfterAll hook, or a worker that wrote no scenario, also failed outside every scenario. The findings below say why.",
+    );
+  });
+
   it("says when the run failed outside every scenario, and lists the findings that say why", () => {
     const markdown = renderRunSummary(run({
       verdict: "failed",

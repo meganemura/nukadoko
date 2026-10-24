@@ -277,7 +277,9 @@ just until 0.1.
   `url`, `commands`, `timings`, `log`, `error`), each step record gains
   `world_name`, and two run codes are new: `program-start-failed`, which
   fails the run and runs no scenario in that world, and `program-exited`,
-  a warning for a program that exited during the pass. The fields are
+  a warning for a program that exited during the pass. Both name the log
+  by its path from the project root, and the run summary's first lines
+  name a world that did not start and its log. The fields are
   additive, so no `schema_version` changes. A tree with no program file
   starts no world and behaves as before. Before this, a terminal or a CI
   step kept the program running, or a fixture started it per scenario.

@@ -77,6 +77,34 @@ function runFindings(document: RunDocument): readonly Finding[] {
   return document.findings.filter((finding) => finding.code !== "scenario-failed");
 }
 
+/** Why a run with no failed scenario failed. A world that did not start is
+ * named with its log, since no scenario ran there and its log is where the
+ * reason is; any other failure outside every scenario is a hook's or a
+ * worker's, which the findings name. */
+function outsideScenarios(document: RunDocument): string[] {
+  const unstarted = (document.worlds ?? []).filter((world) => world.error !== null);
+  if (unstarted.length === 0) {
+    return [
+      "No scenario failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, " +
+        "failed outside every scenario. The findings below name it.",
+    ];
+  }
+  const sentences = ["No scenario failed, but the run did."];
+  for (const world of unstarted) {
+    const log = world.log === null ? null : document.run_dir === undefined ? world.log : `${document.run_dir}/${world.log}`;
+    sentences.push(
+      `The program did not start for world ${world.name} (\`program-start-failed\`), so no scenario ran there` +
+        `${log === null ? "." : `; its log is ${cellCode(log)}.`}`,
+    );
+  }
+  const other = document.findings.some(
+    (finding) => finding.severity === "failed" && finding.code !== "program-start-failed" && finding.code !== "scenario-failed",
+  );
+  if (other) sentences.push("A BeforeAll or AfterAll hook, or a worker that wrote no scenario, also failed outside every scenario.");
+  sentences.push("The findings below say why.");
+  return [sentences.join(" ")];
+}
+
 // The counts are of verdicts, one per scenario and environment: under
 // `--repeat` a scenario that failed once has not passed, and under several
 // environments one scenario is as many verdicts as environments.
@@ -93,13 +121,7 @@ function renderTitle(document: RunDocument): string[] {
   if (failed > 0) counts.push(`${failed} failed`);
   if (notRun > 0) counts.push(`${notRun} not run`);
   const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
-  if (document.verdict === "failed" && failed === 0) {
-    lines.push(
-      "",
-      "No scenario failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, " +
-        "failed outside every scenario. The findings below name it.",
-    );
-  }
+  if (document.verdict === "failed" && failed === 0) lines.push("", ...outsideScenarios(document));
   return lines;
 }
 

@@ -2129,6 +2129,8 @@ nukadoko が起動したプログラムは nukadoko より長く生き残りま�
 
 `ready` が答える前にプログラムが終わったとき、`ready` が時間内に答えないとき、`setup` が throw したとき、world は失敗します。
 nukadoko は起動したものを止め、メッセージはコマンド、その終わり方、world の `program.log` の最後の 20 行を示します。
+このメッセージ、警告 `program-exited`、準備のできた world が出す行は、nukadoko が出すすべてのパスと同じく、ログをプロジェクトのルートからのパスで名指します。
+`run.json` は run ディレクトリからのパスで名指します。
 pass の途中でプログラムが終わったときは、world を止める時点で警告 `program-exited` を報告します。
 それ以降の request は待ち受ける相手を見つけられず、失敗した step だけではその理由が分からないからです。
 
@@ -3559,6 +3561,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - run の断定と scenario の件数を載せた表題。
   断定は終了コードのものです。
   そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗がどの scenario の外で起きたかを述べる 1 文が付きます。
+  その文は、プログラムが起動しなかった world をそのログとともに名指します。
 - 条件。
   短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--since` のときは「Criteria since `<ref>`」。

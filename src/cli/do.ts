@@ -422,6 +422,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
         rootDir,
         worldDir: () => path.join(evidenceDir, DO_WORLD_DIR_NAME),
         recordPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
+        displayPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
         progress: stderr,
       }).start(resolvedEnv.name, resolvedEnv.program, secrets);
       if (!started.ok) {

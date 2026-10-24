@@ -658,6 +658,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       rootDir,
       worldDir: (name) => path.join(runDirAbsolute, "worlds", name),
       recordPath: (absolutePath) => path.relative(runDirAbsolute, absolutePath).split(path.sep).join("/"),
+      displayPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
       progress,
     });
     const worlds: RunWorld[] = [];

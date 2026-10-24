@@ -2576,6 +2576,9 @@ The world fails when the program exits before `ready` answers, when
 `ready` does not answer in time, or when `setup` throws.
 nukadoko stops what it started, and the message names the command, how
 it ended, and the last 20 lines of the world's `program.log`.
+The message, the `program-exited` warning, and the line a ready world
+prints name the log by its path from the project root, as every path
+nukadoko prints does; `run.json` names it from the run directory.
 When the program exits during the pass, the world's stop reports
 `program-exited`, a warning: the requests after that found nothing
 listening, and the failed steps alone would not say why.
@@ -4496,7 +4499,8 @@ holds:
   pull request comment it posted earlier;
 - a title with the run's verdict (the exit code's, so an AfterAll failure
   with every scenario green still reads `failed`, with a sentence saying the
-  failure was outside every scenario) and its scenario counts;
+  failure was outside every scenario, which names each world whose program
+  did not start, with its log) and its scenario counts;
 - the condition: the short commit sha and whether the tree had uncommitted
   changes (from `commit`, or "unknown" without one), each environment and its
   target version, a line for each world whose program log was not read,
