@@ -401,6 +401,19 @@ This part does not change release to release.
   `world_name`; both are additive. A CI step that started the app before
   `nuka run` can go, once `serve` starts it.
 
+- **Requests to the world carry a `traceparent`, and `observed` has
+  `program_log` when the run has a world URL.** A step's requests to the
+  world's origin now carry a W3C `traceparent` header; a request that
+  sets its own keeps it. A reader that compares `observed` as a whole
+  adds `program_log` (`{ "lines", "file", "stamped" }`, or `null` for
+  a world at a `url`), and one that compares http.jsonl lines as a whole
+  adds `traceparent` to a line of a request nukadoko stamped. To get each
+  step's lines of the program's log, make the program write the
+  request's `traceparent` into its log lines: docs/spec.md "Trace
+  context and the program's log" shows the Rails and Node lines. Until
+  then, the run summary says once per world that the log carries no
+  trace ids.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

@@ -845,6 +845,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   const contextHandle = createStepContext({
     config,
     baseURL: programWorld?.url,
+    programLog: programWorld?.log,
     evidenceDir: scenarioDir,
     rootDir,
     env,

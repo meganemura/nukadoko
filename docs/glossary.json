@@ -475,6 +475,26 @@
       "en": ["change point", "change points"],
       "ja": "変化点",
       "note": "poll の読み取りのうち、内容(成り立ったかどうか、各 claim が読んだもの、observe が throw したもの)が直前の読み取りと違うもの。長い poll では step record が最初、最後、変化点を残す。フィールド名 `change_points` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["slice (of the program's log)", "a step's slice"],
+      "ja": "切り出し",
+      "note": "program.log のうち、ある step の span id(または trace id)を持つ行だけを集めたもの。step record の `observed.program_log` とファイル program-log.txt に対応する。動詞は 切り出す"
+    },
+    {
+      "en": ["stamp (a request)", "stamped"],
+      "ja": "traceparent を付ける",
+      "note": "nukadoko がリクエストに `traceparent` ヘッダを足すこと。フィールド `stamped` はコードスパンで英語のまま。刻印 などの比喩には訳さない"
+    },
+    {
+      "en": ["origin (of a URL)"],
+      "ja": "オリジン",
+      "note": "スキーム、ホスト、ポートの組。ブラウザの同一オリジンポリシーの語に揃える。args の出所(origin of an argument)とは別の語"
+    },
+    {
+      "en": ["preflight"],
+      "ja": "プリフライト",
+      "note": "クロスオリジンのリクエストの前にブラウザが送る OPTIONS リクエスト(CORS)"
     }
   ],
   "keep_english": [
@@ -607,6 +627,18 @@
     {
       "term": "observe",
       "why": "claim step の `observe` 関数と、step record の `observation` に直接対応する API 名。散文の 読む / 計測 とは書き分ける(observe という API の話か、計測という行為の話かを読み手が区別できる必要がある)"
+    },
+    {
+      "term": "trace context",
+      "why": "W3C Trace Context の仕組みと、`traceparent` ヘッダが運ぶ値の組を指す標準の名前。Playwright の trace(trace.zip、keep_english の trace)とは別の語なので、単独の trace とは書かず、trace context、trace id、span id の形で書く"
+    },
+    {
+      "term": "trace id",
+      "why": "`traceparent` の 32 桁の部分。nukadoko では scenario の実行 1 回につき 1 つ。OpenTelemetry や Rails のログと同じ綴りで対応させる"
+    },
+    {
+      "term": "span id",
+      "why": "`traceparent` の 16 桁の部分。nukadoko では step(と hook)の境界 1 つにつき 1 つ。program.log の行を step に振り分ける鍵"
     }
   ],
   "identifiers": {

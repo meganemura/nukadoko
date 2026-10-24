@@ -114,6 +114,16 @@ function renderCondition(document: RunDocument): string[] {
       ? `- environment: ${environment.name}${at}`
       : `- environment: ${environment.name}${at} (target version ${environment.target_version})`;
   });
+  // Once per world, so a reader of an empty slice knows why it is empty.
+  const programLogs = (document.worlds ?? []).flatMap((world) => {
+    if (world.program_log === null) {
+      return [`- program log of world ${world.name}: not read, since the program runs at ${world.url ?? "a URL"}, which nukadoko did not start`];
+    }
+    if (world.program_log !== undefined && world.program_log.stamped > 0 && world.program_log.lines === 0) {
+      return [`- program log of world ${world.name}: carries no trace ids, so each step's slice of it is empty`];
+    }
+    return [];
+  });
   const browsers = new Map<string, string>();
   for (const scenario of document.scenarios) {
     if (scenario.browser !== undefined) {
@@ -136,6 +146,7 @@ function renderCondition(document: RunDocument): string[] {
     "",
     commit,
     ...environments,
+    ...programLogs,
     browser,
     selection,
     ...check,

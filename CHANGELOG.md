@@ -280,6 +280,34 @@ just until 0.1.
   starts no world and behaves as before. Before this, a terminal or a CI
   step kept the program running, or a fixture started it per scenario.
 
+- **Each step record holds the program's log lines its own requests
+  caused.** Every request a step sends to the world's origin carries a
+  W3C `traceparent`, one trace id per scenario execution and one span id
+  per step: through `fetch`, `node:http`, `node:https`, a Playwright
+  request context, and a Chromium page's documents, fetches, XHRs, and
+  EventSources. For a `localhost` world, a name below `localhost` at the
+  same port counts as the world's origin. A request that sets its own
+  `traceparent` keeps it, and a request to another origin goes as
+  before. A page's requests are stamped through the DevTools Protocol,
+  since `setExtraHTTPHeaders` sent the header to other origins and broke
+  a CORS request with a preflight, and `context.route` turned the HTTP
+  cache off; Firefox and WebKit pages go unstamped. When nukadoko serves
+  the program, the lines of `program.log` that carry the step's span id
+  (or the scenario's trace id and no other step's span id) go to
+  `program-log.txt` beside the step record, and `observed.program_log`
+  counts them (`{ lines, file, stamped }`). http.jsonl names the value
+  nukadoko added as `traceparent`, run.json's `worlds` entries gain
+  `program_log: { stamped, lines }`, and the run summary says once per
+  world when the log carries no trace ids, or was not read because the
+  world runs at a `url` (there `observed.program_log` is `null`). The
+  program has to write the id into its lines: docs/spec.md shows the
+  Rails `config.log_tags` and logger lines and the Node one-liner, and
+  the todo and HTTP API examples' servers tag their lines that way. On a
+  Rails suite of 16 scenarios, 146 steps got their requests' lines,
+  8,223 in all, and the run took 77.5 and 79.3 s against 73.6 and 74.4 s
+  with nothing stamped and the log in its file. The fields are additive,
+  so no `schema_version` changes.
+
 - **Six check codes for claims.** `then-without-claims`: a Then bound
   to a typed step that runs. `claims-outside-then`: a claim step bound in
   Given or When position, or on a `*` line. `claim-compares-itself`: a

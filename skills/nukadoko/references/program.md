@@ -60,6 +60,32 @@ died during the run, which the failed steps alone would not.
 `run.json`'s `worlds` names what each world ran, its URL, its timings,
 and its log; each step record names its world in `world_name`.
 
+## Each step's lines of the program's log
+
+Every request a step sends to the world's origin (through `fetch`,
+`node:http`, `request`, and a Chromium page) carries a W3C `traceparent`:
+one trace id per scenario, one span id per step. A request that sets its
+own keeps it. When the program writes that value into its log lines,
+each step record gets the lines its own requests caused in
+`program-log.txt` beside it, counted in `observed.program_log`
+(`{ lines, file, stamped }`). Read that file first when a step against
+the program fails: it holds what the server did for that step.
+
+`lines: 0` with `stamped` above 0 means the program does not tag its
+lines, and the run summary says so once per world. For Rails, send the
+test log to stdout and tag it, in `config/environments/test.rb`:
+
+```ruby
+config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?
+config.log_tags = [ ->(request) { request.headers["traceparent"] } ]
+```
+
+with `RAILS_LOG_TO_STDOUT: "1"` in the program file's `env`. A Node
+server prints `req.headers.traceparent` at the start of each line it
+writes for a request. A world at a `url` has no log nukadoko reads:
+`observed.program_log` is `null`, and the server's own log finds a
+step's requests by the `traceparent` on its `http.jsonl` lines.
+
 ## Environments and programs nukadoko does not start
 
 An entry of `environments` overrides any field above (`env` merges by

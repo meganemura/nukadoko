@@ -15,6 +15,7 @@ import type { SecretSet } from "../secrets/types.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 import { instrumentApiRequestContext } from "./http-log.js";
+import { type PageStamp, stampPageRequests } from "./browser-trace.js";
 import { loadPlaywright } from "./load-playwright.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
@@ -203,6 +204,9 @@ export interface TracedContextOptions {
   /** Tallies every page-issued http.jsonl line whose append failed
    * (http-log-failed.ts). */
   httpLogFailed: HttpLogFailedCollector;
+  /** Puts a `traceparent` on the page requests to the world
+   * (browser-trace.ts). Absent without a world URL. */
+  stamp?: PageStamp;
 }
 
 export interface TracedContextHandle {
@@ -274,6 +278,19 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
   // the context before the error propagates, or it stays open in a browser
   // that later contexts of this scenario share.
   try {
+    if (options.stamp !== undefined) {
+      // A page the step opens itself is stamped from its first request:
+      // `newPage` returns once the page's session is attached, where the
+      // context's `page` event alone would race the step's first
+      // navigation.
+      const stamping = stampPageRequests(context, browser.browserType().name(), options.stamp);
+      const newPage = context.newPage.bind(context);
+      context.newPage = async (): Promise<Page> => {
+        const page = await newPage();
+        await stamping.attach(page);
+        return page;
+      };
+    }
     // `page.request` / `context.request` do not emit the context's
     // `request` event (this file's own header). One call covers every page, because
     // they share this object.
@@ -283,6 +300,7 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
       options.secrets,
       options.httpLogFailed,
       as,
+      options.contextOptions.baseURL,
     );
     context.on("console", (msg) => {
       if (msg.type() !== "error") {

@@ -2217,7 +2217,8 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
     ],
     "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
     "log": "worlds/default/program.log",
-    "error": null
+    "error": null,
+    "program_log": { "stamped": 12, "lines": 31 }
   }
 ]
 ```
@@ -2229,6 +2230,9 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
   `build_ms`、`prepare_ms`、`serve_ms`、`setup_ms`、`stop_ms` です。
 - `log` は run ディレクトリからの相対パスで、world が何のコマンドも実行しなかったときは `null` です。
 - `error` はプログラムが起動しなかった理由で、起動したときは `null` です。
+- `program_log` は、world の step たちがプログラムのログの中に見つけた自分のリクエストの分を合計します。
+  `stamped` は `traceparent` を運んで world へ送られたリクエストの数で、`lines` は step の切り出しに入った行の数です(「trace context とプログラムのログ」を参照)。
+  `url` の world では `null` で、URL の無い world と起動しなかった world には現れません。
 
 各 step record は、自分の world を `world_name` で名指します。
 `worlds` のエントリの `name` か、world が動かなかったときは `null` です。
@@ -2281,8 +2285,121 @@ environments: {
 
 そうした world は何も起動せず、`program.log` を書きません。
 nukadoko は自分が動かしていないプログラムのログを読めないので、world の `log` は `null` です。
+そのリクエストはそれでも `traceparent` を運び、各 step の `observed.program_log` は `null` です(「trace context とプログラムのログ」を参照)。
 `env` はそれでも step に届き、`{token}` もそれでも作られます。
 サーバがほかの誰かに必要なデータを持つなら、そうした environment には read-only の `policy` を付けます。
+
+### trace context とプログラムのログ
+
+step が world へ送るすべての HTTP リクエストは W3C の `traceparent` ヘッダを運ぶので、プログラム自身のログが、どの step がそれを送ったかを言えます。
+値は `00-<trace id>-<span id>-01` です。
+trace id は scenario の実行 1 回につき 1 つ(`nuka do` の呼び出し 1 回につき 1 つ)で、span id は step 1 つにつき 1 つです。
+hook は専用の span id を持ち、どの step の切り出しもそれを含みません。
+
+- ヘッダは、`fetch`、`node:http`、`node:https`、`request` fixture、`page.request`、`context.request` を通るリクエストと、Chromium の page のドキュメント、`fetch` の呼び出し、XMLHttpRequest、EventSource に付きます。
+- 付くのは、world のオリジン、つまり URL のスキーム、ホスト、ポートへのリクエストだけです。
+  ほかのオリジンへのリクエストは CDN や決済事業者のような第三者のもので、予期しないヘッダはその振る舞いを変えうるからです。
+  `localhost` の world では、同じポートの `localhost` の下の名前も world のものです。
+  そうした名前はループバックアドレスに解決される(RFC 6761)ので、nukadoko がプログラムに与えたポートに届きます。
+  プロジェクトは、scenario の人ごとの cookie を分けるために、そこで人ごとにホスト名を与えます。
+- 自分で `traceparent` を設定したリクエストは、それを保ちます。
+  Request を渡した `fetch` と、プレーンなオブジェクトではない `init` を渡した `fetch` は、ヘッダなしでそのまま送られます。
+  nukadoko はそうした引数を決して作り直さないからです(「Records」を参照)。
+  ヘッダを配列で渡した `node:http` のリクエストは呼び出しが戻るときに送られるので、これもヘッダなしで送られます。
+- http.jsonl の行は、nukadoko が足した値を `traceparent` として名指します。
+  page の行は名指しません。
+  ヘッダを足したのはブラウザだからです。
+- page のリクエストには Chrome DevTools Protocol を通してヘッダを付けるので、付くのは Chromium だけです。
+  Firefox と WebKit には Playwright を通したそうしたプロトコルが無く、その page のリクエストはヘッダなしで送られます。
+  ポップアップの最初のリクエストもヘッダなしで送られます。
+  context がポップアップを知らせるとき、ポップアップはすでに読み込みを始めているからです。
+  step が `context.newPage()` で開く page には、最初のリクエストから付きます。
+
+Playwright には page のリクエストにヘッダを足す方法が 2 つあり、どちらも計測したうえで退けました。
+計測には Chromium 149.0.7827.55 と Playwright 1.61.1 を使いました。
+`cache-control: max-age=3600` の画像を読み込む page に 2 回移動し、続いて world から fetch する 2 つ目のオリジンの page を開きました。
+world は単純な CORS リクエストにだけ答えます。
+`context.setExtraHTTPHeaders` は 2 つ目のオリジンにもヘッダを送り、クロスオリジンの fetch をプリフライトの `OPTIONS` リクエストに変えました。
+そのプリフライトは失敗し、page の fetch も失敗しました。
+`context.route` はブラウザの HTTP キャッシュを切ったので、2 回目の移動で画像をもう一度読み込みました。
+これでは scenario が、人が受け取るのとは違う page を計測することになります。
+代わりに nukadoko が使う DevTools Protocol の接続は、画像を 1 回だけ読み込み、クロスオリジンの fetch をプリフライトなしで送り、page の cookie を保ち、step 自身が足した route を動かしたままにしました。
+ヘッダを付けるリクエスト 1 つにつき 2 から 3 ms かかるので、画像、スクリプト、スタイルシートには付けません。
+
+nukadoko がプログラムを serve するとき、各 step record は、自分のリクエストが生んだ `program.log` の行を受け取ります。
+step の実行中にプログラムが書いた行のうち、step の span id を持つ行と、scenario の trace id を持ちほかの step の span id を持たない行です。
+2 つ目の規則は、行に trace id だけを付けるプログラムのためのものです。
+行は redact されて step record の隣の `program-log.txt` に入り、`observed.program_log` がそれを数えます:
+
+```json
+"program_log": { "lines": 33, "file": "program-log.txt", "stamped": 3 }
+```
+
+- `lines` は切り出しが持つ行の数で、step の id を持つ行が無いときは 0 です。
+- `file` は、`lines` が 0 のとき `null` です。
+- `stamped` は、step が `traceparent` を付けて world へ送ったリクエストの数です。
+- `truncated: true` は、step の実行中にプログラムが 16 MiB を超えて書いたときに現れます。
+  そのとき切り出しは、最初の 16 MiB から取ります。
+
+step は、自分の実行中にプログラムが書いたものだけを読みます。
+読む範囲は、step が始まったときのログのサイズから始まります。
+`--concurrency` のもとでは親がログを書き、各 worker がそれを読みます。
+scenario ごとの行は trace id が分けます。
+行は、step がレスポンスを読んだあとにログに届くことがあります。
+プログラムはその行を答えるころに書き、行はパイプを通って来るからです。
+そのため、リクエストに `traceparent` を付けた step は、最後に付けたリクエストとログの最後の書き込みのうち遅いほうから、ログが 30 ms 静かになるまで待ちます。
+待つのは全部で 300 ms までです。
+何にも付けなかった step は待ちません。
+
+行に何も付けないプログラムでは、どの step の切り出しも空になります。
+run サマリは world ごとに一度そう言うので、読み手は理由がわかります:
+
+```text
+- program log of world default: carries no trace ids, so each step's slice of it is empty
+```
+
+`url` の world には、nukadoko が読めるログがありません。
+各 step の `observed.program_log` は `null` で、`run.json` の world の `program_log` も `null` です。
+run サマリはこう言います:
+
+```text
+- program log of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+```
+
+そのリクエストはそれでも `traceparent` を運ぶので、サーバ自身のログやトレーシングは、http.jsonl の行にある id で step のリクエストを見つけられます。
+world の URL が無い run は何にもヘッダを付けず、`observed.program_log` は現れません。
+
+プログラムは、各行が扱うリクエストのヘッダを読んで、行にタグを付けます。
+Rails は test 環境のログをファイルに書きます。
+そこでプログラムのファイルはそのログを nukadoko が読む標準出力へ送らせ、各行にリクエストの `traceparent` のタグを付けます:
+
+```ruby
+# config/environments/test.rb
+config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?
+config.log_tags = [ ->(request) { request.headers["traceparent"] } ]
+```
+
+プログラムのファイルの `env` は `RAILS_LOG_TO_STDOUT: "1"` を設定します(下を参照)。
+nukadoko の `ready` の確認や `bin/rails test` からのリクエストのように `traceparent` を持たないリクエストには、タグが付きません。
+Rails は空のタグを省くからです。
+Node のサーバは、リクエストについて書く各行で同じことをします:
+
+```js
+const log = (req, text) => console.log(`[${req.headers.traceparent ?? "-"}] ${text}`);
+```
+
+OpenTelemetry が計装したサーバは、すでに `traceparent` を読みます。
+id が行のテキストにあれば、形は何でも構いません。
+
+計測は、16 の scenario を持ち 188 の step record を書く受け入れテストのスイートを持つ Rails アプリケーションで行いました。
+どの step も、`localhost` の下の名前で開いた Chromium の page を通ります。
+582 のリクエストが `traceparent` を運び、146 の step が少なくとも 1 つ送りました。
+それらの step の切り出しは、各リクエストのすべての行を持ちました。
+どの `Started` の行にも `Completed` の行があり、合わせて 8,223 行です。
+遅れて届く行を待つのにかかったのは、run 全体で 1.7 s でした。
+64 の step では待たず、中央値は 10 ms、最大は 50 ms です。
+交互に続けて実行すると、run は 77.5 s と 79.3 s かかりました。
+どのリクエストにもヘッダを付けず、Rails のログをファイルに書いた同じスイートでは 73.6 s と 74.4 s です。
 
 ### Ruby のプログラム
 
@@ -2300,6 +2417,7 @@ export default defineProgram({
   env: {
     RAILS_ENV: "test",
     DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
+    RAILS_LOG_TO_STDOUT: "1",
   },
 });
 ```
@@ -2307,6 +2425,7 @@ export default defineProgram({
 `-P {dir}/server.pid` は pid ファイルを world のディレクトリに置くので、2 つの world が互いの起動を拒むことはありません。
 `DATABASE_URL` は、world ごとに専用のデータベースを与えます。
 `/up` は Rails が生成するヘルスチェックです。
+`RAILS_LOG_TO_STDOUT` は、上の `config/environments/test.rb` の 2 行とともにログを標準出力へ送るので、各 step record は自分のリクエストの Rails の行を受け取ります。
 
 ## 実行
 
@@ -2974,7 +3093,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   `started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
 - `observed` は、その実行が届いたものとしてツールが見たものを、チャネルごとに 1 つのキーで持ちます。
-  キーは `processes`、`http`、`files`、`unmeasured` です。
+  キーは `processes`、`http`、`files`、`unmeasured` で、run に world の URL があるときは `program_log` もあります。
   どのチャネルも 1 つの規則に従います。
   正確に計測できるものは計測し、計測できないものはそうと印を付け、メソッドから書き込みを推測しません。
   実行が一度も届かなかったチャネルは `0` ではなく `null` です。
@@ -3078,6 +3197,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   step のコードが自分で作った request context(`playwright` の `request.newContext()` で、compat の World が作ることがあります)は step 自身のプロセスから送るので、そのリクエストは `via: "node:http"` か `"node:https"` の行です。
   step の record を書いたあとに step のコードが始めたリクエストは、ここでは数えません。
   その行は、`"after_step_end": true` を付けて、その step の http.jsonl に書かれます。
+- `observed.program_log` は、プログラムのログのうち step の切り出しで、`{ "lines", "file", "stamped" }` です。
+  `url` の world では、nukadoko がそのログを読まないので `null` です。
+  run に world の URL が無いときは現れません(「テスト対象のプログラム」、「trace context とプログラムのログ」を参照)。
 - `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
   各エントリは `{ "path", "change", "bytes", "content" }` です。
   2 つの出どころをまとめます。
@@ -3178,7 +3300,10 @@ scenario record は独立したファイルではなく、その run の `run.js
   どのエントリにも必ず付くため、読み手はその行がどの経路から来たかを形だけから推測せずに済みます。
   `"page"` 以外のどの行にも `"request_body"`(リクエストが何も送らなかったときはありません)と `"response_body"`(レスポンスが届かなかったか、HEAD、204、304、`content-length: 0` のように本文がなかったときは、どのクライアントでもありません)があり、それぞれ 16 KiB までのテキストとして残します(下記)。
   本文がない行は、ステータスの時点で書かれます。
-  ヘッダは書きません。
+  nukadoko が `traceparent` を付けて world へ送ったリクエストの行は、足した値を `"traceparent"` として持ちます(「テスト対象のプログラム」を参照)。
+  page の行は持ちません。
+  ヘッダを足したのはブラウザだからです。
+  それ以外のヘッダは書きません。
   ヘッダは cookie と資格情報を運び、page のヘッダは trace が持つからです。
   page の行は本文を持ちません。
   page の通信は trace がすでに持つからです。
@@ -3197,6 +3322,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   送る前に throw する `fetch`(使用済みの Request、本文付きの GET)は、`fetch` が出すエラーを持つ行になり、step はそのエラーをそのまま受け取ります。
   `fetch` は step が渡した引数を、複製せずそのまま受け取ります。
   `init` は Request でも、メンバーがプロトタイプ上の getter であるオブジェクトでもよく、複製するとそれらが落ちるからです。
+  唯一の例外は、`init` が無いかプレーンなオブジェクトである world へのリクエストです。
+  そうした `init` は複製しても全体が残るので、`traceparent` ヘッダを足した複製を受け取ります(「テスト対象のプログラム」を参照)。
   Upgrade(WebSocket)や CONNECT は、ハンドシェイクの実際のステータス(101 またはトンネルのステータス)を持つ行で、CONNECT の `url` はその宛先の `<host>:<port>` です。
   接続がそのあとに運ぶものは `unmeasured` の socket になり、step の境界はそれを待ちません。
   追記の失敗で step が失敗することはありません。
@@ -3391,7 +3518,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   断定は終了コードのものです。
   そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗がどの scenario の外で起きたかを述べる 1 文が付きます。
 - 条件。
-  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
+  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world と、ログが trace id を持たなかった world ごとの 1 行(「テスト対象のプログラム」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--since` のときは「Criteria since `<ref>`」。
   unchanged、changed、new の scenario の数、消えた受け入れ基準の数(ambiguous か比べられなかったものがあればその数も)、比べた対象と step ファイル、変わった step ファイル、unchanged ではない各 scenario と消えた各受け入れ基準の行を `gherkin` のブロックで、そして変わった各 step ファイルの下にそれを名指すすべての scenario を載せます。
 - feature ファイルごとの表(パス順)。

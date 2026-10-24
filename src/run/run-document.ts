@@ -1,5 +1,13 @@
 import type { GherkinDocument, Pickle, Step as GherkinStep } from "@cucumber/messages";
-import { CLAIM_VALUE_MAX_BYTES, type RunClaim, type RunScenario, type RunScenarioClaims, type RunStep, type RunUsed } from "../record/run-result.js";
+import {
+  CLAIM_VALUE_MAX_BYTES,
+  type RunClaim,
+  type RunScenario,
+  type RunScenarioClaims,
+  type RunStep,
+  type RunUsed,
+  type RunWorld,
+} from "../record/run-result.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import type { ClaimRecord, ObservedCounts, StepRecord } from "../record/types.js";
 
@@ -21,6 +29,26 @@ import type { ClaimRecord, ObservedCounts, StepRecord } from "../record/types.js
 // They are bounded (`boundUsedResult`): a 5 MB producer result would
 // otherwise make a 5 MB run.json and `--json` document, and the producer's
 // `record` still holds the whole value.
+
+/** `world` with `program_log`, the sum of what its scenarios' steps found
+ * of the program's log. `readsLog` is whether nukadoko read that log:
+ * `undefined` for a world that did not start. Pure. */
+export function withProgramLog(world: RunWorld, readsLog: boolean | undefined, scenarios: readonly RunScenario[]): RunWorld {
+  if (world.url === null || readsLog === undefined) return world;
+  if (!readsLog) return { ...world, program_log: null };
+  let stamped = 0;
+  let lines = 0;
+  for (const scenario of scenarios) {
+    if (scenario.environment !== world.name) continue;
+    for (const step of scenario.steps) {
+      const slice = step.observed?.program_log;
+      if (slice === undefined || slice === null) continue;
+      stamped += slice.stamped;
+      lines += slice.lines;
+    }
+  }
+  return { ...world, program_log: { stamped, lines } };
+}
 
 export interface RunScenarioInput {
   /** The step records the scenario cites, by id; `null` for one that could

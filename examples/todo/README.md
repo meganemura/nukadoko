@@ -123,7 +123,10 @@ nuka do add-todo --args '{"title":"Buy milk"}'
   "args_origin": { "title": "command_line" },
   "result": { "id": "0d8b52bf-2281-4cde-9572-a885533c03d9", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
+  "observed": {
+    "processes": null, "http": 1, "files": null, "unmeasured": [],
+    "program_log": { "lines": 1, "file": "program-log.txt", "stamped": 1 }
+  }
 }
 ```
 
@@ -131,7 +134,11 @@ nuka do add-todo --args '{"title":"Buy milk"}'
 for space; the real step record on your terminal has them too.)
 `args_origin` says where each argument came from, here the command line.
 `observed.http` counts the one request the step made, and the step record's
-`http.jsonl` holds it with its request body and response body. Read `result`,
+`http.jsonl` holds it with its request body and response body.
+`observed.program_log` counts the app's own log line for that request, in
+`program-log.txt` beside the record: the app writes the request's
+`traceparent` at the start of each line, so nukadoko knows the line is this
+step's. Read `result`,
 decide the next call: that loop is what `nuka do` is for, and it's the same
 loop whether the vocabulary is complete or, as here, missing something.
 

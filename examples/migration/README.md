@@ -256,7 +256,10 @@ output (`evidence`/`environment`/timestamps trimmed for space):
   "kind": "run",
   "result": null,
   "status": "passed",
-  "observed": { "processes": null, "http": 2, "files": null, "unmeasured": [] },
+  "observed": {
+    "processes": null, "http": 2, "files": null, "unmeasured": [],
+    "program_log": { "lines": 2, "file": "program-log.txt", "stamped": 2 }
+  },
   "world": { "reads": [], "writes": ["seededCount"] }
 }
 ```
@@ -266,8 +269,10 @@ contract (docs/spec.md "Records": "Compat steps record result: null").
 Everything else on this step record is new, for free, from the import switch
 alone: `observed.http` counts the 2 requests the harness itself watched this
 execution make through `this.request`, its `http.jsonl` holds each POST
-with its request body and response body, and `world` is the one World key this step
-touched, in access order -- the data flow a plain `this.foo = ...` used to
+with its request body and response body, `observed.program_log` counts the
+todo app's own log line for each POST (the app tags each line with the
+request's `traceparent`, which nukadoko put on it), and `world` is the one
+World key this step touched, in access order -- the data flow a plain `this.foo = ...` used to
 hide entirely.
 
 ## Stage 1.5 -- declaring one World key
@@ -369,7 +374,10 @@ and `step-...-f602`), trimmed the same way:
   "step": "create-todo",
   "result": { "id": "2335564f-1516-418c-8dc8-ef2dd8afc233", "title": "Read a book", "done": false },
   "status": "passed",
-  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
+  "observed": {
+    "processes": null, "http": 1, "files": null, "unmeasured": [],
+    "program_log": { "lines": 1, "file": "program-log.txt", "stamped": 1 }
+  }
 }
 ```
 
@@ -378,7 +386,10 @@ and `step-...-f602`), trimmed the same way:
   "step_record_id": "step-20261024-091719-f602",
   "step": "created-todo-is-titled",
   "status": "passed",
-  "observed": { "processes": null, "http": null, "files": null, "unmeasured": [] },
+  "observed": {
+    "processes": null, "http": null, "files": null, "unmeasured": [],
+    "program_log": { "lines": 0, "file": null, "stamped": 0 }
+  },
   "used": [{ "step_record_id": "step-20261024-091719-x9fp", "step": "create-todo" }],
   "claims": [
     {

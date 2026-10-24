@@ -478,7 +478,10 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
   "args_origin": { "title": "command_line" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
+  "observed": {
+    "processes": null, "http": 1, "files": null, "unmeasured": [],
+    "program_log": { "lines": 1, "file": "program-log.txt", "stamped": 1 }
+  }
 }
 ```
 
@@ -495,6 +498,9 @@ scenario の中では、capture、docstring、table、または前の step の r
 `http` は step が送ったリクエストの数です。
 各リクエストは step record の `http.jsonl` の 1 行で、リクエスト本文とレスポンス本文を持ちます。
 `files` は、step が scratch のディレクトリで変えたファイルと、`node:fs` で書いたファイルで、その中身も含みます。
+`program_log` は、nukadoko がプログラムを起動するとき、step 自身のリクエストが生んだそのログの行です。
+プログラムへの各リクエストは、プログラムが自分のログの行に書ける `traceparent` を運びます。
+`url` のプログラムでは `null` です。
 `unmeasured` は、nukadoko が見えたが計測できない操作の一覧です。
 たとえば `runCommand` を通さずに起動したプロセスです。
 これにより、nukadoko が完全でないと見た record は、完全には見えません。

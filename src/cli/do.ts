@@ -435,6 +435,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     const contextHandle = createStepContext({
       config,
       baseURL: world?.view.url,
+      programLog: world?.view.log,
       evidenceDir,
       rootDir,
       env: stepEnv,

@@ -349,6 +349,15 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   どちらも追加なので、既存の読み方は変わりません。
   `nuka run` の前にアプリを起動していた CI の step は、`serve` が起動するようになれば取り除けます。
 
+- **world へのリクエストは `traceparent` を運び、run に world の URL があるとき `observed` は `program_log` を持ちます。**
+  step が world のオリジンへ送るリクエストは、W3C の `traceparent` ヘッダを運ぶようになりました。
+  自分で設定したリクエストは、それを保ちます。
+  `observed` を丸ごと比べていた読み手は、`program_log`(`{ "lines", "file", "stamped" }`、`url` の world では `null`)を加えます。
+  http.jsonl の行を丸ごと比べていた読み手は、nukadoko がヘッダを付けたリクエストの行に `traceparent` を加えます。
+  step ごとにプログラムのログの行を得るには、プログラムがリクエストの `traceparent` をログの行に書くようにします。
+  Rails と Node の書き方は docs/spec.ja.md の「trace context とプログラムのログ」にあります。
+  それまでは、run サマリが world ごとに一度、ログが trace id を持たないと言います。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

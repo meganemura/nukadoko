@@ -14,6 +14,7 @@ import type { UnmeasuredEntry } from "../record/types.js";
 import { childProcessDetail } from "./child-process-detail.js";
 import { BODY_CAP, type RawBody, rawBodyOf, windowFor } from "./kept-text.js";
 import type { Identity } from "./step-files.js";
+import { TRACEPARENT } from "./trace-context.js";
 import { writeMadeByPlaywrightServer } from "./write-origin.js";
 
 // Responsibility: measure, inside a step's own `run`, the channels a step
@@ -82,6 +83,15 @@ import { writeMadeByPlaywrightServer } from "./write-origin.js";
 // the step that the step only reads from is not seen: nothing marks a read
 // as the step's.
 //
+// A request to the world's origin also gets a `traceparent` header here,
+// the recorder's (observed.ts, trace-context.ts), so the program's log can
+// say which step sent it. Only where adding a header changes nothing else
+// the caller passed: a `fetch` whose `init` is absent or a plain object
+// (a copy of it holds every member), and a `ClientRequest` whose headers
+// are not sent yet. A caller's own `traceparent` is kept. A `fetch`
+// given a Request, or an `init` of any other kind, goes as it was,
+// without one: rebuilding it is what the rule above forbids.
+//
 // What no patch reaches: a Worker's own globals, a native addon, a child
 // process's own traffic, a function copied before installation, a
 // connection opened before installation, and work that runs outside the
@@ -101,6 +111,8 @@ export interface ChannelHttpLine {
   readonly error?: string;
   readonly request_body?: RawBody;
   readonly response_body?: RawBody;
+  /** The `traceparent` nukadoko added to the request, when it added one. */
+  readonly traceparent?: string;
 }
 
 /** Where nukadoko stopped waiting for a request: at its step boundary's
@@ -156,6 +168,11 @@ export interface ChannelRecorder {
   /** Notes a socket the step connected, or wrote to after another context
    * connected it. Whether it was measured is decided at the step's end. */
   noteSocket(use: SocketUse, how: "connect" | "write"): void;
+  /** The `traceparent` for a request to `url` (resolved against `base`
+   * when relative), counted as sent, or `undefined` when the URL is not
+   * the world's or the run has no world. Called only once the caller knows
+   * it will add the header. */
+  traceparentFor?(url: string, base?: string): string | undefined;
 }
 
 const SCOPE_KEY = Symbol.for("nukadoko.runCommand.scope");
@@ -399,22 +416,62 @@ function fetchMethod(args: FetchArgs): string {
   return String(init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
 }
 
+function isPlainObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  return prototype === Object.prototype || prototype === null;
+}
+
+/** `args` with a `traceparent` header added, and the value, when the
+ * request goes to the world (this file's own header): `input` a string
+ * or a URL, `init` absent or a plain object, and headers `Headers` can
+ * read, without one of their own. `undefined` leaves `args` as the caller
+ * passed them. Throws where reading the arguments throws. */
+export function withTraceparent(
+  args: FetchArgs,
+  traceparentFor: (url: string) => string | undefined,
+): { readonly args: FetchArgs; readonly traceparent: string } | undefined {
+  const [input, init] = args;
+  if (typeof input !== "string" && !(input instanceof URL)) return undefined;
+  if (init !== undefined && (typeof init !== "object" || init === null || !isPlainObject(init))) return undefined;
+  let headers: Headers;
+  try {
+    headers = new Headers(init?.headers);
+  } catch {
+    // Headers `fetch` would refuse: the original refuses them, with its
+    // own error.
+    return undefined;
+  }
+  if (headers.has(TRACEPARENT)) return undefined;
+  const traceparent = traceparentFor(fetchTarget(input));
+  if (traceparent === undefined) return undefined;
+  headers.set(TRACEPARENT, traceparent);
+  return { args: [input, { ...init, headers }], traceparent };
+}
+
 async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args: FetchArgs): Promise<Response> {
   const startedAt = performance.now();
   const elapsed = (): number => Math.round(performance.now() - startedAt);
   let method = "GET";
   let declared = "";
   let request: FetchBody;
+  let sent: FetchArgs = args;
+  let traceparent: string | undefined;
   try {
     method = fetchMethod(args);
     declared = fetchTarget(args[0]);
     request = requestBodyOf(args);
+    const stamped = typeof rec.traceparentFor === "function" ? withTraceparent(args, (url) => rec.traceparentFor?.(url)) : undefined;
+    if (stamped !== undefined) {
+      sent = stamped.args;
+      traceparent = stamped.traceparent;
+    }
   } catch {
     // The caller's own arguments still go to the original, so the caller
     // gets exactly the error `fetch` throws for them, and the line
     // records it.
     request = { body: undefined };
   }
+  const stampField = traceparent === undefined ? {} : { traceparent };
   let requestBody: RawBody | undefined = request.body instanceof Promise ? undefined : request.body;
   const requestBodyRead = Promise.resolve(request.body).then(
     (body) => (requestBody = body),
@@ -427,7 +484,16 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
   let thrown: { readonly error: string; readonly durationMs: number } | undefined;
   const failed = (error: string, durationMs: number): ChannelHttpLine => {
     const body = requestBodyNow();
-    return { method, url: declared, status: 0, duration_ms: durationMs, via: "fetch", error, ...(body !== undefined ? { request_body: body } : {}) };
+    return {
+      method,
+      url: declared,
+      status: 0,
+      duration_ms: durationMs,
+      via: "fetch",
+      error,
+      ...stampField,
+      ...(body !== undefined ? { request_body: body } : {}),
+    };
   };
   const withBodies = (line: ChannelHttpLine, requestRaw: RawBody | undefined, responseRaw: RawBody | undefined): ChannelHttpLine => ({
     ...line,
@@ -444,7 +510,7 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
 
   let response: Response;
   try {
-    response = await withoutChannelRecording(() => original(...args));
+    response = await withoutChannelRecording(() => original(...sent));
   } catch (error) {
     const failure = { error: firstLine(error), durationMs: elapsed() };
     thrown = failure;
@@ -459,6 +525,7 @@ async function recordedFetch(rec: ChannelRecorder, original: typeof fetch, args:
     status: response.status,
     duration_ms: elapsed(),
     via: "fetch",
+    ...stampField,
   };
   let capture: { done: Promise<RawBody>; finalize(): RawBody } | undefined;
   if (response.body !== null) {
@@ -503,6 +570,23 @@ function noBodyByProtocol(method: string, res: http.IncomingMessage): boolean {
   return method === "HEAD" || status === 204 || status === 304 || res.headers["content-length"] === "0";
 }
 
+/** The URL a `ClientRequest` goes to. A CONNECT request names a host and
+ * port, not a path. */
+function clientRequestUrl(req: http.ClientRequest): string {
+  return req.method === "CONNECT" ? req.path : `${req.protocol}//${String(req.getHeader("host") ?? req.host)}${req.path}`;
+}
+
+/** Adds a `traceparent` header to `req` when it goes to the world and
+ * its headers can still change (this file's own header), and returns the
+ * value. Headers given as an array are already sent when the call
+ * returns, so such a request goes as it was. */
+function stampClientRequest(req: http.ClientRequest, rec: ChannelRecorder): string | undefined {
+  if (typeof rec.traceparentFor !== "function" || req.headersSent || req.method === "CONNECT" || req.hasHeader(TRACEPARENT)) return undefined;
+  const traceparent = rec.traceparentFor(clientRequestUrl(req));
+  if (traceparent !== undefined) req.setHeader(TRACEPARENT, traceparent);
+  return traceparent;
+}
+
 /** Records one `ClientRequest` passively: it listens to what the request
  * and its response already emit and never changes their flow, so a
  * response the step leaves unread stays unread, and an `upgrade` or
@@ -511,7 +595,7 @@ function noBodyByProtocol(method: string, res: http.IncomingMessage): boolean {
  * `readable` listener, never resumed or piped) is idle: the flush writes
  * its line at once, saying the step did not read the body, instead of
  * waiting for a body nothing will read. */
-function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:https", rec: ChannelRecorder): void {
+function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:https", rec: ChannelRecorder, traceparent: string | undefined): void {
   const startedAt = performance.now();
   const requestBody = new BodyBuffer();
   const responseBody = new BodyBuffer();
@@ -531,15 +615,14 @@ function tapClientRequest(req: http.ClientRequest, via: "node:http" | "node:http
     return (originalEnd as (...a: unknown[]) => http.ClientRequest).call(this, chunk, ...rest);
   } as typeof req.end;
 
-  // A CONNECT request names a host and port, not a path.
-  const url = (): string =>
-    req.method === "CONNECT" ? req.path : `${req.protocol}//${String(req.getHeader("host") ?? req.host)}${req.path}`;
+  const url = (): string => clientRequestUrl(req);
   const line = (fields: { readonly error?: string; readonly response?: RawBody }): ChannelHttpLine => ({
     method: req.method,
     url: url(),
     status,
     duration_ms: durationMs ?? Math.round(performance.now() - startedAt),
     via,
+    ...(traceparent === undefined ? {} : { traceparent }),
     ...(fields.error !== undefined ? { error: fields.error } : {}),
     ...(requestBody.total > 0 ? { request_body: requestBody.ended() } : {}),
     ...(fields.response !== undefined ? { response_body: fields.response } : {}),
@@ -621,8 +704,14 @@ function installNodeHttp(): void {
       // through the request, never an unmeasured one.
       const req = insideSyncCall(() => (original as (...a: unknown[]) => http.ClientRequest).apply(this, args));
       if (rec !== undefined) {
+        let traceparent: string | undefined;
         try {
-          tapClientRequest(req, via, rec);
+          traceparent = stampClientRequest(req, rec);
+        } catch {
+          // A header that cannot be set leaves the request as it was.
+        }
+        try {
+          tapClientRequest(req, via, rec, traceparent);
         } catch {
           // A tap that fails leaves the request as it was.
         }

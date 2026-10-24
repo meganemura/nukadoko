@@ -2682,7 +2682,8 @@ them:
     ],
     "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
     "log": "worlds/default/program.log",
-    "error": null
+    "error": null,
+    "program_log": { "stamped": 12, "lines": 31 }
   }
 ]
 ```
@@ -2696,6 +2697,12 @@ them:
 - `log` is relative to the run directory, `null` when the world ran no
   command.
 - `error` is why the program did not start, `null` when it did.
+- `program_log` sums what the world's steps found of their requests in
+  the program's log: `stamped`, the requests that carried a
+  `traceparent` to the world, and `lines`, the lines that went into a
+  step's slice (see "Trace context and the program's log").
+  It is `null` for a world at a `url`, and absent for a world with no
+  URL or one that did not start.
 
 Each step record names its world in `world_name`, the `name` of a
 `worlds` entry, or `null` when no world ran.
@@ -2756,9 +2763,158 @@ environments: {
 Such a world starts nothing and writes no `program.log`: nukadoko cannot
 read the log of a program it does not run, so the world's `log` is
 `null`.
+Its requests still carry a `traceparent`, and each step's
+`observed.program_log` is `null` (see "Trace context and the program's
+log").
 `env` still reaches the steps, and `{token}` is still made.
 A read-only `policy` belongs on such an environment whenever the server
 holds data someone else needs.
+
+### Trace context and the program's log
+
+Every HTTP request a step sends to the world carries a W3C `traceparent`
+header, so the program's own log can say which step sent it.
+The value is `00-<trace id>-<span id>-01`: one trace id for each scenario
+execution (one for a `nuka do` call), and one span id for each step.
+A hook gets a span id of its own, which no step's slice includes.
+
+- The header goes on requests through `fetch`, `node:http`,
+  `node:https`, the `request` fixture, `page.request`, and
+  `context.request`, and on a Chromium page's documents, `fetch` calls,
+  XMLHttpRequests, and EventSources.
+- Only a request to the world's origin, the scheme, host, and port of its
+  URL, gets one.
+  A request to another origin is a third party's, a CDN or a payment
+  provider, and a header it did not expect can change what it does.
+  For a world at `localhost`, a name below `localhost` at the same port
+  is the world's too: such a name resolves to the loopback address
+  (RFC 6761), so it reaches the port nukadoko gave the program, and a
+  project gives each person in a scenario a host name of their own there
+  to keep their cookies apart.
+- A request that sets its own `traceparent` keeps it.
+  A `fetch` given a Request, or an `init` that is not a plain object,
+  goes as it was and without the header, since nukadoko never rebuilds
+  those arguments (see "Records").
+  A `node:http` request whose headers were given as an array is sent as
+  the call returns, so it goes without one too.
+- A line of http.jsonl names the value nukadoko added, as `traceparent`.
+  A page's line does not: the browser added it.
+- A page's requests are stamped through the Chrome DevTools Protocol, so
+  only on Chromium.
+  Firefox and WebKit have no such protocol through Playwright, and their
+  pages' requests go without the header.
+  A popup's first requests go without it as well: the popup is already
+  loading when the context announces it.
+  A page the step opens with `context.newPage()` is stamped from its
+  first request.
+
+Playwright has two ways to add a header to a page's requests, and both
+were measured and refused.
+The measurement used Chromium 149.0.7827.55 and Playwright 1.61.1: a page
+that loads an image with `cache-control: max-age=3600`, navigated to
+twice, then a page on a second origin that fetches from the world, which
+answers simple CORS requests only.
+`context.setExtraHTTPHeaders` sent the header to the second origin too,
+and turned the cross-origin fetch into a preflight `OPTIONS` request,
+which failed, so the page's fetch failed.
+`context.route` turned the browser's HTTP cache off, so the second
+navigation loaded the image again, and a scenario would measure a page
+that differs from the one a person gets.
+The DevTools session nukadoko uses instead loaded the image once, sent
+the cross-origin fetch with no preflight, kept the page's cookies, and
+left a route the step adds itself working.
+It costs 2 to 3 ms for each request it stamps, which is why it leaves
+images, scripts, and stylesheets alone.
+
+When nukadoko serves the program, each step record gets the lines of
+`program.log` that its requests caused: the lines the program wrote while
+the step ran that carry the step's span id, or that carry the scenario's
+trace id and no other step's span id.
+The second rule is for a program that tags a line with the trace id
+alone.
+The lines go to `program-log.txt` beside the step record, redacted, and
+`observed.program_log` counts them:
+
+```json
+"program_log": { "lines": 33, "file": "program-log.txt", "stamped": 3 }
+```
+
+- `lines` is how many lines the slice holds, 0 when no line carries the
+  step's ids.
+- `file` is `null` when `lines` is 0.
+- `stamped` is how many requests the step sent to the world with a
+  `traceparent`.
+- `truncated: true` appears when the program wrote more than 16 MiB while
+  the step ran; the slice then comes from the first 16 MiB.
+
+A step reads only what the program wrote while it ran: its window starts
+at the log's size when the step began.
+Under `--concurrency` the parent writes the log and each worker reads it,
+and the trace id keeps one scenario's lines apart from another's.
+A line can reach the log after the step read its response, since the
+program writes it around the time it answers and it comes through a
+pipe.
+So a step that stamped a request waits until the log has been quiet for
+30 ms after the later of its last stamped request and the log's last
+write, and no longer than 300 ms in all.
+A step that stamped nothing does not wait.
+
+A program that tags no line gives every step an empty slice, and the run
+summary says so once for the world, so a reader knows why:
+
+```text
+- program log of world default: carries no trace ids, so each step's slice of it is empty
+```
+
+A world at a `url` has no log nukadoko can read.
+Each step's `observed.program_log` is `null`, the world's `program_log`
+in `run.json` is `null`, and the run summary says:
+
+```text
+- program log of world staging: not read, since the program runs at https://staging.acme.example, which nukadoko did not start
+```
+
+Its requests still carry a `traceparent`, so the server's own log or
+tracing finds a step's requests by the ids on its http.jsonl lines.
+A run with no world URL stamps nothing, and `observed.program_log` is
+absent.
+
+A program tags its lines by reading the header of the request each line
+is about.
+Rails writes the test environment's log to a file, so the program file
+sends it to standard output, where nukadoko reads it, and tags each line
+with the request's `traceparent`:
+
+```ruby
+# config/environments/test.rb
+config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?
+config.log_tags = [ ->(request) { request.headers["traceparent"] } ]
+```
+
+The program file's `env` sets `RAILS_LOG_TO_STDOUT: "1"` (below).
+A request with no `traceparent`, such as nukadoko's `ready` check or
+one from `bin/rails test`, gets no tag, since Rails leaves out a blank
+tag.
+A Node server does the same with each line it writes for a request:
+
+```js
+const log = (req, text) => console.log(`[${req.headers.traceparent ?? "-"}] ${text}`);
+```
+
+A server that OpenTelemetry instruments reads `traceparent` already; any
+form works as long as the id is in the line's text.
+
+Measured on a Rails application whose acceptance suite has 16 scenarios
+and writes 188 step records, all through Chromium pages on names below
+`localhost`: 582 requests carried a `traceparent`, 146 steps sent at
+least one, and each of those steps' slices held every line of each of its
+requests, a `Completed` line for every `Started` line, 8,223 lines in
+all.
+Waiting for late lines took 1.7 s over the run: none in 64 steps, 10 ms
+at the median, and 50 ms at most.
+Run in turn, back to back, the run took 77.5 and 79.3 s, against 73.6
+and 74.4 s for the same suite with no request stamped and the Rails log
+written to its file.
 
 ### A Ruby program
 
@@ -2776,6 +2932,7 @@ export default defineProgram({
   env: {
     RAILS_ENV: "test",
     DATABASE_URL: "sqlite3:{dir}/test.sqlite3",
+    RAILS_LOG_TO_STDOUT: "1",
   },
 });
 ```
@@ -2784,6 +2941,9 @@ export default defineProgram({
 worlds never refuse each other's start, and `DATABASE_URL` gives each
 world a database of its own.
 `/up` is the health check Rails generates.
+`RAILS_LOG_TO_STDOUT` sends the log to standard output, with the two lines
+of `config/environments/test.rb` above, so each step record gets the
+Rails lines of its own requests.
 
 ## Running
 
@@ -3636,7 +3796,8 @@ its scenario record's id, so either record leads to the other.
   for without ever stating it, and it says the real thing: how long after
   this execution's own timeline the screenshot was actually taken.
 - `observed` holds what the tool saw the execution reach, one key per
-  channel: `processes`, `http`, `files`, and `unmeasured`. Every channel
+  channel: `processes`, `http`, `files`, and `unmeasured`, and, when the
+  run has a world URL, `program_log`. Every channel
   follows one rule: measure what can be measured exactly, mark what
   cannot, and never infer a write from a method. A channel the execution
   never reached is `null`, never `0`: "nothing was measured" and
@@ -3791,6 +3952,10 @@ its scenario record's id, so either record leads to the other.
   code starts after its record was written is not counted here: its line
   is still written to that step's http.jsonl, with `"after_step_end":
   true`.
+- `observed.program_log` is the step's slice of the program's log, `{
+  "lines", "file", "stamped" }`, or `null` for a world at a `url`, whose
+  log nukadoko does not read; it is absent when the run has no world URL
+  (see "Program", "Trace context and the program's log").
 - `observed.files` (`null` when the execution changed none) lists the
   paths the step changed, sorted: `{ "path", "change", "bytes", "content" }`.
   Two sources are merged. Every scratch directory (see "Context API") is
@@ -3939,7 +4104,10 @@ its scenario record's id, so either record leads to the other.
   arrived or it had no body, as for HEAD, a 204, a 304, or
   `content-length: 0`, from every client, whose line is written at the
   status), kept as text of at most 16 KiB each (below).
-  Headers are never written: they carry cookies and credentials, and the
+  A line of a request nukadoko sent to the world with a `traceparent` has
+  `"traceparent"`, the value it added (see "Program"); a page's line does
+  not, since the browser added it.
+  No header is written: headers carry cookies and credentials, and the
   trace holds a page's. A page line has no bodies: the trace already holds
   the page's traffic. A call the step itself made is logged whatever its outcome,
   including one that throws (a refused connection, `failOnStatusCode` on an
@@ -3961,7 +4129,10 @@ its scenario record's id, so either record leads to the other.
   error `fetch` gives, and the step gets exactly that error. A `fetch`
   gets exactly the arguments the step passed, never a copy: its `init`
   can be a Request, or an object whose members are getters on its
-  prototype, and a copy would drop them. An upgrade
+  prototype, and a copy would drop them. The one exception is a request
+  to the world whose `init` is absent or a plain object, which a copy
+  holds whole: it gets a copy with a `traceparent` header added (see
+  "Program"). An upgrade
   (a WebSocket) or a CONNECT is a line with the handshake's real status,
   101 or the tunnel's, and `url` is the CONNECT target `<host>:<port>`;
   what the connection carries afterwards is an `unmeasured` socket, and
@@ -4260,7 +4431,8 @@ holds:
   failure was outside every scenario) and its scenario counts;
 - the condition: the short commit sha and whether the tree had uncommitted
   changes (from `commit`, or "unknown" without one), each environment and its
-  target version, every browser a scenario launched or "none launched", the
+  target version, a line for each world whose program log was not read or
+  carries no trace ids (see "Program"), every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
   file), `check: skipped` under `nuka run --no-check` (nothing when the check
   ran), the nukadoko version, the run id, and the start and finish times;

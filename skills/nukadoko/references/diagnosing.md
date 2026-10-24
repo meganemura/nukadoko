@@ -55,10 +55,13 @@ need more than a glance.
 3. `page_events`, if the step opened a browser: a console error, an
    uncaught page error, or a failed request recorded there can explain a
    failure nothing else on the step record mentions.
-4. `nuka do <step> --use <upstream-step-record-id>` when the record
+4. `program-log.txt` beside the record, when `observed.program_log`
+   names it: the lines the program under test wrote for this step's own
+   requests, such as the error behind a 500 (`program.md`).
+5. `nuka do <step> --use <upstream-step-record-id>` when the record
    sharpens a hypothesis rather than confirming it ("Testing a hypothesis
    without a full re-run").
-5. Re-run the scenario last, with the `do:` line `nuka run` printed,
+6. Re-run the scenario last, with the `do:` line `nuka run` printed,
    once the step itself passes under `do`, not as the first thing tried
    after a failure.
 

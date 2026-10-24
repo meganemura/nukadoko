@@ -43,6 +43,7 @@ export type {
   PageErrorEntry,
   PageEventsSnapshot,
   PageEventsTruncated,
+  ProgramLogSlice,
   UnmeasuredEntry,
   UsedEntry,
   UsedEntryWithResult,

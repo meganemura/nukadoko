@@ -6,6 +6,7 @@ import type { SecretSet } from "../secrets/types.js";
 import { type ChannelHttpLine, channelRecorder, noResponse, recordRequest, withoutChannelRecording } from "./channels.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import { bodyFields, type RawBody, rawBodyOf } from "./kept-text.js";
+import { TRACEPARENT } from "./trace-context.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
@@ -42,6 +43,14 @@ import { bodyFields, type RawBody, rawBodyOf } from "./kept-text.js";
 // `appendHttpLogEntry` below is exported for that module to call: one
 // redact-and-append call site for both paths, so neither can drift into
 // redacting differently than the other.
+//
+// Inside a step, a call to the world's origin gets a `traceparent` header
+// from the recorder (trace-context.ts), added to the call's own
+// `headers` option, and its line names the value. A relative URL is
+// resolved against the request context's base URL to find its origin. A
+// call that sets its own `traceparent` keeps it, and a call given a
+// Playwright `Request` (`route.fetch()`) goes as it was: that request
+// came from a page, which browser-trace.ts stamps already.
 //
 // A call is logged whatever its outcome, from a `finally`: a call that
 // throws (a refused connection, `failOnStatusCode` on a 4xx/5xx) still
@@ -105,6 +114,9 @@ export interface HttpLogEntry {
   /** The request started after its step's record was written, so the
    * record does not count it (docs/spec.md "Records"). */
   after_step_end?: true;
+  /** Not `"page"`: the `traceparent` nukadoko added to a request to the
+   * world (docs/spec.md "Program"). Absent when it added none. */
+  traceparent?: string;
 }
 
 /** The http.jsonl entry of one line a channel patch or a request context
@@ -119,6 +131,7 @@ export function httpLogEntryOf(line: ChannelHttpLine, secrets: SecretSet): HttpL
     via: line.via,
     ...(line.error !== undefined ? { error: line.error } : {}),
     ...(line.as !== undefined ? { as: line.as } : {}),
+    ...(line.traceparent !== undefined ? { traceparent: line.traceparent } : {}),
     ...bodyFields(line.request_body, line.response_body, secrets),
   };
 }
@@ -136,18 +149,52 @@ export async function appendHttpLogEntry(
   await appendFile(logPath(), `${JSON.stringify(redacted)}\n`);
 }
 
-async function logCall(
-  logPath: () => string,
-  method: string,
-  url: string,
-  secrets: SecretSet,
-  httpLogFailed: HttpLogFailedCollector,
-  send: () => Promise<APIResponse>,
-  requestBody: () => Promise<RawBody | undefined>,
-  as?: string,
-): Promise<APIResponse> {
+/** Where a request context's calls are logged, and how. */
+interface LogTarget {
+  readonly logPath: () => string;
+  readonly secrets: SecretSet;
+  readonly httpLogFailed: HttpLogFailedCollector;
+  /** The request context's base URL, which a relative URL resolves
+   * against. */
+  readonly baseURL: string | undefined;
+  readonly as?: string | undefined;
+}
+
+/** One call: what the step passed, and how to send it with a
+ * `traceparent` header added (`undefined` sends it as passed). */
+interface Call {
+  readonly method: string;
+  readonly url: string;
+  /** The call's own `headers` option; `null` for a call given a
+   * Playwright `Request`, which is never stamped (this file's own header). */
+  readonly headers: { readonly [name: string]: string } | undefined | null;
+  readonly send: (traceparent: string | undefined) => Promise<APIResponse>;
+  readonly requestBody: () => Promise<RawBody | undefined>;
+}
+
+function hasHeader(headers: { readonly [name: string]: string } | undefined, name: string): boolean {
+  return headers !== undefined && Object.keys(headers).some((key) => key.toLowerCase() === name);
+}
+
+/** `options` with a `traceparent` header added, or `options` itself when
+ * there is none to add. Playwright's options are plain objects, so a copy
+ * holds every member. */
+function withTraceparentHeader<O extends { headers?: { [name: string]: string } } | undefined>(options: O, traceparent: string | undefined): O {
+  if (traceparent === undefined) return options;
+  return { ...options, headers: { ...options?.headers, [TRACEPARENT]: traceparent } } as O;
+}
+
+async function logCall(target: LogTarget, call: Call): Promise<APIResponse> {
+  const { secrets, httpLogFailed, as } = target;
+  const { method, url } = call;
   const startedAt = performance.now();
   const elapsed = (): number => Math.round(performance.now() - startedAt);
+  const rec = channelRecorder();
+  const traceparent =
+    rec === undefined || typeof rec.traceparentFor !== "function" || call.headers === null || hasHeader(call.headers, TRACEPARENT)
+      ? undefined
+      : rec.traceparentFor(url, target.baseURL);
+  const stampField = traceparent === undefined ? {} : { traceparent };
   const failed = (error: string, sent?: RawBody): ChannelHttpLine => ({
     method,
     url,
@@ -156,21 +203,21 @@ async function logCall(
     via: "request",
     error,
     ...(as !== undefined ? { as } : {}),
+    ...stampField,
     ...(sent !== undefined ? { request_body: sent } : {}),
   });
-  const rec = channelRecorder();
   const write = rec === undefined ? undefined : recordRequest(rec, (end) => failed(noResponse(end, elapsed())));
-  const path = logPath();
+  const path = target.logPath();
   let response: APIResponse | undefined;
   let failure: unknown;
   try {
-    response = await withoutChannelRecording(send);
+    response = await withoutChannelRecording(() => call.send(traceparent));
     return response;
   } catch (error) {
     failure = error;
     throw error;
   } finally {
-    const sent = await requestBody().catch((): RawBody => ({ unread: "the request body could not be read" }));
+    const sent = await call.requestBody().catch((): RawBody => ({ unread: "the request body could not be read" }));
     const received = response === undefined ? undefined : await responseBodyOf(response);
     const line: ChannelHttpLine = response
       ? {
@@ -181,6 +228,7 @@ async function logCall(
           duration_ms: elapsed(),
           via: "request",
           ...(as !== undefined ? { as } : {}),
+          ...stampField,
           ...(sent !== undefined ? { request_body: sent } : {}),
           ...(received !== undefined ? { response_body: received } : {}),
         }
@@ -262,39 +310,53 @@ function methodOf(
   return (method ?? "GET").toUpperCase();
 }
 
+/** The headers option of a call, or `null` for a call given a Playwright
+ * `Request`. */
+function headersOf(
+  target: Parameters<APIRequestContext["fetch"]>[0],
+  options: { headers?: { [name: string]: string } } | undefined,
+): { readonly [name: string]: string } | undefined | null {
+  return typeof target === "string" ? options?.headers : null;
+}
+
 /** Wraps `target` so get/post/put/patch/delete/head/fetch are logged to
  * whatever `logPath()` currently returns, with `secrets` redacted from each
  * logged line; `dispose`/`storageState` pass
- * straight through unlogged. */
+ * straight through unlogged. `baseURL` is the one `target` was created
+ * with, which a relative URL resolves against. */
 export function wrapRequestContextWithLogging(
   target: APIRequestContext,
   logPath: () => string,
   secrets: SecretSet,
   httpLogFailed: HttpLogFailedCollector,
+  baseURL?: string,
 ): APIRequestContext {
+  const log: LogTarget = { logPath, secrets, httpLogFailed, baseURL };
+  const verb =
+    (method: string, send: APIRequestContext["get"]) =>
+    (url: string, options?: Parameters<APIRequestContext["get"]>[1]): Promise<APIResponse> =>
+      logCall(log, {
+        method,
+        url,
+        headers: options?.headers,
+        send: (traceparent) => send(url, withTraceparentHeader(options, traceparent)),
+        requestBody: bodyOf(url, options),
+      });
   return {
-    get: (url, options) =>
-      logCall(logPath, "GET", url, secrets, httpLogFailed, () => target.get(url, options), bodyOf(url, options)),
-    post: (url, options) =>
-      logCall(logPath, "POST", url, secrets, httpLogFailed, () => target.post(url, options), bodyOf(url, options)),
-    put: (url, options) =>
-      logCall(logPath, "PUT", url, secrets, httpLogFailed, () => target.put(url, options), bodyOf(url, options)),
-    patch: (url, options) =>
-      logCall(logPath, "PATCH", url, secrets, httpLogFailed, () => target.patch(url, options), bodyOf(url, options)),
-    delete: (url, options) =>
-      logCall(logPath, "DELETE", url, secrets, httpLogFailed, () => target.delete(url, options), bodyOf(url, options)),
-    head: (url, options) =>
-      logCall(logPath, "HEAD", url, secrets, httpLogFailed, () => target.head(url, options), bodyOf(url, options)),
+    get: verb("GET", (url, options) => target.get(url, options)),
+    post: verb("POST", (url, options) => target.post(url, options)),
+    put: verb("PUT", (url, options) => target.put(url, options)),
+    patch: verb("PATCH", (url, options) => target.patch(url, options)),
+    delete: verb("DELETE", (url, options) => target.delete(url, options)),
+    head: verb("HEAD", (url, options) => target.head(url, options)),
     fetch: (urlOrRequest, options) =>
-      logCall(
-        logPath,
-        methodOf(urlOrRequest, options),
-        urlOf(urlOrRequest),
-        secrets,
-        httpLogFailed,
-        () => target.fetch(urlOrRequest, options),
-        bodyOf(urlOrRequest, options),
-      ),
+      logCall(log, {
+        method: methodOf(urlOrRequest, options),
+        url: urlOf(urlOrRequest),
+        headers: headersOf(urlOrRequest, options),
+        send: (traceparent) => target.fetch(urlOrRequest, withTraceparentHeader(options, traceparent)),
+        requestBody: bodyOf(urlOrRequest, options),
+      }),
     dispose: (options) => target.dispose(options),
     storageState: (options) => target.storageState(options),
     // Pass-through, not logged: `tracing` isn't an HTTP call, and
@@ -325,21 +387,20 @@ export function instrumentApiRequestContext(
   secrets: SecretSet,
   httpLogFailed: HttpLogFailedCollector,
   as?: string,
+  baseURL?: string,
 ): void {
   if (instrumentedApiRequests.has(target)) {
     return;
   }
   instrumentedApiRequests.add(target);
   const originalFetch = target.fetch.bind(target);
+  const log: LogTarget = { logPath, secrets, httpLogFailed, baseURL, as };
   target.fetch = (urlOrRequest, options) =>
-    logCall(
-      logPath,
-      methodOf(urlOrRequest, options),
-      urlOf(urlOrRequest),
-      secrets,
-      httpLogFailed,
-      () => originalFetch(urlOrRequest, options),
-      bodyOf(urlOrRequest, options),
-      as,
-    );
+    logCall(log, {
+      method: methodOf(urlOrRequest, options),
+      url: urlOf(urlOrRequest),
+      headers: headersOf(urlOrRequest, options),
+      send: (traceparent) => originalFetch(urlOrRequest, withTraceparentHeader(options, traceparent)),
+      requestBody: bodyOf(urlOrRequest, options),
+    });
 }

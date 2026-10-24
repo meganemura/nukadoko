@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import type { RunDocument, RunScenario, RunStep } from "../src/record/run-result.js";
+import type { RunDocument, RunScenario, RunStep, RunWorld } from "../src/record/run-result.js";
 import type { UnmeasuredEntry } from "../src/record/types.js";
+import { withProgramLog } from "../src/run/run-document.js";
 import { renderRunSummary } from "../src/run/run-summary.js";
 import { foldVerdicts } from "../src/run/verdicts.js";
 
@@ -461,4 +462,79 @@ describe("renderRunSummary", () => {
       if (failed > 0) counts.push(`${failed} failed`);
       expect(title).toBe(`# nukadoko run ${verdict}: ${counts.join(", ")}`);
     }));
+});
+
+// A world record as `nuka run` writes it, before `withProgramLog`.
+function world(name: string, url: string | null): RunWorld {
+  return { name, tree: "head", url, commands: [], timings: {}, log: null, error: null };
+}
+
+describe("the program log lines of the summary", () => {
+  it("says once per world that a log was not read, or carries no trace ids, and nothing for a log whose slices hold lines", () => {
+    const markdown = renderRunSummary(
+      run({
+        environments: [
+          { name: "default", target_version: null, base_url: "http://localhost:41873" },
+          { name: "untagged", target_version: null, base_url: "http://localhost:41874" },
+          { name: "staging", target_version: null, base_url: "https://staging.example.test" },
+          { name: "quiet", target_version: null, base_url: "http://localhost:41875" },
+        ],
+        worlds: [
+          { ...world("default", "http://localhost:41873"), program_log: { stamped: 4, lines: 7 } },
+          { ...world("untagged", "http://localhost:41874"), program_log: { stamped: 4, lines: 0 } },
+          { ...world("staging", "https://staging.example.test"), program_log: null },
+          { ...world("quiet", "http://localhost:41875"), program_log: { stamped: 0, lines: 0 } },
+        ],
+      }),
+    );
+    expect(markdown.split("\n").slice(3, 12)).toEqual([
+      "- commit: `0123456`",
+      "- environment: default at http://localhost:41873",
+      "- environment: untagged at http://localhost:41874",
+      "- environment: staging at https://staging.example.test",
+      "- environment: quiet at http://localhost:41875",
+      "- program log of world untagged: carries no trace ids, so each step's slice of it is empty",
+      "- program log of world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
+      "- browser: none launched",
+      "- selection: full",
+    ]);
+  });
+});
+
+describe("withProgramLog", () => {
+  const slice = gs.record({ lines: gs.integers({ minValue: 0, maxValue: 5 }), stamped: gs.integers({ minValue: 0, maxValue: 5 }) });
+
+  it("sums the slices of the world's own environment, and of no other", () =>
+    hegel.test((tc) => {
+      const scenarios = tc.draw(
+        gs.arrays(
+          gs.tuples(gs.sampledFrom(["default", "other"]), gs.arrays(gs.optional(slice), { maxSize: 4 })),
+          { maxSize: 5 },
+        ),
+      ).map(([environment, slices], index) =>
+        scenario("features/a.feature", index + 1, `s${index}`, "passed", 1, {
+          environment,
+          steps: slices.map((entry) =>
+            step("a step", {
+              observed: {
+                processes: null,
+                http: null,
+                files: null,
+                unmeasured: [],
+                ...(entry === undefined || entry === null ? {} : { program_log: { ...entry, file: entry.lines === 0 ? null : "program-log.txt" } }),
+              },
+            }),
+          ),
+        }),
+      );
+      const own = scenarios.filter((entry) => entry.environment === "default").flatMap((entry) => entry.steps);
+      const sum = (key: "lines" | "stamped"): number => own.reduce((total, entry) => total + (entry.observed?.program_log?.[key] ?? 0), 0);
+      expect(withProgramLog(world("default", "http://localhost:1"), true, scenarios).program_log).toEqual({ stamped: sum("stamped"), lines: sum("lines") });
+    }));
+
+  it("says null for a log nukadoko did not read, and leaves a world with no URL or that did not start as it was", () => {
+    expect(withProgramLog(world("staging", "https://staging.example.test"), false, []).program_log).toBeNull();
+    expect(withProgramLog(world("tool", null), true, [])).toEqual(world("tool", null));
+    expect(withProgramLog(world("broken", "http://localhost:1"), undefined, [])).toEqual(world("broken", "http://localhost:1"));
+  });
 });

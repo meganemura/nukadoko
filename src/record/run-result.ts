@@ -249,6 +249,13 @@ export interface RunWorld {
   readonly log: string | null;
   /** Why the program did not start, or `null` when it did. */
   readonly error: string | null;
+  /** What the steps found of their requests in the program's log
+   * (docs/spec.md "Program"): `stamped`, the requests that carried a
+   * `traceparent` to the world, and `lines`, the log lines that went into
+   * a step's slice. `null` for a world at a `url`, whose log nukadoko
+   * does not read. Absent for a world with no URL, one that did not start,
+   * and in a run.json an earlier build wrote. */
+  readonly program_log?: { readonly stamped: number; readonly lines: number } | null;
 }
 
 /** The fields `nuka run` puts beside the envelope's `findings`. */

@@ -20,6 +20,7 @@ import {
   type ScratchState,
   snapshotScratch,
 } from "./step-files.js";
+import { newSpanId, stampsUrl, traceparentOf } from "./trace-context.js";
 
 // Responsibility: what one step boundary reached outside its own code, the
 // step record's `observed` (docs/spec.md "Records"): the processes
@@ -54,10 +55,32 @@ import {
 // the flush and by this module for the end of the run, so a request left
 // open after its boundary closed (no flush will ever wait for it) still
 // gets its line before run.json is written (`finalizeOpenRequests`).
+//
+// Each boundary also holds its span id when the run has a world
+// (trace-context.ts): a request the boundary's code sends to the world's
+// origin carries the scenario's trace id and this span id, and the
+// boundary counts it. A recorder held by a step that outlived its boundary
+// stamps with that boundary's span, for the same reason it records into
+// that boundary.
 
 /** What a step's scope holds: the recorder runCommand and the channel
  * patches write into. */
 export type StepRecorder = ProcessRecorder & ChannelRecorder;
+
+/** What the current boundary knows of its trace, for the step's program
+ * log slice (program-log-slice.ts). */
+export interface BoundaryTrace {
+  readonly traceId: string;
+  readonly spanId: string;
+  /** The span ids of every other boundary of this collector. */
+  readonly otherSpans: ReadonlySet<string>;
+  /** How many requests the boundary sent to the world with a
+   * `traceparent`. */
+  readonly stamped: number;
+  /** When the boundary last stamped a request, as `Date.now()` reads,
+   * or `undefined` when it stamped none. */
+  readonly lastStampAt: number | undefined;
+}
 
 /** How many requests and `runCommand` processes started after a step's
  * record was written. Live: it grows while the step's code keeps running. */
@@ -93,6 +116,12 @@ export interface ObservedCollector extends StepRecorder {
   afterStepEnd(): AfterStepEnd;
   /** Executor-only: starts a new step boundary. */
   reset(): void;
+  /** Executor-only: the current boundary's trace, or `undefined` when the
+   * run has no world to stamp requests for. */
+  boundaryTrace(): BoundaryTrace | undefined;
+  /** The `traceparent` for a request to `url` sent now, in the current
+   * boundary: a page's request, which runs in no step's scope. */
+  traceparentFor(url: string, base?: string): string | undefined;
 }
 
 /** One boundary's measurements. */
@@ -112,11 +141,19 @@ interface Boundary {
   /** Each socket the step connected or wrote to, by how it first saw it. */
   readonly sockets: Map<SocketUse, "connect" | "write">;
   scratchBefore: ScratchState | undefined;
+  /** The span id requests to the world carry, `undefined` without a
+   * world. */
+  readonly span: string | undefined;
+  stamped: number;
+  lastStampAt: number | undefined;
 }
 
-function newBoundary(dir: string | undefined): Boundary {
+function newBoundary(dir: string | undefined, span: string | undefined): Boundary {
   return {
     dir,
+    span,
+    stamped: 0,
+    lastStampAt: undefined,
     closed: false,
     afterEnd: { requests: 0, processes: 0 },
     processes: null,
@@ -175,18 +212,32 @@ export function createObservedCollector(
     readonly secrets?: SecretSet;
     /** Counts a request line that could not be appended to http.jsonl. */
     readonly httpLogFailed?: HttpLogFailedCollector;
+    /** The scenario's trace id and the world's origin: requests to that
+     * origin get a `traceparent`. Absent without a world URL. */
+    readonly trace?: { readonly traceId: string; readonly origin: string };
   } = {},
 ): ObservedCollector {
   const unwatchedDirs = (options.unwatchedDirs ?? []).map((dir) => path.resolve(dir));
   const secrets = options.secrets ?? [];
-  let boundary = newBoundary(options.outputDir?.());
+  const trace = options.trace;
+  // Every span id this collector gave a boundary, so a step's slice can
+  // leave out a line another boundary's request caused.
+  const spans: string[] = [];
+  const openBoundary = (): Boundary => {
+    const span = trace === undefined ? undefined : newSpanId();
+    if (span !== undefined) spans.push(span);
+    return newBoundary(options.outputDir?.(), span);
+  };
+  let boundary = openBoundary();
 
   function isOwnPath(target: string): boolean {
     const own = options.outputDir === undefined ? unwatchedDirs : [...unwatchedDirs, path.resolve(options.outputDir())];
     return own.some((dir) => target === dir || target.startsWith(dir + path.sep));
   }
 
-  function recorderFor(current: () => Boundary): StepRecorder & { readonly unwatchedDirs: readonly string[] } {
+  function recorderFor(
+    current: () => Boundary,
+  ): StepRecorder & { readonly unwatchedDirs: readonly string[]; traceparentFor(url: string, base?: string): string | undefined } {
     return {
       unwatchedDirs,
       startProcess(): (entry: ProcessEntry, output?: ProcessOutput) => void {
@@ -248,6 +299,13 @@ export function createObservedCollector(
       noteSocket(use: SocketUse, how: "connect" | "write"): void {
         const state = current();
         if (!state.sockets.has(use)) state.sockets.set(use, how);
+      },
+      traceparentFor(url: string, base?: string): string | undefined {
+        const state = current();
+        if (trace === undefined || state.span === undefined || !stampsUrl(trace.origin, url, base)) return undefined;
+        state.stamped += 1;
+        state.lastStampAt = Date.now();
+        return traceparentOf(trace.traceId, state.span);
       },
     };
   }
@@ -329,7 +387,18 @@ export function createObservedCollector(
       return boundary.afterEnd;
     },
     reset(): void {
-      boundary = newBoundary(options.outputDir?.());
+      boundary = openBoundary();
+    },
+    boundaryTrace(): BoundaryTrace | undefined {
+      const state = boundary;
+      if (trace === undefined || state.span === undefined) return undefined;
+      return {
+        traceId: trace.traceId,
+        spanId: state.span,
+        otherSpans: new Set(spans.filter((span) => span !== state.span)),
+        stamped: state.stamped,
+        lastStampAt: state.lastStampAt,
+      };
     },
   };
 }

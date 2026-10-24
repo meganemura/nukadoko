@@ -72,6 +72,7 @@ export const TYPE_ONLY_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ProcessEnv",
     "ProcessFiles",
     "ProgramInput",
+    "ProgramLogSlice",
     "ProgramWorld",
     "ProgramWorldPlace",
     "ReplaceableFixtures",

@@ -51,6 +51,8 @@ import { createHttpLogFailedCollector } from "./http-log-failed.js";
 import { createHttpOmittedCollector } from "./http-omitted.js";
 import { type AfterStepEnd, createObservedCollector, finalizeOpenRequests } from "./observed.js";
 import { createPageEventsCollector } from "./page-events.js";
+import { createProgramLogReader } from "./program-log-slice.js";
+import { newTraceId, originOf } from "./trace-context.js";
 import { pollWithRecording } from "./poll.js";
 import { createPollsCollector } from "./polls.js";
 import { createSectionsCollector } from "./sections.js";
@@ -69,6 +71,11 @@ import { createUsedCollector } from "./used.js";
 // (`beginStep`) stay executor-only, the same trust-model rule as everything
 // else on this handle — a step can write a label or run a poll but can
 // never read back or clear what it or an earlier step already wrote.
+// With a world URL, one handle is one trace (trace-context.ts): its trace
+// id is made here, each boundary's span id in `observed`, and every
+// request to the world's origin carries them, whichever client sent it.
+// `observedSnapshot` then adds the step's slice of the program's log
+// (program-log-slice.ts).
 // `poll`'s own retry loop still lives entirely in src/context/poll.ts
 // (`pollWithRecording`, unchanged in its own right) — this module only owns
 // the `polls` collector and binds the two together to produce `ctx.poll`.
@@ -511,6 +518,12 @@ export interface CreateStepContextOptions {
    * `ctx.baseURL` is it. `undefined` when the run has no world, or a world
    * with neither `serve` nor `url`. */
   baseURL?: string | undefined;
+  /** The world's `program.log` (src/program/world-view.ts), which each
+   * step's record slices by trace context: its path when nukadoko serves
+   * the program, `null` for a world at a `url`, whose log nukadoko does
+   * not read. Absent, or ignored without `baseURL`, when there is no
+   * world URL. */
+  programLog?: string | null | undefined;
   /** Absolute path to this execution's browser evidence directory (trace.zip,
    * screenshots) and, until `beginStep` first moves it, http.jsonl too; must
    * already exist. */
@@ -657,12 +670,18 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // Created before `observed`, which counts a request line it could not
   // append into it.
   const httpLogFailed = createHttpLogFailedCollector();
+  // One trace per handle, so per scenario execution under `nuka run`.
+  const worldOrigin = originOf(baseURL);
+  const trace = worldOrigin === undefined ? undefined : { traceId: newTraceId(), origin: worldOrigin };
   const observed = createObservedCollector({
     unwatchedDirs: config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)],
     outputDir: () => boundaryDir,
     secrets,
     httpLogFailed,
+    ...(trace === undefined ? {} : { trace }),
   });
+  const programLog = trace !== undefined && typeof options.programLog === "string" ? createProgramLogReader(options.programLog, secrets) : undefined;
+  programLog?.begin();
   // Same lifetime rule as `observed`, for provenance instead of network
   // calls.
   const used = createUsedCollector();
@@ -1086,6 +1105,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         secrets,
         httpOmitted,
         httpLogFailed,
+        ...(trace === undefined ? {} : { stamp: { origin: trace.origin, traceparentFor: (url: string) => observed.traceparentFor(url) } }),
       });
       const opened: OpenedContext = { as, handle, chunkOpen: false };
       contexts.set(as, opened);
@@ -1150,6 +1170,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         () => path.join(boundaryDir, "http.jsonl"),
         secrets,
         httpLogFailed,
+        baseURL,
       );
     }
     return requestContext;
@@ -1247,7 +1268,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     await observed.flush();
     const counts = observed.snapshot(scratch.allDirs());
     observed.close();
-    return counts;
+    if (trace === undefined) return counts;
+    if (programLog === undefined) return options.programLog === null ? { ...counts, program_log: null } : counts;
+    return { ...counts, program_log: await programLog.slice(boundaryDir, observed.boundaryTrace()) };
   }
 
   function usedSnapshot(): UsedEntryWithResult[] {
@@ -1315,6 +1338,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     pendingChunkTitle = title;
     pendingChunkFileName = chunkFileName ?? "trace.zip";
     observed.reset();
+    programLog?.begin();
     used.reset();
     sections.reset();
     calls.reset();

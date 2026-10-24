@@ -80,7 +80,9 @@ Feature: items API
 
 - `nukadoko.program.ts`: starts the API once for the run, on a free port,
   waits until `GET /items` answers, and stops it after the scenarios. The
-  steps read its URL from `baseURL`.
+  steps read its URL from `baseURL`. The server starts each log line with
+  the request's `traceparent`, so each step record holds the server's
+  lines for its own requests in `program-log.txt`.
 - `an-item-exists` (Given): POSTs a name and returns the `id` the API
   assigned and the `body` it answered.
 - `create-item` (When): `I POST this body to \/items`; sends the docstring

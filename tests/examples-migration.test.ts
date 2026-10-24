@@ -105,13 +105,27 @@ describe("examples/migration", () => {
     // exact claim README.md's "measured for free" section quotes.
     const seedStepRecord = await readStepRecord(rootDir, seedStep.step_record_id);
     expect(seedStepRecord.result).toBeNull();
-    expect(seedStepRecord.observed).toEqual({ processes: null, http: 2, files: null, unmeasured: [] });
+    // The todo app tags each log line with the request's traceparent, so
+    // the step record holds the app's line for each of its requests.
+    expect(seedStepRecord.observed).toEqual({
+      processes: null,
+      http: 2,
+      files: null,
+      unmeasured: [],
+      program_log: { lines: 2, file: "program-log.txt", stamped: 2 },
+    });
     expect(httpLogLines(rootDir, seedStep.step_record_id).map((line) => line.method)).toEqual(["POST", "POST"]);
     expect(seedStepRecord.world).toEqual({ reads: [], writes: ["seededCount"] });
 
     // The RegExp-pattern count assertion: read-only, no World touch.
     const countStepRecord = await readStepRecord(rootDir, countStep.step_record_id);
-    expect(countStepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
+    expect(countStepRecord.observed).toEqual({
+      processes: null,
+      http: 1,
+      files: null,
+      unmeasured: [],
+      program_log: { lines: 1, file: "program-log.txt", stamped: 1 },
+    });
     expect(countStepRecord.world).toBeUndefined();
 
     // Scenario 1 binds no claim step: its Then is compat glue, which run.json
@@ -131,7 +145,13 @@ describe("examples/migration", () => {
 
     const createStepRecord = await readStepRecord(rootDir, createStep.step_record_id);
     expect(createStepRecord.result).toMatchObject({ title: "Read a book", done: false });
-    expect(createStepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
+    expect(createStepRecord.observed).toEqual({
+      processes: null,
+      http: 1,
+      files: null,
+      unmeasured: [],
+      program_log: { lines: 1, file: "program-log.txt", stamped: 1 },
+    });
     expect(createStepRecord.world).toBeUndefined();
 
     const consumerStepRecord = await readStepRecord(rootDir, consumerStep.step_record_id);
@@ -152,7 +172,13 @@ describe("examples/migration", () => {
     ]);
     expect(consumerStepRecord.observation).toBe("observed");
     expect(consumerStepRecord.attempts).toBe(1);
-    expect(consumerStepRecord.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
+    expect(consumerStepRecord.observed).toEqual({
+      processes: null,
+      http: null,
+      files: null,
+      unmeasured: [],
+      program_log: { lines: 0, file: null, stamped: 0 },
+    });
     expect(consumerStepRecord.world).toBeUndefined();
   });
 });

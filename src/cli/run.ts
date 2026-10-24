@@ -46,7 +46,7 @@ import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessS
 import { generateRunId } from "../run/run-id.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
-import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
+import { buildRunScenario, gherkinStepLines, pickleStepLines, withProgramLog } from "../run/run-document.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
@@ -661,12 +661,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       progress,
     });
     const worlds: RunWorld[] = [];
+    // Whether nukadoko read each started world's program log, by name: a
+    // world it serves, not one at a `url`.
+    const readsProgramLog = new Map<string, boolean>();
     // Starts the pass's world, or reports why it did not start. `null`
     // when the tree has no program file: the pass runs with no world.
     const startWorld = async (condition: Condition): Promise<StartedWorld | "failed" | null> => {
       if (condition.resolvedEnv.program === null) return null;
       const started = await worldStarter.start(condition.resolvedEnv.name, condition.resolvedEnv.program, condition.secrets);
-      if (started.ok) return started;
+      if (started.ok) {
+        readsProgramLog.set(started.view.name, started.view.log !== null);
+        return started;
+      }
       worlds.push(started.record());
       warn({ severity: "failed", code: "program-start-failed", message: started.message });
       return "failed";
@@ -864,7 +870,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           base_url: worlds.find((world) => world.name === condition.resolvedEnv.name)?.url ?? null,
         })),
         // Each world's record is redacted with its own values already.
-        worlds,
+        worlds: worlds.map((world) => withProgramLog(world, readsProgramLog.get(world.name), runScenarios)),
         selection,
         check: options.check ? "ran" : "skipped",
         counts: countScenarios(runScenarios, verdicts),

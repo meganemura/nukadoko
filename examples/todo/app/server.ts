@@ -42,6 +42,10 @@ function createTodoApp(options: TodoAppOptions = {}): ReturnType<typeof createSe
   const todos: TodoRecord[] = [];
 
   return createServer(async (req, res) => {
+    // One line per request, tagged with the traceparent nukadoko puts on
+    // it, so each step record holds the lines of its own requests
+    // (docs/spec.md "Trace context and the program's log").
+    console.log(`[${req.headers.traceparent ?? "-"}] ${req.method} ${req.url}`);
     const url = new URL(req.url ?? "/", "http://localhost");
     const segments = url.pathname.split("/").filter((segment) => segment.length > 0);
 

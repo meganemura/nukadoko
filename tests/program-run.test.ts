@@ -71,6 +71,8 @@ describe("a program nukadoko serves", () => {
         timings: { serve_ms: expect.any(Number), stop_ms: expect.any(Number) },
         log: "worlds/default/program.log",
         error: null,
+        // One request reached the program, whose log carries no trace id.
+        program_log: { stamped: 1, lines: 0 },
       },
     ]);
     expect(run.environments).toEqual([expect.objectContaining({ name: "default", base_url: url })]);

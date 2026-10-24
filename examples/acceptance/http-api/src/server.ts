@@ -1,11 +1,14 @@
 // A small items API on node:http, listening on PORT. Its items live in
-// memory for as long as the process runs.
+// memory for as long as the process runs. Each request's log line starts
+// with the traceparent nukadoko puts on it, so each step record holds the
+// server's lines for that step's requests.
 import { createServer } from "node:http";
 
 const items = new Map<number, { id: number; name: string }>();
 let nextId = 1;
 
 createServer(async (req, res) => {
+  console.log(`[${req.headers.traceparent ?? "-"}] ${req.method} ${req.url}`);
   const url = new URL(req.url ?? "/", "http://localhost");
   const send = (status: number, body: unknown) => {
     res.writeHead(status, { "content-type": "application/json" });

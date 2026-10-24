@@ -266,6 +266,28 @@ export interface ObservedCounts {
   /** What the step did that nukadoko could not measure. Empty when there
    * was nothing. */
   unmeasured: UnmeasuredEntry[];
+  /** The lines of the world's `program.log` that carry this step's trace
+   * context (docs/spec.md "Program"). `null` for a world at a `url`,
+   * whose log nukadoko does not read. Absent when the run has no world
+   * URL. */
+  program_log?: ProgramLogSlice | null;
+}
+
+/** A step's slice of the program's log (docs/spec.md "Trace context and
+ * the program's log"). */
+export interface ProgramLogSlice {
+  /** How many lines the program wrote while the step ran that carry the
+   * step's span id, or the scenario's trace id and no other step's span
+   * id. 0 when the program does not tag its lines with either. */
+  readonly lines: number;
+  /** The file beside the step record that holds those lines, redacted;
+   * `null` when there are none. */
+  readonly file: string | null;
+  /** How many requests the step sent to the world with a `traceparent`. */
+  readonly stamped: number;
+  /** The program wrote more while the step ran than one slice reads, so
+   * the lines come from the first part of it. */
+  readonly truncated?: true;
 }
 
 /** A body or a file's content, kept as text. The bytes are decoded as

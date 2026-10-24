@@ -504,7 +504,10 @@ afterward. The result is a step record, not a pass/fail line.
   "args_origin": { "title": "command_line" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
+  "observed": {
+    "processes": null, "http": 1, "files": null, "unmeasured": [],
+    "program_log": { "lines": 1, "file": "program-log.txt", "stamped": 1 }
+  }
 }
 ```
 
@@ -519,7 +522,10 @@ environment variables it was given, a value shown only when it is a path
 that exists, an integer, or a boolean), `http` (a count of the requests the step sent; each one is a
 line in the step record's `http.jsonl`, with its request body and
 response body), `files` (the files the step changed in a scratch
-directory or wrote through `node:fs`, with their content), and
+directory or wrote through `node:fs`, with their content), `program_log`
+(when nukadoko starts the program, the lines of its log that the step's
+own requests caused: each request to it carries a `traceparent` the
+program can write into its lines; `null` for a program at a `url`), and
 `unmeasured`. That last one lists what nukadoko saw but cannot measure,
 such as a process started without `runCommand`, so a record does not
 look complete when nukadoko saw that it is not. A key is `null` when the step did nothing

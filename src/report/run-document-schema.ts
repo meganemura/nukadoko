@@ -114,6 +114,7 @@ const observed = z.looseObject({
     .array(z.looseObject({ path: z.string(), change: z.enum(["added", "changed", "removed"]), bytes: z.number().int().optional() }))
     .nullable(),
   unmeasured: z.array(z.looseObject({ kind: z.enum(["child_process", "worker_thread", "socket", "files"]), detail: z.string() })),
+  program_log: z.looseObject({ lines: z.number().int(), file: z.string().nullable(), stamped: z.number().int() }).nullable().optional(),
 });
 
 const step = z.looseObject({
@@ -210,6 +211,15 @@ const document = z.looseObject({
   finished_at: z.iso.datetime(),
   commit: z.looseObject({ sha: z.string(), dirty: z.boolean() }).nullable(),
   environments: z.array(z.looseObject({ name: z.string(), target_version: z.string().nullable(), base_url: z.string().nullable().optional() })),
+  worlds: z
+    .array(
+      z.looseObject({
+        name: z.string(),
+        url: z.string().nullable(),
+        program_log: z.looseObject({ stamped: z.number().int(), lines: z.number().int() }).nullable().optional(),
+      }),
+    )
+    .optional(),
   selection: z.enum(["full", "partial"]),
   check: z.enum(["ran", "skipped"]).optional(),
   counts: z.looseObject({ scenarios: z.number().int(), passed: z.number().int(), failed: z.number().int(), not_run: z.number().int() }),

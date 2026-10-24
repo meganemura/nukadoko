@@ -73,7 +73,7 @@ describe("measured mutates: request-side observed counts", () => {
     expect(stderr.text()).toBe("");
     const stepRecord = JSON.parse(stdout.text());
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null, http: 2, files: null, unmeasured: [] });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 2, files: null, unmeasured: [], program_log: null });
   });
 
   it("nuka run: each step record carries the step record schema version and its observed", async () => {
@@ -94,9 +94,9 @@ describe("measured mutates: request-side observed counts", () => {
       }),
     );
     expect(observed).toEqual([
-      [4, "setup-step", { processes: null, http: null, files: null, unmeasured: [] }],
-      [4, "only-a-read-happens", { processes: null, http: 1, files: null, unmeasured: [] }],
-      [4, "a-fetch-read-happens", { processes: null, http: 1, files: null, unmeasured: [] }],
+      [4, "setup-step", { processes: null, http: null, files: null, unmeasured: [], program_log: null }],
+      [4, "only-a-read-happens", { processes: null, http: 1, files: null, unmeasured: [], program_log: null }],
+      [4, "a-fetch-read-happens", { processes: null, http: 1, files: null, unmeasured: [], program_log: null }],
     ]);
   });
 
@@ -149,7 +149,7 @@ describe("measured mutates: request-side observed counts", () => {
       ),
     );
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [], program_log: null });
   });
 
   // The "lie backstop": a declared `mutates: false` step that actually
@@ -168,7 +168,7 @@ describe("measured mutates: request-side observed counts", () => {
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [], program_log: null });
     expect(httpLogLines(rootDir, stepRecord.step_record_id).map((line) => [line.method, line.via, line.status])).toEqual([["POST", "request", 200]]);
   });
 
@@ -227,6 +227,6 @@ describe("measured mutates: request-side observed counts", () => {
       ),
     );
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [], program_log: null });
   });
 });

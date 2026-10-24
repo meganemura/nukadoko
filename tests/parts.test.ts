@@ -99,8 +99,9 @@ describe("call / parts", () => {
     const stepRecord = JSON.parse(stdout.text());
     // invite-member (the only part project-with-member calls) is the one
     // that actually issues the POST; project-with-member's own run() never
-    // touches `request` at all.
-    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
+    // touches `request` at all. The fixture's program runs at a `url`,
+    // so nukadoko reads no log of it.
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [], program_log: null });
   });
 
   it("records args (as given) and result (validated) on calls[0], with a part-of-a-part nested under calls[0].calls", async () => {
