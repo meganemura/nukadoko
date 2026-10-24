@@ -163,7 +163,7 @@ describe("a scenario entry's claims and judged_by", () => {
       }
     }));
 
-  it("names no judge when a claim step stands in Then position, compat when only a compat step does, and nothing otherwise, wherever else a claim step stands", () =>
+  it("names no judge when a claim step or an unbound line stands in Then position, compat when only a compat step does, and nothing otherwise, wherever else a claim step stands", () =>
     hegel.testAsync(async (tc) => {
       const kinds = tc.draw(gs.arrays(gs.sampledFrom(["claim", "run", "compat", null, "undefined"] as const), { maxSize: 5 }));
       const then = tc.draw(gs.arrays(gs.booleans(), { minSize: kinds.length, maxSize: kinds.length }));
@@ -173,7 +173,7 @@ describe("a scenario entry's claims and judged_by", () => {
         return kind === "undefined" || kind === undefined ? null : kind;
       };
       const judged = judgedBy(names, (index) => then[index] ?? false, kindOf);
-      if (kinds.some((kind, index) => kind === "claim" && then[index])) expect(judged).toBeUndefined();
+      if (kinds.some((kind, index) => then[index] && (kind === "claim" || kind === null || kind === "undefined"))) expect(judged).toBeUndefined();
       else if (kinds.some((kind, index) => kind === "compat" && then[index])) expect(judged).toBe("compat");
       else expect(judged).toBe("nothing");
     }));

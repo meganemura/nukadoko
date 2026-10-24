@@ -1023,7 +1023,8 @@ describe("run.json and the summary say what judged each scenario", () => {
   it("counts held and broken claims, names a scenario judged by compat or by nothing, and says a check was skipped", async () => {
     // "claim off Then" binds a claim step on a When line, which nuka check
     // refuses (claims-outside-then); under --no-check it runs, and its
-    // claim is counted, but no Then judged the scenario.
+    // claim is counted, but no Then judged the scenario. "unbound Then"
+    // has a Then line no step matches, so what it judges is unknown.
     const rootDir = await project({
       "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -1048,6 +1049,9 @@ export default defineStep({
         "  Scenario: claim off Then",
         "    When the app answers",
         "    And it counts 1",
+        "  Scenario: unbound Then",
+        "    When the app answers",
+        "    Then no step matches this line",
         "",
       ].join("\n"),
     });
@@ -1060,9 +1064,11 @@ export default defineStep({
       ["compat", { held: 0, broken: 0 }, "compat"],
       ["nothing", { held: 0, broken: 0 }, "nothing"],
       ["claim off Then", { held: 1, broken: 0 }, "nothing"],
+      ["unbound Then", { held: 0, broken: 0 }, undefined],
     ]);
     const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary).toContain("- check: skipped (`nuka run --no-check`), so no finding of `nuka check` held this run back\n");
+    expect(summary).not.toContain("unbound Then:");
     expect(summary).toContain(
       [
         "## Scenarios with no claim",

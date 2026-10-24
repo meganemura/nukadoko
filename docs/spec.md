@@ -2979,7 +2979,8 @@ to act on the run without opening another file:
   or `*` line does not count, the same rule `scenario-without-then`
   applies, so a run under `--no-check` that runs one still names the
   scenario. A scenario with a claim step on a Then line has no
-  `judged_by`.
+  `judged_by`, and neither has one with a Then line that binds no step,
+  since what that line would judge is unknown.
 - `check` is `ran` when `nuka check` ran before the scenarios and found
   no error that held the run back, and `skipped` under `nuka run
   --no-check`, so a run that started past the check says so.

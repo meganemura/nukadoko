@@ -2444,6 +2444,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
   Given、When、`*` の行にある claim step は数えません。
   `scenario-without-then` と同じ規則なので、そのような claim step を動かす `--no-check` の run でも、その scenario を挙げます。
   Then の行に claim step が結び付く scenario は `judged_by` を持ちません。
+  どの step にも結び付かない Then の行を持つ scenario も持ちません。
+  その行が何を判定するはずだったかが分からないからです。
 - `check` は、scenario の前に `nuka check` が動いて run を止めるエラーを見つけなかったときは `ran`、`nuka run --no-check` のときは `skipped` です。
   そのため check を飛ばして始まった run は、そのことを述べます。
 - 失敗した scenario は、それだけを走らせるコマンドである `do` を持ちます。
