@@ -1572,10 +1572,14 @@ These promises hold against step code that uses nukadoko's API and
 ordinary libraries. They do not hold against code that patches
 nukadoko's own modules or the JavaScript intrinsics every module shares,
 such as the store that tells the channels which calls to leave out,
-`Array.prototype`, or `JSON`. Such code runs in the process that
-records it, and no recorder inside that process can stop it. The keys of
-that store are `Symbol.for` keys on purpose, so that two copies of
-nukadoko in one process share it, and nukadoko does not hide them. The
+the set of steps `defineStep` returned
+(`globalThis[Symbol.for("nukadoko.step.defined")]`, which discovery
+reads to run only a validated step), `Array.prototype`, or `JSON`.
+Both are internal state a step file must not touch. Such code runs in
+the process that records it, and no recorder inside that process can
+stop it. The keys of that store and that set are `Symbol.for` keys on
+purpose, so that two copies of nukadoko in one process share them, and
+nukadoko does not hide them. The
 run summary lists every step file that changed since the approved base,
 and code that patches what nukadoko relies on is seen there, by a reader
 of the change.
@@ -1608,18 +1612,28 @@ or `{ actual, view?, at?, each }` (below). `claims: []` is refused at
 import: a claim step with no claim passes without judging anything.
 `description` is optional on a claim step, because `nuka steps` and
 `nuka describe` print the claims, and the claims say exactly what the
-step checks.
+step checks. A claim, an `each`, or a claim on one item with a key it
+does not have is refused at import, naming the key: a misspelled `at`
+would otherwise be left out, and the claim would read another place than
+the one its author wrote.
 
 `defineStep` reads the definition once. It copies `pattern`,
 `patterns`, the claims, `from`, `parts`, and `poll` into new objects
 frozen at every level, validates that copy, and returns a frozen step
-that holds only the copy, so the step file keeps no reference into what
-runs. A getter or a setter, a Proxy, or an object of a class anywhere in
+that holds only the copy, so the step file keeps no reference into the
+data that runs. A getter or a setter, a Proxy, or an object of a class anywhere in
 those fields is refused at the call with its path
 (`defineStep claims[0].compare is a getter or a setter`): it could
-answer validation one way and the run another. Functions and the steps in `from` and
-`parts` are kept as they are. The step file's own objects are frozen
-too, below an object it froze itself as well, so a step file that changes
+answer validation one way and the run another. So is a hole in an array
+(`defineStep claims[0] is a hole`): validation would skip it, and the
+run would read `undefined` as a claim. Functions are kept as they are,
+and so is a step `defineStep` returned where the definition names
+another step: in a `from` tuple and in `parts`. Any other object is
+copied, wherever it sits, and so is one that only carries the step
+brand: the brand is a `Symbol.for` key any file can write, and an
+object kept as it is would be one the step file could still change.
+The step file's own objects are frozen too, below an object it froze
+itself as well, so a step file that changes
 a claim or the patterns after the call throws at import instead of
 changing an object nothing reads. Discovery runs a default export only
 when it is the object `defineStep` returned, so a file that exports a

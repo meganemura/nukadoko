@@ -40,10 +40,13 @@ just until 0.1.
   constant a When step returned.
   `defineStep` validates one copy of the claims, `from`, `parts`,
   `poll`, and patterns, frozen at every level, and the run reads only
-  that copy: a getter, a setter, a Proxy, or a class instance in them is
-  refused with its path, and a change to the step file's objects after
-  the call throws at import. Discovery runs only the step `defineStep`
-  returned, not a copy of it. A `where` claim that reads the path an
+  that copy: a getter, a setter, a Proxy, a class instance, or a hole in
+  an array in them is refused with its path, and so is a claim with a
+  key it does not have (a misspelled `at`). Only a step `defineStep`
+  returned, in a `from` tuple or in `parts`, is kept as it is; an
+  object that merely carries the step brand is copied. A change to the
+  step file's objects after the call throws at import. Discovery runs
+  only the step `defineStep` returned, not a copy of it. A `where` claim that reads the path an
   item claim reads (`actual` then `at`, with or without a `view`) is
   refused, whatever its compare. `matches` runs on
   a worker thread, and judging as a whole is bounded by the step's

@@ -32,9 +32,9 @@ A claim is `{ actual, view?, at?, compare, expected, expected_view? }`.
 line states one value (for a word such as `empty`, the literal of the
 chained key's type); `examples/` has a finished Then for a CLI, an API,
 and a workflow (`examples/workflow.md` claims a literal and a sentence
-value in one step). Write claims as plain data (no getter, Proxy, or
-class instance) and export what `defineStep` returned: it validates and
-freezes one copy, and a copy of the step (`{ ...step }`) fails to import.
+value in one step). Write claims as plain data (no getter, Proxy, class
+instance, hole, or unknown key) and export what `defineStep` returned: it
+validates one frozen copy, and a copy of the step (`{ ...step }`) fails.
 
 ## Where the expected value comes from
 

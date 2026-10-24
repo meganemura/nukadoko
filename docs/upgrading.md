@@ -228,10 +228,11 @@ This part does not change release to release.
   it is.** `defineStep` now freezes the step it returns, with its claims,
   `from`, and `parts`, and discovery refuses a default export that is a
   copy (`{ ...step }`, `Object.assign({}, step)`). It validates a copy
-  of the definition's data, so a getter, a setter, a Proxy, or a class
-  instance in the claims, `from`, `parts`, `poll`, or the patterns is
-  refused at the call; write them as plain objects and arrays. Each
-  shows as `step-file-import-failed`. A file that copied a step to change an
+  of the definition's data, so a getter, a setter, a Proxy, a class
+  instance, or a hole in an array in the claims, `from`, `parts`,
+  `poll`, or the patterns is refused at the call, and so is a claim
+  with a key it does not have; write them as plain objects and arrays,
+  with the keys the spec names. Each shows as `step-file-import-failed`. A file that copied a step to change an
   option passes the option to `defineStep` instead; a step listed in
   `parts` is the one `defineStep` returned, too. A file that changed
   another step's `parts` after the call throws at import, so `nuka check`

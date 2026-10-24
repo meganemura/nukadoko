@@ -762,6 +762,94 @@ export default step;
   });
 
   it.each([
+    ["swaps in a where claim", `claims[0] = { actual: "cart.items", each: { where: [{ actual: "paid", compare: "equal", expected: { literal: true } }], claims: [{ actual: "paid", compare: "equal", expected: { literal: true } }] } };`, "Cannot assign to read only property '0'"],
+    ["empties the claims", "claims.length = 0;", "Cannot assign to read only property 'length'"],
+  ])("refuses a step file that brands its claims as a step and then %s after defineStep", async (_name, change, error) => {
+    // The brand is a Symbol.for key any file can write. An object that
+    // carries it is copied like any other, so nothing the step file still
+    // holds is what runs.
+    const rootDir = await project({
+      "features/steps/every-item-is-paid.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+const claims: any = [{ actual: "cart.items", each: { claims: [{ actual: "paid", compare: "equal", expected: { literal: true } }] } }];
+claims[Symbol.for("nukadoko.step")] = true;
+const step = defineStep({
+  pattern: "every item is paid true",
+  args: z.object({ cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims,
+});
+${change}
+export default step;
+`,
+      "features/t.feature": feature("When the app answers", "Then every item is paid true"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain(error);
+  });
+
+  it("copies an object that only carries the step brand, even where a step belongs, so from names no step", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-counts.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+const fake: any = { ...answer, [Symbol.for("nukadoko.step")]: true, returns: undefined, args: undefined, run: undefined };
+export default defineStep({
+  pattern: "the cart counts 1",
+  args: z.object({ cart: answer.returns.shape.cart }),
+  from: { cart: [fake, "cart"] },
+  claims: [{ actual: "cart.count", compare: "equal", expected: { literal: 1 } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart counts 1"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain("from-structural-violation\tfeatures/steps/the-cart-counts.ts\tfrom.cart names something that is not a Step");
+  });
+
+  it("refuses a hole in claims, which validation would skip and the run would read as undefined", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-counts.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart counts 1",
+  args: z.object({ cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  // eslint-disable-next-line no-sparse-arrays
+  claims: [, { actual: "cart.count", compare: "equal", expected: { literal: 1 } }] as any,
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart counts 1"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain("defineStep claims[0] is a hole.");
+  });
+
+  it.each([
+    ["att", `{ actual: "cart", att: "count", compare: "equal", expected: { literal: 1 } }`, 'claims[0] has the key "att", which a claim does not have. It has actual, view, at, compare, expected, expected_view'],
+    ["wher", `{ actual: "cart.items", each: { wher: [], claims: [{ actual: "paid", compare: "equal", expected: { literal: true } }] } }`, 'claims[0].each has the key "wher", which each does not have. It has where, claims'],
+    ["expect", `{ actual: "cart.items", each: { claims: [{ actual: "paid", compare: "equal", expected: { literal: true }, expect: 1 }] } }`, 'claims[0].each.claims[0] has the key "expect", which a claim on one item does not have. It has actual, view, at, compare, expected, expected_view'],
+  ])("refuses a claim with the unknown key %s and names it", async (_key, claim, message) => {
+    const rootDir = await project({
+      "features/steps/the-cart-counts.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart counts 1 true",
+  args: z.object({ cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [${claim}] as any,
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart counts 1 true"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain(`defineStep ${message}.`);
+  });
+
+  it.each([
     ["the same claim", `{ actual: "title", compare: "equal", expected: "title" }`, "the item at title"],
     ["the same path through at", `{ at: "title", compare: "equal", expected: "title" }`, "the item at title"],
     ["the same path through a view", `{ actual: "title", view: "text", compare: "equal", expected: "title" }`, "the item at title"],

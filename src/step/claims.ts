@@ -389,6 +389,21 @@ function checkPath(label: string, path: unknown, optional: boolean): void {
   }
 }
 
+// The keys each kind of declaration has. A key outside its list is refused,
+// naming it: a misspelled `at` would otherwise be ignored, and the claim
+// would read another place than the one its author wrote.
+const COMPARISON_KEYS = ["actual", "view", "at", "compare", "expected", "expected_view"] as const;
+const EACH_CLAIM_KEYS = ["actual", "view", "at", "each"] as const;
+const EACH_KEYS = ["where", "claims"] as const;
+
+function checkKeys(label: string, value: object, allowed: readonly string[], what: string): void {
+  // A key set to undefined reads as absent, as the declaration types allow.
+  const unknown = Object.entries(value).find(([key, entry]) => entry !== undefined && !allowed.includes(key))?.[0];
+  if (unknown !== undefined) {
+    throw new InvalidClaimError(`${label} has the key "${unknown}", which ${what} does not have. It has ${allowed.join(", ")}`);
+  }
+}
+
 function checkCommon(label: string, claim: { view?: unknown; at?: unknown }): void {
   if (claim.view !== undefined && !(CLAIM_VIEWS as readonly unknown[]).includes(claim.view)) {
     throw new InvalidClaimError(`${label}.view must be one of ${CLAIM_VIEWS.join(", ")}; got ${describe(claim.view)}`);
@@ -523,6 +538,7 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   if (claim.each !== undefined) {
     throw new InvalidClaimError(`${label} has each, which a claim inside each cannot have`);
   }
+  checkKeys(label, claim, COMPARISON_KEYS, where === "item" ? "a claim on one item" : "a claim");
   checkPath(`${label}.actual`, claim.actual, where === "item");
   checkCommon(label, claim);
   if (!(CLAIM_COMPARES as readonly unknown[]).includes(claim.compare)) {
@@ -598,11 +614,13 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
     if (claim.compare !== undefined || claim.expected !== undefined) {
       throw new InvalidClaimError(`${label} has both each and compare/expected. A claim compares one value, or applies each to an array`);
     }
+    checkKeys(label, claim, EACH_CLAIM_KEYS, "a claim with each");
     checkCommon(label, claim);
     const each = claim.each as Record<string, unknown> | null;
     if (typeof each !== "object" || each === null || !Array.isArray(each.claims) || each.claims.length === 0) {
       throw new InvalidClaimError(`${label}.each.claims must be a non-empty array of claims on one item`);
     }
+    checkKeys(`${label}.each`, each, EACH_KEYS, "each");
     if (each.where !== undefined && (!Array.isArray(each.where) || each.where.length === 0)) {
       throw new InvalidClaimError(`${label}.each.where must be a non-empty array of claims on one item, or left out`);
     }

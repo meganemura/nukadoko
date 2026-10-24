@@ -8,9 +8,10 @@ import { freezeInPlace, frozenCopy } from "../src/step/frozen-copy.js";
 // validates and the run reads (docs/spec.md "The shape"), as properties
 // over drawn definitions: every plain value copies to an equal value that
 // is frozen at every level and shares no object with the value it came
-// from, except a function or a kept value; a part that is not plain data,
-// at any depth, is refused with its path; and freezing in place reaches
-// below an object that was frozen already.
+// from, except a function or a value kept at its place; a part that is
+// not plain data, or a hole in an array, at any depth, is refused with its
+// path; an object is kept by reference only at a place `keep` accepts;
+// and freezing in place reaches below an object that was frozen already.
 
 const kept = new WeakSet<object>();
 const keep = (value: object): boolean => kept.has(value);
@@ -160,6 +161,39 @@ describe("frozenCopy", () => {
     expect(copied.value).toEqual([{ compare: "equal" }, { compare: "equal" }]);
   });
 
+  it("refuses a hole in an array at any depth, naming it, since validation that walks the array skips it", () =>
+    hegel.test((tc) => {
+      const holey: unknown[] = [];
+      const length = tc.draw(gs.integers({ minValue: 1, maxValue: 4 }));
+      const hole = tc.draw(gs.integers({ minValue: 0, maxValue: length - 1 }));
+      holey.length = length;
+      for (let index = 0; index < length; index += 1) if (index !== hole) holey[index] = tc.draw(plainValue(1));
+      const { value, path } = tc.draw(withPart(() => holey));
+      expect(frozenCopy(value, "root", keep)).toEqual({ refused: { path: `${path}[${hole}]`, problem: "is a hole" } });
+    }));
+
+  it("keeps an object by reference only at a place keep accepts, and copies the same object anywhere else", () =>
+    hegel.test((tc) => {
+      const step = { step: true };
+      const at = tc.draw(gs.sampledFrom([["a", "0"], ["b"], ["a", "1", "0"]]));
+      const keepAt = (value: object, place: readonly string[]): boolean => value === step && place.join(".") === at.join(".");
+      const elsewhere = tc.draw(gs.sampledFrom([["c"], ["a", "2"], ["c", "n"]]));
+      const value: Record<string, unknown> = { a: [{ n: 1 }, [{ n: 2 }, "k"], { n: 3 }], b: { inner: { n: 4 } }, c: { n: 5 } };
+      const put = (place: readonly string[], part: unknown): void => {
+        let parent = value as Record<string, unknown>;
+        for (const key of place.slice(0, -1)) parent = parent[key] as Record<string, unknown>;
+        parent[place.at(-1)!] = part;
+      };
+      put(at, step);
+      put(elsewhere, step);
+      const copy = (frozenCopy(value, "root", keepAt) as { value: Record<string, unknown> }).value;
+      const read = (place: readonly string[]): unknown => place.reduce<unknown>((current, key) => (current as Record<string, unknown>)[key], copy);
+      expect(read(at)).toBe(step);
+      expect(read(elsewhere)).not.toBe(step);
+      expect(read(elsewhere)).toEqual({ step: true });
+      expect(Object.isFrozen(read(elsewhere))).toBe(true);
+    }));
+
   it("names a key that is not an identifier in brackets, the way a step file writes it", () => {
     const getter = Object.defineProperty({}, "my key", { get: () => 1, enumerable: true });
     expect(frozenCopy({ a: [getter] }, "claims", keep)).toEqual({ refused: { path: 'claims.a[0]["my key"]', problem: "is a getter or a setter" } });
@@ -167,6 +201,16 @@ describe("frozenCopy", () => {
 });
 
 describe("freezeInPlace", () => {
+  it("freezes an object keep accepts at one place when it sits at another", () => {
+    const branded = [{ actual: "out" }];
+    const keepAt = (_value: object, place: readonly string[]): boolean => place.join(".") === "from.0";
+    freezeInPlace({ claims: branded }, keepAt);
+    expect(Object.isFrozen(branded)).toBe(true);
+    const step = { step: true };
+    freezeInPlace({ from: [step] }, keepAt);
+    expect(Object.isFrozen(step)).toBe(false);
+  });
+
   it("freezes every array and plain object inside a value, below one that was frozen already, and leaves kept values alone", () =>
     hegel.test((tc) => {
       const value = tc.draw(plainValues);

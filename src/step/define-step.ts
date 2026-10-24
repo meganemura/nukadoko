@@ -5,7 +5,7 @@ import { argsSchemaRewrite, asObjectShape, isPlainString, isRequiredField, schem
 import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 import { claimsProblem, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
-import { freezeInPlace, frozenCopy } from "./frozen-copy.js";
+import { freezeInPlace, frozenCopy, type Keep } from "./frozen-copy.js";
 
 // Responsibility: the `defineStep` API from docs/spec.md "Typed steps", and
 // the `Step` shape discovery recognizes. Does not execute anything (`run` is
@@ -837,15 +837,36 @@ function definedSteps(): WeakSet<object> {
  * every level, and the copy is what defineStep validates and returns. */
 const COPIED_FIELDS = ["pattern", "patterns", "claims", "from", "parts", "poll"] as const;
 
+/** Where a definition field names another step, by the keys below the
+ * field: `parts[i]`, and in `from` the step of a `[step, "key"]`
+ * tuple, `from[key][0]` or, in a list of candidates, `from[key][i][0]`.
+ * `from[key]` itself is one too: a step written there instead of a tuple
+ * is kept, so validate-from.ts names that mistake in its own words. */
+function isStepPlace(field: string, at: readonly string[]): boolean {
+  if (field === "parts") return at.length === 1;
+  if (field !== "from") return false;
+  return at.length === 1 || ((at.length === 2 || at.length === 3) && at[at.length - 1] === "0");
+}
+
+/** What `frozenCopy` keeps by reference in `field`: a step `defineStep`
+ * returned, at a place that names a step. A step is frozen and in the
+ * defined-step set, so holding it changes nothing a claim reads. An object
+ * that only carries the step brand is copied like any other, wherever it
+ * sits: the brand is a `Symbol.for` key any file can write, and an object
+ * kept by reference is one the step file can still change. */
+function keepStep(field: string): Keep {
+  return (value, at) => isStepPlace(field, at) && isDefinedStep(value);
+}
+
 /**
  * `input` read once: each own field taken by its descriptor, so a getter on
  * the definition never runs, and each data field replaced by a frozen
  * copy (`frozenCopy`), so what is validated is what runs and nothing the
  * step file still holds reaches it. The step file's own objects are frozen
  * too, so a write to one after the call throws instead of doing nothing.
- * Steps (in `from` and `parts`) and functions are kept by reference.
- * Throws `InvalidStepDefinitionError` naming the path of a getter, a
- * setter, a Proxy, or an object of a class.
+ * Functions, and the steps in `from` and `parts` (`keepStep`), are kept
+ * by reference. Throws `InvalidStepDefinitionError` naming the path of a
+ * getter, a setter, a Proxy, an object of a class, or a hole in an array.
  */
 function copiedDefinition(input: StepDefinitionInput): StepDefinitionInput {
   const refused = (path: string, problem: string): never => {
@@ -863,10 +884,10 @@ function copiedDefinition(input: StepDefinitionInput): StepDefinitionInput {
   }
   for (const key of COPIED_FIELDS) {
     if (!(key in fields)) continue;
-    const copied = frozenCopy(fields[key], key, isStep);
+    const copied = frozenCopy(fields[key], key, keepStep(key));
     if ("refused" in copied) refused(copied.refused.path, copied.refused.problem);
     else {
-      freezeInPlace(fields[key], isStep);
+      freezeInPlace(fields[key], keepStep(key));
       fields[key] = copied.value;
     }
   }

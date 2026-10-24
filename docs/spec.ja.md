@@ -1312,9 +1312,11 @@ Given や When の throw はその step のエラーであり、成り立たな�
 最も確かな確かめ方は、振る舞いがない場所で受け入れ基準を動かし、そこで Then が失敗するのを見ることです。
 
 これらの約束が成り立つのは、nukadoko の API と普通のライブラリを使う step のコードに対してです。
-nukadoko 自身のモジュールや、どのモジュールも共有する JavaScript の組み込み(どの呼び出しを記録から外すかをチャネルに伝える store、`Array.prototype`、`JSON` など)を差し替えるコードに対しては成り立ちません。
+nukadoko 自身のモジュールや、どのモジュールも共有する JavaScript の組み込み(どの呼び出しを記録から外すかをチャネルに伝える store、`defineStep` が返した step の集合、`Array.prototype`、`JSON` など)を差し替えるコードに対しては成り立ちません。
+その集合は `globalThis[Symbol.for("nukadoko.step.defined")]` にあり、discovery は検証した step だけを実行するためにそれを読みます。
+store と集合は、どちらも step ファイルが触れてはならない内部の状態です。
 そのようなコードは、それを記録するプロセスの中で動き、そのプロセスの中の記録係にはそれを止められないからです。
-その store のキーは、1 つのプロセスにある 2 つの nukadoko のコピーが同じ store を共有するように、意図して `Symbol.for` のキーにしてあり、nukadoko はそれを隠しません。
+その store と集合のキーは、1 つのプロセスにある 2 つの nukadoko のコピーがそれらを共有するように、意図して `Symbol.for` のキーにしてあり、nukadoko はそれを隠しません。
 run サマリは承認された基点から変わったすべての step ファイルを並べ、nukadoko が頼るものを差し替えるコードは、変更の読み手がそこで見つけます。
 
 #### 形
@@ -1344,13 +1346,21 @@ claim は `{ actual, view?, at?, compare, expected, expected_view? }` か、`{ a
 claim を持たない claim step は、何も判定せずに通るからです。
 claim step では `description` は省略できます。
 `nuka steps` と `nuka describe` が claim を表示し、claim はその step が何を確かめるかを正確に述べるからです。
+claim、`each`、1 つの項目への claim が、それの持たないキーを持つときは、import の時点でそのキーを名指しして拒否されます。
+そうしないと、綴りを誤った `at` は無視され、claim は書いた人の意図と別の場所を読むからです。
 
 `defineStep` は定義を一度だけ読みます。
 `pattern`、`patterns`、claim、`from`、`parts`、`poll` を、すべての階層で凍結した新しいオブジェクトにコピーし、そのコピーを検証して、コピーだけを持つ凍結した step を返します。
-したがって、step ファイルは実行されるものへの参照を持ちません。
+したがって、step ファイルは実行されるデータへの参照を持ちません。
 これらのフィールドのどこかにある getter や setter、Proxy、クラスのオブジェクトは、呼び出しの時点でパスを名指しして拒否されます(`defineStep claims[0].compare is a getter or a setter`)。
 検証と実行に別々の答えを返せるからです。
-関数と、`from` と `parts` の中の step は、そのまま保持されます。
+配列の穴も拒否されます(`defineStep claims[0] is a hole`)。
+検証はそれを飛ばし、実行はそれを `undefined` の claim として読むからです。
+関数は、そのまま保持されます。
+定義が別の step を名指す場所、つまり `from` のタプルと `parts` にある、`defineStep` が返した step も、そのまま保持されます。
+それ以外のオブジェクトは、どこにあってもコピーされます。
+step の印を持つだけのオブジェクトもコピーされます。
+印はどのファイルでも書ける `Symbol.for` のキーであり、そのまま保持したオブジェクトは、step ファイルがあとから変えられるオブジェクトだからです。
 step ファイル自身のオブジェクトも、step ファイルが自分で凍結したオブジェクトの下まで凍結されます。
 したがって、呼び出しのあとで claim やパターンを変える step ファイルは、何も読まないオブジェクトを変えるのではなく、import の時点で throw します。
 discovery は、`defineStep` が返したオブジェクトそのものである default export だけを実行するので、コピー(`{ ...step, claims }`)を export するファイルも拒否されます。
