@@ -15,6 +15,7 @@ import { createLineBuffer } from "../sink/line-buffer.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { captureOutput } from "./in-process-output.js";
 import { describePlaceholderGap, fillPlaceholders, placeholderGaps, type PlaceholderValues } from "./placeholders.js";
+import { groupAlive } from "./process-group.js";
 import { openProgramLog, type ProgramLog } from "./program-log.js";
 import type { WorldView } from "./world-view.js";
 
@@ -38,8 +39,12 @@ import type { WorldView } from "./world-view.js";
 // it signals the whole group: `npm start` or `bin/rails server` start the
 // program as a child, and stopping only the process nukadoko spawned left
 // that child holding the port. A group of its own also keeps a terminal's
-// Ctrl-C from reaching it before nukadoko stops it in order. A `build` or
-// `prepare` command's group is killed once the command exits, so a child
+// Ctrl-C from reaching it before nukadoko stops it in order. Stopping a
+// group sends it SIGTERM and gives the whole group the grace period, until
+// no process of it is left (src/program/process-group.ts) or 5 seconds
+// pass, then SIGKILL to what is left: a server that a shell or `npm start`
+// started can still be writing its last lines after the leader exits. A
+// `build` or `prepare` command's group is killed once the command exits, so a child
 // it left behind neither outlives the phase nor holds its output pipe
 // open, which would keep the phase from ending at all. On Windows a signal
 // ends only the process it names, so the whole tree ends with `taskkill /t
@@ -141,6 +146,7 @@ const READY_POLL_MS = 100;
 const READY_REQUEST_MS = 2_000;
 const STOP_GRACE_MS = 5_000;
 const STREAMS_CLOSE_MS = 1_000;
+const GROUP_POLL_MS = 50;
 
 class WorldStartError extends Error {}
 
@@ -500,9 +506,11 @@ function runToEnd(
     const err = log.stream();
     child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
+    const closed = new Promise<void>((done) => child.once("close", () => done()));
     let settled = false;
     let failure: WorldStartError | WorldStartAborted | undefined;
     let timer: NodeJS.Timeout | undefined;
+    let stopping: Promise<void> | undefined;
     const onAbort = (): void => {
       failure ??= new WorldStartAborted("the start was aborted");
       group.kill();
@@ -520,17 +528,17 @@ function runToEnd(
     };
     timer = setTimeout(() => {
       failure ??= new WorldStartError(`${phase} command ${display(argv)} did not finish within ${timeoutMs} ms (timeout_ms)`);
-      void group.stop();
+      stopping = group.stop();
     }, timeoutMs);
     if (abort?.aborted === true) onAbort();
     else abort?.addEventListener("abort", onAbort, { once: true });
     child.once("error", (error) => finish(failure ?? new WorldStartError(`${phase} command ${display(argv)} could not start: ${error.message}`)));
     child.once("exit", (code, signal) => {
       // What the command left in its group goes with it, or a child that
-      // holds the output pipe keeps `close` from ever coming.
-      group.kill();
-      const closed = new Promise<void>((done) => child.once("close", () => done()));
-      void Promise.race([closed, delay(STREAMS_CLOSE_MS)]).then(() => {
+      // holds the output pipe keeps `close` from ever coming. A group
+      // being stopped past its limit keeps its grace period instead.
+      if (stopping === undefined) group.kill();
+      void (stopping ?? Promise.resolve()).then(() => Promise.race([closed, delay(STREAMS_CLOSE_MS)])).then(() => {
         if (failure !== undefined) finish(failure);
         else if (code === 0) finish(undefined);
         else finish(new WorldStartError(`${phase} command ${display(argv)} exited ${signal === null ? `with code ${code}` : `on ${signal}`}`));
@@ -539,7 +547,8 @@ function runToEnd(
   });
 }
 
-/** Signals a child's process group on POSIX, or its tree on Windows. */
+/** Signals a child's process group on POSIX, or its tree on Windows.
+ * `stop` gives the whole group the grace period (module header). */
 function processGroup(child: ChildProcess, groupOfItsOwn: boolean): { signal(signal: NodeJS.Signals): void; kill(): void; stop(): Promise<void> } {
   const signal = (name: NodeJS.Signals): void => {
     if (child.pid === undefined) return;
@@ -560,10 +569,22 @@ function processGroup(child: ChildProcess, groupOfItsOwn: boolean): { signal(sig
     kill: () => signal("SIGKILL"),
     async stop() {
       signal("SIGTERM");
-      await delay(STOP_GRACE_MS);
+      const running = (): boolean =>
+        groupOfItsOwn && child.pid !== undefined ? groupAlive(child.pid) : child.exitCode === null && child.signalCode === null;
+      await graceFor(running);
       signal("SIGKILL");
     },
   };
+}
+
+/** Waits until `running` answers false, or the grace period passes. The
+ * wait between two probes holds the event loop open, unlike `delay`: once
+ * the leader has exited, nothing else may, and an unref'd timer would let
+ * the process end with the stop still pending. The wait is bounded by the
+ * grace period. */
+async function graceFor(running: () => boolean): Promise<void> {
+  const deadline = Date.now() + STOP_GRACE_MS;
+  while (running() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, GROUP_POLL_MS));
 }
 
 interface ServeProcess {
@@ -643,12 +664,16 @@ function startServe(argv: readonly string[], env: NodeJS.ProcessEnv, cwd: string
           }
           await exited;
         } else {
-          if (exit === null) signalGroup("SIGTERM");
-          const graceful = await Promise.race([exited.then(() => true), delay(STOP_GRACE_MS).then(() => false)]);
-          // A child the program started can outlive it; the group goes
-          // whole, so nothing of this world holds the port afterwards.
-          signalGroup("SIGKILL");
-          if (!graceful) await exited;
+          // The whole group gets the grace period, a child the program
+          // started included, which can outlive the leader; what is left
+          // after it is killed, so nothing of this world holds the port.
+          const pid = child.pid;
+          if (pid !== undefined && groupAlive(pid)) {
+            signalGroup("SIGTERM");
+            await graceFor(() => groupAlive(pid));
+            signalGroup("SIGKILL");
+          }
+          await exited;
         }
         await Promise.race([closed, delay(STREAMS_CLOSE_MS)]);
         out.flush();

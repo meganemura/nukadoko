@@ -295,9 +295,13 @@ just until 0.1.
   and a `url` function, each changed with `timeout_ms` (`{ command,
   timeout_ms }`, `setup: { run, timeout_ms }`, `url: { resolve,
   timeout_ms }`), a whole number of milliseconds from 1 to
-  2,147,483,647, the longest delay a Node.js timer keeps. Every command runs in a process group of its own, and a
-  `build` or `prepare` command's group is killed when the command exits,
-  so nothing it left running outlives it; on Windows, which has no
+  2,147,483,647, the longest delay a Node.js timer keeps. Every command
+  runs in a process group of its own, and a `build` or `prepare`
+  command's group is killed when the command exits, so nothing it left
+  running outlives it. Stopping a group, `serve` or a command past its
+  limit, sends SIGTERM and gives the whole group up to 5 seconds to end
+  before SIGKILL, so a server a shell started still writes its last
+  lines after the shell exits. On Windows, which has no
   process group, `serve.command` is the server itself or a launcher that
   stays running with it, since nukadoko cannot stop what a launcher that
   exits leaves behind. Each phase prints one line on

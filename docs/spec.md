@@ -2684,9 +2684,15 @@ world's requests there, and stops the program after the world's pass.
 
 The program runs in a process group of its own on POSIX, as every
 command of a world does.
-Stopping it sends SIGTERM to the group, waits up to 5 seconds, and then
-sends SIGKILL to the group, so a child the program started (`npm start`
-starts the server as one) does not keep the port.
+Stopping it sends SIGTERM to the group and gives the whole group up to
+5 seconds, until no process of it is left, and then sends SIGKILL to what
+is left, so a child the program started (`npm start` starts the server
+as one) can write its last lines after the process nukadoko started has
+exited, and does not keep the port.
+A process of the group that exited but that its parent has not collected
+(a zombie, under a PID 1 that does not collect orphans, as in many
+containers) counts as gone on Linux, and as still there elsewhere, where
+the group then waits out its 5 seconds.
 A `build` or `prepare` command's group gets SIGKILL as soon as the
 command exits, so a child the command left running neither outlives it
 nor keeps its output open, which would keep the phase from ending.
@@ -2754,7 +2760,8 @@ A phase past its limit fails the world with `program-start-failed`, and
 the message names the phase, its command, the limit, and the end of the
 world's `program.log`, as any other failure to start does.
 A command past its limit is stopped as `serve` is: SIGTERM to its process
-group, and SIGKILL after 5 seconds.
+group, up to 5 seconds for the whole group to end, and SIGKILL to what is
+left.
 `setup` and a `url` function run in nukadoko's own process, where
 nothing can stop a function from outside.
 One past its limit is abandoned: the world fails without waiting for it,
