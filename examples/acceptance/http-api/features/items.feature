@@ -5,6 +5,7 @@ Feature: items API
   - GET /items/<id> answers the item, or 404 with an error for an unknown id
   - A body that is not JSON answers 400; a missing name answers 422
   - GET /items lists every item created so far
+  - GET /items/count answers how many items exist, where ITEM_COUNT turns it on
 
   Scenario: creating an item
     When I POST this body to /items
@@ -51,3 +52,10 @@ Feature: items API
     When I request the item list
     Then the response status is 200
     And the list has the item that was created
+
+  @with:item_count
+  Scenario: counting the items
+    Given an item named "chair" exists
+    When I request the item count
+    Then the response status is 200
+    And the response body has a count of at least 1

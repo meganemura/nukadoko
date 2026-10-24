@@ -322,7 +322,8 @@ just until 0.1.
   Each Allure result carries the row's `verdict` and the cell's `role` as
   `excluded` parameters, and each messages test case a `verdict.json`
   attachment (`application/vnd.nukadoko.verdict+json`), since a control
-  that failed shows red in both.
+  that failed shows red in both. `examples/acceptance/http-api` runs one
+  flag-gated scenario that a control proves.
 
 - **`nukadoko.program.ts` builds, prepares, starts, and stops the program
   under test.** Its default export, written with `defineProgram`, holds
