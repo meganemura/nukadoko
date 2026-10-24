@@ -553,17 +553,35 @@ describe("the literal rule, exactly", () => {
 });
 
 describe("where", () => {
-  it("refuses a where claim that is the same claim as an item claim, and accepts one that differs in any field", () =>
+  const shape = { ...literalShape("every row is at least {least:int}"), argsKeys: new Set(["least", "limit", "result"]), requiredArgsKeys: new Set(["least", "limit", "result"]) };
+  const segmentsGen = gs.arrays(gs.sampledFrom(["a", "b", "c"]), { maxSize: 3 });
+
+  /** `segments` written as an item claim, the split between `actual` and
+   * `at` drawn, and a `view` drawn: three spellings of one path. */
+  function spelled(tc: { draw: <T>(generator: Generator<T>) => T }, segments: readonly string[], compare: ClaimCompare, expected: string) {
+    const split = tc.draw(gs.integers({ minValue: 0, maxValue: segments.length }));
+    const actual = segments.slice(0, split).join(".");
+    const at = segments.slice(split).join(".");
+    const view = tc.draw(gs.sampledFrom([undefined, "text", "json"] as const));
+    return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected };
+  }
+
+  it("refuses a where claim that reads what an item claim reads, however actual, at, and view spell it, and accepts any other path", () =>
     hegel.test((tc) => {
-      const item = { actual: "n", compare: tc.draw(gs.sampledFrom(ALL_COMPARES.filter((entry) => entry !== "matches" && entry !== "contains-text"))), expected: "least" };
-      const shape = { ...literalShape("every row is at least {least:int}"), argsKeys: new Set(["least", "limit", "result"]), requiredArgsKeys: new Set(["least", "limit", "result"]) };
-      const same = claimsProblem([{ actual: "result", each: { where: [item], claims: [{ ...item }] } }], shape);
-      expect(same).toBe(
-        "claims[0].each.where[0] is the same claim as claims[0].each.claims[0], so every item where selects holds it and the claim says nothing. Select by another value, or drop where",
+      const wherePath = tc.draw(segmentsGen);
+      const itemPath = tc.draw(gs.booleans()) ? [...wherePath] : tc.draw(segmentsGen);
+      const where = spelled(tc, wherePath, tc.draw(gs.sampledFrom(["equal", "greater-than", "at-least"] as const)), "least");
+      const item = spelled(tc, itemPath, tc.draw(gs.sampledFrom(["equal", "at-least", "not-equal"] as const)), tc.draw(gs.sampledFrom(["least", "limit"])));
+      const problem = claimsProblem([{ actual: "result", each: { where: [where], claims: [item] } }], shape);
+      const same = wherePath.length === itemPath.length && wherePath.every((segment, index) => segment === itemPath[index]);
+      if (!same) {
+        expect(problem).toBeNull();
+        return;
+      }
+      const place = wherePath.length === 0 ? "the item itself" : `the item at ${wherePath.join(".")}`;
+      expect(problem).toBe(
+        `claims[0].each.where[0] and claims[0].each.claims[0] both read ${place}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
       );
-      const field = tc.draw(gs.sampledFrom(["actual", "compare", "expected"] as const));
-      const other = { ...item, [field]: field === "actual" ? "m" : field === "compare" ? (item.compare === "equal" ? "not-equal" : "equal") : "limit" };
-      expect(claimsProblem([{ actual: "result", each: { where: [other], claims: [item] } }], shape)).toBeNull();
     }));
 });
 

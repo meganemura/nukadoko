@@ -1830,12 +1830,15 @@ an array. Paths inside are relative to the item, and an item claim with no
 to. When the array is empty, or `where` selects nothing, the claim breaks:
 "every item" over nothing is not a measurement.
 
-A `where` claim that is the same claim as an item claim is refused at
-import: every item it selects holds that claim, so "every item" would
-read as "every item that holds". A `where` claim that cannot compare an
-item at all (an undefined value, two JSON types) breaks the whole claim
-and names the item, since leaving that item out would narrow "every
-item" without a word.
+A `where` claim that reads what an item claim reads is refused at
+import, whatever the two compares are: it selects the items by the value
+the item claim then judges, so "every item" would read as "every item
+that holds". The path read is `actual` followed by `at`, so
+`{ actual: "a.b" }`, `{ actual: "a", at: "b" }`, and `{ at: "a.b" }`
+read one path, and a `view` reads the same value another way. A `where`
+claim that cannot compare an item at all (an undefined value, two JSON
+types) breaks the whole claim and names the item, since leaving that
+item out would narrow "every item" without a word.
 
 The record keeps the declared `where` claims and item claims with their
 expected values, the number of items, the number selected, and at most 20

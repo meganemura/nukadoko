@@ -35,8 +35,10 @@ just until 0.1.
   bigint, `NaN`, a `Proxy`, or a value nested deeper than 256 levels
   leaves the claim `unjudged`, and the reason names it.
   `defineStep` freezes what it validated, and discovery runs only the
-  step `defineStep` returned, not a copy of it. `matches` runs on a
-  worker thread, and judging as a whole is bounded by the step's
+  step `defineStep` returned, not a copy of it. A `where` claim that
+  reads the path an item claim reads (`actual` then `at`, with or
+  without a `view`) is refused, whatever its compare. `matches` runs on
+  a worker thread, and judging as a whole is bounded by the step's
   deadline: a pattern still running when it passes is stopped, and each
   claim and item not judged by then is `unjudged`, with how many. `observe` receives every
   args key except the ones a claim compares with, and `resultOf` throws

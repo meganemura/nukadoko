@@ -696,7 +696,12 @@ export default valid;
     expect(checked.stdout + checked.stderr).toContain("Cannot assign to read only property 'expected'");
   });
 
-  it("refuses a where claim that is the same claim as an item claim", async () => {
+  it.each([
+    ["the same claim", `{ actual: "title", compare: "equal", expected: "title" }`, "the item at title"],
+    ["the same path through at", `{ at: "title", compare: "equal", expected: "title" }`, "the item at title"],
+    ["the same path through a view", `{ actual: "title", view: "text", compare: "equal", expected: "title" }`, "the item at title"],
+    ["the same path with another compare", `{ actual: "title", compare: "not-equal", expected: "title" }`, "the item at title"],
+  ])("refuses a where claim that reads what an item claim reads: %s", async (_name, itemClaim, place) => {
     const rootDir = await project({
       "features/steps/every-item-is-titled.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -706,7 +711,7 @@ export default defineStep({
   from: { cart: [answer, "cart"] },
   claims: [{ actual: "cart.items", each: {
     where: [{ actual: "title", compare: "equal", expected: "title" }],
-    claims: [{ actual: "title", compare: "equal", expected: "title" }],
+    claims: [${itemClaim}],
   } }],
 });
 `,
@@ -714,7 +719,7 @@ export default defineStep({
     });
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
     expect(checked.stdout + checked.stderr).toContain(
-      "defineStep claims[0].each.where[0] is the same claim as claims[0].each.claims[0], so every item where selects holds it and the claim says nothing. Select by another value, or drop where.",
+      `defineStep claims[0].each.where[0] and claims[0].each.claims[0] both read ${place}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where.`,
     );
   });
 

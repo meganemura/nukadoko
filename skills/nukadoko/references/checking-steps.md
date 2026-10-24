@@ -111,9 +111,11 @@ parsing is data: `{ actual: "stdout", view: "json", at:
 "sections.git.0.dirty_count", compare: "equal", expected: "count" }`.
 `{ actual, each: { where?, claims } }` applies item claims to every item
 of an array (paths inside are relative to the item), and breaks when the
-array, or what `where` selects, is empty. A `where` claim that repeats an
-item claim is refused: it would turn "every item" into "every item that
-holds". A path reads own properties only (not `constructor`, not a getter).
+array, or what `where` selects, is empty. A `where` claim that reads
+what an item claim reads (`actual` then `at`, with or without a `view`)
+is refused, whatever its compare: it would turn "every item" into "every
+item that holds". A path reads own properties only (not `constructor`,
+not a getter).
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `has-item`, `matches`, `greater-than`, `at-least`,

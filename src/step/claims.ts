@@ -582,23 +582,38 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
         checkComparison(itemLabel, entry as Record<string, unknown>, shape, "item", fromObserve);
       });
     }
-    // A where claim that is also an item claim makes "every item" read as
-    // "every item that holds", which holds for any array with one such item.
+    // A where claim that reads what an item claim reads selects the
+    // items by the value the item claim then judges: "every item that is
+    // done is done", or "every item with more than 2 has at least 2". So
+    // "every item" would read as "every item that holds".
     ((each.where ?? []) as Record<string, unknown>[]).forEach((entry, whereIndex) => {
-      const same = (each.claims as Record<string, unknown>[]).findIndex((item) => sameItemClaim(entry, item));
+      const place = itemPath(entry);
+      const same = (each.claims as Record<string, unknown>[]).findIndex((item) => samePath(itemPath(item), place));
       if (same !== -1) {
         throw new InvalidClaimError(
-          `${label}.each.where[${whereIndex}] is the same claim as ${label}.each.claims[${same}], so every item where selects holds it and the claim says nothing. Select by another value, or drop where`,
+          `${label}.each.where[${whereIndex}] and ${label}.each.claims[${same}] both read ${describeItemPath(place)}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
         );
       }
     });
   });
 }
 
-const ITEM_CLAIM_FIELDS = ["actual", "view", "at", "compare", "expected", "expected_view"] as const;
+/** The place inside one item that an item claim reads, as path segments:
+ * its `actual` path (none for the item itself) followed by its `at`
+ * path. `view` is left out on purpose: a view reads the same value
+ * another way, so a where clause and an item claim that differ only by a
+ * view read one value. Pure. */
+export function itemPath(claim: { readonly actual?: unknown; readonly at?: unknown }): readonly string[] {
+  const split = (path: unknown): readonly string[] => (typeof path === "string" ? (pathSegments(path) ?? [path]) : []);
+  return [...split(claim.actual), ...split(claim.at)];
+}
 
-function sameItemClaim(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  return ITEM_CLAIM_FIELDS.every((field) => JSON.stringify(a[field]) === JSON.stringify(b[field]));
+function samePath(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((segment, index) => segment === b[index]);
+}
+
+function describeItemPath(segments: readonly string[]): string {
+  return segments.length === 0 ? "the item itself" : `the item at ${segments.join(".")}`;
 }
 
 function validatePoll(poll: unknown, hasObserve: boolean, maxMs: number): void {
