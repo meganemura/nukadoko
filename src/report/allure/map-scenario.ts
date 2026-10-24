@@ -14,6 +14,7 @@ import type { ActionEntry, CallEntry, ClaimRecord, ErrorKind, MeasuredChannel, P
 import { claimLine } from "../summary/claim-line.js";
 import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
+import type { ScenarioVerdict } from "../scenario-verdict.js";
 import { ownStepSpan, placeSteps, type StepSpan } from "../step-timeline.js";
 
 // Responsibility: the pure transform at the center of this module, kept in
@@ -1184,6 +1185,9 @@ export interface MapScenarioInput {
    * by the caller (write-results.ts) in `record.steps`' own order, so
    * this function never calls `mapGwtStep` itself. */
   readonly steps: readonly MappedGwtStepOutcome[];
+  /** What the verdict table says of this execution; absent when the table
+   * holds no cell for it. */
+  readonly verdict?: ScenarioVerdict | undefined;
 }
 
 export interface MappedScenarioTest {
@@ -1208,7 +1212,7 @@ export interface MappedScenarioTest {
 }
 
 export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
-  const { record, gherkinDocument, pickle, posixPath, projectName, steps } = input;
+  const { record, gherkinDocument, pickle, posixPath, projectName, steps, verdict } = input;
 
   const scenario = resolveScenario(gherkinDocument, pickle);
   const featureName = gherkinDocument.feature?.name ?? "";
@@ -1237,8 +1241,18 @@ export function mapScenario(input: MapScenarioInput): MappedScenarioTest {
     { name: "environment", value: record.environment },
   ];
 
+  // The verdict table's word for the row and the cell's role, beside the
+  // execution's own status: a control that failed shows failed, and these
+  // say that the run read it as proof. Excluded from historyId, since a
+  // verdict changing between runs is a change of one test's outcome.
   const contextParameters: MappedParameter[] = [
     ...(record.target_version !== undefined ? [{ name: "target_version", value: record.target_version, excluded: true }] : []),
+    ...(verdict !== undefined
+      ? [
+          { name: "verdict", value: verdict.verdict, excluded: true },
+          { name: "role", value: verdict.role, excluded: true },
+        ]
+      : []),
   ];
 
   // A step's own declared label/link (`ctx.declare`-style facade calls from

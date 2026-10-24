@@ -470,6 +470,12 @@ This part does not change release to release.
   run.json's `table` instead, and a duration from each scenario entry's
   `started_at` and `finished_at`.
 
+- **The Allure results and the messages stream carry the verdict.** Each
+  Allure result has two more parameters, `verdict` and `role`, both
+  `excluded`, so `historyId` does not change. Each messages test case
+  has one more attachment, `verdict.json`, of media type
+  `application/vnd.nukadoko.verdict+json`. A consumer that counts a test
+  case's attachments counts one more.
 
 ## 0.20.0 to 0.21.0
 

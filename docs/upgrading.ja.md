@@ -401,6 +401,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   表題は受け入れ基準の数と、`held`、`proven`、`failed` の行の数を数え、赤い行はそれぞれ理由を述べる 1 行を得ます。
   `summary.md` を解析していたジョブは、代わりに run.json の `table` を読み、所要時間は各 scenario のエントリの `started_at` と `finished_at` から読みます。
 
+- **Allure の result と messages ストリームは断定を持ちます。**
+  Allure の各 result は、`verdict` と `role` の 2 つの parameter を新たに持ちます。
+  どちらも `excluded` なので、`historyId` は変わりません。
+  messages の各 test case は、media type が `application/vnd.nukadoko.verdict+json` の `verdict.json` 添付を 1 つ多く持ちます。
+  test case の添付を数える消費者は、1 つ多く数えます。
 
 ## 0.20.0 から 0.21.0 へ
 

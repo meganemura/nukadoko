@@ -12,7 +12,8 @@ import {
 import path from "node:path";
 import type { ScenarioRecord } from "../../record/scenario-record.js";
 import type { StepRecord } from "../../record/types.js";
-import { mapScenario, type MessagesAttachmentPlan } from "./map-scenario.js";
+import { mapScenario, verdictAttachment, type MessagesAttachmentPlan } from "./map-scenario.js";
+import type { ScenarioVerdict } from "../scenario-verdict.js";
 
 // Responsibility: one run as a cucumber-messages stream, for
 // `nuka report --format messages`: the I/O half of this directory, the
@@ -55,6 +56,9 @@ export interface MessagesScenarioInput {
   readonly record: ScenarioRecord;
   readonly pickle: Pickle;
   readonly stepRecords: ReadonlyMap<string, StepRecord | null>;
+  /** What the verdict table says of this execution, carried as a test
+   * case attachment after its steps. */
+  readonly verdict?: ScenarioVerdict | undefined;
 }
 
 export interface MessagesStreamOptions {
@@ -251,6 +255,7 @@ export function writeMessagesStream(
       }
       append({ testStepFinished: step.testStepFinished });
     }
+    if (scenario.verdict !== undefined) writeAttachment(verdictAttachment(scenario.verdict, mapped.testCaseStarted.id));
     append({ testCaseFinished: mapped.testCaseFinished });
   }
 

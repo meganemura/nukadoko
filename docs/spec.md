@@ -4086,6 +4086,8 @@ proven, <failed> failed` line after it.
 The table is `run.json`'s `table`, and the run summary opens with it: a
 row per criterion, a column per world and environment, and under it one
 line for each red row that says why, with where its execution stopped.
+The Allure results and the messages stream carry each execution's row
+verdict and cell role (see "Allure results" and "Messages stream").
 
 ### Single steps (the agent path)
 
@@ -5513,6 +5515,8 @@ The one hidden parameter every scenario result carries for identity is `nukadoko
 It is `mode: "hidden"` rather than `excluded: true` on purpose: Allure drops an `excluded` parameter before hashing it, which would defeat the whole point, where `hidden` only keeps a parameter out of the UI.
 A Scenario Outline row adds each Examples cell as a visible parameter, which also feeds `historyId`.
 The visible cells replace the former hidden row parameter and distinguish rows.
+A result also carries `verdict`, its row's verdict in the run's table, and `role`, its cell's, both `excluded` (see "Verdicts").
+A control that failed shows `failed`, as it ran, and these two say the run read it as proof; a verdict that changes between runs is one test's outcome changing, so neither feeds `historyId`.
 
 Two scenarios can share a Gherkin name, most often as two rows of one Scenario Outline. Without more input to the hash, both would use the same `historyId`, and the second would enter the first scenario's history.
 `nukadoko.scenario.steps` closes that gap for a plain scenario, and an Outline row's own Examples cells close it for a row.
@@ -5696,6 +5700,12 @@ manifest, so retention and `nuka clean` remove it with the run.
   the scenario's `started_at` when it comes first. That anchor is read from
   `record.json` alone, so a report built from the record after the run
   gives the same timeline.
+- Each test case carries a `verdict.json` attachment of media type
+  `application/vnd.nukadoko.verdict+json`, after its last step and with
+  no `testStepId`: its row's `verdict` and `reason` and its cell's `role`
+  (see "Verdicts"). `TestCaseFinished` says how the execution ended and
+  has no field for a verdict, and a control that failed ends red where the
+  run read it as proof.
 - `testRunFinished.success` always matches the run's verdict.
   BeforeAll/AfterAll have no place to write into this stream (no
   run-scope record exists to draw from), so a run whose

@@ -155,7 +155,7 @@ export async function runReport(options: RunReportOptions): Promise<number> {
           success: run.document.verdict === "passed",
         },
         run.features.map((feature) => ({ ...feature, relativeFeaturePath: feature.relativePath, pickles: selectedPickles(run, feature.relativePath) })),
-        run.scenarios.map((scenario) => ({ record: scenario.record, pickle: scenario.pickle, stepRecords: scenario.stepRecords })),
+        run.scenarios.map((scenario) => ({ record: scenario.record, pickle: scenario.pickle, stepRecords: scenario.stepRecords, verdict: scenario.verdict })),
       );
       return { kind: "text", runId: run.document.run_id, ownRun: run.ownRun, text: lines.join(""), problems };
     }
@@ -183,6 +183,7 @@ export async function runReport(options: RunReportOptions): Promise<number> {
             gherkinDocument: scenario.feature.gherkinDocument,
             pickle: scenario.pickle,
             relativeFeaturePath: scenario.feature.relativePath,
+            verdict: scenario.verdict,
           })),
         ),
     };

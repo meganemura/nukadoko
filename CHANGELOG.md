@@ -319,6 +319,10 @@ just until 0.1.
   `condition-unmet` (a scenario no selected environment meets), and
   `nuka check --env` reads the tags against the environments it names, as
   `nuka run --env` does. `@held` is read and kept, and changes nothing yet.
+  Each Allure result carries the row's `verdict` and the cell's `role` as
+  `excluded` parameters, and each messages test case a `verdict.json`
+  attachment (`application/vnd.nukadoko.verdict+json`), since a control
+  that failed shows red in both.
 
 - **`nukadoko.program.ts` builds, prepares, starts, and stops the program
   under test.** Its default export, written with `defineProgram`, holds

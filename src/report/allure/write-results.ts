@@ -27,6 +27,7 @@ import {
 } from "./map-scenario.js";
 import { createAtomicWriter, stableNames } from "./writer.js";
 import { ownStepSpan } from "../step-timeline.js";
+import type { ScenarioVerdict } from "../scenario-verdict.js";
 
 // Responsibility: the thin layer that turns map-scenario.ts's flat
 // description of one finished scenario into `ReporterRuntime` calls, for
@@ -72,6 +73,8 @@ export interface AllureScenarioInput {
   readonly pickle: Pickle;
   /** The feature file's path relative to the project root. */
   readonly relativeFeaturePath: string;
+  /** What the verdict table says of this execution (src/report/scenario-verdict.ts). */
+  readonly verdict?: ScenarioVerdict | undefined;
 }
 
 export interface WriteAllureResultsOptions {
@@ -315,7 +318,7 @@ export function writeAllureResults(options: WriteAllureResultsOptions, scenarios
       const scopeUuid = runtime.startScope();
       const posixPath = toPosixPath(relativeFeaturePath);
       const projectName = options.projectName;
-      const mapped = mapScenario({ record, gherkinDocument, pickle, posixPath, projectName, steps: mapSteps(input) });
+      const mapped = mapScenario({ record, gherkinDocument, pickle, posixPath, projectName, steps: mapSteps(input), verdict: input.verdict });
       // Bare `pickle.name`: a scenario's own test has nothing to
       // disambiguate itself from within its own fullName (identity.ts's
       // own header).

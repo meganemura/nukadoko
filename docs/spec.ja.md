@@ -3276,6 +3276,7 @@ stderr の件数の行は必須のセルの実行を数え、対照のある run
 
 表は `run.json` の `table` で、run サマリはそれで始まります。
 受け入れ基準ごとに 1 行、world と environment ごとに 1 列で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
+Allure の result と messages ストリームは、各実行の行の断定とセルの役割を持ちます(「Allure results」と「Messages stream」を参照)。
 
 ### 単体 step(agent の経路)
 
@@ -4372,6 +4373,9 @@ Allure はハッシュの計算前に `excluded` な parameter を落として�
 `hidden` は parameter を UI から外すだけです。
 Scenario Outline の行は、Examples の各セルを可視 parameter として追加し、これも `historyId` に加わります。
 可視セルは以前の隠された行 parameter を置き換え、行を区別します。
+result は、run の表でのその行の断定である `verdict` と、そのセルの役割である `role` も持ち、どちらも `excluded` です(「断定」を参照)。
+失敗した対照は走ったとおり `failed` と表示され、この 2 つが、run がそれを証明として読んだことを述べます。
+run ごとに変わる断定は 1 つのテストの結果が変わることなので、どちらも `historyId` には加わりません。
 
 2 つの scenario が Gherkin の名前を共有することがあります(たいていは 1 つの Scenario Outline の 2 つの行です)。
 ハッシュへの入力がこれ以上なければ、両方が同じ `historyId` を使い、2 つ目が 1 つ目の scenario の history に入ります。
@@ -4574,6 +4578,10 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   そのため両方の形式が、その step を直前の step の終了時刻に幅ゼロで置きます。
   最初の step なら scenario の `started_at` に置きます。
   この基準点は `record.json` だけから読むので、run の後に record から作ったレポートも同じタイムラインになります。
+- 各 test case は、media type が `application/vnd.nukadoko.verdict+json` の `verdict.json` 添付を、最後の step の後に `testStepId` なしで持ちます。
+  その中身は、行の `verdict` と `reason`、セルの `role` です(「断定」を参照)。
+  `TestCaseFinished` は実行がどう終わったかを述べ、断定のためのフィールドを持ちません。
+  そして失敗した対照は、run が証明として読んだところで赤く終わります。
 - `testRunFinished.success` は常に run の断定と一致します。
   BeforeAll/AfterAll はこのストリームに書き込む場所を持ちません(汲み取れる run スコープの record が存在しないからです)。
   そのため run スコープのフックが失敗した run は、どの scenario の中にも現れず、ここにしか現れません。

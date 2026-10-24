@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
@@ -12,7 +12,8 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, r
 // breaks, and the control proves it after `--proof-runs` agreeing
 // failures. The exact run.json `table`, the summary's table, the stderr
 // lines, the counts, and the refusal of a `--proof-runs` that is not a
-// whole number of 1 or more; at --concurrency 1 and 2 alike.
+// whole number of 1 or more; at --concurrency 1 and 2 alike. And what the
+// Allure results and the messages stream carry of each execution's row.
 
 async function run(argv: readonly string[]) {
   const rootDir = await copyFixtureToTempDir("run-verdict-project");
@@ -156,6 +157,44 @@ describe("nuka run: the verdict table", () => {
     const { document } = await run(["features/value.feature:3", "--env", "staging"]);
     expect(document.table.worlds).toEqual([head("staging")]);
     expect(document.table.rows.map((row: { verdict: string }) => row.verdict)).toEqual(["held"]);
+  });
+
+  it("carries each execution's row verdict and cell role in the Allure results and the messages stream", async () => {
+    const rootDir = await copyFixtureToTempDir("run-verdict-project");
+    try {
+      const cli = (argv: string[], stdout = createCaptureSink()) => runCli(argv, { rootDir, stdout, stderr: createCaptureSink() });
+      expect(await cli(["run", "features/banner.feature:4"])).toBe(0);
+
+      expect(await cli(["report", "--format", "allure"])).toBe(0);
+      const resultsDir = path.join(rootDir, ".nukadoko", "export", "allure-results");
+      const results = readdirSync(resultsDir)
+        .filter((name) => name.endsWith("-result.json"))
+        .map((name) => JSON.parse(readFileSync(path.join(resultsDir, name), "utf8")) as { status: string; parameters: { name: string; value: string; excluded?: boolean }[] })
+        .map((result) => [result.status, ...result.parameters.filter((parameter) => ["environment", "verdict", "role"].includes(parameter.name)).map((parameter) => `${parameter.name}=${parameter.value}${parameter.excluded === true ? " (excluded)" : ""}`)])
+        .sort((a, b) => a.join().localeCompare(b.join()));
+      expect(results).toEqual([
+        ["failed", "verdict=proven (excluded)", "role=control (excluded)", "environment=flag-off"],
+        ["failed", "verdict=proven (excluded)", "role=control (excluded)", "environment=flag-off"],
+        ["passed", "verdict=proven (excluded)", "role=required (excluded)", "environment=flag-on"],
+      ]);
+
+      const out = createCaptureSink();
+      expect(await cli(["report", "--format", "messages"], out)).toBe(0);
+      const envelopes = out
+        .text()
+        .split("\n")
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line) as { attachment?: { mediaType: string; body: string; testStepId?: string; fileName: string } });
+      const verdicts = envelopes.flatMap((envelope) => (envelope.attachment?.mediaType === "application/vnd.nukadoko.verdict+json" ? [envelope.attachment] : []));
+      expect(verdicts.map((attachment) => [attachment.fileName, attachment.testStepId, JSON.parse(attachment.body).role])).toEqual([
+        ["verdict.json", undefined, "control"],
+        ["verdict.json", undefined, "control"],
+        ["verdict.json", undefined, "required"],
+      ]);
+      expect(JSON.parse(verdicts[0]!.body)).toEqual({ verdict: "proven", reason: table(2).rows[0]!.reason, role: "control" });
+    } finally {
+      await removeTempDir(rootDir);
+    }
   });
 
   for (const value of ["0", "1.5", "-2"]) {

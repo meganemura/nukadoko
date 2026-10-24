@@ -5,6 +5,7 @@ import { parseFeatureSource } from "../feature/load-features.js";
 import { readStepRecord } from "../record/read-step-record.js";
 import { RUN_RESULT_FILE_NAME, type RunDocument, type RunScenario } from "../record/run-result.js";
 import { parseRunDocument } from "./run-document-schema.js";
+import { scenarioVerdictOf, type ScenarioVerdict } from "./scenario-verdict.js";
 import { readRunSources, runSourcesPath } from "../record/run-sources.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { isWithin, realTarget } from "../record/contained-path.js";
@@ -43,6 +44,10 @@ import type { StepRecord } from "../record/types.js";
 // the run used. The pickles are parsed again from sources.json, so their
 // ids differ from the run's; no output keeps a pickle id across renders.
 
+// The writers name a scenario's verdict by this type, and this file is the
+// report module's surface, so it re-exports it.
+export type { ScenarioVerdict };
+
 export interface LoadedFeature {
   readonly relativePath: string;
   readonly source: string;
@@ -55,6 +60,8 @@ export interface LoadedScenario {
   readonly stepRecords: ReadonlyMap<string, StepRecord | null>;
   readonly feature: LoadedFeature;
   readonly pickle: Pickle;
+  /** What the verdict table says of this execution's row and cell. */
+  readonly verdict: ScenarioVerdict | undefined;
 }
 
 export interface LoadedRun {
@@ -234,7 +241,13 @@ export function loadRun(runDir: string, rootDir: string, stateDir: string | null
       }
       stepRecords.set(step.step_record_id, stepRecord);
     }
-    scenarios.push({ record: scenarioRecordOf(document, scenario), stepRecords, feature: match.feature, pickle: match.pickle });
+    scenarios.push({
+      record: scenarioRecordOf(document, scenario),
+      stepRecords,
+      feature: match.feature,
+      pickle: match.pickle,
+      verdict: scenarioVerdictOf(document.table, scenario.feature, scenario.line, scenario.environment),
+    });
   }
   return {
     run: {

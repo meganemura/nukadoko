@@ -19,6 +19,7 @@ import type { DeclaredSnapshot } from "../../compat/declared.js";
 import type { StepRecord } from "../../record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry, ScenarioStepStatus } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
+import type { ScenarioVerdict } from "../scenario-verdict.js";
 import { ownStepSpan, placeSteps } from "../step-timeline.js";
 
 // Responsibility: the pure transform at the center of this module:
@@ -173,6 +174,28 @@ export const CLAIM_BROKEN_EXCEPTION = "nukadoko.ClaimBroken";
 /** The media type of the attachment that carries a claim step's claims,
  * so a consumer can find it among the step's other attachments. */
 export const CLAIMS_MEDIA_TYPE = "application/vnd.nukadoko.claims+json";
+
+/** The media type of the test case attachment that carries what the
+ * verdict table says of the execution (src/report/scenario-verdict.ts):
+ * the protocol has no field for a verdict, and `TestCaseFinished` says
+ * only how the execution ended, which for a control that failed is red
+ * where the run read it as proof. */
+export const VERDICT_MEDIA_TYPE = "application/vnd.nukadoko.verdict+json";
+
+/** The test case attachment for `verdict`, with no test step: it is the
+ * execution's, not one step's. */
+export function verdictAttachment(verdict: ScenarioVerdict, testCaseStartedId: string): MessagesAttachmentPlan {
+  return {
+    kind: "built",
+    attachment: {
+      body: JSON.stringify({ verdict: verdict.verdict, reason: verdict.reason, role: verdict.role }),
+      contentEncoding: AttachmentContentEncoding.IDENTITY,
+      mediaType: VERDICT_MEDIA_TYPE,
+      fileName: "verdict.json",
+      testCaseStartedId,
+    },
+  };
+}
 
 function claimsAttachment(stepRecord: StepRecord, testCaseStartedId: string, testStepId: string): MessagesAttachmentPlan[] {
   if (stepRecord.claims === undefined) return [];
