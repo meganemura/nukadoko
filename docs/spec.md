@@ -2616,7 +2616,7 @@ with `runCommand`: such a project needs nothing new.
 | `serve` | `{ command, port, ready, timeout_ms }`: the server nukadoko starts, waits for, and stops (below) |
 | `url` | an `http:` or `https:` URL, or a function of the world that returns one, for a program nukadoko does not start (below) |
 | `env` | the variables the world's processes and the steps' process get, with placeholders (below) |
-| `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, url, port, env }` (`{ run, timeout_ms }` to give it a limit of its own, below) |
+| `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, signal, url, port, env }` (`{ run, timeout_ms }` to give it a limit of its own, below) |
 | `environments` | named overrides of any field above, plus `policy`, `envFiles`, and `version` (below) |
 
 `serve` and `url` are two ways to reach the program, so writing both is
@@ -2756,9 +2756,15 @@ world's `program.log`, as any other failure to start does.
 A command past its limit is stopped as `serve` is: SIGTERM to its process
 group, and SIGKILL after 5 seconds.
 `setup` and a `url` function run in nukadoko's own process, where
-nothing can stop a function from outside, so the world fails without
-waiting for one, and what it started goes on until it ends or nukadoko
-exits.
+nothing can stop a function from outside.
+One past its limit is abandoned: the world fails without waiting for it,
+and `program.log` ends with a line that says the function was abandoned
+at its limit.
+The `signal` in the function's argument, an `AbortSignal`, is aborted
+then, and when a signal to nukadoko stops the start while the function
+runs.
+A function that honours it stops; one that does not goes on, with what
+it started, until it ends or nukadoko exits.
 
 ### Placeholders
 
@@ -2871,6 +2877,12 @@ to stdout or stderr, goes to stderr and to `program.log`, after a
 Every one of these lines is redacted first, `{token}` included, since
 these functions run in nukadoko's own process and would otherwise write
 to the terminal as they are.
+Only what the function's own work prints is taken, the timers it set and
+the requests it sent included: a step, another world starting at the same
+time, and nukadoko itself print where they always do.
+Once the function settles or is abandoned, what its work still prints
+goes where it was written, redacted the same way, and never to
+`program.log`.
 
 The world's URL is the base URL of `page`, `context`, `pageAs`, and
 `request`, and it is the `baseURL` fixture.
@@ -2969,8 +2981,9 @@ export default defineProgram({
 
 `url` names a program that runs somewhere nukadoko does not: a deployed
 server, a preview per pull request.
-A function receives the world's `{ name, root, dir }` before anything is
-reached, so one entry covers every preview:
+A function receives the world's `{ name, root, dir, signal }` before
+anything is reached, so one entry covers every preview (`signal` is
+aborted when the function is abandoned, see "Limits"):
 
 ```ts
 environments: {

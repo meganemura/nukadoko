@@ -1182,10 +1182,20 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, condition.secrets) + "\n");
           }
         });
-        processSignal.setProcessCleanup(tearDownProcessFixtures);
         // The pass's world, before BeforeAll: a hook may already talk to
-        // the program. A signal from here on stops it after the fixtures.
-        const world = hasPickles ? await startWorld(condition) : null;
+        // the program. A signal while it starts aborts the start, which
+        // stops what the start spawned and gives a running setup or url
+        // function its signal, before the fixtures' teardown. A signal from
+        // then on stops the world after the fixtures.
+        const startAbort = new AbortController();
+        const starting = hasPickles ? startWorld(condition, startAbort.signal) : Promise.resolve(null);
+        processSignal.setProcessCleanup(async () => {
+          startAbort.abort();
+          await starting.catch(() => {});
+          await tearDownProcessFixtures();
+        });
+        const world = await starting;
+        processSignal.setProcessCleanup(tearDownProcessFixtures);
         const started = world === null || world === "failed" ? null : world;
         const restoreEnv = started === null ? () => {} : applyWorldEnv(started.view.env);
         if (started !== null) {

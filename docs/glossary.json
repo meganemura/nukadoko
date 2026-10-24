@@ -505,6 +505,11 @@
       "en": ["limit (of a phase)"],
       "ja": "持ち時間",
       "note": "world の各段階(build、prepare、serve、setup、url の関数)に与える時間。フィールド名 `timeout_ms` はコードスパンで英語のまま。段階は phase の訳"
+    },
+    {
+      "en": ["abandon", "abandoned"],
+      "ja": "見捨てる",
+      "note": "持ち時間を過ぎた setup や url の関数を待たずに world を失敗させること。nukadoko は関数を止められないので、関数は `signal` に従わない限り動き続ける。止める(stop)とは別の語"
     }
   ],
   "keep_english": [

@@ -431,15 +431,25 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     processSignal = installProcessSignalHandlers();
     let world: StartedWorld | null = null;
     if (resolvedEnv.program !== null) {
-      const started = await createWorldStarter({
+      // The signal's cleanup aborts the start, so a running setup or url
+      // function gets its signal and the start stops what it spawned
+      // before the exit.
+      const startAbort = new AbortController();
+      const starting = createWorldStarter({
         rootDir,
         worldDir: () => path.join(evidenceDir, DO_WORLD_DIR_NAME),
         recordPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
         displayPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
         progress: stderr,
-      }).start(resolvedEnv.name, resolvedEnv.program, secrets);
+      }).start(resolvedEnv.name, resolvedEnv.program, secrets, startAbort.signal);
+      processSignal.setProcessCleanup(async () => {
+        startAbort.abort();
+        await starting;
+      });
+      const started = await starting;
+      processSignal.setProcessCleanup(null);
       if (!started.ok) {
-        stderr.write(formatFinding(withHint({ severity: "failed", code: "program-start-failed", message: started.message })));
+        if (!started.aborted) stderr.write(formatFinding(withHint({ severity: "failed", code: "program-start-failed", message: started.message })));
         return FAILED_EXIT_CODE;
       }
       world = started;

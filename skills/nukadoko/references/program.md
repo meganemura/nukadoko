@@ -54,7 +54,8 @@ only on that (`scenario-rules.md`, S8, and `examples/http-api.md`).
 A step reads the same `env`: in `process.env` during the run and in the
 `env` fixture, after the config's env files. `setup(world)` runs once per
 world before the first scenario, to seed data; what it prints reaches
-stderr and `program.log` redacted.
+stderr and `program.log` redacted. A `setup` or `url` function past its
+limit is abandoned and its `signal` aborted: it stops only if it honours it.
 
 Every phase has a limit: 600 s for each `build` or `prepare` command, 60 s
 for `serve` to answer `ready`, `setup`, and a `url` function. Write

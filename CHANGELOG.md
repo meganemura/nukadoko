@@ -301,10 +301,14 @@ just until 0.1.
   process group, `serve.command` is the server itself or a launcher that
   stays running with it, since nukadoko cannot stop what a launcher that
   exits leaves behind. Each phase prints one line on
-  stderr as it starts, and what `setup` prints reaches stderr and
-  `program.log` redacted. A signal while a world starts stops it at once
+  stderr as it starts, and what the work of `setup` or a `url` function
+  prints reaches stderr and `program.log` redacted, while what other code
+  prints meanwhile goes where it always goes. A `setup` or `url` function
+  past its limit is abandoned: the world fails, the log says so, and the
+  `signal` in the function's argument is aborted, which stops it if it
+  honours the signal. A signal while a world starts stops it at once
   and leaves no program running, in `nuka do` and under `--concurrency`
-  as well. `serve.ready` is a path on the world's own server, starting
+  as well, and aborts a running function's `signal` too. `serve.ready` is a path on the world's own server, starting
   with one `/`; the ready check counts only a 2xx answer and never
   follows a redirect, and a world that never gets one names the last
   answer it got. `url` is an `http:` or `https:` URL with no user or

@@ -3,7 +3,6 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
-import { format } from "node:util";
 import { commandWords, programUrlProblem, type Command, type ProgramRecipe, type ProgramWorld, type TimedCommand } from "../config/program-schema.js";
 import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
 import { newTracePrefix } from "../context/trace-context.js";
@@ -14,6 +13,7 @@ import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { createLineBuffer } from "../sink/line-buffer.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { captureOutput } from "./in-process-output.js";
 import { describePlaceholderGap, fillPlaceholders, placeholderGaps, type PlaceholderValues } from "./placeholders.js";
 import { openProgramLog, type ProgramLog } from "./program-log.js";
 import type { WorldView } from "./world-view.js";
@@ -51,18 +51,22 @@ import type { WorldView } from "./world-view.js";
 // `timeout_ms`, `serve` its `timeout_ms` to answer `ready`, and `setup`
 // and a `url` function theirs (src/config/program-schema.ts). A phase past
 // its limit is stopped and fails the world, naming the phase. A function
-// cannot be stopped from outside, so a `setup` past its limit is left to
-// finish on its own while the world fails. Each phase prints one line as
-// it starts, so a terminal says what a long wait is waiting on.
+// cannot be stopped from outside, so a `setup` or a `url` function past
+// its limit is abandoned: the world fails without waiting for it, and the
+// `signal` it was given is aborted, which stops it only if it honours the
+// signal. Each phase prints one line as it starts, so a terminal says what
+// a long wait is waiting on.
 //
-// A start the caller aborts (a signal under `--concurrency`, where the
-// parent waits for the world) kills the running phase's group at once and
+// A start the caller aborts (a signal to nukadoko) kills the running
+// phase's group at once, abandons a running function the same way, and
 // returns a failed world marked `aborted`, which no finding reports.
 //
 // `setup` and a `url` function run in nukadoko's own process, so what
 // they print would reach the terminal unredacted, a `{token}` included.
-// While one runs, what this process writes to stdout and stderr goes to
-// the progress sink and to program.log instead, redacted.
+// What the function's own async work prints goes to the progress sink and
+// to program.log instead, redacted, until the function settles or is
+// abandoned (src/program/in-process-output.ts); what any other code prints
+// meanwhile goes where it always goes.
 //
 // When the world stops, after the program has, one pass over its log finds
 // the lines of each step that arrived after the step's record was written
@@ -140,6 +144,9 @@ const STREAMS_CLOSE_MS = 1_000;
 
 class WorldStartError extends Error {}
 
+/** A phase reached its limit. */
+class WorldStartLimit extends WorldStartError {}
+
 /** The caller aborted the start. */
 class WorldStartAborted extends Error {}
 
@@ -158,7 +165,7 @@ function abortedBy(abort: AbortSignal | undefined): Promise<never> {
 async function withinLimit<T>(work: Promise<T>, timeoutMs: number, what: string, abort: AbortSignal | undefined): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const limit = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new WorldStartError(`${what} did not finish within ${timeoutMs} ms (timeout_ms)`)), timeoutMs);
+    timer = setTimeout(() => reject(new WorldStartLimit(`${what} did not finish within ${timeoutMs} ms (timeout_ms)`)), timeoutMs);
   });
   const aborted = abortedBy(abort);
   // Neither loser may surface as an unhandled rejection.
@@ -168,53 +175,6 @@ async function withinLimit<T>(work: Promise<T>, timeoutMs: number, what: string,
     return await Promise.race([work, limit, aborted]);
   } finally {
     clearTimeout(timer);
-  }
-}
-
-const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"] as const;
-
-/** Runs `fn` with what this process writes to stdout and stderr, and
- * through `console`, sent to `into` (module header). Both, since a host
- * such as a test runner can replace `console` with one that never reaches
- * the streams. Restored however `fn` ends.
- *
- * `into` itself writes to the terminal, through a sink that can be
- * `process.stderr`, so a write made while `into` runs goes to the stream
- * as before; capturing it too would feed the line back to `into` without
- * end. */
-async function capturingOutput<T>(fn: () => Promise<T>, into: (text: string) => void): Promise<T> {
-  const streams = [process.stdout, process.stderr];
-  const originalWrites = streams.map((stream) => stream.write);
-  const originalConsole = CONSOLE_METHODS.map((method) => console[method]);
-  let forwarding = false;
-  const capture = (text: string): void => {
-    forwarding = true;
-    try {
-      into(text);
-    } finally {
-      forwarding = false;
-    }
-  };
-  streams.forEach((stream, index) => {
-    const original = originalWrites[index]!;
-    stream.write = ((chunk: string | Uint8Array, ...rest: unknown[]): boolean => {
-      if (forwarding) return (original as (...args: unknown[]) => boolean).call(stream, chunk, ...rest);
-      capture(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
-      const callback = rest.find((arg): arg is () => void => typeof arg === "function");
-      callback?.();
-      return true;
-    }) as typeof stream.write;
-  });
-  for (const method of CONSOLE_METHODS) console[method] = (...args: unknown[]) => capture(`${format(...args)}\n`);
-  try {
-    return await fn();
-  } finally {
-    streams.forEach((stream, index) => {
-      stream.write = originalWrites[index]!;
-    });
-    CONSOLE_METHODS.forEach((method, index) => {
-      console[method] = originalConsole[index]!;
-    });
   }
 }
 
@@ -288,11 +248,34 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         log.note(line);
         options.progress.write(`${redactString(line, allSecrets)}\n`);
       });
-      const inProcess = async <T>(fn: () => Promise<T>): Promise<T> => {
+      // Runs `setup` or a `url` function under its own capture and its
+      // limit. One past its limit, or running when the start is aborted,
+      // is abandoned (module header): the capture ends, what it printed so
+      // far is flushed with a line that says so, and its signal is aborted.
+      const inProcess = async <T>(what: string, timeoutMs: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+        const controller = new AbortController();
+        const capture = captureOutput(
+          (text) => printed.push(text),
+          (text) => redactString(text, allSecrets),
+        );
+        let settled = false;
+        let ended: unknown;
         try {
-          return await capturingOutput(fn, (text) => printed.push(text));
+          const work = capture.run(() => fn(controller.signal)).finally(() => {
+            settled = true;
+          });
+          return await withinLimit(work, timeoutMs, what, abort);
+        } catch (error) {
+          ended = error;
+          throw error;
         } finally {
+          capture.end();
           printed.flush();
+          if (!settled) {
+            const when = ended instanceof WorldStartLimit ? `at its limit (${timeoutMs} ms)` : "when the start was stopped";
+            log.note(`# ${what} was abandoned ${when}; it stops only if it honours its signal`);
+            controller.abort(new Error(`${what} was abandoned ${when}`));
+          }
         }
       };
 
@@ -344,12 +327,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
           url =
             typeof reachUrl === "string"
               ? reachUrl
-              : await withinLimit(
-                  inProcess(async () => reachUrl(place)),
-                  reach.timeout_ms,
-                  "the url function",
-                  abort,
-                );
+              : await inProcess("the url function", reach.timeout_ms, async (signal) => reachUrl({ ...place, signal }));
           // A string `url` was checked at load; what a function returns
           // is checked here, by the same rule, without quoting it.
           const problem = programUrlProblem(String(url));
@@ -392,21 +370,16 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         const setup = recipe.setup;
         if (setup !== undefined) {
           const started = Date.now();
-          const world: ProgramWorld = { ...place, url, port, env: { ...worldEnv } };
           announce("setup started");
           log.note("# setup");
-          await withinLimit(
-            inProcess(async () => {
-              try {
-                await setup.run(world);
-              } catch (error) {
-                throw new WorldStartError(`setup threw: ${error instanceof Error ? error.message : String(error)}`);
-              }
-            }),
-            setup.timeout_ms,
-            "setup",
-            abort,
-          );
+          await inProcess("setup", setup.timeout_ms, async (signal) => {
+            const world: ProgramWorld = { ...place, signal, url, port, env: { ...worldEnv } };
+            try {
+              await setup.run(world);
+            } catch (error) {
+              throw new WorldStartError(`setup threw: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          });
           timings.setup_ms = Date.now() - started;
         }
 

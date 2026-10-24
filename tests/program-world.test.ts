@@ -285,8 +285,10 @@ describe("the limit and the process group of each phase", () => {
   it("fails a setup and a url function past their timeout_ms", async () => {
     const setup = await starter().start("default", recipe({ ...SERVE, setup: { run: () => new Promise(() => {}), timeout_ms: 200 } }), []);
     expect(setup.ok ? null : setup.message).toMatch(/^the program did not start for world default: setup did not finish within 200 ms \(timeout_ms\)\. The end of /);
-    const url = await starter().start("default", recipe({ url: { resolve: () => new Promise<string>(() => {}), timeout_ms: 200 } }), []);
-    expect(url.ok ? null : url.message).toBe("the program did not start for world default: the url function did not finish within 200 ms (timeout_ms)");
+    const url = await starter().start("at-url", recipe({ url: { resolve: () => new Promise<string>(() => {}), timeout_ms: 200 } }), []);
+    expect(url.ok ? null : url.message).toBe(
+      "the program did not start for world at-url: the url function did not finish within 200 ms (timeout_ms). The end of project/worlds/at-url/program.log:\n# the url function was abandoned at its limit (200 ms); it stops only if it honours its signal",
+    );
   });
 
   it("prints a line as each phase starts, and what setup prints, redacted, on the progress sink and in the log", async () => {

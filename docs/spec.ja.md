@@ -2138,7 +2138,7 @@ step が `runCommand` でコマンドを実行するコマンドラインツー�
 | `serve` | `{ command, port, ready, timeout_ms }`: nukadoko が起動し、待ち、止めるサーバ(下記) |
 | `url` | nukadoko が起動しないプログラムの `http:` か `https:` の URL、またはそれを返す world の関数(下記) |
 | `env` | world のプロセスと step のプロセスが受け取る変数。プレースホルダーを使える(下記) |
-| `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, url, port, env }`(専用の持ち時間を与えるには `{ run, timeout_ms }`、下記) |
+| `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, signal, url, port, env }`(専用の持ち時間を与えるには `{ run, timeout_ms }`、下記) |
 | `environments` | 上のどのフィールドも上書きする名前付きの設定。加えて `policy`、`envFiles`、`version`(下記) |
 
 `serve` と `url` はプログラムに届く 2 つの方法なので、両方を書くと拒否されます。
@@ -2254,7 +2254,11 @@ export default defineProgram({
 持ち時間を過ぎたコマンドは `serve` と同じ方法で止めます。
 プロセスグループに SIGTERM を送り、5 秒後に SIGKILL を送ります。
 `setup` と `url` の関数は nukadoko 自身のプロセスで動き、そこでは関数を外から止める手段がありません。
-そのため world はそれを待たずに失敗し、その関数が始めたことは、終わるか nukadoko が終了するまで続きます。
+持ち時間を過ぎた関数は見捨てられます。
+world はそれを待たずに失敗し、`program.log` は、関数が持ち時間で見捨てられたことを述べる行で終わります。
+関数の引数にある `signal`(`AbortSignal`)は、そのときと、関数の実行中に nukadoko へのシグナルが起動を止めたときに中断されます。
+それに従う関数は止まります。
+従わない関数は、それが始めたことと一緒に、終わるか nukadoko が終了するまで続きます。
 
 ### プレースホルダー
 
@@ -2343,6 +2347,9 @@ world default: build 2.1s, prepare 0.4s, serve 1.9s, http://localhost:41873  (lo
 `setup` の出力は `# setup` の行のあとに続きます。
 これらの関数は nukadoko 自身のプロセスで動き、何もしなければ出力が redact されないまま端末に書かれるので、これらの行はどれも先に redact されます。
 `{token}` も含みます。
+取り込むのは、関数自身の処理が出力したものだけで、関数が仕掛けたタイマーや送ったリクエストの出力も含みます。
+step、同時に起動している別の world、nukadoko 自身は、いつもの場所に出力します。
+関数が終わるか見捨てられたあとに、その処理がまだ出力するものは、書かれた先へ同じように redact されて行き、`program.log` には決して行きません。
 
 world の URL は `page`、`context`、`pageAs`、`request` の base URL であり、`baseURL` fixture です。
 `run.json` の `environments[].base_url` がそれを名指します。
@@ -2427,7 +2434,7 @@ export default defineProgram({
 
 `url` は、nukadoko が動かさない場所で動いているプログラムを名指します。
 配備されたサーバや、pull request ごとのプレビューです。
-関数は、何かに届く前に world の `{ name, root, dir }` を受け取るので、1 つのエントリですべてのプレビューを賄えます:
+関数は、何かに届く前に world の `{ name, root, dir, signal }` を受け取るので、1 つのエントリですべてのプレビューを賄えます(`signal` は関数が見捨てられたときに中断されます。「持ち時間」を参照):
 
 ```ts
 environments: {

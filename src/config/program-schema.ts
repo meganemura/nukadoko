@@ -68,8 +68,7 @@ function timedCommand(entry: z.infer<typeof stepCommandSchema>): TimedCommand {
   return { command: entry.command, timeout_ms: entry.timeout_ms ?? DEFAULT_COMMAND_TIMEOUT_MS };
 }
 
-/** What a `url` function and the placeholders know before the program is
- * reached. */
+/** What a `url` function knows before the program is reached. */
 export interface ProgramWorldPlace {
   /** The environment this world runs: `default` without `--env`. */
   readonly name: string;
@@ -77,6 +76,10 @@ export interface ProgramWorldPlace {
   readonly root: string;
   /** The world's own directory, for its state: `.nukadoko/runs/<run_id>/worlds/<name>/`. */
   readonly dir: string;
+  /** Aborted when nukadoko abandons the function: at its `timeout_ms`, or
+   * when a signal stops the start. nukadoko cannot stop a function from
+   * outside, so one that does not honour this signal goes on running. */
+  readonly signal: AbortSignal;
 }
 
 /** The world `setup` receives, once its program answers. */
