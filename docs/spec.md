@@ -4025,7 +4025,8 @@ its scenario record's id, so either record leads to the other.
   call of the step's own process (`writeFile`, `appendFile`, `mkdir`,
   `rm`, `rename`, `copyFile`, `open` with a write flag, a write stream,
   and their sync and promise forms) names a path anywhere outside the
-  state directory, and the path counts when its identity (size,
+  state directory, or inside the world's directory (see "Program"), and
+  the path counts when its identity (size,
   modification time, change time, inode) differs between the first call
   and the end of the step. A failed call, a `mkdir` of a directory that
   exists, and a file created and removed within the step are therefore
@@ -4036,7 +4037,11 @@ its scenario record's id, so either record leads to the other.
   kind `files`, `<path> could not be inspected: <code>`, and the run goes
   on. Where both sources name a path, the scratch comparison
   wins. The project root is not walked: it would cost more than most
-  steps take, and would read a dev server's writes as the step's. `path`
+  steps take, and would read a dev server's writes as the step's. For
+  the same reason the world's directory is not walked: the files the
+  program under test writes there are not in `observed.files`, and the
+  program's log is where its work shows. A write the step's own process
+  makes there is listed like any other. `path`
   is absolute, with a trailing `/` for a directory, and `change` is
   `added`, `changed`, or `removed`. `bytes` is the file's size after
   the step and `content` its text after the step (below), at most 8 KiB

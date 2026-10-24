@@ -63,6 +63,16 @@ import { newSpanId, newTraceId, stampsUrl, traceparentOf } from "./trace-context
 // boundary stamps with that boundary's trace id, for the same reason it
 // records into that boundary, so the program's lines for such a request
 // are that step's too.
+//
+// A write the step's own process makes through `node:fs` is a touch,
+// recorded unless it lands in a directory nukadoko writes itself: the state
+// directory and the boundary's evidence directory. The world's directory
+// lies inside one of those, and the program under test keeps its state
+// there, so a step's own write there is recorded like any other
+// (`watchedDirs`). No walk reads it: the program writes there while the
+// step runs, and a before and after walk would give the program's writes
+// to the step or to a `runCommand` process. The program's own work shows
+// in its log, not in `observed.files`.
 
 /** What a step's scope holds: the recorder runCommand and the channel
  * patches write into. */
@@ -204,6 +214,10 @@ function socketEntry(use: SocketUse, how: "connect" | "write"): UnmeasuredEntry 
 export function createObservedCollector(
   options: {
     readonly unwatchedDirs?: readonly string[];
+    /** Directories inside an unwatched one, or inside the evidence
+     * directory, where a write the step's own process makes is still
+     * recorded: the world's directory (this file's header). Never walked. */
+    readonly watchedDirs?: readonly string[];
     /** The current step boundary's evidence directory. Without it, process
      * output and request lines are not kept. */
     readonly outputDir?: () => string;
@@ -222,9 +236,13 @@ export function createObservedCollector(
   const openBoundary = (): Boundary => newBoundary(options.outputDir?.(), trace === undefined ? undefined : newTraceId(trace.prefix));
   let boundary = openBoundary();
 
+  const watchedDirs = (options.watchedDirs ?? []).map((dir) => path.resolve(dir));
+  const within = (target: string, dir: string): boolean => target === dir || target.startsWith(dir + path.sep);
+
   function isOwnPath(target: string): boolean {
+    if (watchedDirs.some((dir) => within(target, dir))) return false;
     const own = options.outputDir === undefined ? unwatchedDirs : [...unwatchedDirs, path.resolve(options.outputDir())];
-    return own.some((dir) => target === dir || target.startsWith(dir + path.sep));
+    return own.some((dir) => within(target, dir));
   }
 
   function recorderFor(

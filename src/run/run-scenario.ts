@@ -847,6 +847,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     baseURL: programWorld?.url,
     programLog: programWorld?.log,
     tracePrefix: programWorld?.tracePrefix,
+    worldDir: programWorld?.dir,
     evidenceDir: scenarioDir,
     rootDir,
     env,

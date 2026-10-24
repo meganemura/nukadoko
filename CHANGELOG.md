@@ -271,7 +271,9 @@ just until 0.1.
   world's URL is the base URL of `page`, `context`, `pageAs`, and
   `request`, and its `env` reaches the steps' process too. `program.log`
   holds what every command printed, redacted, and `{token}` is redacted as
-  `{{secret.WORLD_TOKEN}}`. run.json gains `worlds` (`name`, `tree`,
+  `{{secret.WORLD_TOKEN}}`. A write the step's own process makes in the
+  world's directory is in its `observed.files`; the program's own writes
+  there are not, and its log is where its work shows. run.json gains `worlds` (`name`, `tree`,
   `url`, `commands`, `timings`, `log`, `error`), each step record gains
   `world_name`, and two run codes are new: `program-start-failed`, which
   fails the run and runs no scenario in that world, and `program-exited`,

@@ -23,6 +23,9 @@ export interface WorldView {
    * and writes what it prints there; `null` for a world it does not serve,
    * whose program's log nukadoko cannot read. */
   readonly log: string | null;
+  /** The world's directory, `{dir}`, absolute: where the program keeps
+   * its state. A step's own write there is in its `observed.files`. */
+  readonly dir: string;
   /** The eight hexadecimal characters every trace id of the world starts
    * with (src/context/trace-context.ts), so every process that reads the
    * program's log finds the same trace id in a line. */
@@ -37,7 +40,7 @@ export function serializeWorldView(view: WorldView): string {
  * ago, so a value that does not read is a bug and throws. */
 export function parseWorldView(text: string): WorldView {
   const value = JSON.parse(text) as Partial<WorldView>;
-  if (typeof value.name !== "string" || typeof value.env !== "object" || !Array.isArray(value.secrets) || typeof value.tracePrefix !== "string") {
+  if (typeof value.name !== "string" || typeof value.env !== "object" || !Array.isArray(value.secrets) || typeof value.tracePrefix !== "string" || typeof value.dir !== "string") {
     throw new Error(`not a world view: ${text.slice(0, 200)}`);
   }
   return {
@@ -46,6 +49,7 @@ export function parseWorldView(text: string): WorldView {
     env: value.env ?? {},
     secrets: value.secrets,
     log: value.log ?? null,
+    dir: value.dir,
     tracePrefix: value.tracePrefix,
   };
 }

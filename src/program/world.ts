@@ -244,7 +244,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         if (commands.length > 0 || recipe.setup !== undefined) {
           options.progress.write(`${readyLine(name, timings, url, log.written ? path.relative(options.rootDir, log.path) : null)}\n`);
         }
-        const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, tracePrefix };
+        const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, dir, tracePrefix };
         const running = server;
         // A world at a URL has a log nukadoko cannot read; a world with no
         // URL sends nothing to stamp.

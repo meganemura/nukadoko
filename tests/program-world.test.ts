@@ -221,6 +221,7 @@ describe("a world nukadoko does not serve", () => {
       env: {},
       secrets: [{ name: "WORLD_TOKEN", value: expect.any(String) }],
       log: null,
+      dir: path.join(runDir, "worlds", "pr-12"),
       tracePrefix: expect.stringMatching(/^[0-9a-f]{8}$/),
     });
     expect(progress.text()).toBe("");

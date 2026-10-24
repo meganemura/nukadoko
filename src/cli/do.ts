@@ -450,6 +450,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       baseURL: world?.view.url,
       programLog: world?.view.log,
       tracePrefix: world?.view.tracePrefix,
+      worldDir: world?.view.dir,
       evidenceDir,
       // The world's directory is beside the record (worldDir above), so a
       // step's evidence may not take its name.

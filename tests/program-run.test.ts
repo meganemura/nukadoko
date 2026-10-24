@@ -178,6 +178,28 @@ describe("a program nukadoko serves", () => {
     expect(await answers(port)).toBe(false);
   });
 
+  it("records a step's own write in the world's directory, and leaves the program's writes there to its log", async () => {
+    await writeFile(
+      path.join(rootDir, "features", "write.feature"),
+      "Feature: Writes beside the database\n\n  Scenario: two writers\n    When the step and the program each write a file beside the database\n",
+    );
+    const filesOf = (record: Record<string, unknown>): unknown =>
+      (record.observed as { files: { path: string; change: string }[] | null }).files?.map((file) => [file.path, file.change]);
+
+    expect((await cli(rootDir, ["run", "features/write.feature"])).exitCode).toBe(0);
+    const worldDir = path.join(latestRunDir(rootDir), "worlds", "default");
+    const [id] = stepRecordIds(rootDir);
+    expect(filesOf(stepResult(rootDir, id!))).toEqual([[path.join(worldDir, "step-wrote.txt"), "added"]]);
+    expect(existsSync(path.join(worldDir, "program-wrote.txt"))).toBe(true);
+
+    const done = await cli(rootDir, ["do", "write-beside-database", "--args", "{}"]);
+    expect(done.exitCode).toBe(0);
+    const record = JSON.parse(done.stdout) as Record<string, unknown> & { step_record_id: string };
+    const doWorldDir = path.join(stepRecordDir(rootDir, record.step_record_id), "world");
+    expect(filesOf(record)).toEqual([[path.join(doWorldDir, "step-wrote.txt"), "added"]]);
+    expect(existsSync(path.join(doWorldDir, "program-wrote.txt"))).toBe(true);
+  });
+
   it("nuka do writes no step record when the program does not start", async () => {
     await writeFile(
       path.join(rootDir, "nukadoko.program.ts"),

@@ -526,6 +526,10 @@ export interface CreateStepContextOptions {
   /** The prefix every trace id of the world starts with
    * (src/program/world-view.ts). Without one, the handle makes its own. */
   tracePrefix?: string | undefined;
+  /** The world's directory (src/program/world-view.ts). It is inside the
+   * state directory, which the file measurement leaves out, and a step's
+   * own write there is recorded all the same (observed.ts). */
+  worldDir?: string | undefined;
   /** Absolute path to this execution's browser evidence directory (trace.zip,
    * screenshots) and, until `beginStep` first moves it, http.jsonl too; must
    * already exist. */
@@ -681,6 +685,7 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   const trace = worldOrigin === undefined ? undefined : { prefix: options.tracePrefix ?? newTracePrefix(), origin: worldOrigin };
   const observed = createObservedCollector({
     unwatchedDirs: config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)],
+    ...(options.worldDir === undefined ? {} : { watchedDirs: [options.worldDir] }),
     outputDir: () => boundaryDir,
     secrets,
     httpLogFailed,
