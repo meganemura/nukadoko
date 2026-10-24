@@ -88,9 +88,10 @@ describe("nuka scaffold --feature", () => {
   });
 
   // A claim's expected value is one the line states (docs/spec.md
-  // "Claims"): a Then line that states none gets no stub, and one that
-  // states its value with a word compares with that word's literal.
-  it("writes no stub for a Then line that states no value, and a literal claim for one a word states", async () => {
+  // "Claims"): a Then line that states none gets no stub, and neither does
+  // one that states its value with a word alone, since a stub chains no
+  // value whose JSON type picks the word's literal.
+  it("writes no stub for a Then line that states no value, or one only a word states", async () => {
     const feature = await writeFeature(rootDir, "banner.feature", [
       "Feature: banner",
       "  Scenario: a banner",
@@ -102,12 +103,15 @@ describe("nuka scaffold --feature", () => {
     const result = await cli(rootDir, ["scaffold", "--feature", feature]);
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe(["features/steps/i-open-the-page.ts", "features/steps/the-error-list-is-empty.ts", ""].join("\n"));
+    expect(result.stdout).toBe(["features/steps/i-open-the-page.ts", ""].join("\n"));
     expect(result.stderr).toContain(
       "note: features/banner.feature:4: a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, empty), so no stub was written; state the value this line checks in the line, such as a number or a quoted text, and scaffold again\n",
     );
+    expect(result.stderr).toContain(
+      'note: features/banner.feature:5: the line states its value only with the word "empty", which fixes "" or [], and no --from names the value it is compared with, so that value\'s JSON type is unknown; a literal of another JSON type would never hold, so no stub was written; scaffold it alone with --then --from <step>.<key>, naming a value its step\'s returns declares as z.string(), z.number(), or z.array()\n',
+    );
     expect(existsSync(path.join(rootDir, "features", "steps", "the-banner-looks-right.ts"))).toBe(false);
-    expect(await stepFile(rootDir, "the-error-list-is-empty")).toContain('  claims: [{ actual: "actual", compare: "equal", expected: { literal: "" } }],');
+    expect(existsSync(path.join(rootDir, "features", "steps", "the-error-list-is-empty.ts"))).toBe(false);
   });
 
   it("writes a When stub with its captures, and a Then stub with observe and a claim", async () => {

@@ -4142,11 +4142,16 @@ nuka scaffold <name> [--pattern <text>] [--then | --command [<entry point>] [--c
                               and one claim on what observe returns
                               against the first stated value. A line
                               that states no value but holds a word that
-                              fixes one (no, none, nothing, empty) gets
-                              a claim with equal against { literal },
-                              the word's value of the chained value's
-                              class (its first otherwise), with a
-                              comment naming the others.
+                              fixes one (no, none, nothing, empty) needs
+                              exactly one --from whose returns schema is
+                              a bare z.string(), z.number(), or
+                              z.array(): its claim compares that value
+                              with the word's literal of the same JSON
+                              type ("", 0, or []), with equal, or with
+                              not-equal right after the word "not". With
+                              no --from, several, one of another type,
+                              or one whose type the word fixes no value
+                              of, --then refuses and writes no literal.
                               A pattern that states no value at all is
                               refused, so --then never writes an
                               expected value that observe computes.
@@ -4264,7 +4269,10 @@ nuka scaffold --feature <path>
                               integer {value:int}, a decimal
                               {value:float}, keyed value, value2, ... A
                               Then line (and its And/But) gets --then's
-                              claim step. A line with a
+                              claim step; one that states no value, or
+                              states it with a word alone, gets a note
+                              and no stub, since a stub chains nothing.
+                              A line with a
                               docstring gets a docstring: z.string()
                               key, and one with a table a table key of
                               rows, which a Then compares. The name is the pattern's

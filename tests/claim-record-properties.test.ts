@@ -3,10 +3,10 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
 import { certainlySamePlace } from "../src/check/claim-check.js";
-import { statedWord } from "../src/cli/scaffold.js";
+import { type ChainedJsonType, wordLiteral } from "../src/cli/scaffold.js";
 import type { ClaimReading, StepRecord } from "../src/record/types.js";
 import { judgedBy, scenarioClaims } from "../src/run/run-document.js";
-import { ANY_INDEX, LITERAL_WORDS, literalStatedBy } from "../src/step/claims.js";
+import { ANY_INDEX, claimsProblem, LITERAL_WORDS, literalStatedBy } from "../src/step/claims.js";
 import { CLAIM_READING_MAX_BYTES, CLAIM_READINGS_CAP, failedReading, keptReadings, readingValue } from "../src/step/evaluate-claims.js";
 
 // Responsibility: the pure parts of what a claim leaves in the record
@@ -180,16 +180,21 @@ describe("a scenario entry's claims and judged_by", () => {
 });
 
 describe("the literal nuka scaffold --then writes for a word", () => {
-  it("is one the literal rule accepts for the same pattern", () =>
+  const jsonTypeOf = (value: unknown): ChainedJsonType => (Array.isArray(value) ? "array" : typeof value === "string" ? "string" : typeof value === "number" ? "number" : null);
+
+  it("is of the chained value's JSON type, one the literal rule accepts with the compare it writes, and there exactly when a word fixes a value of that type", () =>
     hegel.testAsync(async (tc) => {
-      const words = tc.draw(gs.arrays(gs.sampledFrom(["the", "list", "is", "shows", "{count:int}", "NO", "none", "nothing", "empty"]), { minSize: 1, maxSize: 5 }));
+      const words = tc.draw(gs.arrays(gs.sampledFrom(["the", "list", "is", "not", "shows", "{count:int}", "NO", "none", "nothing", "empty"]), { minSize: 1, maxSize: 5 }));
       const pattern = words.join(" ");
-      const actualClass = tc.draw(gs.sampledFrom(["string", "number", "other"] as const));
-      const stated = statedWord(pattern, actualClass);
-      const hasWord = words.some((word) => LITERAL_WORDS[word.toLowerCase()] !== undefined);
-      expect(stated !== null).toBe(hasWord);
-      if (stated === null) return;
-      expect(LITERAL_WORDS[stated.word.toLowerCase()]).toContainEqual(stated.literal);
-      expect(literalStatedBy(pattern, stated.literal)).not.toBeNull();
+      const jsonType = tc.draw(gs.sampledFrom<ChainedJsonType>(["string", "number", "array", null]));
+      const chosen = wordLiteral(pattern, jsonType);
+      const fixesOne = words.some((word) => (LITERAL_WORDS[word.toLowerCase()] ?? []).some((value) => jsonTypeOf(value) === jsonType));
+      expect(chosen !== null).toBe(jsonType !== null && fixesOne);
+      if (chosen === null) return;
+      expect(jsonTypeOf(chosen.literal)).toBe(jsonType);
+      expect(LITERAL_WORDS[chosen.word.toLowerCase()]).toContainEqual(chosen.literal);
+      expect(literalStatedBy(pattern, chosen.literal)).not.toBeNull();
+      const shape = { patterns: [pattern], argsKeys: null, requiredArgsKeys: null, fromKeys: new Set(["got"]), captureKeys: new Set<string>(), hasObserve: false, rewrittenArgs: new Map(), stringArgs: null };
+      expect(claimsProblem([{ actual: "got", compare: chosen.compare, expected: { literal: chosen.literal } }], shape)).toBeNull();
     }));
 });

@@ -242,18 +242,44 @@ describe("nuka scaffold --from", () => {
     expect(existsSync(path.join(rootDir, "features", "steps", "greet-wrote.ts"))).toBe(false);
   });
 
-  it("compares with the literal a word of the line states when it captures nothing", async () => {
+  it("compares with the literal of the chained value's JSON type that a word of the line states when it captures nothing", async () => {
     const result = await cli(rootDir, ["scaffold", "greet-printed-nothing", "--pattern", "greet printed nothing", "--then", "--from", "run-greet.stdout"]);
 
     expect(result.exitCode).toBe(0);
     const written = await readFile(path.join(rootDir, "features", "steps", "greet-printed-nothing.ts"), "utf8");
     expect(written).toContain(
       [
-        '  // "nothing" states "", or 0 or []: keep the one of the value you compare. A word\'s literal is compared with equal alone.',
+        '  // "nothing" states "" for the type stdout holds. A word\'s literal is compared with equal alone.',
         "  // The program ends its output with a newline that the feature line does not show.",
         '  claims: [{ actual: "stdout", view: "text", compare: "equal", expected: { literal: "" } }],',
       ].join("\n"),
     );
+  });
+
+  it("writes not-equal for a word right after not, and the exit code's 0 for a number", async () => {
+    expect((await cli(rootDir, ["scaffold", "greet-printed-something", "--pattern", "greet printed not nothing", "--then", "--from", "run-greet.stdout"])).exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "greet-printed-something.ts"), "utf8")).toContain(
+      '  claims: [{ actual: "stdout", view: "text", compare: "not-equal", expected: { literal: "" } }],',
+    );
+    expect((await cli(rootDir, ["scaffold", "greet-failed-none", "--pattern", "greet failed none", "--then", "--from", "run-greet.exitCode"])).exitCode).toBe(0);
+    expect(await readFile(path.join(rootDir, "features", "steps", "greet-failed-none.ts"), "utf8")).toContain(
+      '  claims: [{ actual: "exitCode", compare: "equal", expected: { literal: 0 } }],',
+    );
+    const empty = await cli(rootDir, ["scaffold", "greet-exit-is-empty", "--pattern", "greet exit is empty", "--then", "--from", "run-greet.exitCode"]);
+    expect(empty.exitCode).toBe(2);
+    expect(empty.stderr).toContain('which fixes "" or [], and --from exitCode holds a number, a type no word of the line fixes a value of; a literal of another JSON type would never hold');
+  });
+
+  it("refuses --then when a word's values have no value of the chained value's type, or no value is chained, and writes nothing", async () => {
+    const none = await cli(rootDir, ["scaffold", "the-list-is-empty", "--pattern", "the list is empty", "--then"]);
+    expect(none).toEqual({
+      exitCode: 2,
+      stdout: "",
+      stderr:
+        'refused\tinvalid-value\t-\tRefusing to scaffold: --then: the line states its value only with the word "empty", which fixes "" or [], and no --from names the value it is compared with, so that value\'s JSON type is unknown; a literal of another JSON type would never hold\n' +
+        "  fix: Chain the value the line checks with --from <step>.<key> from a step whose returns declares it as z.string(), z.number(), or z.array(), or capture the value in --pattern, and scaffold again.\n",
+    });
+    expect(existsSync(path.join(rootDir, "features", "steps", "the-list-is-empty.ts"))).toBe(false);
   });
 
   it("lists each producer of one key as a candidate, and either one binds it in a run", async () => {

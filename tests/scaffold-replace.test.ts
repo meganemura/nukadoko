@@ -4,8 +4,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { type Attachment, type ChainedField, isUneditedStub, type Producer, stepTemplate, thenStatesValue } from "../src/cli/scaffold.js";
-import type { PrimitiveClass } from "../src/binding/schema-shape.js";
+import { type Attachment, type ChainedField, isUneditedStub, type Producer, stepTemplate, thenLiteralRefusal, thenStatesValue } from "../src/cli/scaffold.js";
 import { stripCaptureNames } from "../src/binding/pattern.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir } from "./helpers/fixtures.js";
 
@@ -173,7 +172,14 @@ function draftChained(tc: hegel.TestCase, captureKeys: readonly string[]): Chain
     return {
       key,
       producers: producers as [Producer, ...Producer[]],
-      valueClass: tc.draw(gs.sampledFrom<PrimitiveClass>(["string", "number", "other"])),
+      ...tc.draw(
+        gs.sampledFrom<Pick<ChainedField, "valueClass" | "jsonType">>([
+          { valueClass: "string", jsonType: "string" },
+          { valueClass: "number", jsonType: "number" },
+          { valueClass: "other", jsonType: null },
+          { valueClass: "other", jsonType: "array" },
+        ]),
+      ),
     };
   });
 }
@@ -189,7 +195,7 @@ function draftStub(tc: hegel.TestCase): { file: string; name: string; relativeFi
   const command = variant === "command";
   const attachment = pattern === null || command ? null : tc.draw(gs.sampledFrom<Attachment | null>([null, "docstring", "table"]));
   // scaffold refuses --then for a line that states no value, so it writes no such stub to read back.
-  tc.assume(variant !== "then" || thenStatesValue(pattern, captures, attachment));
+  tc.assume(variant !== "then" || (thenStatesValue(pattern, captures, attachment) && thenLiteralRefusal(pattern, captures, attachment, chained) === null));
   const file = stepTemplate({
     name,
     pattern,

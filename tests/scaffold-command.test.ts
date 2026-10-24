@@ -944,11 +944,11 @@ describe("every scaffolded variant", () => {
     );
     const variants: readonly (readonly string[])[] = [
       ["scaffold", "bare-when"],
-      ["scaffold", "bare-then", "--pattern", "the list is empty", "--then"],
       ["scaffold", "args-when", "--pattern", "set {n:int} {w:word} {b:biginteger} {c:colour}"],
       ["scaffold", "args-then", "--pattern", "the total is {total:float}", "--then"],
       ["scaffold", "run-bare", "--command"],
       ["scaffold", "run-args", "--pattern", "run with {s:string} {n:int} {b:biginteger}", "--command"],
+      ["scaffold", "bare-then", "--pattern", "it printed nothing", "--then", "--from", "run-args.stdout"],
       ["scaffold", "chained-then", "--pattern", "it printed {text:string}", "--then", "--from", "run-args.stdout", "--from", "run-args.exitCode"],
       ["scaffold", "asserted-then", "--pattern", "it said {text:string}", "--then", "--from", "run-args.stdout"],
       ["scaffold", "exit-then", "--pattern", "it exited {code:int}", "--then", "--from", "run-args.exitCode"],

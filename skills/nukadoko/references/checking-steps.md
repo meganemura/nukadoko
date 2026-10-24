@@ -29,7 +29,8 @@ export default defineStep({
 
 A claim is `{ actual, view?, at?, compare, expected, expected_view? }`.
 `nuka scaffold --then --from <step>.<key>` writes this shape when the
-line states one value; `examples/` has a finished Then for a CLI, an API,
+line states one value (for a word such as `empty`, the literal of the
+chained key's type); `examples/` has a finished Then for a CLI, an API,
 and a workflow (`examples/workflow.md` claims a literal and a sentence
 value in one step). Write claims as plain data (no getter, Proxy, or
 class instance) and export what `defineStep` returned: it validates and

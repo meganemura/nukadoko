@@ -19,7 +19,16 @@ import { isCommonJsProject } from "../config/module-kind.js";
 import { attachStepLines, loadFeaturesFromDirs } from "../feature/load-features.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { readCheckTargets } from "./check.js";
-import { attachmentInFeatures, readPattern, refusedBelowParentConfig, stepTemplate, THEN_STATES_NO_VALUE, thenStatesValue, type StepTemplate } from "./scaffold.js";
+import {
+  attachmentInFeatures,
+  readPattern,
+  refusedBelowParentConfig,
+  stepTemplate,
+  THEN_STATES_NO_VALUE,
+  thenLiteralRefusal,
+  thenStatesValue,
+  type StepTemplate,
+} from "./scaffold.js";
 import { shellWord } from "../shell/shell-word.js";
 import type { RefusalCode } from "./refusal-codes.js";
 import { RefusalError, refuse, restated, type Hint } from "./refusal.js";
@@ -342,6 +351,16 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
     if (then && !thenStatesValue(stub.pattern, captures, attachment)) {
       taken.delete(name);
       notes.push(`${location(stub.lines[0]!)}: ${THEN_STATES_NO_VALUE}, so no stub was written; state the value this line checks in the line, such as a number or a quoted text, and scaffold again`);
+      continue;
+    }
+    // A stub here chains nothing, so a line that states its value with a
+    // word alone has no value whose JSON type picks the word's literal.
+    const literalRefusal = then ? thenLiteralRefusal(stub.pattern, captures, attachment, []) : null;
+    if (literalRefusal !== null) {
+      taken.delete(name);
+      notes.push(
+        `${location(stub.lines[0]!)}: ${literalRefusal}, so no stub was written; scaffold it alone with --then --from <step>.<key>, naming a value its step's returns declares as z.string(), z.number(), or z.array()`,
+      );
       continue;
     }
     const template: StepTemplate = {

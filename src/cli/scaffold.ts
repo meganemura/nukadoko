@@ -22,7 +22,7 @@ import { DESCRIPTION_TODO_PREFIX } from "../check/description-todo.js";
 import { discoverSteps, type TypedVocabularyEntry } from "../discover/discover-steps.js";
 import { tsExtensionImports, type TsExtensionImports } from "./tsconfig-edit.js";
 import { declaresReturns } from "../step/define-step.js";
-import { fixedWords, LITERAL_WORDS, type ClaimLiteral } from "../step/claims.js";
+import { fixedWords, LITERAL_WORDS, literalStatement, type ClaimLiteral } from "../step/claims.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
 
@@ -211,12 +211,19 @@ export interface Producer {
   readonly specifier: string;
 }
 
+/** The JSON type a chained value's schema declares, as scaffold reads it:
+ * a bare `z.string()`, `z.number()`, or `z.array(...)`, and `null` for
+ * any other schema, whose values may be of more than one type. */
+export type ChainedJsonType = "string" | "number" | "array" | null;
+
 /** One args key filled through `from`: every `--from` that names it, in
- * the order given, and the class of the value their schemas hold. */
+ * the order given, and the class and JSON type of the value their schemas
+ * hold. */
 export interface ChainedField {
   readonly key: string;
   readonly producers: readonly [Producer, ...Producer[]];
   readonly valueClass: PrimitiveClass;
+  readonly jsonType: ChainedJsonType;
 }
 
 /** What the step is for, which decides its outcome and its body. */
@@ -243,10 +250,12 @@ const VARIANTS: Readonly<Record<Variant, VariantShape>> = {
   },
 };
 
-/** One args field: its key and the class of the value it holds. */
+/** One args field: its key and the class of the value it holds, and, for
+ * a chained value, its JSON type. */
 interface Field {
   readonly key: string;
   readonly valueClass: PrimitiveClass;
+  readonly jsonType?: ChainedJsonType;
 }
 
 export interface StepTemplate {
@@ -513,7 +522,7 @@ function importLines(chained: readonly ChainedField[]): string[] {
 function fieldsOf(captures: readonly Capture[], chained: readonly ChainedField[]): Field[] {
   return [
     ...captures.map((capture) => ({ key: capture.key, valueClass: CAPTURED_CLASS.get(capture.type) ?? "other" })),
-    ...chained.map(({ key, valueClass }) => ({ key, valueClass })),
+    ...chained.map(({ key, valueClass, jsonType }) => ({ key, valueClass, jsonType })),
   ];
 }
 
@@ -545,21 +554,37 @@ const OUTPUT_STREAMS: ReadonlySet<string> = new Set(["stdout", "stderr"]);
 export const THEN_STATES_NO_VALUE =
   "a Then step's claim compares what the step reads with a value the line states, and this pattern captures none and holds no word that states one (no, none, nothing, empty)";
 
-/** The first word of `pattern` that states a literal (`LITERAL_WORDS`), the
- * value `--then` compares with, and the word's other values, or `null`. The
- * value is the one of the actual value's class when the word has one (`""`
- * for a string, `0` for a number), and the word's first otherwise. The word
- * fixes the value, so the claim compares with `equal` alone. Pure. */
-export function statedWord(
-  pattern: string | null,
-  actualClass: PrimitiveClass = "other",
-): { readonly word: string; readonly literal: ClaimLiteral; readonly others: readonly ClaimLiteral[] } | null {
-  if (pattern === null) return null;
-  for (const word of fixedWords(pattern)) {
+/** Every fixed word of `pattern` that states a literal (`LITERAL_WORDS`),
+ * in order, with the values it fixes. Pure. */
+function literalWords(pattern: string | null): readonly { readonly word: string; readonly values: readonly ClaimLiteral[] }[] {
+  if (pattern === null) return [];
+  return fixedWords(pattern).flatMap((word) => {
     const values = LITERAL_WORDS[word.toLowerCase()];
-    if (values === undefined || values.length === 0) continue;
-    const literal = values.find((value) => typeof value === actualClass) ?? values[0]!;
-    return { word, literal, others: values.filter((value) => value !== literal) };
+    return values === undefined || values.length === 0 ? [] : [{ word, values }];
+  });
+}
+
+function jsonTypeOfLiteral(literal: ClaimLiteral): ChainedJsonType {
+  if (Array.isArray(literal)) return "array";
+  if (typeof literal === "string") return "string";
+  return typeof literal === "number" ? "number" : null;
+}
+
+/** What `--then` compares with for a line that states its value with a
+ * word alone: the first word's value whose JSON type is `jsonType` (`""`
+ * for a string, `0` for a number, `[]` for an array), and the one compare
+ * the literal rule allows for it (`not-equal` right after a fixed `not`,
+ * `equal` otherwise). `null` when the type is unknown or no word fixes a
+ * value of it: a claim across two JSON types never holds, so no literal is
+ * better than a guess. Pure. */
+export function wordLiteral(
+  pattern: string | null,
+  jsonType: ChainedJsonType,
+): { readonly word: string; readonly literal: ClaimLiteral; readonly compare: "equal" | "not-equal" } | null {
+  if (pattern === null || jsonType === null) return null;
+  for (const { word, values } of literalWords(pattern)) {
+    const literal = values.find((value) => jsonTypeOfLiteral(value) === jsonType);
+    if (literal !== undefined) return { word, literal, compare: literalStatement(pattern, literal)?.compare ?? "equal" };
   }
   return null;
 }
@@ -567,7 +592,41 @@ export function statedWord(
 /** Whether `--then` can write a claim for this line: it captures a value,
  * carries a docstring or a table, or holds a word that states one. */
 export function thenStatesValue(pattern: string | null, captures: readonly Capture[], attachment: "docstring" | "table" | null | undefined): boolean {
-  return captures.length > 0 || (attachment !== null && attachment !== undefined) || statedWord(pattern) !== null;
+  return captures.length > 0 || (attachment !== null && attachment !== undefined) || literalWords(pattern).length > 0;
+}
+
+/** The next step for a line `thenLiteralRefusal` refuses, in words. */
+export const THEN_LITERAL_FIX =
+  "Chain the value the line checks with --from <step>.<key> from a step whose returns declares it as z.string(), z.number(), or z.array(), or capture the value in --pattern, and scaffold again.";
+
+/** Why `--then` writes no claim for a line that states its value with a
+ * word alone, or `null` when it can: the claim needs exactly one chained
+ * value whose JSON type the word fixes a value of, since the word's values
+ * differ in type (`no` fixes `0`, `""`, or `[]`) and only one of them can
+ * equal the value read. `null` too for a line that states its value
+ * another way, or none (`thenStatesValue` refuses that one). Pure. */
+export function thenLiteralRefusal(
+  pattern: string | null,
+  captures: readonly Capture[],
+  attachment: "docstring" | "table" | null | undefined,
+  chained: readonly Pick<ChainedField, "key" | "jsonType">[],
+): string | null {
+  if (captures.length > 0 || (attachment !== null && attachment !== undefined)) return null;
+  const first = literalWords(pattern)[0];
+  if (first === undefined) return null;
+  const only = chained.length === 1 ? chained[0]! : null;
+  if (only !== null && wordLiteral(pattern, only.jsonType) !== null) return null;
+  const shown = first.values.map((value) => JSON.stringify(value));
+  const values = shown.length === 1 ? shown[0]! : `${shown.slice(0, -1).join(", ")} or ${shown.at(-1)!}`;
+  const why =
+    only === null
+      ? chained.length === 0
+        ? "no --from names the value it is compared with, so that value's JSON type is unknown"
+        : `${chained.length} --from values fill this step, so which one it is compared with is unknown`
+      : only.jsonType === null
+        ? `--from ${only.key} is not declared as a bare z.string(), z.number(), or z.array(), so its JSON type is unknown`
+        : `--from ${only.key} holds ${only.jsonType === "array" ? "an array" : `a ${only.jsonType}`}, a type no word of the line fixes a value of`;
+  return `the line states its value only with the word "${first.word}", which fixes ${values}, and ${why}; a literal of another JSON type would never hold`;
 }
 
 /** A Then step's claims, and its `observe` while it has none to read from
@@ -582,7 +641,7 @@ export function thenStatesValue(pattern: string | null, captures: readonly Captu
  * no value (`thenStatesValue`). */
 function thenLines(name: string, pattern: string | null, stated: readonly Field[], chained: readonly Field[]): string[] {
   const expected = stated[0];
-  if (expected === undefined) return wordThenLines(name, pattern, chained);
+  if (expected === undefined) return wordThenLines(pattern, chained);
   if (stated.length === 1 && chained.length === 1) {
     const actual = chained[0]!;
     const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string" && expected.valueClass === "string";
@@ -608,34 +667,19 @@ function thenLines(name: string, pattern: string | null, stated: readonly Field[
   ];
 }
 
-/** A Then step whose line states its value with a word alone: the claim
- * compares with that word's literal. A chained value, when there is exactly
- * one, is the actual; otherwise `observe` reads it. */
-function wordThenLines(name: string, pattern: string | null, chained: readonly Field[]): string[] {
-  const stated = statedWord(pattern, chained.length === 1 ? chained[0]!.valueClass : "other");
-  if (stated === null) throw new Error(`internal: ${THEN_STATES_NO_VALUE}, and the caller should have refused it`);
-  const literal = `{ literal: ${JSON.stringify(stated.literal)} }`;
-  const others = stated.others.map((value) => JSON.stringify(value)).join(" or ");
-  const note = `  // "${stated.word}" states ${JSON.stringify(stated.literal)}${others === "" ? "" : `, or ${others}`}: keep the one of the value you compare. A word's literal is compared with equal alone.`;
-  if (chained.length === 1) {
-    const actual = chained[0]!;
-    const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string";
-    return [
-      note,
-      ...(text ? ["  // The program ends its output with a newline that the feature line does not show."] : []),
-      `  claims: [{ actual: ${JSON.stringify(actual.key)},${text ? ' view: "text",' : ""} compare: "equal", expected: ${literal} }],`,
-    ];
-  }
-  const parameter = chained.length === 0 ? "" : `{}, { ${chained.map((field) => field.key).join(", ")} }`;
-  const actualKey = freeKey("actual", new Set(chained.map((field) => field.key)));
+/** A Then step whose line states its value with a word alone: the one
+ * chained value is the actual, compared with the word's literal of its JSON
+ * type (`wordLiteral`). A caller never asks for a line
+ * `thenLiteralRefusal` refuses. */
+function wordThenLines(pattern: string | null, chained: readonly Field[]): string[] {
+  const actual = chained.length === 1 ? chained[0]! : undefined;
+  const stated = actual === undefined ? null : wordLiteral(pattern, actual.jsonType ?? null);
+  if (actual === undefined || stated === null) throw new Error("internal: the caller should have refused this Then (thenLiteralRefusal)");
+  const text = OUTPUT_STREAMS.has(actual.key) && actual.valueClass === "string";
   return [
-    `  // TODO: read the value this line checks and return it as { ${actualKey} }, or take it`,
-    "  // from an earlier step's returns through `from` and remove observe.",
-    `  observe(${parameter}) {`,
-    stubBody(name, chained),
-    "  },",
-    note,
-    `  claims: [{ actual: ${JSON.stringify(actualKey)}, compare: "equal", expected: ${literal} }],`,
+    `  // "${stated.word}" states ${JSON.stringify(stated.literal)} for the type ${actual.key} holds. A word's literal is compared with ${stated.compare} alone.`,
+    ...(text ? ["  // The program ends its output with a newline that the feature line does not show."] : []),
+    `  claims: [{ actual: ${JSON.stringify(actual.key)},${text ? ' view: "text",' : ""} compare: "${stated.compare}", expected: { literal: ${JSON.stringify(stated.literal)} } }],`,
   ];
 }
 
@@ -833,7 +877,19 @@ const FROM_CANDIDATE = /\[([A-Za-z_$][A-Za-z0-9_$]*), "([A-Za-z_$][A-Za-z0-9_$]*
 
 const TEMPLATE_VARIANTS: readonly Variant[] = ["when", "then", "command", "request"];
 const TEMPLATE_ATTACHMENTS: readonly (Attachment | null)[] = [null, "docstring", "table"];
-const CHAINED_CLASSES: readonly PrimitiveClass[] = ["string", "number", "other"];
+/** A class and a JSON type a chained key may have been read with. */
+type ChainedKind = Pick<ChainedField, "valueClass" | "jsonType">;
+
+const CHAINED_KINDS: readonly ChainedKind[] = [
+  { valueClass: "string", jsonType: "string" },
+  { valueClass: "number", jsonType: "number" },
+  { valueClass: "other", jsonType: null },
+];
+
+// An array differs from another value only in the literal a word's Then
+// compares its one chained value with, so it is tried for one key alone
+// and the renders for more keys do not grow.
+const ARRAY_KIND: ChainedKind = { valueClass: "other", jsonType: "array" };
 
 // Each chained key multiplies the renders by three; a file with more keys
 // than this is refused rather than rendered thousands of times.
@@ -879,11 +935,12 @@ function chainedFromFile(source: string): { key: string; producers: Producer[] }
   return null;
 }
 
-/** Every assignment of a value class to each of `count` chained keys. */
-function classAssignments(count: number): PrimitiveClass[][] {
-  let assignments: PrimitiveClass[][] = [[]];
+/** Every assignment of a kind to each of `count` chained keys. */
+function kindAssignments(count: number): ChainedKind[][] {
+  if (count === 1) return [...CHAINED_KINDS, ARRAY_KIND].map((kind) => [kind]);
+  let assignments: ChainedKind[][] = [[]];
   for (let index = 0; index < count; index += 1) {
-    assignments = assignments.flatMap((assignment) => CHAINED_CLASSES.map((valueClass) => [...assignment, valueClass]));
+    assignments = assignments.flatMap((assignment) => CHAINED_KINDS.map((kind) => [...assignment, kind]));
   }
   return assignments;
 }
@@ -929,18 +986,18 @@ export function isUneditedStub(source: string, name: string, relativeFilePath: s
   const requestPath = call === null ? null : readRequestPath(call[1]!);
   const request = method === null || requestPath === null ? null : { method, path: requestPath };
   const bodyKey = call?.[3] ?? null;
-  return classAssignments(chainedKeys.length).some((classes) => {
+  return kindAssignments(chainedKeys.length).some((kinds) => {
     const chained = chainedKeys.map(({ key, producers }, index): ChainedField => ({
       key,
       producers: producers as [Producer, ...Producer[]],
-      valueClass: classes[index]!,
+      ...kinds[index]!,
     }));
     return TEMPLATE_VARIANTS.some((variant) =>
       TEMPLATE_ATTACHMENTS.some(
         (attachment) =>
           // scaffold writes no Then stub for a line that states no value,
           // so that reading cannot match, and stepTemplate refuses to draw it.
-          (variant !== "then" || thenStatesValue(pattern, captures, attachment)) &&
+          (variant !== "then" || (thenStatesValue(pattern, captures, attachment) && thenLiteralRefusal(pattern, captures, attachment, chained) === null)) &&
           stepTemplate({
             name,
             pattern,
@@ -1078,6 +1135,13 @@ function chainedClass(schema: z.ZodTypeAny): PrimitiveClass {
   return schema.type === "string" || schema.type === "number" ? schema.type : "other";
 }
 
+/** The JSON type of a chained value, read the same way: a bare
+ * `z.string()`, `z.number()`, or `z.array(...)`, so an optional or nullable
+ * one, which may hold no value of that type, has none. */
+function chainedJsonType(schema: z.ZodTypeAny): ChainedJsonType {
+  return schema.type === "string" || schema.type === "number" || schema.type === "array" ? schema.type : null;
+}
+
 /** A schema's JSON Schema with every `description` (and the `$schema`
  * dialect line) dropped, as text, or `null` when zod cannot represent it:
  * two producers that describe one key differently still declare one type. */
@@ -1169,6 +1233,7 @@ function resolveChain(
     key,
     producers,
     valueClass: chainedClass(schema as z.ZodTypeAny),
+    jsonType: chainedJsonType(schema as z.ZodTypeAny),
   }));
   return { chained };
 }
@@ -1486,6 +1551,10 @@ export async function runScaffold(options: RunScaffoldOptions): Promise<number> 
     return refuse(sinks, `Refusing to scaffold: --then: ${THEN_STATES_NO_VALUE}`, "invalid-value", {
       fix: 'Capture the value the line checks in --pattern, such as "the count is {count:int}", or write a feature line with a docstring or a table, and scaffold again.',
     });
+  }
+  const literalRefusal = then ? thenLiteralRefusal(pattern, read.captures, attachment, chained) : null;
+  if (literalRefusal !== null) {
+    return refuse(sinks, `Refusing to scaffold: --then: ${literalRefusal}`, "invalid-value", { fix: THEN_LITERAL_FIX });
   }
 
   await mkdir(path.dirname(filePath), { recursive: true });

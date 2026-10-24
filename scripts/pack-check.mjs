@@ -210,11 +210,13 @@ async function verifyOptionalPeerTypeIsolation(projectDir) {
 // `--from` chain, whose import names the producer's `.ts` file; tsc accepts
 // that with the option `nuka init` writes into a project's tsconfig.json.
 async function verifyDeclarationEmit(projectDir, nukaBin) {
-  await runInherit(nukaBin, ["scaffold", "output-is-empty", "--pattern", "the output is empty", "--then"], {
-    cwd: projectDir,
-  });
   await runInherit(nukaBin, ["scaffold", "plain-stub", "--pattern", "nothing happens yet"], { cwd: projectDir });
   await runInherit(nukaBin, ["scaffold", "run-tool", "--pattern", "I run the tool", "--command"], { cwd: projectDir });
+  // A Then that a word alone states takes its literal from the type of the
+  // value it is compared with, so it chains one.
+  await runInherit(nukaBin, ["scaffold", "output-is-empty", "--pattern", "the output is empty", "--then", "--from", "run-tool.stdout"], {
+    cwd: projectDir,
+  });
   await runInherit(
     nukaBin,
     ["scaffold", "tool-printed", "--pattern", "the tool printed {text:string}", "--then", "--from", "run-tool.stdout"],

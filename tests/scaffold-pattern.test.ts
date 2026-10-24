@@ -5,7 +5,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
-import { stepTemplate } from "../src/cli/scaffold.js";
+import { type ChainedField, stepTemplate, thenLiteralRefusal } from "../src/cli/scaffold.js";
 import { claimsProblem } from "../src/step/claims.js";
 import { createCaptureSink, createEmptyTempDir, ensureNukadokoShim, removeTempDir, repoRoot, withoutCheckNotes } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
@@ -430,7 +430,13 @@ describe("nuka scaffold --pattern: any text", () => {
 describe("nuka scaffold --then: the claim it writes", () => {
   const keyNames = ["want", "actual", "actual2", "expected", "got", "stdout"] as const;
   const types = ["string", "int", "biginteger", "colour"] as const;
-  const classes = ["string", "number", "bigint", "other"] as const;
+  const kinds: readonly Pick<ChainedField, "valueClass" | "jsonType">[] = [
+    { valueClass: "string", jsonType: "string" },
+    { valueClass: "number", jsonType: "number" },
+    { valueClass: "bigint", jsonType: null },
+    { valueClass: "other", jsonType: null },
+    { valueClass: "other", jsonType: "array" },
+  ];
 
   it("is a claim defineStep accepts, whatever the keys are called", () =>
     hegel.test((tc) => {
@@ -441,16 +447,20 @@ describe("nuka scaffold --then: the claim it writes", () => {
       const chainedKeys = ordered.slice(captureCount);
       const captures = captureKeys.map((key) => ({ key, type: tc.draw(gs.sampledFrom(types)) }));
       // A line with no capture states its value with a word, or gets no stub.
-      const pattern = ["it is", ...captures.map((capture) => `{${capture.key}:${capture.type}}`), ...(captures.length === 0 ? ["empty"] : [])].join(" ");
+      const words = captures.length === 0 ? [tc.draw(gs.sampledFrom(["empty", "not empty", "holding nothing"]))] : [];
+      const pattern = ["it is", ...captures.map((capture) => `{${capture.key}:${capture.type}}`), ...words].join(" ");
+      const chained: ChainedField[] = chainedKeys.map((key) => ({
+        key,
+        producers: [{ step: "producer", identifier: "producer", specifier: "./producer.ts" }],
+        ...tc.draw(gs.sampledFrom(kinds)),
+      }));
+      // scaffold refuses a word's Then whose one chained value has no type the word fixes a value of.
+      tc.assume(thenLiteralRefusal(pattern, captures, null, chained) === null);
       const file = stepTemplate({
         name: "it-is",
         pattern,
         captures,
-        chained: chainedKeys.map((key) => ({
-          key,
-          producers: [{ step: "producer", identifier: "producer", specifier: "./producer.ts" }],
-          valueClass: tc.draw(gs.sampledFrom(classes)),
-        })),
+        chained,
         variant: "then",
         entryPoint: null,
         cwd: null,

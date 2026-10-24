@@ -76,13 +76,19 @@ just until 0.1.
 
 - **`nuka scaffold --then` writes a claim step.** With one value the line
   states and one `--from`, it writes one `equal` claim, with `view:
-  "text"` for a chained `stdout` or `stderr`; otherwise it writes an
-  `observe` stub that throws `not implemented: <name>` and one claim on
-  what `observe` returns. The expected value is always one the line
-  states: a capture, the docstring, the table, or the literal of a word
-  such as `none` or `empty`, never a value `observe` computes, so a
-  pattern that states no value is refused (exit 2), and
-  `nuka scaffold --feature` skips such a Then line with a note.
+  "text"` for a chained `stdout` or `stderr`; with any other mix of
+  stated values and `--from`, it writes an `observe` stub that throws
+  `not implemented: <name>` and one claim on what `observe` returns. The
+  expected value is always one the line states: a capture, the docstring,
+  the table, or the literal of a word such as `none` or `empty`, never a
+  value `observe` computes, so a pattern that states no value is refused
+  (exit 2), and `nuka scaffold --feature` skips such a Then line with a
+  note. A word's literal is the one of the JSON type the single `--from`
+  value's `returns` schema declares (`""`, `0`, or `[]`), compared with
+  `equal`, or with `not-equal` right after the word `not`; with no `--from`, several, or
+  one whose type the word fixes no value of, `--then` refuses and
+  `--feature` skips the line with a note, so neither writes a claim
+  across two JSON types.
   `nuka scaffold --feature` writes the same claim step for a Then line.
   Neither writes `mutates: false` or an `assert` body any more.
 
