@@ -439,7 +439,8 @@ This part does not change release to release.
   one does, a run without `--env` runs each environment that declares
   them, in the order the file lists them, and not `default`; an
   environment with none, such as a deployment target, runs when `--env`
-  names it. A CI job that relied on `default` names `--env default`.
+  names it. A CI job that relied on `default` names `--env default`, or
+  the program file names the selection with `defaultEnvironments`.
   `nuka do` without `--env` still uses `default`.
 
 - **A tag that starts `@with:` or `@without:` names a condition.** A

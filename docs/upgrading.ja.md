@@ -380,7 +380,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   run は `default` を使います。
   1 つでも宣言すると、`--env` の無い run は、それを宣言する各 environment をファイルが並べる順に走らせ、`default` は走らせません。
   配備先のように宣言しない environment は、`--env` が名指したときに走ります。
-  `default` に頼っていた CI のジョブは `--env default` を名指します。
+  `default` に頼っていた CI のジョブは `--env default` を名指すか、プログラムのファイルが `defaultEnvironments` で選択を名指します。
   `--env` の無い `nuka do` は、これまでどおり `default` を使います。
 
 - **`@with:` か `@without:` で始まる tag は condition を名指します。**

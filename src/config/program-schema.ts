@@ -252,13 +252,38 @@ const environmentSchema = z
   .strict()
   .superRefine(serveOrUrl);
 
+/** `defaultEnvironments` names environments of this file, each once.
+ * `default` is the top level's name wherever an environment is named
+ * (`--env default`), so it may be named whether or not `environments`
+ * defines it. */
+function defaultEnvironmentsNamed(value: { defaultEnvironments?: readonly string[] | undefined; environments?: Record<string, unknown> | undefined }, ctx: z.RefinementCtx): void {
+  const named = value.defaultEnvironments;
+  if (named === undefined) return;
+  const defined = Object.keys(value.environments ?? {});
+  named.forEach((name, index) => {
+    if (name !== "default" && !defined.includes(name)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["defaultEnvironments", index],
+        message: `names "${name}", which is neither default nor an environment of this file (${defined.length === 0 ? "it defines none" : `it defines ${defined.map((entry) => `"${entry}"`).join(", ")}`})`,
+      });
+    }
+    if (named.indexOf(name) !== index) {
+      ctx.addIssue({ code: "custom", path: ["defaultEnvironments", index], message: `names "${name}" more than once, which would run every scenario twice under one name` });
+    }
+  });
+}
+
 export const programSchema = z
   .object({
     ...programFields,
     environments: z.record(z.string().regex(ENVIRONMENT_NAME_PATTERN), environmentSchema).optional(),
+    /** The environments a run without `--env` starts, in this order. */
+    defaultEnvironments: z.array(z.string()).min(1, { message: "must name at least one environment; leave it out for the default selection" }).optional(),
   })
   .strict()
-  .superRefine(serveOrUrl);
+  .superRefine(serveOrUrl)
+  .superRefine(defaultEnvironmentsNamed);
 
 /** The loaded program file, defaults applied. */
 export type Program = z.infer<typeof programSchema>;

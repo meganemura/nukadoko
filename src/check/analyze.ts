@@ -614,6 +614,7 @@ async function reportFor(
       program: program?.program ?? null,
       programFile: program?.fileName ?? "nukadoko.program.ts",
       selected: selectedNames.map((name) => ({ name, conditions: resolveEnvironment(config, program?.program ?? null, name, selectedNames === envs).conditions })),
+      explicit: selectedNames === envs,
     }),
   );
   // Warnings, not errors: a scenario with no Then can be a deliberate smoke

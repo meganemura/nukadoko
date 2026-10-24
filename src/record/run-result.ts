@@ -277,6 +277,11 @@ export interface RunTable {
   /** The table's columns, in order: each world and environment. */
   readonly worlds: readonly { readonly world: "head"; readonly environment: string }[];
   readonly rows: readonly RunTableRow[];
+  /** How many selected criteria the run left out because `--env` named
+   * no environment that meets their conditions: each would have had no
+   * required cell, so nothing it showed would count. 0 without `--env`,
+   * where `nuka check` reports such a criterion as `condition-unmet`. */
+  readonly left_out: number;
 }
 
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */

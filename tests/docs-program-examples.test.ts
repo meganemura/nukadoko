@@ -3,11 +3,17 @@ import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
 import { loadProgram } from "../src/config/load-program.js";
+import { defaultEnvironmentNames } from "../src/environment/resolve-environment.js";
 import { createCaptureSink, removeTempDir, repoRoot, testsDir } from "./helpers/fixtures.js";
 
 // Responsibility: every whole `nukadoko.program.ts` the reader-facing docs
-// show loads, and `nuka check` passes it for each world it can start, the
-// default world and each environment. The spec's own Environments example
+// show loads, and `nuka check` passes it for each world it can start:
+// each environment, and the default world when a run without `--env`
+// starts it. A default world no run starts unless `--env default` names it
+// is left out: a top-level `{condition.<name>}`, the way the docs derive a
+// switch from its condition, has no value there, since the default world
+// declares no condition, and `--env default` refuses it by name as the spec
+// says. The spec's own Environments example
 // once failed `nuka check`: its staging environment swapped `serve` for a
 // `url` and kept the top level's `PORT: "{port}"`, which a url world had no
 // value for.
@@ -94,7 +100,7 @@ describe("the program files the docs show", () => {
     it(`${block.file}:${block.line} loads and passes nuka check in every world it can start`, async () => {
       const rootDir = projectFor(block);
       const program = await loadProgram(rootDir);
-      const envs = ["default", ...Object.keys(program?.program.environments ?? {})];
+      const envs = [...new Set([...defaultEnvironmentNames(program?.program ?? null), ...Object.keys(program?.program.environments ?? {})])];
       const stdout = createCaptureSink();
       const exitCode = await runCli(["check", "--json", ...envs.flatMap((name) => ["--env", name])], { rootDir, stdout, stderr: createCaptureSink() });
       const findings = (JSON.parse(stdout.text()) as { findings: { severity: string; code: string; message: string }[] }).findings;

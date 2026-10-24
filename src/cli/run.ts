@@ -44,8 +44,8 @@ import {
   type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
-import { buildTable, executionOutcome, needsProofRun, rolesOf, type ExecutionOutcome } from "../run/verdict-table.js";
-import type { CellRole } from "../condition/condition.js";
+import { buildTable, executionOutcome, hasRequiredCell, leftOutText, needsProofRun, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome } from "../run/verdict-table.js";
+import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
@@ -459,7 +459,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       selected = selection;
       let analysis;
       try {
-        analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features, envs);
+        // The names --env gave, not the selection they resolve to: the check
+        // reports condition-unmet for the default selection alone.
+        analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features, options.envs);
       } catch (error) {
         return refused(error);
       }
@@ -515,7 +517,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // the from/fixture checks, the pickle loop itself) wants one ordered
     // sequence across every file, each pickle still paired with *its own*
     // feature's `relativePath`/`gherkinDocument`, never a stray shared one.
-    const flatPickles = selected.features.flatMap((feature) =>
+    const targetedPickles = selected.features.flatMap((feature) =>
       feature.pickles.map((pickle) => ({ feature, pickle })),
     );
 
@@ -526,7 +528,33 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // non-null line here always names one file.
     const lineTargets = featureArgs.filter((featureArg) => parseFeatureTarget(featureArg).line !== null);
     const selection: RunFields["selection"] =
-      lineTargets.length > 0 && flatPickles.length < selected.totalPickles ? "partial" : "full";
+      lineTargets.length > 0 && targetedPickles.length < selected.totalPickles ? "partial" : "full";
+
+    // Under `--env`, a criterion no named environment meets would have
+    // only control cells, and nothing it showed would count. It is not
+    // run, and the table and the summary count it, so naming one
+    // environment runs what applies there: a hook failure's `do:` line,
+    // which names one, runs as printed. Without `--env` the program file
+    // chose the environments and is expected to cover every condition a tag
+    // names, so `nuka check` reports such a criterion (`condition-unmet`)
+    // and a run under `--no-check` keeps its red row. Workers select by
+    // the same `selected`, so a file keeps only the lines that run.
+    const tableEnvironments = resolvedEnvs.map((resolvedEnv) => ({ name: resolvedEnv.name, conditions: resolvedEnv.conditions }));
+    const runsHere = (pickle: (typeof targetedPickles)[number]["pickle"]): boolean =>
+      options.envs.length === 0 || hasRequiredCell(pickle.tags.map((tag) => tag.name), tableEnvironments);
+    const flatPickles = targetedPickles.filter(({ pickle }) => runsHere(pickle));
+    const leftOut = targetedPickles.length - flatPickles.length;
+    const targetedFeatures = selected.features;
+    if (leftOut > 0) {
+      selected = {
+        ...selected,
+        features: selected.features.flatMap((feature) => {
+          const kept = feature.pickles.filter(runsHere);
+          if (kept.length === feature.pickles.length) return [feature];
+          return kept.length === 0 ? [] : [{ ...feature, pickles: kept, selectedLines: kept.map((pickle) => pickle.location?.line ?? 0) }];
+        }),
+      };
+    }
 
     // --- Execution phase: from here, every pickle that begins gets a
     // scenario record written, whatever happens inside it. ---
@@ -759,7 +787,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         comparison = await compareSince({
           rootDir,
           commit: since.commit,
-          features: selected.features.map((feature) => ({ relativePath: feature.relativePath, source: feature.source })),
+          // Every targeted file, the left out included: a file the run
+          // left out entirely is still in the ref's comparison, and its
+          // criteria are not removed.
+          features: targetedFeatures.map((feature) => ({ relativePath: feature.relativePath, source: feature.source })),
           targets: [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
           stepFiles: stepFiles.all,
         });
@@ -804,7 +835,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // cell's executions so far, read for the table: the proof runs below
     // are decided from them, so a control is run again while it keeps
     // failing at the same Then line.
-    const tableEnvironments = resolvedEnvs.map((resolvedEnv) => ({ name: resolvedEnv.name, conditions: resolvedEnv.conditions }));
     const cellKey = (feature: string, line: number, environment: string): string => `${feature}\u0000${line}\u0000${environment}`;
     const roleByCell = new Map<string, CellRole>();
     for (const { feature, pickle } of flatPickles) {
@@ -912,6 +942,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       notRun: number;
       notes: readonly Finding[];
       criteria: CriteriaCounts | null;
+      rows: readonly Finding[];
     }> => {
       // Every request a step was counted for gets its line before run.json
       // is written, one its step left open after it ended included. Under
@@ -959,7 +990,18 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           return undefined;
         },
         proofRuns,
+        leftOut,
       });
+      // A red row with no required cell has no failed execution to carry
+      // its finding, so it gets one of its own. An environment the run did
+      // not start that meets the row is the one its `do:` line runs.
+      const rows = rowsWithoutRequiredCell(table, tableEnvironments, (tags) => {
+        const { conditions } = readCriterionTags(tags);
+        return Object.entries(program?.environments ?? {}).find(
+          ([name, environment]) => !envs.includes(name) && roleIn(conditions, environment.conditions) === "required",
+        )?.[0];
+      });
+      runFindings.push(...rows);
       const fields: RunFields = {
         run_id: runId,
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
@@ -1053,7 +1095,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             failed: table.rows.filter((row) => row.verdict === "failed").length,
           }
         : null;
-      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run, notes, criteria };
+      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run, notes, criteria, rows };
     };
     // The text a person reads at the end, after the files are written: where
     // they are, the count, each failed scenario, the repeat tallies, and
@@ -1070,6 +1112,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         notRun?: number;
         notes?: readonly Finding[];
         criteria?: CriteriaCounts | null;
+        rows?: readonly Finding[];
       },
     ): void => {
       writeOutputLocations(progress, [...locations, ...summaryLocation(end.summaryPath, end.runResultWritten)]);
@@ -1081,7 +1124,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
       if (end.criteria !== undefined && end.criteria !== null) writeCriteriaCounts(progress, end.criteria);
-      for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...(end.notes ?? [])]) {
+      if (leftOut > 0) progress.write(`${leftOutText(leftOut)}\n`);
+      for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...(end.rows ?? []), ...(end.notes ?? [])]) {
         progress.write(formatFinding(withHint(finding)));
       }
       writeRepeatTallies(progress, tallies, conditionsOf);

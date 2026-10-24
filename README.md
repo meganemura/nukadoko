@@ -1253,7 +1253,8 @@ BeforeAll and AfterAll, and process-scope fixtures. `run.json` holds the
 verdict table, one row per criterion and one cell per environment, and the
 summary opens with it. An environment can declare the switches of its
 program as `conditions`, and a run without `--env` runs every
-environment that declares them:
+environment that declares them, or the ones the program file's
+`defaultEnvironments` names:
 
 ```ts
 env: { BANNER: "{condition.banner}" },

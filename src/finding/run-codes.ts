@@ -20,6 +20,12 @@ const RUN_CODES = {
       "nuka steps --json or nuka describe could not read part of a step's contract: its needs, a from entry, or an args or returns schema that JSON Schema cannot represent. The rest is printed, and the command exits 1.",
     fix: "Correct what the message names in the step file; a schema JSON Schema cannot represent, such as z.date(), still runs, and only its published contract is missing.",
   },
+  "criterion-without-required-cell": {
+    severity: "failed",
+    description:
+      "A row of the verdict table has no required cell: no environment the run started meets every condition its scenario's tags name, so the row is failed and nothing ran that shows it holds. Only a run under --no-check reaches it; nuka check reports the scenario as condition-unmet.",
+    fix: "Add an environment whose conditions meet the scenario's tags, run one that does with --env, or correct the tags.",
+  },
   "fixture-teardown-failed": {
     severity: "warning",
     description: "A fixture's teardown threw after its scenario or the run finished.",

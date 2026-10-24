@@ -2139,7 +2139,8 @@ step が `runCommand` でコマンドを実行するコマンドラインツー�
 | `url` | nukadoko が起動しないプログラムの `http:` か `https:` の URL、またはそれを返す world の関数(下記) |
 | `env` | world のプロセスと step のプロセスが受け取る変数。プレースホルダーを使える(下記) |
 | `setup` | `(world) => unknown`。`serve` が答えたあと、最初の scenario の前に world ごとに 1 回実行し、データを用意したりフラグを切り替えたりする。`world` は `{ name, root, dir, signal, url, port, env }`(専用の持ち時間を与えるには `{ run, timeout_ms }`、下記) |
-| `environments` | 上のどのフィールドも上書きする名前付きの設定。加えて `policy`、`envFiles`、`version`(下記) |
+| `environments` | 上のどのフィールドも上書きする名前付きの設定。加えて `policy`、`envFiles`、`version`、`conditions`(下記) |
+| `defaultEnvironments` | `--env` の無い run が起動する environment をこの順に並べたもの。`environments` の名前か `default`(下記) |
 
 `serve` と `url` はプログラムに届く 2 つの方法なので、両方を書くと拒否されます。
 どちらも無いプログラムのファイルも有効です。
@@ -2443,22 +2444,27 @@ environment が書いたフィールドはトップレベルのものを置き�
 `build` と `prepare` はほかのフィールドと同じく引き継がれます。
 そのため、`url` を持ち実行するコマンドが無い environment は、`build: []` と `prepare: []` を書きます。
 `--env <name>` が environment を選びます。
-`--env` の無い run は、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に走らせ、1 つも宣言していなければトップレベルを `default` という名前で走らせます。
+プログラムのファイルがトップレベルに `defaultEnvironments` を書いていれば、`--env` の無い run はそれが名指す environment をその順に走らせます。
+それぞれはファイルの environment か `default` で、定義していない名前、繰り返した名前、空のリストは、ファイルを読むときに拒否されます。
+それが無ければ、`--env` の無い run は、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に走らせ、1 つも宣言していなければトップレベルを `default` という名前で走らせます。
+`defaultEnvironments` は、配備先が自分の動くスイッチを宣言しながら、ローカルのすべての run からは外れたままでいるための手段です。
 `--env` は繰り返せ、environment ごとに自分の world を持ちます(「実行」を参照)。
 
 ```ts
 export default defineProgram({
   serve: { command: "npm start", ready: "/health" },
-  env: { PORT: "{port}" },
+  env: { PORT: "{port}", CHECKOUT_V2: "{condition.checkout_v2}" },
+  defaultEnvironments: ["checkout-v1", "checkout-v2"],
   environments: {
-    "checkout-v1": { env: { CHECKOUT_V2: "" }, conditions: { checkout_v2: false } },
-    "checkout-v2": { env: { CHECKOUT_V2: "1" }, conditions: { checkout_v2: true } },
-    staging: { url: "https://staging.acme.example", policy: "read-only" },
+    "checkout-v1": { conditions: { checkout_v2: false } },
+    "checkout-v2": { conditions: { checkout_v2: true } },
+    staging: { url: "https://staging.acme.example", policy: "read-only", conditions: { checkout_v2: true } },
   },
 });
 ```
 
-ここで `nuka run` は `checkout-v1` と `checkout-v2` を走らせ、`nuka run --env staging` は condition を宣言しない配備先を走らせます。
+ここで `nuka run` は `checkout-v1` と `checkout-v2` を走らせ、`nuka run --env staging` は配備先を走らせます。
+配備先は自分の動くスイッチを宣言しますが、`defaultEnvironments` には入っていません。
 
 ### nukadoko が起動しないプログラム
 
@@ -2853,7 +2859,7 @@ unchanged ではない scenario は現在の `lines` を持ち、どの scenario
 `--env` は繰り返せます。
 `nuka run --env a --env b` は、1 つの `run_id`、1 つの `run.json`、1 つのサマリ、1 つの終了コードを持つ 1 回の run で、選ばれたすべての scenario を各 environment で 1 回ずつ実行します。
 `--env` は、config が定義していてもいなくても `default` という名前を受け付けます。
-それは、どの environment も `conditions` を宣言していないときに `--env` なしの run が使い、`--env` なしの `nuka do` が使う environment(トップレベルの設定、またはプログラムのファイルが定義していれば `environments.default`)で、`run.json` がそう名付けるものなので、`--env default --env staging` は両方を実行します。
+それは、プログラムのファイルが `defaultEnvironments` を名指さず、どの environment も `conditions` を宣言していないときに `--env` なしの run が使い、`--env` なしの `nuka do` が使う environment(トップレベルの設定、またはプログラムのファイルが定義していれば `environments.default`)で、`run.json` がそう名付けるものなので、`--env default --env staging` は両方を実行します。
 environment は与えた順に 1 つずつ走ります。
 `a` で選択全体を実行し、それから `b` で選択全体を実行するので、2 つの environment が同時に同じ対象を共有することはありません。
 各回は、それだけを走らせたときと同じ run です。
@@ -3066,7 +3072,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
         "verdict": "failed",
         "reason": "a claim broke at line 6 in default"
       }
-    ]
+    ],
+    "left_out": 0
   }
 }
 ```
@@ -3133,6 +3140,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並びます。
   行は `feature`、`line`、`name`、`change`(`null`)、持っている condition の tag と `@held` を並べた `conditions`、列ごとに 1 つのセル、`verdict`(`held`、`proven`、`failed`)、1 文の `reason` を持ちます。
   セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、そして `not-run` のときは `reason` を持ちます。
+  `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
   run サマリが描く表はこれです。
 - `counts` は、必須のセルの実行を数える `scenarios`、`passed`、`failed` と、証明の実行を含めて対照の実行を数える `controls` と、`not-run` のセルを数える `not_run` を持ちます。
 - BeforeAll や AfterAll の失敗は、その environment を名指す `hook-failed` の所見になり、その `do` は同じ対象をその environment で走らせます。
@@ -3245,8 +3253,13 @@ program ファイルは、プログラムの設定を condition から導くこ�
 `run.json` の表の各セルは、その役割のもとになった condition を名指し、サマリの列見出しはその environment の condition を示します。
 そのため読み手は、各列が何であると宣言されていたかを見られます。
 
-`--env` の無い run は、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に選び、1 つも宣言していなければ `default` を選びます。
-配備先のように condition を宣言しない environment は、`--env` が名指したときに走ります。
+`--env` の無い run は、`defaultEnvironments` が名指す environment を選びます。
+それが無ければ、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に選び、1 つも宣言していなければ `default` を選びます(「Environment」を参照)。
+配備先のようにその選択の外にある environment は、`--env` が名指したときに走ります。
+`--env` のもとでは、名指したどの environment も満たさない scenario は走りません。
+その行は表から外れ、`run.json` の `table.left_out` がそれを数え、サマリ(表の下)と stderr(件数の行の後ろ)が 1 行でそう言います。
+`<n> criteria not run: their conditions hold in no selected environment` です。
+environment を 1 つ名指せばそこに当てはまるものが走るので、environment を 1 つ名指す hook の失敗の `do:` 行は、出力されたとおりに走ります。
 `nuka check` は、run が選ぶ environment(`nuka check --env` が名指すもの、または `--env` の無い run が選ぶもの)に照らして tag を読み、3 つのエラーを報告します:
 
 - `condition-tag-malformed`: `@with:` か `@without:` で始まり、3 つの形のどれでもない tag。
@@ -3255,6 +3268,9 @@ program ファイルは、プログラムの設定を condition から導くこ�
   `@with:` の側のコードが残ったなら tag を消し、もう一方の側のコードが残ったなら scenario を消します。
 - `condition-unmet`: 選んだどの environment も満たさない scenario。
   そのセルはすべて対照になります。
+  これは既定の選択についてだけ報告されます。
+  その選択はプログラムのファイルが決めたもので、tag が名指すすべての condition を覆うことが期待されるからです。
+  `--env` のもとでは、そのような scenario は代わりに run から外れます。
 
 **セル。**
 セルは、その実行がどうなったかです:
@@ -3284,7 +3300,9 @@ Then の行で失敗した対照のセルは、同じ pass の同じ world で�
 行は次のどれかです:
 
 - `failed`: 必須のセルが `pass` でないとき、または行が必須のセルを持たないとき。
-  後者は `nuka check` が `condition-unmet` を報告するので、`--no-check` の run でだけ起きます。
+  後者は `nuka check` が `condition-unmet` を報告するので、`--env` の無い `--no-check` の run でだけ起きます。
+  そのような行は `criterion-without-required-cell` の finding を持ちます。
+  その `do:` 行は、プログラムのファイルの中でその行を満たす environment で scenario を走らせ、そのような environment が無ければそのファイルに `nuka check` を走らせます。
 - `proven`: 必須のセルがすべて `pass` で、ある対照が `--proof-runs` 回以上 `fail` だったとき。
 - `held`: それ以外。
   必須のセルがすべて `pass` で、それを証明する対照がないときです。

@@ -1,5 +1,7 @@
-import { conditionTagText, HELD_TAG, readCriterionTags, roleIn, type CellRole, type Conditions } from "../condition/condition.js";
+import { conditionTagText, describeConditions, HELD_TAG, readCriterionTags, roleIn, type CellRole, type Conditions } from "../condition/condition.js";
+import type { Finding } from "../finding/finding.js";
 import type { RunRowVerdict, RunScenario, RunTable, RunTableCell, RunTableRow } from "../record/run-result.js";
+import { shellWord } from "../shell/shell-word.js";
 
 // Responsibility: the verdict table (docs/spec.md "Verdicts"): from a run's
 // executions, one cell per criterion and environment, and from the cells,
@@ -147,6 +149,52 @@ export function rolesOf(tags: readonly string[], environments: readonly TableEnv
   return environments.map((environment) => roleIn(conditions, environment.conditions));
 }
 
+/** Whether a criterion has a required cell in one of `environments`:
+ * one of them meets every condition its tags name. Pure. */
+export function hasRequiredCell(tags: readonly string[], environments: readonly TableEnvironment[]): boolean {
+  return rolesOf(tags, environments).includes("required");
+}
+
+/** The line the summary and stderr give the criteria a run left out under
+ * `--env`, so the two say it in the same words. */
+export function leftOutText(count: number): string {
+  return count === 1
+    ? "1 criterion not run: its conditions hold in no selected environment"
+    : `${count} criteria not run: their conditions hold in no selected environment`;
+}
+
+/** A `criterion-without-required-cell` finding for each row with no
+ * required cell, which only a run under `--no-check` reaches: the row is
+ * red, and the table's reason alone gave no command. `elsewhere` names an
+ * environment of the program file the run did not start that meets the
+ * row's conditions, for a `do:` line that runs the scenario there; without
+ * one, the `do:` line is `nuka check` on the file, which names the tags
+ * and the environments as `condition-unmet`. Pure. */
+export function rowsWithoutRequiredCell(
+  table: Pick<RunTable, "rows">,
+  environments: readonly TableEnvironment[],
+  elsewhere: (tags: readonly string[]) => string | undefined,
+): Finding[] {
+  const described = environments.map((environment) => `${environment.name} (${describeConditions(environment.conditions)})`).join("; ");
+  return table.rows.flatMap((row) => {
+    if (row.cells.some((cell) => cell.role === "required")) return [];
+    const { conditions } = readCriterionTags(row.conditions);
+    const other = elsewhere(row.conditions);
+    return [
+      {
+        severity: "failed",
+        code: "criterion-without-required-cell",
+        file: row.feature,
+        line: row.line,
+        message:
+          `Scenario "${row.name}" needs ${conditions.map(conditionTagText).join(" ")}, and no environment of this run meets ${conditions.length === 1 ? "it" : "all of them"}: ${described}. ` +
+          "Its cells are all controls, so nothing shows that it holds",
+        do: (other === undefined ? ["nuka", "check", row.feature] : ["nuka", "run", `${row.feature}:${row.line}`, "--env", other]).map(shellWord).join(" "),
+      },
+    ];
+  });
+}
+
 /** The condition tags and `@held` a criterion carries, as written. */
 export function conditionTagsOf(tags: readonly string[]): string[] {
   const read = readCriterionTags(tags);
@@ -162,6 +210,9 @@ export interface TableInput {
    * program did not start for its world, or a BeforeAll failed. */
   readonly notRunReason: (environment: string) => string | undefined;
   readonly proofRuns: number;
+  /** How many selected criteria the run left out, having no required cell
+   * in an environment `--env` named. */
+  readonly leftOut: number;
 }
 
 /** The table: rows by feature path and line, cells in the run's
@@ -196,5 +247,6 @@ export function buildTable(input: TableInput): RunTable {
     mapping_changed: null,
     worlds: input.environments.map((environment) => ({ world: "head", environment: environment.name })),
     rows,
+    left_out: input.leftOut,
   };
 }

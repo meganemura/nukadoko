@@ -8,7 +8,7 @@ import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { scenarioKey } from "./criteria-since.js";
 import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
-import { cellText as cellWord } from "./verdict-table.js";
+import { cellText as cellWord, leftOutText } from "./verdict-table.js";
 
 // Responsibility: the Markdown run summary one `nuka run` invocation leaves
 // for a person: in its own run directory always, appended to
@@ -69,9 +69,13 @@ function codeSpan(text: string): string {
   return `${fence}${padded}${fence}`;
 }
 
+/** The findings the verdict table already shows: a failed scenario is its
+ * cell, and a row with no required cell is its reason line. */
+const TABLE_CODES: ReadonlySet<string> = new Set(["scenario-failed", "criterion-without-required-cell"]);
+
 /** Findings the scenario tables do not already show. */
 function runFindings(document: RunDocument): readonly Finding[] {
-  return document.findings.filter((finding) => finding.code !== "scenario-failed");
+  return document.findings.filter((finding) => !TABLE_CODES.has(finding.code));
 }
 
 /** Why a run in which no scenario that ran failed, failed. A world that did not start is
@@ -95,7 +99,7 @@ function outsideScenarios(document: RunDocument): string[] {
     );
   }
   const other = document.findings.some(
-    (finding) => finding.severity === "failed" && finding.code !== "program-start-failed" && finding.code !== "scenario-failed",
+    (finding) => finding.severity === "failed" && finding.code !== "program-start-failed" && !TABLE_CODES.has(finding.code),
   );
   if (other) sentences.push("A BeforeAll or AfterAll hook, or a worker that wrote no scenario, also failed outside every scenario.");
   sentences.push("The findings below say why.");
@@ -276,6 +280,9 @@ function renderTable(document: RunDocument): string[] {
       });
       return `| ${row.verdict} | ${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags} | ${cells.join(" | ")} |`;
     }),
+    // A criterion `--env` left out has no row, so the table says how many
+    // there were, or the run would read as covering the whole selection.
+    ...(document.table.left_out > 0 ? ["", leftOutText(document.table.left_out)] : []),
   ];
 }
 

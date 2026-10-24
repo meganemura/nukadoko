@@ -35,9 +35,12 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 
 export const DEFAULT_ENVIRONMENT_NAME = "default";
 
-/** The environments a run with no `--env` runs, in the order the program
- * file names them: every environment that declares `conditions`, when at
- * least one does, and `default` otherwise. The scenarios name the
+/** The environments a run with no `--env` runs: the ones
+ * `defaultEnvironments` names, in its order, when the program file writes
+ * it. Otherwise, in the order the program file names them, every
+ * environment that declares `conditions`, when at least one does, and
+ * `default` otherwise. `defaultEnvironments` is how a deployment target
+ * declares its real switches without joining every local run. The scenarios name the
  * conditions they need, so the run that covers them is the one over every
  * environment that sets one up. An environment with no `conditions` is a
  * deployment target (a staging server, a preview), which needs a URL or
@@ -45,6 +48,7 @@ export const DEFAULT_ENVIRONMENT_NAME = "default";
  * names it. `conditions: {}` puts an environment in this set with no
  * condition on, as the side where every flag is off. Pure. */
 export function defaultEnvironmentNames(program: Program | null): string[] {
+  if (program?.defaultEnvironments !== undefined) return [...program.defaultEnvironments];
   const conditioned = Object.entries(program?.environments ?? {})
     .filter(([, environment]) => environment.conditions !== undefined)
     .map(([name]) => name);

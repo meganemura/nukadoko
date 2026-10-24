@@ -68,6 +68,11 @@ describe("programSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts defaultEnvironments that name default and environments of the file", () => {
+    const result = programSchema.safeParse({ environments: { staging: {}, "flag-on": { conditions: { a: true } } }, defaultEnvironments: ["default", "flag-on"] });
+    expect(result.success && result.data.defaultEnvironments).toEqual(["default", "flag-on"]);
+  });
+
   it.each([
     [{ serve: { command: "x" }, url: "http://a.example" }, "serve and url are two ways to reach the program"],
     [{ environments: { staging: { serve: { command: "x" }, url: "http://a.example" } } }, "serve and url are two ways to reach the program"],
@@ -90,6 +95,10 @@ describe("programSchema", () => {
     [{ prepare: [{ command: "make", timeout: 5 }] }, "timeout"],
     [{ url: { resolve: () => "http://a.example", timeout_ms: 1.5 } }, "timeout_ms"],
     [{ baseURL: "http://a.example" }, "baseURL"],
+    [{ defaultEnvironments: [] }, "must name at least one environment"],
+    [{ defaultEnvironments: ["staging"] }, "which is neither default nor an environment of this file (it defines none)"],
+    [{ environments: { a: {} }, defaultEnvironments: ["b"] }, "which is neither default nor an environment of this file (it defines \\\"a\\\")"],
+    [{ environments: { a: {} }, defaultEnvironments: ["a", "a"] }, "more than once"],
   ])("refuses %j", (input, needle) => {
     const result = programSchema.safeParse(input);
     expect(result.success).toBe(false);

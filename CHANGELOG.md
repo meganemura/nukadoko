@@ -240,6 +240,9 @@ just until 0.1.
   `conditions`.** It runs `default` only when none does. An environment
   with no conditions, such as a deployment target, needs a URL or
   credentials a local run may not have, so it runs when `--env` names it.
+  A program file that names `defaultEnvironments` chooses the selection
+  itself, so a deployment target can declare the switches it runs with
+  and still stay out of every local run.
 
 ### Removed
 
@@ -319,9 +322,13 @@ just until 0.1.
   reports `condition-tag-malformed` (`@with:x=true` among them, which
   names the boolean as text), `condition-unknown` (a condition no
   environment declares, with what to do once its switch is removed), and
-  `condition-unmet` (a scenario no selected environment meets), and
-  `nuka check --env` reads the tags against the environments it names, as
-  `nuka run --env` does. `@held` is read and kept, and changes nothing yet.
+  `condition-unmet` (a scenario no environment of the default selection
+  meets). Under `--env`, such a scenario is not run: its row is left out
+  of the table, `table.left_out` counts it, and stderr and the summary say
+  so in one line, so a hook failure's `do:` line, which names one
+  environment, runs as printed. A row with no required cell, which only a
+  run under `--no-check` reaches, has a `criterion-without-required-cell`
+  finding whose `do:` line runs the scenario where it is met. `@held` is read and kept, and changes nothing yet.
   `conditions` are declarations nukadoko trusts and does not check
   against the program, so the placeholder `{condition.<name>}` hands the
   program its environment's value as text (`env: { BANNER:

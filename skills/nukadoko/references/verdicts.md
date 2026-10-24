@@ -26,8 +26,10 @@ run.json names the conditions its role came from. nukadoko trusts
 `conditions` and does not check them against the program, so derive the
 switch from them with `{condition.<name>}` (`references/program.md`).
 `nuka run`
-without `--env` runs every environment that declares `conditions`. A
-control never turns the run red. Tag only what the criteria say depends
+without `--env` runs every environment that declares `conditions`, or
+the ones the program file's `defaultEnvironments` names. Under `--env`,
+a scenario no named environment meets is not run, and the summary counts
+it (`<n> criteria not run`). A control never turns the run red. Tag only what the criteria say depends
 on the switch, and write the Then so it would fail on the other side: a
 When that errors there proves nothing.
 
@@ -45,9 +47,10 @@ stderr.
 
 - **`failed`**: a required cell did not pass. Diagnose it like any
   failure (`references/diagnosing.md`). A row with no required cell is
-  `failed` too: no environment of the run meets its tags. `nuka check`
-  reports that first as `condition-unmet`; add the environment, name it
-  with `--env`, or correct the tags.
+  `failed` too: no environment of the default selection meets its tags.
+  `nuka check` reports that first as `condition-unmet`, and a run under
+  `--no-check` as `criterion-without-required-cell`, whose `do:` runs it
+  where it is met; add the environment, or correct the tags.
 - **`proven`**: it passed where it is required, and a control broke a
   claim at the same Then line in each of `--proof-runs` runs: the
   scenario tells the behaviour apart. Nothing to do. A control's failure
@@ -70,5 +73,5 @@ stderr.
 `condition-unknown` names a condition no environment declares: when the
 switch was removed, the side whose code stayed decides, so the `@with:`
 side keeps the scenario and the tag goes, and the other side means the
-scenario goes. `condition-unmet` is a scenario no selected environment
-meets. `@held` is read and kept in the row, and changes nothing yet.
+scenario goes. `condition-unmet` is a scenario no environment of the
+default selection meets; under `--env` it is left out, not reported. `@held` is read and kept in the row, and changes nothing yet.

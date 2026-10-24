@@ -13,7 +13,11 @@ import type { CheckIssue } from "./types.js";
 // `condition-unmet` reads the run's selection, not every environment: a
 // scenario that only a deployment target meets has no required cell in a
 // run that leaves the target out, and a run with no required cell for a
-// criterion holds no evidence for it.
+// criterion holds no evidence for it. It is reported for the default
+// selection alone, which the program file is expected to cover: a
+// selection `--env` names is a choice of where to run, and `nuka run`
+// leaves such a scenario out of that run instead (src/cli/run.ts), so a
+// hook failure's `do:` line, which names one environment, runs as printed.
 
 /** One environment a run selects, with what it declares. */
 export interface SelectedConditions {
@@ -27,6 +31,8 @@ export interface ConditionCheckInput {
   readonly program: Program | null;
   readonly programFile: string;
   readonly selected: readonly SelectedConditions[];
+  /** Whether `--env` named the selection, rather than the program file. */
+  readonly explicit: boolean;
 }
 
 export function checkConditions(input: ConditionCheckInput): CheckIssue[] {
@@ -58,6 +64,7 @@ export function checkConditions(input: ConditionCheckInput): CheckIssue[] {
       ...where,
     });
   }
+  if (input.explicit) return issues;
   const unknownNames = new Set(input.conditionTags.flatMap((occurrence) => (occurrence.read !== undefined && !declared.has(occurrence.read.name) ? [occurrence.read.name] : [])));
   const environments = input.selected.map((environment) => `${environment.name} (${describeConditions(environment.conditions)})`).join("; ");
   for (const feature of input.features) {

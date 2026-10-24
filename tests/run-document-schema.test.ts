@@ -50,6 +50,7 @@ const VALID = {
         reason: "passes in default",
       },
     ],
+    left_out: 0,
   },
 };
 

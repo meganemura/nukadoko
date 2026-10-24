@@ -89,6 +89,7 @@ function table(proofRuns: number) {
         reason: "passes in flag-on; no control shows a Then failing where its conditions do not hold (flag-off: pass)",
       },
     ],
+    left_out: 0,
   };
 }
 
@@ -146,20 +147,15 @@ describe("nuka run: the verdict table", () => {
     expect(document.table.rows[0].cells).toEqual([fail("flag-off", 5, 3), pass("flag-on", "required", 3)]);
   });
 
-  it("is red on a row with no required cell, which only --no-check lets run", async () => {
+  it("leaves out a row --env gives no required cell, under --no-check too, and does not turn the run red", async () => {
     const { exitCode, document, summary } = await run(["features/banner.feature", "--env", "flag-on", "--no-check"]);
-    // No execution of a required cell failed: the row alone turns the run red.
-    expect(exitCode).toBe(1);
-    expect(document.verdict).toBe("failed");
-    expect(document.counts).toEqual({ scenarios: 1, passed: 1, failed: 0, controls: 2, not_run: 0 });
-    expect(document.table.rows.map((row: { line: number; verdict: string; reason: string }) => [row.line, row.verdict, row.reason])).toEqual([
-      [4, "held", "passes in flag-on"],
-      [8, "failed", "no environment of this run meets its conditions, so every cell is a control and nothing shows that it holds"],
-    ]);
-    expect(summary.split("\n").slice(1, 3)).toEqual(["# nukadoko run failed: 2 criteria, 1 held, 1 failed", ""]);
-    expect(summary).toContain(
-      "\n- `features/banner.feature:8` the banner is off: no environment of this run meets its conditions, so every cell is a control and nothing shows that it holds\n",
-    );
+    expect(exitCode).toBe(0);
+    expect(document.verdict).toBe("passed");
+    expect(document.counts).toEqual({ scenarios: 1, passed: 1, failed: 0, controls: 0, not_run: 0 });
+    expect(document.table.rows.map((row: { line: number; verdict: string; reason: string }) => [row.line, row.verdict, row.reason])).toEqual([[4, "held", "passes in flag-on"]]);
+    expect(document.table.left_out).toBe(1);
+    expect(summary.split("\n").slice(1, 3)).toEqual(["# nukadoko run passed: 1 criterion, 1 held", ""]);
+    expect(summary).toContain("\n1 criterion not run: its conditions hold in no selected environment\n");
   });
 
   it("runs an environment that declares no conditions only when --env names it", async () => {

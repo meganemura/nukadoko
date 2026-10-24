@@ -29,7 +29,7 @@ const base: RunDocument = {
   selection: "full",
   counts: { scenarios: 0, passed: 0, failed: 0, controls: 0, not_run: 0 },
   scenarios: [],
-  table: { base: null, mapping_changed: null, worlds: [{ world: "head", environment: "default" }], rows: [] },
+  table: { base: null, mapping_changed: null, worlds: [{ world: "head", environment: "default" }], rows: [], left_out: 0 },
 };
 
 // A document whose `table` reads its own scenarios, as `nuka run` builds
@@ -52,6 +52,7 @@ function run(over: Partial<RunDocument>, tags: Readonly<Record<string, readonly 
         .map((entry) => executionOutcome(entry, () => true)),
     notRunReason: () => undefined,
     proofRuns: 2,
+    leftOut: 0,
   });
   return { ...document, table };
 }
@@ -430,6 +431,7 @@ describe("renderRunSummary", () => {
         outcomes: () => [],
         notRunReason: () => "a BeforeAll hook failed",
         proofRuns: 2,
+        leftOut: 0,
       }),
     });
     expect(markdown.split("\n").slice(1, 11)).toEqual([

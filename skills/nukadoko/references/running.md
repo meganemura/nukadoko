@@ -39,8 +39,9 @@ program the scenarios talk to, once per run (`references/program.md`).
 file's `environments`, or `default`, which needs none. An entry overrides
 any program field, adds `envFiles` after the config's, and may set
 `policy: "read-only"` and `conditions`. `nuka run` without `--env` runs
-every environment that declares `conditions`, or `default` when none
-does; `nuka do` without `--env` uses `default`. `nuka run --env a --env
+what the program file's `defaultEnvironments` names, or else every
+environment that declares `conditions`, or `default` when none does;
+`nuka do` without `--env` uses `default`. `nuka run --env a --env
 b` runs every selected scenario in `a`, then in `b`, as one run: the
 verdict table holds one cell per criterion and environment, and a
 failure's `do:` names its environment. A cell that reads `·` never ran:

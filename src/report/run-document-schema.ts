@@ -240,6 +240,7 @@ const table = z.looseObject({
       reason: z.string(),
     }),
   ),
+  left_out: z.number().int(),
 });
 
 const document = z.looseObject({

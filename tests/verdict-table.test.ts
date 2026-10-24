@@ -8,8 +8,12 @@ import {
   buildTable,
   executionOutcome,
   foldCell,
+  hasRequiredCell,
   judgeRow,
+  leftOutText,
   needsProofRun,
+  rolesOf,
+  rowsWithoutRequiredCell,
   type ExecutionOutcome,
 } from "../src/run/verdict-table.js";
 
@@ -213,6 +217,7 @@ describe("buildTable", () => {
       outcomes: (feature, at, environment) => outcomes[`${feature}:${at}:${environment}`] ?? [],
       notRunReason: () => undefined,
       proofRuns: 2,
+      leftOut: 0,
     });
     expect(table).toEqual({
       base: null,
@@ -249,6 +254,7 @@ describe("buildTable", () => {
           reason: "passes in flag-off, flag-on",
         },
       ],
+      left_out: 0,
     });
   });
 
@@ -268,6 +274,7 @@ describe("buildTable", () => {
         outcomes: () => [{ kind: "pass" }],
         notRunReason: () => undefined,
         proofRuns: 2,
+        leftOut: 0,
       });
       const cell = table.rows[0]!.cells[0]!;
       const named = new Set(tags.map((tag) => tag.replace(/^@with(out)?:/, "").replace(/=.*$/, "")));
@@ -275,6 +282,56 @@ describe("buildTable", () => {
       const recorded = Object.fromEntries(Object.entries(cell.conditions).filter((entry): entry is [string, boolean | string] => entry[1] !== null));
       expect(roleIn(readCriterionTags(tags).conditions, recorded)).toBe(cell.role);
     }));
+
+  const pooledName = gs.sampledFrom(["a", "b"]);
+  const tagsOf = gs.arrays(gs.oneOf(pooledName.map((n) => `@with:${n}`), pooledName.map((n) => `@without:${n}`), pooledName.map((n) => `@with:${n}=x`)), { maxSize: 3 });
+  const environmentsOf = gs
+    .arrays(gs.optional(gs.arrays(gs.tuples(pooledName, gs.oneOf(gs.booleans().map((b): boolean | string => b), gs.just<boolean | string>("x"))), { maxSize: 2 })), {
+      minSize: 1,
+      maxSize: 3,
+    })
+    .map((drawn) => drawn.map((entries, index) => ({ name: `env-${index}`, conditions: entries === null || entries === undefined ? undefined : Object.fromEntries(entries) })));
+
+  it("has a required cell exactly when one environment meets every condition tag", () =>
+    hegel.test((tc) => {
+      const tags = tc.draw(tagsOf);
+      const environments = tc.draw(environmentsOf);
+      const { conditions } = readCriterionTags(tags);
+      expect(hasRequiredCell(tags, environments)).toBe(environments.some((environment) => roleIn(conditions, environment.conditions) === "required"));
+      // A criterion with no condition tag is required everywhere.
+      expect(hasRequiredCell([], environments)).toBe(true);
+    }));
+
+  it("gives each row with no required cell one failed finding, with a do: line that names an environment that meets it or checks the file", () =>
+    hegel.test((tc) => {
+      const environments = tc.draw(environmentsOf);
+      const rows = tc.draw(gs.arrays(tagsOf, { maxSize: 3 })).map((tags, index) => ({
+        feature: "features/a.feature",
+        line: 3 + index,
+        name: `s${index}`,
+        change: null,
+        conditions: tags,
+        cells: rolesOf(tags, environments).map((role, at) => ({ world: "head" as const, environment: environments[at]!.name, role, conditions: {}, outcome: "pass" as const, runs: 1 })),
+        verdict: "held" as const,
+        reason: "",
+      }));
+      const elsewhere = tc.draw(gs.optional(gs.sampledFrom(["staging", "flag on"])));
+      const findings = rowsWithoutRequiredCell({ rows }, environments, () => elsewhere ?? undefined);
+      const red = rows.filter((row) => !hasRequiredCell(row.conditions, environments));
+      expect(findings.map((finding) => finding.line)).toEqual(red.map((row) => row.line));
+      for (const finding of findings) {
+        expect(finding).toMatchObject({ severity: "failed", code: "criterion-without-required-cell", file: "features/a.feature" });
+        expect(finding.message).toMatch(/no environment of this run meets (it|all of them): env-0 \(/);
+        expect(finding.do).toBe(
+          elsewhere === null || elsewhere === undefined ? "nuka check features/a.feature" : `nuka run features/a.feature:${finding.line} --env ${elsewhere === "staging" ? "staging" : "'flag on'"}`,
+        );
+      }
+    }));
+
+  it("says how many criteria --env left out, in the same words on stderr and in the summary", () => {
+    expect(leftOutText(1)).toBe("1 criterion not run: its conditions hold in no selected environment");
+    expect(leftOutText(3)).toBe("3 criteria not run: their conditions hold in no selected environment");
+  });
 
   it("says why a cell with no execution did not run", () => {
     const table = buildTable({
@@ -286,6 +343,7 @@ describe("buildTable", () => {
       outcomes: () => [],
       notRunReason: (environment) => (environment === "one" ? "a BeforeAll hook failed" : undefined),
       proofRuns: 2,
+      leftOut: 0,
     });
     expect(table.rows[0]!.cells.map((entry) => entry.reason)).toEqual(["a BeforeAll hook failed", "no execution of it was recorded"]);
     expect(table.rows[0]!.reason).toBe("did not run in one: a BeforeAll hook failed");

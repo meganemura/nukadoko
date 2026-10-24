@@ -152,6 +152,7 @@ describe("nuka run: run.json", () => {
             reason: "passes in default",
           },
         ],
+        left_out: 0,
       },
       since: null,
     });

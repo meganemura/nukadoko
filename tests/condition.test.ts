@@ -143,4 +143,13 @@ describe("the environments a run with no --env selects", () => {
       } as never),
     ).toEqual(["flag-off", "flag-on"]);
   });
+
+  it("selects what defaultEnvironments names, in its order, whatever the environments declare", () =>
+    hegel.test((tc) => {
+      const environments = Object.fromEntries(
+        tc.draw(gs.arrays(gs.tuples(gs.sampledFrom(["staging", "flag-off", "flag-on", "preview"]), gs.booleans()), { maxSize: 4 })).map(([key, declares]) => [key, declares ? { conditions: { a: true } } : {}]),
+      );
+      const named = tc.draw(gs.arrays(gs.sampledFrom(["default", ...Object.keys(environments)]), { minSize: 1, maxSize: 3, unique: true }));
+      expect(defaultEnvironmentNames({ environments, defaultEnvironments: named } as never)).toEqual(named);
+    }));
 });

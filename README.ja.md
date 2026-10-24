@@ -1127,7 +1127,7 @@ run サマリの「Criteria since」の節は、unchanged ではない各 scenar
 それぞれの environment が、自分の env file、secret、version の probe、プログラム、BeforeAll と AfterAll、process スコープの fixture を持ちます。
 `run.json` は断定の表を持ちます。
 受け入れ基準ごとに 1 行、environment ごとに 1 つのセルで、サマリはこの表で始まります。
-environment はプログラムのスイッチを `conditions` として宣言でき、`--env` の無い run はそれを宣言するすべての environment を走らせます:
+environment はプログラムのスイッチを `conditions` として宣言でき、`--env` の無い run はそれを宣言するすべての environment、またはプログラムのファイルの `defaultEnvironments` が名指す environment を走らせます:
 
 ```ts
 env: { BANNER: "{condition.banner}" },

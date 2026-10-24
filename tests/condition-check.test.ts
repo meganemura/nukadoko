@@ -8,10 +8,11 @@ import { copyFixtureToTempDir, createCaptureSink, fixture, removeTempDir } from 
 // tests/fixtures/condition-check-project: a tag that does not read, a tag
 // that names a condition no environment declares, and a scenario no
 // selected environment meets. `nuka check` reads the environments a run
-// with no --env selects; `nuka run --env` reads the ones it names, so a
-// scenario only a conditioned environment meets is unmet in a run of the
-// deployment target alone, and `nuka check --env` reads them the same
-// way. `@held` is a tag nuka check accepts.
+// with no --env selects, which the program file is expected to cover. A
+// selection --env names is a choice of where to run: `nuka check --env`
+// and `nuka run --env` report no scenario as unmet there, and the run
+// leaves such a scenario out (tests/run-verdict-selection.test.ts).
+// `@held` is a tag nuka check accepts.
 
 interface Finding {
   readonly code: string;
@@ -77,22 +78,19 @@ describe("nuka check: condition tags", () => {
     ]);
   });
 
-  it("reads the environments nuka run --env names, so a deployment target alone meets no @with: scenario", async () => {
+  it("reports no scenario as unmet in a selection nuka run --env names, and still reports a tag that does not read", async () => {
     const { exitCode, findings } = await cli(["run", "--env", "staging"]);
     expect(exitCode).toBe(2);
-    expect(findings.filter((finding) => finding.code === "condition-unmet").map((finding) => [finding.line, finding.message])).toEqual([
-      [4, 'Scenario "the banner is on" needs @with:banner, and no selected environment meets it: staging (no conditions). Its cells would all be controls, so nothing would show that it holds'],
-      [20, 'Scenario "a value no environment has" needs @with:banner=on, and no selected environment meets it: staging (no conditions). Its cells would all be controls, so nothing would show that it holds'],
-      [
-        24,
-        'Scenario "two tags no environment meets at once" needs @with:banner @without:banner, and no selected environment meets all of them: staging (no conditions). Its cells would all be controls, so nothing would show that it holds',
-      ],
+    expect(findings.map((finding) => [finding.code, finding.line])).toEqual([
+      ["condition-tag-malformed", 11],
+      ["condition-unknown", 15],
+      ["condition-tag-malformed", 27],
     ]);
   });
 
   it("reads the environments nuka check --env names the way nuka run --env does, and names that check in the refusal's do", async () => {
     const { findings } = await cli(["check", "--env", "staging", "--env", "staging"]);
-    expect(findings.filter((finding) => finding.code === "condition-unmet").map((finding) => finding.line)).toEqual([4, 20, 24]);
+    expect(findings.filter((finding) => finding.code === "condition-unmet")).toEqual([]);
     const stdout = createCaptureSink();
     await runCli(["run", "features/tags.feature", "--env", "staging", "--json"], { rootDir: project, stdout, stderr: createCaptureSink() });
     const refusal = (JSON.parse(stdout.text()) as { findings: { code: string; do?: string }[] }).findings.find((finding) => finding.code === "check-errors");
@@ -108,12 +106,12 @@ describe("nuka check: condition tags", () => {
   });
 
   it("narrows condition-unmet to the scenarios a line target selects, and keeps the tags its file writes", async () => {
-    const { findings } = await cli(["run", "features/tags.feature:4", "--env", "staging"]);
+    const { findings } = await cli(["run", "features/tags.feature:20"]);
     expect(findings.map((finding) => [finding.code, finding.line])).toEqual([
       ["condition-tag-malformed", 11],
       ["condition-unknown", 15],
       ["condition-tag-malformed", 27],
-      ["condition-unmet", 4],
+      ["condition-unmet", 20],
     ]);
   });
 

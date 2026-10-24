@@ -2617,7 +2617,8 @@ with `runCommand`: such a project needs nothing new.
 | `url` | an `http:` or `https:` URL, or a function of the world that returns one, for a program nukadoko does not start (below) |
 | `env` | the variables the world's processes and the steps' process get, with placeholders (below) |
 | `setup` | `(world) => unknown`, run once per world after `serve` answers and before the first scenario, to seed data or switch a flag; `world` is `{ name, root, dir, signal, url, port, env }` (`{ run, timeout_ms }` to give it a limit of its own, below) |
-| `environments` | named overrides of any field above, plus `policy`, `envFiles`, and `version` (below) |
+| `environments` | named overrides of any field above, plus `policy`, `envFiles`, `version`, and `conditions` (below) |
+| `defaultEnvironments` | the environments a run without `--env` starts, in this order: names of `environments`, or `default` (below) |
 
 `serve` and `url` are two ways to reach the program, so writing both is
 refused.
@@ -3004,26 +3005,34 @@ changes one variable does not repeat the rest.
 replaces the top level's.
 `build` and `prepare` are inherited like any field, so an environment
 with a `url` and no command to run writes `build: []` and `prepare: []`.
-`--env <name>` selects an environment. A run without `--env` runs every
-environment that declares `conditions`, in the order the program file
-lists them, and the top level under the name `default` when none does.
+`--env <name>` selects an environment. A run without `--env` runs the
+environments the top-level `defaultEnvironments` names, in its order,
+when the program file writes it; each is an environment of the file, or
+`default`, and a name it does not define, a repeated name, or an empty
+list is refused when the file is read. Without it, a run without `--env`
+runs every environment that declares `conditions`, in the order the
+program file lists them, and the top level under the name `default` when
+none does. `defaultEnvironments` is how a deployment target declares the
+switches it runs with and still stays out of every local run.
 `--env` may repeat; each environment is a world of its own (see
 "Running").
 
 ```ts
 export default defineProgram({
   serve: { command: "npm start", ready: "/health" },
-  env: { PORT: "{port}" },
+  env: { PORT: "{port}", CHECKOUT_V2: "{condition.checkout_v2}" },
+  defaultEnvironments: ["checkout-v1", "checkout-v2"],
   environments: {
-    "checkout-v1": { env: { CHECKOUT_V2: "" }, conditions: { checkout_v2: false } },
-    "checkout-v2": { env: { CHECKOUT_V2: "1" }, conditions: { checkout_v2: true } },
-    staging: { url: "https://staging.acme.example", policy: "read-only" },
+    "checkout-v1": { conditions: { checkout_v2: false } },
+    "checkout-v2": { conditions: { checkout_v2: true } },
+    staging: { url: "https://staging.acme.example", policy: "read-only", conditions: { checkout_v2: true } },
   },
 });
 ```
 
 Here `nuka run` runs `checkout-v1` and `checkout-v2`, and `nuka run --env
-staging` runs the deployment target, which declares no conditions.
+staging` runs the deployment target, which declares the switch it runs
+with and is not in `defaultEnvironments`.
 
 ### A program nukadoko does not start
 
@@ -3563,7 +3572,8 @@ every scenario has `criteria: { changed_since: null }` and `since` is
 `run_id`, one `run.json`, one summary, and one exit code, that runs every
 selected scenario once in each environment. `default` is a name `--env`
 takes too, whether or not the config defines it: it is the environment a
-run without `--env` uses when no environment declares `conditions`, and
+run without `--env` uses when the program file names no
+`defaultEnvironments` and no environment declares `conditions`, and
 the one `nuka do` without `--env` uses (the top-level settings, or
 `environments.default` when the program file defines one), and the name
 `run.json` gives it, so
@@ -3805,7 +3815,8 @@ to act on the run without opening another file:
         "verdict": "failed",
         "reason": "a claim broke at line 6 in default"
       }
-    ]
+    ],
+    "left_out": 0
   }
 }
 ```
@@ -3903,7 +3914,9 @@ to act on the run without opening another file:
   none), `outcome`
   (`pass`, `fail`, `broke`, `flaky`, or `not-run`), the `line` the last
   three name, `runs`, the executions it holds, and for `not-run` a
-  `reason`. It is the table the run summary draws.
+  `reason`. `left_out` counts the selected criteria the run left out
+  because `--env` named no environment that meets their conditions, 0
+  without `--env`. It is the table the run summary draws.
 - `counts` holds `scenarios`, `passed`, and `failed`, which count the
   executions of required cells, `controls`, which counts the executions
   of controls, proof runs included, and `not_run`, which counts the
@@ -4054,10 +4067,17 @@ edit. Each cell of `run.json`'s table names the conditions its role came
 from, and the summary's column heading shows the conditions of its
 environment, so a reader sees what each column was declared to be.
 
-A run without `--env` selects every environment that declares
-`conditions`, in the order the program file lists them, and `default`
-when none does. An environment that declares none, such as a deployment
-target, runs when `--env` names it. `nuka check` reads the tags against
+A run without `--env` selects the environments `defaultEnvironments`
+names, or, without it, every environment that declares `conditions`, in
+the order the program file lists them, and `default` when none does (see
+"Environments"). An environment outside that selection, such as a
+deployment target, runs when `--env` names it. Under `--env`, a scenario
+no named environment meets is not run: its row is left out of the table,
+`run.json`'s `table.left_out` counts it, and the summary, under the
+table, and stderr, after the count line, say so in one line: `<n> criteria
+not run: their conditions hold in no selected environment`. Naming one
+environment runs what applies there, so a hook failure's `do:` line,
+which names one, runs as printed. `nuka check` reads the tags against
 the environments a run would select (the ones `nuka check --env` names,
 or the ones a run without `--env` selects), and reports three errors:
 
@@ -4068,7 +4088,9 @@ or the ones a run without `--env` selects), and reports three errors:
   goes when the code of its `@with:` side stayed, and the scenario goes
   when the code of its other side did.
 - `condition-unmet`: a scenario no selected environment meets, so every
-  cell of it would be a control.
+  cell of it would be a control. It is reported for the default selection
+  alone, which the program file chose and is expected to cover; under
+  `--env`, such a scenario is left out of the run instead.
 
 **Cells.** A cell is what its executions came to:
 
@@ -4097,8 +4119,11 @@ own scenario line ends with `(control)`.
 **Verdicts.** A row is:
 
 - `failed` when a required cell is not `pass`, or when the row has no
-  required cell, which only a run under `--no-check` reaches, since `nuka
-  check` reports `condition-unmet`;
+  required cell, which only a run under `--no-check` without `--env`
+  reaches, since `nuka check` reports `condition-unmet`. Such a row has
+  a `criterion-without-required-cell` finding, whose `do:` line runs the
+  scenario in an environment of the program file that meets it, or runs
+  `nuka check` on its file when none does;
 - `proven` when every required cell is `pass` and a control is `fail` in
   `--proof-runs` runs or more;
 - `held` otherwise: every required cell is `pass`, and no control proves it.

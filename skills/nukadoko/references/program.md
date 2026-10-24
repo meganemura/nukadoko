@@ -139,7 +139,8 @@ program; `{condition.checkout_v2}` hands the program the declared side,
 so the two cannot disagree. It says which side
 the environment is on for a scenario's `@with:checkout_v2` or
 `@without:checkout_v2` tag (`references/verdicts.md`). `nuka run` without `--env` runs every environment that
-declares `conditions`. `url` in place of `serve` names a program
+declares `conditions`, or the ones a top-level `defaultEnvironments`
+names, so a deployment target can declare its switches and stay out. `url` in place of `serve` names a program
 that runs elsewhere, such as a staging server, and starts nothing: give it
 `build: []` and `prepare: []` when the top level has them, and
 `policy: "read-only"` when the data there belongs to someone else.
