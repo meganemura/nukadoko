@@ -267,7 +267,7 @@ describe("nuka clean", () => {
     expect(exitCode).toBe(2);
     expect(stderr.text()).toBe("");
     expect(JSON.parse(stdout.text())).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       nukadoko: readOwnVersion(),
       command: "clean",
       verdict: "refused",

@@ -167,6 +167,15 @@ summary shows as the target version. `--since` compares criteria only when
 the feature file lives in the product's repository; outside it, every
 scenario reads `new`.
 
+When the fix sits behind a switch the program reads (a flag, a setting),
+one run shows both sides instead: declare the switch in `conditions` on
+two environments of `nukadoko.program.ts` and tag the scenario
+`@with:<switch>`, so the side without the fix is a control. The verdict
+table reads `proven` when the Then breaks there at the same line in each
+of `--proof-runs` runs, and `held` when it passes there, which says what
+green on the base branch says: the scenario does not say what the report
+says (`skills/nukadoko/references/verdicts.md`).
+
 ## 7. Prototypes and plan steps
 
 - Before two or three prototypes are built, write the scenarios they must
@@ -183,7 +192,9 @@ scenario reads `new`.
   steps and fixtures that are rotting.
 - `nuka run`: a sub-feature with a scenario no longer does what the map
   says. Red is map drift or a product regression; decide which before
-  editing anything, and never edit a Then to match the product.
+  editing anything, and never edit a Then to match the product. A `held`
+  row whose control passed is a scenario that no longer tells its switch
+  apart.
 - `nuka run --since <ref>`: which criteria changed since the map was last
   checked.
 

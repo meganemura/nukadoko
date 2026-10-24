@@ -56,7 +56,11 @@ describe("nuka run: the run summary", () => {
     expect(summary).toBe(
       [
         "<!-- nukadoko:run -->",
-        "# nukadoko run passed: 1 scenario, 1 passed",
+        "# nukadoko run passed: 1 criterion, 1 held",
+        "",
+        "| verdict | criterion | head default |",
+        "| --- | --- | --- |",
+        "| held | `features/passing.feature:3` create and check a thing | pass |",
         "",
         "- commit: `<sha>`",
         "- environment: default",
@@ -66,12 +70,6 @@ describe("nuka run: the run summary", () => {
         "- nukadoko: <version>",
         "- run: <run>",
         "- started <t>, finished <t> (<duration>)",
-        "",
-        "## features/passing.feature",
-        "",
-        "| scenario | line | default | duration | failure |",
-        "| --- | --- | --- | --- | --- |",
-        "| create and check a thing | 3 | passed | <d>s |  |",
         "",
         "## Scenarios with no claim",
         "",
@@ -94,7 +92,14 @@ describe("nuka run: the run summary", () => {
     expect(summary).toBe(
       [
         "<!-- nukadoko:run -->",
-        "# nukadoko run failed: 1 scenario, 0 passed, 1 failed",
+        "# nukadoko run failed: 1 criterion, 0 held, 1 failed",
+        "",
+        "| verdict | criterion | head default |",
+        "| --- | --- | --- |",
+        "| failed | `features/failing.feature:3` an operation fails partway through | broke@5 |",
+        "",
+        "- `features/failing.feature:3` an operation fails partway through: stopped at line 5 in default before a claim there was judged",
+        '  - step "the operation fails": `operation failed on purpose`; record `steps/<id>`',
         "",
         "- commit: `<sha>`",
         "- environment: default",
@@ -104,12 +109,6 @@ describe("nuka run: the run summary", () => {
         "- nukadoko: <version>",
         "- run: <run>",
         "- started <t>, finished <t> (<duration>)",
-        "",
-        "## features/failing.feature",
-        "",
-        "| scenario | line | default | duration | failure |",
-        "| --- | --- | --- | --- | --- |",
-        '| an operation fails partway through | 3 | failed | <d>s | step "the operation fails": `operation failed on purpose`<br>record `steps/<id>` |',
         "",
         "## Scenarios with no claim",
         "",
@@ -164,18 +163,17 @@ describe("nuka run --concurrency: the run summary", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes one summary for the whole run, with one row per scenario", async () => {
+  it("writes one summary for the whole run, with one row per criterion", async () => {
     await runCli(["run", "--no-check", "features/basic/", "--concurrency", "2"], { rootDir, stdout: createCaptureSink(), stderr: createCaptureSink() });
 
     const document = latestRunJson(rootDir);
     const records = document.scenarios as { feature: string; line: number; scenario: string }[];
     expect(records.length).toBeGreaterThan(1);
     const summary = await readRunSummary(rootDir, document.run_id as string);
-    const rows = summary.split("\n").filter((line) => /^\| .* \| (passed|failed) \|/.test(line));
+    const rows = summary.split("\n").filter((line) => /^\| (held|proven|failed) \| /.test(line));
     expect(rows).toHaveLength(records.length);
     for (const record of records) {
-      expect(summary).toContain(`## ${record.feature}`);
-      expect(rows.filter((row) => row.startsWith(`| ${record.scenario} | ${record.line} |`))).toHaveLength(1);
+      expect(rows.filter((row) => row.includes(`\`${record.feature}:${record.line}\` ${record.scenario} |`))).toHaveLength(1);
     }
   });
 });

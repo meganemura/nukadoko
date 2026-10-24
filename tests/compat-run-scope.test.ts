@@ -318,20 +318,21 @@ describe("nuka run: BeforeAll's own timeout and failure fallout", () => {
       expect(exitCode).toBe(1);
       const document = JSON.parse(stdout.text()) as {
         counts: unknown;
-        verdicts: unknown[];
+        table: { rows: unknown[] };
         findings: { severity: string; code: string; message: string; do?: string }[];
       };
-      const cell = (feature: string) => ({
+      const row = (feature: string) => ({
         feature,
         line: 3,
-        scenario: "never executes because BeforeAll fails first",
-        environment: "default",
-        verdict: "not-run",
-        executions: 0,
-        passed: 0,
+        name: "never executes because BeforeAll fails first",
+        change: null,
+        conditions: [],
+        cells: [{ world: "head", environment: "default", role: "required", outcome: "not-run", runs: 0, reason: "a BeforeAll hook failed" }],
+        verdict: "failed",
+        reason: "did not run in default: a BeforeAll hook failed",
       });
-      expect(document.counts).toEqual({ scenarios: 0, passed: 0, failed: 0, not_run: 2 });
-      expect(document.verdicts).toEqual([cell("features/one-scenario.feature"), cell("features/two-scenario.feature")]);
+      expect(document.counts).toEqual({ scenarios: 0, passed: 0, failed: 0, controls: 0, not_run: 2 });
+      expect(document.table.rows).toEqual([row("features/one-scenario.feature"), row("features/two-scenario.feature")]);
       const hookFailed = {
         severity: "failed",
         code: "hook-failed",

@@ -177,7 +177,7 @@ jobs:
 
 ## チームがその上に足すもの
 
-上の workflow がチームに委ねているものが 4 つあります。
+上の workflow がチームに委ねているものが 5 つあります。
 どれも小さいものです。
 
 - **pull request のコメントとしての run サマリ。**
@@ -222,7 +222,7 @@ jobs:
   `--edit-last` は、push のたびにコメントを足すのではなく、前の push が残したコメントを更新します。
   どのサマリも `<!-- nukadoko:run -->` という行で始まるので、ほかのコメントも投稿する step は、代わりにこの目印でこのコメントを見つけられます。
   サマリは何が走ったかを名指しします。
-  コミット、environment、ブラウザ、各 scenario の状態と所要時間、失敗した step のエラーの 1 行目(secret はすでに伏せてあります)、そしてそれを再実行するコマンドです(docs/spec.ja.md の「Records」を参照)。
+  断定の表(受け入れ基準ごとに 1 行で、その断定と environment ごとのセルを持ちます)、コミット、environment、ブラウザ、失敗した step のエラーの 1 行目(secret はすでに伏せてあります)、そしてそれを再実行するコマンドです(docs/spec.ja.md の「Records」を参照)。
   代償は `pull-requests: write` の権限です。
   suite を走らせるジョブが pull request に書き込めるようになります。
   fork からの pull request は読み取り専用のトークンを受け取るので、そこではこの step は失敗します。
@@ -258,6 +258,14 @@ jobs:
   失敗した scenario ごとに issue を作る step や、それらを再実行する step は、stderr ではなく `run.json` を読みます。
   `nuka run features/ --json > run.json` がそれを出力し、run はどちらの場合も同じファイルを `.nukadoko/runs/<run_id>/run.json` に書きます。
   その `scenarios` のエントリは、各 scenario の status と、行、status、step record、エラーを持つ step を持ち、失敗した scenario はそれを再実行する `do` コマンドを持ちます(docs/spec.ja.md の「Scenario(スクリプト化された経路)」を参照)。
+  その `table` は、受け入れ基準ごとの断定(`held`、`proven`、`failed`)とその理由を持ちます(docs/spec.ja.md の「断定」を参照)。
+- **matrix ではなく 1 つの job で、機能のスイッチの両側。**
+  フラグの値ごとに同じ job を走らせていたスイート(`CHECKOUT_V2: ["", "1"]` に対する `strategy.matrix`)は、代わりに各値を `nukadoko.program.ts` の environment として宣言し、その側を `conditions` に名指します(docs/spec.ja.md の「断定」を参照)。
+  step は `npx nuka run features/` のままです。
+  `--env` の無い run がそれらの environment をそれぞれ 1 つの job の 1 回の run で走らせ、サマリの表が各 scenario を両側で示します。
+  `@with:checkout_v2` の tag を付けた scenario は、フラグが入っているところで必須、切れているところで対照で、そこで Then が成り立たなければ、その行は `proven` です。
+  2 つの job が言えるのは、それぞれの側が green だったことです。
+  1 回の run は、scenario が 2 つを見分けたことを言えます。
 - **ランナー自身の速さに合わせた `retention.runs`。**
   既定は最新 20 回の run を残します。
   merge のたびと毎晩に走る永続ランナーは数日で 20 に達し、`nuka report` と `nuka do --use` は保持された run しか読みません。

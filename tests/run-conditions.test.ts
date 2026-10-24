@@ -5,8 +5,8 @@ import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir }
 // Responsibility: `nuka run --env a --env b`, one run over two
 // environments. The fixture's two environments differ in one env value, so
 // "the banner is on" passes in flag-on and fails in flag-off. The run has
-// one run_id, one exit code that is red because one cell is red, one
-// verdict per scenario and environment, and a rerun line that lands in the
+// one run_id, one exit code that is red because one row is red, one
+// cell per scenario and environment, and a rerun line that lands in the
 // environment the failure came from. It holds at `--concurrency 2` and
 // under `--repeat` and a `:line` target as well, and an environment named
 // twice is refused before anything runs.
@@ -27,9 +27,13 @@ async function run(argv: readonly string[]) {
   }
 }
 
-type Cell = { feature: string; line: number; environment: string; verdict: string; executions: number; passed: number };
+type Row = { feature: string; line: number; cells: { environment: string; outcome: string; line?: number; runs: number }[] };
+// Each cell of the verdict table as [feature, line, environment, what it
+// came to, runs], rows in table order and cells in environment order.
 const cells = (document: Record<string, any>) =>
-  (document.verdicts as readonly Cell[]).map((cell) => [cell.feature, cell.line, cell.environment, cell.verdict, cell.executions, cell.passed]);
+  (document.table.rows as readonly Row[]).flatMap((row) =>
+    row.cells.map((cell) => [row.feature, row.line, cell.environment, cell.line === undefined ? cell.outcome : `${cell.outcome}@${cell.line}`, cell.runs]),
+  );
 
 describe("nuka run over several environments", () => {
   it("runs every scenario once per environment in one run, and is red because one cell is red", async () => {
@@ -40,17 +44,17 @@ describe("nuka run over several environments", () => {
       { name: "flag-off", target_version: null, base_url: null },
     ]);
     expect(document.verdict).toBe("failed");
-    expect(document.counts).toEqual({ scenarios: 6, passed: 5, failed: 1, not_run: 0 });
+    expect(document.counts).toEqual({ scenarios: 6, passed: 5, failed: 1, controls: 0, not_run: 0 });
     expect(new Set(document.scenarios.map((scenario: { environment: string }) => scenario.environment))).toEqual(
       new Set(["flag-on", "flag-off"]),
     );
     expect(cells(document)).toEqual([
-      ["features/banner.feature", 3, "flag-on", "passed", 1, 1],
-      ["features/banner.feature", 3, "flag-off", "failed", 1, 0],
-      ["features/banner.feature", 6, "flag-on", "passed", 1, 1],
-      ["features/banner.feature", 6, "flag-off", "passed", 1, 1],
-      ["features/page.feature", 3, "flag-on", "passed", 1, 1],
-      ["features/page.feature", 3, "flag-off", "passed", 1, 1],
+      ["features/banner.feature", 3, "flag-on", "pass", 1],
+      ["features/banner.feature", 3, "flag-off", "fail@4", 1],
+      ["features/banner.feature", 6, "flag-on", "pass", 1],
+      ["features/banner.feature", 6, "flag-off", "pass", 1],
+      ["features/page.feature", 3, "flag-on", "pass", 1],
+      ["features/page.feature", 3, "flag-off", "pass", 1],
     ]);
     expect(document.findings).toEqual([
       {
@@ -71,12 +75,12 @@ describe("nuka run over several environments", () => {
     const { exitCode, document } = await run(["features/", ...ENVS, "--concurrency", "2"]);
     expect(exitCode).toBe(1);
     expect(cells(document)).toEqual([
-      ["features/banner.feature", 3, "flag-on", "passed", 1, 1],
-      ["features/banner.feature", 3, "flag-off", "failed", 1, 0],
-      ["features/banner.feature", 6, "flag-on", "passed", 1, 1],
-      ["features/banner.feature", 6, "flag-off", "passed", 1, 1],
-      ["features/page.feature", 3, "flag-on", "passed", 1, 1],
-      ["features/page.feature", 3, "flag-off", "passed", 1, 1],
+      ["features/banner.feature", 3, "flag-on", "pass", 1],
+      ["features/banner.feature", 3, "flag-off", "fail@4", 1],
+      ["features/banner.feature", 6, "flag-on", "pass", 1],
+      ["features/banner.feature", 6, "flag-off", "pass", 1],
+      ["features/page.feature", 3, "flag-on", "pass", 1],
+      ["features/page.feature", 3, "flag-off", "pass", 1],
     ]);
     expect(document.findings.map((finding: { do?: string }) => finding.do)).toEqual([
       "nuka run features/banner.feature:3 --env flag-off",
@@ -87,8 +91,8 @@ describe("nuka run over several environments", () => {
     const { exitCode, document, stderr } = await run(["features/banner.feature:3", ...ENVS, "--repeat", "2"]);
     expect(exitCode).toBe(1);
     expect(cells(document)).toEqual([
-      ["features/banner.feature", 3, "flag-on", "passed", 2, 2],
-      ["features/banner.feature", 3, "flag-off", "failed", 2, 0],
+      ["features/banner.feature", 3, "flag-on", "pass", 2],
+      ["features/banner.feature", 3, "flag-off", "fail@4", 2],
     ]);
     // A tally line is written only for a scenario that failed at least once,
     // and it names the environment it failed in.
@@ -102,8 +106,8 @@ describe("nuka run over several environments", () => {
     expect(exitCode).toBe(0);
     expect(document.verdict).toBe("passed");
     expect(cells(document)).toEqual([
-      ["features/page.feature", 3, "flag-on", "passed", 1, 1],
-      ["features/page.feature", 3, "flag-off", "passed", 1, 1],
+      ["features/page.feature", 3, "flag-on", "pass", 1],
+      ["features/page.feature", 3, "flag-off", "pass", 1],
     ]);
   });
 
@@ -111,8 +115,8 @@ describe("nuka run over several environments", () => {
     const { exitCode, document } = await run(["features/banner.feature", "--env", "flag-off"]);
     expect(exitCode).toBe(1);
     expect(cells(document)).toEqual([
-      ["features/banner.feature", 3, "flag-off", "failed", 1, 0],
-      ["features/banner.feature", 6, "flag-off", "passed", 1, 1],
+      ["features/banner.feature", 3, "flag-off", "fail@4", 1],
+      ["features/banner.feature", 6, "flag-off", "pass", 1],
     ]);
     expect(document.findings).toEqual([
       {

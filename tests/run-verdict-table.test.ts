@@ -1,0 +1,169 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { runCli } from "../src/cli/run-cli.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunDir, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
+
+// Responsibility: the verdict table a real run writes, against
+// tests/fixtures/run-verdict-project. Its flag-off and flag-on
+// environments declare the condition `banner` off and on, and staging
+// declares none, so a run with no --env runs flag-off and flag-on. A
+// scenario tagged for one side is a control on the other, where its Then
+// breaks, and the control proves it after `--proof-runs` agreeing
+// failures. The exact run.json `table`, the summary's table, the stderr
+// lines, the counts, and the refusal of a `--proof-runs` that is not a
+// whole number of 1 or more; at --concurrency 1 and 2 alike.
+
+async function run(argv: readonly string[]) {
+  const rootDir = await copyFixtureToTempDir("run-verdict-project");
+  const stdout = createCaptureSink();
+  const stderr = createCaptureSink();
+  try {
+    const exitCode = await runCli(["run", ...argv], { rootDir, stdout, stderr });
+    const document = exitCode === 2 ? {} : latestRunJson(rootDir);
+    const summary = exitCode === 2 ? "" : readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
+    return { exitCode, document, summary, stderr: stderr.text(), stdout: stdout.text() };
+  } finally {
+    await removeTempDir(rootDir);
+  }
+}
+
+const head = (environment: string) => ({ world: "head", environment });
+const pass = (environment: string, role: "required" | "control", runs = 1) => ({ ...head(environment), role, outcome: "pass", runs });
+const fail = (environment: string, line: number, runs: number) => ({ ...head(environment), role: "control", outcome: "fail", line, runs });
+
+function table(proofRuns: number) {
+  return {
+    base: null,
+    mapping_changed: null,
+    worlds: [head("flag-off"), head("flag-on")],
+    rows: [
+      {
+        feature: "features/banner.feature",
+        line: 4,
+        name: "the banner is on",
+        change: null,
+        conditions: ["@with:banner"],
+        cells: [fail("flag-off", 5, proofRuns), pass("flag-on", "required")],
+        verdict: "proven",
+        reason: `passes in flag-on, and a claim broke at line 5 in flag-off, where its conditions do not hold, in each of ${proofRuns} runs`,
+      },
+      {
+        feature: "features/banner.feature",
+        line: 8,
+        name: "the banner is off",
+        change: null,
+        conditions: ["@without:banner"],
+        cells: [pass("flag-off", "required"), fail("flag-on", 9, proofRuns)],
+        verdict: "proven",
+        reason: `passes in flag-off, and a claim broke at line 9 in flag-on, where its conditions do not hold, in each of ${proofRuns} runs`,
+      },
+      {
+        feature: "features/value.feature",
+        line: 3,
+        name: "the banner has a value",
+        change: null,
+        conditions: [],
+        cells: [pass("flag-off", "required"), pass("flag-on", "required")],
+        verdict: "held",
+        reason: "passes in flag-off, flag-on",
+      },
+      {
+        feature: "features/value.feature",
+        line: 7,
+        name: "the banner has a value where it is on",
+        change: null,
+        conditions: ["@with:banner", "@held"],
+        cells: [pass("flag-off", "control"), pass("flag-on", "required")],
+        verdict: "held",
+        reason: "passes in flag-on; no control shows a Then failing where its conditions do not hold (flag-off: pass)",
+      },
+    ],
+  };
+}
+
+describe("nuka run: the verdict table", () => {
+  for (const concurrency of ["1", "2"]) {
+    it(`selects every environment that declares conditions, and proves a gated scenario with a control, at --concurrency ${concurrency}`, async () => {
+      const { exitCode, document, summary, stderr } = await run(["--concurrency", concurrency]);
+      expect(exitCode).toBe(0);
+      expect(document.verdict).toBe("passed");
+      expect(document.environments).toEqual([
+        { name: "flag-off", target_version: null, base_url: null, conditions: { banner: false } },
+        { name: "flag-on", target_version: null, base_url: null, conditions: { banner: true } },
+      ]);
+      expect(document.table).toEqual(table(2));
+      expect(document.counts).toEqual({ scenarios: 5, passed: 5, failed: 0, controls: 5, not_run: 0 });
+      expect(document.findings).toEqual([]);
+      // A control's failure is proof, not a failure to rerun.
+      const controls = (document.scenarios as { role: string; do?: string; status: string }[]).filter((entry) => entry.role === "control");
+      expect(controls.map((entry) => [entry.status, entry.do])).toEqual(
+        expect.arrayContaining([
+          ["failed", undefined],
+          ["passed", undefined],
+        ]),
+      );
+      expect(controls).toHaveLength(5);
+      expect(summary.split("\n").slice(1, 9)).toEqual([
+        "# nukadoko run passed: 4 criteria in 2 environments, 2 held, 2 proven",
+        "",
+        "| verdict | criterion | head flag-off | head flag-on |",
+        "| --- | --- | --- | --- |",
+        "| proven | `features/banner.feature:4` the banner is on `@with:banner` | fail@5 (control, 2 runs) | pass |",
+        "| proven | `features/banner.feature:8` the banner is off `@without:banner` | pass | fail@9 (control, 2 runs) |",
+        "| held | `features/value.feature:3` the banner has a value | pass | pass |",
+        "| held | `features/value.feature:7` the banner has a value where it is on `@with:banner` `@held` | pass (control) | pass |",
+      ]);
+      expect(stderr.split("\n").filter((line) => line.startsWith("proof run "))).toEqual([
+        "proof run 2/2  features/banner.feature:4  the banner is on  (control in flag-off)",
+        "proof run 2/2  features/banner.feature:8  the banner is off  (control in flag-on)",
+      ]);
+      expect(stderr).toMatch(/^scenario \d\/8 {2}features\/banner\.feature:4 {2}the banner is on {2}\(control\)$/m);
+      expect(stderr).toContain("5 scenarios: 5 passed, 0 failed  (");
+      expect(stderr).toContain("\ncriteria: 2 held, 2 proven, 0 failed\n");
+    });
+  }
+
+  it("runs a control until --proof-runs agreeing failures, and no further", async () => {
+    const { exitCode, document } = await run(["features/banner.feature:4", "--proof-runs", "3"]);
+    expect(exitCode).toBe(0);
+    expect(document.table.rows).toEqual([table(3).rows[0]]);
+    expect((document.scenarios as unknown[]).length).toBe(4);
+  });
+
+  it("runs a required cell --repeat times and a control no fewer than --proof-runs", async () => {
+    const { document } = await run(["features/banner.feature:4", "--repeat", "3"]);
+    expect(document.table.rows[0].cells).toEqual([fail("flag-off", 5, 3), pass("flag-on", "required", 3)]);
+  });
+
+  it("is red on a row with no required cell, which only --no-check lets run", async () => {
+    const { exitCode, document, summary } = await run(["features/banner.feature", "--env", "flag-on", "--no-check"]);
+    // No execution of a required cell failed: the row alone turns the run red.
+    expect(exitCode).toBe(1);
+    expect(document.verdict).toBe("failed");
+    expect(document.counts).toEqual({ scenarios: 1, passed: 1, failed: 0, controls: 2, not_run: 0 });
+    expect(document.table.rows.map((row: { line: number; verdict: string; reason: string }) => [row.line, row.verdict, row.reason])).toEqual([
+      [4, "held", "passes in flag-on"],
+      [8, "failed", "no environment of this run meets its conditions, so every cell is a control and nothing shows that it holds"],
+    ]);
+    expect(summary.split("\n").slice(1, 3)).toEqual(["# nukadoko run failed: 2 criteria, 1 held, 1 failed", ""]);
+    expect(summary).toContain(
+      "\n- `features/banner.feature:8` the banner is off: no environment of this run meets its conditions, so every cell is a control and nothing shows that it holds\n",
+    );
+  });
+
+  it("runs an environment that declares no conditions only when --env names it", async () => {
+    const { document } = await run(["features/value.feature:3", "--env", "staging"]);
+    expect(document.table.worlds).toEqual([head("staging")]);
+    expect(document.table.rows.map((row: { verdict: string }) => row.verdict)).toEqual(["held"]);
+  });
+
+  for (const value of ["0", "1.5", "-2"]) {
+    it(`refuses --proof-runs ${value}, and runs nothing`, async () => {
+      const { exitCode, stderr, stdout } = await run(["--proof-runs", value]);
+      expect(exitCode).toBe(2);
+      expect(stdout).toBe("");
+      expect(stderr).toContain(`refused\tinvalid-value\t-\t--proof-runs must be a whole number of 1 or more (got ${value}).\n`);
+    });
+  }
+});

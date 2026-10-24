@@ -287,6 +287,7 @@ async function main(): Promise<void> {
       for (const hook of beforeAllHooks) {
         const ok = await runOneRunHook(hook, "BeforeAll");
         if (!ok) {
+          emit({ kind: "before-all-failed" });
           beforeAllFailed = true;
           allPassed = false;
           break;

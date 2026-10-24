@@ -175,7 +175,7 @@ describe("a program nukadoko serves", () => {
     const log = `${run.run_dir}/worlds/default/program.log`;
     expect(stderr).toContain(`. The end of ${log}: $ node -e`);
     expect(readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8")).toContain(
-      `No scenario failed, but the run did. The program did not start for world default (\`program-start-failed\`), so no scenario ran there; its log is \`${log}\`.`,
+      `No scenario that ran failed, but the run did. The program did not start for world default (\`program-start-failed\`), so no scenario ran there; its log is \`${log}\`.`,
     );
     expect(run.worlds).toEqual([
       expect.objectContaining({ name: "default", error: expect.stringContaining("exited with code 4"), log: "worlds/default/program.log" }),

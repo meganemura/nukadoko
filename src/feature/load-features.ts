@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { AstBuilder, GherkinClassicTokenMatcher, Parser, compile, dialects } from "@cucumber/gherkin";
 import { findScenarioShapeFindings, type ScenarioShapeFinding } from "./scenario-shape.js";
+import { findConditionTags, type ConditionTagOccurrence } from "./condition-tags.js";
+export { findConditionTags, type ConditionTagOccurrence } from "./condition-tags.js";
 
 export {
   findScenarioShapeFindings,
@@ -99,6 +101,8 @@ export interface LoadFeaturesResult {
   readonly serialTagOnScenario: readonly SerialTagOnScenario[];
   readonly outlinesThatDoNotRun: readonly OutlineDoesNotRun[];
   readonly scenarioShapeFindings: readonly ScenarioShapeFinding[];
+  /** Every condition tag the files write (src/feature/condition-tags.ts). */
+  readonly conditionTags: readonly ConditionTagOccurrence[];
 }
 
 /** Exported for src/run/select-pickles.ts's own directory-target walk —
@@ -395,6 +399,7 @@ export function loadFeaturesFromDirs(
   const serialTagOnScenario: SerialTagOnScenario[] = [];
   const outlinesThatDoNotRun: OutlineDoesNotRun[] = [];
   const scenarioShapeFindings: ScenarioShapeFinding[] = [];
+  const conditionTags: ConditionTagOccurrence[] = [];
   const seenRealPaths = new Set<string>();
   const firstVisit = (filePath: string): boolean => {
     const key = realPathOrSelf(filePath);
@@ -429,6 +434,7 @@ export function loadFeaturesFromDirs(
         serialTagOnScenario.push(...findSerialTagOnScenario(gherkinDocument, relativePath));
         outlinesThatDoNotRun.push(...findOutlinesThatDoNotRun(gherkinDocument, relativePath));
         scenarioShapeFindings.push(...findScenarioShapeFindings(gherkinDocument, relativePath));
+        conditionTags.push(...findConditionTags(gherkinDocument, relativePath));
       } catch (error) {
         parseErrors.push({
           relativePath,
@@ -457,6 +463,7 @@ export function loadFeaturesFromDirs(
     serialTagOnScenario,
     outlinesThatDoNotRun,
     scenarioShapeFindings,
+    conditionTags,
     missingAdditionalDirs,
   };
 }

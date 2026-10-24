@@ -103,7 +103,7 @@ describe("applyRetention", () => {
       stateDir,
       runId,
       JSON.stringify({
-        schema_version: 3,
+        schema_version: 4,
         nukadoko: "0.0.0-test",
         command: "run",
         verdict: "passed",

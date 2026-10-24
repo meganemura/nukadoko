@@ -20,6 +20,7 @@ import { createFixtureCache, teardownFixtureCache } from "../fixture/resolver.js
 import { probeVersion } from "../environment/probe-version.js";
 import {
   DEFAULT_ENVIRONMENT_NAME,
+  defaultEnvironmentNames,
   resolveEnvironment,
   type ResolvedEnvironment,
 } from "../environment/resolve-environment.js";
@@ -35,12 +36,16 @@ import {
   writeOutputLocations,
   writeRunSummary,
   writeScenarioBoundary,
+  writeProofRunBoundary,
+  writeCriteriaCounts,
   writeRepeatTallies,
   createRepeatTally,
   formatRerunCommand,
+  type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
-import { foldVerdicts } from "../run/verdicts.js";
+import { buildTable, executionOutcome, needsProofRun, rolesOf, type ExecutionOutcome } from "../run/verdict-table.js";
+import type { CellRole } from "../condition/condition.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
@@ -231,10 +236,10 @@ const UNBUILDABLE_PATTERN_CODES: ReadonlySet<string> = new Set([
 
 // One environment a run executes under: what `--env <name>` resolves to,
 // and what follows from it before the first scenario runs.
-interface Condition {
+interface EnvironmentPass {
   readonly resolvedEnv: ResolvedEnvironment;
-  /** The name `--env` gave, or null when the run named no environment and
-   * ran under the default one. */
+  /** The name a worker resolves, or null for the implicit `default` a run
+   * with no `--env` falls back to. */
   readonly envArg: string | null;
   readonly envVars: Readonly<Record<string, string>>;
   readonly secrets: SecretSet;
@@ -253,7 +258,9 @@ export interface RunRunOptions {
   /** `false` under `--no-check`: skip the static check this run otherwise
    * performs over its own selection before it executes anything. */
   check: boolean;
-  /** `--env`, in the order given; empty for the `default` environment.
+  /** `--env`, in the order given. Empty selects the environments that
+   * declare conditions, or `default` when none does
+   * (src/environment/resolve-environment.ts's `defaultEnvironmentNames`).
    * Each selected scenario runs once per environment, in this order. */
   envs: readonly string[];
   /** `--records`: write each scenario's run.json entry to stdout, one per
@@ -280,6 +287,10 @@ export interface RunRunOptions {
    * Under `--concurrency`, each worker repeats its own files; a target
    * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
   repeat: number;
+  /** `--proof-runs`'s raw value; default 2. A control cell whose Then
+   * failed runs again until it has failed this many times at the same
+   * line, or a run disagrees (src/run/verdict-table.ts). */
+  proofRuns: number;
   /** `--since <ref>`: compare each scenario's criteria, and each step file
    * it bound to, with the commit `ref` names, and report what moved. It
    * reports only; the exit code is unchanged. `undefined` without it. */
@@ -307,7 +318,7 @@ function stepsLocation(
 }
 
 export async function runRun(options: RunRunOptions): Promise<number> {
-  const { rootDir, envs, concurrency, repeat, stepSummaryPath, stderr } = options;
+  const { rootDir, concurrency, repeat, stepSummaryPath, stderr } = options;
   const notices = options.notices ?? [];
   const refused = (error: unknown, code: RefusalCode = "unexpected-error", hint?: Hint, before: readonly Finding[] = []): number =>
     refuse({ json: options.json, stdout: options.stdout, stderr, command: "run" }, error, code, hint, [...notices, ...before]);
@@ -343,6 +354,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   }
   if (!Number.isInteger(concurrency) || concurrency < 1) {
     return refused(`--concurrency must be a whole number of 1 or more (got ${options.concurrency}).`, "invalid-value");
+  }
+  const { proofRuns } = options;
+  if (!Number.isInteger(proofRuns) || proofRuns < 1) {
+    return refused(`--proof-runs must be a whole number of 1 or more (got ${options.proofRuns}).`, "invalid-value");
   }
   // Resolved once, before anything runs: a ref that names nothing, or a
   // project outside git, has nothing to compare against, and a run that
@@ -383,6 +398,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     return refused(error);
   }
   const featureArgs = options.featureArgs.length === 0 ? [config.featuresDir] : options.featureArgs;
+  // Without `--env`, the environments that declare conditions, since the
+  // scenarios name the conditions they need; `default` when none does.
+  const envs = options.envs.length > 0 ? options.envs : defaultEnvironmentNames(program);
+  // Only the implicit `default` goes without a name on a rerun line or to
+  // a worker: every other environment, chosen or not, is named.
+  const implicitDefault = options.envs.length === 0 && envs.length === 1 && envs[0] === DEFAULT_ENVIRONMENT_NAME;
 
   // One environment twice would run every scenario twice under the same
   // name, and its cells could not be told apart.
@@ -394,17 +415,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // A run that named no environment ran under `default`, and its rerun
   // names none either.
   const conditionsOf: RunConditions = {
-    rerunFlags: (environment) => (envs.length === 0 ? [] : ["--env", environment]),
+    rerunFlags: (environment) => (implicitDefault ? [] : ["--env", environment]),
     named: envs.length > 1,
   };
-  const rerunFlags = envs.flatMap((name) => ["--env", name]);
+  const rerunFlags = options.envs.flatMap((name) => ["--env", name]);
 
   let resolvedEnvs: ResolvedEnvironment[];
   try {
-    resolvedEnvs =
-      envs.length === 0
-        ? [resolveEnvironment(config, program, DEFAULT_ENVIRONMENT_NAME, false)]
-        : envs.map((name) => resolveEnvironment(config, program, name, true));
+    resolvedEnvs = envs.map((name) => resolveEnvironment(config, program, name, !implicitDefault));
   } catch (error) {
     return refused(error);
   }
@@ -454,7 +472,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         return refused(
           `nuka run did not start: nuka check reports ${count} ${count === 1 ? "error" : "errors"} for these scenarios`,
           "check-errors",
-          { fix: "Correct each error the findings name, or pass --no-check to run anyway.", do: ["nuka check", ...options.featureArgs.map(shellWord)].join(" ") },
+          {
+            fix: "Correct each error the findings name, or pass --no-check to run anyway.",
+            do: ["nuka check", ...options.featureArgs.map(shellWord), ...options.envs.flatMap((name) => ["--env", shellWord(name)])].join(" "),
+          },
           options.json ? report.errors.map((issue) => asFinding("error", issue)) : [],
         );
       }
@@ -624,10 +645,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     );
     if (unfilled !== undefined) return refused(new Error(unfilled.message), "program-placeholder-unfilled", { fix: unfilled.fix });
 
-    // Each environment is a condition of its own: its env files, the
+    // Each environment is a pass of its own: its env files, the
     // secrets they hold, its version probe, and the world its pass starts
     // (in the execution phase, below).
-    const conditions: Condition[] = [];
+    const passes: EnvironmentPass[] = [];
     for (const resolvedEnv of resolvedEnvs) {
       const envFiles = resolvedEnv.envFiles;
       // An env file that cannot be read is a setup problem, refused like
@@ -656,9 +677,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           warnings("version-probe-failed").write(versionProbeWarning(resolvedEnv.name, probeResult.reason, secrets) + "\n");
         }
       }
-      conditions.push({
+      passes.push({
         resolvedEnv,
-        envArg: envs.length === 0 ? null : resolvedEnv.name,
+        envArg: implicitDefault ? null : resolvedEnv.name,
         envVars,
         secrets,
         targetVersion,
@@ -682,9 +703,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // when the tree has no program file: the pass runs with no world.
     // A start a signal aborted is no failure of the program's, and the
     // run that follows is incomplete, so it reports nothing here.
-    const startWorld = async (condition: Condition, abort?: AbortSignal): Promise<StartedWorld | "failed" | null> => {
-      if (condition.resolvedEnv.program === null) return null;
-      const started = await worldStarter.start(condition.resolvedEnv.name, condition.resolvedEnv.program, condition.secrets, abort);
+    const startWorld = async (pass: EnvironmentPass, abort?: AbortSignal): Promise<StartedWorld | "failed" | null> => {
+      if (pass.resolvedEnv.program === null) return null;
+      const started = await worldStarter.start(pass.resolvedEnv.name, pass.resolvedEnv.program, pass.secrets, abort);
       if (started.ok) return started;
       worlds.push(started.record());
       if (!started.aborted) warn({ severity: "failed", code: "program-start-failed", message: started.message });
@@ -777,6 +798,26 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       pickleLines.set(key, pickleStepLines(pickle, lines));
       pickleOutcomes.set(key, pickle.steps.map((step) => step.type === PickleStepType.OUTCOME));
     }
+    const inThenOf = (feature: string, line: number) => (index: number): boolean => pickleOutcomes.get(scenarioKey(feature, line))?.[index] ?? false;
+    // Each selected criterion's role in each environment, from its tags and
+    // what the environments declare (src/condition/condition.ts), and each
+    // cell's executions so far, read for the table: the proof runs below
+    // are decided from them, so a control is run again while it keeps
+    // failing at the same Then line.
+    const tableEnvironments = resolvedEnvs.map((resolvedEnv) => ({ name: resolvedEnv.name, conditions: resolvedEnv.conditions }));
+    const cellKey = (feature: string, line: number, environment: string): string => `${feature}\u0000${line}\u0000${environment}`;
+    const roleByCell = new Map<string, CellRole>();
+    for (const { feature, pickle } of flatPickles) {
+      const line = pickle.location?.line ?? 0;
+      const roles = rolesOf(pickle.tags.map((tag) => tag.name), tableEnvironments);
+      tableEnvironments.forEach((environment, index) => roleByCell.set(cellKey(feature.relativePath, line, environment.name), roles[index]!));
+    }
+    const roleOf = (feature: string, line: number, environment: string): CellRole => roleByCell.get(cellKey(feature, line, environment)) ?? "required";
+    const cellOutcomes = new Map<string, ExecutionOutcome[]>();
+    const needsProof = (feature: string, line: number, environment: string): boolean =>
+      needsProofRun(roleOf(feature, line, environment), cellOutcomes.get(cellKey(feature, line, environment)) ?? [], proofRuns);
+    // Why a pass ran no scenario, for its cells that did not run.
+    const beforeAllFailedIn = new Set<string>();
     const stepKind = (name: string): "claim" | "run" | "compat" | null => {
       const entry = vocabulary.get(name);
       if (entry === undefined) return null;
@@ -809,11 +850,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         recordPath: (stepRecordId) => path.join(RUN_FILE_DIRS.steps, stepRecordId),
         evidenceDir: relativeToRun(config.stateDir, runId, record.evidence.dir),
         rerun: formatRerunCommand(record, conditionsOf.rerunFlags(record.environment)),
-        inThen: (index) => pickleOutcomes.get(scenarioKey(record.feature, record.line))?.[index] ?? false,
+        inThen: inThenOf(record.feature, record.line),
         stepKind,
       });
-      const entry: RunScenario = { ...built, criteria: criteriaFor(built) };
+      // A control's failure is what the table reads as proof, so it gets no
+      // rerun line: the reruns a reader is offered are of failures.
+      const role = roleOf(record.feature, record.line, record.environment);
+      const { do: rerun, ...withoutRerun } = built;
+      const entry: RunScenario = { ...(role === "control" || rerun === undefined ? withoutRerun : built), role, criteria: criteriaFor(built) };
       runScenarios.push(entry);
+      const key = cellKey(record.feature, record.line, record.environment);
+      cellOutcomes.set(key, [...(cellOutcomes.get(key) ?? []), executionOutcome(entry, inThenOf(record.feature, record.line))]);
       if (entry.evidence === undefined) emptyEvidenceDirs.push(path.join(rootDir, record.evidence.dir));
       stdout.write(`${JSON.stringify(entry)}\n`);
     };
@@ -857,7 +904,15 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const finishRun = async (
       verdict: "passed" | "failed",
       failedScenarios: readonly FailedScenario[],
-    ): Promise<{ summaryPath: string | null; retention: string | null; runResultWritten: boolean; exitCode: number; notRun: number; notes: readonly Finding[] }> => {
+    ): Promise<{
+      summaryPath: string | null;
+      retention: string | null;
+      runResultWritten: boolean;
+      exitCode: number;
+      notRun: number;
+      notes: readonly Finding[];
+      criteria: CriteriaCounts | null;
+    }> => {
       // Every request a step was counted for gets its line before run.json
       // is written, one its step left open after it ended included. Under
       // `--concurrency` each worker has done this for its own requests.
@@ -889,34 +944,49 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       } catch (error) {
         warn({ severity: "warning", code: "retention-failed", message: `retention failed: ${error instanceof Error ? error.message : String(error)}` });
       }
-      const verdicts = foldVerdicts(
-        runScenarios,
-        resolvedEnvs.map((resolvedEnv) => resolvedEnv.name),
-        flatPickles.map(({ feature, pickle }) => ({ feature: feature.relativePath, line: pickle.location?.line ?? 0, scenario: pickle.name })),
-      );
+      const table = buildTable({
+        criteria: flatPickles.map(({ feature, pickle }) => ({
+          feature: feature.relativePath,
+          line: pickle.location?.line ?? 0,
+          name: pickle.name,
+          tags: pickle.tags.map((tag) => tag.name),
+        })),
+        environments: tableEnvironments,
+        outcomes: (feature, line, environment) => cellOutcomes.get(cellKey(feature, line, environment)) ?? [],
+        notRunReason: (environment) => {
+          if (worlds.some((world) => world.name === environment && world.error !== null)) return "the program did not start for its world";
+          if (beforeAllFailedIn.has(environment)) return "a BeforeAll hook failed";
+          return undefined;
+        },
+        proofRuns,
+      });
       const fields: RunFields = {
         run_id: runId,
         run_dir: runRelativeDir(config.stateDir, runId).split(path.sep).join("/"),
         started_at: invocationStartedAt.toISOString(),
         finished_at: new Date().toISOString(),
         commit: git === undefined ? null : { sha: git.commit, dirty: !git.clean },
-        environments: conditions.map((condition) => ({
-          name: condition.resolvedEnv.name,
+        environments: passes.map((pass) => ({
+          name: pass.resolvedEnv.name,
           // Unlike a scenario record, run.json is not redacted as a whole,
           // and a version probe can answer with a secret value.
-          target_version: condition.targetVersion === undefined ? null : redactString(condition.targetVersion, condition.secrets),
-          base_url: worlds.find((world) => world.name === condition.resolvedEnv.name)?.url ?? null,
+          target_version: pass.targetVersion === undefined ? null : redactString(pass.targetVersion, pass.secrets),
+          base_url: worlds.find((world) => world.name === pass.resolvedEnv.name)?.url ?? null,
+          ...(pass.resolvedEnv.conditions === undefined ? {} : { conditions: pass.resolvedEnv.conditions }),
         })),
         // Each world's record is redacted with its own values already.
         worlds,
         selection,
         check: options.check ? "ran" : "skipped",
-        counts: countScenarios(runScenarios, verdicts),
+        counts: countScenarios(runScenarios, table),
         scenarios: runScenarios,
-        verdicts,
+        table,
         since: since === undefined || comparison === undefined ? null : sinceOf(since, comparison),
       };
-      let exitCode = verdict === "passed" ? 0 : 1;
+      // The gate: red when the run failed outside the table, or when a row
+      // is red, which a run with no failed execution can still have: a
+      // criterion no environment of the run meets, under `--no-check`.
+      let exitCode = verdict === "passed" && !table.rows.some((row) => row.verdict === "failed") ? 0 : 1;
       // sources.json first, before anything is serialized, so a failure to
       // write it is a finding in the summary, in run.json, and in the
       // `--json` document alike. It fails the run, as run.json does: without
@@ -973,7 +1043,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
       if (options.json) options.stdout.write(document);
-      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run, notes };
+      // The criteria line is for a run with a control cell, the only kind
+      // whose verdicts the scenario count above it cannot tell.
+      const withControl = table.rows.some((row) => row.cells.some((cell) => cell.role === "control"));
+      const criteria = withControl
+        ? {
+            held: table.rows.filter((row) => row.verdict === "held").length,
+            proven: table.rows.filter((row) => row.verdict === "proven").length,
+            failed: table.rows.filter((row) => row.verdict === "failed").length,
+          }
+        : null;
+      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run, notes, criteria };
     };
     // The text a person reads at the end, after the files are written: where
     // they are, the count, each failed scenario, the repeat tallies, and
@@ -983,7 +1063,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       counts: { total: number; passed: number },
       failedScenarios: readonly FailedScenario[],
       tallies: Parameters<typeof writeRepeatTallies>[1],
-      end: { summaryPath: string | null; retention: string | null; runResultWritten: boolean; notRun?: number; notes?: readonly Finding[] },
+      end: {
+        summaryPath: string | null;
+        retention: string | null;
+        runResultWritten: boolean;
+        notRun?: number;
+        notes?: readonly Finding[];
+        criteria?: CriteriaCounts | null;
+      },
     ): void => {
       writeOutputLocations(progress, [...locations, ...summaryLocation(end.summaryPath, end.runResultWritten)]);
       writeRunSummary(progress, {
@@ -993,6 +1080,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(end.notRun !== undefined ? { notRun: end.notRun } : {}),
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
+      if (end.criteria !== undefined && end.criteria !== null) writeCriteriaCounts(progress, end.criteria);
       for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...(end.notes ?? [])]) {
         progress.write(formatFinding(withHint(finding)));
       }
@@ -1083,13 +1171,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           runId,
           repeat,
           runHookDo,
-          conditions: conditions.map((condition) => ({
-            envArg: condition.envArg,
-            environment: condition.resolvedEnv.name,
-            targetVersion: condition.targetVersion,
-            secrets: condition.secrets,
+          passes: passes.map((pass) => ({
+            envArg: pass.envArg,
+            environment: pass.resolvedEnv.name,
+            targetVersion: pass.targetVersion,
+            secrets: pass.secrets,
             openWorld: async (abort) => {
-              const world = await startWorld(condition, abort);
+              const world = await startWorld(pass, abort);
               if (world === null || world === "failed") return world;
               return { view: world.view, close: () => stopWorld(world) };
             },
@@ -1097,7 +1185,14 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           concurrency: effectiveConcurrency,
           selected,
           flatPickles,
+          cells: {
+            roleOf,
+            needsProof,
+            runsOf: (feature, line, environment) => cellOutcomes.get(cellKey(feature, line, environment))?.length ?? 0,
+            proofRuns,
+          },
           onRecord: noteRecord,
+          onBeforeAllFailed: (environment) => beforeAllFailedIn.add(environment),
           progress,
           warn,
           stderr,
@@ -1158,10 +1253,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
 
       // Environment by environment, in the order `--env` named them: a
       // pass ends, its AfterAll and process fixtures included, before the
-      // next begins, so two conditions never share a moment or a fixture.
+      // next begins, so two passes never share a moment or a fixture.
       const repeatTally = createRepeatTally();
-      for (const [conditionIndex, condition] of conditions.entries()) {
-        if (conditionsOf.named && hasPickles) progress.write(`environment ${condition.resolvedEnv.name}\n`);
+      for (const [passIndex, pass] of passes.entries()) {
+        if (conditionsOf.named && hasPickles) progress.write(`environment ${pass.resolvedEnv.name}\n`);
         let passPassed = true;
         // This environment's own `"process"`-scope fixture cache — one
         // instance, shared by every `runScenario`
@@ -1181,7 +1276,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           for (const teardownError of processFixtureTeardownErrors) {
             // The line is the fixture's own text, with no scenario record to
             // redact it first.
-            warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, condition.secrets) + "\n");
+            warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, pass.secrets) + "\n");
           }
         });
         // The pass's world, before BeforeAll: a hook may already talk to
@@ -1190,7 +1285,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // function its signal, before the fixtures' teardown. A signal from
         // then on stops the world after the fixtures.
         const startAbort = new AbortController();
-        const starting = hasPickles ? startWorld(condition, startAbort.signal) : Promise.resolve(null);
+        const starting = hasPickles ? startWorld(pass, startAbort.signal) : Promise.resolve(null);
         processSignal.setProcessCleanup(async () => {
           startAbort.abort();
           await starting.catch(() => {});
@@ -1206,15 +1301,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             await started.stop();
           });
         }
-        const passEnv = started === null ? condition.envVars : { ...condition.envVars, ...started.view.env };
-        const passSecrets = started === null ? condition.secrets : [...condition.secrets, ...started.view.secrets];
+        const passEnv = started === null ? pass.envVars : { ...pass.envVars, ...started.view.env };
+        const passSecrets = started === null ? pass.secrets : [...pass.secrets, ...started.view.secrets];
         let beforeAllFailed = world === "failed";
         if (beforeAllFailed) passPassed = false;
         if (hasPickles && !beforeAllFailed) {
           for (const hook of beforeAllHooks) {
-            const ok = await runOneRunHook(hook, "BeforeAll", condition.resolvedEnv.name);
+            const ok = await runOneRunHook(hook, "BeforeAll", pass.resolvedEnv.name);
             if (!ok) {
               beforeAllFailed = true;
+              beforeAllFailedIn.add(pass.resolvedEnv.name);
               passPassed = false;
               // Stop at the first BeforeAll failure — same convention
               // as scenario-level Before.
@@ -1223,6 +1319,69 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           }
         }
 
+        // One execution of one pickle in this pass: its record, its run.json
+        // entry, and the tallies. A control's failure is the table's to
+        // read (src/run/verdict-table.ts), so it never counts as a failed
+        // scenario here and never turns the pass red.
+        const execute = async (feature: (typeof flatPickles)[number]["feature"], pickle: (typeof flatPickles)[number]["pickle"]): Promise<void> => {
+          const record = await runScenario({
+            rootDir,
+            config,
+            programWorld: started?.view ?? null,
+            pickle,
+            relativeFeaturePath: feature.relativePath,
+            gherkinDocument: feature.gherkinDocument,
+            vocabulary,
+            bindings,
+            patterns,
+            runId,
+            git,
+            environment: pass.resolvedEnv.name,
+            policy: pass.resolvedEnv.policy,
+            targetVersion: pass.targetVersion,
+            env: passEnv,
+            secrets: passSecrets,
+            instantiateCompatWorld,
+            onWorldSetupFailure: (message) => {
+              warnings("world-setup-failed").write(`${message}\n`);
+            },
+            compatHooks,
+            defaultTimeoutMs,
+            onUnknownTraceVersion,
+            onStepEnd,
+            fixtureGraph,
+            fixtureProcessCache,
+            processSignal,
+          });
+
+          // One JSON line per completed scenario record, streamed as it
+          // finishes; everything else about
+          // this run goes to stderr, never stdout.
+          noteRecord(record);
+          stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
+          // A `"scenario"`-scope fixture's own teardown failure, already
+          // recorded on `record.teardown_
+          // errors` (src/run/run-scenario.ts); announced here too, on
+          // stderr, so it is never silent even though it never changes
+          // `record.status` or this run's own exit code. Redacted on this
+          // write as well: the record's copy is already redacted, and this
+          // stderr line has to stay that way on its own.
+          for (const teardownError of record.teardown_errors ?? []) {
+            warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, pass.secrets) + "\n");
+          }
+          if (roleOf(record.feature, record.line, record.environment) === "control") return;
+          scenariosWritten += 1;
+          if (record.status === "passed") {
+            scenariosPassed += 1;
+          }
+          if (repeat > 1) repeatTally.note(record);
+          if (record.status !== "passed") {
+            passPassed = false;
+            failedScenarios.push(failedScenarioOf(record));
+          }
+        };
+        const environment = pass.resolvedEnv.name;
+
         // Iteration-major under `--repeat`: the whole selection once, then
         // again, so a failure that depends on what ran before it meets the
         // same neighbours on every pass. `executionIndex` numbers the
@@ -1230,72 +1389,39 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         if (hasPickles && !beforeAllFailed) {
           for (let iteration = 0; iteration < repeat; iteration += 1) {
           for (const [pickleIndex, { feature, pickle }] of flatPickles.entries()) {
-            const executionIndex = (conditionIndex * repeat + iteration) * flatPickles.length + pickleIndex;
+            const executionIndex = (passIndex * repeat + iteration) * flatPickles.length + pickleIndex;
+            const line = pickle.location?.line ?? 0;
             // This pickle's own boundary line, right before its execution
             // actually begins.
             writeScenarioBoundary(progress, {
               index: executionIndex + 1,
-              total: flatPickles.length * repeat * conditions.length,
+              total: flatPickles.length * repeat * passes.length,
               relativeFeaturePath: feature.relativePath,
-              line: pickle.location?.line ?? 0,
-              name: pickle.name,
+              line,
+              name: roleOf(feature.relativePath, line, environment) === "control" ? `${pickle.name}  (control)` : pickle.name,
             });
-
-            const record = await runScenario({
-              rootDir,
-              config,
-              programWorld: started?.view ?? null,
-              pickle,
-              relativeFeaturePath: feature.relativePath,
-              gherkinDocument: feature.gherkinDocument,
-              vocabulary,
-              bindings,
-              patterns,
-              runId,
-              git,
-              environment: condition.resolvedEnv.name,
-              policy: condition.resolvedEnv.policy,
-              targetVersion: condition.targetVersion,
-              env: passEnv,
-              secrets: passSecrets,
-              instantiateCompatWorld,
-              onWorldSetupFailure: (message) => {
-                warnings("world-setup-failed").write(`${message}\n`);
-              },
-              compatHooks,
-              defaultTimeoutMs,
-              onUnknownTraceVersion,
-              onStepEnd,
-              fixtureGraph,
-              fixtureProcessCache,
-              processSignal,
-            });
-
-            // One JSON line per completed scenario record, streamed as it
-            // finishes; everything else about
-            // this run goes to stderr, never stdout.
-            noteRecord(record);
-            scenariosWritten += 1;
-            if (record.status === "passed") {
-              scenariosPassed += 1;
-            }
-            if (repeat > 1) repeatTally.note(record);
-            stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
-            // A `"scenario"`-scope fixture's own teardown failure — already
-            // recorded on `record.teardown_
-            // errors` (src/run/run-scenario.ts); announced here too, on
-            // stderr, so it is never silent even though it never changes
-            // `record.status` or this run's own exit code. Redacted on this
-            // write as well: the record's copy is already redacted, and this
-            // stderr line has to stay that way on its own.
-            for (const teardownError of record.teardown_errors ?? []) {
-              warnings("fixture-teardown-failed").write(fixtureTeardownWarning(teardownError.fixture, teardownError.message, condition.secrets) + "\n");
-            }
-            if (record.status !== "passed") {
-              passPassed = false;
-              failedScenarios.push(failedScenarioOf(record));
-            }
+            await execute(feature, pickle);
           }
+          }
+          // A control whose Then failed runs again, in the same pass and the
+          // same world, until it has failed `--proof-runs` times at the
+          // same line or a run disagrees. One round at a time, so a cell
+          // stops at the first run that disagrees.
+          for (;;) {
+            const due = flatPickles.filter(({ feature, pickle }) => needsProof(feature.relativePath, pickle.location?.line ?? 0, environment));
+            if (due.length === 0) break;
+            for (const { feature, pickle } of due) {
+              const line = pickle.location?.line ?? 0;
+              writeProofRunBoundary(progress, {
+                relativeFeaturePath: feature.relativePath,
+                line,
+                name: pickle.name,
+                environment,
+                run: (cellOutcomes.get(cellKey(feature.relativePath, line, environment))?.length ?? 0) + 1,
+                of: proofRuns,
+              });
+              await execute(feature, pickle);
+            }
           }
         }
 
@@ -1307,7 +1433,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         // src/run/run-scenario.ts's own After-hook loop.
         if (hasPickles && world !== "failed") {
           for (const hook of afterAllHooks) {
-            const ok = await runOneRunHook(hook, "AfterAll", condition.resolvedEnv.name);
+            const ok = await runOneRunHook(hook, "AfterAll", pass.resolvedEnv.name);
             if (!ok) {
               passPassed = false;
             }

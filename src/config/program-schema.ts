@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_TIMER_DELAY_MS, MAX_TIMER_DELAY_REASON } from "../timer/max-delay.js";
+import { CONDITION_NAME_PATTERN, CONDITION_VALUE_PATTERN } from "../condition/condition.js";
 
 // Responsibility: the validated shape of nukadoko.program.ts's default
 // export (docs/spec.md "Program"): how nukadoko builds, prepares, starts,
@@ -212,9 +213,32 @@ function serveOrUrl(value: { serve?: unknown; url?: unknown }, ctx: z.Refinement
   }
 }
 
+/** What an environment sets up, as facts a scenario's `@with:` and
+ * `@without:` tags name (src/condition/condition.ts). A string value has
+ * to be one a tag can name, so a value no tag could ever meet is refused
+ * here rather than read as a scenario no environment meets. */
+const conditionsSchema = z
+  .record(
+    z.string(),
+    z.union([
+      z.boolean(),
+      z.string().regex(CONDITION_VALUE_PATTERN, { message: "must be true, false, or a value with no whitespace, as @with:<name>=<value> names it" }),
+    ]),
+  )
+  .superRefine((conditions, ctx) => {
+    // A key refused by the record's own key schema reads "Invalid key in
+    // record", which names no rule, so the name is checked here instead.
+    for (const name of Object.keys(conditions)) {
+      if (!CONDITION_NAME_PATTERN.test(name)) {
+        ctx.addIssue({ code: "custom", path: [name], message: 'must be a condition name of letters, digits, "_", ".", or "-", as @with:<name> names it' });
+      }
+    }
+  });
+
 const environmentSchema = z
   .object({
     ...programFields,
+    conditions: conditionsSchema.optional(),
     policy: z.literal("read-only").optional(),
     envFiles: z.array(z.string()).optional(),
     version: functionSchema<() => string | Promise<string>>("must be a function returning string | Promise<string>").optional(),

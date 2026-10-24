@@ -44,7 +44,7 @@ describe("nuka run: run.json", () => {
     const passedStep = result.scenarios.find((s: { status: string }) => s.status === "passed").steps[0];
 
     expect(result).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       nukadoko: readOwnVersion(),
       command: "run",
       check: "skipped",
@@ -69,7 +69,7 @@ describe("nuka run: run.json", () => {
       // The fixture has no program file, so the run started no world.
       worlds: [],
       selection: "full",
-      counts: { scenarios: 2, passed: 1, failed: 1, not_run: 0 },
+      counts: { scenarios: 2, passed: 1, failed: 1, controls: 0, not_run: 0 },
       scenarios: [
         {
           scenario_record_id: expect.stringMatching(/^scn-/),
@@ -93,6 +93,7 @@ describe("nuka run: run.json", () => {
           ],
           hooks: [],
           do: "nuka run features/failure/a.feature:3",
+          role: "required",
           criteria: { changed_since: null },
           claims: { held: 0, broken: 0 },
           judged_by: "nothing",
@@ -119,31 +120,39 @@ describe("nuka run: run.json", () => {
             },
           ],
           hooks: [],
+          role: "required",
           criteria: { changed_since: null },
           claims: { held: 0, broken: 0 },
           judged_by: "nothing",
         },
       ],
-      verdicts: [
-        {
-          feature: "features/failure/a.feature",
-          line: 3,
-          scenario: "named concurrent failure",
-          environment: "default",
-          verdict: "failed",
-          executions: 1,
-          passed: 0,
-        },
-        {
-          feature: "features/failure/b.feature",
-          line: 3,
-          scenario: "concurrent pass",
-          environment: "default",
-          verdict: "passed",
-          executions: 1,
-          passed: 1,
-        },
-      ],
+      table: {
+        base: null,
+        mapping_changed: null,
+        worlds: [{ world: "head", environment: "default" }],
+        rows: [
+          {
+            feature: "features/failure/a.feature",
+            line: 3,
+            name: "named concurrent failure",
+            change: null,
+            conditions: [],
+            cells: [{ world: "head", environment: "default", role: "required", outcome: "broke", line: 4, runs: 1 }],
+            verdict: "failed",
+            reason: "stopped at line 4 in default before a claim there was judged",
+          },
+          {
+            feature: "features/failure/b.feature",
+            line: 3,
+            name: "concurrent pass",
+            change: null,
+            conditions: [],
+            cells: [{ world: "head", environment: "default", role: "required", outcome: "pass", runs: 1 }],
+            verdict: "held",
+            reason: "passes in default",
+          },
+        ],
+      },
       since: null,
     });
     // Paths in run.json are relative to the run directory.
@@ -187,8 +196,8 @@ describe("nuka run: run.json", () => {
       expect(exitCode, stderr.text()).toBe(0);
       const printed = JSON.parse(stdout.text());
       // The envelope carries run.json's fields beside its own five.
-      expect(printed).toEqual({ ...readRunJson(rootDir, onlyRunId(rootDir)), schema_version: 3, command: "run", findings: [] });
-      expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0, not_run: 0 }]);
+      expect(printed).toEqual({ ...readRunJson(rootDir, onlyRunId(rootDir)), schema_version: 4, command: "run", findings: [] });
+      expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0, controls: 0, not_run: 0 }]);
       expect(printed.scenarios.map((s: { feature: string }) => s.feature).sort()).toEqual([
         "features/basic/a.feature",
         "features/basic/b.feature",
@@ -206,28 +215,32 @@ describe("nuka run: run.json", () => {
       expect(stderr.text()).toBe("");
       expect(exitCode).toBe(1);
       const printed = JSON.parse(stdout.text());
-      expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1, not_run: 0 }]);
+      expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1, controls: 0, not_run: 0 }]);
       expect(printed.scenarios.find((s: { status: string }) => s.status === "failed").do).toBe(
         "nuka run features/failure/a.feature:3",
       );
     }
   });
 
-  it("counts what its scenarios say, and the cells that never ran, for any mix of outcomes", () =>
+  it("counts the required executions, the controls apart, and the cells that never ran, for any mix of outcomes", () =>
     hegel.test((tc) => {
-      const statuses = tc.draw(gs.arrays(gs.sampledFrom(["passed", "failed"] as const), { maxSize: 12 }));
-      const cells = tc.draw(gs.arrays(gs.sampledFrom(["passed", "failed", "not-run"] as const), { maxSize: 12 }));
-      const failed = statuses.filter((status) => status === "failed").length;
+      const executions = tc.draw(
+        gs.arrays(gs.tuples(gs.sampledFrom(["passed", "failed"] as const), gs.sampledFrom(["required", "control", undefined] as const)), { maxSize: 12 }),
+      );
+      const rows = tc.draw(gs.arrays(gs.arrays(gs.sampledFrom(["pass", "fail", "not-run"] as const), { maxSize: 3 }), { maxSize: 4 }));
+      const required = executions.filter(([, role]) => role !== "control");
+      const failed = required.filter(([status]) => status === "failed").length;
       expect(
         countScenarios(
-          statuses.map((status) => ({ status })),
-          cells.map((verdict) => ({ verdict })),
+          executions.map(([status, role]) => (role === undefined ? { status } : { status, role })),
+          { rows: rows.map((outcomes) => ({ cells: outcomes.map((outcome) => ({ outcome })) })) as never },
         ),
       ).toEqual({
-        scenarios: statuses.length,
-        passed: statuses.length - failed,
+        scenarios: required.length,
+        passed: required.length - failed,
         failed,
-        not_run: cells.filter((verdict) => verdict === "not-run").length,
+        controls: executions.length - required.length,
+        not_run: rows.flat().filter((outcome) => outcome === "not-run").length,
       });
     }));
 });

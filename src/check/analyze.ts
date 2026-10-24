@@ -8,9 +8,9 @@ import { loadProgram, type LoadedProgram } from "../config/load-program.js";
 import { cjsTsMismatchExplanation, refusesEsmTs } from "../config/module-kind.js";
 import { isPlaywrightInstalled } from "../context/load-playwright.js";
 import { discoverSteps, type DiscoveryResult } from "../discover/discover-steps.js";
-import { resolveEnvironment } from "../environment/resolve-environment.js";
 import {
   attachStepLines,
+  findConditionTags,
   findOutlinesThatDoNotRun,
   findScenarioShapeFindings,
   findSerialTagOnScenario,
@@ -28,6 +28,8 @@ import { validateStepParts } from "../step/validate-parts.js";
 import { hookDisplayTitle } from "../record/scenario-record.js";
 import { checkBindings } from "./binding-check.js";
 import { checkConfig } from "./config-check.js";
+import { checkConditions } from "./condition-check.js";
+import { defaultEnvironmentNames, resolveEnvironment } from "../environment/resolve-environment.js";
 import {
   declaresDoneCallback,
   doneCallbackMessage,
@@ -156,7 +158,10 @@ function outlineDoesNotRunMessage(issue: OutlineDoesNotRun): string {
 // being reported.
 
 /** The report a `nuka check` with no target gives: every feature under
- * featuresDir and additionalFeatureDirs. */
+ * featuresDir and additionalFeatureDirs. `envs` are `--env`'s names: they
+ * choose the worlds whose placeholders are checked, and the environments
+ * the condition tags are read against; empty reads them against the
+ * environments a run with no `--env` selects. */
 export async function analyzeProject(rootDir: string, envs: readonly string[] = []): Promise<CheckReport> {
   // additionalFeatureDirs joins featuresDir here: a no-target `nuka check`
   // scans it, while `nuka run`'s default scan does not. A config
@@ -224,6 +229,7 @@ function runSelectionFeatures(
     scenarioShapeFindings: selected.flatMap((feature) =>
       findScenarioShapeFindings(feature.gherkinDocument, feature.relativePath),
     ),
+    conditionTags: selected.flatMap((feature) => findConditionTags(feature.gherkinDocument, feature.relativePath)),
   });
 }
 
@@ -562,7 +568,7 @@ async function reportFor(
     errors.push({ code: issue.code, message: issue.message, file: configFileName });
   }
 
-  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun, scenarioShapeFindings } =
+  const { features, parseErrors, serialTagOnScenario, outlinesThatDoNotRun, scenarioShapeFindings, conditionTags } =
     loadFeatures(config);
   for (const parseError of parseErrors) {
     errors.push({
@@ -596,6 +602,20 @@ async function reportFor(
       line: issue.line,
     });
   }
+  // The environments `nuka run` selects: the ones `--env` names, or the
+  // ones a run without it runs. A name `--env` gave that the program file
+  // does not define is refused (`unknown-environment`), as `nuka run`
+  // refuses it before its check.
+  const selectedNames = envs.length === 0 ? defaultEnvironmentNames(program?.program ?? null) : envs;
+  errors.push(
+    ...checkConditions({
+      conditionTags,
+      features,
+      program: program?.program ?? null,
+      programFile: program?.fileName ?? "nukadoko.program.ts",
+      selected: selectedNames.map((name) => ({ name, conditions: resolveEnvironment(config, program?.program ?? null, name, selectedNames === envs).conditions })),
+    }),
+  );
   // Warnings, not errors: a scenario with no Then can be a deliberate smoke
   // test, and rows that share a name can be what the author wants to read.
   for (const finding of scenarioShapeFindings) {

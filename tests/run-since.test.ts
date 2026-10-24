@@ -134,7 +134,7 @@ describe("nuka run --since", () => {
         "- `features/checkout.feature:7` a full cart, criteria changed",
         "- `features/checkout.feature:11` a big cart, criteria new",
         "",
-        "## features/checkout.feature",
+        "## Claims",
       ].join("\n"),
     );
     const markdown = await cli(["report", "--format", "markdown"]);

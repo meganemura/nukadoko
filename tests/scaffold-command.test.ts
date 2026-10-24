@@ -389,8 +389,8 @@ describe("nuka scaffold --command", () => {
     const [runId] = await readdir(runsDir);
     const summary = await readFile(path.join(runsDir, runId!, "summary.md"), "utf8");
     expect(summary).toContain(
-      'step "the output says "Hello, Ada!"": `claim broken: "" (from:run-greet@3.stdout as text) equal "Hello, Ada!" (sentence:text)`<br>' +
-        "used run-greet exit 1: `Error [ERR_MODULE_NOT_FOUND]: Cannot find module greet.js, token {{secret.TOKEN}}`<br>record ",
+      'step "the output says "Hello, Ada!"": `claim broken: "" (from:run-greet@3.stdout as text) equal "Hello, Ada!" (sentence:text)`; ' +
+        "used run-greet exit 1: `Error [ERR_MODULE_NOT_FOUND]: Cannot find module greet.js, token {{secret.TOKEN}}`; record ",
     );
   });
 

@@ -8,7 +8,7 @@ import { parseRunDocument } from "../src/report/run-document-schema.js";
 // them is refused naming that field, never cast and read.
 
 const VALID = {
-  schema_version: 3,
+  schema_version: 4,
   nukadoko: "0.17.0",
   command: "run",
   verdict: "passed",
@@ -19,7 +19,7 @@ const VALID = {
   commit: null,
   environments: [{ name: "default", target_version: null }],
   selection: "full",
-  counts: { scenarios: 1, passed: 1, failed: 0, not_run: 0 },
+  counts: { scenarios: 1, passed: 1, failed: 0, controls: 0, not_run: 0 },
   scenarios: [
     {
       scenario_record_id: "scn-1",
@@ -34,7 +34,23 @@ const VALID = {
       hooks: [],
     },
   ],
-  verdicts: [{ feature: "features/a.feature", line: 3, scenario: "a", environment: "default", verdict: "passed", executions: 1, passed: 1 }],
+  table: {
+    base: null,
+    mapping_changed: null,
+    worlds: [{ world: "head", environment: "default" }],
+    rows: [
+      {
+        feature: "features/a.feature",
+        line: 3,
+        name: "a",
+        change: null,
+        conditions: [],
+        cells: [{ world: "head", environment: "default", role: "required", outcome: "pass", runs: 1 }],
+        verdict: "held",
+        reason: "passes in default",
+      },
+    ],
+  },
 };
 
 const REQUIRED = Object.keys(VALID).filter((key) => key !== "schema_version");
@@ -54,7 +70,7 @@ describe("parseRunDocument", () => {
     }));
 
   it("refuses another schema version before it reads a field", () => {
-    expect(parseRunDocument(JSON.stringify({ schema_version: 2 }))).toEqual({ problem: "has schema_version 2, and this release reads 3" });
+    expect(parseRunDocument(JSON.stringify({ schema_version: 2 }))).toEqual({ problem: "has schema_version 2, and this release reads 4" });
     expect(parseRunDocument("[")).toEqual({ problem: "does not parse as JSON: Unexpected end of JSON input" });
   });
 });

@@ -121,8 +121,20 @@ with `traceparent_sent_to`, the origins that received it.
 ## Environments and programs nukadoko does not start
 
 An entry of `environments` overrides any field above (`env` merges by
-key), so a feature flag is `{ env: { CHECKOUT_V2: "1" } }` and `nuka run
---env new-checkout` runs it. `url` in place of `serve` names a program
+key). A feature behind a switch gets one environment per side, each
+naming its side in `conditions`:
+
+```ts
+environments: {
+  "checkout-v1": { env: { CHECKOUT_V2: "" }, conditions: { checkout_v2: false } },
+  "checkout-v2": { env: { CHECKOUT_V2: "1" }, conditions: { checkout_v2: true } },
+},
+```
+
+`env` sets the switch; `conditions` sets nothing, and says which side
+the environment is on for a scenario's `@with:checkout_v2` or
+`@without:checkout_v2` tag (`references/verdicts.md`). `nuka run` without `--env` runs every environment that
+declares `conditions`. `url` in place of `serve` names a program
 that runs elsewhere, such as a staging server, and starts nothing: give it
 `build: []` and `prepare: []` when the top level has them, and
 `policy: "read-only"` when the data there belongs to someone else.

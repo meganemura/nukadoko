@@ -233,7 +233,14 @@ lands on the job's summary page by itself. Its first part:
 
 ```text
 <!-- nukadoko:run -->
-# nukadoko run failed: 1 scenario, 0 passed, 1 failed
+# nukadoko run failed: 1 criterion, 0 held, 1 failed
+
+| verdict | criterion | head default |
+| --- | --- | --- |
+| failed | `features/greet.feature:4` greets by name | fail@6 |
+
+- `features/greet.feature:4` greets by name: a claim broke at line 6 in default
+  - step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`; record `steps/step-20261024-123634-s9j0`
 
 - commit: `e26cf85`
 - environment: default
@@ -242,12 +249,6 @@ lands on the job's summary page by itself. Its first part:
 - nukadoko: 0.21.0
 - run: run-20261024-123634-z9t2
 - started 2026-10-24T12:36:34.018Z, finished 2026-10-24T12:36:34.449Z (0s)
-
-## features/greet.feature
-
-| scenario | line | default | duration | failure |
-| --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-123634-s9j0` |
 
 ## Claims
 
@@ -808,6 +809,7 @@ they are most familiar, not because it is the only layer that has them.
 | A report that only says `passed` | Every execution writes a step record: validated result, the HTTP calls with their bodies, the processes, and the files the tool itself recorded, what it saw but could not measure, evidence, environment, target version |
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
 | A `Then` that judges in code, or quietly acts | A typed `Then` declares claims instead of code: which value it reads, how it compares it, and where the expected value comes from, which is the sentence unless the step says otherwise. nukadoko compares, and the record and the run summary name both values. `nuka check` refuses a `Then` bound to a step that runs, and a claim step bound in `Given` or `When` (see [Claims](docs/spec.md#claims)) |
+| A scenario that passes whether or not the feature is there | An environment declares the switches of its program as `conditions`, and a scenario tagged `@with:<switch>` also runs where the switch is off, as a control that never turns the run red. A Then that fails there, at the same line in two runs, makes the row `proven`; a row whose control passed stays `held`, and the run summary's table shows which is which (see [Verdicts](docs/spec.md#verdicts)) |
 | A step that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment; what actually ran is still recorded on the step record for review |
 
 The last row requires precision because the tool once failed on a count
@@ -1148,7 +1150,8 @@ one JSON line per scenario as it finishes, and `nuka run --json` prints
 `run.json` itself instead, the envelope every `--json` prints with the
 run's fields beside `findings`: the commit and whether the tree was dirty,
 each environment it ran in, whether a `:line` target made the run
-`partial`, the counts, one verdict per scenario and environment, and each
+`partial`, the counts, the verdict table (one row per criterion, one cell
+per environment, and each row `held`, `proven`, or `failed`), and each
 scenario's steps with their line, status, step record, a claim step's
 claims,
 and, for a failure, its error, the results it read, and the command that
@@ -1246,15 +1249,30 @@ only; the exit code stays the run's.
 `nuka run --env a --env b` runs every selected scenario once in each
 environment, in one run with one run id: all of `a` first, then all of
 `b`, each with its own env files, secrets, version probe, program,
-BeforeAll and AfterAll, and process-scope fixtures. `run.json` holds one verdict per
-scenario and environment, the summary table has one column per
-environment, and the exit code is red when any cell is. A scenario that
-passes with a feature flag on and fails with it off reads across one row.
-`--env default` names the environment a run without `--env` uses, as
-`run.json` names it, so `--env default --env staging` runs both.
-An environment is still only configuration, in `nukadoko.program.ts`:
-what differs between `a` and `b` is whatever their env files and
-program fields say.
+BeforeAll and AfterAll, and process-scope fixtures. `run.json` holds the
+verdict table, one row per criterion and one cell per environment, and the
+summary opens with it. An environment can declare the switches of its
+program as `conditions`, and a run without `--env` runs every
+environment that declares them:
+
+```ts
+environments: {
+  "banner-off": { env: { BANNER: "off" }, conditions: { banner: false } },
+  "banner-on": { env: { BANNER: "on" }, conditions: { banner: true } },
+},
+```
+
+A scenario tagged `@with:banner` is required in `banner-on` and a
+control in `banner-off`. A control never turns the run red. When its Then
+fails, at the same line in two runs (`--proof-runs`), the row is
+`proven`: the scenario tells the two sides of the switch apart. When it
+passes, the row is `held`, and that is the row to read: the Then does not
+see what the switch changes. A row is `failed`, and the exit code 1, when
+a required cell does not pass. `--env default` names the top-level
+environment, as `run.json` names it, so `--env default --env staging`
+runs both. An environment is still only configuration, in
+`nukadoko.program.ts`: what differs between `a` and `b` is whatever
+their fields say, and `conditions` sets nothing.
 
 ## What this does not do
 

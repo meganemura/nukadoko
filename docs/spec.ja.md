@@ -2288,7 +2288,7 @@ fix は world に欠けているものだけを挙げます。
 `build` のコマンドには `{root}` だけにするか `prepare` に移すことを、どちらも無い world には `serve` か `url` を挙げます。
 world がどのプレースホルダーを持つかはレシピだけで決まるので、この拒否は world を待ちません。
 `nuka check` は、同じ `--env` フラグの `nuka run` が起動する各 world のそれぞれの欠けについて、error `program-placeholder-unfilled` を報告します。
-その world とは、`--env` が無いときは default の world、あるときは `--env` が名指す各 environment です。
+その world とは、`--env` があるときは `--env` が名指す各 environment、無いときは `--env` の無い run が選ぶ environment(`conditions` を宣言する各 environment、どれも宣言しないときは default の world)です。
 その呼び出しで何も起動しない world は確かめないので、別の用途のために書いた environment が、ほかの environment の run を拒否することはありません。
 `nuka run` と `nuka do` は、起動する world について、どの `build`、`prepare`、version の probe よりも前に、同じコードで拒否します。
 そのため、あとの world と共有する `build` も実行されません。
@@ -2412,14 +2412,19 @@ compat の step が読み書きする compat の World は `world` で、別の�
 
 `environments` は、配備先とプログラムの変種に名前を付けます。
 staging のサーバ、pull request ごとのプレビュー、機能を有効にした同じアプリなどです。
-エントリは上のどのフィールドも持てるほか、environment だけが持つ 3 つのフィールドを持てます:
+エントリは上のどのフィールドも持てるほか、environment だけが持つ 4 つのフィールドを持てます:
 
 - `policy: "read-only"` は、mutate すると宣言した step を拒否します。
 - `envFiles` は config の `envFiles` のあとに続き、あとのファイルが勝ちます。
 - `version` は probe(`() => string | Promise<string>`)で、run ごとに 10 秒の持ち時間で 1 回呼ばれます。
   各 step record は、その答えを `target_version` として保存します。
+- `conditions` は、この environment が動かすプログラムのスイッチに名前を付けます。
+  値はそれぞれ `true`、`false`、または空白を含まない値で、たとえば `{ banner: true, locale: "ja" }` です。
+  scenario の `@with:` と `@without:` の tag はこれに照らして読まれ、どの run が scenario を証明するかを決めます(「断定」を参照)。
+  プログラムには何も設定しません。
+  それをするのは environment の `env` と env file です。
 
-3 つの規則は「Environment、secret」にあります。
+はじめの 3 つの規則は「Environment、secret」にあります。
 environment が書いたフィールドはトップレベルのものを置き換えます。
 例外は `env` で、キーごとに合わさり、environment のものが勝ちます。
 そのため、変数を 1 つ変える environment が残りを繰り返す必要はありません。
@@ -2427,7 +2432,8 @@ environment が書いたフィールドはトップレベルのものを置き�
 どちらかを書いた environment は、トップレベルのものを置き換えます。
 `build` と `prepare` はほかのフィールドと同じく引き継がれます。
 そのため、`url` を持ち実行するコマンドが無い environment は、`build: []` と `prepare: []` を書きます。
-`--env <name>` が environment を選び、`--env` の無い run はトップレベルを `default` という名前で使います。
+`--env <name>` が environment を選びます。
+`--env` の無い run は、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に走らせ、1 つも宣言していなければトップレベルを `default` という名前で走らせます。
 `--env` は繰り返せ、environment ごとに自分の world を持ちます(「実行」を参照)。
 
 ```ts
@@ -2435,11 +2441,14 @@ export default defineProgram({
   serve: { command: "npm start", ready: "/health" },
   env: { PORT: "{port}" },
   environments: {
-    "new-checkout": { env: { CHECKOUT_V2: "1" } },
+    "checkout-v1": { env: { CHECKOUT_V2: "" }, conditions: { checkout_v2: false } },
+    "checkout-v2": { env: { CHECKOUT_V2: "1" }, conditions: { checkout_v2: true } },
     staging: { url: "https://staging.acme.example", policy: "read-only" },
   },
 });
 ```
+
+ここで `nuka run` は `checkout-v1` と `checkout-v2` を走らせ、`nuka run --env staging` は condition を宣言しない配備先を走らせます。
 
 ### nukadoko が起動しないプログラム
 
@@ -2680,7 +2689,7 @@ export default defineProgram({
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--since <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--since <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -2757,9 +2766,10 @@ Gherkin のタグは自由記述なので、名前空間は、短いタグ名を
 `--repeat <n>` は、選ばれたすべての scenario をこの 1 回の呼び出しの中で `n` 回実行します。
 選択全体を 1 回、それからもう 1 回、という順です。
 前に走ったものに依存する失敗が、毎回同じ隣人と出会うためです。
-各実行は `run.json` の `scenarios` でそれぞれ自分のエントリになり、`verdicts` のセルが実行の回数と通った回数を数えます。
+各実行は `run.json` の `scenarios` でそれぞれ自分のエントリになります。
+`table` のセルは実行の回数を `runs` として数え、実行が食い違えば `flaky@<line>` になります(「断定」を参照)。
 1 回でも失敗した scenario は、failed の一覧の後に `repeat` の行を 1 つ得ます。
-`<passed> of <n> passed` の形で、判定は付けません。
+`<passed> of <n> passed` の形です。
 毎回失敗する scenario は flaky ではなく、読み手に要るのは回数だからです。
 このフラグは、数回に 1 回だけ再現する失敗のためにあります。
 これが無いときの答えはシェルで `nuka run` を回すループで、それは証拠をその回数ぶんの run id に散らします。
@@ -2768,7 +2778,7 @@ messages ストリームでは、各実行は 1 つの retry ではなく、そ�
 test case を列挙する formatter は、すべての実行を列挙します。
 Allure では、1 つの environment の中の各実行が scenario 自身の identity を持つため、レポートは 1 つのテストとして表示し、他の実行をその retry として並べます。
 ときどき失敗する scenario が最も読みやすいのはそこです。
-run サマリのセルは `<passed> of <n> passed` と読めます。
+run サマリのセルは `pass (3 runs)` や `flaky@12 (3 runs)` と読めます。
 3 回 green は 1 回 green とは別の主張であり、レビュアーはその回数を目にします。
 `repeated-scenario-prefix` の note は、何回走ったかによらず scenario を 1 回と数えます。
 `--concurrency` の下では、各 worker が自分のファイルを繰り返すので、配る単位はファイルのままです。
@@ -2833,16 +2843,17 @@ unchanged ではない scenario は現在の `lines` を持ち、どの scenario
 `--env` は繰り返せます。
 `nuka run --env a --env b` は、1 つの `run_id`、1 つの `run.json`、1 つのサマリ、1 つの終了コードを持つ 1 回の run で、選ばれたすべての scenario を各 environment で 1 回ずつ実行します。
 `--env` は、config が定義していてもいなくても `default` という名前を受け付けます。
-それは `--env` なしの run が使う environment(トップレベルの設定、またはプログラムのファイルが定義していれば `environments.default`)で、`run.json` がそう名付けるものなので、`--env default --env staging` は両方を実行します。
+それは、どの environment も `conditions` を宣言していないときに `--env` なしの run が使い、`--env` なしの `nuka do` が使う environment(トップレベルの設定、またはプログラムのファイルが定義していれば `environments.default`)で、`run.json` がそう名付けるものなので、`--env default --env staging` は両方を実行します。
 environment は与えた順に 1 つずつ走ります。
 `a` で選択全体を実行し、それから `b` で選択全体を実行するので、2 つの environment が同時に同じ対象を共有することはありません。
 各回は、それだけを走らせたときと同じ run です。
 自分の env file、secret、version の probe、world、policy、自分の BeforeAll と AfterAll、自分の `"process"` スコープの fixture を持ち、その fixture は次の environment が始まる前に teardown され、world は止められます(「テスト対象のプログラム」を参照)。
 environment は汎用の設定のままです。
-nukadoko は feature flag という概念を持たず、2 つの environment の違いは、それぞれの env file とプログラムのフィールドが言うことだけです。
+2 つの environment の違いは、それぞれのフィールドが言うことだけです。
+nukadoko が走らせる以外に読むのは `conditions` だけで、それは各セルに役割を与え、何も設定しません(「断定」を参照)。
 各 scenario のエントリは自分の `environment` を持ちます。
-`verdicts` は scenario と environment の組ごとに 1 つのセルを持ち、その中のどれか 1 つの実行が失敗ならセルも失敗です。
-どれか 1 つのセルが失敗なら終了コードも失敗です。
+`table` は受け入れ基準と environment の組ごとに 1 つのセルを持ちます。
+どれか 1 つの行が赤なら終了コードも赤です。
 同じ environment を 2 回名指すと、何も走る前に拒否されます。
 そのセルを互いに区別できないからです。
 他のフラグとは次のように組み合わさります。
@@ -2941,7 +2952,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "nukadoko": "...",
   "command": "run",
   "check": "ran",
@@ -2963,7 +2974,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
-  "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "controls": 0, "not_run": 0 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
@@ -3026,27 +3037,35 @@ run が終わったとき、最後の step record と run サマリの後に、�
       ],
       "hooks": [],
       "do": "nuka run features/greet.feature:4",
+      "role": "required",
       "claims": { "held": 0, "broken": 1 }
     }
   ],
-  "verdicts": [
-    {
-      "feature": "features/greet.feature",
-      "line": 4,
-      "scenario": "greets by name",
-      "environment": "default",
-      "verdict": "failed",
-      "executions": 1,
-      "passed": 0
-    }
-  ]
+  "table": {
+    "base": null,
+    "mapping_changed": null,
+    "worlds": [{ "world": "head", "environment": "default" }],
+    "rows": [
+      {
+        "feature": "features/greet.feature",
+        "line": 4,
+        "name": "greets by name",
+        "change": null,
+        "conditions": [],
+        "cells": [{ "world": "head", "environment": "default", "role": "required", "outcome": "fail", "line": 6, "runs": 1 }],
+        "verdict": "failed",
+        "reason": "a claim broke at line 6 in default"
+      }
+    ]
+  }
 }
 ```
 
 - `commit` は、run の開始時に `HEAD` が指していたコミットです。
   `dirty` は、そのとき作業ツリーに `git status --porcelain` が報告する変更(未追跡ファイルを含む)があったかどうかです。
   git リポジトリの外や最初のコミットの前では `null` です。
-  `environments` は run が対象にした各 environment を `--env` が与えた順に並べます(`--env` が無ければ `default`)。
+  `environments` は run が対象にした各 environment を、`--env` が与えた順(`--env` が無ければ run が選んだ順)に並べます。
+  environment が `conditions` を宣言していれば、各要素はそれを持ちます。
   各要素の `target_version` は、その environment のバージョン probe が答えた値です(probe がなければ `null`)。
   各要素の `base_url` は、その world の URL です(なければ `null`)。
   これで run は、コミットだけでなく、判定した相手のインスタンスも名指しします。
@@ -3059,7 +3078,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   run.json の中のパスは、これまでどおりこのディレクトリからの相対パスです。
 - `selection` は、`:line` の対象がそのファイルの scenario を 1 つでも外したとき `partial` で、それ以外は `full` です。
   部分実行はデバッグの結果であり、レビュアーが feature が通ったと読むべきものではありません(「レビュー」を参照)。
-- `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` を持ちます。
+- `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` と、そのセルの役割である `role`(`required` か `control` で、「断定」を参照)を持ちます。
   各 step は、feature ファイルでの `line`、`text`、一致した `step`(一致がないか複数あれば `null`)、`status` を持ちます。
   始まった step は、`step_record_id`(`nuka do --use` が受け取る値)と、step record のディレクトリである `record` を持ち、その `mutates` の宣言と `observed` の計測も持ちます。
   step record を読み戻せなかった step は、その代わりに `record_unreadable: true` を持ち、`step-record-unreadable` の警告がそのファイルを名指します。
@@ -3085,6 +3104,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
   そのため check を飛ばして始まった run は、そのことを述べます。
 - 失敗した scenario は、それだけを走らせるコマンドである `do` を持ちます。
   `scenario-failed` の所見の `do:` 行が出すのと同じコマンドです。
+  対照は `do` を持ちません。
+  その失敗は、表が証明として読むものだからです。
   自分の evidence(最終スクリーンショット、hook の trace や添付)を書いた scenario は、run の `scenarios/` の下のそのディレクトリを `evidence` に持ちます。
   何も書かなかった scenario は `evidence` を持たず、その空のディレクトリは run の終わりに消されます。
 - すべての scenario は `criteria` を持ちます。
@@ -3095,14 +3116,18 @@ run が終わったとき、最後の step record と run サマリの後に、�
   あれば `ref`、その `commit`、比べた対象の `compared`、消えた受け入れ基準の `removed`、各 step ファイルの `file` とその `change`(`unchanged`、`changed`、`untracked`)を持ちます。
 - `findings` は、run が出したすべての所見を持ちます。
   失敗した各 scenario と、各 note と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
-- `verdicts` は scenario と environment の組ごとに 1 つのセルを持ち、feature はパス順、scenario は行順、environment は与えた順に並びます。
-  セルの中の実行が 1 つでも失敗していれば `verdict` は `failed` で、`executions` はその数(`--repeat` のとき 2 以上)、`passed` は通った数です。
-  選んだ scenario がある environment で一度も走らなかったとき(その environment の BeforeAll が失敗したときなど)は、`verdict` が `not-run` で実行が 0 のセルになります。
+- `table` は断定の表です(「断定」を参照)。
+  `worlds` はその列 `{ world, environment }` を run の environment の順に並べます。
+  world は `head` で、`base` と `mapping_changed` は `null` です。
+  このリリースは run を他の tree と比べないからです。
+  `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並びます。
+  行は `feature`、`line`、`name`、`change`(`null`)、持っている condition の tag と `@held` を並べた `conditions`、列ごとに 1 つのセル、`verdict`(`held`、`proven`、`failed`)、1 文の `reason` を持ちます。
+  セルは `world`、`environment`、`role`、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、そして `not-run` のときは `reason` を持ちます。
   run サマリが描く表はこれです。
-- `counts` は、実行を数える `scenarios`、`passed`、`failed` と、`not-run` のセルを数える `not_run` を持ちます。
+- `counts` は、必須のセルの実行を数える `scenarios`、`passed`、`failed` と、証明の実行を含めて対照の実行を数える `controls` と、`not-run` のセルを数える `not_run` を持ちます。
 - BeforeAll や AfterAll の失敗は、その environment を名指す `hook-failed` の所見になり、その `do` は同じ対象をその environment で走らせます。
 - `verdict` は終了コードの断定です。
-  どの scenario も持たない BeforeAll や AfterAll の失敗も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
+  どの scenario も持たない BeforeAll や AfterAll の失敗と、必須のセルを持たない行も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
 
 `run.json` の中のパス(step の `record`、`used` のエントリの `record`、scenario の `evidence.dir`)はすべて、`run.json` 自身を持つ run ディレクトリからの相対パスです。
 CI からアップロードした run ディレクトリを別の場所にダウンロードしても、同じように読めるからです。
@@ -3162,6 +3187,95 @@ required な連鎖キーの生産者が欠けているか、より後ろで束�
 undefined な step は、マッチに失敗したテキストを名指しして scenario を失敗させ、`nuka scaffold` を提案します。
 同梱の skill に従う agent が、欠けている型付き step を作成して PR として提出します。
 feature のバックログが語彙の成長を駆動します。
+
+### 断定
+
+run は 1 つの表で終わります。
+行は 1 つの受け入れ基準で、1 つの scenario か、outline の Examples の 1 行です。
+列は 1 つの world と environment の組です。
+このリリースの world は run を始めた tree である `head` だけなので、列は run の environment 1 つに当たります。
+行と列が交わるところがセルで、各行は 1 つの断定を持ち、終了コードはそれに従います。
+
+すべての environment で通る scenario は、コードが言うとおりに動くことを示します。
+しかし、そうでなかったときに scenario が気付くことは示しません。
+スイッチの後ろにある機能では、この問いに答えがあります。
+スイッチが切れているところで scenario を走らせ、そこで Then が失敗すれば、scenario が 2 つを見分けることが分かります。
+そこで environment はプログラムのスイッチを `conditions` として宣言し(「テスト対象のプログラム」を参照)、scenario は必要とする condition を `Feature:`、`Rule:`、`Scenario:`、`Examples:` の行の tag で名指します。
+tag は Gherkin の tag と同じように積み重なります:
+
+- `@with:<condition>` は condition が入っていること、つまり `true` か何かの値であることを求めます。
+- `@with:<condition>=<value>` はその値を求めます。
+  `@with:x=true` はテキストの `true` を名指し、真偽値の `true` はそれと等しくなりません。
+- `@without:<condition>` は condition が切れていること、つまり `false` か宣言されていないことを求めます。
+
+condition の名前は英字、数字、`_`、`.`、`-` で、値は空白を含みません。
+セルは、その environment が行の condition の tag をすべて満たすところで必須(`required`)、それ以外で対照(`control`)です。
+condition の tag を持たない行は、すべての environment で必須です。
+対照のセルはほかのセルと同じように走り、run を赤にすることはありません。
+そこでは condition が成り立たないので、そこで失敗する Then は scenario の証拠になり、そこで通る Then は何の証拠にもならないからです。
+`@held` は読まれて行の `conditions` に残りますが、どのセルもどの断定も変えません。
+
+```gherkin
+@with:banner
+Scenario: the sale banner is shown
+  When the visitor opens the home page
+  Then the banner reads "Sale"
+```
+
+`banner-on`(`conditions: { banner: true }`)と `banner-off`(`{ banner: false }`)の run では、`banner-on` のセルが必須で、`banner-off` のセルが対照です。
+
+`--env` の無い run は、`conditions` を宣言するすべての environment をプログラムのファイルが並べる順に選び、1 つも宣言していなければ `default` を選びます。
+配備先のように condition を宣言しない environment は、`--env` が名指したときに走ります。
+`nuka check` は、run が選ぶ environment(`nuka check --env` が名指すもの、または `--env` の無い run が選ぶもの)に照らして tag を読み、3 つのエラーを報告します:
+
+- `condition-tag-malformed`: `@with:` か `@without:` で始まり、3 つの形のどれでもない tag。
+- `condition-unknown`: どの environment も宣言していない condition を名指す tag。
+  スイッチを取り除いたときは、残した側が決めます。
+  `@with:` の側のコードが残ったなら tag を消し、もう一方の側のコードが残ったなら scenario を消します。
+- `condition-unmet`: 選んだどの environment も満たさない scenario。
+  そのセルはすべて対照になります。
+
+**セル。**
+セルは、その実行がどうなったかです:
+
+| セル | その実行 |
+| --- | --- |
+| `pass` | すべて通った |
+| `fail@<line>` | すべて、Then の位置のその行で成り立たなかった claim で止まった |
+| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、どの step にも一致しない行、nukadoko が判定できなかった claim、または scenario の行では hook |
+| `flaky@<line>` | 食い違った。行は通らなかった最初の実行のもの |
+| `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、または BeforeAll が失敗した) |
+
+証明するのは Then だけです。
+振る舞いが無いところでエラーになる When は、Then が違いを見分けられるかどうかについて何も言いません。
+そのためそれは `broke` で、`fail` にはなりません。
+
+必須のセルは 1 回、または `--repeat` の回数だけ走ります。
+Then の行で失敗した対照のセルは、同じ pass の同じ world でもう一度走ります。
+その行で `--proof-runs` 回(既定は 2)失敗するか、実行が食い違って `flaky` になるまでです。
+1 回の失敗は、プログラムが一度遅かっただけかもしれません。
+証明は失敗を良い知らせとして読む唯一の断定なので、失敗の繰り返しを要するのも証明だけです。
+通った対照や、`broke` になった対照はもう走りません。
+各証明の実行は、番号の付いた scenario の行とは別に、stderr の `proof run <k>/<n>` の行になります。
+対照自身の scenario の行は `(control)` で終わります。
+
+**断定。**
+行は次のどれかです:
+
+- `failed`: 必須のセルが `pass` でないとき、または行が必須のセルを持たないとき。
+  後者は `nuka check` が `condition-unmet` を報告するので、`--no-check` の run でだけ起きます。
+- `proven`: 必須のセルがすべて `pass` で、ある対照が `--proof-runs` 回以上 `fail` だったとき。
+- `held`: それ以外。
+  必須のセルがすべて `pass` で、それを証明する対照がないときです。
+
+行が `failed` のとき、または run がどの scenario の外でも失敗したとき(hook、world、worker)、終了コードは 1 です。
+`held` と `proven` はどちらも green です。
+対照が通った `held` の行は、読むべき行です。
+スイッチが Then の確かめるものに届いていないか、Then がスイッチの変えるものを確かめていないかのどちらかです。
+stderr の件数の行は必須のセルの実行を数え、対照のある run は、その後ろに `criteria: <held> held, <proven> proven, <failed> failed` の行を加えます。
+
+表は `run.json` の `table` で、run サマリはそれで始まります。
+受け入れ基準ごとに 1 行、world と environment ごとに 1 列で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。
 
 ### 単体 step(agent の経路)
 
@@ -3767,18 +3881,21 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 
 - 先頭の `<!-- nukadoko:run -->` という行。
   CI の step は、これで前に投稿した pull request のコメントを見つけて更新できます。
-- run の断定と scenario の件数を載せた表題。
+- run の断定、受け入れ基準の数、`held`、`proven`、`failed` の行の数を載せた表題。
   断定は終了コードのものです。
-  そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗がどの scenario の外で起きたかを述べる 1 文が付きます。
+  そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗が走ったどの scenario の外で起きたかを述べる 1 文が付きます。
   その文は、プログラムが起動しなかった world をそのログとともに名指します。
+- 断定の表(「断定」を参照)。
+  受け入れ基準ごとに 1 行を feature のパスと行の順に並べ、その断定、場所、名前、condition の tag を載せます。
+  world と environment ごとに 1 列で、列名は `head <environment>` です。
+  セルは `pass`、`fail@<line>`、`broke@<line>`、`flaky@<line>`、`·` と読め、対照には `(control)` が、2 回以上走ったときは実行の数が付きます。
+- 赤い行ごとに 1 行。
+  その場所、名前、行の理由を載せます。
+  その下には、走ったセルについて、通らなかった最初の実行が止まった場所(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
 - 条件。
   短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--since` のときは「Criteria since `<ref>`」。
   unchanged、changed、new の scenario の数、消えた受け入れ基準の数(ambiguous か比べられなかったものがあればその数も)、比べた対象と step ファイル、変わった step ファイル、unchanged ではない各 scenario と消えた各受け入れ基準の行を `gherkin` のブロックで、そして変わった各 step ファイルの下にそれを名指すすべての scenario を載せます。
-- feature ファイルごとの表(パス順)。
-  scenario ごとに 1 行を行番号順に並べ、scenario、行、environment ごとに 1 列(列名は environment の名前)のセルの断定(`--repeat` のときは `<passed> of <n> passed`)、その行のすべての実行の所要時間を載せます。
-  失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
-  これは失敗した environment ごとに 1 つずつ載り、run に environment が 2 つ以上あればその environment の名前が前に付きます。
 - 「Claims」。
   claim を宣言した Then ごとに 1 つの項目で、その場所と文、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
@@ -3984,8 +4101,9 @@ dotenv のユーザーにはおなじみの、共通設定と上書きの重ね�
 拒否は `env-file-unreadable` で、`nuka check`、`nuka run`（`--no-check` の有無を問わず）、`nuka do` のどれでも exit 2 です。
 拒否は、設定されたパスと errno を名指しします。
 同じ読み取りが `env` fixture と secret の集合の両方を埋めるので、ファイルがロードされたかどうかは両者で一致します。
-`policy` と `version` は environment ごとにしか存在しません。
-`--env` を指定しないことは名前 `default` を意味し、これはエントリを必要としません。
+`policy`、`version`、`conditions` は environment ごとにしか存在しません。
+`--env` の無い `nuka do` は `default` という名前の environment を使い、これはエントリを必要としません。
+どの environment も `conditions` を宣言していないときは、`--env` の無い `nuka run` も同じです(「断定」を参照)。
 それでも `default` という名前のエントリは書けます。
 そこに `policy: "read-only"` を置くことが、`--env` 無しで打った `nuka do` をどこにも書き込ませない手段です。
 明示的に名前を付けた environment は存在していなければなりません。
@@ -4157,6 +4275,7 @@ agent は、チケットの受け入れ基準に対して次の手順を実行�
 7. 人が feature とサマリを読みます。
    run が証跡です。
    その人が承認をどこに記録するかは、チームのプロセスです。
+   サマリの冒頭の表は、受け入れ基準ごとに、condition が成り立たない run がそれを失敗させたか(`proven`)、通ったことだけを示すか(`held`)を述べます(「断定」を参照)。
 
 手順 1 から 4 に作業があります。
 新しい型付き step と feature は通常のレビューの題材です。
@@ -4613,17 +4732,25 @@ npm パッケージは `nukadoko` で、それがインストールするただ 
 `nuka --help` は最後に、skill を読み込んでいない agent が最初に読むファイル `node_modules/nukadoko/llms.txt` を示します。
 
 ```
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs <n>]
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before
                               anything executes (exit 2, no record);
                               --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
-                              --env targets a named environment ("default"
-                              when omitted); repeated, it runs every selected
-                              scenario once in each, in order, in one run
-                              with one verdict per scenario and environment.
+                              --env targets a named environment; repeated,
+                              it runs every selected scenario once in each,
+                              in order, in one run with one cell per
+                              criterion and environment. Without it, every
+                              environment that declares conditions runs,
+                              or "default" when none does. A scenario's
+                              @with:/@without: tags make its cell required
+                              where the environment meets them and a
+                              control elsewhere; a row is held, proven (a
+                              control broke a claim at a Then line in each
+                              of --proof-runs runs, default 2), or failed,
+                              and the exit code is 1 when a row is failed.
                               With nukadoko.program.ts, each environment's
                               world (build, prepare, serve, setup) starts
                               before its scenarios and stops after them;
@@ -4667,7 +4794,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               or not (a step's program_log_late is only in
                               run.json, written when the world stops). --json prints
                               run.json (commit, environments, selection,
-                              counts, verdicts, each scenario's steps with line,
+                              counts, table, each scenario's steps with line,
                               status, record, and error, each failed
                               scenario's do, the findings) as the one
                               document on stdout instead; run.json is
@@ -4965,7 +5092,7 @@ nuka scaffold --feature <path>
                               name, --pattern, --then, --command, --from,
                               --cwd, --argv, --request, --body,
                               --description, or --replace
-nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
+nuka check [feature..] [--json] [--fail-on <code>] [--env <name>]...
                               static checks: pattern/schema mismatches, a
                               Then bound to a step that runs, a claim step
                               bound outside Then position, a claim whose
@@ -5021,7 +5148,11 @@ nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
                               looks secret but is not in secrets.redact, a
                               secrets.redact key too short to redact, a
                               secrets.public or secrets.redact key no envFile
-                              defines; with no target, scans featuresDir plus
+                              defines, a condition tag that does not read,
+                              names a condition no environment declares, or
+                              that no environment of the run meets (read
+                              against --env's environments, or the ones a
+                              run without --env selects); with no target, scans featuresDir plus
                               additionalFeatureDirs and adds notes, none of
                               which changes the exit code: a `from` nothing
                               exercises, a patterned step no feature binds
@@ -5036,8 +5167,8 @@ nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
                               severity; a code a check report never contains
                               is refused; --env <name> (repeatable) checks
                               the placeholders of the worlds a nuka run with
-                              the same --env flags would start, the default
-                              world without it, and no other world;
+                              the same --env flags would start, and no
+                              other world;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
                               files), so the errors
@@ -5112,7 +5243,7 @@ run.json の scenario から `probes` が、各 step の `observed` から同じ
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "nukadoko": "0.17.0",
   "command": "check",
   "verdict": "failed",

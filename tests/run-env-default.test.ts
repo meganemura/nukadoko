@@ -34,9 +34,15 @@ describe("--env default", () => {
   it("runs the implicit environment beside a named one in nuka run, under the name run.json gives it", async () => {
     const result = await cli(["run", "--json", "--env", "default", "--env", "staging"]);
     expect(result.exitCode).toBe(0);
-    const document = JSON.parse(result.stdout) as { environments: { name: string }[]; verdicts: { environment: string; verdict: string }[] };
+    const document = JSON.parse(result.stdout) as {
+      environments: { name: string }[];
+      table: { rows: { cells: { environment: string; outcome: string }[] }[] };
+    };
     expect(document.environments.map((environment) => environment.name)).toEqual(["default", "staging"]);
-    expect([...new Set(document.verdicts.map((cell) => `${cell.environment} ${cell.verdict}`))]).toEqual(["default passed", "staging passed"]);
+    expect([...new Set(document.table.rows.flatMap((row) => row.cells.map((cell) => `${cell.environment} ${cell.outcome}`)))]).toEqual([
+      "default pass",
+      "staging pass",
+    ]);
   });
 
   it("runs a step under --env default in nuka do", async () => {

@@ -87,12 +87,12 @@ If none is true, ask what this is supposed to do before writing anything.
 3. **`nuka check <feature>`.** Fix every error and read every warning: a
    warning is a question about intent, not noise. Each finding names its
    file, a `fix:` (an edit) or `do:` (a command) line; apply or run it.
-4. **`nuka run <feature>`** until green. A failure names the step, the
-   first line of its error, its step record, and a `do:` that reruns it; read the
-   record before running again (`references/diagnosing.md`). A red Then is
-   fixed in the implementation or by asking the person, never by weakening
-   it. Read the summary's "Unmeasured actions" (`references/evidence.md`),
-   "Scenarios with no claim", and `measured: none` (`references/reviewing.md`).
+4. **`nuka run <feature>`** until no table row is `failed`; read the step
+   record a failure names before running again (`references/diagnosing.md`).
+   A red Then, or a `held` row whose control passed (`references/verdicts.md`),
+   is fixed in the code or by asking the person, never by weakening it.
+   Read "Unmeasured actions" (`references/evidence.md`), "Scenarios with no
+   claim", and `measured: none` (`references/reviewing.md`).
 5. **Commit before the run you report**, push, and open the pull
    request; CI posts the run summary (`docs/ci.md` in the package), and
    `nuka run --since <base>` quotes each criterion that moved or went.

@@ -1,3 +1,4 @@
+import type { Conditions } from "../condition/condition.js";
 import type { NukadokoConfig } from "../config/schema.js";
 import { layerProgram, type Program, type ProgramRecipe } from "../config/program-schema.js";
 import { UnknownEnvironmentError } from "./errors.js";
@@ -34,15 +35,32 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 
 export const DEFAULT_ENVIRONMENT_NAME = "default";
 
+/** The environments a run with no `--env` runs, in the order the program
+ * file names them: every environment that declares `conditions`, when at
+ * least one does, and `default` otherwise. The scenarios name the
+ * conditions they need, so the run that covers them is the one over every
+ * environment that sets one up. An environment with no `conditions` is a
+ * deployment target (a staging server, a preview), which needs a URL or
+ * credentials a local run may not have, so it runs only when `--env`
+ * names it. `conditions: {}` puts an environment in this set with no
+ * condition on, as the side where every flag is off. Pure. */
+export function defaultEnvironmentNames(program: Program | null): string[] {
+  const conditioned = Object.entries(program?.environments ?? {})
+    .filter(([, environment]) => environment.conditions !== undefined)
+    .map(([name]) => name);
+  return conditioned.length > 0 ? conditioned : [DEFAULT_ENVIRONMENT_NAME];
+}
+
 /** The worlds a `nuka run` with these `--env` names starts, each with its
- * recipe, once per name: the default world when `envs` is empty. A name
- * the program file does not define, other than `default`, is left out:
- * `resolveEnvironment` refuses it by name for the command that named it.
+ * recipe, once per name: the `defaultEnvironmentNames` when `envs` is
+ * empty, as `nuka run` selects them. A name the program file does not
+ * define, other than `default`, is left out: `resolveEnvironment`
+ * refuses it by name for the command that named it.
  * `nuka check` checks these worlds and no others, so a world no command
  * of this invocation starts never refuses a program for a placeholder. */
 export function worldsToStart(program: Program, envs: readonly string[]): { readonly name: string; readonly recipe: ProgramRecipe }[] {
   const environments = program.environments ?? {};
-  const names = envs.length === 0 ? [DEFAULT_ENVIRONMENT_NAME] : [...new Set(envs)];
+  const names = envs.length === 0 ? defaultEnvironmentNames(program) : [...new Set(envs)];
   return names.flatMap((name) => {
     const environment = Object.hasOwn(environments, name) ? environments[name] : undefined;
     if (environment === undefined && name !== DEFAULT_ENVIRONMENT_NAME) return [];
@@ -55,6 +73,10 @@ export interface ResolvedEnvironment {
   readonly envFiles: readonly string[];
   readonly policy: "read-only" | undefined;
   readonly version: (() => string | Promise<string>) | undefined;
+  /** What the environment declares it sets up; `undefined` when it
+   * declares nothing, which src/condition/condition.ts reads as every
+   * condition off. */
+  readonly conditions: Conditions | undefined;
   /** The program this environment's world builds and reaches, or `null`
    * when the tree has no program file and the run starts no world. */
   readonly program: ProgramRecipe | null;
@@ -81,6 +103,7 @@ export function resolveEnvironment(
     envFiles: [...(config.envFiles ?? []), ...(environment?.envFiles ?? [])],
     policy: environment?.policy,
     version: environment?.version,
+    conditions: environment?.conditions,
     program: program === null ? null : layerProgram(program, environment),
   };
 }

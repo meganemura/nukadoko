@@ -244,7 +244,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **HTTP メソッドによる回数がなくなり、2 つのバージョン番号が上がりました。**
   step record や run.json で `observed.http_reads` や `observed.http_writes` を読んでいたものは、それを外します。
   step record の `http.jsonl` は、各 request をそのメソッドとともに並べます。
-  `schema_version` を確かめる読み手は、step record では 4 を、run.json とすべての `--json` の文書では 3 を受け入れます。
+  `schema_version` を確かめる読み手は、step record でも、run.json とすべての `--json` の文書でも 4 を受け入れます。
   `nuka report` は以前のリリースが書いた run.json を拒否するので、run はそれを走らせたリリースでレポートします。
 
 - **run サマリに「Declared vs observed」の節はありません。**
@@ -374,6 +374,33 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   step ごとにプログラムのログの行を得るには、プログラムがリクエストの trace id をログの行に書き、バッファせずに書くようにします。
   Rails と Node の書き方は docs/spec.ja.md の「trace context とプログラムのログ」にあります。
   それまでは、run サマリが world ごとに一度、ログが trace id を持たないこと、またはその行が step が終わったあとに届いたことを言います。
+
+- **`--env` の無い run は、`conditions` を宣言するすべての environment を走らせます。**
+  `nukadoko.program.ts` のどの environment も `conditions` を宣言していないあいだは、何も変わりません。
+  run は `default` を使います。
+  1 つでも宣言すると、`--env` の無い run は、それを宣言する各 environment をファイルが並べる順に走らせ、`default` は走らせません。
+  配備先のように宣言しない environment は、`--env` が名指したときに走ります。
+  `default` に頼っていた CI のジョブは `--env default` を名指します。
+  `--env` の無い `nuka do` は、これまでどおり `default` を使います。
+
+- **`@with:` か `@without:` で始まる tag は condition を名指します。**
+  そうした tag を独自の意味で使っていたスイートは、`nuka check` から `condition-tag-malformed`、`condition-unknown`、`condition-unmet` を受け取り、`nuka run` は始まる前に拒否します。
+  tag の名前を変えるか、environment の `conditions` に condition を宣言します(docs/spec.ja.md の「断定」)。
+
+- **run.json の `verdicts` は `table` になりました。**
+  `verdicts` を読んでいた読み手は `table.rows` を読みます。
+  受け入れ基準ごとに 1 行で、`feature`、`line`、`name`(以前のセルの `scenario`)、environment ごとに 1 つのセルを並べた `cells`、行の `verdict`(`held`、`proven`、`failed`)と `reason` を持ちます。
+  セルの `outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)が以前の `verdict` を、`runs` が `executions` を置き換えます。
+  `passed` は無いので、それが要る読み手は `scenarios` の通ったエントリを数えます。
+  condition の tag が無い run は必須(`required`)のセルだけを持ち、その行は、以前のセルが `passed` か `failed` だったとおりに `held` か `failed` になります。
+  各 scenario のエントリは `role` を持ち、`counts` は `controls` を持ちます。
+  `scenarios`、`passed`、`failed` は必須のセルの実行だけを数え、失敗した対照は `do` を持ちません。
+
+- **run サマリは断定の表で始まります。**
+  feature ファイルごとの表と、実行ごとの所要時間はなくなりました。
+  表題は受け入れ基準の数と、`held`、`proven`、`failed` の行の数を数え、赤い行はそれぞれ理由を述べる 1 行を得ます。
+  `summary.md` を解析していたジョブは、代わりに run.json の `table` を読み、所要時間は各 scenario のエントリの `started_at` と `finished_at` から読みます。
+
 
 ## 0.20.0 から 0.21.0 へ
 

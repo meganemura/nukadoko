@@ -4,18 +4,19 @@ import * as gs from "@hegeldev/hegel/generators";
 import type { RunDocument, RunScenario, RunStep, RunWorld } from "../src/record/run-result.js";
 import type { UnmeasuredEntry } from "../src/record/types.js";
 import { renderRunSummary } from "../src/run/run-summary.js";
-import { foldVerdicts } from "../src/run/verdicts.js";
+import { buildTable, executionOutcome, type SelectedCriterion } from "../src/run/verdict-table.js";
 
 // Responsibility: the exact Markdown of the run summary, rendered from
-// literal run.json documents: a green run, a red run, and a run over two
-// environments under `--repeat`. The properties are that every scenario of
-// a run gets exactly one row, whatever its name, feature, or line, and that
-// the title says the document's verdict, so a reader never reads a run with
-// a scenario missing, counted twice, or with a verdict run.json does not
-// hold.
+// literal run.json documents: a green run, a red run, a run over two
+// environments under `--repeat`, and a run whose control proves a
+// criterion. The properties are that every criterion of a run gets exactly
+// one row of the verdict table, whatever its name, feature, or line, and
+// that the title says the document's verdict and the rows' words, so a
+// reader never reads a run with a criterion missing, counted twice, or with
+// a verdict run.json does not hold.
 
 const base: RunDocument = {
-  schema_version: 3,
+  schema_version: 4,
   nukadoko: "0.14.1",
   command: "run",
   verdict: "passed",
@@ -26,22 +27,33 @@ const base: RunDocument = {
   commit: { sha: "0123456789abcdef0123456789abcdef01234567", dirty: false },
   environments: [{ name: "default", target_version: null }],
   selection: "full",
-  counts: { scenarios: 0, passed: 0, failed: 0, not_run: 0 },
+  counts: { scenarios: 0, passed: 0, failed: 0, controls: 0, not_run: 0 },
   scenarios: [],
-  verdicts: [],
+  table: { base: null, mapping_changed: null, worlds: [{ world: "head", environment: "default" }], rows: [] },
 };
 
-// A document whose `verdicts` fold its own scenarios, as `nuka run` writes
-// them.
-function run(over: Partial<RunDocument>): RunDocument {
+// A document whose `table` reads its own scenarios, as `nuka run` builds
+// it: a step that failed with `claim_broken` is a Then's claim breaking,
+// and anything else that stopped a scenario broke it. `tags` gives a
+// criterion's tags by `feature:line`.
+function run(over: Partial<RunDocument>, tags: Readonly<Record<string, readonly string[]>> = {}): RunDocument {
   const document = { ...base, ...over };
-  return {
-    ...document,
-    verdicts: foldVerdicts(
-      document.scenarios,
-      document.environments.map((environment) => environment.name),
-    ),
-  };
+  const criteria = new Map<string, SelectedCriterion>();
+  for (const entry of document.scenarios) {
+    const key = `${entry.feature}:${entry.line}`;
+    if (!criteria.has(key)) criteria.set(key, { feature: entry.feature, line: entry.line, name: entry.scenario, tags: tags[key] ?? [] });
+  }
+  const table = buildTable({
+    criteria: [...criteria.values()],
+    environments: document.environments.map((environment) => ({ name: environment.name, conditions: environment.conditions })),
+    outcomes: (feature, line, environment) =>
+      document.scenarios
+        .filter((entry) => entry.feature === feature && entry.line === line && entry.environment === environment)
+        .map((entry) => executionOutcome(entry, () => true)),
+    notRunReason: () => undefined,
+    proofRuns: 2,
+  });
+  return { ...document, table };
 }
 
 function scenario(
@@ -151,7 +163,13 @@ describe("renderRunSummary", () => {
     expect(markdown).toBe(
       [
         "<!-- nukadoko:run -->",
-        "# nukadoko run passed: 3 scenarios, 3 passed",
+        "# nukadoko run passed: 3 criteria, 3 held",
+        "",
+        "| verdict | criterion | head default |",
+        "| --- | --- | --- |",
+        "| held | `features/cart.feature:3` an item is added | pass |",
+        "| held | `features/login.feature:3` a member signs in | pass |",
+        "| held | `features/login.feature:9` a wrong password is refused | pass |",
         "",
         "- commit: `0123456`",
         "- environment: default",
@@ -160,19 +178,6 @@ describe("renderRunSummary", () => {
         "- nukadoko: 0.14.1",
         "- run: run-20261015-120000-abcd",
         "- started 2026-10-15T12:00:00.000Z, finished 2026-10-15T12:01:05.000Z (1m 5s)",
-        "",
-        "## features/cart.feature",
-        "",
-        "| scenario | line | default | duration | failure |",
-        "| --- | --- | --- | --- | --- |",
-        "| an item is added | 3 | passed | 1.3s |  |",
-        "",
-        "## features/login.feature",
-        "",
-        "| scenario | line | default | duration | failure |",
-        "| --- | --- | --- | --- | --- |",
-        "| a member signs in | 3 | passed | 2.0s |  |",
-        "| a wrong password is refused | 9 | passed | 0.8s |  |",
         "",
       ].join("\n"),
     );
@@ -227,7 +232,18 @@ describe("renderRunSummary", () => {
     expect(markdown).toBe(
       [
         "<!-- nukadoko:run -->",
-        "# nukadoko run failed: 3 scenarios, 1 passed, 2 failed",
+        "# nukadoko run failed: 3 criteria, 1 held, 2 failed",
+        "",
+        "| verdict | criterion | head staging |",
+        "| --- | --- | --- |",
+        "| held | `features/login.feature:3` a member signs in | pass |",
+        "| failed | `features/login.feature:9` a wrong password \\| is refused | broke@4 |",
+        "| failed | `features/login.feature:15` a session expires | broke@15 |",
+        "",
+        "- `features/login.feature:9` a wrong password \\| is refused: stopped at line 4 in staging before a claim there was judged",
+        '  - step "the error &lt;b>Locked&lt;/b> is shown": `` expected `Locked` | got `Open` ``; used the-seed-ran exit 2: `seed: no database`; ran `npm run seed`; record `steps/stp-1`',
+        "- `features/login.feature:15` a session expires: stopped at line 15 in staging before a claim there was judged",
+        "  - Before hook: `(no message)`; record `scenarios/scn-2`",
         "",
         "- commit: `fedcba9` with uncommitted changes",
         "- environment: staging at https://staging.example.test (target version 2.4.0)",
@@ -236,14 +252,6 @@ describe("renderRunSummary", () => {
         "- nukadoko: 0.14.1",
         "- run: run-20261015-120000-abcd",
         "- started 2026-10-15T12:00:00.000Z, finished 2026-10-15T12:01:05.000Z (1m 5s)",
-        "",
-        "## features/login.feature",
-        "",
-        "| scenario | line | staging | duration | failure |",
-        "| --- | --- | --- | --- | --- |",
-        "| a member signs in | 3 | passed | 1.0s |  |",
-        '| a wrong password \\| is refused | 9 | failed | 0.4s | step "the error &lt;b>Locked&lt;/b> is shown": `` expected `Locked` \\| got `Open` ``<br>used the-seed-ran exit 2: `seed: no database`<br>ran `npm run seed`<br>record `steps/stp-1` |',
-        "| a session expires | 15 | failed | 0.0s | Before hook: `(no message)`<br>record `scenarios/scn-2` |",
         "",
         "## Rerun a failed scenario",
         "",
@@ -256,7 +264,7 @@ describe("renderRunSummary", () => {
     );
   });
 
-  it("draws one column per environment, and a cell per scenario and environment under --repeat", () => {
+  it("draws one column per world and environment, and folds a cell's runs under --repeat", () => {
     const at = (environment: string, status: "passed" | "failed", extra: Partial<RunScenario> = {}) =>
       scenario("features/flag.feature", 4, "the banner is shown", status, 500, { environment, ...extra });
     const markdown = renderRunSummary(run({
@@ -282,7 +290,15 @@ describe("renderRunSummary", () => {
     expect(markdown).toBe(
       [
         "<!-- nukadoko:run -->",
-        "# nukadoko run failed: 2 scenarios in 2 environments, 3 passed, 1 failed",
+        "# nukadoko run failed: 2 criteria in 2 environments, 1 held, 1 failed",
+        "",
+        "| verdict | criterion | head flag-on | head flag-off |",
+        "| --- | --- | --- | --- |",
+        "| failed | `features/flag.feature:4` the banner is shown | pass (2 runs) | flaky@4 (2 runs) |",
+        "| held | `features/flag.feature:9` the page loads | pass (2 runs) | pass (2 runs) |",
+        "",
+        "- `features/flag.feature:4` the banner is shown: its 2 runs in flag-off disagree, the first that did not pass at line 4",
+        '  - step "the banner is shown": `no banner`; record `steps/stp-9`',
         "",
         "- commit: `0123456`",
         "- environment: flag-on",
@@ -292,13 +308,6 @@ describe("renderRunSummary", () => {
         "- nukadoko: 0.14.1",
         "- run: run-20261015-120000-abcd",
         "- started 2026-10-15T12:00:00.000Z, finished 2026-10-15T12:01:05.000Z (1m 5s)",
-        "",
-        "## features/flag.feature",
-        "",
-        "| scenario | line | flag-on | flag-off | duration | failure |",
-        "| --- | --- | --- | --- | --- | --- |",
-        '| the banner is shown | 4 | 2 of 2 passed | 1 of 2 passed | 2.0s | flag-off: step "the banner is shown": `no banner`<br>record `steps/stp-9` |',
-        "| the page loads | 9 | 2 of 2 passed | 2 of 2 passed | 1.0s |  |",
         "",
         "## Rerun a failed scenario",
         "",
@@ -310,6 +319,46 @@ describe("renderRunSummary", () => {
     );
   });
 
+  it("marks a control cell and its runs, and calls the row it proves proven", () => {
+    const off = (status: "passed" | "failed") =>
+      scenario("features/banner.feature", 4, "the banner is shown", status, 100, {
+        environment: "flag-off",
+        steps: status === "passed" ? [] : [step("the banner reads Sale", { line: 6, status: "failed", record: "steps/stp-6", error: { kind: "claim_broken", message: "banner" } })],
+      });
+    const markdown = renderRunSummary(
+      run(
+        {
+          environments: [
+            { name: "flag-off", target_version: null, conditions: { banner: false } },
+            { name: "flag-on", target_version: null, conditions: { banner: true } },
+          ],
+          scenarios: [
+            off("failed"),
+            off("failed"),
+            scenario("features/banner.feature", 4, "the banner is shown", "passed", 100, { environment: "flag-on" }),
+            scenario("features/banner.feature", 9, "the page loads", "passed", 100, { environment: "flag-off" }),
+            scenario("features/banner.feature", 9, "the page loads", "passed", 100, { environment: "flag-on" }),
+          ],
+        },
+        { "features/banner.feature:4": ["@with:banner"] },
+      ),
+    );
+    expect(markdown.split("\n").slice(0, 12)).toEqual([
+      "<!-- nukadoko:run -->",
+      "# nukadoko run passed: 2 criteria in 2 environments, 1 held, 1 proven",
+      "",
+      "| verdict | criterion | head flag-off | head flag-on |",
+      "| --- | --- | --- | --- |",
+      "| proven | `features/banner.feature:4` the banner is shown `@with:banner` | fail@6 (control, 2 runs) | pass |",
+      "| held | `features/banner.feature:9` the page loads | pass | pass |",
+      "",
+      "- commit: `0123456`",
+      "- environment: flag-off (conditions banner: false)",
+      "- environment: flag-on (conditions banner: true)",
+      "- browser: none launched",
+    ]);
+  });
+
   it("names a world whose program did not start, with its log, and a hook failure beside it", () => {
     const unstarted = { ...world("default", "http://localhost:41563"), log: "worlds/default/program.log", error: "serve command node app/server.mjs exited with code 4" };
     const failedStart = { severity: "failed" as const, code: "program-start-failed", message: "the program did not start for world default" };
@@ -317,7 +366,7 @@ describe("renderRunSummary", () => {
       renderRunSummary(run({ verdict: "failed", run_dir: ".nukadoko/runs/run-1", worlds: [unstarted], findings, scenarios: [] })).split("\n")[3]!;
 
     expect(headline([failedStart])).toBe(
-      "No scenario failed, but the run did. The program did not start for world default (`program-start-failed`), so no scenario ran there; " +
+      "No scenario that ran failed, but the run did. The program did not start for world default (`program-start-failed`), so no scenario ran there; " +
         "its log is `.nukadoko/runs/run-1/worlds/default/program.log`. The findings below say why.",
     );
     expect(headline([failedStart, { severity: "failed", code: "hook-failed", message: "AfterAll: x" }])).toContain(
@@ -335,11 +384,15 @@ describe("renderRunSummary", () => {
       ],
       scenarios: [scenario("features/a.feature", 2, "s", "passed", 10)],
     }));
-    expect(markdown.split("\n").slice(0, 6)).toEqual([
+    expect(markdown.split("\n").slice(0, 10)).toEqual([
       "<!-- nukadoko:run -->",
-      "# nukadoko run failed: 1 scenario, 1 passed",
+      "# nukadoko run failed: 1 criterion, 1 held",
       "",
-      "No scenario failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, failed outside every scenario. The findings below name it.",
+      "No scenario that ran failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, failed outside every scenario. The findings below name it.",
+      "",
+      "| verdict | criterion | head default |",
+      "| --- | --- | --- |",
+      "| held | `features/a.feature:2` s | pass |",
       "",
       "- commit: unknown (no git state was readable when the run started)",
     ]);
@@ -354,17 +407,33 @@ describe("renderRunSummary", () => {
     );
   });
 
-  it("counts and draws a scenario its BeforeAll kept from running as not run", () => {
+  it("draws a criterion its BeforeAll kept from running as failed, with a · cell and why", () => {
     const markdown = renderRunSummary({
       ...base,
       verdict: "failed",
       commit: null,
       findings: [{ severity: "failed", code: "hook-failed", message: 'BeforeAll failed in environment "default": boom', do: "nuka run" }],
-      counts: { scenarios: 0, passed: 0, failed: 0, not_run: 1 },
-      verdicts: foldVerdicts([], ["default"], [{ feature: "features/a.feature", line: 2, scenario: "s" }]),
+      counts: { scenarios: 0, passed: 0, failed: 0, controls: 0, not_run: 1 },
+      table: buildTable({
+        criteria: [{ feature: "features/a.feature", line: 2, name: "s", tags: [] }],
+        environments: [{ name: "default", conditions: undefined }],
+        outcomes: () => [],
+        notRunReason: () => "a BeforeAll hook failed",
+        proofRuns: 2,
+      }),
     });
-    expect(markdown.split("\n").slice(1, 2)).toEqual(["# nukadoko run failed: 1 scenario, 0 passed, 1 not run"]);
-    expect(markdown).toContain("| s | 2 | not run | 0.0s |  |\n");
+    expect(markdown.split("\n").slice(1, 11)).toEqual([
+      "# nukadoko run failed: 1 criterion, 0 held, 1 failed",
+      "",
+      "No scenario that ran failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, failed outside every scenario. The findings below name it.",
+      "",
+      "| verdict | criterion | head default |",
+      "| --- | --- | --- |",
+      "| failed | `features/a.feature:2` s | · |",
+      "",
+      "- `features/a.feature:2` s: did not run in default: a BeforeAll hook failed",
+      "",
+    ]);
   });
 
   const scenariosGen = gs.arrays(
@@ -393,21 +462,17 @@ describe("renderRunSummary", () => {
   const distinct = (entries: readonly RunScenario[]): RunScenario[] =>
     entries.map((entry, index) => ({ ...entry, line: index + 1 }));
 
-  it("gives every scenario of the run exactly one row", () =>
+  it("gives every criterion of the run exactly one row", () =>
     hegel.test((tc) => {
-      // Each row carries a unique duration, so a row can be traced back to
-      // the one scenario it came from.
-      const scenarios = distinct(tc.draw(scenariosGen)).map((entry, index) => ({
-        ...entry,
-        finished_at: new Date(Date.parse(entry.started_at) + index * 100_000).toISOString(),
-      }));
+      // Each criterion has a line of its own, so a row can be traced back
+      // to the one criterion it came from by the line in its code span.
+      const scenarios = distinct(tc.draw(scenariosGen));
       const markdown = renderRunSummary(run({ scenarios }));
-      const rows = markdown.split("\n").filter((line) => /^\| .* \| (passed|failed) \| \d+\.\ds \|/.test(line));
+      const rows = markdown.split("\n").filter((line) => /^\| (held|proven|failed) \| /.test(line));
       expect(rows).toHaveLength(scenarios.length);
-      scenarios.forEach((_, index) => {
-        const duration = `| ${(index * 100).toFixed(1)}s |`;
-        expect(rows.filter((row) => row.includes(duration))).toHaveLength(1);
-      });
+      for (const entry of scenarios) {
+        expect(rows.filter((row) => row.includes(`:${entry.line}\``))).toHaveLength(1);
+      }
     }));
 
   // cmark-gfm splits a row only on a `|` whose preceding character is not `\`,
@@ -459,11 +524,14 @@ describe("renderRunSummary", () => {
           ],
         }),
       );
-      const row = markdown.split("\n").find((line) => line.startsWith("| ") && !line.startsWith("| scenario") && !line.startsWith("| ---"));
+      const row = markdown.split("\n").find((line) => line.startsWith("| ") && !line.startsWith("| verdict") && !line.startsWith("| ---"));
       const cells = splitTableRow(row ?? "");
-      expect(cells).toHaveLength(6);
-      expect(plainCell(cells[1] ?? "")).toBe(name);
-      expect(cells[5]?.match(/`([^`]*)`/)?.[1]).toBe(name);
+      expect(cells).toHaveLength(4);
+      expect(plainCell(cells[2] ?? "")).toBe(`\`features/login.feature:3\` ${name}`);
+      // The error is in the list item under the row's reason, outside the
+      // table, where a code span needs no backslash before `|`.
+      const failure = markdown.split("\n").find((line) => line.startsWith('  - step "the step": '));
+      expect(failure?.match(/`([^`]*)`/)?.[1]).toBe(name);
     }));
 
   it("titles the summary with the document's verdict", () =>
@@ -472,7 +540,7 @@ describe("renderRunSummary", () => {
       const scenarios = distinct(tc.draw(scenariosGen));
       const title = renderRunSummary(run({ verdict, scenarios })).split("\n")[1]!;
       const failed = scenarios.filter((entry) => entry.status === "failed").length;
-      const counts = [`${scenarios.length} scenario${scenarios.length === 1 ? "" : "s"}`, `${scenarios.length - failed} passed`];
+      const counts = [`${scenarios.length} ${scenarios.length === 1 ? "criterion" : "criteria"}`, `${scenarios.length - failed} held`];
       if (failed > 0) counts.push(`${failed} failed`);
       expect(title).toBe(`# nukadoko run ${verdict}: ${counts.join(", ")}`);
     }));

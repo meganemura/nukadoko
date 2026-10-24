@@ -222,7 +222,14 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 
 ```text
 <!-- nukadoko:run -->
-# nukadoko run failed: 1 scenario, 0 passed, 1 failed
+# nukadoko run failed: 1 criterion, 0 held, 1 failed
+
+| verdict | criterion | head default |
+| --- | --- | --- |
+| failed | `features/greet.feature:4` greets by name | fail@6 |
+
+- `features/greet.feature:4` greets by name: a claim broke at line 6 in default
+  - step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`; record `steps/step-20261024-123634-s9j0`
 
 - commit: `e26cf85`
 - environment: default
@@ -231,12 +238,6 @@ GitHub Actions では、それがひとりでに job のサマリページに載
 - nukadoko: 0.21.0
 - run: run-20261024-123634-z9t2
 - started 2026-10-24T12:36:34.018Z, finished 2026-10-24T12:36:34.449Z (0s)
-
-## features/greet.feature
-
-| scenario | line | default | duration | failure |
-| --- | --- | --- | --- | --- |
-| greets by name | 4 | failed | 0.1s | step "the output says "Hi, Ada!"": `claim broken: "Hello, Ada!" (from:run-greet@5.stdout as text) equal "Hi, Ada!" (sentence:text)`<br>record `steps/step-20261024-123634-s9j0` |
 
 ## Claims
 
@@ -757,6 +758,7 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 | `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が記録した HTTP の呼び出しとその本文、プロセス、ファイル、見えたが計測できなかった操作、evidence、environment、target version を記録した step record を書きます |
 | 実行時に見つかる undefined な step | `nuka check <feature>` はそれらを実行前に静的に検出して失敗し、何にも一致しなかったテキストの名前を挙げます |
 | コードで判定する、あるいは黙って操作する `Then` | 型付きの `Then` はコードではなく claim を宣言します。どの値を読み、どう比べ、expected の値がどこから来るか(step が別の出どころを述べない限り文)です。比べるのは nukadoko で、record と run サマリは両方の値を名指しします。`nuka check` は、実行する step に結び付いた `Then` と、`Given` や `When` に結び付いた claim step を拒否します([Claims](docs/spec.md#claims) を参照)。 |
+| 機能があってもなくても通る scenario | environment はプログラムのスイッチを `conditions` として宣言し、`@with:<switch>` の tag を付けた scenario は、スイッチが切れているところでも、run を赤にしない対照として走ります。そこで Then が 2 回の実行で同じ行で失敗すれば、行は `proven` になります。対照が通った行は `held` のままで、run サマリの表がどちらなのかを示します([断定](docs/spec.ja.md#断定) を参照) |
 | 黙って状態を変える step | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否されます。実際に何が起きたかは、レビューのためにいまも step record に記録されます。 |
 
 最後の項目には、正確な説明が必要です。
@@ -1051,7 +1053,7 @@ stdout には、求めたときだけ出力されます。
 `nuka run --records` は、scenario が終わるたびに、その scenario の `run.json` のエントリを 1 行 1 件の JSON として stdout に出力します。
 `nuka run --json` は、代わりに `run.json` そのものを出力します。
 それはすべての `--json` が出力する envelope で、`findings` の隣に run のフィールドが入ります。
-そこにはコミットと作業ツリーが dirty だったかどうか、実行した各 environment、`:line` の対象が run を `partial` にしたかどうか、件数、scenario と environment の組ごとに 1 つの断定、各 scenario の step(行、status、step record、claim step ならその claim、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
+そこにはコミットと作業ツリーが dirty だったかどうか、実行した各 environment、`:line` の対象が run を `partial` にしたかどうか、件数、断定の表(受け入れ基準ごとに 1 行、environment ごとに 1 つのセルで、各行は `held`、`proven`、`failed` のどれか)、各 scenario の step(行、status、step record、claim step ならその claim、失敗ならそのエラー、読んだ結果、再実行のコマンド)が入ります。
 `--json` のときは stderr は空で、警告は文書の中の finding になるので、エージェントのシェルに見えるのはその文書だけです。
 `run.json` と step record は、フラグにかかわらず run 自身のディレクトリ `.nukadoko/runs/<run_id>/` に書かれ、run サマリは `run.json` だけから描画されます。
 stdout や stderr が端末かどうかで変わる出力はありません。
@@ -1123,11 +1125,27 @@ run サマリの「Criteria since」の節は、unchanged ではない各 scenar
 `nuka run --env a --env b` は、選ばれたすべての scenario を各 environment で 1 回ずつ、1 つの run id の 1 回の run の中で実行します。
 まず `a` ですべてを実行し、次に `b` ですべてを実行します。
 それぞれの environment が、自分の env file、secret、version の probe、プログラム、BeforeAll と AfterAll、process スコープの fixture を持ちます。
-`--env default` は `--env` なしの run が使う environment を、`run.json` が名付けるとおりに名指すので、`--env default --env staging` は両方を実行します。
-`run.json` は scenario と environment の組ごとに 1 つの断定を持ち、サマリの表は environment ごとに 1 列を持ち、どれか 1 つのセルが失敗なら終了コードも失敗です。
-feature flag を有効にすると通り、無効にすると失敗する scenario は、1 行を横に読めば分かります。
+`run.json` は断定の表を持ちます。
+受け入れ基準ごとに 1 行、environment ごとに 1 つのセルで、サマリはこの表で始まります。
+environment はプログラムのスイッチを `conditions` として宣言でき、`--env` の無い run はそれを宣言するすべての environment を走らせます:
+
+```ts
+environments: {
+  "banner-off": { env: { BANNER: "off" }, conditions: { banner: false } },
+  "banner-on": { env: { BANNER: "on" }, conditions: { banner: true } },
+},
+```
+
+`@with:banner` の tag を付けた scenario は、`banner-on` では必須、`banner-off` では対照です。
+対照が run を赤にすることはありません。
+その Then が 2 回の実行で同じ行で失敗すれば(`--proof-runs`)、行は `proven` です。
+scenario がスイッチの 2 つの側を見分けるということです。
+通れば行は `held` で、それが読むべき行です。
+Then はスイッチが変えるものを見ていません。
+必須のセルが通らなければ、行は `failed` で、終了コードは 1 です。
+`--env default` はトップレベルの environment を、`run.json` が名付けるとおりに名指すので、`--env default --env staging` は両方を実行します。
 environment はそれでも `nukadoko.program.ts` の設定にすぎません。
-`a` と `b` で何が違うかは、それぞれの env file とプログラムのフィールドが決めます。
+`a` と `b` で何が違うかはそれぞれのフィールドが決め、`conditions` は何も設定しません。
 
 ## What this does not do
 

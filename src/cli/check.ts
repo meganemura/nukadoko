@@ -61,12 +61,14 @@ export interface RunCheckOptions {
   codes?: boolean;
   /** Feature files or directories; empty checks the whole project. */
   targets?: readonly string[];
-  /** `--env`: the worlds whose placeholders are checked are the ones a
-   * `nuka run` with the same names starts; empty for the default world. */
-  envs?: readonly string[];
   /** `--fail-on`: codes whose presence turns the exit code to 1. Empty by
    * default, so a note stays a note. */
   failOn?: readonly string[];
+  /** `--env`: the environments a `nuka run` with the same names selects.
+   * Their worlds are the ones whose placeholders are checked, and the
+   * condition tags are read against them. Empty means the ones a run with
+   * no `--env` selects. */
+  envs?: readonly string[];
   /** Findings the invocation raised before the command ran, such as a
    * missing config file, which `--json` carries in the envelope. */
   notices?: readonly Finding[];
@@ -187,8 +189,8 @@ function failOnRefusal(codes: readonly string[]): string {
 export async function runCheck(options: RunCheckOptions): Promise<number> {
   const { rootDir, json, codes, stdout, stderr } = options;
   const targets = options.targets ?? [];
-  const envs = options.envs ?? [];
   const failOn = options.failOn ?? [];
+  const envs = [...new Set(options.envs ?? [])];
   const notices = options.notices ?? [];
   const sinks = { json, stdout, stderr, command: "check" };
 

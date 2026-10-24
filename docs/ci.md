@@ -210,7 +210,7 @@ of the above; these four are what changes.
 
 ## What a team adds on top
 
-Four things the workflow above leaves to the team, each small.
+Five things the workflow above leaves to the team, each small.
 
 - **The run summary as a pull request comment.** The job summary page
   already shows it, but a reviewer reads the pull request: the feature in
@@ -262,10 +262,11 @@ Four things the workflow above leaves to the team, each small.
   needs to read. `--edit-last` updates the comment an earlier push left
   instead of adding one per push. Every summary starts with the line
   `<!-- nukadoko:run -->`, so a step that posts other comments too can find
-  this one by that marker instead. The summary names what ran: the commit,
-  the environment, the browser, each scenario's status and duration, the
-  first line of a failed step's error (secrets already redacted), and the
-  command that reruns it (see "Records" in [docs/spec.md](spec.md#records)).
+  this one by that marker instead. The summary names what ran: the
+  verdict table (one row per criterion, with its verdict and a cell per
+  environment), the commit, the environment, the browser, the first line
+  of a failed step's error (secrets already redacted), and the command
+  that reruns it (see "Records" in [docs/spec.md](spec.md#records)).
   The `pull-requests: write` permission is the cost: the job that runs the
   suite can then write to the pull request. A pull request from a fork gets
   a read-only token, so the step fails there; a team that takes fork pull
@@ -307,7 +308,20 @@ Four things the workflow above leaves to the team, each small.
   either way. Its `scenarios` entries carry each scenario's status, its
   steps with their line, status, step record, and error, and for a failed
   one the `do` command that reruns it (see "Scenarios (the scripted
-  path)" in [docs/spec.md](spec.md)).
+  path)" in [docs/spec.md](spec.md)). Its `table` holds each criterion's
+  verdict, `held`, `proven`, or `failed`, with the reason ("Verdicts" in
+  [docs/spec.md](spec.md#verdicts)).
+- **Both sides of a feature switch in one job, not a matrix.** A suite
+  that ran the same job once per value of a flag (a `strategy.matrix`
+  over `CHECKOUT_V2: ["", "1"]`) declares each value as an environment in
+  `nukadoko.program.ts` instead, naming its side in `conditions`
+  ("Verdicts" in [docs/spec.md](spec.md#verdicts)). The step stays
+  `npx nuka run features/`: a run without `--env` runs each of those
+  environments, in one job and one run, and the summary's table shows each
+  scenario on both sides. A scenario tagged `@with:checkout_v2` is
+  required where the flag is on and a control where it is off, and its row
+  is `proven` when its Then breaks there. Two jobs can say that each side
+  was green; one run can say that the scenario told them apart.
 - **`retention.runs` sized to the runner's own pace.** The default keeps
   the newest 20 runs. A persistent runner that runs every merge and every
   night reaches 20 in days, and `nuka report` and `nuka do --use` read only

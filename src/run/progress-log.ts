@@ -265,6 +265,26 @@ export function writeScenarioBoundary(stderr: WritableSink, boundary: ScenarioBo
   );
 }
 
+export interface ProofRunBoundary {
+  readonly relativeFeaturePath: string;
+  readonly line: number;
+  readonly name: string;
+  readonly environment: string;
+  /** Which run of the cell this is, and how many `--proof-runs` asks. */
+  readonly run: number;
+  readonly of: number;
+}
+
+/** One line before a control cell runs again for proof
+ * (src/run/verdict-table.ts's `needsProofRun`): apart from the numbered
+ * scenario lines, whose total counts the selection, so a proof run never
+ * reads as one scenario more than the run selected. */
+export function writeProofRunBoundary(stderr: WritableSink, boundary: ProofRunBoundary): void {
+  stderr.write(
+    `proof run ${boundary.run}/${boundary.of}  ${boundary.relativeFeaturePath}:${boundary.line}  ${boundary.name}  (control in ${boundary.environment})\n`,
+  );
+}
+
 export interface ScenarioStart {
   /** 1-based, the parent's own bucket number for the worker that is
    * running this scenario. */
@@ -402,6 +422,21 @@ export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void
     `${summary.total} scenario${summary.total === 1 ? "" : "s"}: ${summary.passed} passed, ` +
       `${summary.failed} failed${(summary.notRun ?? 0) > 0 ? `, ${summary.notRun} not run` : ""}  (${formatSummaryDuration(summary.durationMs)})\n`,
   );
+}
+
+/** How many criteria the table calls each word. */
+export interface CriteriaCounts {
+  readonly held: number;
+  readonly proven: number;
+  readonly failed: number;
+}
+
+/** The line after the scenario count for a run with a control cell:
+ * `criteria: <held> held, <proven> proven, <failed> failed`, the table's
+ * verdicts, which the count of required executions above it does not
+ * show. */
+export function writeCriteriaCounts(stderr: WritableSink, counts: CriteriaCounts): void {
+  stderr.write(`criteria: ${counts.held} held, ${counts.proven} proven, ${counts.failed} failed\n`);
 }
 
 export interface RepeatTally {

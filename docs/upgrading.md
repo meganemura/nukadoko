@@ -283,7 +283,7 @@ This part does not change release to release.
   reader of `observed.http_reads` or `observed.http_writes`, in a step
   record or in run.json, drops them; the step record's `http.jsonl` lists
   each request with its method. A reader that tests `schema_version`
-  accepts 4 for a step record, and 3 for run.json and every `--json`
+  accepts 4 for a step record, for run.json, and for every `--json`
   document. `nuka report` refuses a run.json that an earlier release
   wrote, so report a run with the release that ran it.
 
@@ -432,6 +432,44 @@ This part does not change release to release.
   Node lines. Until then, the run summary says once per world that the
   log carries no trace ids, or that its lines arrived after the steps
   ended.
+
+- **A run without `--env` runs every environment that declares
+  `conditions`.** While no environment in `nukadoko.program.ts`
+  declares `conditions`, nothing changes: the run uses `default`. Once
+  one does, a run without `--env` runs each environment that declares
+  them, in the order the file lists them, and not `default`; an
+  environment with none, such as a deployment target, runs when `--env`
+  names it. A CI job that relied on `default` names `--env default`.
+  `nuka do` without `--env` still uses `default`.
+
+- **A tag that starts `@with:` or `@without:` names a condition.** A
+  suite that used such a tag for a meaning of its own gets
+  `condition-tag-malformed`, `condition-unknown`, or `condition-unmet`
+  from `nuka check`, and `nuka run` refuses to start. Rename the tag,
+  or declare the condition under the environments' `conditions`
+  (docs/spec.md "Verdicts").
+
+- **run.json's `verdicts` is `table`.** A reader of `verdicts` reads
+  `table.rows`: one row per criterion, with `feature`, `line`, and
+  `name` (the old cell's `scenario`), one cell per environment in
+  `cells`, and the row's `verdict` (`held`, `proven`, or `failed`)
+  and `reason`. A cell's `outcome` (`pass`, `fail`, `broke`,
+  `flaky`, or `not-run`) replaces its `verdict`, and `runs` replaces
+  `executions`; there is no `passed`, so a reader that needs it counts
+  the passed entries in `scenarios`. A run with no condition tag has
+  only `required` cells, and its rows are `held` or `failed` as the
+  old cells were `passed` or `failed`. Each scenario entry has `role`,
+  and `counts` has `controls`: `scenarios`, `passed`, and `failed`
+  count the executions of required cells only, and a control that
+  failed has no `do`.
+
+- **The run summary opens with the verdict table.** The per-feature
+  tables and the per-execution durations are gone; the title counts
+  criteria, and rows `held`, `proven`, and `failed`; and each red row
+  gets one line that says why. A job that parsed `summary.md` reads
+  run.json's `table` instead, and a duration from each scenario entry's
+  `started_at` and `finished_at`.
+
 
 ## 0.20.0 to 0.21.0
 

@@ -201,6 +201,37 @@ const scenario = z.looseObject({
     })
     .optional(),
   judged_by: z.enum(["compat", "nothing"]).optional(),
+  role: z.enum(["required", "control"]).optional(),
+});
+
+// The verdict table (src/run/verdict-table.ts), which the summary leads
+// with and the Allure results and the messages stream carry per scenario.
+const tableCell = z.looseObject({
+  world: z.literal("head"),
+  environment: z.string(),
+  role: z.enum(["required", "control"]),
+  outcome: z.enum(["pass", "fail", "broke", "flaky", "not-run"]),
+  line: z.number().int().optional(),
+  runs: z.number().int(),
+  reason: z.string().optional(),
+});
+
+const table = z.looseObject({
+  base: z.null(),
+  mapping_changed: z.null(),
+  worlds: z.array(z.looseObject({ world: z.literal("head"), environment: z.string() })),
+  rows: z.array(
+    z.looseObject({
+      feature: z.string(),
+      line: z.number().int(),
+      name: z.string(),
+      change: z.null(),
+      conditions: z.array(z.string()),
+      cells: z.array(tableCell),
+      verdict: z.enum(["held", "proven", "failed"]),
+      reason: z.string(),
+    }),
+  ),
 });
 
 const document = z.looseObject({
@@ -214,7 +245,14 @@ const document = z.looseObject({
   started_at: z.iso.datetime(),
   finished_at: z.iso.datetime(),
   commit: z.looseObject({ sha: z.string(), dirty: z.boolean() }).nullable(),
-  environments: z.array(z.looseObject({ name: z.string(), target_version: z.string().nullable(), base_url: z.string().nullable().optional() })),
+  environments: z.array(
+    z.looseObject({
+      name: z.string(),
+      target_version: z.string().nullable(),
+      base_url: z.string().nullable().optional(),
+      conditions: z.record(z.string(), z.union([z.boolean(), z.string()])).optional(),
+    }),
+  ),
   worlds: z
     .array(
       z.looseObject({
@@ -229,19 +267,15 @@ const document = z.looseObject({
     .optional(),
   selection: z.enum(["full", "partial"]),
   check: z.enum(["ran", "skipped"]).optional(),
-  counts: z.looseObject({ scenarios: z.number().int(), passed: z.number().int(), failed: z.number().int(), not_run: z.number().int() }),
+  counts: z.looseObject({
+    scenarios: z.number().int(),
+    passed: z.number().int(),
+    failed: z.number().int(),
+    controls: z.number().int(),
+    not_run: z.number().int(),
+  }),
   scenarios: z.array(scenario),
-  verdicts: z.array(
-    z.looseObject({
-      feature: z.string(),
-      line: z.number().int(),
-      scenario: z.string(),
-      environment: z.string(),
-      verdict: z.enum(["passed", "failed", "not-run"]),
-      executions: z.number().int(),
-      passed: z.number().int(),
-    }),
-  ),
+  table,
   findings: z.array(
     z.looseObject({
       severity: z.string(),

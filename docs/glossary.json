@@ -240,7 +240,32 @@
     {
       "en": ["cell", "cells"],
       "ja": "セル",
-      "note": "run.json の verdicts の 1 要素で、scenario と environment の 1 組の断定(verdict)。run サマリの表で scenario の行と environment の列が交わるところに描かれる"
+      "note": "run.json の table の行(受け入れ基準)と列(world と environment)が交わるところ。その実行がどうなったか(`pass`、`fail@<行>`、`broke@<行>`、`flaky@<行>`、`·`)と役割(必須か対照か)を持つ。値はコードスパンで英語のまま"
+    },
+    {
+      "en": ["verdict table", "the table"],
+      "ja": "断定の表",
+      "note": "run.json の `table` と run サマリの冒頭の表。受け入れ基準ごとに 1 行、world と environment ごとに 1 列で、行ごとに 1 つの断定を持つ。フィールド名 `table` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["required", "required cell"],
+      "ja": "必須",
+      "note": "environment が行の condition の tag をすべて満たすセルの役割。必須のセル、と書く。run.json の `role` の値 `required` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["control", "control cell"],
+      "ja": "対照",
+      "note": "environment が行の condition を満たさないセルの役割。実験の対照群の 対照 で、対照のセル、と書く。run を赤にしない。run.json の `role` の値 `control` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["proven", "prove", "proves", "proof"],
+      "ja": "証明された / 証明する / 証明",
+      "note": "行の断定の一つ。必須のセルがすべて通り、対照のセルが Then の同じ行で --proof-runs 回失敗したこと。値 `proven` はコードスパンで英語のまま"
+    },
+    {
+      "en": ["proof run", "proof runs"],
+      "ja": "証明の実行",
+      "note": "Then の行で失敗した対照のセルをもう一度走らせる 1 回。フラグ名 `--proof-runs` と stderr の `proof run <k>/<n>` 行は英語のまま"
     },
     {
       "en": ["outcome"],
@@ -434,7 +459,7 @@
     {
       "en": ["held", "holds"],
       "ja": "成り立つ",
-      "note": "claim の比較が真だったこと。claim record の `outcome` の値 `held` はコードスパンで英語のまま。成否(outcome)は fixture の pass/fail を指す別語"
+      "note": "claim の比較が真だったこと。claim record の `outcome` の値 `held` はコードスパンで英語のまま。成否(outcome)は fixture の pass/fail を指す別語。断定の表の行の断定 `held` も 成り立った と書く(必須のセルがすべて通り、それを証明する対照がない)"
     },
     {
       "en": ["broken", "breaks", "a broken claim"],
@@ -564,6 +589,10 @@
       "why": "step 定義の pattern / patterns フィールド名と直接対応する場面では常に英語。パターンマッチングのような一般的な文脈ではカタカナのパターンも使われ、それはフィールド名としての pattern とは別の使われ方"
     },
     { "term": "environment", "why": "environment / --env、config の environments と直接対応する" },
+    {
+      "term": "condition",
+      "why": "environment の `conditions` と、scenario の `@with:` / `@without:` の tag が名指すプログラムのスイッチ。`conditions` と tag 名、`condition-unmet` などの所見コードと直接対応する。run サマリの 条件(どの commit、どの environment で走ったか)や一般語の 条件 とは別の語なので訳さない"
+    },
     { "term": "session", "why": "session / --session、nuka session コマンドと直接対応する" },
     { "term": "secret", "why": "secrets config、{{secret.NAME}} token と直接対応する" },
     { "term": "compat", "why": "nukadoko/compat という実在のサブパス名そのもの" },

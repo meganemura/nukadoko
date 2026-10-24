@@ -88,7 +88,15 @@ export interface WorkerNoteEnvelope {
   readonly text: string;
 }
 
-export type WorkerEnvelope = WorkerScenarioStartedEnvelope | WorkerScenarioEnvelope | WorkerNoteEnvelope;
+/** Sent after the note when a BeforeAll hook failed, so none of this
+ * worker's scenarios ran. The parent's verdict table says why their cells
+ * did not run (docs/spec.md "Verdicts"); a note's text is for a person,
+ * and the table does not read it back. */
+export interface WorkerBeforeAllFailedEnvelope {
+  readonly kind: "before-all-failed";
+}
+
+export type WorkerEnvelope = WorkerScenarioStartedEnvelope | WorkerScenarioEnvelope | WorkerNoteEnvelope | WorkerBeforeAllFailedEnvelope;
 
 export function serializeWorkerEnvelope(envelope: WorkerEnvelope): string {
   return `${JSON.stringify(envelope)}\n`;
@@ -110,7 +118,7 @@ export function parseWorkerEnvelope(line: string): WorkerEnvelope | undefined {
     return undefined;
   }
   const kind = (parsed as { kind?: unknown }).kind;
-  if (kind === "scenario-started" || kind === "scenario" || kind === "note") {
+  if (kind === "scenario-started" || kind === "scenario" || kind === "note" || kind === "before-all-failed") {
     return parsed as WorkerEnvelope;
   }
   return undefined;

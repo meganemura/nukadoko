@@ -97,6 +97,24 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Move the line to Then position, or bind a step that runs (defineStep with run) at this line.",
   },
+  "condition-tag-malformed": {
+    description:
+      "A tag starts with @with: or @without: but does not read as @with:<condition>, @with:<condition>=<value>, or @without:<condition>, so it names no condition.",
+    severity: "error",
+    fix: 'Rewrite the tag as @with:<condition>, @with:<condition>=<value>, or @without:<condition>; a condition name holds letters, digits, "_", ".", or "-", and a value holds no whitespace.',
+  },
+  "condition-unknown": {
+    description:
+      "A condition tag names a condition that no environment in nukadoko.program.ts declares under conditions, so no environment sets it up.",
+    severity: "error",
+    fix: "Declare the condition under the conditions of the environments that set it up in nukadoko.program.ts, or remove the tag.",
+  },
+  "condition-unmet": {
+    description:
+      "No environment the run selects meets every condition a scenario's tags name, so the scenario has no required cell and nothing shows that it holds.",
+    severity: "error",
+    fix: "Add an environment whose conditions meet the scenario's tags, name one with --env, or correct the tags.",
+  },
   "duplicate-capture-key": {
     description:
       "A pattern captures the same key more than once. One args field holds one value, so the pattern is refused instead of dropping a value.",

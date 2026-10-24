@@ -38,12 +38,15 @@ program the scenarios talk to, once per run (`references/program.md`).
 `--env <name>` on `nuka do` and `nuka run` targets an entry of the program
 file's `environments`, or `default`, which needs none. An entry overrides
 any program field, adds `envFiles` after the config's, and may set
-`policy: "read-only"`. `nuka run --env a --env b` runs every selected
-scenario in `a`, then in `b`, as one run: `verdicts` and the summary hold
-one cell per scenario and environment, a failure's `do:` names its
-environment, and any red cell makes the run red. A cell that reads `not
-run` never ran: the `hook-failed` finding beside it names the
-environment whose BeforeAll stopped it.
+`policy: "read-only"` and `conditions`. `nuka run` without `--env` runs
+every environment that declares `conditions`, or `default` when none
+does; `nuka do` without `--env` uses `default`. `nuka run --env a --env
+b` runs every selected scenario in `a`, then in `b`, as one run: the
+verdict table holds one cell per criterion and environment, and a
+failure's `do:` names its environment. A cell that reads `·` never ran:
+its `reason`, and the `hook-failed` or `program-start-failed` finding
+beside it, say why. What each verdict of the table means, and what to do
+about it, is `references/verdicts.md`.
 
 Trial and error, `nuka do` while building a step and `nuka run` while
 getting a feature green, belongs on a verification environment; never
@@ -109,8 +112,8 @@ there is not checked and not run, and the skip reports nothing.
    way. To act on the result, pass `--json` instead: stdout is then
    `run.json` itself, one envelope `{ schema_version, nukadoko, command,
    verdict, findings, ... }` with the run's fields beside `findings`
-   (`commit`, `environments`, `selection`, counts, `verdicts`, and per
-   scenario its steps with `line`, `status`, `record`, and a failed one's
+   (`commit`, `environments`, `selection`, counts, `table`, and per
+   scenario its `role` and steps with `line`, `status`, `record`, and a failed one's
    `error` and `used`, plus a failed scenario's `do`); the run writes the
    same bytes beside its summary, which is rendered from it. nukadoko then
    writes nothing to stderr: every warning and failed scenario is a finding.
@@ -137,7 +140,8 @@ there is not checked and not run, and the skip reports nothing.
    header, as run.json's `selection` does. stderr does not say so.
 3. A failure that reproduces one time in several is a case for
    `nuka run <feature>:<line> --repeat <n>`, not for a shell loop: every
-   execution lands under one run id, its summary cell counts them, and a
+   execution lands under one run id, its summary cell counts them
+   (`pass (3 runs)`, or `flaky@12 (3 runs)` when they disagree), and a
    scenario that failed at least once gets a `repeat` line after the
    failed list, `<passed> of <n> passed`. Read the failing executions'
    records and screenshots (`references/diagnosing.md`) rather than the

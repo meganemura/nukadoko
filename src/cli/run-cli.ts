@@ -109,6 +109,9 @@ interface RunArgs {
   /** Same `NaN`/fraction caveat as `concurrency` below; run.ts refuses
    * anything but a whole number of 1 or more. */
   repeat?: number;
+  /** Same caveat as `repeat`; run.ts refuses anything but a whole number
+   * of 1 or more. */
+  "proof-runs"?: number;
   /** yargs' own `type: "number"` accepts `NaN`/a fraction without
    * complaint; run.ts's own setup phase is what actually refuses either
    * (that file's own header explains why the check lives there and not
@@ -569,9 +572,9 @@ export async function runCli(
         .option("env", {
           type: "string",
           describe:
-            'target a named environment (omit it, or name "default", for the "default" environment: the top-level ' +
-            "settings, or environments.default when nukadoko.program.ts defines it); repeat it to run every selected " +
-            'scenario once in each, in one run with one verdict per scenario and environment, "default" among them',
+            "target a named environment from nukadoko.program.ts; repeat it to run every selected scenario once in each, " +
+            "in one run with one cell per scenario and environment. Omitted, the run selects every environment that declares " +
+            'conditions, or the "default" environment (the top-level settings, or environments.default) when none does',
         })
         .option("records", {
           type: "boolean",
@@ -603,6 +606,14 @@ export async function runCli(
             "(default 1); for a failure that reproduces one time in several. Each execution is its own scenario " +
             "record under the one run_id, and a scenario that failed at least once gets a `repeat` line after the summary",
         })
+        .option("proof-runs", {
+          type: "number",
+          default: 2,
+          describe:
+            "run a control cell (a scenario in an environment that does not meet its @with:/@without: conditions) until " +
+            "a claim in Then has broken at the same line this many times, or a run disagrees (default 2); only then does " +
+            "the control prove the scenario. A required cell runs once, or --repeat times",
+        })
         .option("since", {
           type: "string",
           nargs: 1,
@@ -613,7 +624,7 @@ export async function runCli(
             "changed, new, ambiguous, or unknown) and lists the criteria the ref held that are gone, and the summary quotes " +
             "what moved. Compares the feature files the run targets. Reports only; never changes the exit code",
         })
-        .check(rejectRepeatedFlags(["concurrency", "repeat", "since"])) as Argv<RunArgs>,
+        .check(rejectRepeatedFlags(["concurrency", "repeat", "proof-runs", "since"])) as Argv<RunArgs>,
     handler: async (args: Arguments<RunArgs>) => {
       if (argsFailed) return;
       const { runRun } = await import("./run.js");
@@ -627,6 +638,7 @@ export async function runCli(
         json: args.json ?? false,
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
+        proofRuns: args["proof-runs"] ?? 2,
         ...(args.since !== undefined ? { since: args.since } : {}),
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
@@ -864,12 +876,6 @@ export async function runCli(
           default: false,
           describe: "machine-readable output",
         })
-        .option("env", {
-          type: "string",
-          describe:
-            "check the placeholders of the worlds a nuka run with the same --env flags would start (repeatable; " +
-            'without it, the "default" environment\'s world); no other world is checked',
-        })
         .option("fail-on", {
           type: "string",
           array: true,
@@ -883,6 +889,13 @@ export async function runCli(
           default: false,
           describe:
             "list every finding code nuka check can produce, with a one-line description, instead of checking a project",
+        })
+        .option("env", {
+          type: "string",
+          describe:
+            "check as a nuka run with the same --env flags would run (repeatable): the placeholders of the worlds it " +
+            "would start, and no other world's, and the condition tags read against its environments; omitted, every " +
+            "environment that declares conditions, or default when none does",
         }) as Argv<CheckArgs>,
     handler: async (args: Arguments<CheckArgs>) => {
       if (argsFailed) return;

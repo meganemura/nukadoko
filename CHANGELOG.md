@@ -222,6 +222,25 @@ just until 0.1.
   `requestContext.baseURL` stay refused, now naming the world's URL as
   the one source.
 
+- **A run ends in a verdict table, which replaces run.json's
+  `verdicts`.** A row is a criterion and a column an environment; a
+  cell reads `pass`, `fail@<line>` (a claim broke at a Then line),
+  `broke@<line>` (it stopped before a claim was judged), `flaky@<line>`
+  (its runs disagree), or `·` (it did not run, with the reason), and each
+  row is `held`, `proven`, or `failed`, with one sentence that says
+  why. The exit code is 1 when a row is `failed`. run.json's `table`
+  holds it, with `base: null` until a run compares two trees, each
+  scenario entry names its cell's `role`, and `counts` gains
+  `controls`. The run summary opens with the table and one line per red
+  row, and its per-feature tables and durations are gone. A passing
+  scenario says the code does what it says, not that the scenario would
+  notice otherwise; a control that fails is the run that shows it would.
+
+- **A run without `--env` runs every environment that declares
+  `conditions`.** It runs `default` only when none does. An environment
+  with no conditions, such as a deployment target, needs a URL or
+  credentials a local run may not have, so it runs when `--env` names it.
+
 ### Removed
 
 - **`nuka tend` is removed.** Its findings are notes and warnings of
@@ -258,7 +277,8 @@ just until 0.1.
   that writes on a GET counted as a read. They also saw only `request`,
   `page`, `context`, and `pageAs`, so a step that called `fetch`
   counted nothing. Fields were removed, so the step record's
-  `schema_version` is 4 and the envelope's is 3.
+  `schema_version` is 4. The envelope's is 4 as well, for this and for
+  the verdict table below.
 
 - **The run summary's "Declared vs observed" section is removed.** It set
   `mutates: false` against the method counts and against the files a
@@ -282,6 +302,23 @@ just until 0.1.
   message named only the missing export.
 
 ### Added
+
+- **Conditions, and controls that prove a scenario.** An environment in
+  `nukadoko.program.ts` declares the switches of its program as
+  `conditions` (`true`, `false`, or a value), and a scenario names what
+  it needs with `@with:<condition>`, `@with:<condition>=<value>`, or
+  `@without:<condition>` on its `Feature:`, `Rule:`, `Scenario:`, or
+  `Examples:` line. Its cell is `required` where the environment meets
+  every tag and a `control` elsewhere. A control never turns the run red:
+  when it breaks a claim at a Then line, it runs again until it has done so
+  at the same line `--proof-runs <n>` times (2 by default), and then the
+  row is `proven`. One failure could be the program being slow once, and
+  proof is the one verdict that reads a failure as good news. `nuka check`
+  reports `condition-tag-malformed`, `condition-unknown` (a condition no
+  environment declares, with what to do once its switch is removed), and
+  `condition-unmet` (a scenario no selected environment meets), and
+  `nuka check --env` reads the tags against the environments it names, as
+  `nuka run --env` does. `@held` is read and kept, and changes nothing yet.
 
 - **`nukadoko.program.ts` builds, prepares, starts, and stops the program
   under test.** Its default export, written with `defineProgram`, holds

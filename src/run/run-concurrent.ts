@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import type { CellRole } from "../condition/condition.js";
 import { parseFindings, warningSink, type Finding } from "../finding/finding.js";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -14,6 +15,7 @@ import {
   type FailedScenario,
   writeScenarioBoundary,
   writeScenarioStarted,
+  writeProofRunBoundary,
   createRepeatTally,
   type RepeatTally,
 } from "./progress-log.js";
@@ -90,6 +92,17 @@ import { serializeWorldView, type WorldView } from "../program/world-view.js";
 // that does not start fails the pass, whose scenarios then have no record;
 // the caller has already reported why, so the count below does not report
 // them a second time as an incomplete run.
+//
+// A control cell (docs/spec.md "Verdicts") is a record like any other on
+// the wire, but its failure is the table's to read, so it never fails the
+// pass, never counts as a failed scenario, and never joins the scenario
+// count or the repeat tallies. After a pass's workers, a control that
+// failed at a Then line runs again, in the same world, until it has failed
+// `--proof-runs` times at that line or a run disagrees: one worker per
+// round, which runs every due target one after another, so a
+// `@nukadoko:serial` file still runs alone and a round never races
+// another. The caller decides which cells are due, from the records
+// `onRecord` hands it.
 
 const SERIAL_TAG = "@nukadoko:serial";
 
@@ -101,9 +114,9 @@ function pickleKey(relativeFeaturePath: string, line: number): string {
   return `${relativeFeaturePath}:${line}`;
 }
 
-/** One environment the run executes under (src/cli/run.ts's `Condition`),
+/** One environment the run executes under (src/cli/run.ts's `EnvironmentPass`),
  * reduced to what this module needs. */
-export interface ConcurrentCondition {
+export interface ConcurrentPass {
   /** `--env`'s value for this environment, or `null` when the run named
    * none. Forwarded to every worker unresolved: a worker resolves it
    * itself. */
@@ -118,6 +131,19 @@ export interface ConcurrentCondition {
   readonly openWorld: (abort: AbortSignal) => Promise<{ readonly view: WorldView; close(): Promise<void> } | "failed" | null>;
 }
 
+/** The caller's view of the table's cells (src/run/verdict-table.ts),
+ * kept from the records `onRecord` hears. */
+export interface ConcurrentCells {
+  readonly roleOf: (feature: string, line: number, environment: string) => CellRole;
+  /** Whether a control runs once more for proof, from its executions so
+   * far. */
+  readonly needsProof: (feature: string, line: number, environment: string) => boolean;
+  /** How many executions a cell holds so far. */
+  readonly runsOf: (feature: string, line: number, environment: string) => number;
+  /** `--proof-runs`. */
+  readonly proofRuns: number;
+}
+
 export interface RunConcurrentOptions {
   readonly rootDir: string;
   readonly config: NukadokoConfig;
@@ -127,13 +153,14 @@ export interface RunConcurrentOptions {
    * then its serial files, before the next environment starts, so a
    * `@nukadoko:serial` file still runs alone and two environments never
    * share a target at once. */
-  readonly conditions: readonly ConcurrentCondition[];
+  readonly passes: readonly ConcurrentPass[];
   readonly concurrency: number;
   /** `--repeat`; each worker runs its own files this many times
    * (src/cli/run.ts's `RunRunOptions.repeat`). */
   readonly repeat: number;
   readonly selected: SelectedScenarios;
   readonly flatPickles: readonly { readonly feature: SelectedFeature; readonly pickle: Pickle }[];
+  readonly cells: ConcurrentCells;
   /** Hears every scenario record the parent forwards, so the parent builds
    * one run.json for the whole run, and streams it under `--records`. */
   readonly onRecord: (record: ScenarioRecord) => void;
@@ -143,6 +170,9 @@ export interface RunConcurrentOptions {
   /** Every warning and failure this function finds, as a finding; the
    * caller writes it to stderr or keeps it for the `--json` document. */
   readonly warn: (finding: Finding) => void;
+  /** Hears that a worker's BeforeAll failed in `environment`, so the
+   * table can say why its cells there did not run. */
+  readonly onBeforeAllFailed: (environment: string) => void;
   /** The `do` of a BeforeAll or AfterAll failure in `environment`: a
    * worker does not know the targets the run was given. */
   readonly runHookDo: (environment: string) => string;
@@ -158,6 +188,8 @@ interface WorkerGroupResult {
 
 export interface RunConcurrentResult {
   readonly allPassed: boolean;
+  /** Executions of required cells; a control's are in run.json and the
+   * table, not in the scenario count. */
   readonly scenariosWritten: number;
   readonly scenariosPassed: number;
   readonly stepRecordsWritten: number;
@@ -180,11 +212,12 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     rootDir,
     config,
     runId,
-    conditions,
+    passes,
     concurrency,
     repeat,
     selected,
     flatPickles,
+    cells,
     onRecord,
     progress,
     warn,
@@ -193,7 +226,10 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const warnings = (code: string): WritableSink => warningSink(code, warn);
 
   const hasPickles = flatPickles.length > 0;
-  let expectedRecords = flatPickles.length * repeat * conditions.length;
+  let expectedRecords = flatPickles.length * repeat * passes.length;
+  // The total the numbered scenario lines count to: the selection, never
+  // the proof runs, which have lines of their own.
+  let mainRecords = expectedRecords;
 
   const pickleByKey = new Map<string, { readonly feature: SelectedFeature; readonly pickle: Pickle }>();
   for (const entry of flatPickles) {
@@ -201,6 +237,9 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   }
 
   let allPassed = true;
+  // Every record, controls and proof runs included, for the completeness
+  // check; `scenariosWritten` counts required executions only.
+  let recordsWritten = 0;
   let scenariosWritten = 0;
   let scenariosPassed = 0;
   let stepRecordsWritten = 0;
@@ -236,9 +275,14 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     }
   }
 
-  function handleEnvelope(envelope: WorkerEnvelope, filesWithRecords: Set<string>, worker: number): void {
+  function handleEnvelope(envelope: WorkerEnvelope, filesWithRecords: Set<string>, worker: number, proofRound: boolean): void {
     if (envelope.kind === "note") {
       relayNote(envelope.text);
+      return;
+    }
+
+    if (envelope.kind === "before-all-failed") {
+      options.onBeforeAllFailed(currentEnvironment);
       return;
     }
 
@@ -254,26 +298,41 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
 
     const { record, stepLines, notes } = envelope;
     filesWithRecords.add(record.feature);
-    completedCount += 1;
+    recordsWritten += 1;
+    const control = cells.roleOf(record.feature, record.line, record.environment) === "control";
 
-    scenariosWritten += 1;
-    if (record.status === "passed") {
-      scenariosPassed += 1;
-    } else {
-      allPassed = false;
-      failedScenarios.push(failedScenarioOf(record));
+    if (!control) {
+      scenariosWritten += 1;
+      if (record.status === "passed") {
+        scenariosPassed += 1;
+      } else {
+        allPassed = false;
+        failedScenarios.push(failedScenarioOf(record));
+      }
+      if (repeat > 1) repeatTally.note(record);
     }
-    if (repeat > 1) repeatTally.note(record);
     stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
     onRecord(record);
 
-    writeScenarioBoundary(progress, {
-      index: completedCount,
-      total: expectedRecords,
-      relativeFeaturePath: record.feature,
-      line: record.line,
-      name: record.scenario,
-    });
+    if (proofRound) {
+      writeProofRunBoundary(progress, {
+        relativeFeaturePath: record.feature,
+        line: record.line,
+        name: record.scenario,
+        environment: record.environment,
+        run: cells.runsOf(record.feature, record.line, record.environment),
+        of: cells.proofRuns,
+      });
+    } else {
+      completedCount += 1;
+      writeScenarioBoundary(progress, {
+        index: completedCount,
+        total: mainRecords,
+        relativeFeaturePath: record.feature,
+        line: record.line,
+        name: control ? `${record.scenario}  (control)` : record.scenario,
+      });
+    }
     for (const line of stepLines) {
       progress.write(`${line}\n`);
     }
@@ -300,11 +359,14 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   const liveWorkers = new Set<ChildProcess>();
   let interruptedBy: NodeJS.Signals | null = null;
 
+  // `targets` are what a worker's list file holds: a feature path, or a
+  // path and line. `proofRound` runs each target once, as a proof run.
   async function runWorkerGroup(
-    files: readonly SelectedFeature[],
+    targets: readonly string[],
     worker: number,
     envArg: string | null,
     world: WorldView | null,
+    proofRound: boolean,
   ): Promise<WorkerGroupResult> {
     const filesWithRecords = new Set<string>();
     if (interruptedBy !== null) {
@@ -313,19 +375,14 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     const tmpDir = await mkdtemp(path.join(tmpdir(), "nukadoko-run-"));
     const featureListPath = path.join(tmpDir, "features.txt");
     try {
-      const featureTargets = files.flatMap((feature) =>
-        feature.selectedLines === null
-          ? [feature.relativePath]
-          : feature.selectedLines.map((line) => `${feature.relativePath}:${line}`),
-      );
-      await writeFile(featureListPath, `${featureTargets.join("\n")}\n`, "utf8");
+      await writeFile(featureListPath, `${targets.join("\n")}\n`, "utf8");
       const worldPath = world === null ? null : path.join(tmpDir, "world.json");
       if (worldPath !== null && world !== null) await writeFile(worldPath, serializeWorldView(world), "utf8");
       // A signal can arrive during the two awaits above.
       if (interruptedBy !== null) {
         return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
       }
-      const child = spawnRunWorker({ rootDir, runId, env: envArg, featureListPath, repeat, worldPath });
+      const child = spawnRunWorker({ rootDir, runId, env: envArg, featureListPath, repeat: proofRound ? 1 : repeat, worldPath });
       liveWorkers.add(child);
 
       const stdoutBuffer = createLineBuffer((line) => {
@@ -337,7 +394,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
           warn({ severity: "warning", code: "worker-output-unreadable", message: `A worker produced an unreadable line on its own stdout: ${line}` });
           return;
         }
-        handleEnvelope(envelope, filesWithRecords, worker);
+        handleEnvelope(envelope, filesWithRecords, worker, proofRound);
       });
       // Relayed raw, never parsed: this worker's own real stderr carries a
       // pre-try/catch Node crash and project code's own stdout writes
@@ -382,6 +439,10 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     }
   }
 
+  const targetsOf = (files: readonly SelectedFeature[]): string[] =>
+    files.flatMap((feature) =>
+      feature.selectedLines === null ? [feature.relativePath] : feature.selectedLines.map((line) => `${feature.relativePath}:${line}`),
+    );
   const parallelFeatures = selected.features.filter((feature) => !isSerialFeature(feature));
   const serialFeatures = selected.features.filter(isSerialFeature);
 
@@ -400,22 +461,24 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   };
   for (const signal of HANDLED_SIGNALS) process.on(signal, onSignal);
   try {
-    for (const condition of conditions) {
+    for (const pass of passes) {
       // A signal stops the run before the next environment starts.
       if (interruptedBy !== null) break;
-      if (conditions.length > 1) progress.write(`environment ${condition.environment}\n`);
-      currentEnvironment = condition.environment;
-      const world = hasPickles ? await condition.openWorld(startAbort.signal) : null;
+      if (passes.length > 1) progress.write(`environment ${pass.environment}\n`);
+      currentEnvironment = pass.environment;
+      const world = hasPickles ? await pass.openWorld(startAbort.signal) : null;
       if (world === "failed") {
         // A start the signal stopped leaves this environment's scenarios
         // without records, which is what makes the run incomplete.
         if (interruptedBy !== null) break;
         expectedRecords -= flatPickles.length * repeat;
+        mainRecords -= flatPickles.length * repeat;
         allPassed = false;
         continue;
       }
       try {
-        await runCondition(condition.envArg, world?.view ?? null);
+        await runPass(pass.envArg, world?.view ?? null);
+        await runProofRounds(pass, world?.view ?? null);
       } finally {
         await world?.close();
       }
@@ -424,7 +487,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const signal of HANDLED_SIGNALS) process.off(signal, onSignal);
   }
 
-  async function runCondition(envArg: string | null, world: WorldView | null): Promise<void> {
+  async function runPass(envArg: string | null, world: WorldView | null): Promise<void> {
     const workerCount = Math.min(concurrency, parallelFeatures.length);
     if (workerCount > 0) {
       const buckets: SelectedFeature[][] = Array.from({ length: workerCount }, () => []);
@@ -432,7 +495,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         buckets[index % workerCount]!.push(feature);
       });
 
-      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(bucket, bucketIndex + 1, envArg, world)));
+      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(targetsOf(bucket), bucketIndex + 1, envArg, world, false)));
       for (const [bucketIndex, result] of results.entries()) {
         if (result.exitCode !== 0) {
           for (const feature of buckets[bucketIndex]!) {
@@ -450,10 +513,39 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const feature of serialFeatures) {
       // Worker 1: a `@nukadoko:serial` file runs alone, so there is never a
       // second number to tell it apart from.
-      const result = await runWorkerGroup([feature], 1, envArg, world);
+      const result = await runWorkerGroup(targetsOf([feature]), 1, envArg, world, false);
       if (result.exitCode !== 0 && !result.filesWithRecords.has(feature.relativePath)) {
         failedFiles.add(envArg === null ? feature.relativePath : `${feature.relativePath} (${envArg})`);
       }
+    }
+  }
+
+  // One round at a time, so a cell stops at the first run that disagrees.
+  // A round that wrote fewer records than it was given ends the rounds:
+  // the cells it left out would be due again forever, and the count
+  // below reports the records that are missing.
+  async function runProofRounds(pass: ConcurrentPass, world: WorldView | null): Promise<void> {
+    for (;;) {
+      if (interruptedBy !== null) return;
+      const due = flatPickles.filter(({ feature, pickle }) => cells.needsProof(feature.relativePath, pickle.location?.line ?? 0, pass.environment));
+      if (due.length === 0) return;
+      expectedRecords += due.length;
+      const before = recordsWritten;
+      const result = await runWorkerGroup(
+        due.map(({ feature, pickle }) => `${feature.relativePath}:${pickle.location?.line ?? 0}`),
+        1,
+        pass.envArg,
+        world,
+        true,
+      );
+      if (result.exitCode !== 0) {
+        for (const { feature } of due) {
+          if (!result.filesWithRecords.has(feature.relativePath)) {
+            failedFiles.add(pass.envArg === null ? feature.relativePath : `${feature.relativePath} (${pass.envArg})`);
+          }
+        }
+      }
+      if (recordsWritten - before < due.length) return;
     }
   }
 
@@ -462,7 +554,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       severity: "failed",
       code: "run-incomplete",
       message:
-        scenariosWritten === expectedRecords
+        recordsWritten === expectedRecords
           ? `${interruptedBy} arrived after every scenario had a record, so AfterAll hooks may not have run`
           : `${interruptedBy} stopped this run before every scenario had a record, so it is incomplete`,
     });
@@ -476,7 +568,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         "This run is incomplete and cannot be treated as a pass",
     });
     allPassed = false;
-  } else if (scenariosWritten !== expectedRecords) {
+  } else if (recordsWritten !== expectedRecords) {
     // The total check `failedFiles` cannot make. That set catches a worker
     // that produced nothing at all for a file it was given, which is the
     // loud case. A record lost some other way (an unreadable envelope line,
@@ -489,8 +581,9 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       code: "run-incomplete",
       message:
         `This run selected ${flatPickles.length} scenarios${repeat > 1 ? ` to run ${repeat} times each` : ""}` +
-        `${conditions.length > 1 ? ` in each of ${conditions.length} environments` : ""} ` +
-        `and wrote ${scenariosWritten} records. ` +
+        `${passes.length > 1 ? ` in each of ${passes.length} environments` : ""}` +
+        `${expectedRecords > mainRecords ? `, with ${expectedRecords - mainRecords} proof run${expectedRecords - mainRecords === 1 ? "" : "s"},` : ""}` +
+        ` and wrote ${recordsWritten} records. ` +
         "The missing ones cannot be accounted for, so this run is incomplete",
     });
     allPassed = false;

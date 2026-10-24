@@ -2809,7 +2809,9 @@ The recipe alone says which placeholders a world has, so the refusal does
 not wait for the world.
 `nuka check` reports `program-placeholder-unfilled`, an error, for each
 gap of each world a `nuka run` with the same `--env` flags would start:
-the default world without `--env`, and each environment `--env` names.
+each environment `--env` names, or without `--env` the ones a run
+without it selects (every environment that declares `conditions`, or
+the default world when none does).
 A world nothing in the invocation starts is not checked, so an
 environment written for another use does not refuse a run of the others.
 `nuka run` and `nuka do` refuse with the same code for the worlds they
@@ -2966,7 +2968,7 @@ field.
 `environments` names the deployment targets and the variants of the
 program: a staging server, a preview per pull request, the same app with
 a feature turned on.
-An entry may hold any field above, plus three that only an environment
+An entry may hold any field above, plus four that only an environment
 holds:
 
 - `policy: "read-only"` refuses a step that declares it mutates.
@@ -2974,8 +2976,14 @@ holds:
 - `version` is a probe, `() => string | Promise<string>`, called once per
   run with a 10-second budget; each step record stores what it answered
   as `target_version`.
+- `conditions` names the switches of the program this environment runs,
+  each `true`, `false`, or a value with no whitespace, such as
+  `{ banner: true, locale: "ja" }`. A scenario's `@with:` and
+  `@without:` tags are read against them, and they decide which runs
+  prove a scenario (see "Verdicts"). They set nothing in the program: the
+  environment's `env` and env files do that.
 
-The rules for all three are under "Environments and secrets".
+The rules for the first three are under "Environments and secrets".
 A field an environment writes replaces the top level's, except `env`,
 whose keys merge with the environment's winning, so an environment that
 changes one variable does not repeat the rest.
@@ -2983,8 +2991,9 @@ changes one variable does not repeat the rest.
 replaces the top level's.
 `build` and `prepare` are inherited like any field, so an environment
 with a `url` and no command to run writes `build: []` and `prepare: []`.
-`--env <name>` selects an environment, and a run without `--env` uses the
-top level under the name `default`.
+`--env <name>` selects an environment. A run without `--env` runs every
+environment that declares `conditions`, in the order the program file
+lists them, and the top level under the name `default` when none does.
 `--env` may repeat; each environment is a world of its own (see
 "Running").
 
@@ -2993,11 +3002,15 @@ export default defineProgram({
   serve: { command: "npm start", ready: "/health" },
   env: { PORT: "{port}" },
   environments: {
-    "new-checkout": { env: { CHECKOUT_V2: "1" } },
+    "checkout-v1": { env: { CHECKOUT_V2: "" }, conditions: { checkout_v2: false } },
+    "checkout-v2": { env: { CHECKOUT_V2: "1" }, conditions: { checkout_v2: true } },
     staging: { url: "https://staging.acme.example", policy: "read-only" },
   },
 });
 ```
+
+Here `nuka run` runs `checkout-v1` and `checkout-v2`, and `nuka run --env
+staging` runs the deployment target, which declares no conditions.
 
 ### A program nukadoko does not start
 
@@ -3326,7 +3339,7 @@ Rails lines of its own requests.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--since <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--proof-runs <n>] [--since <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -3428,11 +3441,11 @@ colliding with a suite's existing meaning for a short name.
 `--repeat <n>` runs every selected scenario `n` times in this one
 invocation: the whole selection once, then again, so a failure that depends
 on what ran before it meets the same neighbours on every pass. Each
-execution is its own entry in `run.json`'s `scenarios`, its `verdicts`
-cell counts the executions and how many passed, and a scenario that failed at least once gets a `repeat`
-line after the failed list, `<passed> of <n> passed`, with no verdict
-attached: a scenario that fails every time is not flaky, and the count is
-what a reader needs. The flag exists for a failure that reproduces one time
+execution is its own entry in `run.json`'s `scenarios`, its cell in
+`table` counts the executions as `runs` and is `flaky@<line>` when they
+disagree (see "Verdicts"), and a scenario that failed at least once gets a `repeat`
+line after the failed list, `<passed> of <n> passed`: a scenario that
+fails every time is not flaky, and the count is what a reader needs. The flag exists for a failure that reproduces one time
 in several. Without it, the answer was a shell loop of `nuka run`, which
 spreads the evidence over that many run ids, while the run summary reads
 one. In the messages stream each execution is its own
@@ -3440,8 +3453,9 @@ one. In the messages stream each execution is its own
 every execution. In Allure, every execution in one environment carries the scenario's own
 identity, so a report shows one test with the other executions as its
 retries, which is where a scenario that sometimes fails is easiest to read.
-The run summary's cell reads `<passed> of <n> passed`: green three times is
-a different claim from green once, and a reviewer sees the count. The
+The run summary's cell reads `pass (3 runs)` or `flaky@12 (3 runs)`: green
+three times is a different claim from green once, and a reviewer sees the
+count. The
 `repeated-scenario-prefix` note counts a scenario once however many times
 it ran. Under `--concurrency`, each worker repeats
 its own files, so the unit of distribution stays the file: a target naming
@@ -3536,8 +3550,10 @@ every scenario has `criteria: { changed_since: null }` and `since` is
 `run_id`, one `run.json`, one summary, and one exit code, that runs every
 selected scenario once in each environment. `default` is a name `--env`
 takes too, whether or not the config defines it: it is the environment a
-run without `--env` uses (the top-level settings, or `environments.default`
-when the program file defines one) and the name `run.json` gives it, so
+run without `--env` uses when no environment declares `conditions`, and
+the one `nuka do` without `--env` uses (the top-level settings, or
+`environments.default` when the program file defines one), and the name
+`run.json` gives it, so
 `--env default --env staging` runs both. The environments run one after
 another in the order given, the whole selection in `a` and then the whole
 selection in `b`, so two environments never share a target at once, and
@@ -3545,13 +3561,13 @@ each pass is the run it would have been alone: its own env files, secrets,
 version probe, world, and policy, its own BeforeAll and AfterAll, and
 its own `"process"`-scope fixtures, torn down before the next environment
 starts, and its world stopped (see "Program"). An environment stays generic
-configuration: nukadoko has no notion of a feature flag, and what differs
-between two environments is whatever their env files and program fields
-say. Each scenario entry carries its `environment`,
-and `verdicts` holds one cell per scenario and environment, red when any
-execution in it is red. The exit code is red when any cell is red. Naming
-one environment twice is refused before anything runs, since its cells
-could not be told apart. The other flags compose with it as follows.
+configuration: what differs between two environments is whatever their
+fields say, and the one thing nukadoko reads in it beyond running it is
+`conditions`, which gives each cell a role and sets nothing (see
+"Verdicts"). Each scenario entry carries its `environment`, and `table`
+holds one cell per criterion and environment. The exit code is red when a
+row is red. Naming one environment twice is refused before anything runs,
+since its cells could not be told apart. The other flags compose with it as follows.
 `--repeat <n>` repeats inside each environment, so a cell holds `n`
 executions. A `:line` target selects the scenarios, and each selected one
 runs in every environment. Under `--concurrency`, each environment is a
@@ -3671,7 +3687,7 @@ to act on the run without opening another file:
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "nukadoko": "...",
   "command": "run",
   "check": "ran",
@@ -3694,7 +3710,7 @@ to act on the run without opening another file:
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
-  "counts": { "scenarios": 1, "passed": 0, "failed": 1 },
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "controls": 0, "not_run": 0 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
@@ -3757,20 +3773,27 @@ to act on the run without opening another file:
       ],
       "hooks": [],
       "do": "nuka run features/greet.feature:4",
+      "role": "required",
       "claims": { "held": 0, "broken": 1 }
     }
   ],
-  "verdicts": [
-    {
-      "feature": "features/greet.feature",
-      "line": 4,
-      "scenario": "greets by name",
-      "environment": "default",
-      "verdict": "failed",
-      "executions": 1,
-      "passed": 0
-    }
-  ]
+  "table": {
+    "base": null,
+    "mapping_changed": null,
+    "worlds": [{ "world": "head", "environment": "default" }],
+    "rows": [
+      {
+        "feature": "features/greet.feature",
+        "line": 4,
+        "name": "greets by name",
+        "change": null,
+        "conditions": [],
+        "cells": [{ "world": "head", "environment": "default", "role": "required", "outcome": "fail", "line": 6, "runs": 1 }],
+        "verdict": "failed",
+        "reason": "a claim broke at line 6 in default"
+      }
+    ]
+  }
 }
 ```
 
@@ -3778,8 +3801,9 @@ to act on the run without opening another file:
   says whether the working tree then had a change `git status --porcelain`
   reports, an untracked file included. It is `null` outside a git
   repository or before the first commit. `environments` lists each
-  environment the run targeted, in the order `--env` gave them (`default`
-  without `--env`), with `target_version`, what that environment's version
+  environment the run targeted, in the order `--env` gave them (or the
+  order a run without `--env` selected them), with `conditions` when the
+  environment declares them, `target_version`, what that environment's version
   probe answered, `null` without one, and `base_url`, the URL of its
   world, `null` without one, so the run names the instance it
   judged and not only the commit. `base_url` is redacted like
@@ -3795,7 +3819,8 @@ to act on the run without opening another file:
   file, and `full` otherwise. A partial run is a debugging result, not
   what a reviewer should read as the feature passing (see "Review").
 - `scenarios` has one entry per scenario execution, in the order each
-  finished, with the `environment` it ran in. Each step has its `line` in the feature file, its `text`, the
+  finished, with the `environment` it ran in and the `role` of its cell,
+  `required` or `control` (see "Verdicts"). Each step has its `line` in the feature file, its `text`, the
   `step` it matched (`null` when none or more than one), and its `status`.
   A step that began has a `step_record_id` (the value `nuka do --use`
   takes) and a `record`, the step record's directory, with its `mutates`
@@ -3834,7 +3859,8 @@ to act on the run without opening another file:
   no error that held the run back, and `skipped` under `nuka run
   --no-check`, so a run that started past the check says so.
 - A failed scenario has `do`, the command that runs it alone: the same
-  command the `scenario-failed` finding's `do:` line prints. A scenario that
+  command the `scenario-failed` finding's `do:` line prints. A control
+  has none, since its failure is what the table reads as proof. A scenario that
   wrote its own evidence (a final screenshot, a hook's trace or attachment)
   has `evidence`, its directory under the run's `scenarios/`. A scenario
   that wrote none has no `evidence`, and its empty directory is removed
@@ -3850,20 +3876,27 @@ to act on the run without opening another file:
   note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
   in text.
-- `verdicts` has one cell per selected scenario and environment, features
-  by path, scenarios by line, and environments in the order given:
-  `verdict` is `failed` when any execution in the cell failed, `executions`
-  counts them (more than 1 under `--repeat`), and `passed` counts the ones
-  that passed. A selected scenario that never ran in an environment, such
-  as after that environment's BeforeAll failed, has a cell with `verdict`
-  `not-run` and 0 executions. It is the table the run summary draws.
-- `counts` holds `scenarios`, `passed`, and `failed`, which count
-  executions, and `not_run`, which counts the `not-run` cells.
+- `table` is the verdict table (see "Verdicts"). `worlds` lists its
+  columns, `{ world, environment }`, in the run's environment order; the
+  world is `head`, and `base` and `mapping_changed` are `null`, since
+  this release compares the run with no other tree. `rows` has one row
+  per selected criterion, features by path and scenarios by line: its
+  `feature`, `line`, and `name`, `change` (`null`), the condition tags
+  and `@held` it carries as `conditions`, one cell per column, its
+  `verdict` (`held`, `proven`, or `failed`), and the `reason`, one
+  sentence. A cell has its `world`, `environment`, `role`, `outcome`
+  (`pass`, `fail`, `broke`, `flaky`, or `not-run`), the `line` the last
+  three name, `runs`, the executions it holds, and for `not-run` a
+  `reason`. It is the table the run summary draws.
+- `counts` holds `scenarios`, `passed`, and `failed`, which count the
+  executions of required cells, `controls`, which counts the executions
+  of controls, proof runs included, and `not_run`, which counts the
+  `not-run` cells.
 - A BeforeAll or AfterAll failure is a `hook-failed` finding that names
   its environment, with a `do` that runs the same targets in it.
 - `verdict` is the exit code's: it also counts a BeforeAll or AfterAll
-  failure that no scenario carries, so it can be `failed` while
-  `counts.failed` is 0.
+  failure that no scenario carries, and a row with no required cell, so it
+  can be `failed` while `counts.failed` is 0.
 
 Every path in `run.json` (a step's `record`, a `used` entry's `record`, a
 scenario's `evidence.dir`) is relative to the run directory, the one that
@@ -3950,6 +3983,109 @@ An undefined step fails the scenario naming the text that failed to match
 and suggests `nuka scaffold`. An agent following the bundled skill authors
 the missing typed step and submits it as a PR: the feature backlog drives
 vocabulary growth.
+
+### Verdicts
+
+A run ends in one table. A row is one criterion: one scenario, or one
+Examples row of an outline. A column is one world and environment. In this
+release the one world is `head`, the tree the run was started in, so a
+column is one environment of the run. Where a row meets a column is a
+cell, and each row has one verdict, which the exit code follows.
+
+A scenario that passes in every environment shows the code does what it
+says, but not that the scenario would notice if it did not. A feature
+behind a switch is where that question has an answer: run the scenario
+where the switch is off, and a Then that fails there shows the scenario
+tells the two apart. So an environment declares the switches of its
+program as `conditions` (see "Program"), and a scenario names the
+conditions it needs with tags on its `Feature:`, `Rule:`, `Scenario:`, or
+`Examples:` line, which add up the way Gherkin tags do:
+
+- `@with:<condition>` needs the condition on: `true`, or any value.
+- `@with:<condition>=<value>` needs that value. `@with:x=true` names the
+  text `true`, which the boolean `true` never equals.
+- `@without:<condition>` needs it off: `false`, or not declared.
+
+A condition name is letters, digits, `_`, `.`, and `-`, and a value has no
+whitespace. A cell is `required` where its environment meets every
+condition tag of its row, and a `control` elsewhere. A row with no
+condition tag is required in every environment. A control runs like any
+cell and never turns the run red: its conditions do not hold, so a Then
+that fails there is evidence for the scenario, and one that passes there
+is evidence of nothing. `@held` is read and kept in the row's
+`conditions`; it changes no cell and no verdict.
+
+```gherkin
+@with:banner
+Scenario: the sale banner is shown
+  When the visitor opens the home page
+  Then the banner reads "Sale"
+```
+
+In a run of `banner-on` (`conditions: { banner: true }`) and `banner-off`
+(`{ banner: false }`), the cell in `banner-on` is required and the one in
+`banner-off` is a control.
+
+A run without `--env` selects every environment that declares
+`conditions`, in the order the program file lists them, and `default`
+when none does. An environment that declares none, such as a deployment
+target, runs when `--env` names it. `nuka check` reads the tags against
+the environments a run would select (the ones `nuka check --env` names,
+or the ones a run without `--env` selects), and reports three errors:
+
+- `condition-tag-malformed`: a tag that starts `@with:` or `@without:` and
+  is not one of the three forms.
+- `condition-unknown`: a tag naming a condition no environment declares.
+  When the switch was removed, the side that was kept decides: the tag
+  goes when the code of its `@with:` side stayed, and the scenario goes
+  when the code of its other side did.
+- `condition-unmet`: a scenario no selected environment meets, so every
+  cell of it would be a control.
+
+**Cells.** A cell is what its executions came to:
+
+| cell | its executions |
+| --- | --- |
+| `pass` | every one passed |
+| `fail@<line>` | every one stopped at a claim that broke at that line, in Then position |
+| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a line no step matches, a claim nukadoko could not judge, or, at the scenario's line, a hook |
+| `flaky@<line>` | they disagree; the line is the first one's that did not pass |
+| `·` | none ran, and `reason` says why: the program did not start for its world, or a BeforeAll failed |
+
+Only a Then proves. A When that errors where the behaviour is absent says
+nothing about whether the Then can tell the difference, so it is
+`broke`, never `fail`.
+
+A required cell runs once, or `--repeat` times. A control that failed at a
+Then line runs again, in the same pass and the same world, until it has
+failed at that line `--proof-runs` times (2 by default), or until a run
+disagrees, which makes it `flaky`. One failure could be the program being
+slow once, and proof is the one verdict that reads a failure as good
+news, so it is the one that needs the failure repeated. A control that
+passed or broke is not run again. Each proof run is a `proof run <k>/<n>`
+line on stderr, apart from the numbered scenario lines, and a control's
+own scenario line ends with `(control)`.
+
+**Verdicts.** A row is:
+
+- `failed` when a required cell is not `pass`, or when the row has no
+  required cell, which only a run under `--no-check` reaches, since `nuka
+  check` reports `condition-unmet`;
+- `proven` when every required cell is `pass` and a control is `fail` in
+  `--proof-runs` runs or more;
+- `held` otherwise: every required cell is `pass`, and no control proves it.
+
+The exit code is 1 when a row is `failed`, or when the run failed outside
+every scenario (a hook, a world, a worker). `held` and `proven` are both
+green. A `held` row whose control passed is the one to read: the switch
+does not reach what the Then checks, or the Then does not check what the
+switch changes. The stderr count line counts the executions of required
+cells, and a run with a control adds a `criteria: <held> held, <proven>
+proven, <failed> failed` line after it.
+
+The table is `run.json`'s `table`, and the run summary opens with it: a
+row per criterion, a column per world and environment, and under it one
+line for each red row that says why, with where its execution stopped.
 
 ### Single steps (the agent path)
 
@@ -4815,8 +4951,23 @@ holds:
   pull request comment it posted earlier;
 - a title with the run's verdict (the exit code's, so an AfterAll failure
   with every scenario green still reads `failed`, with a sentence saying the
-  failure was outside every scenario, which names each world whose program
-  did not start, with its log) and its scenario counts;
+  failure was outside every scenario that ran, which names each world whose
+  program did not start, with its log), how many criteria, and how many
+  rows are `held`, `proven`, and `failed`;
+- the verdict table (see "Verdicts"): a row per criterion, by feature path
+  and line, with its verdict, its location, name, and condition tags, and
+  a column per world and environment, named `head <environment>`, whose
+  cell reads `pass`, `fail@<line>`, `broke@<line>`, `flaky@<line>`, or
+  `·`, with `(control)` for a control and the number of runs when there
+  is more than one;
+- one line for each red row: its location, its name, and the row's
+  reason, and under it, for a cell that ran, where its first execution
+  that did not pass stopped (the first step that did not pass or skip,
+  otherwise the first failed hook), the first line of that error, each
+  `used` step whose process exited nonzero with its exit code and the
+  first line of its stderr, or of its stdout when stderr is empty (as on
+  stderr), the last command the step ran through `runCommand` that did
+  not exit 0, and the record's path;
 - the condition: the short commit sha and whether the tree had uncommitted
   changes (from `commit`, or "unknown" without one), each environment and its
   target version, a line for each world whose program log was not read,
@@ -4832,16 +4983,6 @@ holds:
   scenario that is not unchanged and of each removed criterion in a
   `gherkin` block, and under each changed step file every scenario that
   names it;
-- one table per feature file, by path, with a row per scenario in line
-  order: scenario, line, one column per environment, named after it, with
-  that cell's verdict (`<passed> of <n> passed` under `--repeat`), the
-  duration of every execution in the row, and for a failed one where it
-  failed (the first step that did not pass or skip, otherwise the first
-  failed hook), the first line of that error, each `used` step whose process
-  exited nonzero with its exit code and the first line of its stderr, or of
-  its stdout when stderr is empty (as on stderr), the last command the step ran through `runCommand` that did not
-  exit 0, and the record's path, once for each environment it failed in
-  and prefixed by that environment when the run had more than one;
 - "Claims", one entry per Then that declared claims: its location and
   sentence, the number of readings when there was more than one, and under
   it one line per claim, in the words of its failure message with the
@@ -5098,8 +5239,10 @@ a directory at that path, stops setup. The refusal is
 without `--no-check`), and `nuka do`, and it names the
 configured path and the errno. The same read fills the `env` fixture and the secret set, so
 the two agree on whether the file was loaded.
-Only an environment can define `policy` and `version`. Without `--env`, the
-environment name is `default`, which needs no entry. An entry named `default`
+Only an environment can define `policy`, `version`, and `conditions`.
+Without `--env`, `nuka do` uses the environment named `default`, which
+needs no entry, and so does `nuka run` when no environment declares
+`conditions` (see "Verdicts"). An entry named `default`
 is still allowed, and `policy: "read-only"` on it is what keeps a `nuka do`
 typed without `--env` from writing anywhere. An explicitly named
 environment must exist because its name asserts that it exists. The `version`
@@ -5287,7 +5430,10 @@ An agent follows this process for a ticket's acceptance criteria:
    feature and publishes the run summary beside it (see `docs/ci.md`),
    with `--since <base>` naming the base that was last approved.
 7. A person reads the feature and the summary. The run is the evidence;
-   where the person records their approval is the team's process.
+   where the person records their approval is the team's process. The
+   table the summary opens with says, for each criterion, whether a run
+   where its conditions do not hold showed it fail (`proven`) or only
+   that it passed (`held`) (see "Verdicts").
 
 Steps 1 through 4 contain the work. New typed steps and the feature are
 ordinary review material. Steps 5 and 6 are mechanical. Step 7 is the
@@ -5732,17 +5878,25 @@ The npm package is `nukadoko`. The one command it installs is `nuka`.
 `nuka --help` ends by naming `node_modules/nukadoko/llms.txt`, the file an agent with no skill loaded reads first.
 
 ```
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--proof-runs <n>]
                               check, then execute scenarios (featuresDir when
                               no target is given). An error nuka check reports
                               for the selected scenarios stops the run before
                               anything executes (exit 2, no record);
                               --no-check skips that check. Step records, plus the Allure
                               and messages exports their config keys turn on.
-                              --env targets a named environment ("default"
-                              when omitted); repeated, it runs every selected
-                              scenario once in each, in order, in one run
-                              with one verdict per scenario and environment.
+                              --env targets a named environment; repeated,
+                              it runs every selected scenario once in each,
+                              in order, in one run with one cell per
+                              criterion and environment. Without it, every
+                              environment that declares conditions runs,
+                              or "default" when none does. A scenario's
+                              @with:/@without: tags make its cell required
+                              where the environment meets them and a
+                              control elsewhere; a row is held, proven (a
+                              control broke a claim at a Then line in each
+                              of --proof-runs runs, default 2), or failed,
+                              and the exit code is 1 when a row is failed.
                               With nukadoko.program.ts, each environment's
                               world (build, prepare, serve, setup) starts
                               before its scenarios and stops after them;
@@ -5786,7 +5940,7 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               or not (a step's program_log_late is only in
                               run.json, written when the world stops). --json prints
                               run.json (commit, environments, selection,
-                              counts, verdicts, each scenario's steps with line,
+                              counts, table, each scenario's steps with line,
                               status, record, and error, each failed
                               scenario's do, the findings) as the one
                               document on stdout instead; run.json is
@@ -6084,7 +6238,7 @@ nuka scaffold --feature <path>
                               name, --pattern, --then, --command, --from,
                               --cwd, --argv, --request, --body,
                               --description, or --replace
-nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
+nuka check [feature..] [--json] [--fail-on <code>] [--env <name>]...
                               static checks: pattern/schema mismatches, a
                               Then bound to a step that runs, a claim step
                               bound outside Then position, a claim whose
@@ -6140,7 +6294,11 @@ nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
                               looks secret but is not in secrets.redact, a
                               secrets.redact key too short to redact, a
                               secrets.public or secrets.redact key no envFile
-                              defines; with no target, scans featuresDir plus
+                              defines, a condition tag that does not read,
+                              names a condition no environment declares, or
+                              that no environment of the run meets (read
+                              against --env's environments, or the ones a
+                              run without --env selects); with no target, scans featuresDir plus
                               additionalFeatureDirs and adds notes, none of
                               which changes the exit code: a `from` nothing
                               exercises, a patterned step no feature binds
@@ -6155,8 +6313,8 @@ nuka check [feature..] [--env <name>] [--json] [--fail-on <code>]
                               severity; a code a check report never contains
                               is refused; --env <name> (repeatable) checks
                               the placeholders of the worlds a nuka run with
-                              the same --env flags would start, the default
-                              world without it, and no other world;
+                              the same --env flags would start, and no
+                              other world;
                               targets select files the way nuka run's do
                               (several files, a directory walked for .feature
                               files), so the errors
@@ -6231,7 +6389,7 @@ has no text form, always does:
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "nukadoko": "0.17.0",
   "command": "check",
   "verdict": "failed",

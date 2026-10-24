@@ -132,8 +132,14 @@ export interface RunScenario {
   readonly evidence?: ScenarioEvidence;
   readonly teardown_errors?: readonly { readonly fixture: string; readonly message: string }[];
   /** For a failed scenario: the command that runs it alone, in its own
-   * environment. */
+   * environment. Absent for a control execution, whose failure is what the
+   * table reads as proof, not a failure to rerun. */
   readonly do?: string;
+  /** How this execution counts in the table (`table.rows[].cells[].role`):
+   * `required` where the environment meets every condition the scenario's
+   * tags name, `control` where it does not. Absent in a run.json an
+   * earlier build wrote. */
+  readonly role?: "required" | "control";
   /** What moved in this scenario's criteria since `nuka run --since`'s
    * ref. Absent in a run.json an earlier build wrote. */
   readonly criteria?: RunCriteria;
@@ -209,19 +215,62 @@ export interface RunSince {
   readonly step_files: readonly { readonly file: string; readonly change: StepFileChange }[];
 }
 
-/** One scenario under one environment: `failed` when any of its
- * executions failed (src/run/verdicts.ts). */
-export interface RunVerdict {
+/** What one cell of the table holds after its executions: `pass` when
+ * every one passed; `fail` when every one broke a claim of a Then at
+ * `line`; `broke` when every one stopped at `line` before a claim there
+ * was judged (a Given or When error, an undefined line, a claim nukadoko
+ * could not judge, a hook); `flaky` when they disagree, `line` naming
+ * the first that did not pass; `not-run` when none ran, with the reason. */
+export type RunCellOutcome = "pass" | "fail" | "broke" | "flaky" | "not-run";
+
+/** One criterion in one world and environment (src/run/verdict-table.ts). */
+export interface RunTableCell {
+  /** The world the cell ran in: `head`, the tree the run was started in. */
+  readonly world: "head";
+  readonly environment: string;
+  readonly role: "required" | "control";
+  readonly outcome: RunCellOutcome;
+  /** The feature file line `fail`, `broke`, and `flaky` name. */
+  readonly line?: number;
+  /** The executions the cell holds: more than 1 under `--repeat`, and for
+   * a control whose Then failed, the proof runs (`--proof-runs`). */
+  readonly runs: number;
+  /** Why a `not-run` cell did not run. */
+  readonly reason?: string;
+}
+
+/** What the table says of one criterion: green `held` or `proven`, red
+ * `failed`. */
+export type RunRowVerdict = "held" | "proven" | "failed";
+
+/** One criterion: one scenario, or one Examples row of an outline. */
+export interface RunTableRow {
   readonly feature: string;
   readonly line: number;
-  readonly scenario: string;
-  readonly environment: string;
-  /** `not-run` for a selected scenario that never ran in that
-   * environment, such as after its BeforeAll failed. */
-  readonly verdict: "passed" | "failed" | "not-run";
-  /** More than 1 under `--repeat`; 0 for `not-run`. */
-  readonly executions: number;
-  readonly passed: number;
+  readonly name: string;
+  /** How the criterion compares with a base ref: `null`, since this
+   * release compares none. */
+  readonly change: null;
+  /** The criterion's condition tags and `@held`, as written, each once. */
+  readonly conditions: readonly string[];
+  /** One cell per environment, in the run's order. */
+  readonly cells: readonly RunTableCell[];
+  readonly verdict: RunRowVerdict;
+  /** Why the row has its verdict, in one sentence. */
+  readonly reason: string;
+}
+
+/** run.json's `table`: one row per criterion, one cell per world and
+ * environment (docs/spec.md "Verdicts"). */
+export interface RunTable {
+  /** The ref the run compared against: `null`, since this release
+   * compares none. */
+  readonly base: null;
+  /** Whether the mapping changed since the base: `null` without one. */
+  readonly mapping_changed: null;
+  /** The table's columns, in order: each world and environment. */
+  readonly worlds: readonly { readonly world: "head"; readonly environment: string }[];
+  readonly rows: readonly RunTableRow[];
 }
 
 /** A condition the run ran under: an environment from nukadoko.program.ts, or `default`. */
@@ -233,6 +282,9 @@ export interface RunEnvironment {
    * one, so the run names the instance it judged and not only the commit.
    * Absent in a run.json an earlier build wrote. */
   readonly base_url?: string | null;
+  /** What the environment declares under `conditions` in
+   * nukadoko.program.ts; present only when it declares them. */
+  readonly conditions?: Readonly<Record<string, boolean | string>>;
 }
 
 /** One command a world ran, in the order it ran. */
@@ -299,8 +351,9 @@ export type RunFields = {
    * the run started; `null` outside git or before the first commit. */
   readonly commit: { readonly sha: string; readonly dirty: boolean } | null;
   /** Every environment the run ran under, in the order `--env` named
-   * them; `default` alone without `--env`. Each selected scenario ran once
-   * per environment. */
+   * them, or without `--env`, the ones that declare conditions in the
+   * program file's order, or `default` alone when none does. Each
+   * selected scenario ran once per environment. */
   readonly environments: readonly RunEnvironment[];
   /** One per world the run started, in the order it started them; empty
    * when the tree has no program file. Absent in a run.json an earlier
@@ -313,14 +366,22 @@ export type RunFields = {
    * held it back; `ran` otherwise. Absent in a run.json an earlier build
    * wrote. */
   readonly check?: "ran" | "skipped";
-  /** `scenarios`, `passed`, and `failed` count executions; `not_run`
-   * counts the `verdicts` cells that never ran. */
-  readonly counts: { readonly scenarios: number; readonly passed: number; readonly failed: number; readonly not_run: number };
+  /** `scenarios`, `passed`, and `failed` count the executions of
+   * required cells; `controls` counts the executions of control cells,
+   * whatever they ended in; `not_run` counts the table's cells that never
+   * ran. */
+  readonly counts: {
+    readonly scenarios: number;
+    readonly passed: number;
+    readonly failed: number;
+    readonly controls: number;
+    readonly not_run: number;
+  };
   /** One entry per scenario execution, in the order they finished. */
   readonly scenarios: readonly RunScenario[];
-  /** One entry per (scenario, environment), red when any execution of it
-   * was red. */
-  readonly verdicts: readonly RunVerdict[];
+  /** The verdict table: what each criterion's cells came to, and the
+   * verdict the exit code follows. */
+  readonly table: RunTable;
   /** `nuka run --since`'s ref, or `null` without it. Absent in a run.json
    * an earlier build wrote. */
   readonly since?: RunSince | null;
@@ -336,9 +397,18 @@ export interface RunDocument extends RunFields {
   readonly findings: readonly Finding[];
 }
 
-export function countScenarios(scenarios: readonly Pick<RunScenario, "status">[], verdicts: readonly Pick<RunVerdict, "verdict">[] = []): RunFields["counts"] {
-  const passed = scenarios.filter((scenario) => scenario.status === "passed").length;
-  return { scenarios: scenarios.length, passed, failed: scenarios.length - passed, not_run: verdicts.filter((cell) => cell.verdict === "not-run").length };
+/** The counts of `scenarios` and `table`. An entry without a `role`
+ * counts as required. */
+export function countScenarios(scenarios: readonly Pick<RunScenario, "status" | "role">[], table: Pick<RunTable, "rows">): RunFields["counts"] {
+  const required = scenarios.filter((scenario) => scenario.role !== "control");
+  const passed = required.filter((scenario) => scenario.status === "passed").length;
+  return {
+    scenarios: required.length,
+    passed,
+    failed: required.length - passed,
+    controls: scenarios.length - required.length,
+    not_run: table.rows.reduce((total, row) => total + row.cells.filter((cell) => cell.outcome === "not-run").length, 0),
+  };
 }
 
 export function runResultPath(rootDir: string, stateDir: string, runId: string): string {

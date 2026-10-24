@@ -243,7 +243,7 @@ export async function runScaffoldFeature(options: RunScaffoldFeatureOptions): Pr
 
   let analysis;
   try {
-    analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features);
+    analysis = await analyzeRunSelectionKeepingSteps(rootDir, selected.features, undefined);
   } catch (error) {
     return refused(restated(error, formatVocabularyError(error), "unexpected-error", "scaffold"));
   }

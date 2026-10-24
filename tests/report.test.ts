@@ -150,7 +150,7 @@ describe("nuka report", () => {
     expect(result.exitCode).toBe(2);
     expect(result.stderr).toBe("");
     expect(JSON.parse(result.stdout)).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       nukadoko: readOwnVersion(),
       command: "report",
       verdict: "refused",
@@ -170,7 +170,7 @@ describe("nuka report", () => {
     const result = await cli(["report", "--format", "allure", "--json"]);
     expect(result.exitCode).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({
-      schema_version: 3,
+      schema_version: 4,
       nukadoko: readOwnVersion(),
       command: "report",
       verdict: "passed",
@@ -241,7 +241,7 @@ describe("nuka report", () => {
           const document = JSON.parse(readFileSync(path.join(copy, "run.json"), "utf8")) as Record<string, unknown>;
           writeFileSync(path.join(copy, "run.json"), JSON.stringify({ ...document, schema_version: 1 }));
         },
-        "run.json has schema_version 1, and this release reads 3",
+        "run.json has schema_version 1, and this release reads 4",
         "Render a run directory that nuka run of this release wrote, unedited; the message names what is wrong.",
       ],
       [

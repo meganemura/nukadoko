@@ -72,7 +72,7 @@ describe("nuka run when run.json cannot be written", () => {
     const runsDir = path.join(rootDir, ".nukadoko", "runs");
     const [runId] = readdirSync(runsDir);
     const summary = readFileSync(path.join(runsDir, runId!, "summary.md"), "utf8");
-    expect(summary.split("\n").slice(0, 2)).toEqual(["<!-- nukadoko:run -->", "# nukadoko run failed: 1 scenario, 1 passed"]);
+    expect(summary.split("\n").slice(0, 2)).toEqual(["<!-- nukadoko:run -->", "# nukadoko run failed: 1 criterion, 1 held"]);
     expect(summary).toContain("run-result-not-written");
     expect(readFileSync(stepSummary, "utf8")).toContain(summary);
   });

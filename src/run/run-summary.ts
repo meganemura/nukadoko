@@ -2,24 +2,20 @@ import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
-import type { RunClaim, RunDocument, RunScenario, RunVerdict } from "../record/run-result.js";
+import type { RunClaim, RunDocument, RunScenario, RunTableCell, RunTableRow } from "../record/run-result.js";
 import type { MeasuredChannel } from "../record/types.js";
 import { claimLine } from "../report/summary/claim-line.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { scenarioKey } from "./criteria-since.js";
-import {
-  exitedProducers,
-  firstErrorLine,
-  formatStepDuration,
-  formatSummaryDuration,
-  type ExitedProducer,
-} from "./progress-log.js";
+import { exitedProducers, firstErrorLine, formatSummaryDuration, type ExitedProducer } from "./progress-log.js";
+import { cellText as cellWord } from "./verdict-table.js";
 
 // Responsibility: the Markdown run summary one `nuka run` invocation leaves
 // for a person: in its own run directory always, appended to
 // `$GITHUB_STEP_SUMMARY` when that is set, and wherever
 // `nuka report --format markdown` is pointed later. It says what ran, at which commit, under which condition, and how
-// each scenario ended.
+// each criterion came out: the verdict table first, then why each red row
+// is red.
 //
 // The renderer reads run.json and nothing else, so the summary is a view of
 // the run's one record and can never say something run.json does not. The
@@ -62,14 +58,15 @@ function cellText(text: string): string {
 // backslash inside a code span. A code span shows any other `\` as itself,
 // so those are left alone.
 function cellCode(text: string): string {
+  return codeSpan(text).replace(/\|/g, "\\|");
+}
+
+// A code span outside a table, where a `\` before `|` would show.
+function codeSpan(text: string): string {
   const longestRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
   const fence = "`".repeat(longestRun + 1);
   const padded = text.startsWith("`") || text.endsWith("`") ? ` ${text} ` : text;
-  return `${fence}${padded.replace(/\|/g, "\\|")}${fence}`;
-}
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? "" : "s"}`;
+  return `${fence}${padded}${fence}`;
 }
 
 /** Findings the scenario tables do not already show. */
@@ -77,7 +74,7 @@ function runFindings(document: RunDocument): readonly Finding[] {
   return document.findings.filter((finding) => finding.code !== "scenario-failed");
 }
 
-/** Why a run with no failed scenario failed. A world that did not start is
+/** Why a run in which no scenario that ran failed, failed. A world that did not start is
  * named with its log, since no scenario ran there and its log is where the
  * reason is; any other failure outside every scenario is a hook's or a
  * worker's, which the findings name. */
@@ -85,11 +82,11 @@ function outsideScenarios(document: RunDocument): string[] {
   const unstarted = (document.worlds ?? []).filter((world) => world.error !== null);
   if (unstarted.length === 0) {
     return [
-      "No scenario failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, " +
+      "No scenario that ran failed, but the run did: a BeforeAll or AfterAll hook, or a worker that wrote no scenario, " +
         "failed outside every scenario. The findings below name it.",
     ];
   }
-  const sentences = ["No scenario failed, but the run did."];
+  const sentences = ["No scenario that ran failed, but the run did."];
   for (const world of unstarted) {
     const log = world.log === null ? null : document.run_dir === undefined ? world.log : `${document.run_dir}/${world.log}`;
     sentences.push(
@@ -105,23 +102,27 @@ function outsideScenarios(document: RunDocument): string[] {
   return [sentences.join(" ")];
 }
 
-// The counts are of verdicts, one per scenario and environment: under
-// `--repeat` a scenario that failed once has not passed, and under several
-// environments one scenario is as many verdicts as environments.
+// The counts are of rows, one per criterion, whatever the environments
+// and repeats: the verdict word is what a row comes to across its cells.
 function renderTitle(document: RunDocument): string[] {
-  const failed = document.verdicts.filter((cell) => cell.verdict === "failed").length;
-  const notRun = document.verdicts.filter((cell) => cell.verdict === "not-run").length;
-  const passed = document.verdicts.length - failed - notRun;
-  const rows = new Set(document.verdicts.map((cell) => scenarioKey(cell.feature, cell.line))).size;
-  const scope =
-    document.environments.length > 1
-      ? `${plural(rows, "scenario")} in ${document.environments.length} environments`
-      : plural(rows, "scenario");
-  const counts = [scope, `${passed} passed`];
-  if (failed > 0) counts.push(`${failed} failed`);
-  if (notRun > 0) counts.push(`${notRun} not run`);
+  const rows = document.table.rows;
+  const count = (verdict: RunTableRow["verdict"]): number => rows.filter((row) => row.verdict === verdict).length;
+  const criteria = countOf(rows.length, "criterion", "criteria");
+  const scope = document.environments.length > 1 ? `${criteria} in ${document.environments.length} environments` : criteria;
+  const counts = [scope, `${count("held")} held`];
+  if (count("proven") > 0) counts.push(`${count("proven")} proven`);
+  if (count("failed") > 0) counts.push(`${count("failed")} failed`);
   const lines = [`# nukadoko run ${document.verdict}: ${counts.join(", ")}`];
-  if (document.verdict === "failed" && failed === 0) lines.push("", ...outsideScenarios(document));
+  // A red row whose red cells all did not run says why in its reason, but
+  // not where to look: a world that did not start names its log here. A row
+  // red for a cell that ran, or for having no required cell, is the table's
+  // own to explain.
+  const explained = rows.some((row) => {
+    if (row.verdict !== "failed") return false;
+    const required = row.cells.filter((cell) => cell.role === "required");
+    return required.length === 0 || required.some((cell) => cell.outcome !== "pass" && cell.outcome !== "not-run");
+  });
+  if (document.verdict === "failed" && !explained) lines.push("", ...outsideScenarios(document));
   return lines;
 }
 
@@ -132,9 +133,10 @@ function renderCondition(document: RunDocument): string[] {
       : `- commit: \`${document.commit.sha.slice(0, 7)}\`${document.commit.dirty ? " with uncommitted changes" : ""}`;
   const environments = document.environments.map((environment) => {
     const at = environment.base_url === undefined || environment.base_url === null ? "" : ` at ${environment.base_url}`;
-    return environment.target_version === null
-      ? `- environment: ${environment.name}${at}`
-      : `- environment: ${environment.name}${at} (target version ${environment.target_version})`;
+    const declared = environment.conditions === undefined ? [] : [`conditions ${conditionsText(environment.conditions)}`];
+    const version = environment.target_version === null ? [] : [`target version ${environment.target_version}`];
+    const notes = [...declared, ...version];
+    return `- environment: ${environment.name}${at}${notes.length === 0 ? "" : ` (${notes.join(", ")})`}`;
   });
   // Once per world, so a reader of an empty slice knows why it is empty.
   // Decided from the whole log when the world stopped: a log with no line
@@ -221,86 +223,75 @@ function describeFailure(scenario: RunScenario): SummaryFailure | undefined {
   return undefined;
 }
 
-function renderFailureCell(failure: SummaryFailure | undefined): string {
-  if (failure === undefined) return "";
-  const parts = [`${cellText(failure.where)}: ${cellCode(failure.errorLine)}`];
+// Where an execution stopped, as the list item under a red row's reason
+// says it, outside the table.
+function renderFailure(failure: SummaryFailure): string {
+  const parts = [`${cellText(failure.where)}: ${codeSpan(failure.errorLine)}`];
   for (const producer of failure.exited ?? []) {
-    parts.push(`used ${cellText(producer.step)} exit ${producer.exitCode}: ${cellCode(producer.outputLine)}`);
+    parts.push(`used ${cellText(producer.step)} exit ${producer.exitCode}: ${codeSpan(producer.outputLine)}`);
   }
-  if (failure.command !== undefined) parts.push(`ran ${cellCode(failure.command)}`);
-  if (failure.recordPath !== null) parts.push(`record ${cellCode(failure.recordPath)}`);
-  return parts.join("<br>");
+  if (failure.command !== undefined) parts.push(`ran ${codeSpan(failure.command)}`);
+  if (failure.recordPath !== null) parts.push(`record ${codeSpan(failure.recordPath)}`);
+  return parts.join("; ");
 }
 
-function durationOf(scenario: RunScenario): number {
-  return Date.parse(scenario.finished_at) - Date.parse(scenario.started_at);
+function conditionsText(conditions: Readonly<Record<string, boolean | string>>): string {
+  const entries = Object.entries(conditions);
+  return entries.length === 0 ? "none" : entries.map(([name, value]) => `${name}: ${String(value)}`).join(", ");
 }
 
-// What one cell of a scenario's row says: its verdict, or how many of its
-// executions passed under `--repeat`.
-function verdictCell(cell: RunVerdict | undefined): string {
-  if (cell === undefined || cell.verdict === "not-run") return "not run";
-  if (cell.executions === 1) return cell.verdict;
-  return `${cell.passed} of ${cell.executions} passed`;
+// A cell as the table shows it: what it came to, and, beside it, that it is
+// a control and how many runs it holds when more than one, since a control
+// proves only with `--proof-runs` agreeing runs and the reader checks that
+// count against the word.
+function tableCell(cell: RunTableCell): string {
+  const notes = [...(cell.role === "control" ? ["control"] : []), ...(cell.runs > 1 ? [`${cell.runs} runs`] : [])];
+  return `${cellWord(cell)}${notes.length === 0 ? "" : ` (${notes.join(", ")})`}`;
 }
 
-// One table per feature file, features by path and scenarios by line, so
-// the same run reads the same way at any concurrency. A row is one
-// scenario and a column is one environment, in the order `--env` gave
-// them, so a scenario that passed in one environment and failed in another
-// reads across one line. A row's duration sums every execution it holds,
-// and its failure cell names the first failed execution in each failed
-// environment, prefixed by that environment when there is more than one.
-function renderFeatures(document: RunDocument): string[] {
-  const environments = document.environments.map((environment) => environment.name);
-  const named = environments.length > 1;
-  const executions = new Map<string, RunScenario[]>();
-  for (const scenario of document.scenarios) {
-    const key = scenarioKey(scenario.feature, scenario.line);
-    const rows = executions.get(key) ?? [];
-    rows.push(scenario);
-    executions.set(key, rows);
-  }
-  const byFeature = new Map<string, RunVerdict[][]>();
-  const rowOf = new Map<string, RunVerdict[]>();
-  for (const cell of document.verdicts) {
-    const key = scenarioKey(cell.feature, cell.line);
-    let row = rowOf.get(key);
-    if (row === undefined) {
-      row = [];
-      rowOf.set(key, row);
-      const rows = byFeature.get(cell.feature) ?? [];
-      rows.push(row);
-      byFeature.set(cell.feature, rows);
-    }
-    row.push(cell);
-  }
-  const lines: string[] = [];
-  for (const feature of [...byFeature.keys()].sort()) {
-    const rows = [...byFeature.get(feature)!].sort((a, b) => a[0]!.line - b[0]!.line);
-    lines.push(
-      "",
-      `## ${cellText(feature)}`,
-      "",
-      `| scenario | line | ${environments.map(cellText).join(" | ")} | duration | failure |`,
-      `| --- | --- | ${environments.map(() => "---").join(" | ")} | --- | --- |`,
-    );
-    for (const row of rows) {
-      const first = row[0]!;
-      const ran = executions.get(scenarioKey(first.feature, first.line)) ?? [];
-      const cells = environments.map((environment) => verdictCell(row.find((cell) => cell.environment === environment)));
-      const duration = ran.reduce((total, scenario) => total + durationOf(scenario), 0);
-      const failures = environments.flatMap((environment) => {
-        const failed = ran.find((scenario) => scenario.environment === environment && scenario.status === "failed");
-        const failure = failed === undefined ? undefined : describeFailure(failed);
-        if (failure === undefined) return [];
-        const text = renderFailureCell(failure);
-        return [named ? `${cellText(environment)}: ${text}` : text];
+// The verdict table (docs/spec.md "Verdicts"): a row per criterion, rows by
+// feature path and line, so the same run reads the same way at any
+// concurrency, and a column per world and environment, in the run's
+// environment order. The verdict is the first column, since it is what a
+// reader scans for.
+function renderTable(document: RunDocument): string[] {
+  const { worlds, rows } = document.table;
+  if (rows.length === 0) return [];
+  return [
+    "",
+    `| verdict | criterion | ${worlds.map((column) => cellText(`${column.world} ${column.environment}`)).join(" | ")} |`,
+    `| --- | --- | ${worlds.map(() => "---").join(" | ")} |`,
+    ...rows.map((row) => {
+      const tags = row.conditions.length === 0 ? "" : ` ${row.conditions.map((tag) => cellCode(tag)).join(" ")}`;
+      const cells = worlds.map((column) => {
+        const cell = row.cells.find((entry) => entry.world === column.world && entry.environment === column.environment);
+        return cell === undefined ? "" : tableCell(cell);
       });
-      lines.push(
-        `| ${cellText(first.scenario)} | ${first.line} | ${cells.join(" | ")} | ${formatStepDuration(duration)} | ${failures.join("<br>")} |`,
-      );
-    }
+      return `| ${row.verdict} | ${cellCode(`${row.feature}:${row.line}`)} ${cellText(row.name)}${tags} | ${cells.join(" | ")} |`;
+    }),
+  ];
+}
+
+// One line per red row, under the table: the reason the row is red, and,
+// under it, where the first execution that did not pass stopped in the
+// cell the reason names, with the error, the command, and the record a
+// reader opens next. A held or proven row's reason is in run.json; its
+// cells already say what it came to.
+function renderReasons(document: RunDocument): string[] {
+  const red = document.table.rows.filter((row) => row.verdict === "failed");
+  if (red.length === 0) return [];
+  const lines = [""];
+  for (const row of red) {
+    lines.push(`- ${codeSpan(`${row.feature}:${row.line}`)} ${cellText(row.name)}: ${cellText(row.reason)}`);
+    const cell = row.cells.find((entry) => entry.role === "required" && entry.outcome !== "pass" && entry.outcome !== "not-run");
+    const execution =
+      cell === undefined
+        ? undefined
+        : document.scenarios.find(
+            (scenario) => scenario.feature === row.feature && scenario.line === row.line && scenario.environment === cell.environment && scenario.status === "failed",
+          );
+    const failure = execution === undefined ? undefined : describeFailure(execution);
+    if (failure !== undefined) lines.push(`  - ${renderFailure(failure)}`);
   }
   return lines;
 }
@@ -375,7 +366,6 @@ function renderCriteriaSince(document: RunDocument): string[] {
 // How many unmeasured actions one line names before it counts the rest.
 const UNMEASURED_SHOWN = 3;
 
-// `plural` above adds an s, which "process" does not take.
 function countOf(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }
@@ -565,9 +555,10 @@ export function renderRunSummary(document: RunDocument): string {
   const lines = [
     RUN_SUMMARY_MARKER,
     ...renderTitle(document),
+    ...renderTable(document),
+    ...renderReasons(document),
     ...renderCondition(document),
     ...renderCriteriaSince(document),
-    ...renderFeatures(document),
     ...renderClaims(document),
     ...renderUnjudged(document),
     ...renderUnmeasured(document),
