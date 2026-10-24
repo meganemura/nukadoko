@@ -4128,10 +4128,14 @@ when the run names none. A ref feature file that does not parse is a
 
 **The mapping.** The mapping is what turns a sentence into what runs:
 every file under the features directory except the `.feature` files (the
-step files, their helpers, support code, data), the config's `fixtures`,
-`parameterTypes`, `secrets`, and `worldParameters`, and the program file's
-`conditions` on each environment and its `defaultEnvironments`, which
-decide which cells of a criterion are required. It is compared as one
+step files, their helpers, support code, data), the whole config but
+`stateDir` and `retention`, and the program file's `conditions` on each
+environment and its `defaultEnvironments`, which decide which cells of a
+criterion are required. The two config fields left out cannot change what
+a step sends or sees: one says where the records are written, the other
+how many runs of them are kept. Every other field, the browser, the
+timeouts, and the env files among them, can, so a field the config gains
+later is mapping too. It is compared as one
 unit: the run knows only that the mapping changed or that it did not,
 never which criterion a changed helper reaches. A config or program file
 that does not load at the ref counts as changed. Code outside the features

@@ -13,13 +13,14 @@ import type { NukadokoConfig } from "../config/schema.js";
 // program's code, which the base world measures. Boundary: pure. Listing
 // and hashing the files is src/run/base-run.ts's.
 //
-// The config's mapping part is `fixtures`, `parameterTypes`, `secrets`, and
-// `worldParameters`: what decides what a step receives and how a sentence
-// binds. A function in them is compared by its source text, the one thing
-// a config written in TypeScript says about it. The rest of the config
-// (where features and state live, the browser, retention, timeouts) is the
-// run's own setting, and changing it does not change what an approved
-// sentence means.
+// The config is mapping, all of it but `RUN_SETTINGS`: the fields that
+// cannot change what a step sends or sees. Naming what is left out, and not
+// what is in, keeps a field added to the config later in the comparison:
+// an earlier list of four fields left out the browser, its context, the
+// request context, the timeouts, and `envFiles`, each of which can change
+// what a step sees, so an unchanged sentence over a changed one read as
+// held. A function in the config is compared by its source text, the one
+// thing a config written in TypeScript says about it.
 //
 // The program file's `conditions` on each environment and its
 // `defaultEnvironments` are part of the mapping too, though the program file
@@ -82,10 +83,15 @@ function canonical(value: unknown, seen: Set<unknown>): unknown {
   return result;
 }
 
-/** The config's mapping part as text two trees compare (this file's
- * header). Pure. */
-export function configMappingText(config: Pick<NukadokoConfig, "fixtures" | "parameterTypes" | "secrets" | "worldParameters">): string {
-  const part = { fixtures: config.fixtures, parameterTypes: config.parameterTypes, secrets: config.secrets, worldParameters: config.worldParameters };
+/** The config fields that are not mapping, each because it cannot change
+ * what a step sends or sees: `stateDir` is where the run's records are
+ * written, and `retention` how many runs of them are kept. */
+export const RUN_SETTINGS: readonly (keyof NukadokoConfig)[] = ["stateDir", "retention"];
+
+/** The config's mapping part as text two trees compare: every field but
+ * `RUN_SETTINGS` (this file's header). Pure. */
+export function configMappingText(config: Readonly<Record<string, unknown>>): string {
+  const part = Object.fromEntries(Object.entries(config).filter(([key]) => !(RUN_SETTINGS as readonly string[]).includes(key)));
   return JSON.stringify(canonical(part, new Set()));
 }
 

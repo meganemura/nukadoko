@@ -3299,8 +3299,11 @@ parse できない基点の feature ファイルは `base-feature-unparsed` の�
 
 **対応づけ。**
 対応づけは、文を実行されるものへ変えるものです。
-features ディレクトリの `.feature` 以外のすべてのファイル(step ファイル、その補助、support のコード、データ)、config の `fixtures`、`parameterTypes`、`secrets`、`worldParameters`、そしてプログラムのファイルの各 environment の `conditions` と `defaultEnvironments` です。
+features ディレクトリの `.feature` 以外のすべてのファイル(step ファイル、その補助、support のコード、データ)、`stateDir` と `retention` を除く config のすべて、そしてプログラムのファイルの各 environment の `conditions` と `defaultEnvironments` です。
 最後の 2 つは、受け入れ基準のどのセルが必須かを決めます。
+除く config の 2 つのフィールドは、step が送るものも見るものも変えられません。
+1 つは record を書く場所で、もう 1 つはそれを何回分の run だけ残すかです。
+ブラウザ、タイムアウト、env ファイルを含むほかのフィールドはどれも変えられるので、config に後から加わるフィールドも対応づけです。
 対応づけは 1 つの単位として比べます。
 run が知るのは対応づけが変わったか変わらなかったかだけで、変わった補助がどの受け入れ基準に届くかは知りません。
 基点で読み込めない config やプログラムのファイルは、変わったと数えます。

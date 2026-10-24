@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { NukadokoConfig } from "../src/config/schema.js";
-import { compareMapping, configMappingText, programMappingOf, type MappingSnapshot } from "../src/run/mapping.js";
+import { configSchema } from "../src/config/schema.js";
+import { compareMapping, configMappingText, programMappingOf, RUN_SETTINGS, type MappingSnapshot } from "../src/run/mapping.js";
 
 // Responsibility: whether the mapping changed since `nuka run --base`'s
 // ref (src/run/mapping.ts): the files under the features directory other
@@ -77,5 +78,19 @@ describe("compareMapping", () => {
     const two = configText({ parameterTypes: [{ name: "n", regexp: /\d+/, transformer: (value: string) => Number(value) + 1 }] });
     expect(compareMapping({ ...plain, config: { text: one } }, { ...plain, config: { text: two } }).config).toBe(true);
     expect(compareMapping({ ...plain, config: { text: one } }, { ...plain, config: { text: one } }).config).toBe(false);
+  });
+});
+
+describe("configMappingText", () => {
+  it("counts every config field as mapping but where records are written and how many are kept", () =>
+    hegel.test((tc) => {
+      const base = configSchema.parse({}) as Record<string, unknown>;
+      const key = tc.draw(gs.sampledFrom(Object.keys(configSchema.shape)));
+      const changed = { ...base, [key]: { a: tc.draw(gs.integers({ minValue: 0, maxValue: 9 })) } };
+      expect(configMappingText(changed) !== configMappingText(base)).toBe(!(RUN_SETTINGS as readonly string[]).includes(key));
+    }));
+
+  it("names the fields left out of the mapping", () => {
+    expect(RUN_SETTINGS).toEqual(["stateDir", "retention"]);
   });
 });
