@@ -1097,13 +1097,18 @@ export interface StepRecordBase {
    * `observe` call counts; a step with no `observe` reads its `from`
    * values once. */
   attempts?: number;
-  /** A polled claim step only: its readings, the first
-   * `CLAIM_READINGS_HEAD` and the last `CLAIM_READINGS_TAIL`, oldest
-   * first; `attempt` says where a gap falls. `poll` reads until every
-   * claim holds, so how many times `observe` is called tells it whether a
-   * reading held; what each reading read shows a value that walked toward
-   * the expected one. */
+  /** A polled claim step only: its readings, oldest first; `attempt`
+   * says where a gap falls. Every reading of a short poll, and of a long
+   * one the first, the last, and the readings whose value changed
+   * (`CLAIM_READINGS_CAP` in src/step/evaluate-claims.ts). `poll` reads
+   * until every claim holds, so how many times `observe` is called tells
+   * it whether a reading held; what each reading read shows a value that
+   * walked toward the expected one. */
   readings?: ClaimReading[];
+  /** A polled claim step whose record left readings out: how many, and
+   * how many of them were change points (0 when every change point is in
+   * `readings`). */
+  readings_left_out?: { readings: number; change_points: number };
 }
 
 export interface StepRecordPassed extends StepRecordBase {

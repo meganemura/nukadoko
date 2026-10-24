@@ -7,7 +7,7 @@ import { statedWord } from "../src/cli/scaffold.js";
 import type { ClaimReading, StepRecord } from "../src/record/types.js";
 import { judgedBy, scenarioClaims } from "../src/run/run-document.js";
 import { ANY_INDEX, LITERAL_WORDS, literalStatedBy } from "../src/step/claims.js";
-import { CLAIM_READING_MAX_BYTES, createReadingsLog, failedReading, readingValue } from "../src/step/evaluate-claims.js";
+import { CLAIM_READING_MAX_BYTES, CLAIM_READINGS_CAP, failedReading, keptReadings, readingValue } from "../src/step/evaluate-claims.js";
 
 // Responsibility: the pure parts of what a claim leaves in the record
 // (docs/spec.md "Claims" and "Records"), as properties over drawn values:
@@ -38,26 +38,47 @@ const jsonValue = (depth: number): Generator<unknown> => {
   );
 };
 
-function reading(attempt: number): ClaimReading {
-  return { attempt, at: `2026-01-01T00:00:00.${String(attempt).padStart(3, "0")}Z`, held: false };
+function reading(attempt: number, value: number): ClaimReading {
+  return { attempt, at: `2026-01-01T00:00:00.${String(attempt).padStart(3, "0")}Z`, held: value === 9, actuals: [{ value }] };
+}
+
+/** The rule docs/spec.md "Poll" states, written as plainly as possible:
+ * every reading up to the cap; past it, the first, the last, and the
+ * earliest and latest change points between them. */
+function wantedAttempts(values: readonly number[], cap: number): { kept: number[]; changesLeftOut: number } {
+  const all = values.map((_, index) => index + 1);
+  if (values.length <= cap) return { kept: all, changesLeftOut: 0 };
+  const changes = all.slice(1, -1).filter((attempt) => values[attempt - 1] !== values[attempt - 2]);
+  const head = Math.floor((cap - 2) / 2);
+  const tail = cap - 2 - head;
+  const chosen = changes.length <= head + tail ? changes : [...changes.slice(0, head), ...changes.slice(changes.length - tail)];
+  return { kept: [1, ...chosen, values.length], changesLeftOut: changes.length - chosen.length };
 }
 
 describe("the readings a poll keeps", () => {
-  it("keeps the first head readings and the last tail ones, in the order they came", () =>
-    hegel.testAsync(async (tc) => {
-      const head = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
-      const tail = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
-      const count = tc.draw(gs.integers({ minValue: 0, maxValue: 15 }));
-      const log = createReadingsLog(head, tail);
-      for (let attempt = 1; attempt <= count; attempt++) log.add(reading(attempt));
-      const kept = log.kept().map((entry) => entry.attempt);
-      const first = Math.min(head, count);
-      const last = Math.min(tail, count - first);
-      const want = [
-        ...Array.from({ length: first }, (_, index) => index + 1),
-        ...Array.from({ length: last }, (_, index) => count - last + index + 1),
-      ];
-      expect(kept).toEqual(want);
+  it("keeps every reading up to the cap, and past it the first, the last, and the change points, saying what it left out", () =>
+    hegel.test((tc) => {
+      const cap = tc.draw(gs.integers({ minValue: 2, maxValue: 8 }));
+      const values = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: 3 }), { maxSize: 30 }));
+      const kept = keptReadings(values.map((value, index) => reading(index + 1, value)), cap);
+      const want = wantedAttempts(values, cap);
+      expect(kept.readings.map((entry) => entry.attempt)).toEqual(want.kept);
+      if (values.length <= cap) expect(kept.left_out).toBeUndefined();
+      else expect(kept.left_out).toEqual({ readings: values.length - want.kept.length, change_points: want.changesLeftOut });
+    }));
+
+  it("keeps every change of a value that walks toward the expected one, however many readings repeat between", () =>
+    hegel.test((tc) => {
+      const steps = tc.draw(gs.integers({ minValue: 1, maxValue: Math.floor((CLAIM_READINGS_CAP - 2) / 2) }));
+      const padding = tc.draw(gs.integers({ minValue: 0, maxValue: 40 }));
+      const values: number[] = [];
+      for (let step = 0; step < steps; step++) values.push(step, ...Array<number>(padding).fill(step));
+      values.push(9, 9);
+      const kept = keptReadings(values.map((value, index) => reading(index + 1, value)));
+      const keptValues = kept.readings.map((entry) => (entry.actuals![0] as { value: number }).value);
+      for (let step = 0; step < steps; step++) expect(keptValues).toContain(step);
+      expect(keptValues.at(-1)).toBe(9);
+      expect(kept.left_out?.change_points ?? 0).toBe(0);
     }));
 
   it("keeps a value whose JSON fits whole, and the start and byte length of one that does not", () =>

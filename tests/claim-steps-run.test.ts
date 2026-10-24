@@ -968,6 +968,48 @@ export default defineStep({
   });
 });
 
+describe("a long poll keeps the readings where the value changed", () => {
+  it("keeps every candidate a padded observe offered, and says how many readings it left out", async () => {
+    const rootDir = await project({
+      "features/steps/the-list-includes.ts": `import { defineStep, z } from "nukadoko";
+const plan: string[] = Array(10).fill("x");
+for (const candidate of ["y", "z"]) plan.push(candidate, candidate, ...Array(18).fill("x"));
+plan.push("milk");
+let calls = 0;
+export default defineStep({
+  pattern: "the list includes {name:string}",
+  args: z.object({ name: z.string() }),
+  poll: { timeout_ms: 20000 },
+  observe() {
+    const shown = plan[Math.min(calls, plan.length - 1)]!;
+    calls += 1;
+    return { list: [shown] };
+  },
+  claims: [{ actual: "list", compare: "has-item", expected: "name" }],
+});
+`,
+      "features/t.feature": feature('Then the list includes "milk"'),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const step = lastClaimStep(rootDir);
+    expect(step.attempts).toBe(52);
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as {
+      readings: { attempt: number; actuals: { value: string[] }[] }[];
+      readings_left_out: unknown;
+    };
+    expect(record.readings.map((reading) => [reading.attempt, reading.actuals[0]!.value[0]])).toEqual([
+      [1, "x"],
+      [11, "y"],
+      [13, "x"],
+      [31, "z"],
+      [33, "x"],
+      [51, "milk"],
+      [52, "milk"],
+    ]);
+    expect(record.readings_left_out).toEqual({ readings: 45, change_points: 0 });
+  });
+});
+
 describe("measured names an HTTP status", () => {
   it("names the status of the response the producing step received", async () => {
     const server = createServer((_request, response) => {

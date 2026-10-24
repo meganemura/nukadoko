@@ -150,7 +150,9 @@ and `returns` field a `.describe()`, so `nuka describe` connects a
 criterion's wording to the field that answers it.
 
 `poll: { timeout_ms }` runs `observe` again every 100 ms until every claim
-holds on two readings in a row, then judges the last reading once. A claim
+holds on two readings in a row, then judges the last reading once. The
+step record's `readings` keep what each reading read (past 40 readings,
+the first, the last, and the ones where the value changed). A claim
 step whose `observe` reaches `page`, `context`, or `pageAs` states `poll`,
 as `{ timeout_ms }` or `false` (`claim-poll-unstated`).
 

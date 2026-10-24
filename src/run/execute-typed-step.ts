@@ -29,6 +29,7 @@ import {
   type PollClock,
   type Reader,
   type Reading,
+  type ReadingsLeftOut,
   type ReadingsLog,
 } from "../step/evaluate-claims.js";
 import { detachedCopy, readAt, type Read } from "../step/snapshot.js";
@@ -66,6 +67,8 @@ export interface ClaimExecution {
   /** A polled step only: what its readings read, bounded
    * (`createReadingsLog`). */
   readonly readings?: readonly ClaimReading[];
+  /** A polled step whose log left readings out: how many. */
+  readonly readingsLeftOut?: ReadingsLeftOut;
 }
 
 export type ValidatedStepOutcome =
@@ -273,7 +276,11 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   let attempts = 0;
   // Set for a polled step only, so a step that reads once records none.
   let readings: ReadingsLog | undefined;
-  const readingsField = (): { readonly readings?: readonly ClaimReading[] } => (readings === undefined ? {} : { readings: readings.kept() });
+  const readingsField = (): { readonly readings?: readonly ClaimReading[]; readonly readingsLeftOut?: ReadingsLeftOut } => {
+    if (readings === undefined) return {};
+    const kept = readings.kept();
+    return kept.left_out === undefined ? { readings: kept.readings } : { readings: kept.readings, readingsLeftOut: kept.left_out };
+  };
   const judge = async (observed: Reader): Promise<ValidatedStepOutcome> => {
     const judged = await evaluateClaims(step.claims, claimInputs(observed));
     const claims: ClaimExecution = { judged, observation: "observed", attempts: Math.max(attempts, 1), ...readingsField() };

@@ -238,9 +238,11 @@ just until 0.1.
   for each item whether `where` selected it and why. `observation` and
   `attempts` say whether and how many times the step read its values.
   A claim step that polls also has `readings`: the attempt number, the
-  time, whether every claim held, and each claim's actual value for its
-  first 10 and last 10 readings, so an `observe` that walks toward the
-  expected value is visible. `measured` also finds a process's exit code
+  time, whether every claim held, and each claim's actual value, for
+  every reading of a poll of up to 40 and, past that, for the first, the
+  last, and up to 38 readings where the value changed, with
+  `readings_left_out` saying how many it left out, so an `observe`
+  that walks toward the expected value is visible. `measured` also finds a process's exit code
   and a response's status, as numbers, in the producing step's record or
   the claim step's own. run.json's step entries carry `claims`,
   `observation`, and `attempts`, and the run summary lists every claim

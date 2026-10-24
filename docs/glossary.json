@@ -468,6 +468,11 @@
       "en": ["snapshot", "the value a claim judges"],
       "ja": "スナップショット",
       "note": "claim の各辺について、値が来る場所で nukadoko が取る素の JSON のコピー。claim はこれだけを読み、record はこれをそのまま示す。素の JSON でない値、Proxy、256 段より深い値はコピーせず、claim は判定できなかったものになる"
+    },
+    {
+      "en": ["change point", "change points"],
+      "ja": "変化点",
+      "note": "poll の読み取りのうち、内容(成り立ったかどうか、各 claim が読んだもの、observe が throw したもの)が直前の読み取りと違うもの。長い poll では step record が最初、最後、変化点を残す。フィールド名 `change_points` はコードスパンで英語のまま"
     }
   ],
   "keep_english": [

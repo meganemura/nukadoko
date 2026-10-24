@@ -1890,8 +1890,18 @@ property, and an `observe` that counts its calls can use it to return a
 value that walks toward the expected one. So the step record keeps the
 readings (`readings`): for each, its attempt number, its time, whether
 every claim held on it, and each claim's actual value, or the first line
-of what `observe` threw. A long poll keeps its first 10 readings and its
-last 10, and the attempt numbers show the gap. A value whose JSON is
+of what `observe` threw. Each reading's value is its own snapshot, taken
+when it was read. A poll of up to 40 readings keeps them all. A longer
+one keeps its first reading, its last, and every reading whose content
+(whether it held, and what each claim read or what `observe` threw)
+differs from the reading just before it, up to 38 of these change
+points: the earliest 19 and the latest 19. The record then says how many
+readings it left out and how many of those were change points
+(`readings_left_out: { readings, change_points }`), and the attempt
+numbers show where the gaps fall. Change points are kept, not the first
+and last few readings, because an `observe` that pads each candidate
+with readings that repeat would push the candidates out of a fixed window.
+40 bounds a record to 40 values per claim, and a value whose JSON is
 longer than 1024 bytes is kept as its start and its length in bytes. A
 reader sees a value that walks toward the expected one without opening
 the step file.
@@ -1986,7 +1996,8 @@ A claim step's record has these fields of its own (see "Records"):
   when it could not. The step's `error` then says why.
 - `attempts`: how many times the step read its values. Each `observe` call
   counts; a step with no `observe` reads its `from` values once.
-- `readings`, under `poll` only: the readings the step kept (see "Poll").
+- `readings`, under `poll` only: the readings the step kept (see "Poll"),
+  and `readings_left_out` when it did not keep them all.
 
 `measured` names the recorded channel whose content equals the raw actual
 value, before `view` and `at`: `{ "step_record_id", "channel" }`, where the

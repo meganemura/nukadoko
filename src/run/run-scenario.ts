@@ -971,7 +971,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     observed: StepRecord["observed"],
     httpLogExists: boolean,
     argsOrigin: Record<string, ArgOrigin> | undefined,
-  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings"> {
+  ): Pick<StepRecord, "claims" | "observation" | "attempts" | "readings" | "readings_left_out"> {
     const claims = withMeasured(execution.judged, {
       ownRecordId: begun.recordId,
       ownChannels: recordedChannels({ observed, dir: begun.recordDir, ...(httpLogExists ? { http: "http.jsonl" } : {}) }),
@@ -990,6 +990,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       observation: execution.observation,
       attempts: execution.attempts,
       ...(execution.readings === undefined ? {} : { readings: [...execution.readings] }),
+      ...(execution.readingsLeftOut === undefined ? {} : { readings_left_out: { ...execution.readingsLeftOut } }),
     };
   }
 

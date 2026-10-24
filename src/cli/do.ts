@@ -644,6 +644,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             observation: outcome.claims.observation,
             attempts: outcome.claims.attempts,
             ...(outcome.claims.readings === undefined ? {} : { readings: [...outcome.claims.readings] }),
+            ...(outcome.claims.readingsLeftOut === undefined ? {} : { readings_left_out: { ...outcome.claims.readingsLeftOut } }),
           };
 
     const stepRecord: StepRecord =

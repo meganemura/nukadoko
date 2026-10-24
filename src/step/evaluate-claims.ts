@@ -707,12 +707,15 @@ export async function pollReadings(
 // `observe` whether a reading held: a step can offer candidates until one
 // holds. No rule in code can tell that from a value that settles, so the
 // record keeps what each reading read, and a value that walks toward the
-// expected one is there to see.
+// expected one is there to see. A long poll keeps the readings where the
+// value changed, not the first and last few: a step that pads its
+// candidates with readings that repeat would otherwise push them out.
 
-/** How many of the first readings the record keeps. */
-export const CLAIM_READINGS_HEAD = 10;
-/** How many of the last readings the record keeps. */
-export const CLAIM_READINGS_TAIL = 10;
+/** How many readings the record keeps: every reading of a poll this
+ * short, and of a longer one the first, the last, and the readings whose
+ * value differs from the reading before (change points), the earliest
+ * half and the latest half of them. */
+export const CLAIM_READINGS_CAP = 40;
 /** The longest value, as JSON, a reading keeps whole. */
 export const CLAIM_READING_MAX_BYTES = 1024;
 
@@ -745,25 +748,89 @@ export function failedReading(attempt: number, at: string, error: unknown): Clai
   return { attempt, at, held: false, error: message.split("\n")[0] ?? "" };
 }
 
-/** Keeps the first `head` and the last `tail` readings added, in the
- * order they were added, so a long poll costs bounded memory. */
-export interface ReadingsLog {
-  readonly add: (reading: ClaimReading) => void;
-  readonly kept: () => ClaimReading[];
+/** How many readings, and how many of the change points among them, the
+ * record left out. */
+export interface ReadingsLeftOut {
+  readonly readings: number;
+  readonly change_points: number;
 }
 
-export function createReadingsLog(head = CLAIM_READINGS_HEAD, tail = CLAIM_READINGS_TAIL): ReadingsLog {
-  const first: ClaimReading[] = [];
-  const last: ClaimReading[] = [];
+/** The readings a log kept, oldest first, and what it left out (absent
+ * when it kept every reading). */
+export interface KeptReadings {
+  readonly readings: ClaimReading[];
+  readonly left_out?: ReadingsLeftOut;
+}
+
+/** Collects a poll's readings in bounded memory (`CLAIM_READINGS_CAP`
+ * readings and one more), keeping what `keptReadings` names. */
+export interface ReadingsLog {
+  readonly add: (reading: ClaimReading) => void;
+  readonly kept: () => KeptReadings;
+}
+
+/** What a reading read, without when it happened or its number: two
+ * readings with one content read the same thing. */
+function readingContent(reading: ClaimReading): string {
+  return JSON.stringify([reading.held, reading.actuals ?? null, reading.error ?? null]);
+}
+
+export function createReadingsLog(cap = CLAIM_READINGS_CAP): ReadingsLog {
+  const headCap = Math.floor((cap - 2) / 2);
+  const tailCap = cap - 2 - headCap;
+  // Every reading while there are at most `cap` of them.
+  let all: ClaimReading[] | null = [];
+  let total = 0;
+  let first: ClaimReading | null = null;
+  let previous: ClaimReading | null = null;
+  // Whether `previous` differs from the reading before it. It joins the
+  // change points only once a later reading shows it is not the last.
+  let previousChanged = false;
+  const head: ClaimReading[] = [];
+  const tail: ClaimReading[] = [];
+  let dropped = 0;
   return {
     add(reading) {
-      if (first.length < head) {
-        first.push(reading);
-        return;
+      total += 1;
+      if (all !== null) {
+        all.push(reading);
+        if (all.length > cap) all = null;
       }
-      last.push(reading);
-      if (last.length > tail) last.shift();
+      if (previous !== null && previousChanged) {
+        if (head.length < headCap) head.push(previous);
+        else {
+          tail.push(previous);
+          if (tail.length > tailCap) {
+            tail.shift();
+            dropped += 1;
+          }
+        }
+      }
+      if (first === null) {
+        first = reading;
+        previousChanged = false;
+      } else {
+        previousChanged = readingContent(reading) !== readingContent(previous!);
+      }
+      previous = reading;
     },
-    kept: () => [...first, ...last],
+    kept() {
+      if (all !== null) return { readings: [...all] };
+      const readings = [first!, ...head, ...tail, previous!];
+      return { readings, left_out: { readings: total - readings.length, change_points: dropped } };
+    },
   };
+}
+
+/**
+ * The readings a record keeps of `readings`, the rule `createReadingsLog`
+ * applies as they arrive: every reading when there are at most `cap`;
+ * otherwise the first, the last, and the change points between them (a
+ * reading whose content differs from the one just before it), the
+ * earliest `floor((cap - 2) / 2)` and the latest of the rest. Pure.
+ */
+export function keptReadings(readings: readonly ClaimReading[], cap = CLAIM_READINGS_CAP): KeptReadings {
+  const log = createReadingsLog(cap);
+  for (const reading of readings) log.add(reading);
+  return log.kept();
 }
