@@ -442,7 +442,17 @@
     {
       "en": ["unobserved", "observed nothing"],
       "ja": "観測できなかった",
-      "note": "claim step が値を読めず、claim を一つも判定しなかったこと(observe が throw した、fixture を用意できなかった)。`observation` の値 `unobserved` とエラー種別 `unobserved` はコードスパンで英語のまま。成り立たない claim とは別の結果として書き分ける"
+      "note": "claim step の observe が throw し、claim を一つも判定しなかったこと。締め切りは timeout、fixture を用意できなかったのは step のエラーで、どちらも観測できなかったとは書かない。`observation` の値 `unobserved` とエラー種別 `unobserved` はコードスパンで英語のまま。成り立たない claim とは別の結果として書き分ける"
+    },
+    {
+      "en": ["unjudged", "could not judge"],
+      "ja": "判定できなかった",
+      "note": "claim step は値を読んだが、nukadoko 自身が claim の判定の途中で失敗したこと(matches を試す worker が止まった など)。受け入れ基準については何もわからない。`outcome` の値 `unjudged` とエラー種別 `claim_unjudged` はコードスパンで英語のまま。成り立たない claim とも観測できなかった step とも書き分ける"
+    },
+    {
+      "en": ["plain JSON", "not a JSON value"],
+      "ja": "素の JSON / JSON の値ではない",
+      "note": "null、真偽値、文字列、有限の数値、穴のない配列、プロトタイプが Object.prototype か null で自分のプロパティがすべて列挙可能なデータプロパティであるオブジェクトだけからなる値。claim の両辺はこれでなければならない。Date、Map、bigint、NaN は JSON の値ではない"
     }
   ],
   "keep_english": [

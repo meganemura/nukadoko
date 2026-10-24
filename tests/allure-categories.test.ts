@@ -13,13 +13,14 @@ const ALL_KINDS: readonly ErrorKind[] = [
   "unsupported",
   "claim_broken",
   "unobserved",
+  "claim_unjudged",
   "step_error",
 ];
 
 describe("buildCategories", () => {
-  it("writes exactly nine rules, one per ErrorKind", () => {
+  it("writes exactly ten rules, one per ErrorKind", () => {
     const categories = buildCategories();
-    expect(categories).toHaveLength(9);
+    expect(categories).toHaveLength(10);
   });
 
   it.each(ALL_KINDS)("rule for %s matches the status statusForKind assigns it", (kind) => {

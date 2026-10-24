@@ -29,9 +29,11 @@ export default defineStep({
 });
 ```
 
-A claim is `{ actual, view?, at?, compare, expected }`. `nuka scaffold
---then --from <step>.<key>` writes this shape when the line states one
-value; `examples/` has a finished Then for a CLI, an API, and a workflow.
+A claim is `{ actual, view?, at?, compare, expected, expected_view? }`.
+`nuka scaffold --then --from <step>.<key>` writes this shape when the
+line states one value; `examples/` has a finished Then for a CLI, an API,
+and a workflow. Export what `defineStep` returned, unchanged: it freezes
+the step, and a copy (`{ ...step, claims }`) fails to import.
 
 ## Where the expected value comes from
 
@@ -39,14 +41,18 @@ Pick the source from the sentence; the record names it in `expected_from`.
 
 - **The sentence states it** (a capture, the docstring, or the table):
   `expected: "code"`, the key itself, recorded as `sentence:code`. The key
-  has to be required in `args`, with no default.
+  has to be required in `args`, with no default, and its schema must not
+  rewrite the value (`z.coerce`, a transform, a pipe, `trim`, `catch`
+  are refused at import). To read the line's text as JSON or as lines,
+  add `expected_view: "json"` or `"lines"` on a plain `z.string()` key.
 - **An earlier step returned it** ("the item count is unchanged"):
   `expected: { from: "<from key>.<path>" }`, recorded as
   `from:<step>@<line>.<key>`.
 - **The pattern's fixed words state it** ("is refused", "exits 0", "holds
-  no items"): `expected: { literal: "refused" }`. The literal is the
-  pattern's own words, or `0`, `""`, or `[]` for `no`, `none`, or
-  `nothing` (`""` or `[]` for `empty`); any other literal is refused at
+  no items"): `expected: { literal: "refused" }`. The literal is exactly
+  the pattern's own words, or `0`, `""`, or `[]` for `no`, `none`, or
+  `nothing` (`""` or `[]` for `empty`), and a value one of those words
+  fixes takes `compare: "equal"` only; any other literal is refused at
   import. `Then the command succeeds` cannot claim `0`: write `exits 0`.
 - **A second reading** ("A is listed before B"): `expected: { observe:
   "<path>" }`, a value `observe` returned beside the actual one.
@@ -103,12 +109,20 @@ parsing is data: `{ actual: "stdout", view: "json", at:
 "sections.git.0.dirty_count", compare: "equal", expected: "count" }`.
 `{ actual, each: { where?, claims } }` applies item claims to every item
 of an array (paths inside are relative to the item), and breaks when the
-array, or what `where` selects, is empty.
+array, or what `where` selects, is empty. A `where` claim that repeats an
+item claim is refused: it would turn "every item" into "every item that
+holds". A path reads own properties only, so `constructor` or a getter
+finds nothing.
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `has-item`, `matches`, `greater-than`, `at-least`,
 `less-than`, `at-most`. Two values of different JSON types break the
-claim. `nuka check` reads each `from` path against the producer's
+claim, and so does a value that is not plain JSON (a `Date`, a bigint,
+`NaN`, an `undefined` item): return an ISO string or a number instead.
+An expected text every string holds breaks too (blank under
+`contains-text`, a pattern that matches `""` under `matches`), and a
+`matches` pattern that runs past the step's deadline is stopped and
+breaks. `nuka check` reads each `from` path against the producer's
 `returns` (`claim-path-unknown`), and reports a claim whose two sides are
 one value (`claim-compares-itself`).
 
@@ -118,7 +132,8 @@ one value (`claim-compares-itself`).
 the value. It gets every args key except the ones a claim names as its
 expected value, and reading one of those throws: `observe` cannot pick
 what to read by what it will be compared with. An `observe` that throws
-records `unobserved`, never a broken claim.
+records `unobserved`, never a broken claim; a claim nukadoko itself failed
+to judge is `claim_unjudged`.
 
 Return what you measured, never a verdict: a count, a text, a list. A
 boolean literal is refused when the actual value comes from `observe`,
@@ -141,7 +156,7 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 
 The actual value and its source, the compare, the expected value and its
 source. The step fails with `claim_broken`, and the run summary lists
-every claim under "Claims", `held` or `broken`. A broken claim is fixed in
+every claim under "Claims" with its outcome. A broken claim is fixed in
 the implementation or by asking the person, never by a weaker compare.
 
 **One step per claim, or one step with the expected value in the line?**
@@ -169,16 +184,13 @@ export default defineStep({
   pattern: "the results are titled, in this order",
   description: "The rendered result titles, in render order",
   args: z.object({
-    expected: z
-      .string()
-      .transform((text) => text.split("\n"))
-      .describe("Expected titles, one per line, in render order"),
+    expected: z.string().describe("Expected titles, one per line, in render order"),
   }),
   async observe({ page }) {
     return { titles: await page.locator(".result h2").allTextContents() };
   },
   poll: { timeout_ms: 5000 },
-  claims: [{ actual: "titles", compare: "equal", expected: "expected" }],
+  claims: [{ actual: "titles", compare: "equal", expected: "expected", expected_view: "lines" }],
 });
 ```
 

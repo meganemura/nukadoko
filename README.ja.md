@@ -1217,7 +1217,7 @@ step が結び付いているかどうかは、プロジェクトがスキャン
 run サマリを読んで、何がどの commit で走ったか、そして自分が承認した基点からどの受け入れ基準と step ファイルが変わったかを、その比較が届く範囲で確かめます。
 `.nukadoko/` の下にあるものと `nuka` のすべての動詞は、エージェントか CI のものです。
 `nuka run` は毎回そのサマリを Markdown で書きます。
-commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、各 Then のすべての claim を `held` か `broken` とともに挙げる Claims の節、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
+commit、各 environment、ブラウザ、feature ごとの表(各 environment での各 scenario の断定、所要時間、失敗した step)、各 Then のすべての claim をその成否とともに挙げる Claims の節、`mutates: false` と宣言しながら書き込みが計測された step を名指す末尾の節、そして失敗した各 scenario を再実行するコマンドです。
 GitHub Actions では設定なしでジョブのサマリページに載り、`nuka report --format markdown --out <path>` は CI の step が PR のコメントとして投稿できる写しを書きます([docs/ci.ja.md](docs/ci.ja.md))。
 
 nukadoko が記録するのは証跡であり、承認ではありません。

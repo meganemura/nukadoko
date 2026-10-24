@@ -13,11 +13,14 @@ import {
   evaluateClaims,
   pollReadings,
   unobservedClaims,
+  type ArgSide,
   type ClaimInputs,
   type JudgedClaim,
+  type PatternTester,
   type PollClock,
   type Reading,
 } from "../step/evaluate-claims.js";
+import { startPatternWorker, testPatternInWorker } from "./pattern-worker.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
@@ -25,7 +28,7 @@ import { classifyCaughtError, runWithTimeout } from "./step-deadline.js";
 // `nuka do` names where each args key came from, and where each claim
 // value was measured, the same way `nuka run` does, and reaches the run
 // layer through this file.
-export { argOrigins, claimSourceLabel } from "./arg-origins.js";
+export { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
 export { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
 export type { ChannelText } from "./measured.js";
 
@@ -42,8 +45,8 @@ export type { ChannelText } from "./measured.js";
 export interface ClaimExecution {
   /** One entry per declared claim, in declaration order. */
   readonly judged: readonly JudgedClaim[];
-  /** `unobserved` when the step could not read its values: `observe` threw
-   * or ran past the deadline, or a fixture it names could not be set up. */
+  /** `unobserved` when the step read no values: `observe` threw or ran
+   * past the deadline, or a fixture it names could not be set up. */
   readonly observation: "observed" | "unobserved";
   /** How many times `observe` ran; `1` for a step with no `observe`, which
    * reads its `from` values once. */
@@ -78,9 +81,12 @@ export interface RunValidatedStepInput {
   readonly scenarioCache: FixtureCache;
   readonly processCache: FixtureCache;
   readonly config: Pick<NukadokoConfig, "fixtureTimeout" | "stepTimeout">;
-  /** The source a claim record names for an args key
-   * (`claimSourceLabel`). Read only for a claim step. */
-  readonly argLabel: (key: string) => string;
+  /** Where an args key's value starts, for a claim record
+   * (`claimArgSide`). Read only for a claim step. */
+  readonly argSide: (key: string) => ArgSide;
+  /** The text the line states an args key as (`sentenceTextOf`), or
+   * `null`. Read only for a claim step. */
+  readonly sentenceText: (key: string) => string | null;
   /** Injected by tests; the wall clock otherwise. */
   readonly clock?: PollClock;
 }
@@ -182,35 +188,62 @@ function observeInputs(args: Readonly<Record<string, unknown>>, withheld: Readon
   });
 }
 
+/** The time a `matches` pattern may take when the step has no deadline at
+ * all, which only a caller that passes no `stepTimeout` can arrange. */
+export const PATTERN_LIMIT_MS = 10_000;
+
+function testsPatterns(claims: readonly Claim[]): boolean {
+  const items = (claim: Claim): readonly { readonly compare: string }[] =>
+    claim.each === undefined ? [claim] : [...(claim.each.where ?? []), ...claim.each.claims];
+  return claims.some((claim) => items(claim).some((item) => item.compare === "matches"));
+}
+
 async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Promise<ValidatedStepOutcome> {
   const { name, handle, config } = input;
   const args = (typeof input.args === "object" && input.args !== null ? input.args : {}) as Readonly<Record<string, unknown>>;
+  const deadline = deadlineOf(step, config);
+  const startedAt = Date.now();
+  const testPattern: PatternTester = (pattern, text) =>
+    deadline.ms === undefined
+      ? testPatternInWorker(pattern, text, PATTERN_LIMIT_MS, "the limit for a step with no deadline")
+      : testPatternInWorker(pattern, text, Math.max(1, startedAt + deadline.ms - Date.now()), "the time left of the step's deadline");
   const claimInputs = (observation: unknown): ClaimInputs => ({
     args,
     observation,
     fromKeys: new Set(Object.keys(step.from)),
-    argLabel: input.argLabel,
+    argSide: input.argSide,
+    sentenceText: input.sentenceText,
     patterns: step.patterns,
+    testPattern,
   });
   let fixtureUsage: FixtureUsageEntry[] = [];
   let attempts = 0;
-  const judge = (observation: unknown): ValidatedStepOutcome => {
-    const judged = evaluateClaims(step.claims, claimInputs(observation));
+  const judge = async (observation: unknown): Promise<ValidatedStepOutcome> => {
+    const judged = await evaluateClaims(step.claims, claimInputs(observation));
     const claims: ClaimExecution = { judged, observation: "observed", attempts: Math.max(attempts, 1) };
     const records = judged.map((entry) => entry.record);
     if (records.every((record) => record.outcome === "held")) return { status: "passed", result: {}, fixtureUsage, claims };
-    return { status: "failed", error: { message: brokenClaimsMessage(records), kind: "claim_broken" }, thrown: undefined, fixtureUsage, claims };
+    // A claim nukadoko failed to judge is never the criterion failing, so
+    // it decides the kind even when another claim broke.
+    const kind = records.some((record) => record.outcome === "unjudged") ? "claim_unjudged" : "claim_broken";
+    return { status: "failed", error: { message: brokenClaimsMessage(records), kind }, thrown: undefined, fixtureUsage, claims };
   };
-  const unobserved = (error: unknown): ValidatedStepOutcome => {
-    const kind = classifyCaughtError(error) === "timeout" ? "timeout" : "unobserved";
+  // What a step that read nothing records: `unobserved` as the kind only
+  // when `observe` itself threw; a deadline is `timeout` and a fixture that
+  // failed to set up is the step's own error, as for a step that runs.
+  const readNothing = (error: unknown, observeThrew: boolean): ValidatedStepOutcome => {
+    const caught = classifyCaughtError(error);
+    const kind = caught === "timeout" ? "timeout" : observeThrew ? "unobserved" : caught;
     return {
       status: "failed",
-      error: { message: kind === "timeout" ? messageOf(error) : `the step observed nothing, so no claim was judged: ${messageOf(error)}`, kind },
+      error: { message: kind === "unobserved" ? `the step observed nothing, so no claim was judged: ${messageOf(error)}` : messageOf(error), kind },
       thrown: error,
       fixtureUsage,
       claims: { judged: unobservedClaims(step.claims, claimInputs(undefined)), observation: "unobserved", attempts },
     };
   };
+  if (testsPatterns(step.claims)) startPatternWorker();
+  let fixtures: FixtureBag;
   try {
     const resolved = await resolveFixtures({
       names: stepFixtureNames(step),
@@ -222,14 +255,18 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     });
     fixtureUsage = resolved.usage;
     handle.beginStepRun(step, resolved.fixtures);
-    const observe = step.observe;
-    if (observe === undefined) return judge(undefined);
-    const inputs = observeInputs(args, expectedKeys(step.claims), name);
-    const fixtures: FixtureBag = resolved.fixtures;
-    const deadline = deadlineOf(step, config);
-    const poll = step.poll;
-    if (poll === undefined || poll === false) {
-      const value = await runWithTimeout(
+    fixtures = resolved.fixtures;
+  } catch (error) {
+    return readNothing(error, false);
+  }
+  const observe = step.observe;
+  if (observe === undefined) return judge(undefined);
+  const inputs = observeInputs(args, expectedKeys(step.claims), name);
+  const poll = step.poll;
+  if (poll === undefined || poll === false) {
+    let value: unknown;
+    try {
+      value = await runWithTimeout(
         () =>
           handle.recordingProcesses(() => {
             attempts += 1;
@@ -240,41 +277,41 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
         name,
         deadline.source,
       );
-      return judge(value);
-    }
-    // Set once the step's deadline fires, so a poll still running in the
-    // background stops at its next reading instead of reading a world the
-    // scenario has moved past.
-    let abandoned = false;
-    const read = async (): Promise<Reading> => {
-      if (abandoned) throw new Error("the step's deadline passed");
-      attempts += 1;
-      try {
-        return { ok: true, value: await observe(fixtures, inputs) };
-      } catch (error) {
-        return { ok: false, error };
-      }
-    };
-    const holds = (value: unknown): boolean =>
-      evaluateClaims(step.claims, claimInputs(value)).every((entry) => entry.record.outcome === "held");
-    let polled: { readonly last: Reading; readonly attempts: number };
-    try {
-      polled = await runWithTimeout(
-        () => handle.recordingProcesses(() => pollReadings(read, holds, poll.timeout_ms, input.clock ?? WALL_CLOCK)),
-        deadline.ms,
-        "Step",
-        name,
-        deadline.source,
-      );
     } catch (error) {
-      abandoned = true;
-      throw error;
+      return readNothing(error, true);
     }
-    if (!polled.last.ok) return unobserved(polled.last.error);
-    return judge(polled.last.value);
-  } catch (error) {
-    return unobserved(error);
+    return judge(value);
   }
+  // Set once the step's deadline fires, so a poll still running in the
+  // background stops at its next reading instead of reading a world the
+  // scenario has moved past.
+  let abandoned = false;
+  const read = async (): Promise<Reading> => {
+    if (abandoned) throw new Error("the step's deadline passed");
+    attempts += 1;
+    try {
+      return { ok: true, value: await observe(fixtures, inputs) };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  };
+  const holds = async (value: unknown): Promise<boolean> =>
+    (await evaluateClaims(step.claims, claimInputs(value))).every((entry) => entry.record.outcome === "held");
+  let polled: { readonly last: Reading; readonly attempts: number };
+  try {
+    polled = await runWithTimeout(
+      () => handle.recordingProcesses(() => pollReadings(read, holds, poll.timeout_ms, input.clock ?? WALL_CLOCK)),
+      deadline.ms,
+      "Step",
+      name,
+      deadline.source,
+    );
+  } catch (error) {
+    abandoned = true;
+    return readNothing(error, true);
+  }
+  if (!polled.last.ok) return readNothing(polled.last.error, true);
+  return judge(polled.last.value);
 }
 
 // --- nuka do ---
@@ -288,7 +325,8 @@ export interface ExecuteTypedStepInput {
   readonly scenarioCache: FixtureCache;
   readonly processCache: FixtureCache;
   readonly config: Pick<NukadokoConfig, "fixtureTimeout" | "stepTimeout">;
-  readonly argLabel: (key: string) => string;
+  readonly argSide: (key: string) => ArgSide;
+  readonly sentenceText: (key: string) => string | null;
 }
 
 /** `args` is the validated value once validation passed, and the value

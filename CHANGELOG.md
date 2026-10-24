@@ -18,10 +18,19 @@ just until 0.1.
   compares, and where the expected value comes from: a key the sentence
   fills, an earlier step's result (`{ from }`), a literal the pattern's
   fixed words state (`{ literal }`), or a second reading (`{ observe }`).
-  A literal that is not the pattern's own words, or `0`, `""`, or `[]`
-  for `no`, `none`, `nothing`, or `empty`, is refused at import, and
-  so is a boolean literal against a value `observe` computed. `observe`
-  receives every args key except the ones a claim compares with, and
+  A literal that is not exactly a run of the pattern's own words, or `0`,
+  `""`, or `[]` for `no`, `none`, `nothing`, or `empty` (compared with
+  `equal` only), is refused at import, and so is a boolean literal
+  against a value `observe` computed. So is an args schema that rewrites
+  a value a claim reads (`z.coerce`, a transform, a preprocess, a pipe,
+  `trim` and the other overwrite checks, `catch`): a claim names
+  `expected_view` to read the line's text as `json`, `lines`, or
+  `text` instead. Both sides of a compare must be plain JSON, so a
+  `Date`, a bigint, or `NaN` breaks the claim and the reason names it.
+  `defineStep` freezes what it validated, and discovery runs only the
+  step `defineStep` returned, not a copy of it. `matches` runs on a
+  worker thread that the step's deadline stops. `observe` receives every
+  args key except the ones a claim compares with, and
   `poll: { timeout_ms }` reads again until every claim holds on two
   readings in a row. nukadoko compares and records each claim. Before
   this, a Then was code that called `expect`: in ten small projects that
@@ -196,21 +205,25 @@ just until 0.1.
 - **A claim step's record holds its claims.** `claims` lists each claim
   with its `actual` and `expected` values, `actual_from` and
   `expected_from` (`sentence:<key>`, `from:<step>@<line>.<key>`,
-  `literal:<words>`, or `observe:<path>`), the compare, its `outcome`
-  (`held`, `broken`, or `unobserved`), a `reason` when it broke for
-  something other than the comparison, and `measured`, the recorded
-  channel that holds the raw actual value, or `null`. `observation` and
+  `literal:<words>`, or `observe:<path>`, each naming its `view` and
+  `at`), `expected_text` (the text the line stated), the compare, its
+  `outcome` (`held`, `broken`, `unobserved`, or `unjudged`), a
+  `reason` when it broke for something other than the comparison, and
+  `measured`, the recorded channel that holds the raw actual value, or
+  `null`. An `each` claim records its `where` and item claims, and
+  for each item whether `where` selected it and why. `observation` and
   `attempts` say whether and how many times the step read its values.
   run.json's step entries carry the same three fields, and the run
   summary lists every claim under "Claims", `held` or `broken`. The
   fields are additive, so no `schema_version` changes.
 
-- **Two error kinds: `claim_broken` and `unobserved`.** A broken claim
-  fails the step with `claim_broken` and the message `claim broken:
-  <actual> (<actual_from>) <compare> <expected> (<expected_from>)`; an
-  `observe` that throws is `unobserved`, and no claim is judged. Allure
-  has nine categories, one per kind, and `nuka init --allure` writes
-  nine rules.
+- **Three error kinds: `claim_broken`, `unobserved`, and
+  `claim_unjudged`.** A broken claim fails the step with `claim_broken`
+  and the message `claim broken: <actual> (<actual_from>) <compare>
+  <expected> (<expected_from>)`; an `observe` that throws is
+  `unobserved`, and no claim is judged; a claim nukadoko failed to judge
+  is `claim_unjudged`. Allure has ten categories, one per kind, and
+  `nuka init --allure` writes ten rules.
 
 - **Reports show each claim.** An Allure step gets one zero-width child
   step per claim, named by its claim line, passed, failed, or broken,

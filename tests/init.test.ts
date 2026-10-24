@@ -62,6 +62,7 @@ function engineNameByKind(): Record<ErrorKind, string> {
     "unsupported",
     "claim_broken",
     "unobserved",
+    "claim_unjudged",
     "step_error",
   ];
   const rules = buildCategories();
@@ -813,7 +814,7 @@ describe("nuka init: allurerc.mjs", () => {
     await removeTempDir(rootDir);
   });
 
-  it("writes allurerc.mjs with exactly the nine categories.ts (NAME_BY_KIND) rules, no more, no fewer", async () => {
+  it("writes allurerc.mjs with exactly the ten categories.ts (NAME_BY_KIND) rules, no more, no fewer", async () => {
     const exitCode = await runCli(["init", "--allure"], {
       rootDir,
       stdout: createCaptureSink(),
@@ -823,7 +824,7 @@ describe("nuka init: allurerc.mjs", () => {
     expect(existsSync(path.join(rootDir, "allurerc.mjs"))).toBe(true);
 
     const config = await loadGeneratedAllurerc(rootDir);
-    expect(config.categories).toHaveLength(9);
+    expect(config.categories).toHaveLength(10);
     expect(config.categories).toHaveLength(buildCategories().length);
 
     const nameByKind = engineNameByKind();

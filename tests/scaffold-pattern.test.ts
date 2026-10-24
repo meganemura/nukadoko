@@ -469,6 +469,8 @@ describe("nuka scaffold --then: the claim it writes", () => {
           fromKeys: new Set(chainedKeys),
           captureKeys: new Set(captureKeys),
           hasObserve: file.includes("  observe("),
+          rewrittenArgs: new Map(),
+          stringArgs: null,
         }),
       ).toBeNull();
     }));

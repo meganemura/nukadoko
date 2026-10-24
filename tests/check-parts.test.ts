@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { findPartCycles } from "../src/check/parts-check.js";
+import type { Vocabulary } from "../src/discover/discover-steps.js";
+import { z } from "zod";
+import { defineStep, type RunStep } from "../src/step/define-step.js";
 import { createCaptureSink, fixture } from "./helpers/fixtures.js";
 import { bySeverity } from "./helpers/envelope.js";
 
@@ -50,13 +54,41 @@ describe("nuka check: parts findings", () => {
     expect(issues[0]!.file).toBe("features/steps/unregistered-part.ts");
   });
 
-  it("reports a cycle in the parts graph, naming both steps in order", async () => {
+  // defineStep freezes the step it returns, so a step file that closes a
+  // parts cycle throws when it is imported, and no part-cycle is left.
+  it("reports the step file that tries to close a parts cycle as an import failure", async () => {
     const { report } = await checkReport(fixture("check-parts-project"));
-    const issues = report.errors.filter((issue) => issue.code === "part-cycle");
-    expect(issues).toHaveLength(1);
-    expect(issues[0]!.message).toContain("cycle-a");
-    expect(issues[0]!.message).toContain("cycle-b");
-    expect(issues[0]!.message).toContain("->");
+    expect(report.errors.filter((issue) => issue.code === "part-cycle")).toEqual([]);
+    expect(
+      report.errors
+        .filter((issue) => issue.file === "features/steps/cycle-b.ts")
+        .map(({ code, message }) => ({ code, message })),
+    ).toEqual([{ code: "step-file-import-failed", message: "Cannot assign to read only property 'parts' of object '#<Object>'" }]);
+  });
+
+  // No step file reaches findPartCycles with a cycle any more; the check
+  // stays, so a Step built another way still cannot loop unreported. The
+  // copies here are not frozen, which is what lets the test close the loop.
+  it("names both steps of a cycle in order, when a vocabulary holds one", () => {
+    const definition = {
+      description: "half of a cycle",
+      args: z.object({}),
+      returns: z.object({}),
+      async run() {
+        return {};
+      },
+    };
+    const aParts: RunStep[] = [];
+    const a = { ...defineStep(definition), parts: aParts } as RunStep;
+    const b = { ...defineStep(definition), parts: [a] } as RunStep;
+    aParts.push(b);
+    const vocabulary = new Map([
+      ["cycle-a", { kind: "typed", name: "cycle-a", filePath: "features/steps/cycle-a.ts", step: a }],
+      ["cycle-b", { kind: "typed", name: "cycle-b", filePath: "features/steps/cycle-b.ts", step: b }],
+    ]) as unknown as Vocabulary;
+    const issues = findPartCycles(vocabulary);
+    expect(issues.map((issue) => issue.step)).toEqual(["cycle-a"]);
+    expect(issues[0]!.message).toContain("part cycle: cycle-a -> cycle-b -> cycle-a.");
   });
 
   it("reports mutates: false contradicted by a mutates: true part", async () => {

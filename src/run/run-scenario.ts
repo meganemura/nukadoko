@@ -62,7 +62,7 @@ import type { SecretSet } from "../secrets/types.js";
 import type { FixtureOutcome } from "../step/fixture-types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { strictArgsSchema } from "../step/strict-args.js";
-import { argOrigins, claimSourceLabel } from "./arg-origins.js";
+import { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
 import { runValidatedStep, type ClaimExecution } from "./execute-typed-step.js";
 import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
 import { gherkinStepLines, pickleStepLines } from "./run-document.js";
@@ -1880,7 +1880,20 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               scenarioCache: fixtureScenarioCache,
               processCache: fixtureProcessCache,
               config,
-              argLabel: (key) => claimSourceLabel(key, originOf(key), (id) => recordLines.get(id) ?? null),
+              argSide: (key) => claimArgSide(key, originOf(key), (id) => recordLines.get(id) ?? null),
+              sentenceText: sentenceTextOf(
+                outcome.captures,
+                outcome.texts,
+                attachmentKey === null
+                  ? null
+                  : {
+                      key: attachmentKey,
+                      ...(pickleStep.argument?.docString === undefined ? {} : { docString: pickleStep.argument.docString.content }),
+                      ...(pickleStep.argument?.dataTable === undefined
+                        ? {}
+                        : { table: pickleStep.argument.dataTable.rows.map((row) => row.cells.map((cell) => cell.value)) }),
+                    },
+              ),
             });
             fixtureUsage = executed.fixtureUsage;
             claimExecution = executed.claims;

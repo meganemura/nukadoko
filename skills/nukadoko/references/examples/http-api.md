@@ -98,9 +98,9 @@ Feature: items API
 - `get-item-by-id`, `list-items` (When): a literal id, and the list.
 - `status-is`, `body-is` (Then): each lists all four request steps in
   `from`, so exactly one of them runs before it in each scenario, and
-  declares one `equal` claim. `body-is` parses the docstring in `args`
-  (`.transform(JSON.parse)`), so the claim compares two JSON values and
-  key order does not count.
+  declares one `equal` claim. `body-is` reads the docstring with
+  `expected_view: "json"`, so the claim compares two JSON values, key
+  order does not count, and the record keeps the docstring as written.
 
 The two steps that POST keep the default `mutates: true`: they change the
 API's state. They need no go-ahead before `nuka do`, because the only

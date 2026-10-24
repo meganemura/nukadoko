@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { defineStep } from "../src/step/define-step.js";
+import { defineStep, type RunStep } from "../src/step/define-step.js";
 import { stepFixtureNames } from "../src/step/step-fixture-names.js";
 
 // Responsibility: unit tests for src/step/step-fixture-names.ts's
@@ -101,13 +101,14 @@ describe("stepFixtureNames", () => {
         return {};
       },
     });
-    // A real cycle a step author could actually reach (two step files
-    // importing each other's default export circularly) — built here by
-    // mutating the array `defineStep` already produced for `stepA`, since
-    // `stepB` did not exist yet at the point `stepA` was defined.
-    (stepA.parts as unknown as unknown[]).push(stepB);
+    // defineStep freezes a step and its parts, so a step file cannot close
+    // a cycle; the guard stays for a Step built another way. The cycle is
+    // built here from copies, which are not frozen.
+    const cycleParts: RunStep[] = [];
+    const cycleA = { ...stepA, parts: cycleParts } as RunStep;
+    cycleParts.push({ ...stepB, parts: [cycleA] } as RunStep);
 
-    expect(() => stepFixtureNames(stepA)).not.toThrow();
-    expect([...stepFixtureNames(stepA)].sort()).toEqual(["env", "requireEnv"]);
+    expect(() => stepFixtureNames(cycleA)).not.toThrow();
+    expect([...stepFixtureNames(cycleA)].sort()).toEqual(["env", "requireEnv"]);
   });
 });

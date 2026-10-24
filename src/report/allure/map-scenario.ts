@@ -239,7 +239,8 @@ export interface MapGwtStepInput {
 // reach a verdict at all.
 // A broken claim is the one kind that is a criterion failing, which is
 // what Allure's failed means; an unobserved claim step measured nothing,
-// so it reads as broken with every other kind.
+// and an unjudged claim is nukadoko failing to judge, so both read as
+// broken with every other kind.
 const FAILED_KINDS: ReadonlySet<ErrorKind> = new Set(["step_error", "result_invalid", "claim_broken"]);
 
 export function statusForKind(kind: ErrorKind): "failed" | "broken" {

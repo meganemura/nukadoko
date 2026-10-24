@@ -96,7 +96,7 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
     const createRecordId = record.steps[0].step_record_id as string;
     const resultOfStepRecord = await readStepRecord(rootDir, record.steps[1].step_record_id);
     expect(resultOfStepRecord.claims).toEqual([
-      { actual: "t1", actual_from: "observe:created", compare: "equal", expected: "t1", expected_from: "sentence:id", outcome: "held", measured: null },
+      { actual: "t1", actual_from: "observe:created", compare: "equal", expected: "t1", expected_from: "sentence:id", expected_text: "\"t1\"", outcome: "held", measured: null },
     ]);
     expect(resultOfStepRecord.used).toEqual([{ step_record_id: createRecordId, step: "create-thing" }]);
 

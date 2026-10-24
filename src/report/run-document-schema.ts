@@ -26,10 +26,13 @@ const errorKind = z.enum([
   "unsupported",
   "claim_broken",
   "unobserved",
+  "claim_unjudged",
   "step_error",
 ]);
 
 // What the summary reads of one claim (src/report/summary/claim-line.ts).
+const claimOutcome = z.enum(["held", "broken", "unobserved", "unjudged"]);
+
 const comparisonClaim = z.looseObject({
   actual: z.unknown().optional(),
   actual_from: z.string(),
@@ -38,8 +41,17 @@ const comparisonClaim = z.looseObject({
   compare: z.string(),
   expected: z.unknown().optional(),
   expected_from: z.string(),
-  outcome: z.enum(["held", "broken", "unobserved"]),
+  outcome: claimOutcome,
   reason: z.string().optional(),
+});
+
+const itemDeclaration = z.looseObject({
+  actual: z.string().optional(),
+  view: z.string().optional(),
+  at: z.string().optional(),
+  compare: z.string(),
+  expected: z.unknown().optional(),
+  expected_from: z.string(),
 });
 
 const eachClaim = z.looseObject({
@@ -47,11 +59,23 @@ const eachClaim = z.looseObject({
   view: z.string().optional(),
   at: z.string().optional(),
   each: z.looseObject({
+    where: z.array(itemDeclaration).optional(),
+    claims: z.array(itemDeclaration),
     items: z.number().int(),
     selected: z.number().int(),
-    results: z.array(z.looseObject({ index: z.number().int(), outcome: z.enum(["held", "broken"]), claims: z.array(comparisonClaim) })),
+    results: z.array(
+      z.union([
+        z.looseObject({
+          index: z.number().int(),
+          selected: z.literal(true),
+          outcome: z.enum(["held", "broken"]),
+          claims: z.array(comparisonClaim),
+        }),
+        z.looseObject({ index: z.number().int(), selected: z.literal(false), where: z.array(comparisonClaim) }),
+      ]),
+    ),
   }),
-  outcome: z.enum(["held", "broken", "unobserved"]),
+  outcome: claimOutcome,
   reason: z.string().optional(),
 });
 

@@ -384,6 +384,7 @@ and `step-...-f602`), trimmed the same way:
       "compare": "equal",
       "expected": "Read a book",
       "expected_from": "sentence:title",
+      "expected_text": "\"Read a book\"",
       "outcome": "held",
       "measured": null
     }

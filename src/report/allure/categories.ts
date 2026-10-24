@@ -26,6 +26,7 @@ const ERROR_KINDS: readonly ErrorKind[] = [
   "unsupported",
   "claim_broken",
   "unobserved",
+  "claim_unjudged",
   "step_error",
 ];
 
@@ -45,6 +46,7 @@ const NAME_BY_KIND: Readonly<Record<ErrorKind, string>> = {
   unsupported: "Compat: unsupported step shape",
   claim_broken: "Claim broken",
   unobserved: "Claim step did not observe",
+  claim_unjudged: "Claim could not be judged",
   step_error: "Step error",
 };
 

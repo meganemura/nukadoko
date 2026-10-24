@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { z } from "zod";
-import { asObjectShape, classifyPrimitive, isRequiredField } from "../src/binding/schema-shape.js";
+import { asObjectShape, classifyPrimitive, isRequiredField, schemaRewrite } from "../src/binding/schema-shape.js";
 
 // A key is required when an object that declares it rejects `{}`. That is
 // the question `nuka check` and `nuka run` ask before they refuse a line.
@@ -190,5 +190,77 @@ describe("isRequiredField", () => {
         schema = applyWrap(schema, kind);
       }
       expect(isRequiredField(schema)).toBe(omissionFails(schema));
+    }));
+});
+
+// A claim compares the value a line states or an earlier step returned, so
+// `schemaRewrite` has to find a rewrite wherever a schema hides it, and has
+// to find nothing in a schema that only checks. The schemas below nest a
+// leaf in the wrappers and containers a step file uses.
+const checkingLeaves: readonly (() => z.ZodTypeAny)[] = [
+  () => z.string(),
+  () => z.number().int(),
+  () => z.boolean(),
+  () => z.null(),
+  () => z.string().refine((text) => text.length < 100),
+  () => z.enum(["a", "b"]),
+];
+
+const rewritingLeaves: readonly (readonly [() => z.ZodTypeAny, string])[] = [
+  [() => z.number().transform((n) => n + 1), "a transform"],
+  [() => z.coerce.number(), "z.coerce"],
+  [() => z.preprocess((value) => value, z.string()), "a preprocess"],
+  [() => z.string().pipe(z.string()), "a pipe"],
+  [() => z.string().trim(), "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)"],
+  [() => z.string().toLowerCase(), "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)"],
+  [() => z.string().catch("x"), "catch"],
+];
+
+type Container = "optional" | "nullable" | "readonly" | "array" | "object" | "union" | "tuple" | "lazy" | "record" | "intersection";
+const containers: readonly Container[] = ["optional", "nullable", "readonly", "array", "object", "union", "tuple", "lazy", "record", "intersection"];
+
+function contain(inner: z.ZodTypeAny, kind: Container, sibling: z.ZodTypeAny): z.ZodTypeAny {
+  switch (kind) {
+    case "optional":
+      return inner.optional();
+    case "nullable":
+      return inner.nullable();
+    case "readonly":
+      return inner.readonly();
+    case "array":
+      return z.array(inner);
+    case "object":
+      return z.object({ other: sibling, key: inner });
+    case "union":
+      return z.union([sibling, inner]);
+    case "tuple":
+      return z.tuple([sibling, inner]);
+    case "lazy":
+      return z.lazy(() => inner);
+    case "record":
+      return z.record(z.string(), inner);
+    case "intersection":
+      return z.intersection(z.object({ a: sibling }), z.object({ b: inner }));
+  }
+}
+
+describe("schemaRewrite", () => {
+  it("finds nothing in a schema that only checks, however it is nested", () =>
+    hegel.test((tc) => {
+      let schema = tc.draw(gs.sampledFrom(checkingLeaves))();
+      for (const kind of tc.draw(gs.arrays(gs.sampledFrom(containers), { maxSize: 4 }))) {
+        schema = contain(schema, kind, tc.draw(gs.sampledFrom(checkingLeaves))());
+      }
+      expect(schemaRewrite(schema)).toBeNull();
+    }));
+
+  it("finds a rewrite anywhere inside, and names it", () =>
+    hegel.test((tc) => {
+      const [leaf, words] = tc.draw(gs.sampledFrom(rewritingLeaves));
+      let schema = leaf();
+      for (const kind of tc.draw(gs.arrays(gs.sampledFrom(containers), { maxSize: 4 }))) {
+        schema = contain(schema, kind, tc.draw(gs.sampledFrom(checkingLeaves))());
+      }
+      expect(schemaRewrite(schema)).toBe(words);
     }));
 });

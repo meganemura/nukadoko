@@ -141,6 +141,9 @@ export type MatchOutcome =
       readonly stepName: string;
       readonly captures: readonly Capture[];
       readonly values: readonly unknown[];
+      /** Each capture's text as the line has it, before its parameter
+       * type turned it into a value (a claim record's `expected_text`). */
+      readonly texts: readonly string[];
     };
 
 /**
@@ -188,7 +191,7 @@ export async function matchPickleStep(
    * parameter-type transformer. `null` where no World exists. */
   world: unknown,
 ): Promise<MatchOutcome> {
-  const byStep = new Map<string, { binding: StepBinding; values: readonly unknown[] }>();
+  const byStep = new Map<string, { binding: StepBinding; values: readonly unknown[]; texts: readonly string[] }>();
   for (const binding of bindings) {
     if (byStep.has(binding.stepName)) {
       continue;
@@ -206,6 +209,7 @@ export async function matchPickleStep(
         // `Promise.all` awaits an async transformer and passes a sync one
         // through. cucumber-js does the same before it calls the step.
         values: await Promise.all(args.map((argument) => argument.getValue(world))),
+        texts: args.map((argument) => argument.group.value ?? ""),
       });
     }
   }
@@ -217,8 +221,8 @@ export async function matchPickleStep(
     return { kind: "ambiguous", stepNames };
   }
   // Safe: exactly one key exists in `byStep` when `stepNames.length === 1`.
-  const { binding, values } = byStep.get(stepNames[0]!)!;
-  return { kind: "matched", stepName: binding.stepName, captures: binding.captures, values };
+  const { binding, values, texts } = byStep.get(stepNames[0]!)!;
+  return { kind: "matched", stepName: binding.stepName, captures: binding.captures, values, texts };
 }
 
 function duplicateCaptureRefusal(stepName: string, keys: readonly string[]): string {

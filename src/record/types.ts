@@ -619,9 +619,13 @@ export type FixtureScope = "scenario" | "process";
  *     `done()`-callback arity, or a `"pending"`/`"skipped"` return value.
  *   - `claim_broken`: a claim step read its values and at least one of its
  *     claims did not hold: the one kind that is a criterion failing.
- *   - `unobserved`: a claim step could not read its values (its `observe`
- *     threw, or a fixture it names could not be set up), so no claim was
- *     judged. A deadline that passes first is `timeout`, as for any step.
+ *   - `unobserved`: a claim step's `observe` threw, so it read nothing
+ *     and no claim was judged. A deadline that passes first is `timeout`,
+ *     and a fixture that fails to set up is `step_error`, as for any step.
+ *   - `claim_unjudged`: a claim step read its values, and nukadoko failed
+ *     while judging a claim, so that claim neither held nor broke. A failure
+ *     of the judging is never the criterion failing, nor the step not
+ *     having measured.
  *   - `step_error` — anything else: the step's/hook's own code threw. Also
  *     the default whenever classification is uncertain. */
 export type ErrorKind =
@@ -633,6 +637,7 @@ export type ErrorKind =
   | "unsupported"
   | "claim_broken"
   | "unobserved"
+  | "claim_unjudged"
   | "step_error";
 
 /** How a claim compares its actual value with its expected value
@@ -651,9 +656,10 @@ export type ClaimCompare =
 /** How a claim normalizes its actual value before `at` and the compare. */
 export type ClaimView = "text" | "lines" | "json";
 
-/** `unobserved` when the step could not read its values, so nothing was
- * judged. */
-export type ClaimOutcome = "held" | "broken" | "unobserved";
+/** `held` and `broken` are the two outcomes of a comparison. `unobserved`
+ * when the step read no values, so nothing was judged; `unjudged` when the
+ * step read its values and nukadoko failed while judging this claim. */
+export type ClaimOutcome = "held" | "broken" | "unobserved" | "unjudged";
 
 /** A recorded channel whose content equals a claim's raw actual value:
  * `channel` is a path inside that step record, such as
@@ -667,12 +673,16 @@ export interface MeasuredChannel {
 
 /** One comparison as the step judged it. `actual` is the value after
  * `view` and `at`, absent when that path held nothing (then `reason` says
- * which). `*_from` names where each side came from: `sentence:<key>`,
- * `from:<step>@<line or step record id>.<path>`, `literal:<the pattern
- * words that state it>`, or `observe:<path>`. `reason` is present only
- * when the claim broke for something other than the comparison itself: an
- * undefined value, two JSON types, an empty expected value, a side
- * compared with itself. */
+ * which). `*_from` names where each side came from, `view` and `at`
+ * included: `sentence:<key>`, `from:<step>@<line or step record id>.<path>`,
+ * `literal:<the pattern words that state it>`, or `observe:<path>`.
+ * `expected_text` is the text the sentence states the expected value as:
+ * a capture's text, the docstring, the table, or the pattern words of a
+ * literal, and `null` for a value from an earlier step or from `observe`.
+ * `reason` is present only when the claim broke for something other than
+ * the comparison itself: an undefined value, a value that is not plain
+ * JSON, two JSON types, an empty expected value, a side compared with
+ * itself, or, for an `unjudged` claim, the failure. */
 export interface ClaimComparisonRecord {
   readonly actual?: unknown;
   readonly actual_from: string;
@@ -681,26 +691,55 @@ export interface ClaimComparisonRecord {
   readonly compare: ClaimCompare;
   readonly expected?: unknown;
   readonly expected_from: string;
+  readonly expected_view?: ClaimView;
+  readonly expected_text: string | null;
   readonly outcome: ClaimOutcome;
   readonly reason?: string;
 }
 
-/** One `each` item the step judged: the claims on that item, in order. */
-export interface ClaimItemRecord {
-  readonly index: number;
-  readonly outcome: "held" | "broken";
-  readonly claims: readonly ClaimComparisonRecord[];
+/** One claim of an `each`, as declared, with the expected value it read:
+ * the same for every item, since an expected value never reads the item.
+ * `actual` is the path inside an item, absent for the item itself. */
+export interface ClaimItemDeclaration {
+  readonly actual?: string;
+  readonly view?: ClaimView;
+  readonly at?: string;
+  readonly compare: ClaimCompare;
+  readonly expected?: unknown;
+  readonly expected_from: string;
+  readonly expected_view?: ClaimView;
+  readonly expected_text: string | null;
 }
 
+/** One item of an `each`: whether `where` selected it, the `where`
+ * comparisons that decided it, and, for a selected item, its claims. */
+export type ClaimItemRecord =
+  | {
+      readonly index: number;
+      readonly selected: true;
+      readonly where?: readonly ClaimComparisonRecord[];
+      readonly outcome: "held" | "broken";
+      readonly claims: readonly ClaimComparisonRecord[];
+    }
+  | {
+      readonly index: number;
+      readonly selected: false;
+      readonly where: readonly ClaimComparisonRecord[];
+    };
+
 /** A claim over every item of an array, or every item `where` selects.
- * `items` is the array's length and `selected` how many items the claims
- * applied to. `results` holds at most 20 items, the broken ones first,
- * and `results_truncated` is then the number of items judged. */
+ * `where` and `claims` are the item claims as declared. `items` is the
+ * array's length and `selected` how many items the claims applied to.
+ * `results` holds at most 20 items: the broken ones first, then the ones
+ * `where` left out, then the ones that held, in index order, and
+ * `results_truncated` is then the number of items in the array. */
 export interface ClaimEachRecord {
   readonly actual_from: string;
   readonly view?: ClaimView;
   readonly at?: string;
   readonly each: {
+    readonly where?: readonly ClaimItemDeclaration[];
+    readonly claims: readonly ClaimItemDeclaration[];
     readonly items: number;
     readonly selected: number;
     readonly results: readonly ClaimItemRecord[];
@@ -1028,9 +1067,9 @@ export interface StepRecordBase {
    * the step declares it, with what it compared and how it ended. */
   claims?: ClaimRecord[];
   /** A claim step only: `observed` when the step read the values its
-   * claims compare, `unobserved` when it could not (its `observe` threw or
+   * claims compare, `unobserved` when it read none (its `observe` threw or
    * ran past the deadline, or a fixture it names could not be set up); the
-   * step's `error` then says why. */
+   * step's `error.kind` then says which. */
   observation?: "observed" | "unobserved";
   /** A claim step only: how many times the step read those values. Each
    * `observe` call counts; a step with no `observe` reads its `from`

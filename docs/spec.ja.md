@@ -1296,6 +1296,16 @@ feature と record だけを読む人には、次の 3 つの失敗が見えな�
 
 以下の規則は、それぞれこのどれかを塞ぎます。
 
+どの規則も、成り立った claim を、振る舞いが起きたことの証明にはしません。
+規則が約束することはもっと狭く、以下の各規則はその約束に従います。
+
+- record は偽のことを述べません。
+  各ラベルはその値の本当の出所を名指しし、record が示す各値は比較された値そのものです。
+- 振る舞いなしに claim を成り立たせる方法のうち、record の読み手に見えないものは塞ぎます。
+  実行の前にわかるものは import の時点か `nuka check` で拒否し、それ以外は実行で成り立たないものにします。
+- record の読み手に見える方法は残しますが、record がそれを示します。
+  run サマリは各 claim を文の隣に、比較と各値の出所とともに出力するので、claim が文の述べることを計測しているかを読み手が判断します。
+
 #### 形
 
 型付き step は、実行する(`run`)か、claim を宣言する(`claims`)かのどちらかであり、両方はしません。
@@ -1318,11 +1328,18 @@ export default defineStep({
 });
 ```
 
-claim は `{ actual, view?, at?, compare, expected }` か、`{ actual, view?, at?, each }`(後述)です。
+claim は `{ actual, view?, at?, compare, expected, expected_view? }` か、`{ actual, view?, at?, each }`(後述)です。
 `claims: []` は import の時点で拒否されます。
 claim を持たない claim step は、何も判定せずに通るからです。
 claim step では `description` は省略できます。
 `nuka steps` と `nuka describe` が claim を表示し、claim はその step が何を確かめるかを正確に述べるからです。
+
+`defineStep` は検証したものを凍結します。
+対象は claim とその中のすべてのオブジェクト、`from`、そして返す step です。
+呼び出しのあとで claim を変える step ファイルは import の時点で throw します。
+discovery は、`defineStep` が返したオブジェクトそのものである default export だけを実行するので、コピー(`{ ...step, claims }`)を export するファイルも拒否されます。
+`nuka check` はどちらも `step-file-import-failed` として報告します。
+そうしないと、実行される claim が、何も検証していない claim になってしまうからです。
 
 #### 期待値の出所
 
@@ -1332,14 +1349,21 @@ claim step では `description` は省略できます。
   record は `sentence:code` と述べます。
   このキーは `args` で required でなければなりません。
   デフォルト値や省略可能なキーだと、行が値を述べないときに step のコードにあるスキーマが値を補えてしまうからです。
+  そのスキーマは値を書き換えてもいけません。
+  そのキーの `z.coerce`、transform、preprocess、その他の pipe、上書きするチェック(`trim`、`toLowerCase` など)、`catch` は import の時点で拒否されます。
+  claim が比較する値を step のコードが決めることになるからです。
+  行のテキストを JSON や行として読む必要がある claim は、素の `z.string()` のキーに `expected_view`(`text`、`lines`、`json` で、`view` と同じように適用します)を名指しし、record は `sentence:<key> as <view>` と述べます。
 - **前の step の結果**: `{ from: "<key>.<path>" }` で、最初の要素はこの step の `from` のキーです(「凍結した件数が変わらない」など)。
   record は `from:<step>@<line>.<path>` と述べます。
   `<line>` は値を返した step の feature 行で、`nuka do` ではその step record の id です。
   `from` のキーを指す素の文字列は拒否されます。
   そのため record が、前の step の値を文の値と呼ぶことはありません。
 - **リテラル**: `{ literal: v }` で、文そのものがその値を述べているときに限ります。
-  そのテキストが pattern の固定の語の並びであるか(pattern `the command exits 0` は `0` を claim できます)、短い表にある語の固定の値であることが条件です。
+  そのテキストが、pattern の固定の語の並びを 1 つの空白でつないだものとちょうど等しいか(pattern `the command exits 0` は `0` を claim できます)、短い表にある語の固定の値であることが条件です。
+  端の句読点を取るのは pattern の語の側だけなので、空白や句読点の違うリテラルは、文が述べていないテキストです。
   表では、`no`、`none`、`nothing` が `0`、`""`、`[]` を、`empty` が `""` と `[]` を固定します。
+  表の値と比べられるのは `equal` だけです。
+  "no item is unpaid" を `at-least 0` と読むことや、"the cart is empty" を `not-equal []` と読むことは、ほとんど何に対しても成り立ち、語はそれを示しません。
   キャプチャ、省略可能なグループ、選択肢の中にある語は固定ではありません。
   行がその語を言わないことがあるからです。
   pattern を複数持つ step では、すべての pattern がそのリテラルを述べている必要があります。
@@ -1352,8 +1376,13 @@ claim step では `description` は省略できます。
   世界の 2 つの読み取りを比べる claim は自分の値を述べないので、許可したうえでラベルを付けます。
 
 実際の値が `observe` から来るとき、真偽値のリテラルは拒否されます。
+また、`{ observe }` が読む期待値が真偽値なら、実行時に claim は成り立ちません。
 `observe` が計算した真偽値は、コードで下した判定だからです。
 `observe` は計測したもの(件数、テキスト、リスト)を返し、claim がそれを判定します。
+
+どの claim の record も `expected_text` を残します。
+これは行が期待値を述べたテキスト(キャプチャのテキスト、docstring、table)か、リテラルを述べる pattern の語で、前の step や `observe` から来た値では `null` です。
+record の読み手は、値を行が使った言葉と見比べられます。
 
 #### 実際の値
 
@@ -1370,7 +1399,12 @@ claim が計測する値は、行から来ることはありません。
   そのためパースは、コードではなく宣言されたデータです。
   配列に対するパスの要素は 10 進のインデックスです。
 
-`undefined` に解決される実際の値では、claim は必ず成り立たず、record はそのパスを名指しします。
+パスがたどるのは、自分のデータプロパティだけです。
+`constructor` のような継承したメンバーを名指しする要素や、getter は何も見つけません。
+claim が計測する `from` のキーの args スキーマも、期待値のキーと同じ理由で、値を書き換えてはいけません。
+record のラベルは、`view` と `at` を含めて、場所全体を名指しします(`from:run-tally@16.stdout as json at sections.git.0.dirty_count`)。
+
+`undefined` に解決される実際の値では、claim は必ず成り立たず、record はその場所を名指しします。
 `nuka check` は、各 `from` のパスを値を返す step の `returns` スキーマと照らし合わせ、スキーマが宣言していないパスを報告します(`claim-path-unknown`)。
 そのような claim は、成り立たないことしかありえないからです。
 
@@ -1379,12 +1413,22 @@ claim が計測する値は、行から来ることはありません。
 `equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`has-item`(配列に期待値と等しい要素がある)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
-大小の比較は、2 つの number か 2 つの bigint を読みます。
+大小の比較は、2 つの number を読みます。
+
+どの比較の前でも、両辺は素の JSON です。
+つまり `null`、真偽値、文字列、有限の数値(整数なら `Number.MAX_SAFE_INTEGER` 以下)、穴も他のキーもない配列、プロトタイプが `Object.prototype` か `null` で自分のプロパティがすべて文字列キーの列挙可能なデータプロパティであるオブジェクトです。
+それ以外(`Date`、`Map`、bigint、`NaN`、`undefined` の要素、getter、クラスのインスタンス)では claim は成り立たず、理由がそれが何でどこにあるかを名指しします(`observe:when is a Date, not a JSON value`)。
+そのような値は、record ではある形に見え、比較では別の形で扱われる(2 つの `Date` は構造の上ではいつも等しい)ので、record は何を比較したかを示せないからです。
 
 JSON の型が違う 2 つの値の比較では、claim は成り立たず、両方の型を名指しします。
 文字列が数値と等しくなることは、claim が述べる理由ではありえないからです。
-`contains-text` と `matches` で期待するテキストが空のとき、claim は成り立ちません。
-どの文字列もそれを含むからです。
+ほとんどどの文字列も満たす期待するテキストでは、それがどこから来たかにかかわらず claim は成り立ちません。
+`contains-text` では空白だけか空のテキスト、`matches` では空文字列に一致する pattern です。
+
+`matches` は正規表現を worker スレッドで試します。
+nukadoko はこのスレッドを step の記録される操作の外で起動し、step の締め切りの残り時間(締め切りのない step では 10 秒)を与えます。
+バックトラックする pattern のようにそれより長く走る pattern は止められ、claim はその理由で成り立ちません。
+正規表現は、それを実行しているスレッドの上では中断できないので、worker がなければそのような pattern は締め切りも SIGTERM も越えて実行を止めていました。
 
 #### each
 
@@ -1393,7 +1437,16 @@ JSON の型が違う 2 つの値の比較では、claim は成り立たず、両
 `where` は claim を適用する要素を選びます。
 配列が空のとき、または `where` が何も選ばないとき、claim は成り立ちません。
 何もない集合についての「すべての要素」は計測ではないからです。
-record は、要素の数、選ばれた数、最大 20 件の要素の結果を残し、成り立たなかった要素を先に並べます。
+
+要素の claim と同じ claim である `where` の claim は、import の時点で拒否されます。
+それが選ぶどの要素もその claim を満たすので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
+ある要素をまったく比較できない `where` の claim(undefined の値、2 つの JSON の型)では、claim 全体が成り立たず、その要素を名指しします。
+その要素を外すと、「すべての要素」が黙って狭まるからです。
+
+record は、宣言された `where` の claim と要素の claim を期待値とともに残し、要素の数、選ばれた数、最大 20 件の要素の結果を残します。
+結果は成り立たなかった要素を先に並べます。
+各要素の結果は、`where` がその要素を選んだかどうか(`selected`)を、それを決めた `where` の claim の record とともに述べ、選ばれた要素は要素の claim の record を持ちます。
+run サマリの行は、`where` の claim と要素の claim を、比較と期待値とともに名指しします。
 
 #### observe
 
@@ -1408,7 +1461,10 @@ record は、要素の数、選ばれた数、最大 20 件の要素の結果を
 throw した `observe` は、その step をエラーとともに `unobserved` として記録し、claim を一つも判定しません。
 これは成り立たない claim とは別の結果です。
 `observe` の中で throw するガードは、計測しなかったこととして見え、成り立った claim や成り立たなかった claim としては見えません。
-step の締め切りが先に来た場合は、どの step とも同じく `timeout` です。
+`unobserved` は、`observe` が throw したことだけを意味します。
+step の締め切りが先に来た場合は `timeout`、fixture を用意できなかった場合はどの step とも同じく step 自身のエラーであり、`observe` のない step が `unobserved` になることはありません。
+nukadoko 自身が claim の判定の途中で失敗したとき(`matches` を試す worker が止まったとき)、その claim の `outcome` は `unjudged` で、step は `claim_broken` ではなく `claim_unjudged` で失敗します。
+受け入れ基準については何もわからないからです。
 
 #### poll
 
@@ -1429,7 +1485,9 @@ step の締め切りが先に来た場合は、どの step とも同じく `time
 `nuka check` は、結び付いた claim の両辺がどこから来るか(文のキー、値を返した行とパス、`observe` のパス)を解決します。
 両辺が同じ場所に解決される claim は報告されます(`claim-compares-itself`)。
 そのような claim は、振る舞いがどうであっても成り立つからです。
-チェックせずに実行するプロジェクトのために、実行は同じ場合を、理由付きの成り立たない claim として記録します。
+実行も、両辺がどこを読むかを場所として比べます。
+場所とは、出所(`observe`、値を返した step の record、文のキー)と完全なパスで、`view` と `at` もパスの一部として数え、配列のインデックスも他のキーと同じパスの要素とします。
+そのため `actual: "r", at: "count"` と `expected: { from: "r.count" }` は 1 つの場所を読み、実行はその claim を理由付きで成り立たないものにします。
 
 #### mutates
 
@@ -1461,8 +1519,9 @@ compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)�
 claim step の record には、固有のフィールドが 3 つあります(「Records」を参照)。
 
 - `claims`: step が宣言した順の、各 claim です。
-  比較は、`actual`(`view` と `at` を適用したあとの値で、パスに何もなかったときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`、`expected_from`、`outcome`(`held`、`broken`、`unobserved`)、比較そのもの以外の理由(undefined の値、2 つの JSON の型、空の期待するテキスト、適用できなかった view)で成り立たなかったときの `reason`、そして `measured` を持ちます。
-  `each` の claim は、`actual_from`、`each` の数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
+  比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときや素の JSON でない値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、そして `measured` を持ちます。
+  `reason` は、比較そのもの以外の理由(undefined の値、素の JSON でない値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺)で成り立たなかったときか、nukadoko が判定できなかったときにあります。
+  `each` の claim は、`actual_from`、`each` の宣言と数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。
 - `attempts`: step が値を読んだ回数です。
@@ -1481,10 +1540,11 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 ```
 
 成り立たない claim ごとに 1 行で、`each` では最初に成り立たなかった要素がその下に続きます。
-run サマリは、すべての Then のすべての claim を「Claims」の下に 1 行ずつ、同じ言葉に `held` か `broken` を続けて並べます。
+nukadoko が判定できなかった claim は、代わりに `claim_unjudged` で step を落とし、その行は `claim unjudged:` で始まります。
+run サマリは、すべての Then のすべての claim を「Claims」の下に 1 行ずつ、同じ言葉に成否を続けて並べます。
 
 Allure results は、各 claim をその step の子 step として示します。
-名前は同じ行で、成り立ったときは passed、成り立たなかったときは failed、step が何も観測しなかったときは broken です。
+名前は同じ行で、成り立ったときは passed、成り立たなかったときは failed、step が何も観測しなかったときや nukadoko が判定できなかったときは broken です。
 値とその出所はパラメータになります(「Allure results」を参照)。
 cucumber-messages のストリームは、claim を `claims.json`(メディアタイプ `application/vnd.nukadoko.claims+json`)として step に添付します。
 成り立たない claim を持つ step の結果は、同じメッセージを持つ、型が `nukadoko.ClaimBroken` の `exception` を運びます(「Messages stream」を参照)。
@@ -2173,6 +2233,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
               "compare": "equal",
               "expected": "Hi, Ada!",
               "expected_from": "sentence:text",
+              "expected_text": "\"Hi, Ada!\"",
               "outcome": "broken",
               "measured": { "step_record_id": "step-20260801-143023-e5f6", "channel": "observed.processes[0].stdout" }
             }
@@ -2439,13 +2500,13 @@ scenario record は独立したファイルではなく、その run の `run.js
 - `scenario_record_id` と `run_id` は、この実行が何に属するかを名指しします。
   `run`-originated な step(`kind: "run"`)では所属する scenario record の id と `nuka run` 呼び出し自身の id、`do`-originated な step ではどちらも `null` です(`do` はどの scenario にも run にも属さないため)。
   `run_id` が無かったころは、ある step record がどの run のものかを知るのに別のファイルを開く必要がありましたが、いまは step record 自身が、この 1 回の実行が何をしたかについてすでにそうしているのと同じように、それに自分で答えます。
-- `error.kind` は閉じた集合を使い、人が読むメッセージの隣に置かれます: `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`claim_broken`、`unobserved`、`step_error`。
+- `error.kind` は閉じた集合を使い、人が読むメッセージの隣に置かれます: `args_invalid`、`result_invalid`、`binding_invalid`、`world_invalid`、`timeout`、`unsupported`、`claim_broken`、`unobserved`、`claim_unjudged`、`step_error`。
   閉じているのは、レポートがこれに対して分類を行うからです(step ごとに拡張される開いた集合では、何も分類できません)。
   最初の 4 つは、契約があるからこそ存在する失敗を指し、return 値を捨てる runner の上に作られたレポートでは埋められない部分です。
   確信が持てない分類器が `step_error` を返すのは、契約違反を誤って主張するほうが、主張しないより悪いからです。
   `claim_broken` は、受け入れ基準が失敗したことを述べる唯一の種別です。
   claim step が値を読み、ある claim が成り立たなかったことを表します。
-  値を読めなかった claim step は `unobserved` なので、壊れた準備と失敗した受け入れ基準が同じ種別になることはありません(「Claims」を参照)。
+  `observe` が throw した claim step は `unobserved`、nukadoko が claim を判定できなかった claim step は `claim_unjudged` なので、壊れた準備、nukadoko 自身の失敗、失敗した受け入れ基準が同じ種別になることはありません(「Claims」を参照)。
   scenario record の中の hook record も同じフィールドを持ちます。
 
   | `error.kind` | step が失敗した理由 |
@@ -2457,7 +2518,8 @@ scenario record は独立したファイルではなく、その run の `run.js
   | `timeout` | step または hook が決着する前に期限が来た |
   | `unsupported` | nukadoko が実装していない compat の形(`done` コールバック、または `"pending"` や `"skipped"` を返した) |
   | `claim_broken` | claim step が値を読み、少なくとも 1 つの claim が成り立たなかった |
-  | `unobserved` | claim step が値を読めず(`observe` が throw した、または名指しする fixture を用意できなかった)、claim を一つも判定しなかった |
+  | `unobserved` | claim step の `observe` が throw し、claim を一つも判定しなかった |
+  | `claim_unjudged` | claim step が値を読み、nukadoko が claim の判定の途中で失敗したので、その claim について何もわからない |
   | `step_error` | それ以外で、step または hook 自身のコードが throw した |
 
 - `mutates` は step 自身の宣言を保持します(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)。
@@ -3461,7 +3523,7 @@ action は自分の開始点から `ms` 後まで幅を持ち、名前は自分�
 claim は assertion であり、Allure で assertion を表す単位は自分の status を持つ step です。
 そのため claim step の各 claim は、タイムラインの後に置かれる幅ゼロの child step 1 つになります(「Claims」を参照)。
 名前は claim の行で、run サマリが出力するのと同じ言葉です(例: `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`)。
-status は、claim が成り立ったときは passed、成り立たなかったときは failed、step が何も観測できなかったときは broken です。
+status は、claim が成り立ったときは passed、成り立たなかったときは failed、step が何も観測できなかったときや nukadoko が claim を判定できなかったときは broken です。
 parameter は `actual`、`actual from`、`expected`、`expected from` で、生の actual 値を持つ channel があれば `measured` も加わります。
 読み手は `record.json` を開かずに両方の値を確認できます。
 `claim_broken` で失敗した step は、`step_error` や `result_invalid` と同じく failed です。
@@ -3484,13 +3546,13 @@ marker は、失敗した step の step record(hook が scenario を止めた場
 2 つの Allure 世代は、それを別々の経路で category に変換し、利用者に求めるものも異なります。
 
 - **Allure 2** には result ごとの category フィールドが無いため、`nuka report` は描き出すたびに `categories.json` も書きます。
-  このファイルは `error.kind` ごとに 1 つ、合計 9 つの rule を持ち、メッセージの接頭辞を正規表現で照合します。
+  このファイルは `error.kind` ごとに 1 つ、合計 10 個の rule を持ち、メッセージの接頭辞を正規表現で照合します。
   メッセージの接頭辞と category rule は同じ分類を表すため、利用者は追加の設定を必要としません。
 - **Allure 3** は `allure generate` または `allure report` の実行時に、results directory の `categories.json` を読みません。
   Allure 3 は category を config だけから取得し、result の label と照合します。
   `nukadoko.failure` がその label を供給します。
-  `nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出し、`error.kind` ごとに 1 つ、9 個の label-matcher rule を持たせます。
-  この 9 個の名前は `NAME_BY_KIND`(`src/report/allure/categories.ts`)から組み立てられるため、result 自身が使う名前と決してずれません。
+  `nuka init --allure` はプロジェクトの root に `allurerc.mjs` を書き出し、`error.kind` ごとに 1 つ、10 個の label-matcher rule を持たせます。
+  この 10 個の名前は `NAME_BY_KIND`(`src/report/allure/categories.ts`)から組み立てられるため、result 自身が使う名前と決してずれません。
   プロジェクトの root に置けば自動で検出されます(Allure 3 はカレントディレクトリから `allurerc.{js,mjs,cjs,json,yaml,yml}` を自動検出するため、`--config` フラグは不要です)。
   `nuka init` はこの 6 つの拡張子すべてを先にチェックし、プロジェクトに既にどれか 1 つあれば何も書かず、見つけたファイル名を stderr に出します。
   そのどれも置かないと、すべての nukadoko の失敗は Allure 3 に組み込まれた 1 つの category「Product errors」に落ちてしまいます。

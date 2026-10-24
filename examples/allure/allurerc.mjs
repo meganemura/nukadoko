@@ -69,6 +69,10 @@ export default {
       matchers: [{ labels: { "nukadoko.failure": "unobserved" } }],
     },
     {
+      name: "Claim could not be judged",
+      matchers: [{ labels: { "nukadoko.failure": "claim_unjudged" } }],
+    },
+    {
       name: "Step error",
       matchers: [{ labels: { "nukadoko.failure": "step_error" } }],
     },

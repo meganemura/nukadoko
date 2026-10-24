@@ -130,3 +130,95 @@ export function unconsumedRequiredKeys(
     .filter(([key, fieldSchema]) => !consumed.has(key) && isRequiredField(fieldSchema))
     .map(([key]) => key);
 }
+
+interface RewriteDef {
+  readonly type: string;
+  readonly coerce?: unknown;
+  readonly checks?: readonly { readonly _zod: { readonly def: { readonly check?: unknown } } }[];
+  readonly in?: z.ZodTypeAny;
+  readonly out?: z.ZodTypeAny;
+  readonly innerType?: z.ZodTypeAny;
+  readonly getter?: () => z.ZodTypeAny;
+  readonly shape?: Record<string, z.ZodTypeAny>;
+  readonly catchall?: z.ZodTypeAny;
+  readonly element?: z.ZodTypeAny;
+  readonly items?: readonly z.ZodTypeAny[];
+  readonly rest?: z.ZodTypeAny | null;
+  readonly options?: readonly z.ZodTypeAny[];
+  readonly left?: z.ZodTypeAny;
+  readonly right?: z.ZodTypeAny;
+  readonly keyType?: z.ZodTypeAny;
+  readonly valueType?: z.ZodTypeAny;
+}
+
+/**
+ * What, inside `schema`, makes the parsed value differ from the value it
+ * was given, as words a refusal can name, or `null` when the schema only
+ * checks its input and hands it on unchanged. A claim compares the value a
+ * line states or an earlier step returned; a schema that rewrites that
+ * value would let step code decide what the claim compares. Rewriting is
+ * `z.coerce`, a transform, a preprocess, any other pipe (a codec, `.pipe`),
+ * an overwrite check (`trim`, `toLowerCase`, `toUpperCase`, `normalize`,
+ * `overwrite`), and `catch`, which replaces a value that failed. A refine
+ * only checks, so it is not one. The walk goes through every wrapper and
+ * container zod 4 has, and a lazy schema is read once. Pure.
+ */
+export function schemaRewrite(schema: z.ZodTypeAny): string | null {
+  const seen = new Set<unknown>();
+  const visit = (current: z.ZodTypeAny | null | undefined): string | null => {
+    if (current === null || current === undefined || seen.has(current)) return null;
+    seen.add(current);
+    const def = current._zod.def as unknown as RewriteDef;
+    if (def.coerce === true) return "z.coerce";
+    if ((def.checks ?? []).some((check) => check._zod.def.check === "overwrite")) {
+      return "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)";
+    }
+    switch (def.type) {
+      case "transform":
+        return "a transform";
+      case "pipe": {
+        if (def.in?._zod.def.type === "transform") return "a preprocess";
+        if (def.out?._zod.def.type === "transform") return "a transform";
+        return "a pipe";
+      }
+      case "catch":
+        return "catch";
+      case "lazy":
+        return visit(def.getter?.());
+      case "object":
+        for (const field of Object.values(def.shape ?? {})) {
+          const found = visit(field);
+          if (found !== null) return found;
+        }
+        return visit(def.catchall);
+      case "tuple":
+        for (const item of def.items ?? []) {
+          const found = visit(item);
+          if (found !== null) return found;
+        }
+        return visit(def.rest);
+      case "union":
+        for (const option of def.options ?? []) {
+          const found = visit(option);
+          if (found !== null) return found;
+        }
+        return null;
+      case "intersection":
+        return visit(def.left) ?? visit(def.right);
+      case "record":
+      case "map":
+        return visit(def.keyType) ?? visit(def.valueType);
+      default:
+        return visit(def.innerType) ?? visit(def.element) ?? visit(def.valueType);
+    }
+  };
+  return visit(schema);
+}
+
+/** True when `schema`, after optional and default, is a `z.string()` that
+ * does not coerce: the one schema `expected_view` can read, since a view
+ * reads text. Pure. */
+export function isPlainString(schema: z.ZodTypeAny): boolean {
+  const unwrapped = unwrapOptionalDefault(schema);
+  return unwrapped.type === "string" && !schemaCoerces(unwrapped);
+}

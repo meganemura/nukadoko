@@ -131,7 +131,17 @@ export function claimsForRun(claims: readonly ClaimRecord[]): RunClaim[] {
           ...claim,
           each: {
             ...claim.each,
-            results: claim.each.results.map((item) => ({ ...item, claims: item.claims.map((entry) => boundComparison(entry)) })),
+            where: claim.each.where?.map((entry) => boundComparison(entry)),
+            claims: claim.each.claims.map((entry) => boundComparison(entry)),
+            results: claim.each.results.map((item) =>
+              item.selected
+                ? {
+                    ...item,
+                    ...(item.where === undefined ? {} : { where: item.where.map((entry) => boundComparison(entry)) }),
+                    claims: item.claims.map((entry) => boundComparison(entry)),
+                  }
+                : { ...item, where: item.where.map((entry) => boundComparison(entry)) },
+            ),
           },
         }
       : boundComparison(claim),

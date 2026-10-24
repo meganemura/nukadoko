@@ -58,6 +58,10 @@ export interface ComparisonClaim {
   readonly at?: string;
   readonly compare: ClaimCompare;
   readonly expected: ClaimExpected;
+  /** For an expected value the sentence fills: how nukadoko reads the text
+   * the line states (`json` parses a docstring), so no args schema has to
+   * rewrite the value before the claim compares it. */
+  readonly expected_view?: ClaimView;
   readonly each?: never;
 }
 
@@ -69,6 +73,7 @@ export interface ItemClaim {
   readonly at?: string;
   readonly compare: ClaimCompare;
   readonly expected: ClaimExpected;
+  readonly expected_view?: ClaimView;
 }
 
 /** Claims over every item of an array, or over each item every `where`
@@ -83,6 +88,7 @@ export interface EachClaim {
   };
   readonly compare?: never;
   readonly expected?: never;
+  readonly expected_view?: never;
 }
 
 export type Claim = ComparisonClaim | EachClaim;
@@ -102,6 +108,64 @@ export function pathSegments(path: string): readonly string[] | null {
   return segments.every((segment) => segment.length > 0) ? segments : null;
 }
 
+// --- where a value is ---
+//
+// Two sides of a claim read the same value when they start at the same
+// origin and walk the same path, a view counted as a step of the path. The
+// check and the run name origins differently (a feature line, a step
+// record), so each builds its own places, and both compare them here, with
+// one index syntax: an array index is a path segment like any key.
+
+/** Where one side of a claim reads its value: the `origin` it starts at
+ * (`observe`, a producing step's line or record, a sentence key), the
+ * path inside it, and the label the record names it by. `open` is true
+ * when the label ends in a view, so the next segment reads ` at <path>`. */
+export interface ClaimPlace {
+  readonly origin: string;
+  readonly segments: readonly string[];
+  readonly label: string;
+  readonly open: boolean;
+}
+
+/** A segment the check uses for every index of an `each`: the run knows
+ * the index, and the check knows only that some index is read. */
+export const ANY_INDEX = "*";
+
+const INDEX_SEGMENT = /^(0|[1-9][0-9]*)$/;
+
+/** `place` with `path` walked further. Pure. */
+export function placeAt(place: ClaimPlace, path: string | undefined): ClaimPlace {
+  if (path === undefined || path === "") return place;
+  const separator = place.open ? " at " : place.label.endsWith(":") ? "" : ".";
+  return { origin: place.origin, segments: [...place.segments, ...path.split(".")], label: `${place.label}${separator}${path}`, open: false };
+}
+
+/** `place` read through `view`. Pure. */
+export function placeViewed(place: ClaimPlace, view: ClaimView | undefined): ClaimPlace {
+  if (view === undefined) return place;
+  return { origin: place.origin, segments: [...place.segments, `#${view}`], label: `${place.label} as ${view}`, open: true };
+}
+
+function sameSegment(a: string, b: string): boolean {
+  return a === b || (a === ANY_INDEX && INDEX_SEGMENT.test(b)) || (b === ANY_INDEX && INDEX_SEGMENT.test(a));
+}
+
+/** Whether two places read the same value. Pure. */
+export function samePlace(a: Pick<ClaimPlace, "origin" | "segments">, b: Pick<ClaimPlace, "origin" | "segments">): boolean {
+  return a.origin === b.origin && a.segments.length === b.segments.length && a.segments.every((segment, index) => sameSegment(segment, b.segments[index]!));
+}
+
+/** Whether one place holds the other: the same origin, and one path is the
+ * start of the other. Pure. */
+export function placesOverlap(a: Pick<ClaimPlace, "origin" | "segments">, b: Pick<ClaimPlace, "origin" | "segments">): boolean {
+  if (a.origin !== b.origin) return false;
+  const length = Math.min(a.segments.length, b.segments.length);
+  for (let index = 0; index < length; index += 1) {
+    if (!sameSegment(a.segments[index]!, b.segments[index]!)) return false;
+  }
+  return true;
+}
+
 // Thrown inside this module only: the first problem found ends the check,
 // and the exported functions return its message.
 class InvalidClaimError extends Error {}
@@ -111,10 +175,18 @@ class InvalidClaimError extends Error {}
 // A literal is the one expected value that is in neither the sentence's
 // data nor an earlier step's result, so it would let step code carry the
 // criterion again ("the command succeeds" claiming 0). It is allowed only
-// when the sentence itself states it: its text is a run of the pattern's
-// fixed words, or it is the fixed value of a fixed word in the table
-// below. A word inside a capture, an optional group, or an alternation is
-// not fixed, because the sentence a line binds may not say it.
+// when the sentence itself states it: its text is exactly a run of the
+// pattern's fixed words, joined by one space, or it is the fixed value of
+// a fixed word in the table below. A word inside a capture, an optional
+// group, or an alternation is not fixed, because the sentence a line binds
+// may not say it. Only the pattern side is normalized (edge punctuation
+// taken off its words): a literal with other spacing or punctuation is a
+// text the sentence does not state.
+//
+// A value from the table is compared with `equal` alone. "no item is
+// unpaid" read as `at-least 0`, or "the cart is empty" read as
+// `not-equal []`, would hold for nearly anything, and the word gives
+// the reader no way to see that.
 
 /** The values a word fixes, compared case-insensitively. */
 export const LITERAL_WORDS: Readonly<Record<string, readonly ClaimLiteral[]>> = {
@@ -176,15 +248,17 @@ export function fixedWords(pattern: string): readonly string[] {
   return words;
 }
 
-/** The text a literal states in a sentence, as words; `null` for a value
- * no word can state. */
-function literalWords(literal: unknown): readonly string[] | null {
-  if (typeof literal === "string") {
-    return literal.split(/\s+/).map(normalizedWord).filter((word) => word.length > 0);
-  }
-  if (typeof literal === "number" && Number.isFinite(literal)) return [String(literal)];
-  if (typeof literal === "boolean" || literal === null) return [String(literal)];
+/** The text a literal is in a sentence, or `null` for a value no text
+ * states (`[]`, a number that is not finite, anything else). */
+function literalText(literal: unknown): string | null {
+  if (typeof literal === "string") return literal;
+  if (typeof literal === "number" && Number.isFinite(literal)) return String(literal);
+  if (typeof literal === "boolean" || literal === null) return String(literal);
   return null;
+}
+
+function isLiteralValue(literal: unknown): boolean {
+  return literalText(literal) !== null || (Array.isArray(literal) && literal.length === 0);
 }
 
 function sameLiteral(a: unknown, b: ClaimLiteral): boolean {
@@ -192,34 +266,53 @@ function sameLiteral(a: unknown, b: ClaimLiteral): boolean {
   return Object.is(a, b);
 }
 
-function containsRun(words: readonly string[], run: readonly string[]): boolean {
-  if (run.length === 0) return false;
-  for (let start = 0; start + run.length <= words.length; start += 1) {
-    if (run.every((word, offset) => words[start + offset] === word)) return true;
+function isRunOf(words: readonly string[], text: string): boolean {
+  for (let start = 0; start < words.length; start += 1) {
+    for (let end = start + 1; end <= words.length; end += 1) {
+      if (words.slice(start, end).join(" ") === text) return true;
+    }
   }
   return false;
 }
 
-/** The pattern words that state `literal`, as the record names them
- * (`literal:<words>`), or `null` when `pattern` does not state it. Pure. */
-export function literalStatedBy(pattern: string, literal: unknown): string | null {
+/** How a pattern states a literal: `words` as the record names them
+ * (`literal:<words>`), and `byTable` when a word of the table fixes the
+ * value rather than the literal's own text being the words. */
+export interface LiteralStatement {
+  readonly words: string;
+  readonly byTable: boolean;
+}
+
+/** How `pattern` states `literal`, or `null` when it does not. Pure. */
+export function literalStatement(pattern: string, literal: unknown): LiteralStatement | null {
   const words = fixedWords(pattern);
-  const own = literalWords(literal);
-  if (own !== null && containsRun(words, own)) return own.join(" ");
+  const text = literalText(literal);
+  if (text !== null && text.length > 0 && isRunOf(words, text)) return { words: text, byTable: false };
   for (const word of words) {
     const values = LITERAL_WORDS[word.toLowerCase()];
-    if (values?.some((value) => sameLiteral(literal, value))) return word;
+    if (values?.some((value) => sameLiteral(literal, value))) return { words: word, byTable: true };
   }
   return null;
 }
 
-/** The words that state `literal` in every pattern, or `null` when one
- * pattern does not: a line may bind any of them. The first pattern's words
- * name it. */
-export function literalStatedByAll(patterns: readonly string[], literal: unknown): string | null {
+/** The pattern words that state `literal`, or `null`. Pure. */
+export function literalStatedBy(pattern: string, literal: unknown): string | null {
+  return literalStatement(pattern, literal)?.words ?? null;
+}
+
+/** How every pattern states `literal`, or `null` when one pattern does
+ * not: a line may bind any of them. The first pattern's words name it, and
+ * `byTable` is true when any pattern states it only through the table. */
+export function literalStatementOfAll(patterns: readonly string[], literal: unknown): LiteralStatement | null {
   if (patterns.length === 0) return null;
-  const stated = patterns.map((pattern) => literalStatedBy(pattern, literal));
-  return stated.every((words) => words !== null) ? stated[0]! : null;
+  const stated = patterns.map((pattern) => literalStatement(pattern, literal));
+  if (!stated.every((statement) => statement !== null)) return null;
+  return { words: stated[0]!.words, byTable: stated.some((statement) => statement!.byTable) };
+}
+
+/** The words that state `literal` in every pattern, or `null`. Pure. */
+export function literalStatedByAll(patterns: readonly string[], literal: unknown): string | null {
+  return literalStatementOfAll(patterns, literal)?.words ?? null;
 }
 
 // --- declaration validation ---
@@ -238,6 +331,12 @@ export interface ClaimStepShape {
    * same key, so a line would fill such a key itself. */
   readonly captureKeys: ReadonlySet<string>;
   readonly hasObserve: boolean;
+  /** The args keys whose schema rewrites the value it parses, with what
+   * rewrites it (`schemaRewrite` in binding/schema-shape.ts). */
+  readonly rewrittenArgs: ReadonlyMap<string, string>;
+  /** The args keys whose schema is a plain `z.string()`, which
+   * `expected_view` can read; `null` when args is not a z.object. */
+  readonly stringArgs: ReadonlySet<string> | null;
 }
 
 type Where = "actual" | "item";
@@ -265,7 +364,36 @@ function checkCommon(label: string, claim: { view?: unknown; at?: unknown }): vo
   checkPath(`${label}.at`, claim.at, true);
 }
 
-function checkExpected(label: string, expected: unknown, shape: ClaimStepShape, actualFromObserve: boolean): void {
+/** Refuses a claim that reads an args key whose schema rewrites the value. */
+function checkNotRewritten(label: string, key: string, shape: ClaimStepShape, side: "actual" | "expected"): void {
+  const rewrite = shape.rewrittenArgs.get(key);
+  if (rewrite === undefined) return;
+  const where = side === "actual" ? "the value the claim measures" : "the value the line states or an earlier step returned";
+  throw new InvalidClaimError(
+    `${label} reads args.${key}, and its schema rewrites ${where} (${rewrite}), so step code would decide what the claim compares. Take the rewrite out of the schema` +
+      (side === "expected" ? ", or read the line's text with expected_view (text, lines, or json)" : ""),
+  );
+}
+
+function checkExpectedView(label: string, claim: Record<string, unknown>, shape: ClaimStepShape): void {
+  const view = claim.expected_view;
+  if (view === undefined) return;
+  if (!(CLAIM_VIEWS as readonly unknown[]).includes(view)) {
+    throw new InvalidClaimError(`${label}.expected_view must be one of ${CLAIM_VIEWS.join(", ")}; got ${describe(view)}`);
+  }
+  if (typeof claim.expected !== "string") {
+    throw new InvalidClaimError(
+      `${label}.expected_view reads the text a line states, and ${label}.expected is not an args key the sentence fills`,
+    );
+  }
+  if (shape.stringArgs !== null && !shape.stringArgs.has(claim.expected)) {
+    throw new InvalidClaimError(
+      `${label}.expected_view reads text, and args.${claim.expected} is not a plain z.string(), so the line's text is not what reaches the view`,
+    );
+  }
+}
+
+function checkExpected(label: string, expected: unknown, compare: unknown, shape: ClaimStepShape, actualFromObserve: boolean): void {
   if (typeof expected === "string") {
     if (shape.fromKeys.has(expected)) {
       throw new InvalidClaimError(
@@ -283,6 +411,7 @@ function checkExpected(label: string, expected: unknown, shape: ClaimStepShape, 
         `${label}.expected names "${expected}", which args lets a line leave out (it is optional or has a default). An expected value the sentence fills must be required, so it comes from the line and never from step code`,
       );
     }
+    checkNotRewritten(`${label}.expected`, expected, shape, "expected");
     return;
   }
   if (typeof expected !== "object" || expected === null || Array.isArray(expected)) {
@@ -306,6 +435,7 @@ function checkExpected(label: string, expected: unknown, shape: ClaimStepShape, 
         `${label}.expected.from starts with "${key}", which a pattern captures, so a line fills it and no earlier step does. Name it as a sentence key, or take it out of the pattern`,
       );
     }
+    checkNotRewritten(`${label}.expected.from`, key, shape, "expected");
     return;
   }
   if ("observe" in record) {
@@ -317,7 +447,7 @@ function checkExpected(label: string, expected: unknown, shape: ClaimStepShape, 
   }
   if ("literal" in record) {
     const literal = record.literal;
-    if (literalWords(literal) === null && !(Array.isArray(literal) && literal.length === 0)) {
+    if (!isLiteralValue(literal)) {
       throw new InvalidClaimError(
         `${label}.expected.literal must be a string, a finite number, a boolean, null, or []; got ${describe(literal)}`,
       );
@@ -327,13 +457,19 @@ function checkExpected(label: string, expected: unknown, shape: ClaimStepShape, 
         `${label}.expected is the boolean ${String(literal)}, and its actual comes from observe. A boolean computed by observe is a judgment made in code: return the thing measured (a count, a text, a list) and let the claim compare it`,
       );
     }
-    if (literalStatedByAll(shape.patterns, literal) === null) {
+    const statement = literalStatementOfAll(shape.patterns, literal);
+    if (statement === null) {
       const where =
         shape.patterns.length === 0
           ? "the step has no pattern, so no sentence states it"
           : `no fixed word of ${shape.patterns.map((pattern) => `"${pattern}"`).join(" and ")} states it`;
       throw new InvalidClaimError(
         `${label}.expected is the literal ${describe(literal)}, and ${where}. Put the value in the sentence, as fixed words or as a capture the claim names`,
+      );
+    }
+    if (statement.byTable && compare !== "equal") {
+      throw new InvalidClaimError(
+        `${label}.expected is the literal ${describe(literal)}, which the word "${statement.words}" fixes, and ${label}.compare is ${describe(compare)}. A value a word fixes is compared with equal alone: another compare against it holds for nearly anything, and the word does not show it`,
       );
     }
     return;
@@ -350,7 +486,8 @@ function checkComparison(label: string, claim: Record<string, unknown>, shape: C
   if (!(CLAIM_COMPARES as readonly unknown[]).includes(claim.compare)) {
     throw new InvalidClaimError(`${label}.compare must be one of ${CLAIM_COMPARES.join(", ")}; got ${describe(claim.compare)}`);
   }
-  checkExpected(label, claim.expected, shape, actualFromObserve);
+  checkExpected(label, claim.expected, claim.compare, shape, actualFromObserve);
+  checkExpectedView(label, claim, shape);
 }
 
 /** Whether a top-level claim's `actual` reads observe: its first segment
@@ -411,6 +548,7 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
         `${label}.actual starts with "${head}", an args key the sentence fills. A claim's actual is a value an earlier step returned (a from key) or one observe read`,
       );
     }
+    if (!fromObserve) checkNotRewritten(`${label}.actual`, head, shape, "actual");
     if (claim.each === undefined) {
       checkComparison(label, claim, shape, "actual", fromObserve);
       return;
@@ -435,7 +573,23 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
         checkComparison(itemLabel, entry as Record<string, unknown>, shape, "item", fromObserve);
       });
     }
+    // A where claim that is also an item claim makes "every item" read as
+    // "every item that holds", which holds for any array with one such item.
+    ((each.where ?? []) as Record<string, unknown>[]).forEach((entry, whereIndex) => {
+      const same = (each.claims as Record<string, unknown>[]).findIndex((item) => sameItemClaim(entry, item));
+      if (same !== -1) {
+        throw new InvalidClaimError(
+          `${label}.each.where[${whereIndex}] is the same claim as ${label}.each.claims[${same}], so every item where selects holds it and the claim says nothing. Select by another value, or drop where`,
+        );
+      }
+    });
   });
+}
+
+const ITEM_CLAIM_FIELDS = ["actual", "view", "at", "compare", "expected", "expected_view"] as const;
+
+function sameItemClaim(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  return ITEM_CLAIM_FIELDS.every((field) => JSON.stringify(a[field]) === JSON.stringify(b[field]));
 }
 
 function validatePoll(poll: unknown, hasObserve: boolean, maxMs: number): void {
@@ -467,7 +621,8 @@ function describeExpected(expected: ClaimExpected): string {
 function describeComparison(claim: ItemClaim, actual: string): string {
   const view = claim.view === undefined ? "" : ` as ${claim.view}`;
   const at = claim.at === undefined ? "" : ` at ${claim.at}`;
-  return `${actual}${view}${at} ${claim.compare} ${describeExpected(claim.expected)}`;
+  const expectedView = claim.expected_view === undefined ? "" : ` as ${claim.expected_view}`;
+  return `${actual}${view}${at} ${claim.compare} ${describeExpected(claim.expected)}${expectedView}`;
 }
 
 /** A declared claim as one line: `result.exit_code equal code`, with a

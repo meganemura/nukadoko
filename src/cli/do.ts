@@ -4,7 +4,7 @@ import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../ru
 import {
   argOrigins,
   channelsOfStepRecord,
-  claimSourceLabel,
+  claimArgSide,
   executeTypedStep,
   recordedChannels,
   withMeasured,
@@ -528,7 +528,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       config,
       // No feature line produced a `--use` value, so its record id names
       // the producer instead.
-      argLabel: (key) => claimSourceLabel(key, origins.get(key), () => null),
+      argSide: (key) => claimArgSide(key, origins.get(key), () => null),
+      // No line states a value under nuka do: a key --args gave reads as
+      // the JSON text it was given.
+      sentenceText: (key) =>
+        origins.get(key) === "command_line" && typeof parsedArgs === "object" && parsedArgs !== null && Object.hasOwn(parsedArgs, key)
+          ? (JSON.stringify((parsedArgs as Record<string, unknown>)[key]) ?? null)
+          : null,
     });
     const { status, fixtureUsage } = outcome;
     const recordedArgs = outcome.args;

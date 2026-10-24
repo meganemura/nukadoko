@@ -92,8 +92,9 @@ This part does not change release to release.
   ```
 
   The pattern's fixed words state it: `{ literal }`. A literal the pattern
-  does not state is refused at import, so a sentence that keeps its value
-  in step code is reworded to state it.
+  does not state, word for word, is refused at import, so a sentence that
+  keeps its value in step code is reworded to state it. A value that a
+  word such as `no` or `empty` fixes is compared with `equal` only.
 
   ```gherkin
   # Before: Then the command succeeds
@@ -119,6 +120,22 @@ This part does not change release to release.
   poll: { timeout_ms: 5000 },
   claims: [{ actual: "firstAt", compare: "less-than", expected: { observe: "secondAt" } }],
   ```
+
+- **A Then parses the line's text with `expected_view`, not with its
+  schema.** An args schema that rewrites a value a claim reads
+  (`z.coerce`, a transform, a preprocess, a pipe, `trim` and the other
+  overwrite checks, `catch`) is refused at import. A docstring of JSON
+  keeps a plain `z.string()` key, and the claim reads it as JSON:
+
+  ```ts
+  // Before: expected: z.string().transform((text) => JSON.parse(text))
+  args: z.object({ expected: z.string(), body: z.unknown() }),
+  claims: [{ actual: "body", compare: "equal", expected: "expected", expected_view: "json" }],
+  ```
+
+  A claim on a `Date`, a bigint, or another value that is not plain
+  JSON breaks at run: return the value as JSON (an ISO date string, a
+  decimal string, a number) and claim on that.
 
 - **A boolean becomes the word the sentence uses, or the measurement
   behind it.** A boolean literal is refused against a value `observe`
@@ -150,13 +167,21 @@ This part does not change release to release.
   runs.** `--replace` refuses it, because it is not what scaffold writes
   now. Rewrite it as above, or delete the file and scaffold it again.
 
-- **Two error kinds and two Allure categories are new.** A reader that
-  switches on `error.kind` adds `claim_broken` and `unobserved`. A
-  project with an `allurerc.mjs` from an earlier release copies the two
-  new rules from [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs);
-  without them, Allure 3 files both kinds under "Product errors".
+- **Three error kinds and three Allure categories are new.** A reader
+  that switches on `error.kind` adds `claim_broken`, `unobserved`, and
+  `claim_unjudged`. A project with an `allurerc.mjs` from an earlier
+  release copies the three new rules from [examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs);
+  without them, Allure 3 files these kinds under "Product errors".
   `nuka report --format allure` writes Allure 2's `categories.json` with
-  all nine on its own.
+  all ten on its own.
+
+- **A step file exports the step `defineStep` returned, and leaves it as
+  it is.** `defineStep` now freezes the step it returns, with its claims
+  and `from`, and discovery refuses a default export that is a copy
+  (`{ ...step }`, `Object.assign({}, step)`). Both show as
+  `step-file-import-failed`. A file that copied a step to change an
+  option passes the option to `defineStep` instead; a step listed in
+  `parts` is the one `defineStep` returned, too.
 
 - **`nuka tend` is removed; `nuka check` reports its findings.** `nuka
   tend` now refuses with `removed-command`. A job that read

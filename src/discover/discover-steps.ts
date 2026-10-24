@@ -15,7 +15,7 @@ import type {
 import type { RunHookRegistration } from "../compat/run-hooks.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { StepContext } from "../step/context.js";
-import { isStep, type Step } from "../step/define-step.js";
+import { isDefinedStep, isStep, type Step } from "../step/define-step.js";
 import {
   DuplicateCompatStepError,
   DuplicateStepError,
@@ -401,6 +401,23 @@ export async function discoverSteps(
     }
 
     const candidate = mod.default;
+    // A step the file copied (`{ ...step, claims }`, Object.assign) carries
+    // the brand without having been validated: its claims are whatever the
+    // copy says. It is refused like a file that did not import, since its
+    // step cannot be run as written.
+    if (isStep(candidate) && !isDefinedStep(candidate)) {
+      const relativePath = path.relative(rootDir, filePath);
+      const message =
+        "the default export is a copy of a step, not the step defineStep returned, so nothing validated what it declares. Export what defineStep returned, and pass any change to defineStep instead";
+      if (!tolerateImportFailures) {
+        throw new StepFileImportError(`${relativePath}: ${message}`, "step-file-import-failed", { do: "nuka check" }, undefined);
+      }
+      compatRegistry.drainCompatSteps();
+      compatRegistry.drainCompatParameterTypes();
+      defineWorldModule.drainWorldSchemaRegistrations();
+      importFailures.push({ filePath: relativePath, message });
+      continue;
+    }
     if (isStep(candidate)) {
       // `path.extname` rather than a hardcoded `".ts"`: `walkStepFiles`
       // hands this loop a mix of

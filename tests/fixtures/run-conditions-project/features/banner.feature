@@ -4,4 +4,4 @@ Feature: Banner
     Then the banner reads "on"
 
   Scenario: the banner has a value
-    Then the banner is not empty
+    Then the banner matches "^(on|off)$"

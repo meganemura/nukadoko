@@ -1365,7 +1365,7 @@ Everything under
 `nuka run` writes that summary as Markdown: the commit, each environment,
 the browser, one table per feature with each scenario's verdict in each
 environment, its duration, and its failing step, a Claims section listing
-every claim of every Then with `held` or `broken`, a closing section naming any step that declared
+every claim of every Then with its outcome, a closing section naming any step that declared
 `mutates: false` while measured making a write, and the command that reruns
 each failed scenario. On GitHub Actions it lands on the job's summary page
 with no configuration, and `nuka report --format markdown --out <path>`

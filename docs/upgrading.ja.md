@@ -84,8 +84,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ```
 
   pattern の固定の語が値を述べる場合は `{ literal }` です。
-  pattern が述べないリテラルは import 時に拒否されます。
+  pattern が語のとおりに述べないリテラルは import 時に拒否されます。
   そのため、値を step のコードに持っていた文は、値を述べるように書き直します。
+  `no` や `empty` のような語が固定する値と比べられるのは `equal` だけです。
 
   ```gherkin
   # Before: Then the command succeeds
@@ -111,6 +112,19 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   poll: { timeout_ms: 5000 },
   claims: [{ actual: "firstAt", compare: "less-than", expected: { observe: "secondAt" } }],
   ```
+
+- **Then は行のテキストを、スキーマではなく `expected_view` でパースします。**
+  claim が読む値を書き換える args スキーマ(`z.coerce`、transform、preprocess、pipe、`trim` などの上書きするチェック、`catch`)は import 時に拒否されます。
+  JSON の docstring は素の `z.string()` のキーのままにし、claim がそれを JSON として読みます:
+
+  ```ts
+  // Before: expected: z.string().transform((text) => JSON.parse(text))
+  args: z.object({ expected: z.string(), body: z.unknown() }),
+  claims: [{ actual: "body", compare: "equal", expected: "expected", expected_view: "json" }],
+  ```
+
+  `Date`、bigint など、素の JSON でない値に対する claim は実行時に成り立ちません。
+  値を JSON として返し(ISO 形式の日付の文字列、10 進の文字列、数値)、それに対して claim します。
 
 - **真偽値は、文が使う語か、その背後の計測値になります。**
   `observe` が計算した値に対する真偽値のリテラルは拒否され、文が言うのは `true` ではなく `accepted` です。
@@ -138,11 +152,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   それはいまの scaffold が書くものではないので、`--replace` はそれを拒否します。
   上のとおり書き直すか、ファイルを削除して scaffold し直してください。
 
-- **error kind と Allure の category が 2 つずつ増えました。**
-  `error.kind` で分岐する読み手は、`claim_broken` と `unobserved` を加えます。
-  以前のリリースの `allurerc.mjs` を持つプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) から新しい 2 つの rule をコピーします。
-  それがないと、Allure 3 は両方の kind を「Product errors」に入れます。
-  Allure 2 の `categories.json` は、`nuka report --format allure` が 9 つすべてを含めて自分で書きます。
+- **error kind と Allure の category が 3 つずつ増えました。**
+  `error.kind` で分岐する読み手は、`claim_broken`、`unobserved`、`claim_unjudged` を加えます。
+  以前のリリースの `allurerc.mjs` を持つプロジェクトは、[examples/allure/allurerc.mjs](https://github.com/meganemura/nukadoko/blob/main/examples/allure/allurerc.mjs) から新しい 3 つの rule をコピーします。
+  それがないと、Allure 3 はこれらの kind を「Product errors」に入れます。
+  Allure 2 の `categories.json` は、`nuka report --format allure` が 10 個すべてを含めて自分で書きます。
+
+- **step ファイルは `defineStep` が返した step を、そのまま export します。**
+  `defineStep` は返す step を、その claim と `from` とともに凍結するようになり、discovery はコピー(`{ ...step }`、`Object.assign({}, step)`)である default export を拒否します。
+  どちらも `step-file-import-failed` として現れます。
+  オプションを変えるために step をコピーしていたファイルは、そのオプションを `defineStep` に渡します。
+  `parts` に並べる step も、`defineStep` が返したものです。
 
 - **`nuka tend` は削除され、その findings は `nuka check` が報告します。**
   `nuka tend` はいま `removed-command` で拒否します。

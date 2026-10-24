@@ -21,11 +21,11 @@ import { fixtureSourceOf, type Step } from "./define-step.js";
 // `nuka steps --json`'s `needs`/`needs_browser` account for a part's own
 // needs too.
 //
-// `parts` is a static declaration, not a runtime call graph, so it can
-// contain a cycle a step author wrote by mistake (`nuka check` reports that
-// separately) — `visited` below is what keeps this walk from looping
-// forever over one rather than reporting it itself; this file has no
-// business deciding whether a cycle is an error.
+// `parts` is a static declaration, not a runtime call graph. defineStep
+// freezes it, so no step file can close a cycle today, and `nuka check`
+// reports one separately if that ever changes; `visited` below keeps this
+// walk from looping forever over one rather than reporting it itself, since
+// this file has no business deciding whether a cycle is an error.
 
 /**
  * `step`'s own destructured fixture names, unioned with every part's

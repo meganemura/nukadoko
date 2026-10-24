@@ -117,7 +117,7 @@ describe("writeAllureResults", () => {
 
   it("writes categories.json (9 rules) and environment.properties on begin()", () => {
     const categories = JSON.parse(readFileSync(path.join(resultsDir, "categories.json"), "utf8"));
-    expect(categories).toHaveLength(9);
+    expect(categories).toHaveLength(10);
     const env = readFileSync(path.join(resultsDir, "environment.properties"), "utf8");
     expect(env).toContain("environment=staging");
     expect(env).toContain("target_version=9.9.9");

@@ -1550,6 +1550,21 @@ record:
 
 Each rule below closes one of these.
 
+No rule makes a claim that holds into proof that the behaviour happened.
+What the rules promise is narrower, and each rule below is held to it:
+
+- The record never states something false. Every label names the real
+  source of its value, and every value the record shows is the value
+  that was compared.
+- A way to make a claim hold without the behaviour, one that a reader of
+  the record could not see, is closed: refused at import or by `nuka
+  check` when it can be known before the run, and broken by the run
+  otherwise.
+- A way that a reader of the record can see is left open, and the record
+  shows it: the run summary prints each claim beside its sentence, with
+  the compare and where each value came from, so the reader judges
+  whether the claim measures what the sentence says.
+
 #### The shape
 
 A typed step either runs (`run`) or claims (`claims`), never both. The two
@@ -1573,11 +1588,20 @@ export default defineStep({
 });
 ```
 
-A claim is `{ actual, view?, at?, compare, expected }`, or `{ actual,
-view?, at?, each }` (below). `claims: []` is refused at import: a claim
-step with no claim passes without judging anything. `description` is
-optional on a claim step, because `nuka steps` and `nuka describe` print
-the claims, and the claims say exactly what the step checks.
+A claim is `{ actual, view?, at?, compare, expected, expected_view? }`,
+or `{ actual, view?, at?, each }` (below). `claims: []` is refused at
+import: a claim step with no claim passes without judging anything.
+`description` is optional on a claim step, because `nuka steps` and
+`nuka describe` print the claims, and the claims say exactly what the
+step checks.
+
+`defineStep` freezes what it validated: the claims and every object
+inside them, `from`, and the step it returns. A step file that changes a
+claim after the call throws at import, and discovery runs a default
+export only when it is the object `defineStep` returned, so a file that
+exports a copy (`{ ...step, claims }`) is refused too. `nuka check`
+reports both as `step-file-import-failed`: otherwise the claims that run
+would be ones nothing validated.
 
 #### Where the expected value comes from
 
@@ -1588,7 +1612,14 @@ the claims, and the claims say exactly what the step checks.
   written as the key itself (`expected: "code"`). The record says
   `sentence:code`. The key must be required in `args`: a default or an
   optional key would let the schema in step code supply the value when
-  the line states none.
+  the line states none. Its schema must not rewrite the value either:
+  `z.coerce`, a transform, a preprocess, any other pipe, an overwrite
+  check (`trim`, `toLowerCase`, and the like), or `catch` on that key
+  is refused at import, since step code would then decide what the claim
+  compares. A claim that needs the line's text as JSON or as lines names
+  `expected_view` (`text`, `lines`, or `json`, applied as `view` is),
+  on a plain `z.string()` key, and the record says `sentence:<key> as
+  <view>`.
 - **An earlier step's result**: `{ from: "<key>.<path>" }`, where the
   first segment is a key of this step's `from` ("the frozen count is
   unchanged"). The record says `from:<step>@<line>.<path>`, with the
@@ -1596,10 +1627,16 @@ the claims, and the claims say exactly what the step checks.
   do`. A plain string that names a `from` key is refused, so the record
   can never call an earlier step's value a sentence value.
 - **A literal**: `{ literal: v }`, only when the sentence itself states
-  the value. Its text is a run of the pattern's fixed words (the pattern
-  `the command exits 0` may claim `0`), or it is the fixed value of a word
-  in a short table: `no`, `none`, and `nothing` fix `0`, `""`, and `[]`;
-  `empty` fixes `""` and `[]`. A word inside a capture, an optional group,
+  the value. Its text is exactly a run of the pattern's fixed words,
+  joined by one space (the pattern `the command exits 0` may claim `0`).
+  Only the pattern's words lose their edge punctuation, so a literal with
+  other spacing or punctuation is a text the sentence does not state. Or
+  it is the fixed value of a word in a short table: `no`, `none`, and
+  `nothing` fix `0`, `""`, and `[]`; `empty` fixes `""` and `[]`. A
+  value from the table is compared with `equal` alone: "no item is
+  unpaid" read as `at-least 0`, or "the cart is empty" read as
+  `not-equal []`, holds for nearly anything, and the word does not show
+  it. A word inside a capture, an optional group,
   or an alternation is not fixed, since a line may not say it, and a step
   with several patterns needs every pattern to state the literal. Anything
   else is refused at import, naming the pattern. `Then the command
@@ -1611,10 +1648,17 @@ the claims, and the claims say exactly what the step checks.
   `observe:<path>`. It is allowed and labelled, because a claim that
   compares two readings of the world states no value of its own.
 
-A boolean literal is refused when the actual value comes from `observe`.
-A boolean that `observe` computed is a judgment made in code: `observe`
-returns the thing it measured (a count, a text, a list), and the claim
-judges it.
+A boolean literal is refused when the actual value comes from `observe`,
+and an expected value `{ observe }` reads that is a boolean breaks the
+claim at run. A boolean that `observe` computed is a judgment made in
+code: `observe` returns the thing it measured (a count, a text, a list),
+and the claim judges it.
+
+Every claim record keeps `expected_text`: the text the line states the
+expected value as (a capture's text, the docstring, or the table), the
+pattern words of a literal, and `null` for a value from an earlier step
+or from `observe`. A reader of the record compares the value with the
+words the line used.
 
 #### The actual value
 
@@ -1631,8 +1675,15 @@ line. Then, in order:
   view: "json", at: "sections.git.0.dirty_count"`), so parsing is declared
   data, not code. A path segment on an array is a decimal index.
 
+A path walks own data properties only: a segment that names an inherited
+member, such as `constructor`, or a getter finds nothing. The args schema
+of a `from` key a claim measures must not rewrite the value, for the same
+reason as an expected key's. The record's label names the whole place,
+`view` and `at` included: `from:run-tally@16.stdout as json at
+sections.git.0.dirty_count`.
+
 An actual value that resolves to `undefined` always breaks, and the record
-names the path. `nuka check` reads each `from` path against the producing
+names the place. `nuka check` reads each `from` path against the producing
 step's `returns` schema and reports a path that schema does not declare
 (`claim-path-unknown`), because such a claim could only ever break.
 
@@ -1643,12 +1694,33 @@ step's `returns` schema and reports a path that schema does not declare
 (the expected text, as a regular expression, matches), `greater-than`,
 `at-least`, `less-than`, and `at-most`. Equality is structural over JSON
 values: object key order does not count, and `0` equals `-0`. The order
-compares read two numbers or two bigints.
+compares read two numbers.
+
+Both sides are plain JSON before any compare runs: `null`, a boolean, a
+string, a finite number (an integer no larger than
+`Number.MAX_SAFE_INTEGER`), an array with no holes and no other keys, or
+an object whose prototype is `Object.prototype` or `null` and whose own
+properties are all enumerable data properties with string keys. Anything
+else (a `Date`, a `Map`, a bigint, `NaN`, an `undefined` item, a
+getter, a class instance) breaks the claim, and the reason names what it
+is and where it sits: `observe:when is a Date, not a JSON value`. Such a
+value prints one way in the record and compares another way (every two
+`Date`s are structurally equal), so the record could not show what was
+compared.
 
 A comparison across two JSON types breaks and names both types, because a
 string is never equal to a number for the reason the claim states. An
-empty expected text under `contains-text` or `matches` breaks, because
-every string holds it.
+expected text that nearly every string holds breaks, wherever it came
+from: under `contains-text`, a text of only whitespace or nothing; under
+`matches`, a pattern that matches the empty string.
+
+`matches` tests the regular expression on a worker thread, which nukadoko
+starts outside the step's recorded actions, and gives it the time left of
+the step's deadline (10 seconds for a step with no deadline). A pattern
+that runs longer, as one that backtracks can for minutes on a short text,
+is stopped, and the claim breaks with that reason. A regular expression
+cannot be interrupted on the thread that runs it, so without the worker
+such a pattern held the run past its deadline and past SIGTERM.
 
 #### Each
 
@@ -1656,9 +1728,22 @@ every string holds it.
 an array. Paths inside are relative to the item, and an item claim with no
 `actual` reads the item itself. `where` selects the items the claims apply
 to. When the array is empty, or `where` selects nothing, the claim breaks:
-"every item" over nothing is not a measurement. The record keeps the
-number of items, the number selected, and at most 20 item results, the
-broken ones first.
+"every item" over nothing is not a measurement.
+
+A `where` claim that is the same claim as an item claim is refused at
+import: every item it selects holds that claim, so "every item" would
+read as "every item that holds". A `where` claim that cannot compare an
+item at all (an undefined value, two JSON types) breaks the whole claim
+and names the item, since leaving that item out would narrow "every
+item" without a word.
+
+The record keeps the declared `where` claims and item claims with their
+expected values, the number of items, the number selected, and at most 20
+item results, the broken ones first. Each item result says whether
+`where` selected the item (`selected`), with the `where` claim records
+that decided it, and a selected item carries its item claim records. The
+run summary line names the `where` claims and the item claims with their
+compares and expected values.
 
 #### Observe
 
@@ -1676,8 +1761,13 @@ reach, is held to the same rule.
 An `observe` that throws records the step as `unobserved`, with the error,
 and judges no claim. That is a different result from a broken claim: a
 guard inside `observe` that throws is visible as not having measured,
-never as a claim that held or broke. A step deadline that passes first is
-`timeout`, as for any step.
+never as a claim that held or broke. `unobserved` means exactly that
+`observe` threw. A step deadline that passes first is `timeout`, a
+fixture that cannot be set up is the step's own error, as for any step,
+and a step with no `observe` is never `unobserved`. When nukadoko itself
+fails while judging a claim (the worker that tests `matches` stops), the
+claim's outcome is `unjudged` and the step fails with `claim_unjudged`,
+never `claim_broken`: nothing is known about the criterion.
 
 #### Poll
 
@@ -1702,8 +1792,12 @@ settles is a choice the step file has to make visibly.
 sentence key, the producing line and path, or the `observe` path. It
 reports a claim whose two sides resolve to the same place
 (`claim-compares-itself`), because such a claim holds whatever the
-behaviour is. The run records the same case as a broken claim with a
-reason, for a project that runs without checking first.
+behaviour is. The run compares where the two sides read as well, as a
+place: the origin (`observe`, a producing step's record, a sentence key)
+and the full path, with `view` and `at` counted as steps of it and an
+array index as a path segment like any key. So `actual: "r", at:
+"count"` and `expected: { from: "r.count" }` read one place, and the run
+breaks that claim with a reason.
 
 #### mutates
 
@@ -1741,14 +1835,18 @@ its claims.
 A claim step's record has three fields of its own (see "Records"):
 
 - `claims`: each claim in the order the step declares it. A comparison
-  carries `actual` (after `view` and `at`; absent when the path held
-  nothing), `actual_from`, `view` and `at` when the claim names them,
-  `compare`, `expected`, `expected_from`, `outcome` (`held`, `broken`, or
-  `unobserved`), a `reason` when it broke for something other than the
-  comparison itself (an undefined value, two JSON types, an empty expected
-  text, a view that could not apply), and `measured`. An `each` claim
-  carries `actual_from`, the `each` counts and item results, and the same
-  `outcome`, `reason`, and `measured`.
+  carries `actual` (after `view` and `at`; absent when the place held
+  nothing or a value that is not plain JSON), `actual_from`, `view` and
+  `at` when the claim names them, `compare`, `expected` (absent on the
+  same terms), `expected_from`, `expected_view` when the claim names it,
+  `expected_text`, `outcome` (`held`, `broken`, `unobserved`, or
+  `unjudged`), a `reason` when it broke for something other than the
+  comparison itself (an undefined value, a value that is not plain JSON,
+  two JSON types, an expected text every string holds, a view that could
+  not apply, a side compared with itself) or when nukadoko could not
+  judge it, and `measured`. An `each` claim carries `actual_from`, the
+  `each` declarations, counts, and item results, and the same `outcome`,
+  `reason`, and `measured`.
 - `observation`: `observed` when the step read its values, `unobserved`
   when it could not. The step's `error` then says why.
 - `attempts`: how many times the step read its values. Each `observe` call
@@ -1772,12 +1870,15 @@ claim broken: "food: 5.5\nrent: 100" (from:run-tally@16.stdout as text) equal "f
 ```
 
 One line per broken claim, with the first item that broke under an `each`.
-The run summary lists every claim of every Then under "Claims", one line
-each, in the same words with `held` or `broken` after them.
+A claim nukadoko could not judge fails the step with `claim_unjudged`
+instead, and its line starts `claim unjudged:`. The run summary lists
+every claim of every Then under "Claims", one line each, in the same
+words with the outcome after them.
 
 The Allure results show each claim as a child step of its step, named by
 the same line, passed when it held, failed when it broke, and broken when
-the step observed nothing, with the values and their sources as
+the step observed nothing or nukadoko could not judge it, with the values
+and their sources as
 parameters (see "Allure results"). The cucumber-messages stream attaches
 the claims to the step as `claims.json`, with media type
 `application/vnd.nukadoko.claims+json`, and a broken claim's step result
@@ -2588,6 +2689,7 @@ to act on the run without opening another file:
               "compare": "equal",
               "expected": "Hi, Ada!",
               "expected_from": "sentence:text",
+              "expected_text": "\"Hi, Ada!\"",
               "outcome": "broken",
               "measured": { "step_record_id": "step-20260801-143023-e5f6", "channel": "observed.processes[0].stdout" }
             }
@@ -2937,7 +3039,7 @@ its scenario record's id, so either record leads to the other.
   it already answers everything else about what this one execution did.
 - `error.kind` uses a closed set and sits beside the message a person reads:
   `args_invalid`, `result_invalid`, `binding_invalid`, `world_invalid`,
-  `timeout`, `unsupported`, `claim_broken`, `unobserved`, `step_error`. Closed because a report has to
+  `timeout`, `unsupported`, `claim_broken`, `unobserved`, `claim_unjudged`, `step_error`. Closed because a report has to
   classify against it: an open one, extended per step, would classify
   nothing. The first four name failures that exist only because there is a
   contract to violate, which is the part a report built on a runner that
@@ -2945,8 +3047,10 @@ its scenario record's id, so either record leads to the other.
   `step_error`, since claiming a contract failure wrongly is worse than not
   claiming one. `claim_broken` is the one kind that says a criterion
   failed: a claim step read its values and a claim did not hold. A claim
-  step that could not read them is `unobserved`, so a broken setup and a
-  failed criterion never share a kind (see "Claims"). Hook records in the scenario record carry the same field.
+  step whose `observe` threw is `unobserved`, and one whose claim nukadoko
+  could not judge is `claim_unjudged`, so a broken setup, a failure of
+  nukadoko's own, and a failed criterion never share a kind (see
+  "Claims"). Hook records in the scenario record carry the same field.
 
   | `error.kind` | The step failed because |
   | --- | --- |
@@ -2957,7 +3061,8 @@ its scenario record's id, so either record leads to the other.
   | `timeout` | a deadline fired before the step or hook settled |
   | `unsupported` | a compat shape nukadoko does not implement: a `done` callback, or a `"pending"` or `"skipped"` return value |
   | `claim_broken` | a claim step read its values and at least one claim did not hold |
-  | `unobserved` | a claim step could not read its values (its `observe` threw, or a fixture it names could not be set up), so no claim was judged |
+  | `unobserved` | a claim step's `observe` threw, so no claim was judged |
+  | `claim_unjudged` | a claim step read its values and nukadoko failed while judging a claim, so nothing is known about that claim |
   | `step_error` | anything else: the step's or hook's own code threw |
 
 - `mutates` contains the step's declaration (`null` for a compat step, which
@@ -4201,7 +4306,7 @@ Never clamped to the parent step entry's own start/stop range: a timeline entry 
 
 A claim is an assertion, and Allure's unit of an assertion is a step with its own status, so each claim of a claim step becomes one zero-width child step after the timeline (see "Claims").
 Its name is the claim's line, the same words the run summary prints (e.g. `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`).
-Its status is passed when the claim held, failed when it broke, and broken when the step observed nothing.
+Its status is passed when the claim held, failed when it broke, and broken when the step observed nothing or nukadoko could not judge the claim.
 Its parameters are `actual`, `actual from`, `expected`, `expected from`, and, when a channel holds the raw actual value, `measured`, so a reader sees both values without opening `record.json`.
 A step that failed with `claim_broken` is failed, like `step_error` and `result_invalid`: a broken claim is a criterion failing, which is what Allure's failed means.
 
@@ -4216,12 +4321,12 @@ The marker names the same `error.kind` a failed step's step record (or, when a h
 The two Allure generations turn that into a category by different paths, and they need different things from a user.
 
 - **Allure 2** has no category field for each result, so `nuka report` also writes `categories.json` on every render.
-  It contains all nine rules, one for each `error.kind`, and matches the message prefix by regular expression.
+  It contains all ten rules, one for each `error.kind`, and matches the message prefix by regular expression.
   The message prefix and category rule represent the same classification, so users do not need extra configuration.
 - **Allure 3** does not read `categories.json` from a results directory during `allure generate` or `allure report`.
   Allure 3 gets categories only from its configuration and matches them against result labels.
   `nukadoko.failure` supplies that label.
-  `nuka init --allure` writes `allurerc.mjs` at the project root with nine label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the results themselves use.
+  `nuka init --allure` writes `allurerc.mjs` at the project root with ten label-matcher rules, one per `error.kind`, built from `NAME_BY_KIND` (`src/report/allure/categories.ts`) so the names can never drift from the ones the results themselves use.
   Dropped at a project's root it is picked up automatically (Allure 3 auto-detects `allurerc.{js,mjs,cjs,json,yaml,yml}` from the current working directory, no `--config` flag needed).
   `nuka init` checks all six extensions first and writes nothing, naming the file it found on stderr, when a project already has one.
   Without any of them, every nukadoko failure lands in Allure 3's one built-in "Product errors" category instead.

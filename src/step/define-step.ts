@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { stripCaptureNames } from "../binding/pattern.js";
-import { asObjectShape, isRequiredField } from "../binding/schema-shape.js";
+import { asObjectShape, isPlainString, isRequiredField, schemaRewrite } from "../binding/schema-shape.js";
 import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 import { claimsProblem, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
@@ -669,7 +669,7 @@ function validateStepDefinition(definition: DefinitionFields): void {
   }
   if (definition.parts !== undefined) {
     const parts = definition.parts;
-    if (!Array.isArray(parts) || parts.some((part) => !isStep(part))) {
+    if (!Array.isArray(parts) || parts.some((part) => !isDefinedStep(part))) {
       throw new InvalidStepDefinitionError(
         "defineStep parts must be an array of steps, each produced by defineStep.",
       );
@@ -728,6 +728,13 @@ function validateClaimStepDefinition(definition: DefinitionFields): void {
       fromKeys: new Set(fromKeys),
       captureKeys: patternCaptureKeys(patterns),
       hasObserve: definition.observe !== undefined,
+      rewrittenArgs: new Map(
+        Object.entries(shape ?? {}).flatMap(([key, field]) => {
+          const rewrite = schemaRewrite(field);
+          return rewrite === null ? [] : [[key, rewrite] as const];
+        }),
+      ),
+      stringArgs: shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isPlainString(field)).map(([key]) => key)),
     }) ?? pollProblem(definition.poll, definition.observe !== undefined, MAX_STEP_TIMEOUT_MS);
   if (problem !== null) {
     throw new InvalidStepDefinitionError(`defineStep ${problem}.`);
@@ -770,19 +777,19 @@ export function defineStep(definition: StepDefinitionInput): Step {
     [STEP_BRAND]: true as const,
   };
   if (definition.claims !== undefined) {
-    return {
+    return defined({
       ...common,
       description: definition.description,
       returns: defaultReturns(),
       mutates: false,
       parts: [],
-      claims: definition.claims,
+      claims: deepFrozen(definition.claims),
       observe: definition.observe as ObserveFn | undefined,
-      poll: definition.poll,
+      poll: definition.poll === undefined || definition.poll === false ? definition.poll : Object.freeze({ ...definition.poll }),
       [STEP_DECLARATION]: { declaresReturns: false, ignoredOptions: ignoredOptions(definition) },
-    };
+    });
   }
-  return {
+  return defined({
     ...common,
     description: definition.description,
     // An omitted `returns` is the default schema, which is what
@@ -795,7 +802,54 @@ export function defineStep(definition: StepDefinitionInput): Step {
       declaresReturns: definition.returns !== undefined,
       ignoredOptions: ignoredOptions(definition),
     },
-  };
+  });
+}
+
+// --- what defineStep validated ---
+//
+// defineStep validates a definition once, and discovery runs what it
+// returned. A step file could otherwise export a copy with other claims
+// (`{ ...step, claims }`) or change a claim after the call, and run
+// claims nothing ever validated. So the claims, `from`, and the step
+// itself are frozen, and every step defineStep returns is kept in one
+// WeakSet; discovery accepts a default export only when it is in the set.
+// The set lives on globalThis under a registry symbol because step files
+// load in a module graph of their own (brand.ts says why), so a set local
+// to this module would be a different set in each graph.
+
+const DEFINED_KEY = Symbol.for("nukadoko.step.defined");
+
+function definedSteps(): WeakSet<object> {
+  const holder = globalThis as { [DEFINED_KEY]?: WeakSet<object> };
+  holder[DEFINED_KEY] ??= new WeakSet<object>();
+  return holder[DEFINED_KEY];
+}
+
+/** `value` with every object and array it holds frozen. A function is left
+ * as it is, since a claim holds none. */
+function deepFrozen<T>(value: T): T {
+  if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
+  for (const key of Reflect.ownKeys(value)) {
+    deepFrozen((value as Record<PropertyKey, unknown>)[key]);
+  }
+  return Object.freeze(value);
+}
+
+function defined<T extends Step>(step: T): T {
+  // `from` holds other steps, which are frozen by their own defineStep
+  // call, so only the map and its tuples are frozen here.
+  for (const entry of Object.values(step.from)) Object.freeze(entry);
+  Object.freeze(step.from);
+  Object.freeze(step.parts);
+  const frozen = Object.freeze(step);
+  definedSteps().add(frozen);
+  return frozen;
+}
+
+/** True when `value` is a step exactly as defineStep returned it, not a
+ * copy of one. Discovery runs only such steps. */
+export function isDefinedStep(value: unknown): value is Step {
+  return typeof value === "object" && value !== null && definedSteps().has(value);
 }
 
 /**

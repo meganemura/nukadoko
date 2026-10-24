@@ -40,11 +40,14 @@ export interface PartCycleIssue {
  * Every cycle in the `parts` graph -- a step that reaches itself, directly
  * or through several other steps' own `parts`. Never closes into a fixture
  * bag or a terminating run (docs/spec.md "Parts"), so this is always an
- * error, never a guess. Standard three-color DFS, the same algorithm and
- * the same "a node already fully explored is never re-entered, so the same
- * cycle is reported once" property src/fixture/graph.ts's own
- * `findFixtureCycles` already has for the unrelated fixture-dependency
- * graph.
+ * error, never a guess. defineStep freezes the parts of every step it
+ * returns, so no step file can close a cycle today (the file that tries
+ * fails to import); the walk stays so that a cycle is still reported, not
+ * looped over, if a step can ever be built another way. Standard
+ * three-color DFS, the same algorithm and the same "a node already fully
+ * explored is never re-entered, so the same cycle is reported once"
+ * property src/fixture/graph.ts's own `findFixtureCycles` already has for
+ * the unrelated fixture-dependency graph.
  */
 export function findPartCycles(vocabulary: Vocabulary): PartCycleIssue[] {
   const names = stepNameOf(vocabulary);

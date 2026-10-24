@@ -36,8 +36,10 @@ import { installChannelPatches, withoutChannelRecording } from "./channels.js";
 // The commands install the patches before they load the config and the
 // step files, earlier than any context exists, and write the line of every
 // request still open at their end, after the last context is gone; this
-// module is the context layer's surface for both.
-export { finalizeOpenRequests, installChannelPatches };
+// module is the context layer's surface for both. The runner starts its own
+// worker thread to test a claim's regular expression, which is nukadoko's
+// work and not the step's, so it reaches the suppression here too.
+export { finalizeOpenRequests, installChannelPatches, withoutChannelRecording };
 import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
 import { createEnvReadsCollector } from "./env-reads.js";

@@ -1,15 +1,17 @@
 import { z } from "zod";
 import { defineStep } from "../../nukadoko-shim.js";
 
-// "empty" states the literal "", so the claim compares with a value the
-// sentence names. An unset BANNER reads as null, which is never equal to a
-// string, so the claim breaks there too.
+// The line states the pattern the BANNER env value must match, so the claim
+// holds in both environments and breaks where BANNER is unset: an unset
+// value reads as null, which is never a string. A literal from the word
+// "empty" would be compared with equal alone, so "is not empty" cannot say
+// this.
 export default defineStep({
-  pattern: "the banner is not empty",
-  description: "Check that the BANNER env value is set and not empty",
-  args: z.object({}),
+  pattern: "the banner matches {pattern:string}",
+  description: "Check that the BANNER env value matches the pattern the line states",
+  args: z.object({ pattern: z.string() }),
   observe({ env }) {
     return { banner: env.BANNER ?? null };
   },
-  claims: [{ actual: "banner", compare: "not-equal", expected: { literal: "" } }],
+  claims: [{ actual: "banner", compare: "matches", expected: "pattern" }],
 });
