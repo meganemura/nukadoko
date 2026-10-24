@@ -2632,6 +2632,9 @@ Under `--concurrency` each worker applies the same values.
 A world is one pass of a run against one program.
 In this release a run starts one world for each environment it selects,
 of the tree it was started in.
+Every scenario of the pass reaches the same program, so the state one
+scenario writes is there for the scenarios after it; a scenario that
+reads state creates it first and claims only on what it created.
 
 - `nuka run` starts the world before the environment's BeforeAll hooks,
   since a hook may already talk to the program.

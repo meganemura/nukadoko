@@ -76,12 +76,15 @@ Checked by: `outline-rows-share-name`.
 
 ## S8. A scenario starts from nothing it did not establish
 
-Bad: scenario 2 reads the item scenario 1 created, through a server
-fixture with `scope: "process"`. Measured in `examples/http-api.md`: the
-read got `{"id":2,"name":"lamp"}` where the feature expects id 1.
+Bad: scenario 2 reads the item scenario 1 created. The server
+`nukadoko.program.ts` starts serves every scenario of the run, as a
+fixture with `scope: "process"` does. Measured in `examples/http-api.md`:
+the read got `{"id":2,"name":"lamp"}` where the feature expected id 1.
 Good: `Given an item named "lamp" exists` in the scenario that reads it,
-and a fixture that holds state is scoped per scenario. `scope: "process"`
-is for a resource no scenario writes to, or one each scenario resets.
+and claims on what the scenario created (the body the Given returned),
+never on everything the server holds. A fixture that holds state is
+scoped per scenario; `scope: "process"` is for a resource no scenario
+writes to, or one each scenario resets.
 Checked by: review. `repeated-scenario-prefix` names a process-scope
 fixture only when every shared step declares `mutates: false`; for any
 other opening it names the step that may write.
@@ -142,9 +145,10 @@ Checked by: review.
   for every flag; one capture per argument keeps the sentence closer to
   prose, and is the shape for an argument that holds a space. Pick one
   per project and keep it.
-- **An HTTP API.** One request step per sentence the reviewer reads (`I
-  request that item`, `I request the item list`), each returning `status`
-  and `body`; a Then lists every request step in `from`. A slash in a
+- **An HTTP API.** `nukadoko.program.ts` starts the server and the steps
+  read its URL from `baseURL`. One request step per sentence the reviewer
+  reads (`I request that item`, `I request the item list`), each returning
+  `status` and `body`; a Then lists every request step in `from`. A slash in a
   pattern is escaped: `I POST this body to \/items`.
 - **Outline or scenarios.** An Outline when the rows differ only in values
   and share every sentence; separate scenarios when a row needs its own

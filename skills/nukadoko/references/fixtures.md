@@ -164,9 +164,9 @@ runner. Open the host in a process fixture and one session per scenario;
 nukadoko gains no dependency, since the project already has `e2e`.
 
 ```ts
-e2eHost: [async ({ site }, use) => {
+e2eHost: [async ({ baseURL }, use) => {
   const host = await openHost({ config: { targets: [
-    { name: "web", engine: web(), app: { url: site.url } }] } });
+    { name: "web", engine: web(), app: { url: baseURL } }] } });
   try { await use(host); } finally { await host.close(); }
 }, { scope: "process" }],
 e2e: async ({ e2eHost }, use) => {

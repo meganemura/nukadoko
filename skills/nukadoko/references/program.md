@@ -38,6 +38,10 @@ program learns its port only from `{port}`, in the command or in `env`.
 | `{world}` | the environment's name |
 | `{token}` | random per world, redacted as `{{secret.WORLD_TOKEN}}` in every record |
 
+One world serves every scenario of an environment, so what one scenario
+writes is there for the next: a scenario creates what it reads and claims
+only on that (`scenario-rules.md`, S8, and `examples/http-api.md`).
+
 A step reads the same `env`: in `process.env` during the run and in the
 `env` fixture, after the config's env files. `setup(world)` runs once per
 world before the first scenario, to seed data.

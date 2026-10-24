@@ -12,22 +12,17 @@ Feature: items API
       {"name":"lamp"}
       """
     Then the response status is 201
-    And the response body is
-      """
-      {"id":1,"name":"lamp"}
-      """
+    And the response body has the name "lamp"
+    And the response body has an id of at least 1
 
   Scenario: reading an item back
     Given an item named "lamp" exists
     When I request that item
     Then the response status is 200
-    And the response body is
-      """
-      {"id":1,"name":"lamp"}
-      """
+    And the response body is the item that was created
 
   Scenario: an unknown id
-    When I request item 42
+    When I request item 0
     Then the response status is 404
     And the response body is
       """
@@ -52,11 +47,7 @@ Feature: items API
       | {"name":""}| 422    | name is required   |
 
   Scenario: the list holds what was created
-    Given an item named "lamp" exists
-    And an item named "desk" exists
+    Given an item named "desk" exists
     When I request the item list
     Then the response status is 200
-    And the response body is
-      """
-      [{"id":1,"name":"lamp"},{"id":2,"name":"desk"}]
-      """
+    And the list has the item that was created

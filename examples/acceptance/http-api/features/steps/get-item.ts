@@ -11,8 +11,8 @@ export default defineStep({
     body: z.unknown().describe("The parsed JSON response"),
   }),
   mutates: false,
-  async run({ server }, { id }) {
-    const res = await fetch(`${server.url}/items/${id}`);
+  async run({ baseURL }, { id }) {
+    const res = await fetch(`${baseURL}/items/${id}`);
     return { status: res.status, body: await res.json() };
   },
 });

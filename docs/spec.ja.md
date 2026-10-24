@@ -2176,6 +2176,8 @@ world の pass のあいだ、`process.env` は `env` を持ち、pass のあと
 
 world は、1 つのプログラムに対する run の 1 回の pass です。
 このリリースでは、run は選んだ environment ごとに 1 つの world を、run を始めた tree から起動します。
+pass のすべての scenario は同じプログラムに届くので、ある scenario が書いた状態は、そのあとの scenario にも残ります。
+状態を読む scenario は、まずその状態を自分で作り、自分が作ったものだけを claim で確かめます。
 
 - `nuka run` は environment の BeforeAll の hook より前に world を起動します。
   hook がすでにプログラムと話すかもしれないからです。

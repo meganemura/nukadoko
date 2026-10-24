@@ -8,8 +8,8 @@ export default defineStep({
     status: z.number().describe("HTTP status"),
     body: z.unknown().describe("The parsed JSON response"),
   }),
-  async run({ server }, { body }) {
-    const res = await fetch(`${server.url}/items`, { method: "POST", body });
+  async run({ baseURL }, { body }) {
+    const res = await fetch(`${baseURL}/items`, { method: "POST", body });
     return { status: res.status, body: await res.json() };
   },
 });

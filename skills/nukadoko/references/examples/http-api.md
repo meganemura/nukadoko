@@ -1,8 +1,8 @@
 # Worked example: an HTTP API
 
 A finished project for an API on `node:http`, built with nukadoko 0.16.1
-on Node 24.22.0, with its Thens moved to claims in the release after
-0.21.0. Every output block below is copied from a real run of
+on Node 24.22.0, with its Thens moved to claims and its server moved to
+`nukadoko.program.ts` in the release after 0.21.0. Every output block below is copied from a real run of
 that project, which is `examples/acceptance/http-api/` in the nukadoko
 repository; CI runs it. The rules it follows are in
 `../scenario-rules.md`.
@@ -16,9 +16,9 @@ name answers 422. `GET /items` lists every item created so far.
 
 ## The feature
 
-`features/items.feature`. The ids in the expected bodies come from the
-ticket's "id and name" and from each scenario starting with an empty
-server (S8).
+`features/items.feature`. One server serves every scenario of the run,
+so a scenario claims only on what it created: the name it sent, an id the
+API assigned, and the item a Given created, read back or listed (S8).
 
 ```gherkin
 Feature: items API
@@ -35,22 +35,17 @@ Feature: items API
       {"name":"lamp"}
       """
     Then the response status is 201
-    And the response body is
-      """
-      {"id":1,"name":"lamp"}
-      """
+    And the response body has the name "lamp"
+    And the response body has an id of at least 1
 
   Scenario: reading an item back
     Given an item named "lamp" exists
     When I request that item
     Then the response status is 200
-    And the response body is
-      """
-      {"id":1,"name":"lamp"}
-      """
+    And the response body is the item that was created
 
   Scenario: an unknown id
-    When I request item 42
+    When I request item 0
     Then the response status is 404
     And the response body is
       """
@@ -75,60 +70,49 @@ Feature: items API
       | {"name":""}| 422    | name is required   |
 
   Scenario: the list holds what was created
-    Given an item named "lamp" exists
-    And an item named "desk" exists
+    Given an item named "desk" exists
     When I request the item list
     Then the response status is 200
-    And the response body is
-      """
-      [{"id":1,"name":"lamp"},{"id":2,"name":"desk"}]
-      """
+    And the list has the item that was created
 ```
 
-## The steps and the fixture
+## The steps and the program
 
-- `server` (a config fixture, scoped per scenario): starts the API on a
-  free port and closes it after the scenario. The API holds its items in
-  memory, so each scenario gets a new, empty one.
+- `nukadoko.program.ts`: starts the API once for the run, on a free port,
+  waits until `GET /items` answers, and stops it after the scenarios. The
+  steps read its URL from `baseURL`.
 - `an-item-exists` (Given): POSTs a name and returns the `id` the API
-  assigned.
+  assigned and the `body` it answered.
 - `create-item` (When): `I POST this body to \/items`; sends the docstring
   as it is and returns `status` and `body`.
 - `get-item` (When): reads `id` from `an-item-exists` through `from`.
 - `get-item-by-id`, `list-items` (When): a literal id, and the list.
-- `status-is`, `body-is` (Then): each lists all four request steps in
-  `from`, so exactly one of them runs before it in each scenario, and
-  declares one `equal` claim. `body-is` reads the docstring with
-  `expected_view: "json"`, so the claim compares two JSON values, key
-  order does not count, and the record keeps the docstring as written.
+- `status-is`, `body-is`, `body-has-name`, `body-has-id` (Then): each
+  lists all four request steps in `from`, so exactly one of them runs
+  before it in each scenario, and declares one claim. `body-is` reads the
+  docstring with `expected_view: "json"`, so the claim compares two JSON
+  values, key order does not count, and the record keeps the docstring as
+  written.
+- `body-is-created-item`, `list-has-created-item` (Then): compare the
+  response with the `body` `an-item-exists` returned, by `equal` and by
+  `has-item`.
 
 The two steps that POST keep the default `mutates: true`: they change the
 API's state. They need no go-ahead before `nuka do`, because the only
-server they reach is the one the fixture started.
+server they reach is the one the program file started.
 
-`nukadoko.config.ts`:
+`nukadoko.program.ts`:
 
 ```ts
-import { defineConfig, defineFixtures } from "nukadoko";
-import { startServer } from "./src/server.ts";
+import { defineProgram } from "nukadoko";
 
-export default defineConfig({
-  fixtures: defineFixtures({
-    // One server per scenario: the API keeps its items in memory, so a shared
-    // server would let one scenario's items show up in another's list.
-    server: async ({}, use) => {
-      const server = await startServer();
-      await use(server);
-      await server.close();
-    },
-  }),
+// One API server for the whole run, on a port of its own. It keeps its
+// items in memory, so a scenario sees the items earlier scenarios created,
+// and each one claims only on what it created itself (S8).
+export default defineProgram({
+  serve: { command: "node src/server.ts", ready: "/items" },
+  env: { PORT: "{port}" },
 });
-
-declare module "nukadoko" {
-  interface StepFixtures {
-    server: Awaited<ReturnType<typeof startServer>>;
-  }
-}
 ```
 
 `features/steps/create-item.ts`:
@@ -144,10 +128,31 @@ export default defineStep({
     status: z.number().describe("HTTP status"),
     body: z.unknown().describe("The parsed JSON response"),
   }),
-  async run({ server }, { body }) {
-    const res = await fetch(`${server.url}/items`, { method: "POST", body });
+  async run({ baseURL }, { body }) {
+    const res = await fetch(`${baseURL}/items`, { method: "POST", body });
     return { status: res.status, body: await res.json() };
   },
+});
+```
+
+`features/steps/list-has-created-item.ts`:
+
+```ts
+import { defineStep, z } from "nukadoko";
+import anItemExists from "./an-item-exists.ts";
+import listItems from "./list-items.ts";
+
+// Other scenarios share the server, so the list holds their items too; the
+// claim is that this scenario's item is among them.
+export default defineStep({
+  description: "The item list holds the item an earlier step created, id and name",
+  pattern: "the list has the item that was created",
+  args: z.object({
+    body: z.unknown().describe("The list the request got"),
+    created: anItemExists.returns.shape.body,
+  }),
+  from: { body: [listItems, "body"], created: [anItemExists, "body"] },
+  claims: [{ actual: "body", compare: "has-item", expected: { from: "created" } }],
 });
 ```
 
@@ -196,8 +201,10 @@ warning	outline-rows-share-name	probe/outline.feature:37	Scenario outline "a bad
   fix: Add a column to the name, such as: a bad request body <body>
 ```
 
-With the `server` fixture changed to `{ scope: "process" }`, two
-scenarios read items an earlier scenario created (S8):
+The first version of the feature expected the exact bodies a new, empty
+server answers: `{"id":1,"name":"lamp"}` read back, and a list of
+exactly lamp and desk. Against the one server of the run, two scenarios
+read items an earlier scenario created (S8):
 
 ```
   step 4/4  failed  0.0s  the response body is
@@ -213,29 +220,27 @@ The claim line names both values and the step each came from (S11): the
 body is the one `get-item` on line 22 got, and the id the server assigned
 is 2.
 
-The run that passed, scoped per scenario:
+The run that passed, with claims on what each scenario created:
 
 ```
 $ npx nuka check
 ok: no issues found
 $ npx nuka run
 ...
-scenario 4/7  features/items.feature:50  a bad request body: not json answers 400
+scenario 4/7  features/items.feature:45  a bad request body: not json answers 400
 ...
-scenario 5/7  features/items.feature:51  a bad request body: {} answers 422
+scenario 5/7  features/items.feature:46  a bad request body: {} answers 422
 ...
-scenario 6/7  features/items.feature:52  a bad request body: {"name":""} answers 422
+scenario 6/7  features/items.feature:47  a bad request body: {"name":""} answers 422
 ...
 7 scenarios: 7 passed, 0 failed  (1s)
-note	repeated-scenario-prefix	features/items.feature	2 scenarios begin with the same 1 step, which took 0 seconds across them, 6.5% of this run's summed scenario time. The shared steps: "an item named "lamp" exists". "an item named "lamp" exists" does not declare mutates: false, so a later scenario may read what this opening writes: a "process"-scope fixture would share that state between scenarios. A Background keeps the shared steps in one place and still runs them for each scenario.
-  fix: No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.
 ```
 
-`nuka run` reported one note, and it was not acted on.
-
-The shared step writes the item that each scenario then reads by id, so a
-process-scope fixture would bring back the failure above. The note says
-so, because the step keeps the default `mutates: true`.
+The first line, cut above, is `world default: serve 0.3s,
+http://localhost:<port>` with the path of the world's `program.log`, which
+holds what the server printed. The first version's
+`repeated-scenario-prefix` note is gone: the two scenarios that create an
+item no longer begin with the same line.
 
 ## Decisions
 
@@ -248,4 +253,7 @@ so, because the step keeps the default `mutates: true`.
 | 2026-10-16 | The whole body against a docstring, or one claim per field | the whole body | the ticket names the body's fields; a scenario per field would repeat the request | none |
 | 2026-10-17 | Acting on `repeated-scenario-prefix` | not acted on | the shared Given writes state the scenario reads | S8 |
 | 2026-10-17 | `mutates` on the POST steps | the default `true`, no go-ahead | they change the API's state, but only on the server the fixture started | SKILL.md "Before the first command" |
+| 2026-10-24 | Where the API server runs | `nukadoko.program.ts`, one server for the run | the program file is how nukadoko starts a program, and its `program.log` and run.json's `worlds` say which program answered; a fixture that starts one in-process says neither | S8 |
+| 2026-10-24 | Expected bodies against a shared server | claims on what the scenario created: the name it sent, an id of at least 1, the body its Given returned | the exact bodies broke as soon as an earlier scenario had created an item (measured above) | S8 |
+| 2026-10-24 | The unknown id | `0` | the API numbers items from 1, so no run reaches it; `42` exists once a run, or `--repeat`, has created 42 items | none |
 | 2026-10-24 | How the body compares with the docstring | `args` parses the docstring, and one `equal` claim compares the two values | key order and spacing in the docstring do not count; the claim record keeps both values | none |
