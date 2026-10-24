@@ -3119,6 +3119,13 @@ When the line was written or read decides nothing, so a server that logs
 the trace id with a span id of its own, as an OpenTelemetry log bridge
 does, is read the same as one that logs the whole `traceparent`, and a
 line from an earlier step's request never goes to a later step.
+Redaction leaves every trace id of the world, and every `traceparent`
+value that holds one, as it is, in `program.log`, the slices, http.jsonl,
+and the records: nukadoko made those ids at random, so they hold no
+secret, and a short secret that happens to occur in one would otherwise
+change the id a line carries.
+A secret's spelling that overlaps an id is still redacted outside it.
+So a line is read for the same trace id as the program printed it.
 The lines go to `program-log.txt` beside the step record, redacted, and
 `observed.program_log` counts them:
 
@@ -4904,7 +4911,9 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   they happened to equal a loaded value, and it would change that field's
   type. The decimal digits are still removed wherever they appear as text.
   Values shorter than four characters are never redacted, in any form,
-  including values named in `redact`. Nukadoko
+  including values named in `redact`. A trace id of a world, and a
+  `traceparent` value that holds one, is never redacted either, even where a secret occurs inside it (see "Trace context and
+  the program's log"). Nukadoko
   can redact only values that it loaded. It cannot detect a new token in a
   step result. A value from a tracked env file that matches HEAD remains plain
   on all record surfaces unless `secrets.redact` names it. Those surfaces

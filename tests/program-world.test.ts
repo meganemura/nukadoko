@@ -81,7 +81,10 @@ describe("a world nukadoko serves", () => {
     expect(world.view.url).toMatch(/^http:\/\/localhost:\d+$/);
     const port = Number(new URL(world.view.url!).port);
     expect(world.view.env).toEqual({ PORT: String(port), DB: `${dir}/db.sqlite3`, TOKEN: expect.stringMatching(/^[0-9a-f]{32}$/) });
-    expect(world.view.secrets).toEqual([{ name: "WORLD_TOKEN", value: world.view.env.TOKEN }]);
+    expect(world.view.secrets).toEqual([
+      { name: "WORLD_TOKEN", value: world.view.env.TOKEN },
+      { name: "WORLD_TRACE_IDS", value: world.view.tracePrefix, keep: "trace-ids" },
+    ]);
     expect(world.view.log).toBe(path.join(dir, "program.log"));
     expect(await (await fetch(`${world.view.url}/hello`)).json()).toEqual({ path: "/hello", db: `${dir}/db.sqlite3`, token: world.view.env.TOKEN });
     expect(progress.text()).toMatch(
@@ -358,7 +361,10 @@ describe("a world nukadoko does not serve", () => {
       name: "pr-12",
       url: "https://pr-12.preview.example",
       env: {},
-      secrets: [{ name: "WORLD_TOKEN", value: expect.any(String) }],
+      secrets: [
+        { name: "WORLD_TOKEN", value: expect.any(String) },
+        { name: "WORLD_TRACE_IDS", value: expect.stringMatching(/^[0-9a-f]{8}$/), keep: "trace-ids" },
+      ],
       log: null,
       dir: path.join(runDir, "worlds", "pr-12"),
       tracePrefix: expect.stringMatching(/^[0-9a-f]{8}$/),

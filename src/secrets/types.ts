@@ -11,6 +11,15 @@
 export interface SecretEntry {
   readonly name: string;
   readonly value: string;
+  /** Set on the one entry of a world that is no secret: `value` is the
+   * world's trace id prefix, and every trace id of that world, and every
+   * `traceparent` value holding one, is left as it is wherever a secret's
+   * spelling occurs inside it (redact.ts). nukadoko made those ids at
+   * random, so they never hold a secret, and a short secret that happens
+   * to occur in one would otherwise change the id a line carries. The
+   * entry travels with the world's token, so every place that redacts
+   * with the world's secrets keeps the ids. */
+  readonly keep?: "trace-ids";
 }
 
 /** Everything `redact` (redact.ts) treats as sensitive for one run. Order

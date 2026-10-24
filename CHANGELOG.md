@@ -372,7 +372,11 @@ just until 0.1.
   the program, a line of `program.log` belongs to the step whose trace
   id it carries, wherever and whenever it appears, so a server that logs
   the trace id with a span id of its own is read correctly and a line
-  from an earlier step's request never lands in a later step. A step's
+  from an earlier step's request never lands in a later step.
+  Redaction leaves a trace id of the world, and a `traceparent` value
+  that holds one, as it is everywhere: nukadoko made it at random, and a
+  short secret that happened to occur in one changed the id a line
+  carried. A step's
   lines go to `program-log.txt` beside its record, and
   `observed.program_log` counts them (`{ trace_id, lines, file, stamped }`).
   A step that stamped a request waits for its lines up to 300 ms, until

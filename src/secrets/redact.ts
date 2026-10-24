@@ -58,11 +58,65 @@ import { MIN_REDACTABLE_LENGTH, type SecretSet } from "./types.js";
 //     carry a secret. A bigint's digits are redacted like any other string;
 //   - object keys are redacted exactly like string values are, and if two
 //     distinct keys end up identical after redaction, redact throws rather
-//     than picking one and dropping the other's subtree (see redactInner).
+//     than picking one and dropping the other's subtree (see redactInner);
+//   - an entry marked `keep: "trace-ids"` is no secret (types.ts): the
+//     world's trace ids, its prefix followed by 24 hexadecimal characters,
+//     and the `traceparent` values that hold them are left as they are. A
+//     secret's spelling that overlaps one still becomes the token for the
+//     characters outside it, so no part of a secret is left beside the id.
 
 interface Replacement {
   readonly value: string;
   readonly token: string;
+}
+
+/** What one redaction replaces, and the text it keeps whatever it holds. */
+interface Plan {
+  readonly replacements: readonly Replacement[];
+  readonly keep: RegExp | undefined;
+}
+
+/** nukadoko's own trace ids for the worlds whose ids start with
+ * `prefixes`, and the `traceparent` values that hold them
+ * (src/context/trace-context.ts): a prefix, then 24 hexadecimal
+ * characters, in either case, as a line's trace id is read. */
+function traceIdPattern(prefixes: readonly string[]): RegExp | undefined {
+  const hex = prefixes.filter((prefix) => /^[0-9a-f]{1,31}$/i.test(prefix));
+  if (hex.length === 0) return undefined;
+  return new RegExp(hex.map((prefix) => `(?:00-)?${prefix}[0-9a-f]{${32 - prefix.length}}(?:-[0-9a-f]{16}-[0-9a-f]{2})?`).join("|"), "gi");
+}
+
+function planFor(secrets: SecretSet): Plan {
+  return {
+    replacements: buildReplacements(secrets.filter((entry) => entry.keep === undefined)),
+    keep: traceIdPattern(secrets.filter((entry) => entry.keep === "trace-ids").map((entry) => entry.value)),
+  };
+}
+
+/** The spans of `input` that `keep` matches, as [start, end). */
+function keptSpans(input: string, keep: RegExp): (readonly [number, number])[] {
+  const spans: (readonly [number, number])[] = [];
+  for (const found of input.matchAll(keep)) spans.push([found.index, found.index + found[0].length]);
+  return spans;
+}
+
+/** `match`, found at `offset`, with each run of characters outside every
+ * kept span written as `token` and the characters inside left as they
+ * are. */
+function keepingSpans(match: string, offset: number, spans: readonly (readonly [number, number])[], token: string): string {
+  let out = "";
+  let outside = false;
+  for (let index = 0; index < match.length; index += 1) {
+    const at = offset + index;
+    if (spans.some(([start, end]) => at >= start && at < end)) {
+      out += match[index];
+      outside = false;
+    } else if (!outside) {
+      out += token;
+      outside = true;
+    }
+  }
+  return out;
 }
 
 // Interior of a JSON string, without the quotes JSON.stringify adds.
@@ -117,7 +171,7 @@ function escapeRegExp(literal: string): string {
   return literal.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
-function applyReplacements(input: string, replacements: readonly Replacement[]): string {
+function applyReplacements(input: string, { replacements, keep }: Plan): string {
   if (replacements.length === 0) return input;
   const tokenBySpelling = new Map(replacements.map((entry) => [entry.value, entry.token]));
   // Tokens go in the alternation beside the spellings. Sequential
@@ -134,14 +188,21 @@ function applyReplacements(input: string, replacements: readonly Replacement[]):
   ]);
   const ordered = [...literals].sort((a, b) => b.length - a.length);
   const pattern = new RegExp(ordered.map(escapeRegExp).join("|"), "g");
-  return input.replace(pattern, (match) => tokenBySpelling.get(match) ?? match);
+  const spans = keep === undefined ? [] : keptSpans(input, keep);
+  if (spans.length === 0) return input.replace(pattern, (match) => tokenBySpelling.get(match) ?? match);
+  // The alternation holds escaped literals only, so no capture group comes
+  // between the match and its offset.
+  return input.replace(pattern, (match: string, offset: number) => {
+    const token = tokenBySpelling.get(match);
+    return token === undefined ? match : keepingSpans(match, offset, spans, token);
+  });
 }
 
 /** Every spelling `redactString` replaces for `secrets`: each loaded
  * value and its encoded forms. A caller that holds only the start of a
  * text needs them to find a secret the end of that start cut through. */
 export function secretSpellings(secrets: SecretSet): string[] {
-  return buildReplacements(secrets).map((entry) => entry.value);
+  return planFor(secrets).replacements.map((entry) => entry.value);
 }
 
 /** Replaces every occurrence of a secret value inside `input` with its
@@ -149,7 +210,7 @@ export function secretSpellings(secrets: SecretSet): string[] {
  * spellings of that value. An occurrence already inside such a token is
  * left in place, so a second call returns the same text. */
 export function redactString(input: string, secrets: SecretSet): string {
-  return applyReplacements(input, buildReplacements(secrets));
+  return applyReplacements(input, planFor(secrets));
 }
 
 /** The stderr warning `nuka do` and `nuka run` share for a
@@ -165,12 +226,12 @@ export function versionProbeWarning(environment: string, reason: string, secrets
   return `Warning: version probe for environment "${environment}" failed: ${redactString(reason, secrets)}`;
 }
 
-function redactInner(value: unknown, replacements: readonly Replacement[]): unknown {
+function redactInner(value: unknown, plan: Plan): unknown {
   if (typeof value === "string") {
-    return applyReplacements(value, replacements);
+    return applyReplacements(value, plan);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => redactInner(item, replacements));
+    return value.map((item) => redactInner(item, plan));
   }
   if (value !== null && typeof value === "object") {
     const result: Record<string, unknown> = {};
@@ -188,7 +249,7 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
     // step record quietly missing data.
     const originalKeyOf = new Map<string, string>();
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      const redactedKey = applyReplacements(key, replacements);
+      const redactedKey = applyReplacements(key, plan);
       const priorKey = originalKeyOf.get(redactedKey);
       if (priorKey !== undefined) {
         throw new Error(
@@ -200,7 +261,7 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
       // sets the prototype, so a JSON body's own `__proto__` key would be
       // lost from the record while a claim compared it.
       Object.defineProperty(result, redactedKey, {
-        value: redactInner(val, replacements),
+        value: redactInner(val, plan),
         enumerable: true,
         writable: true,
         configurable: true,
@@ -217,5 +278,5 @@ function redactInner(value: unknown, replacements: readonly Replacement[]): unkn
  * of `value` (src/stored-form), and returns that redacted stored form.
  * `value` itself is never mutated. */
 export function redact(value: unknown, secrets: SecretSet): unknown {
-  return redactInner(toStoredForm(value), buildReplacements(secrets));
+  return redactInner(toStoredForm(value), planFor(secrets));
 }

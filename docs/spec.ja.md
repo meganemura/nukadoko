@@ -2519,6 +2519,10 @@ nukadoko がプログラムを serve するとき、各 step record は、step �
 行をいつ書いたか、いつ読んだかは何も決めません。
 そのため、OpenTelemetry のログブリッジのように trace id を自分の span id と一緒にログに書くサーバも、`traceparent` を丸ごと書くサーバと同じように読めます。
 前の step のリクエストの行が、あとの step に入ることもありません。
+redact は、world の trace id と、それを持つ `traceparent` の値を、`program.log`、切り出し、http.jsonl、record のどこでもそのまま残します。
+nukadoko がそれらの id をランダムに作ったので secret を含まず、短い secret がたまたまその中に現れると、行が持つ id が変わってしまうからです。
+id に重なる secret の綴りも、id の外の部分は redact されます。
+そのため、行はプログラムが出力したときと同じ trace id で読まれます。
 行は redact されて step record の隣の `program-log.txt` に入り、`observed.program_log` がそれを数えます:
 
 ```json
@@ -3827,6 +3831,7 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   その数字の並びは、テキストとして現れた場所ではこれまで通り消えます。
   正直な限界もあります。
   4 文字未満の値は、どの形でも決して redact されません(この下限は `redact` で名指しされた値にも、他の secret とまったく同じように適用されます)。
+  world の trace id と、それを持つ `traceparent` の値も、中に secret が現れても redact されません(「trace context とプログラムのログ」を参照)。
   redact できるのは nukadoko 自身が読み込んだ値だけです。
   step の result の中で新たに生まれた token は捕まりません。
   そして `secrets.redact` に名指しされていない、HEAD と一致する追跡済みの値は、それらの面のすべてに平文のまま届きます。

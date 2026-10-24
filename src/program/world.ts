@@ -220,7 +220,13 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       mkdirSync(dir, { recursive: true });
       const token = randomBytes(16).toString("hex");
       const tracePrefix = newTracePrefix();
-      const worldSecrets: SecretSet = [{ name: "WORLD_TOKEN", value: token }];
+      // The trace id entry is no secret: it keeps the world's trace ids as
+      // they are wherever the world's secrets redact (src/secrets/types.ts),
+      // so a short secret inside one never changes the id a line carries.
+      const worldSecrets: SecretSet = [
+        { name: "WORLD_TOKEN", value: token },
+        { name: "WORLD_TRACE_IDS", value: tracePrefix, keep: "trace-ids" },
+      ];
       const allSecrets: SecretSet = [...secrets, ...worldSecrets];
       const log = openProgramLog(path.join(dir, "program.log"), allSecrets);
       const commands: RunWorldCommand[] = [];
