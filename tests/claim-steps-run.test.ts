@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runCli } from "../src/cli/run-cli.js";
+import { SNAPSHOT_MAX_DEPTH } from "../src/step/snapshot.js";
 import {
   createCaptureSink,
   createEmptyTempDir,
@@ -159,8 +160,8 @@ export default defineStep({
   });
 });
 
-describe("a value that is not plain JSON breaks the claim, and the record says which part", () => {
-  it("breaks on a Date observe returned, and records no actual", async () => {
+describe("a value that is not plain JSON leaves the claim unjudged, and the record says which part", () => {
+  it("leaves a Date observe returned unjudged, and records no actual", async () => {
     const rootDir = await project({
       "features/steps/it-is-dated.ts": `import { defineStep, z } from "nukadoko";
 export default defineStep({
@@ -181,14 +182,14 @@ export default defineStep({
       expected: "1970-01-01",
       expected_from: "sentence:date",
       expected_text: '"1970-01-01"',
-      outcome: "broken",
-      reason: "observe:when is a Date, not a JSON value, so the record could not show what was compared",
+      outcome: "unjudged",
+      reason: "observe:when is a Date, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
       measured: null,
     });
-    expect(step.error.kind).toBe("claim_broken");
+    expect(step.error.kind).toBe("claim_unjudged");
   });
 
-  it("breaks on a bigint on either side, naming it", async () => {
+  it("leaves a bigint on either side unjudged, naming it", async () => {
     const rootDir = await project({
       "features/steps/the-total-is.ts": `import { defineStep, z } from "nukadoko";
 export default defineStep({
@@ -202,12 +203,12 @@ export default defineStep({
     });
     await cli(rootDir, ["run", "features/t.feature"]);
     expect(lastClaimStep(rootDir).claims[0]).toMatchObject({
-      outcome: "broken",
-      reason: "observe:total is the bigint 12345678901234567890n, not a JSON value, so the record could not show what was compared",
+      outcome: "unjudged",
+      reason: "observe:total is the bigint 12345678901234567890n, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
     });
   });
 
-  it("breaks, and does not crash, on an array item that is undefined", async () => {
+  it("leaves an array item that is undefined unjudged, and does not crash", async () => {
     const rootDir = await project({
       "features/steps/the-history-holds.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -224,11 +225,235 @@ export default defineStep({
     const result = await cli(rootDir, ["run", "features/t.feature"]);
     expect(result.exitCode).toBe(1);
     const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("claim_unjudged");
+    expect(step.claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: "observe:history.0 is undefined, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+    });
+  });
+});
+
+describe("a schema that can change the value a claim measures is refused at defineStep, wherever it sits", () => {
+  const REFINE = "a refine, superRefine, or check on an object or an array, which can change the value it is handed";
+  const DEFAULT = "a default (default or prefault), which fills a value that is missing";
+  const keyCases: readonly [string, string, string][] = [
+    ["a refine on the from key", "answer.returns.shape.cart.refine((cart) => { cart.count = 5; return true; })", REFINE],
+    ["a superRefine on an array inside it", "z.object({ count: z.number(), items: z.array(z.unknown()).superRefine(() => {}) })", REFINE],
+    ["a default inside it", "z.object({ count: z.number().default(5), items: z.array(z.unknown()) })", DEFAULT],
+    ["a prefault inside it", "z.object({ count: z.number().prefault(5), items: z.array(z.unknown()) })", DEFAULT],
+  ];
+
+  it.each(keyCases)("refuses %s", async (_name, schema, words) => {
+    const rootDir = await project({
+      "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "it counts {code:int}",
+  args: z.object({ code: z.number(), cart: ${schema} }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "code" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then it counts 5"),
+    });
+    const result = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      `defineStep claims[0].actual reads args.cart, and its schema rewrites the value the claim measures (${words}), so step code would decide what the claim compares. Take the rewrite out of the schema.`,
+    );
+  });
+
+  const rootCases: readonly [string, string][] = [
+    ["refine", ".refine((args) => { args.code = args.cart.count; return true; })"],
+    ["superRefine", ".superRefine((args) => { args.code = args.cart.count; })"],
+    ["check", ".check((ctx) => { ctx.value.code = ctx.value.cart.count; })"],
+  ];
+
+  it.each(rootCases)("refuses a %s on the args object, which every key passes through", async (_name, suffix) => {
+    const rootDir = await project({
+      "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "it counts {code:int}",
+  args: z.object({ code: z.number(), cart: answer.returns.shape.cart })${suffix},
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "code" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then it counts 5"),
+    });
+    const result = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(result.stdout + result.stderr).toContain(
+      "defineStep claims[0].actual reads args.cart, and the args schema itself rewrites the value the claim measures (a refine, superRefine, or check on the args object, which can change the value it is handed), so step code would decide what the claim compares. Take the rewrite out of the args schema.",
+    );
+  });
+});
+
+describe("a claim judges one snapshot per side, taken where the value comes from", () => {
+  it("breaks when the args schema changed a value a claim reads after defineStep, and records the value it was given", async () => {
+    const rootDir = await project({
+      "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+const args = z.object({ code: z.number(), cart: answer.returns.shape.cart });
+const step = defineStep({
+  pattern: "it counts {code:int}",
+  args,
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "code" }],
+});
+(args as any).def.shape.cart = z.object({ count: z.number(), items: z.array(z.unknown()) }).transform((cart) => ({ ...cart, count: 5 }));
+export default step;
+`,
+      "features/t.feature": feature("When the app answers", "Then it counts 5"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const step = lastClaimStep(rootDir);
     expect(step.error.kind).toBe("claim_broken");
     expect(step.claims[0]).toMatchObject({
+      actual: 1,
+      expected: 5,
       outcome: "broken",
-      reason: "observe:history.0 is undefined, not a JSON value, so the record could not show what was compared",
+      reason: "the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim judged nothing",
     });
+  });
+
+  it("judges the value the producing step returned, whatever observe does to its own copy", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-holds.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart holds {n:int} items",
+  args: z.object({ n: z.number(), cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  observe({}, { cart }) { (cart as any).count = 3; return {}; },
+  claims: [{ actual: "cart.count", compare: "equal", expected: "n" }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart holds 3 items"),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const [producer, step] = latestRunJson(rootDir).scenarios[0].steps;
+    expect(step.claims[0]).toMatchObject({ actual: 1, expected: 3, outcome: "broken" });
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), producer.record, "record.json"), "utf8")) as { result: { cart: { count: number } } };
+    expect(record.result.cart.count).toBe(1);
+  });
+
+  it("leaves a Proxy observe returned unjudged, at the root or inside, and runs no trap that answers otherwise", async () => {
+    const rootDir = await project({
+      "features/steps/the-list-includes.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the list includes {name:string}",
+  args: z.object({ name: z.string() }),
+  observe() { return { list: new Proxy(["bread"], { get: (target, key) => (key === "0" ? "milk" : Reflect.get(target, key)) }) }; },
+  claims: [{ actual: "list", compare: "has-item", expected: "name" }],
+});
+`,
+      "features/steps/the-page-includes.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the page includes {name:string}",
+  args: z.object({ name: z.string() }),
+  observe() { return new Proxy({ list: ["milk"] }, { getOwnPropertyDescriptor() { throw new Error("descriptor trap ran"); } }); },
+  claims: [{ actual: "list", compare: "has-item", expected: "name" }],
+});
+`,
+      "features/t.feature": [
+        "Feature: claims",
+        "  Scenario: inside",
+        '    Then the list includes "milk"',
+        "  Scenario: root",
+        '    Then the page includes "milk"',
+        "",
+      ].join("\n"),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const [inside, root] = latestRunJson(rootDir).scenarios.map((scenario: Record<string, any>) => scenario.steps.at(-1));
+    expect(inside.error.kind).toBe("claim_unjudged");
+    expect(inside.claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: "observe:list is a Proxy, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+    });
+    expect(inside.claims[0]).not.toHaveProperty("actual");
+    expect(root.error.kind).toBe("claim_unjudged");
+    expect(root.claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: "the value observe returned is a Proxy, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared",
+    });
+  });
+
+  it("leaves a value nested past the limit unjudged, naming the limit, where the record writer would overflow the stack", async () => {
+    const rootDir = await project({
+      "features/steps/the-value-is-nested.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the value is nested",
+  args: z.object({}),
+  observe() {
+    let v: unknown = [];
+    let w: unknown = [];
+    for (let i = 0; i < 2000; i += 1) { v = [v]; w = [w]; }
+    return { v, w };
+  },
+  claims: [{ actual: "v", compare: "equal", expected: { observe: "w" } }],
+});
+`,
+      "features/t.feature": feature("Then the value is nested"),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("claim_unjudged");
+    expect(step.claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: `observe:v nests deeper than ${SNAPSHOT_MAX_DEPTH} levels, so the claim was not judged: the record keeps no value nested that deep`,
+    });
+  });
+
+  it("records the value observe returned as it was when it returned, not after a callback changed it", async () => {
+    const rootDir = await project({
+      "features/steps/the-list-includes.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "the list includes {name:string}",
+  args: z.object({ name: z.string() }),
+  async observe() {
+    const list = ["milk"];
+    setImmediate(() => { list[0] = "bread"; });
+    return { list };
+  },
+  claims: [{ actual: "list", compare: "has-item", expected: "name" }],
+});
+`,
+      "features/t.feature": feature('Then the list includes "milk"'),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(0);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({ actual: ["milk"], outcome: "held" });
+  });
+
+  it("keeps each poll reading's own value, though observe returns one array it changes each time", async () => {
+    const rootDir = await project({
+      "features/steps/the-list-includes.ts": `import { defineStep, z } from "nukadoko";
+const shown = ["x", "y", "milk"];
+const shared: string[] = [];
+let calls = 0;
+export default defineStep({
+  pattern: "the list includes {name:string}",
+  args: z.object({ name: z.string() }),
+  poll: { timeout_ms: 10000 },
+  observe() {
+    shared.length = 0;
+    shared.push(shown[Math.min(calls, shown.length - 1)]!);
+    calls += 1;
+    return { list: shared };
+  },
+  claims: [{ actual: "list", compare: "has-item", expected: "name" }],
+});
+`,
+      "features/t.feature": feature('Then the list includes "milk"'),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const step = lastClaimStep(rootDir);
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as { readings: Record<string, unknown>[] };
+    expect(record.readings.map((reading) => reading.actuals)).toEqual([[{ value: ["x"] }], [{ value: ["y"] }], [{ value: ["milk"] }], [{ value: ["milk"] }]]);
   });
 });
 

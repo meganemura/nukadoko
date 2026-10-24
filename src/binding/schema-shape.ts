@@ -151,6 +151,42 @@ interface RewriteDef {
   readonly valueType?: z.ZodTypeAny;
 }
 
+/** The zod types whose parsed value is never an object or an array, so a
+ * refine on one is handed a value it cannot change. */
+const SCALAR_TYPES: ReadonlySet<string> = new Set([
+  "string", "number", "int", "boolean", "bigint", "null", "undefined", "void", "never",
+  "nan", "symbol", "literal", "enum", "template_literal",
+]);
+
+/** What, on `def` itself, rewrites the value it parses, or `null`. */
+function ownRewrite(def: RewriteDef, where: string): string | null {
+  if (def.coerce === true) return "z.coerce";
+  const checks = def.checks ?? [];
+  if (checks.some((check) => check._zod.def.check === "overwrite")) {
+    return "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)";
+  }
+  // zod hands a refine the parsed value itself, so one on an object or an
+  // array can write into it and still pass.
+  if (!SCALAR_TYPES.has(def.type) && checks.some((check) => check._zod.def.check === "custom")) {
+    return `a refine, superRefine, or check on ${where}, which can change the value it is handed`;
+  }
+  switch (def.type) {
+    case "transform":
+      return "a transform";
+    case "pipe":
+      if (def.in?._zod.def.type === "transform") return "a preprocess";
+      if (def.out?._zod.def.type === "transform") return "a transform";
+      return "a pipe";
+    case "catch":
+      return "catch";
+    case "default":
+    case "prefault":
+      return "a default (default or prefault), which fills a value that is missing";
+    default:
+      return null;
+  }
+}
+
 /**
  * What, inside `schema`, makes the parsed value differ from the value it
  * was given, as words a refusal can name, or `null` when the schema only
@@ -159,30 +195,44 @@ interface RewriteDef {
  * value would let step code decide what the claim compares. Rewriting is
  * `z.coerce`, a transform, a preprocess, any other pipe (a codec, `.pipe`),
  * an overwrite check (`trim`, `toLowerCase`, `toUpperCase`, `normalize`,
- * `overwrite`), and `catch`, which replaces a value that failed. A refine
- * only checks, so it is not one. The walk goes through every wrapper and
- * container zod 4 has, and a lazy schema is read once. Pure.
+ * `overwrite`), `catch`, which replaces a value that failed, a default or
+ * a prefault, which fills a value that is missing, and a refine, superRefine,
+ * or check on a schema whose value can be an object or an array, which zod
+ * hands the parsed value itself. A refine on a string or a number only
+ * checks, so it is not one. The walk goes through every wrapper and
+ * container zod 4 has, and a lazy schema is read once. This reading is the
+ * early warning: the runner also compares what the args schema returned
+ * with what it was given, which catches a schema changed after defineStep.
+ * Pure.
  */
 export function schemaRewrite(schema: z.ZodTypeAny): string | null {
+  return rewriteWalk(schema, true);
+}
+
+/**
+ * What, on the args schema itself and the wrappers around its object (not
+ * on any key's own schema), rewrites the value it parses, or `null`. A
+ * refine on the args object is handed every key's parsed value, so it
+ * reaches whatever a claim reads. Pure.
+ */
+export function argsSchemaRewrite(schema: z.ZodTypeAny): string | null {
+  return rewriteWalk(schema, false);
+}
+
+function rewriteWalk(schema: z.ZodTypeAny, intoFields: boolean): string | null {
   const seen = new Set<unknown>();
   const visit = (current: z.ZodTypeAny | null | undefined): string | null => {
     if (current === null || current === undefined || seen.has(current)) return null;
     seen.add(current);
     const def = current._zod.def as unknown as RewriteDef;
-    if (def.coerce === true) return "z.coerce";
-    if ((def.checks ?? []).some((check) => check._zod.def.check === "overwrite")) {
-      return "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)";
+    const own = ownRewrite(def, intoFields ? "an object or an array" : "the args object");
+    if (own !== null) return own;
+    if (!intoFields) {
+      // The root reading stops at the args object: its keys are read one
+      // by one, each against the claims that name it.
+      return def.type === "object" ? null : visit(def.innerType) ?? visit(def.getter?.());
     }
     switch (def.type) {
-      case "transform":
-        return "a transform";
-      case "pipe": {
-        if (def.in?._zod.def.type === "transform") return "a preprocess";
-        if (def.out?._zod.def.type === "transform") return "a transform";
-        return "a pipe";
-      }
-      case "catch":
-        return "catch";
       case "lazy":
         return visit(def.getter?.());
       case "object":

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { z } from "zod";
-import { asObjectShape, classifyPrimitive, isRequiredField, schemaRewrite } from "../src/binding/schema-shape.js";
+import { argsSchemaRewrite, asObjectShape, classifyPrimitive, isRequiredField, schemaRewrite } from "../src/binding/schema-shape.js";
 
 // A key is required when an object that declares it rejects `{}`. That is
 // the question `nuka check` and `nuka run` ask before they refuse a line.
@@ -204,7 +204,11 @@ const checkingLeaves: readonly (() => z.ZodTypeAny)[] = [
   () => z.null(),
   () => z.string().refine((text) => text.length < 100),
   () => z.enum(["a", "b"]),
+  () => z.array(z.string()).min(1),
 ];
+
+const DEFAULT_WORDS = "a default (default or prefault), which fills a value that is missing";
+const REFINE_WORDS = "a refine, superRefine, or check on an object or an array, which can change the value it is handed";
 
 const rewritingLeaves: readonly (readonly [() => z.ZodTypeAny, string])[] = [
   [() => z.number().transform((n) => n + 1), "a transform"],
@@ -214,6 +218,12 @@ const rewritingLeaves: readonly (readonly [() => z.ZodTypeAny, string])[] = [
   [() => z.string().trim(), "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)"],
   [() => z.string().toLowerCase(), "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)"],
   [() => z.string().catch("x"), "catch"],
+  [() => z.number().default(3), DEFAULT_WORDS],
+  [() => z.number().prefault(3), DEFAULT_WORDS],
+  [() => z.object({ count: z.number() }).refine(() => true), REFINE_WORDS],
+  [() => z.object({ count: z.number() }).superRefine(() => {}), REFINE_WORDS],
+  [() => z.array(z.number()).check(() => {}), REFINE_WORDS],
+  [() => z.object({ count: z.number() }).overwrite((value) => value), "an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)"],
 ];
 
 type Container = "optional" | "nullable" | "readonly" | "array" | "object" | "union" | "tuple" | "lazy" | "record" | "intersection";
@@ -262,5 +272,25 @@ describe("schemaRewrite", () => {
         schema = contain(schema, kind, tc.draw(gs.sampledFrom(checkingLeaves))());
       }
       expect(schemaRewrite(schema)).toBe(words);
+    }));
+});
+
+describe("argsSchemaRewrite", () => {
+  const ROOT_REFINE = "a refine, superRefine, or check on the args object, which can change the value it is handed";
+  const fields = { code: z.number(), cart: z.object({ count: z.number() }) };
+
+  it("finds a refine, a superRefine, a check, an overwrite, or a default on the args object itself", () => {
+    expect(argsSchemaRewrite(z.object(fields).refine(() => true))).toBe(ROOT_REFINE);
+    expect(argsSchemaRewrite(z.object(fields).superRefine(() => {}))).toBe(ROOT_REFINE);
+    expect(argsSchemaRewrite(z.object(fields).check(() => {}))).toBe(ROOT_REFINE);
+    expect(argsSchemaRewrite(z.object(fields).overwrite((value) => value))).toBe("an overwrite check (trim, toLowerCase, toUpperCase, normalize, or overwrite)");
+    expect(argsSchemaRewrite(z.object(fields).default({ code: 1, cart: { count: 1 } }))).toBe(DEFAULT_WORDS);
+    expect(argsSchemaRewrite(z.object(fields).refine(() => true).optional())).toBe(ROOT_REFINE);
+  });
+
+  it("leaves the keys to schemaRewrite: a rewrite inside one key is not the args object's", () =>
+    hegel.test((tc) => {
+      const [leaf] = tc.draw(gs.sampledFrom(rewritingLeaves));
+      expect(argsSchemaRewrite(z.object({ code: z.number(), key: leaf() }))).toBeNull();
     }));
 });

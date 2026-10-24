@@ -1325,6 +1325,12 @@ Given や When の throw はその step のエラーであり、成り立たな�
 値の隣の `measured: none`、poll の読み取り、どの claim にも判定されなかった scenario です。
 最も確かな確かめ方は、振る舞いがない場所で受け入れ基準を動かし、そこで Then が失敗するのを見ることです。
 
+これらの約束が成り立つのは、nukadoko の API と普通のライブラリを使う step のコードに対してです。
+nukadoko 自身のモジュールや、どのモジュールも共有する JavaScript の組み込み(どの呼び出しを記録から外すかをチャネルに伝える store、`Array.prototype`、`JSON` など)を差し替えるコードに対しては成り立ちません。
+そのようなコードは、それを記録するプロセスの中で動き、そのプロセスの中の記録係にはそれを止められないからです。
+その store のキーは、1 つのプロセスにある 2 つの nukadoko のコピーが同じ store を共有するように、意図して `Symbol.for` のキーにしてあり、nukadoko はそれを隠しません。
+run サマリは承認された基点から変わったすべての step ファイルを並べ、nukadoko が頼るものを差し替えるコードは、変更の読み手がそこで見つけます。
+
 #### 形
 
 型付き step は、実行する(`run`)か、claim を宣言する(`claims`)かのどちらかであり、両方はしません。
@@ -1369,8 +1375,12 @@ discovery は、`defineStep` が返したオブジェクトそのものである
   このキーは `args` で required でなければなりません。
   デフォルト値や省略可能なキーだと、行が値を述べないときに step のコードにあるスキーマが値を補えてしまうからです。
   そのスキーマは値を書き換えてもいけません。
-  そのキーの `z.coerce`、transform、preprocess、その他の pipe、上書きするチェック(`trim`、`toLowerCase` など)、`catch` は import の時点で拒否されます。
+  そのキーのスキーマのどこかにある `z.coerce`、transform、preprocess、その他の pipe、上書きするチェック(`trim`、`toLowerCase` など)、`catch`、デフォルト値か prefault、オブジェクトか配列に付いた refine、superRefine、check は import の時点で拒否されます。
   claim が比較する値を step のコードが決めることになるからです。
+  zod は refine にパースした値そのものを渡すので、オブジェクトに付いた refine はその値に書き込んだうえで通ることができます。
+  args のオブジェクトそのものに付いた refine、superRefine、check、上書き、デフォルト値も、同じ理由で拒否されます。
+  どのキーもそこを通るからです。
+  実行はもう一度確かめます(「claim が判定する値」を参照)。
   transformer を持つ parameter type も同じことをします(`config.parameterTypes` にあるものか、compat の `defineParameterType`)。
   transformer は、claim が読む前に行のテキストを書き換えます。
   プロジェクトがどの型を登録しているかを知るのは `nuka check` だけなので、期待値のキーをそのような型で埋める pattern を `nuka check` が報告します(`claim-expected-transformed`、エラー)。
@@ -1433,6 +1443,36 @@ record のラベルは、`view` と `at` を含めて、場所全体を名指し
 `nuka check` は、各 `from` のパスを値を返す step の `returns` スキーマと照らし合わせ、スキーマが宣言していないパスを報告します(`claim-path-unknown`)。
 そのような claim は、成り立たないことしかありえないからです。
 
+#### claim が判定する値
+
+claim の各辺は、1 つのスナップショットとして判定されます。
+スナップショットとは、値が来る場所で nukadoko が取る素のコピーです。
+そこから先、claim はそのコピーだけを読み、record はそのコピーをそのまま示します。
+step のコードがまだ持っている値は、読んだあとで変わることも、ある読み方には一方で答え、次の読み方には別の答えを返すこともあるので、それを 2 回読んでも 1 つの値にはなりません。
+
+- `observe` が返す値は、`observe` が返った瞬間か、その promise が落ち着いた瞬間にコピーします。
+  タイマーやコールバックの中、または次の呼び出しで `observe` があとから変える値は、判定される値ではありません。
+- `from` の値は、claim step の args スキーマが動く前、`observe` が動く前に、args からコピーします。
+- 文の値は、その parameter type が行を読んだあと、args スキーマが動く前にコピーします。
+  `expected_view` はそのあとでコピーを読みます。
+- poll の各読み取りは、読んだときに取る、それぞれのコピーです。
+
+`observe` は入力を、呼び出しごとに作り直す深いコピーとして受け取ります。
+そのため `observe` が入力にすることは、claim が読むもの、前の step の結果、次の読み取りのどれにも届きません。
+
+args スキーマはいまも動き、`observe` が受け取るのはその出力です。
+スキーマが動いたあと、nukadoko は、claim が読むすべての場所で、その出力をコピーと比べます。
+2 つが違う場所では claim は成り立たず、理由がそのキーを名指しします(`the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim judged nothing`)。
+import の時点の拒否は、よくある書き換えを先に名指しします。
+record を正しく保つのはこの比較であり、`defineStep` が返ったあとで step ファイルが変えたスキーマもこの比較が見つけます。
+
+値が素の JSON でないとき(「比較」を参照)、どの深さであれ `Proxy` であるとき、配列とオブジェクトが 256 段より深く入れ子になっているときは、コピーを取らず、claim はその場所を名指しする理由とともに `unjudged` になります。
+`Proxy` は、そのトラップがどれも動く前に拒否します。
+トラップは、比較にはある答えを、record には別の答えを返せるからです。
+record を書く関数は、1 回の呼び出しで値を 1 段ずつたどります。
+Node 22 では、1650 段の深さの値で、step record を書く途中にスタックがあふれました。
+256 は 6 倍の余裕を残し、理由はその上限を名指しします(`observe:v nests deeper than 256 levels`)。
+
 #### 比較
 
 `equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`has-item`(配列に期待値と等しい要素がある)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
@@ -1442,8 +1482,8 @@ record のラベルは、`view` と `at` を含めて、場所全体を名指し
 
 どの比較の前でも、両辺は素の JSON です。
 つまり `null`、真偽値、文字列、有限の数値(整数なら `Number.MAX_SAFE_INTEGER` 以下)、穴も他のキーもない配列、プロトタイプが `Object.prototype` か `null` で自分のプロパティがすべて文字列キーの列挙可能なデータプロパティであるオブジェクトです。
-それ以外(`Date`、`Map`、bigint、`NaN`、`undefined` の要素、getter、クラスのインスタンス)では claim は成り立たず、理由がそれが何でどこにあるかを名指しします(`observe:when is a Date, not a JSON value`)。
-そのような値は、record ではある形に見え、比較では別の形で扱われる(2 つの `Date` は構造の上ではいつも等しい)ので、record は何を比較したかを示せないからです。
+それ以外(`Date`、`Map`、bigint、`NaN`、`undefined` の要素、getter、クラスのインスタンス、`Proxy`)では claim は `unjudged` になり、理由がそれが何でどこにあるかを名指しします(`observe:when is a Date, which is not plain JSON, so the claim was not judged`)。
+そのような値は、record ではある形に見え、比較では別の形で扱われる(2 つの `Date` は構造の上ではいつも等しい)ので、record は何を比較したかを示せず、受け入れ基準については何もわからないからです。
 
 JSON の型が違う 2 つの値の比較では、claim は成り立たず、両方の型を名指しします。
 文字列が数値と等しくなることは、claim が述べる理由ではありえないからです。
@@ -1478,7 +1518,7 @@ run サマリの行は、`where` の claim と要素の claim を、比較と期
 `observe(fixtures, args)` は省略できます。
 前の step が値を返していないときに世界を読み、claim が読むキーを持つオブジェクトを返します。
 その fixture の袋は step の袋と同じなので(「Context API」を参照)、`request`、`page`、プロジェクトの fixture を使えます。
-また、claim が期待値として名指しするキー(文から来るものと `from` から来るもの)を除く、すべての args キーを受け取ります。
+また、claim が期待値として名指しするキー(文から来るものと `from` から来るもの)を除く、すべての args キーのコピーを受け取ります。
 前の step が返したパスのように `observe` に届くキーは入力です。
 `observe` に届かないキーは比較の相手です。
 届かないキーを読むと throw し、型が届かない JavaScript の step ファイルにも同じ規則が働きます。
@@ -1577,8 +1617,8 @@ compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)�
 claim step の record には、次の固有のフィールドがあります(「Records」を参照)。
 
 - `claims`: step が宣言した順の、各 claim です。
-  比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときや素の JSON でない値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、そして `measured` を持ちます。
-  `reason` は、比較そのもの以外の理由(undefined の値、素の JSON でない値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺)で成り立たなかったときか、nukadoko が判定できなかったときにあります。
+  比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、そして `measured` を持ちます。
+  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、args スキーマが変えた値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子)にあります。
   `each` の claim は、`actual_from`、`each` の宣言と数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。

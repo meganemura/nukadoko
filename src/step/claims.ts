@@ -334,6 +334,10 @@ export interface ClaimStepShape {
   /** The args keys whose schema rewrites the value it parses, with what
    * rewrites it (`schemaRewrite` in binding/schema-shape.ts). */
   readonly rewrittenArgs: ReadonlyMap<string, string>;
+  /** What on the args schema itself rewrites every value it parses
+   * (`argsSchemaRewrite`), such as a refine on the args object; absent
+   * when nothing does. */
+  readonly argsRewrite?: string | null;
   /** The args keys whose schema is a plain `z.string()`, which
    * `expected_view` can read; `null` when args is not a z.object. */
   readonly stringArgs: ReadonlySet<string> | null;
@@ -366,9 +370,14 @@ function checkCommon(label: string, claim: { view?: unknown; at?: unknown }): vo
 
 /** Refuses a claim that reads an args key whose schema rewrites the value. */
 function checkNotRewritten(label: string, key: string, shape: ClaimStepShape, side: "actual" | "expected"): void {
+  const where = side === "actual" ? "the value the claim measures" : "the value the line states or an earlier step returned";
+  if (shape.argsRewrite !== undefined && shape.argsRewrite !== null) {
+    throw new InvalidClaimError(
+      `${label} reads args.${key}, and the args schema itself rewrites ${where} (${shape.argsRewrite}), so step code would decide what the claim compares. Take the rewrite out of the args schema`,
+    );
+  }
   const rewrite = shape.rewrittenArgs.get(key);
   if (rewrite === undefined) return;
-  const where = side === "actual" ? "the value the claim measures" : "the value the line states or an earlier step returned";
   throw new InvalidClaimError(
     `${label} reads args.${key}, and its schema rewrites ${where} (${rewrite}), so step code would decide what the claim compares. Take the rewrite out of the schema` +
       (side === "expected" ? ", or read the line's text with expected_view (text, lines, or json)" : ""),

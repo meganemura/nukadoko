@@ -1584,6 +1584,18 @@ the record: `measured: none` beside a value, the readings of a poll, and
 which scenarios no claim judged at all. The surest test is to run the
 criterion where the behaviour is absent and see the Then fail there.
 
+These promises hold against step code that uses nukadoko's API and
+ordinary libraries. They do not hold against code that patches
+nukadoko's own modules or the JavaScript intrinsics every module shares,
+such as the store that tells the channels which calls to leave out,
+`Array.prototype`, or `JSON`. Such code runs in the process that
+records it, and no recorder inside that process can stop it. The keys of
+that store are `Symbol.for` keys on purpose, so that two copies of
+nukadoko in one process share it, and nukadoko does not hide them. The
+run summary lists every step file that changed since the approved base,
+and code that patches what nukadoko relies on is seen there, by a reader
+of the change.
+
 #### The shape
 
 A typed step either runs (`run`) or claims (`claims`), never both. The two
@@ -1633,9 +1645,15 @@ would be ones nothing validated.
   optional key would let the schema in step code supply the value when
   the line states none. Its schema must not rewrite the value either:
   `z.coerce`, a transform, a preprocess, any other pipe, an overwrite
-  check (`trim`, `toLowerCase`, and the like), or `catch` on that key
-  is refused at import, since step code would then decide what the claim
-  compares. A parameter type does the same when it has a transformer
+  check (`trim`, `toLowerCase`, and the like), `catch`, a default or
+  a prefault, or a refine, superRefine, or check on an object or an
+  array, anywhere in that key's schema, is refused at import, since step
+  code would then decide what the claim compares. zod hands a refine the
+  parsed value itself, so a refine on an object can write into it and
+  still pass. A refine, superRefine, check, overwrite, or default on the
+  args object itself is refused for the same reason: every key passes
+  through it. The run checks again (see "The value a claim judges"). A
+  parameter type does the same when it has a transformer
   (one in `config.parameterTypes`, or a compat `defineParameterType`):
   the transformer rewrites the line's text before the claim reads it.
   Only `nuka check` knows which types a project registers, so it reports
@@ -1717,6 +1735,46 @@ names the place. `nuka check` reads each `from` path against the producing
 step's `returns` schema and reports a path that schema does not declare
 (`claim-path-unknown`), because such a claim could only ever break.
 
+#### The value a claim judges
+
+Each side of a claim is judged as one snapshot: a plain copy that
+nukadoko takes where the value comes from. From then on the claim reads
+only that copy, and the record shows exactly that copy. A value that step
+code still holds can change after it was read, or answer one read one way
+and the next another, so two reads of it are not one value.
+
+- A value `observe` returns is copied the moment `observe` returns, or
+  the moment its promise settles. A value it changes later, in a timer, in
+  a callback, or on its next call, is not the one judged.
+- A `from` value is copied from the args before the claim step's args
+  schema runs, and before `observe` runs.
+- A sentence value is copied after its parameter type has read the line
+  and before the args schema runs. `expected_view` then reads the copy.
+- Each reading of a poll is its own copy, taken when it is read.
+
+`observe` receives its inputs as a deep copy, made again for each call,
+so nothing it does to them reaches what a claim reads, an earlier step's
+result, or its next reading.
+
+The args schema still runs, and its output is what `observe` receives.
+After it runs, nukadoko compares its output with the copy, at every place
+a claim reads. Where the two differ, the claim breaks, and the reason
+names the key: `the args schema changed args.cart at count from the value
+nukadoko read before it ran, so the claim judged nothing`. The refusals at
+import name the usual rewrites earlier. This comparison is what keeps the
+record true, and it also catches a schema that a step file changed after
+`defineStep` returned.
+
+No copy is taken, and the claim is `unjudged` with a reason that names
+the place, when the value is not plain JSON (see "The compares"), when it
+is a `Proxy` at any depth, or when it nests deeper than 256 arrays and
+objects. A `Proxy` is refused before any of its traps can run: a trap
+could answer the compare one way and the record another. The functions
+that write the record walk a value one level per call. On Node 22 a value
+1650 levels deep overflowed the stack while its step record was written,
+and 256 keeps a margin of six times; the reason names the limit
+(`observe:v nests deeper than 256 levels`).
+
 #### The compares
 
 `equal`, `not-equal`, `contains-text` (the expected text is a substring),
@@ -1732,11 +1790,12 @@ string, a finite number (an integer no larger than
 an object whose prototype is `Object.prototype` or `null` and whose own
 properties are all enumerable data properties with string keys. Anything
 else (a `Date`, a `Map`, a bigint, `NaN`, an `undefined` item, a
-getter, a class instance) breaks the claim, and the reason names what it
-is and where it sits: `observe:when is a Date, not a JSON value`. Such a
-value prints one way in the record and compares another way (every two
-`Date`s are structurally equal), so the record could not show what was
-compared.
+getter, a class instance, a `Proxy`) leaves the claim `unjudged`, and the
+reason names what it is and where it sits: `observe:when is a Date, which
+is not plain JSON, so the claim was not judged`. Such a value prints one
+way in the record and compares another way (every two `Date`s are
+structurally equal), so the record could not show what was compared, and
+nothing is known about the criterion.
 
 A comparison across two JSON types breaks and names both types, because a
 string is never equal to a number for the reason the claim states. An
@@ -1780,9 +1839,9 @@ compares and expected values.
 `observe(fixtures, args)` is optional. It reads the world when no earlier
 step returned the value, and returns an object whose keys the claims read.
 Its fixture bag is a step's bag (see "Context API"), so it may use
-`request`, `page`, or a project fixture, and it receives every args key
-except the ones a claim names as its expected value, from the sentence or
-from `from`. A key that reaches it, such as a path an earlier step
+`request`, `page`, or a project fixture, and it receives a copy of every
+args key except the ones a claim names as its expected value, from the
+sentence or from `from`. A key that reaches it, such as a path an earlier step
 returned, is an input; a key withheld from it is what it will be compared
 with. Reading a withheld key throws, and a JavaScript step file, which
 the types do not reach, is held to the same rule. Withholding keeps the
@@ -1911,15 +1970,16 @@ A claim step's record has these fields of its own (see "Records"):
 
 - `claims`: each claim in the order the step declares it. A comparison
   carries `actual` (after `view` and `at`; absent when the place held
-  nothing or a value that is not plain JSON), `actual_from`, `view` and
+  nothing or a value no snapshot could copy), `actual_from`, `view` and
   `at` when the claim names them, `compare`, `expected` (absent on the
   same terms), `expected_from`, `expected_view` when the claim names it,
   `expected_text`, `outcome` (`held`, `broken`, `unobserved`, or
   `unjudged`), a `reason` when it broke for something other than the
-  comparison itself (an undefined value, a value that is not plain JSON,
-  two JSON types, an expected text every string holds, a view that could
-  not apply, a side compared with itself) or when nukadoko could not
-  judge it, and `measured`. An `each` claim carries `actual_from`, the
+  comparison itself (an undefined value, two JSON types, an expected text
+  every string holds, a view that could not apply, a side compared with
+  itself, a value the args schema changed) or when nukadoko could not
+  judge it (a value that is not plain JSON, a `Proxy`, a value nested
+  too deep), and `measured`. An `each` claim carries `actual_from`, the
   `each` declarations, counts, and item results, and the same `outcome`,
   `reason`, and `measured`.
 - `observation`: `observed` when the step read its values, `unobserved`

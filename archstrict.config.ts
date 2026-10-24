@@ -232,6 +232,7 @@ export default {
         "infer-needs.ts",
         "parse-returns.ts",
         "resolve-use.ts",
+        "snapshot.ts",
         "step-fixture-names.ts",
         "strict-args.ts",
         "validate-from.ts",

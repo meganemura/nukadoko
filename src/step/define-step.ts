@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { stripCaptureNames } from "../binding/pattern.js";
-import { asObjectShape, isPlainString, isRequiredField, schemaRewrite } from "../binding/schema-shape.js";
+import { argsSchemaRewrite, asObjectShape, isPlainString, isRequiredField, schemaRewrite } from "../binding/schema-shape.js";
 import type { FixtureBag } from "./context.js";
 import { STEP_BRAND, STEP_DECLARATION } from "./brand.js";
 import { claimsProblem, pollProblem, type Claim, type ClaimPoll } from "./claims.js";
@@ -734,6 +734,7 @@ function validateClaimStepDefinition(definition: DefinitionFields): void {
           return rewrite === null ? [] : [[key, rewrite] as const];
         }),
       ),
+      argsRewrite: argsSchemaRewrite(definition.args as z.ZodTypeAny),
       stringArgs: shape === undefined ? null : new Set(Object.entries(shape).filter(([, field]) => isPlainString(field)).map(([key]) => key)),
     }) ?? pollProblem(definition.poll, definition.observe !== undefined, MAX_STEP_TIMEOUT_MS);
   if (problem !== null) {

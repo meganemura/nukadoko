@@ -63,7 +63,7 @@ import type { FixtureOutcome } from "../step/fixture-types.js";
 import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step/define-step.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
-import { runValidatedStep, type ClaimExecution } from "./execute-typed-step.js";
+import { runValidatedStep, snapshotClaimArgs, type ClaimExecution } from "./execute-typed-step.js";
 import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
 import { gherkinStepLines, pickleStepLines } from "./run-document.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
@@ -1858,6 +1858,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             contextHandle.recordUsed,
             (key, from) => fromOrigins.set(key, { from }),
           );
+          // Before the schema runs: what a claim judges is the value the
+          // line or the earlier step gave, never what the schema made of it.
+          const claimArgs = snapshotClaimArgs(entry.step, bindResult.value);
           const argsResult = strictArgsSchema(entry.step.args).safeParse(bindResult.value);
           if (!argsResult.success) {
             status = "failed";
@@ -1880,6 +1883,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
               name: outcome.stepName,
               step: entry.step,
               args: argsResult.data,
+              ...(claimArgs === undefined ? {} : { claimArgs }),
               handle: contextHandle,
               fixtureGraph,
               scenarioCache: fixtureScenarioCache,

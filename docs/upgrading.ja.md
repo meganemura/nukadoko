@@ -114,7 +114,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ```
 
 - **Then は行のテキストを、スキーマではなく `expected_view` でパースします。**
-  claim が読む値を書き換える args スキーマ(`z.coerce`、transform、preprocess、pipe、`trim` などの上書きするチェック、`catch`)は import 時に拒否されます。
+  claim が読む値を書き換える args スキーマ(`z.coerce`、transform、preprocess、pipe、`trim` などの上書きするチェック、`catch`、デフォルト値か prefault、オブジェクトか配列に付いた refine、args のオブジェクトそのものに付いたこれらのどれか)は import 時に拒否されます。
   JSON の docstring は素の `z.string()` のキーのままにし、claim がそれを JSON として読みます:
 
   ```ts
@@ -123,7 +123,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   claims: [{ actual: "body", compare: "equal", expected: "expected", expected_view: "json" }],
   ```
 
-  `Date`、bigint など、素の JSON でない値に対する claim は実行時に成り立ちません。
+  `Date`、bigint、`Proxy` など、素の JSON でない値に対する claim は実行時に `unjudged` になります。
   値を JSON として返し(ISO 形式の日付の文字列、10 進の文字列、数値)、それに対して claim します。
 
 - **真偽値は、文が使う語か、その背後の計測値になります。**

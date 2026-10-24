@@ -23,10 +23,17 @@ just until 0.1.
   `equal` only), is refused at import, and so is a boolean literal
   against a value `observe` computed. So is an args schema that rewrites
   a value a claim reads (`z.coerce`, a transform, a preprocess, a pipe,
-  `trim` and the other overwrite checks, `catch`): a claim names
-  `expected_view` to read the line's text as `json`, `lines`, or
-  `text` instead. Both sides of a compare must be plain JSON, so a
-  `Date`, a bigint, or `NaN` breaks the claim and the reason names it.
+  `trim` and the other overwrite checks, `catch`, a default or a
+  prefault, a refine on an object or an array, or any of these on the
+  args object itself): a claim names `expected_view` to read the line's
+  text as `json`, `lines`, or `text` instead. Each side of a claim is
+  judged as one plain JSON snapshot, taken where the value comes from:
+  when `observe` returns, at each poll reading, and before the args
+  schema runs for a sentence or `from` value. The record shows that
+  snapshot, `observe` receives a copy of its inputs, and an args schema
+  that still changes a value a claim reads breaks the claim. A `Date`, a
+  bigint, `NaN`, a `Proxy`, or a value nested deeper than 256 levels
+  leaves the claim `unjudged`, and the reason names it.
   `defineStep` freezes what it validated, and discovery runs only the
   step `defineStep` returned, not a copy of it. `matches` runs on a
   worker thread that the step's deadline stops. `observe` receives every

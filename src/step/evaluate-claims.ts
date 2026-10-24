@@ -21,25 +21,26 @@ import {
   type EachClaim,
   type ItemClaim,
 } from "./claims.js";
+import { readAt, snapshot, type Read, type Refusal } from "./snapshot.js";
 
 // Responsibility: judging a claim step's claims against the values it read
-// (docs/spec.md "Claims"). The runner reads the world (`observe`, the
-// `from` values) and hands the values in, with a way to test a regular
-// expression that it can stop; what comes back is the record of each claim
-// with the raw actual value beside it, so the runner can look for the
-// channel it was measured on. Every function here is pure except for the
-// pattern tester it is given. The poll loop is here too, with its clock and
-// its reader injected, so the two-consecutive-holds rule is tested without
-// a page.
+// (docs/spec.md "Claims"). The runner takes a snapshot of every value a
+// claim names where the value comes from (src/step/snapshot.ts) and hands
+// in readers over those snapshots, with a way to test a regular expression
+// that it can stop; what comes back is the record of each claim with the
+// raw actual value beside it, so the runner can look for the channel it
+// was measured on. Every function here is pure except for the pattern
+// tester it is given. The poll loop is here too, with its clock and its
+// reader injected, so the two-consecutive-holds rule is tested without a
+// page.
 //
-// A compare reads plain JSON only. A value JSON cannot hold (a Date, a Map,
-// a bigint, NaN, a getter) would print one way in the record and compare
-// another way, so a claim on one breaks and names it, and what the record
-// shows is always what was compared.
+// A claim reads snapshots only, never a value step code still holds, so
+// what was compared and what the record shows are one value. A value a
+// snapshot refuses (not plain JSON, a Proxy, nested too deep) is not
+// judged: the claim is `unjudged` and names the part and what it is.
 
 /** The JSON type a compare sees. `undefined` never reaches a compare: an
- * undefined side breaks first, naming its path, and so does any value that
- * is not plain JSON. */
+ * undefined side breaks first, naming its path. */
 export type JsonType = "null" | "array" | "object" | "string" | "number" | "boolean";
 
 export function jsonType(value: unknown): JsonType {
@@ -50,105 +51,8 @@ export function jsonType(value: unknown): JsonType {
   return "object";
 }
 
-const INDEX = /^(0|[1-9][0-9]*)$/;
-
 function article(word: string): string {
   return /^[aeiou]/i.test(word) ? `an ${word}` : `a ${word}`;
-}
-
-function kindOf(value: unknown): string {
-  if (value === undefined) return "undefined";
-  if (typeof value === "number") {
-    if (Number.isNaN(value)) return "NaN";
-    if (!Number.isFinite(value)) return String(value);
-    return `the integer ${String(value)}, beyond Number.MAX_SAFE_INTEGER`;
-  }
-  if (typeof value === "bigint") return `the bigint ${String(value)}n`;
-  if (typeof value === "function") return "a function";
-  if (typeof value === "symbol") return "a symbol";
-  const prototype = Object.getPrototypeOf(value) as { constructor?: { name?: unknown } } | null;
-  const name = prototype?.constructor?.name;
-  return typeof name === "string" && name.length > 0 ? article(name) : "an object of no class";
-}
-
-/**
- * The first part of `value` that is not plain JSON, as `<where> is <what>`,
- * or `null`. Plain JSON is `null`, a boolean, a string, a finite number that
- * is not an integer beyond `Number.MAX_SAFE_INTEGER`, an array with no
- * holes and no other keys, or an object whose prototype is
- * `Object.prototype` or `null` and whose own properties are all enumerable
- * data properties with string keys. `where` names the root. Pure.
- */
-export function nonJsonPart(value: unknown, where: string): string | null {
-  const seen = new Set<object>();
-  const visit = (current: unknown, at: string): string | null => {
-    if (current === null || typeof current === "string" || typeof current === "boolean") return null;
-    if (typeof current === "number") {
-      return Number.isFinite(current) && (!Number.isInteger(current) || Number.isSafeInteger(current)) ? null : `${at} is ${kindOf(current)}`;
-    }
-    if (typeof current !== "object") return `${at} is ${kindOf(current)}`;
-    if (seen.has(current)) return `${at} refers back to a value that holds it`;
-    const isArray = Array.isArray(current);
-    const prototype: unknown = Object.getPrototypeOf(current);
-    if (isArray ? prototype !== Array.prototype : prototype !== Object.prototype && prototype !== null) {
-      return `${at} is ${kindOf(current)}`;
-    }
-    seen.add(current);
-    const keys = Reflect.ownKeys(current);
-    if (isArray) {
-      const items = current as unknown[];
-      for (let index = 0; index < items.length; index += 1) {
-        if (!Object.hasOwn(items, index)) return `${at}.${index} is a hole`;
-      }
-    }
-    for (const key of keys) {
-      if (typeof key === "symbol") return `${at} has a symbol key`;
-      if (isArray && key === "length") continue;
-      if (isArray && !INDEX.test(key)) return `${at} has the key "${key}" beside its items`;
-      const descriptor = Object.getOwnPropertyDescriptor(current, key)!;
-      if (!("value" in descriptor)) return `${at}.${key} is a getter`;
-      if (descriptor.enumerable !== true) return `${at}.${key} is not enumerable`;
-      const problem = visit(descriptor.value, `${at}.${key}`);
-      if (problem !== null) return problem;
-    }
-    seen.delete(current);
-    return null;
-  };
-  return visit(value, where);
-}
-
-/** What walking a path found: a value, nothing at a segment, or a
- * property that would run code to be read. */
-type PathRead =
-  | { readonly kind: "value"; readonly value: unknown }
-  | { readonly kind: "missing"; readonly at: number }
-  | { readonly kind: "getter"; readonly at: number };
-
-/** Walks `segments` from `root` by own data properties only, so no path
- * reaches `Object.prototype` and no getter runs. An array segment is a
- * decimal index; nothing else is read from an array, so `length` is not a
- * path into one. Pure. */
-function readPath(root: unknown, segments: readonly string[]): PathRead {
-  let current: unknown = root;
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]!;
-    if (Array.isArray(current) && !INDEX.test(segment)) return { kind: "missing", at: index };
-    if (typeof current !== "object" || current === null) return { kind: "missing", at: index };
-    const descriptor = Object.getOwnPropertyDescriptor(current, segment);
-    if (descriptor === undefined) return { kind: "missing", at: index };
-    if (!("value" in descriptor)) return { kind: "getter", at: index };
-    current = descriptor.value;
-  }
-  return { kind: "value", value: current };
-}
-
-/** The value at `path` inside `root`, or `undefined` when a segment holds
- * nothing or names a getter. Pure. */
-export function valueAt(root: unknown, path: string): unknown {
-  const segments = pathSegments(path);
-  if (segments === null) return undefined;
-  const read = readPath(root, segments);
-  return read.kind === "value" ? read.value : undefined;
 }
 
 /** Structural equality over plain JSON values: object key order does not
@@ -160,19 +64,29 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   if (type === "array") {
     const left = a as unknown[];
     const right = b as unknown[];
-    return left.length === right.length && left.every((item, index) => deepEqual(item, right[index]));
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (!deepEqual(left[index], right[index])) return false;
+    }
+    return true;
   }
   if (type === "object") {
     const left = a as Record<string, unknown>;
     const right = b as Record<string, unknown>;
     const keys = Object.keys(left);
-    return keys.length === Object.keys(right).length && keys.every((key) => Object.hasOwn(right, key) && deepEqual(left[key], right[key]));
+    if (keys.length !== Object.keys(right).length) return false;
+    for (const key of keys) {
+      if (!Object.hasOwn(right, key) || !deepEqual(left[key], right[key])) return false;
+    }
+    return true;
   }
   return false;
 }
 
-/** The value after `view`, or why the view could not apply. */
-export function applyView(view: ClaimView | undefined, value: unknown): { readonly value: unknown } | { readonly reason: string } {
+/** The value after `view`, or why the view could not apply. A view reads a
+ * snapshot, and what it makes of one is a snapshot too: the JSON a text
+ * parses to is held to the same depth limit. */
+export function applyView(view: ClaimView | undefined, value: unknown): { readonly value: unknown } | { readonly reason: string } | { readonly refused: Refusal } {
   if (view === undefined) return { value };
   if (typeof value !== "string") return { reason: `view ${view} reads a string, and the value is ${typeof value === "object" ? article(jsonType(value)) : article(typeof value)}` };
   switch (view) {
@@ -182,12 +96,15 @@ export function applyView(view: ClaimView | undefined, value: unknown): { readon
       const text = value.trimEnd();
       return { value: text === "" ? [] : text.split(/\r?\n/) };
     }
-    case "json":
+    case "json": {
+      let parsed: unknown;
       try {
-        return { value: JSON.parse(value) as unknown };
+        parsed = JSON.parse(value) as unknown;
       } catch (error) {
         return { reason: `view json could not parse the value: ${error instanceof Error ? error.message : String(error)}` };
       }
+      return snapshot(parsed);
+    }
   }
 }
 
@@ -263,6 +180,74 @@ export async function compareValues(
   }
 }
 
+// --- what a claim reads ---
+
+/** The paths a step's claims read, as segments from each root: from the
+ * args (`[key, ...path]`: a sentence key, a `from` path) and from what
+ * `observe` returned. The runner takes a snapshot of each one where its
+ * value comes from, and the claims read nothing else. Pure. */
+export interface ClaimReads {
+  readonly args: readonly (readonly string[])[];
+  readonly observed: readonly (readonly string[])[];
+}
+
+export function claimReads(claims: readonly Claim[], fromKeys: ReadonlySet<string>): ClaimReads {
+  const args = new Map<string, readonly string[]>();
+  const observed = new Map<string, readonly string[]>();
+  const add = (into: Map<string, readonly string[]>, segments: readonly string[] | null): void => {
+    if (segments !== null) into.set(readKey(segments), segments);
+  };
+  const addExpected = (expected: ItemClaim["expected"]): void => {
+    if (typeof expected === "string") add(args, [expected]);
+    else if ("from" in expected) add(args, pathSegments(expected.from));
+    else if ("observe" in expected) add(observed, pathSegments(expected.observe));
+  };
+  for (const claim of claims) {
+    const segments = pathSegments(claim.actual);
+    if (segments !== null) add(fromKeys.has(segments[0]!) ? args : observed, segments);
+    const items = isEachClaim(claim) ? [...(claim.each.where ?? []), ...claim.each.claims] : [claim];
+    for (const item of items) addExpected(item.expected);
+  }
+  return { args: [...args.values()], observed: [...observed.values()] };
+}
+
+/** One key per path, for a map of snapshots. */
+export function readKey(segments: readonly string[]): string {
+  return JSON.stringify(segments);
+}
+
+/** Reads one path's snapshot. */
+export type Reader = (segments: readonly string[]) => Read;
+
+/** The snapshot of each path inside `root`, taken now. A read that throws
+ * (no plain value does, and a Proxy is refused before its traps run) is a
+ * refusal with the error, so taking snapshots never throws. */
+export function takeReads(root: unknown, paths: readonly (readonly string[])[]): ReadonlyMap<string, Read> {
+  const reads = new Map<string, Read>();
+  for (const segments of paths) {
+    let read: Read;
+    try {
+      read = readAt(root, segments);
+    } catch (error) {
+      read = { refused: { at: [], problem: `could not be read: ${error instanceof Error ? error.message : String(error)}` } };
+    }
+    reads.set(readKey(segments), read);
+  }
+  return reads;
+}
+
+/** A reader over snapshots taken before. A path no snapshot was taken of
+ * is a refusal: a claim never reads a live value. */
+export function readerOf(reads: ReadonlyMap<string, Read>): Reader {
+  return (segments) => reads.get(readKey(segments)) ?? { refused: { at: [], problem: "was not read when its value was taken" } };
+}
+
+/** A reader that takes each snapshot when it is asked, for a value no step
+ * code holds any more (a test's literal, a value already copied). */
+export function readerNow(root: unknown): Reader {
+  return (segments) => readAt(root, segments);
+}
+
 /** Where an args key's value starts: the origin two sides are compared by,
  * the path inside it, and the label the record names it by. */
 export interface ArgSide {
@@ -273,10 +258,16 @@ export interface ArgSide {
 
 /** What a claim step read, and how to name each value's source. */
 export interface ClaimInputs {
-  /** The step's validated args: sentence values and `from` values. */
-  readonly args: Readonly<Record<string, unknown>>;
-  /** What `observe` returned, or `undefined` for a step without one. */
-  readonly observation: unknown;
+  /** The args a claim names, as snapshots taken before the args schema
+   * ran: a sentence value after its parameter type, a `from` value as the
+   * producing step recorded it. Read by `[key, ...path]`. */
+  readonly args: Reader;
+  /** What `observe` returned, as snapshots taken when it returned. */
+  readonly observed: Reader;
+  /** Whether the args schema's output differs from the snapshot at these
+   * segments: a claim on such a value judged nothing the line or the
+   * earlier step gave. */
+  readonly schemaChanged: (segments: readonly string[]) => boolean;
   readonly fromKeys: ReadonlySet<string>;
   /** Where an args key's value starts: `sentence:<key>` for a value the
    * line states, `from:<step>@<line>.<returns key>` for a value an earlier
@@ -298,10 +289,13 @@ export interface JudgedClaim {
   readonly fromKey: string | null;
 }
 
-/** A value read at a place, or why there is none. */
+/** A value read at a place, or why there is none: a reason that breaks the
+ * claim (nothing there, a view that could not apply), or one that leaves
+ * it unjudged (a value no snapshot could take). */
 type Side =
   | { readonly place: ClaimPlace; readonly value: unknown }
-  | { readonly place: ClaimPlace; readonly reason: string };
+  | { readonly place: ClaimPlace; readonly broken: string }
+  | { readonly place: ClaimPlace; readonly unjudged: string };
 
 function argPlace(key: string, inputs: ClaimInputs): ClaimPlace {
   const side = inputs.argSide(key);
@@ -310,126 +304,144 @@ function argPlace(key: string, inputs: ClaimInputs): ClaimPlace {
 
 const OBSERVE_PLACE: ClaimPlace = { origin: "observe", segments: [], label: "observe:", open: false };
 
-/** Reads `place`'s value from `root`, starting at `from`, which is where
- * `root` sits in `place`. `name` is how a reason names the side. */
-function readSide(root: unknown, place: ClaimPlace, from: number, name = place.label): Side {
-  const read = readPath(root, place.segments.slice(from));
-  if (read.kind === "getter") return { place, reason: `${name} reads a getter, which is not a JSON value` };
-  if (read.kind === "value" && read.value !== undefined) return { place, value: read.value };
-  return { place, reason: `${name} is undefined` };
+function nameOf(place: ClaimPlace): string {
+  return place.label.endsWith(":") ? "the value observe returned" : place.label;
+}
+
+/** Why a refused value is not judged, naming where it sits. A value nested
+ * past the limit is plain JSON, so its reason does not say otherwise. */
+function refusalReason(place: ClaimPlace, refusal: Refusal): string {
+  const name = nameOf(placeAt(place, refusal.at.join(".")));
+  if (refusal.limit !== undefined) {
+    return `${name} ${refusal.problem}, so the claim was not judged: the record keeps no value nested that deep`;
+  }
+  return `${name} ${refusal.problem}, which is not plain JSON, so the claim was not judged: the record could not show the value that was compared`;
+}
+
+/** The side a read found, with `base` the place its root sits at and
+ * `skip` the read's segments already in `base` (an args key). */
+function sideOf(read: Read, base: ClaimPlace, rest: readonly string[], skip: number, name: (place: ClaimPlace) => string = nameOf): Side {
+  const place = placeAt(base, rest.join("."));
+  if ("refused" in read) return { place, unjudged: refusalReason(base, { ...read.refused, at: read.refused.at.slice(skip) }) };
+  if ("missing" in read) return { place, broken: `${name(place)} is undefined` };
+  return { place, value: read.value };
+}
+
+function readArgSide(segments: readonly string[], inputs: ClaimInputs, name?: (place: ClaimPlace) => string): Side {
+  const [head, ...rest] = segments;
+  return sideOf(inputs.args(segments), argPlace(head!, inputs), rest, 1, name);
 }
 
 /** The top-level side a claim's `actual` names, before `view` and `at`. */
 function topLevelSide(path: string, inputs: ClaimInputs): Side & { readonly fromKey: string | null } {
   const segments = pathSegments(path) ?? [path];
-  const head = segments[0]!;
-  if (inputs.fromKeys.has(head)) {
-    const base = argPlace(head, inputs);
-    const place = placeAt(base, segments.slice(1).join("."));
-    const side = readSide(inputs.args[head], place, base.segments.length);
-    return { ...side, fromKey: head };
-  }
-  return { ...readSide(inputs.observation, placeAt(OBSERVE_PLACE, path), 0), fromKey: null };
+  if (inputs.fromKeys.has(segments[0]!)) return { ...readArgSide(segments, inputs), fromKey: segments[0]! };
+  return { ...sideOf(inputs.observed(segments), OBSERVE_PLACE, segments, 0), fromKey: null };
 }
 
 /** A side through `view` and then `at`. */
 function shaped(side: Side, view: ClaimView | undefined, at: string | undefined): Side {
-  if ("reason" in side) return { place: placeAt(placeViewed(side.place, view), at), reason: side.reason };
   const viewedPlace = placeViewed(side.place, view);
-  const viewed = applyView(view, side.value);
-  if ("reason" in viewed) return { place: placeAt(viewedPlace, at), reason: viewed.reason };
-  if (at === undefined) return { place: viewedPlace, value: viewed.value };
   const place = placeAt(viewedPlace, at);
-  const read = readPath(viewed.value, at.split("."));
-  if (read.kind === "value" && read.value !== undefined) return { place, value: read.value };
-  return { place, reason: `${viewedPlace.label} has nothing at ${at}` };
+  if (!("value" in side)) return "broken" in side ? { place, broken: side.broken } : { place, unjudged: side.unjudged };
+  const viewed = applyView(view, side.value);
+  if ("reason" in viewed) return { place, broken: viewed.reason };
+  if ("refused" in viewed) return { place, unjudged: refusalReason(viewedPlace, viewed.refused) };
+  if (at === undefined) return { place: viewedPlace, value: viewed.value };
+  const read = readAt(viewed.value, at.split("."));
+  if ("value" in read) return { place, value: read.value };
+  return { place, broken: `${viewedPlace.label} has nothing at ${at}` };
 }
 
 /** An expected value, its place, and the text the sentence states it as. */
-type ExpectedSide = Side & { readonly text: string | null; readonly fromObserve: boolean };
+type ExpectedSide = Side & { readonly text: string | null; readonly fromObserve: boolean; readonly segments: readonly string[] | null };
+
+const expectedName = (place: ClaimPlace): string => `the expected value ${place.label}`;
 
 function expectedSide(claim: ItemClaim, inputs: ClaimInputs): ExpectedSide {
   const expected = claim.expected;
   if (typeof expected === "string") {
-    const place = placeViewed(argPlace(expected, inputs), claim.expected_view);
-    const text = inputs.sentenceText(expected);
-    const value = inputs.args[expected];
-    if (value === undefined) return { place, reason: `the expected value ${place.label} is undefined`, text, fromObserve: false };
-    const viewed = applyView(claim.expected_view, value);
-    return "reason" in viewed ? { place, reason: viewed.reason, text, fromObserve: false } : { place, value: viewed.value, text, fromObserve: false };
+    const side = shaped(readArgSide([expected], inputs, expectedName), claim.expected_view, undefined);
+    return { ...side, text: inputs.sentenceText(expected), fromObserve: false, segments: [expected] };
   }
   if ("from" in expected) {
     const segments = pathSegments(expected.from) ?? [expected.from];
-    const base = argPlace(segments[0]!, inputs);
-    const place = placeAt(base, segments.slice(1).join("."));
-    const side = readSide(inputs.args[segments[0]!], place, base.segments.length, `the expected value ${place.label}`);
-    return { ...side, text: null, fromObserve: false };
+    return { ...readArgSide(segments, inputs, expectedName), text: null, fromObserve: false, segments };
   }
   if ("observe" in expected) {
-    const place = placeAt(OBSERVE_PLACE, expected.observe);
-    const side = readSide(inputs.observation, place, 0, `the expected value ${place.label}`);
-    return { ...side, text: null, fromObserve: true };
+    const segments = pathSegments(expected.observe) ?? [expected.observe];
+    return { ...sideOf(inputs.observed(segments), OBSERVE_PLACE, segments, 0, expectedName), text: null, fromObserve: true, segments: null };
   }
   const words = literalStatedByAll(inputs.patterns, expected.literal) ?? "unstated";
   const place: ClaimPlace = { origin: "literal", segments: [], label: `literal:${words}`, open: false };
-  return { place, value: literalValue(expected.literal), text: words, fromObserve: false };
+  return { place, value: literalValue(expected.literal), text: words, fromObserve: false, segments: null };
 }
 
 function literalValue(literal: ClaimLiteral): unknown {
   return Array.isArray(literal) ? [] : literal;
 }
 
-/** Why a comparison of `actual` with `expected` cannot say anything about
- * the behaviour, before any compare runs, or `null`. */
-function precondition(actual: Side, expected: ExpectedSide): string | null {
-  if ("reason" in actual) return actual.reason;
-  if ("reason" in expected) return expected.reason;
-  const actualProblem = nonJsonPart(actual.value, actual.place.label);
-  if (actualProblem !== null) return `${actualProblem}, not a JSON value, so the record could not show what was compared`;
-  const expectedProblem = nonJsonPart(expected.value, `the expected value ${expected.place.label}`);
-  if (expectedProblem !== null) return `${expectedProblem}, not a JSON value, so the record could not show what was compared`;
+/** What stops a comparison before any compare runs: a reason that breaks
+ * it, one that leaves it unjudged, or `null`. */
+type Stop = { readonly broken: string } | { readonly unjudged: string } | null;
+
+function schemaChange(segments: readonly string[] | null, inputs: ClaimInputs): Stop {
+  if (segments === null || !inputs.schemaChanged(segments)) return null;
+  const [key, ...rest] = segments;
+  const where = rest.length === 0 ? `args.${key}` : `args.${key} at ${rest.join(".")}`;
+  return { broken: `the args schema changed ${where} from the value nukadoko read before it ran, so the claim judged nothing` };
+}
+
+function stopOf(side: Side): Stop {
+  if ("broken" in side) return { broken: side.broken };
+  if ("unjudged" in side) return { unjudged: side.unjudged };
+  return null;
+}
+
+function precondition(actual: Side, actualSegments: readonly string[] | null, expected: ExpectedSide, inputs: ClaimInputs): Stop {
+  const stop = schemaChange(actualSegments, inputs) ?? schemaChange(expected.segments, inputs) ?? stopOf(actual) ?? stopOf(expected);
+  if (stop !== null) return stop;
   if (samePlace(actual.place, expected.place)) {
-    return `both sides read ${actual.place.label}, so the claim compares a value with itself`;
+    return { broken: `both sides read ${actual.place.label}, so the claim compares a value with itself` };
   }
-  if (expected.fromObserve && typeof expected.value === "boolean") {
-    return `the expected value ${expected.place.label} is a boolean observe computed, which is a judgment made in code: return the thing measured and let the claim compare it`;
+  if (expected.fromObserve && "value" in expected && typeof expected.value === "boolean") {
+    return { broken: `the expected value ${expected.place.label} is a boolean observe computed, which is a judgment made in code: return the thing measured and let the claim compare it` };
   }
   return null;
 }
 
-function declarationOf(claim: ItemClaim, expected: ExpectedSide, withValue: boolean): ClaimItemDeclaration {
+function declarationOf(claim: ItemClaim, expected: ExpectedSide | null): ClaimItemDeclaration {
+  const place = expected?.place ?? expectedPlace(claim, null);
   return {
     ...(claim.actual === undefined ? {} : { actual: claim.actual }),
     ...(claim.view === undefined ? {} : { view: claim.view }),
     ...(claim.at === undefined ? {} : { at: claim.at }),
     compare: claim.compare,
-    ...(withValue && "value" in expected && nonJsonPart(expected.value, "") === null ? { expected: expected.value } : {}),
-    expected_from: expected.place.label,
+    ...(expected !== null && "value" in expected ? { expected: expected.value } : {}),
+    expected_from: place.label,
     ...(claim.expected_view === undefined ? {} : { expected_view: claim.expected_view }),
-    expected_text: expected.text,
+    expected_text: expected?.text ?? null,
   };
 }
 
-async function judgeComparison(claim: ItemClaim, rawActual: Side, inputs: ClaimInputs): Promise<ClaimComparisonRecord> {
+async function judgeComparison(claim: ItemClaim, rawActual: Side, actualSegments: readonly string[] | null, inputs: ClaimInputs): Promise<ClaimComparisonRecord> {
   const expected = expectedSide(claim, inputs);
   const actual = shaped(rawActual, claim.view, claim.at);
-  const showsActual = "value" in actual && nonJsonPart(actual.value, "") === null;
-  const showsExpected = "value" in expected && nonJsonPart(expected.value, "") === null;
   // Field order is the order a reader reads a claim in: what was measured,
   // how, and what it was compared with.
   const base = {
-    ...(showsActual ? { actual: actual.value } : {}),
+    ...("value" in actual ? { actual: actual.value } : {}),
     actual_from: actual.place.label,
     ...(claim.view === undefined ? {} : { view: claim.view }),
     ...(claim.at === undefined ? {} : { at: claim.at }),
     compare: claim.compare,
-    ...(showsExpected ? { expected: expected.value } : {}),
+    ...("value" in expected ? { expected: expected.value } : {}),
     expected_from: expected.place.label,
     ...(claim.expected_view === undefined ? {} : { expected_view: claim.expected_view }),
     expected_text: expected.text,
   };
-  const problem = precondition(actual, expected);
-  if (problem !== null) return { ...base, outcome: "broken", reason: problem };
+  const stop = precondition(actual, actualSegments, expected, inputs);
+  if (stop !== null) return "broken" in stop ? { ...base, outcome: "broken", reason: stop.broken } : { ...base, outcome: "unjudged", reason: stop.unjudged };
   const result = await compareValues(claim.compare, (actual as { value: unknown }).value, (expected as { value: unknown }).value, inputs.testPattern);
   if ("reason" in result) return { ...base, outcome: "broken", reason: result.reason };
   return { ...base, outcome: result.holds ? "held" : "broken" };
@@ -438,42 +450,48 @@ async function judgeComparison(claim: ItemClaim, rawActual: Side, inputs: ClaimI
 /** At most this many items of one `each` are kept on the record. */
 export const EACH_RESULTS_CAP = 20;
 
-/** The side an item claim reads: the item, or a path inside it. */
+/** The side an item claim reads: the item, or a path inside it. The item
+ * is part of a snapshot, so a read inside it finds a value or nothing. */
 function itemSide(item: unknown, itemPlace: ClaimPlace, claim: ItemClaim): Side {
-  if (claim.actual === undefined) {
-    return item === undefined ? { place: itemPlace, reason: `${itemPlace.label} is undefined` } : { place: itemPlace, value: item };
-  }
-  return readSide(item, placeAt(itemPlace, claim.actual), itemPlace.segments.length);
+  const segments = claim.actual === undefined ? [] : (pathSegments(claim.actual) ?? [claim.actual]);
+  return sideOf(readAt(item, segments), itemPlace, segments, 0);
 }
 
-async function judgeEach(claim: EachClaim, rawActual: Side, inputs: ClaimInputs): Promise<ClaimEachRecord> {
+function itemOutcome(records: readonly ClaimComparisonRecord[]): "held" | "broken" | "unjudged" {
+  if (records.some((record) => record.outcome === "broken")) return "broken";
+  return records.some((record) => record.outcome === "unjudged") ? "unjudged" : "held";
+}
+
+async function judgeEach(claim: EachClaim, rawActual: Side, actualSegments: readonly string[] | null, inputs: ClaimInputs): Promise<ClaimEachRecord> {
   const actual = shaped(rawActual, claim.view, claim.at);
   const where = claim.each.where ?? [];
   const declared = {
-    ...(where.length === 0 ? {} : { where: where.map((entry) => declarationOf(entry, expectedSide(entry, inputs), true)) }),
-    claims: claim.each.claims.map((entry) => declarationOf(entry, expectedSide(entry, inputs), true)),
+    ...(where.length === 0 ? {} : { where: where.map((entry) => declarationOf(entry, expectedSide(entry, inputs))) }),
+    claims: claim.each.claims.map((entry) => declarationOf(entry, expectedSide(entry, inputs))),
   };
   const base = {
     actual_from: actual.place.label,
     ...(claim.view === undefined ? {} : { view: claim.view }),
     ...(claim.at === undefined ? {} : { at: claim.at }),
   };
-  const broken = (reason: string, items = 0, results: readonly ClaimItemRecord[] = []): ClaimEachRecord => ({
+  const ended = (outcome: "broken" | "unjudged", reason: string, items = 0, results: readonly ClaimItemRecord[] = []): ClaimEachRecord => ({
     ...base,
     each: { ...declared, items, selected: 0, results },
-    outcome: "broken",
+    outcome,
     reason,
   });
-  if ("reason" in actual) return broken(actual.reason);
-  if (!Array.isArray(actual.value)) return broken(`each reads an array, and the value is ${article(jsonType(actual.value))}`);
-  const items: unknown[] = actual.value;
-  if (items.length === 0) return broken("the array is empty, and a claim on every item of nothing measures nothing");
+  const stop = schemaChange(actualSegments, inputs) ?? stopOf(actual);
+  if (stop !== null) return "broken" in stop ? ended("broken", stop.broken) : ended("unjudged", stop.unjudged);
+  const value = (actual as { value: unknown }).value;
+  if (!Array.isArray(value)) return ended("broken", `each reads an array, and the value is ${article(jsonType(value))}`);
+  const items: unknown[] = value;
+  if (items.length === 0) return ended("broken", "the array is empty, and a claim on every item of nothing measures nothing");
   const judged: ClaimItemRecord[] = [];
   for (let index = 0; index < items.length; index += 1) {
     const itemPlace = placeAt(actual.place, String(index));
     const whereRecords: ClaimComparisonRecord[] = [];
     for (const entry of where) {
-      whereRecords.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), inputs));
+      whereRecords.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), null, inputs));
     }
     // A where claim that could not compare at all (an undefined value, two
     // JSON types) says nothing about whether the item belongs, so leaving
@@ -481,7 +499,8 @@ async function judgeEach(claim: EachClaim, rawActual: Side, inputs: ClaimInputs)
     // compare".
     const unjudgeable = whereRecords.find((record) => record.reason !== undefined);
     if (unjudgeable !== undefined) {
-      return broken(`where could not compare item ${index}: ${unjudgeable.reason}`, items.length, [{ index, selected: false, where: whereRecords }]);
+      const outcome = unjudgeable.outcome === "unjudged" ? "unjudged" : "broken";
+      return ended(outcome, `where could not ${outcome === "unjudged" ? "judge" : "compare"} item ${index}: ${unjudgeable.reason}`, items.length, [{ index, selected: false, where: whereRecords }]);
     }
     if (!whereRecords.every((record) => record.outcome === "held")) {
       judged.push({ index, selected: false, where: whereRecords });
@@ -489,13 +508,13 @@ async function judgeEach(claim: EachClaim, rawActual: Side, inputs: ClaimInputs)
     }
     const claims: ClaimComparisonRecord[] = [];
     for (const entry of claim.each.claims) {
-      claims.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), inputs));
+      claims.push(await judgeComparison(entry, itemSide(items[index], itemPlace, entry), null, inputs));
     }
     judged.push({
       index,
       selected: true,
       ...(whereRecords.length === 0 ? {} : { where: whereRecords }),
-      outcome: claims.every((entry) => entry.outcome === "held") ? "held" : "broken",
+      outcome: itemOutcome(claims),
       claims,
     });
   }
@@ -510,41 +529,78 @@ async function judgeEach(claim: EachClaim, rawActual: Side, inputs: ClaimInputs)
       reason: `where selected none of the ${items.length} items, and a claim on none of them measures nothing`,
     };
   }
+  const outcomes = selected.map((entry) => (entry.selected ? entry.outcome : "held"));
   return {
     ...base,
     each: { ...declared, items: items.length, selected: selected.length, results: kept, ...truncated },
-    outcome: selected.every((entry) => entry.selected && entry.outcome === "held") ? "held" : "broken",
+    outcome: outcomes.includes("broken") ? "broken" : outcomes.includes("unjudged") ? "unjudged" : "held",
   };
 }
 
-/** The item results the record keeps: the broken ones first, then the ones
- * `where` left out, then the ones that held, at most `EACH_RESULTS_CAP`,
- * in index order. */
+/** The item results the record keeps: the broken ones first, then the
+ * unjudged ones, then the ones `where` left out, then the ones that held,
+ * at most `EACH_RESULTS_CAP`, in index order. */
 function keptItems(judged: readonly ClaimItemRecord[]): ClaimItemRecord[] {
-  const rank = (entry: ClaimItemRecord): number => (!entry.selected ? 1 : entry.outcome === "broken" ? 0 : 2);
+  const rank = (entry: ClaimItemRecord): number => (!entry.selected ? 2 : entry.outcome === "broken" ? 0 : entry.outcome === "unjudged" ? 1 : 3);
   return [...judged]
     .sort((a, b) => rank(a) - rank(b) || a.index - b.index)
     .slice(0, EACH_RESULTS_CAP)
     .sort((a, b) => a.index - b.index);
 }
 
+// --- labels alone, for a claim nothing was compared for ---
+
+function actualPlace(claim: Claim, inputs: ClaimInputs): ClaimPlace {
+  const segments = pathSegments(claim.actual) ?? [claim.actual];
+  const base = inputs.fromKeys.has(segments[0]!) ? placeAt(argPlace(segments[0]!, inputs), segments.slice(1).join(".")) : placeAt(OBSERVE_PLACE, claim.actual);
+  return placeAt(placeViewed(base, claim.view), claim.at);
+}
+
+function expectedPlace(claim: ItemClaim, inputs: ClaimInputs | null): ClaimPlace {
+  const expected = claim.expected;
+  if (typeof expected === "string") {
+    const base: ClaimPlace = inputs === null ? { origin: `sentence:${expected}`, segments: [], label: `sentence:${expected}`, open: false } : argPlace(expected, inputs);
+    return placeViewed(base, claim.expected_view);
+  }
+  if ("from" in expected) {
+    const segments = pathSegments(expected.from) ?? [expected.from];
+    if (inputs === null) return { origin: "from", segments, label: `from:${expected.from}`, open: false };
+    return placeAt(argPlace(segments[0]!, inputs), segments.slice(1).join("."));
+  }
+  if ("observe" in expected) return placeAt(OBSERVE_PLACE, expected.observe);
+  const words = inputs === null ? "unstated" : (literalStatedByAll(inputs.patterns, expected.literal) ?? "unstated");
+  return { origin: "literal", segments: [], label: `literal:${words}`, open: false };
+}
+
+function expectedTextOf(claim: ItemClaim, inputs: ClaimInputs): string | null {
+  const expected = claim.expected;
+  if (typeof expected === "string") return inputs.sentenceText(expected);
+  if ("literal" in expected) return literalStatedByAll(inputs.patterns, expected.literal) ?? "unstated";
+  return null;
+}
+
 /** Each claim's labels when nothing was compared: what each side would
- * have been named, with `outcome` and, for an unjudged claim, why. */
+ * have been named, with `outcome` and, for an unjudged claim, why. It
+ * reads no value, so it cannot fail. */
 function notJudged(claim: Claim, inputs: ClaimInputs, outcome: "unobserved" | "unjudged", reason: string | undefined): ClaimComparisonRecord | ClaimEachRecord {
-  const actual = shaped(topLevelSide(claim.actual, inputs), claim.view, claim.at);
   const tail = { outcome, ...(reason === undefined ? {} : { reason }) };
   const base = {
-    actual_from: actual.place.label,
+    actual_from: actualPlace(claim, inputs).label,
     ...(claim.view === undefined ? {} : { view: claim.view }),
     ...(claim.at === undefined ? {} : { at: claim.at }),
   };
+  const declaration = (entry: ItemClaim): ClaimItemDeclaration => ({
+    ...declarationOf(entry, null),
+    expected_from: expectedPlace(entry, inputs).label,
+    expected_text: expectedTextOf(entry, inputs),
+  });
   if (isEachClaim(claim)) {
     const where = claim.each.where ?? [];
     return {
       ...base,
       each: {
-        ...(where.length === 0 ? {} : { where: where.map((entry) => declarationOf(entry, expectedSide(entry, inputs), false)) }),
-        claims: claim.each.claims.map((entry) => declarationOf(entry, expectedSide(entry, inputs), false)),
+        ...(where.length === 0 ? {} : { where: where.map(declaration) }),
+        claims: claim.each.claims.map(declaration),
         items: 0,
         selected: 0,
         results: [],
@@ -552,13 +608,12 @@ function notJudged(claim: Claim, inputs: ClaimInputs, outcome: "unobserved" | "u
       ...tail,
     };
   }
-  const expected = expectedSide(claim, inputs);
   return {
     ...base,
     compare: claim.compare,
-    expected_from: expected.place.label,
+    expected_from: expectedPlace(claim, inputs).label,
     ...(claim.expected_view === undefined ? {} : { expected_view: claim.expected_view }),
-    expected_text: expected.text,
+    expected_text: expectedTextOf(claim, inputs),
     ...tail,
   };
 }
@@ -567,19 +622,27 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function fromKeyOf(claim: Claim, fromKeys: ReadonlySet<string>): string | null {
+  const head = pathSegments(claim.actual)?.[0];
+  return head !== undefined && fromKeys.has(head) ? head : null;
+}
+
 /** Judges every claim against what the step read. A failure while judging
  * one claim makes that claim `unjudged` with the failure as its reason,
  * and the other claims are still judged. */
 export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInputs): Promise<readonly JudgedClaim[]> {
   const judged: JudgedClaim[] = [];
   for (const claim of claims) {
-    const actual = topLevelSide(claim.actual, inputs);
-    const rawActual = "value" in actual ? actual.value : undefined;
+    const fromKey = fromKeyOf(claim, inputs.fromKeys);
+    let rawActual: unknown;
     try {
-      const record = isEachClaim(claim) ? await judgeEach(claim, actual, inputs) : await judgeComparison(claim, actual, inputs);
-      judged.push({ record, rawActual, fromKey: actual.fromKey });
+      const actual = topLevelSide(claim.actual, inputs);
+      rawActual = "value" in actual ? actual.value : undefined;
+      const segments = actual.fromKey === null ? null : (pathSegments(claim.actual) ?? null);
+      const record = isEachClaim(claim) ? await judgeEach(claim, actual, segments, inputs) : await judgeComparison(claim, actual, segments, inputs);
+      judged.push({ record, rawActual, fromKey });
     } catch (error) {
-      judged.push({ record: notJudged(claim, inputs, "unjudged", `nukadoko could not judge this claim: ${messageOf(error)}`), rawActual, fromKey: actual.fromKey });
+      judged.push({ record: notJudged(claim, inputs, "unjudged", `nukadoko could not judge this claim: ${messageOf(error)}`), rawActual, fromKey });
     }
   }
   return judged;
@@ -589,9 +652,9 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
  * have been named, nothing compared. */
 export function unobservedClaims(claims: readonly Claim[], inputs: ClaimInputs): readonly JudgedClaim[] {
   return claims.map((claim): JudgedClaim => ({
-    record: notJudged(claim, { ...inputs, observation: undefined }, "unobserved", undefined),
+    record: notJudged(claim, inputs, "unobserved", undefined),
     rawActual: undefined,
-    fromKey: inputs.fromKeys.has(pathSegments(claim.actual)?.[0] ?? "") ? (pathSegments(claim.actual)?.[0] ?? null) : null,
+    fromKey: fromKeyOf(claim, inputs.fromKeys),
   }));
 }
 

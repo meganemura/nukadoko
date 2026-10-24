@@ -124,7 +124,9 @@ This part does not change release to release.
 - **A Then parses the line's text with `expected_view`, not with its
   schema.** An args schema that rewrites a value a claim reads
   (`z.coerce`, a transform, a preprocess, a pipe, `trim` and the other
-  overwrite checks, `catch`) is refused at import. A docstring of JSON
+  overwrite checks, `catch`, a default or a prefault, a refine on an
+  object or an array, or any of these on the args object itself) is
+  refused at import. A docstring of JSON
   keeps a plain `z.string()` key, and the claim reads it as JSON:
 
   ```ts
@@ -133,9 +135,9 @@ This part does not change release to release.
   claims: [{ actual: "body", compare: "equal", expected: "expected", expected_view: "json" }],
   ```
 
-  A claim on a `Date`, a bigint, or another value that is not plain
-  JSON breaks at run: return the value as JSON (an ISO date string, a
-  decimal string, a number) and claim on that.
+  A claim on a `Date`, a bigint, a `Proxy`, or another value that is
+  not plain JSON is `unjudged` at run: return the value as JSON (an ISO
+  date string, a decimal string, a number) and claim on that.
 
 - **A boolean becomes the word the sentence uses, or the measurement
   behind it.** A boolean literal is refused against a value `observe`

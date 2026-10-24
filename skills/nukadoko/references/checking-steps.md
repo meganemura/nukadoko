@@ -42,8 +42,10 @@ Pick the source from the sentence; the record names it in `expected_from`.
 - **The sentence states it** (a capture, the docstring, or the table):
   `expected: "code"`, the key itself, recorded as `sentence:code`. The key
   has to be required in `args`, with no default, and its schema must not
-  rewrite the value (`z.coerce`, a transform, a pipe, `trim`, `catch`
-  are refused at import). To read the line's text as JSON or as lines,
+  rewrite the value (`z.coerce`, a transform, a pipe, `trim`, `catch`,
+  a default anywhere inside, or a refine on an object, an array, or the
+  args object are refused at import; the run breaks the claim if the
+  schema still changed the value). To read the line's text as JSON or as lines,
   add `expected_view: "json"` or `"lines"` on a plain `z.string()` key.
 - **An earlier step returned it** ("the item count is unchanged"):
   `expected: { from: "<from key>.<path>" }`, recorded as
@@ -116,8 +118,12 @@ holds". A path reads own properties only (not `constructor`, not a getter).
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `has-item`, `matches`, `greater-than`, `at-least`,
 `less-than`, `at-most`. Two values of different JSON types break the
-claim, and so does a value that is not plain JSON (a `Date`, a bigint,
-`NaN`, an `undefined` item): return an ISO string or a number instead.
+claim. A value that is not plain JSON (a `Date`, a bigint, `NaN`, an
+`undefined` item, a `Proxy`) or that nests deeper than 256 levels
+leaves it `unjudged`: return an ISO string or a number instead. Each
+side is a copy taken where the value comes from (when `observe`
+returns, before the args schema runs), so a value changed later is not
+the one judged, and `observe` gets a copy of its inputs.
 An expected text every string holds breaks too (blank under
 `contains-text`, a pattern that matches `""` under `matches`), and a
 `matches` pattern that runs past the step's deadline is stopped and

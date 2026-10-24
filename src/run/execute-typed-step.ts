@@ -6,24 +6,32 @@ import type { FixtureGraph } from "../fixture/graph.js";
 import { resolveFixtures, type FixtureCache } from "../fixture/resolver.js";
 import type { ClaimReading, ErrorKind, FixtureUsageEntry } from "../record/types.js";
 import { brokenClaimsMessage } from "../report/summary/claim-line.js";
+import { types } from "node:util";
 import { pathSegments, type Claim } from "../step/claims.js";
 import type { FixtureBag } from "../step/context.js";
 import { isClaimStep, type ClaimStep, type RunStep, type Step } from "../step/define-step.js";
 import {
+  claimReads,
   createReadingsLog,
+  deepEqual,
   evaluateClaims,
   failedReading,
   pollReadings,
+  readerOf,
   readingOf,
+  readKey,
+  takeReads,
   unobservedClaims,
   type ArgSide,
   type ClaimInputs,
   type JudgedClaim,
   type PatternTester,
   type PollClock,
+  type Reader,
   type Reading,
   type ReadingsLog,
 } from "../step/evaluate-claims.js";
+import { detachedCopy, readAt, type Read } from "../step/snapshot.js";
 import { startPatternWorker, testPatternInWorker } from "./pattern-worker.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
@@ -83,6 +91,9 @@ export interface RunValidatedStepInput {
   readonly step: Step;
   /** The args after validation. */
   readonly args: unknown;
+  /** A claim step only: the snapshot of each args value a claim reads,
+   * taken before the args schema ran (`snapshotClaimArgs`). */
+  readonly claimArgs?: ReadonlyMap<string, Read>;
   readonly handle: StepContextHandle;
   readonly fixtureGraph: FixtureGraph;
   readonly scenarioCache: FixtureCache;
@@ -109,6 +120,32 @@ function messageOf(error: unknown): string {
 
 function deadlineOf(step: Step, config: RunValidatedStepInput["config"]): { readonly ms: number | undefined; readonly source: "step" | "config" } {
   return { ms: step.timeout ?? config.stepTimeout, source: step.timeout === undefined ? "config" : "step" };
+}
+
+/** The snapshot of each args value a claim step's claims read: a sentence
+ * value after its parameter type, a `from` value as the producing step
+ * recorded it. A caller takes it before the args schema runs, so nothing
+ * the schema does (a refine that writes, a default, a transform changed
+ * after defineStep) reaches what the claims judge; `undefined` for a step
+ * that runs. */
+export function snapshotClaimArgs(step: Step, rawArgs: unknown): ReadonlyMap<string, Read> | undefined {
+  if (!isClaimStep(step)) return undefined;
+  return takeReads(rawArgs, claimReads(step.claims, new Set(Object.keys(step.from))).args);
+}
+
+/** Which args values a claim reads came out of the args schema other than
+ * nukadoko read them before it ran. A value the snapshot could not take is
+ * left to that refusal. */
+function changedBySchema(before: ReadonlyMap<string, Read>, paths: readonly (readonly string[])[], after: unknown): (segments: readonly string[]) => boolean {
+  const changed = new Set<string>();
+  for (const segments of paths) {
+    const read = before.get(readKey(segments));
+    if (read === undefined || "refused" in read) continue;
+    const now = readAt(after, segments);
+    const same = "missing" in read ? "missing" in now : "value" in now && deepEqual(read.value, now.value);
+    if (!same) changed.add(readKey(segments));
+  }
+  return (segments) => changed.has(readKey(segments));
 }
 
 /** Runs `step` with args that already validated. Never throws: every
@@ -175,13 +212,14 @@ export function expectedKeys(claims: readonly Claim[]): ReadonlySet<string> {
   return keys;
 }
 
-/** What `observe` receives: the args without the expected keys. Reading
- * one of those keys throws, so a JavaScript step file, which the
- * `ObserveInputs` type does not reach, cannot pick what to read by the
- * value it will be compared with either; the throw records the step as
- * unobserved, naming the key. */
+/** What `observe` receives: a copy of the args without the expected keys,
+ * new for each call, so nothing `observe` does to its inputs reaches an
+ * earlier step's result or another reading. Reading an expected key
+ * throws, so a JavaScript step file, which the `ObserveInputs` type does
+ * not reach, cannot pick what to read by the value it will be compared
+ * with either; the throw records the step as unobserved, naming the key. */
 function observeInputs(args: Readonly<Record<string, unknown>>, withheld: ReadonlySet<string>, stepName: string): Readonly<Record<string, unknown>> {
-  const visible = Object.freeze(Object.fromEntries(Object.entries(args).filter(([key]) => !withheld.has(key))));
+  const visible = detachedCopy(Object.fromEntries(Object.entries(args).filter(([key]) => !withheld.has(key)))) as Record<string, unknown>;
   return new Proxy(visible, {
     get(target, key, receiver) {
       if (typeof key === "string" && withheld.has(key)) {
@@ -214,10 +252,18 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     deadline.ms === undefined
       ? testPatternInWorker(pattern, text, PATTERN_LIMIT_MS, "the limit for a step with no deadline")
       : testPatternInWorker(pattern, text, Math.max(1, startedAt + deadline.ms - Date.now()), "the time left of the step's deadline");
-  const claimInputs = (observation: unknown): ClaimInputs => ({
-    args,
-    observation,
-    fromKeys: new Set(Object.keys(step.from)),
+  const fromKeys = new Set(Object.keys(step.from));
+  const reads = claimReads(step.claims, fromKeys);
+  // A caller that took no snapshot before the schema ran (none does) gets
+  // one of the validated args, so no claim reads a live value either way.
+  const argReads = input.claimArgs ?? takeReads(args, reads.args);
+  const schemaChanged = changedBySchema(argReads, reads.args, args);
+  const noObservation: Reader = readerOf(new Map());
+  const claimInputs = (observed: Reader): ClaimInputs => ({
+    args: readerOf(argReads),
+    observed,
+    schemaChanged,
+    fromKeys,
     argSide: input.argSide,
     sentenceText: input.sentenceText,
     patterns: step.patterns,
@@ -228,8 +274,8 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   // Set for a polled step only, so a step that reads once records none.
   let readings: ReadingsLog | undefined;
   const readingsField = (): { readonly readings?: readonly ClaimReading[] } => (readings === undefined ? {} : { readings: readings.kept() });
-  const judge = async (observation: unknown): Promise<ValidatedStepOutcome> => {
-    const judged = await evaluateClaims(step.claims, claimInputs(observation));
+  const judge = async (observed: Reader): Promise<ValidatedStepOutcome> => {
+    const judged = await evaluateClaims(step.claims, claimInputs(observed));
     const claims: ClaimExecution = { judged, observation: "observed", attempts: Math.max(attempts, 1), ...readingsField() };
     const records = judged.map((entry) => entry.record);
     if (records.every((record) => record.outcome === "held")) return { status: "passed", result: {}, fixtureUsage, claims };
@@ -249,10 +295,18 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
       error: { message: kind === "unobserved" ? `the step observed nothing, so no claim was judged: ${messageOf(error)}` : messageOf(error), kind },
       thrown: error,
       fixtureUsage,
-      claims: { judged: unobservedClaims(step.claims, claimInputs(undefined)), observation: "unobserved", attempts, ...readingsField() },
+      claims: { judged: unobservedClaims(step.claims, claimInputs(noObservation)), observation: "unobserved", attempts, ...readingsField() },
     };
   };
-  if (testsPatterns(step.claims)) startPatternWorker();
+  if (testsPatterns(step.claims)) {
+    try {
+      startPatternWorker();
+    } catch {
+      // A worker that cannot start (`node --permission` without
+      // --allow-worker) fails again when a pattern is tested, and that
+      // claim is recorded as unjudged with the reason.
+    }
+  }
   handle.withholdResults(name);
   let fixtures: FixtureBag;
   try {
@@ -271,18 +325,23 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     return readNothing(error, false);
   }
   const observe = step.observe;
-  if (observe === undefined) return judge(undefined);
-  const inputs = observeInputs(args, expectedKeys(step.claims), name);
+  if (observe === undefined) return judge(noObservation);
+  const withheld = expectedKeys(step.claims);
+  const takeObserved = (value: unknown): Reader => readerOf(takeReads(value, reads.observed));
+  // The snapshot is taken the moment observe returns, before anything else
+  // runs: a value it returned and changes later (on a timer, in a promise
+  // callback, on the next reading) is not what the claims read.
+  const callObserve = (): Reader | Promise<Reader> => {
+    attempts += 1;
+    const returned: unknown = observe(fixtures, observeInputs(args, withheld, name));
+    return isThenable(returned) ? Promise.resolve(returned).then(takeObserved) : takeObserved(returned);
+  };
   const poll = step.poll;
   if (poll === undefined || poll === false) {
-    let value: unknown;
+    let value: Reader;
     try {
       value = await runWithTimeout(
-        () =>
-          handle.recordingProcesses(() => {
-            attempts += 1;
-            return Promise.resolve(observe(fixtures, inputs));
-          }),
+        () => handle.recordingProcesses(() => Promise.resolve(callObserve())),
         deadline.ms,
         "Step",
         name,
@@ -303,16 +362,15 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const readingAt = (): string => new Date(clock.now()).toISOString();
   const read = async (): Promise<Reading> => {
     if (abandoned) throw new Error("the step's deadline passed");
-    attempts += 1;
     try {
-      return { ok: true, value: await observe(fixtures, inputs) };
+      return { ok: true, value: await callObserve() };
     } catch (error) {
       log.add(failedReading(attempts, readingAt(), error));
       return { ok: false, error };
     }
   };
   const holds = async (value: unknown): Promise<boolean> => {
-    const judged = await evaluateClaims(step.claims, claimInputs(value));
+    const judged = await evaluateClaims(step.claims, claimInputs(value as Reader));
     const reading = readingOf(attempts, readingAt(), judged);
     log.add(reading);
     return reading.held;
@@ -331,7 +389,15 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     return readNothing(error, true);
   }
   if (!polled.last.ok) return readNothing(polled.last.error, true);
-  return judge(polled.last.value);
+  return judge(polled.last.value as Reader);
+}
+
+/** Whether `value` is a promise or another thenable `observe` returned. A
+ * Proxy is not asked: its snapshot refuses it without running a trap. */
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  if (typeof value !== "object" && typeof value !== "function") return false;
+  if (value === null || types.isProxy(value)) return false;
+  return typeof (value as { then?: unknown }).then === "function";
 }
 
 // --- nuka do ---
@@ -371,6 +437,7 @@ export type TypedStepOutcome =
 /** Validates the args, then runs the step through `runValidatedStep`.
  * `nuka do` runs a step through this function. */
 export async function executeTypedStep(input: ExecuteTypedStepInput): Promise<TypedStepOutcome> {
+  const claimArgs = snapshotClaimArgs(input.step, input.args);
   const argsResult = strictArgsSchema(input.step.args).safeParse(input.args);
   if (!argsResult.success) {
     return {
@@ -380,7 +447,7 @@ export async function executeTypedStep(input: ExecuteTypedStepInput): Promise<Ty
       fixtureUsage: [],
     };
   }
-  const outcome = await runValidatedStep({ ...input, args: argsResult.data });
+  const outcome = await runValidatedStep({ ...input, args: argsResult.data, ...(claimArgs === undefined ? {} : { claimArgs }) });
   const claims = outcome.claims === undefined ? {} : { claims: outcome.claims };
   if (outcome.status === "passed") {
     return { status: "passed", args: argsResult.data, result: outcome.result, fixtureUsage: outcome.fixtureUsage, ...claims };

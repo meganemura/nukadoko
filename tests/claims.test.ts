@@ -22,14 +22,14 @@ import {
   deepEqual,
   evaluateClaims,
   jsonType,
-  nonJsonPart,
   pollReadings,
   POLL_INTERVAL_MS,
-  valueAt,
+  readerNow,
   type ClaimInputs,
   type PatternTester,
   type Reading,
 } from "../src/step/evaluate-claims.js";
+import { readAt, snapshot } from "../src/step/snapshot.js";
 
 // Responsibility: the judging rules of a claim (docs/spec.md "Claims") as
 // properties over drawn values: each compare against its negation, a
@@ -105,8 +105,9 @@ const testInProcess: PatternTester = async (pattern, text) => {
 
 function inputs(args: Record<string, unknown>, observation: unknown, fromKeys: readonly string[] = []): ClaimInputs {
   return {
-    args,
-    observation,
+    args: readerNow(args),
+    observed: readerNow(observation),
+    schemaChanged: () => false,
     fromKeys: new Set(fromKeys),
     argSide: (key) =>
       fromKeys.includes(key)
@@ -252,7 +253,7 @@ describe("compares", () => {
     }));
 });
 
-/** A value JSON cannot hold, with the words `nonJsonPart` names it by. */
+/** A value JSON cannot hold, with the words its snapshot's refusal names it by. */
 const nonJsonLeaves: Generator<{ value: () => unknown; named: string }> = gs.sampledFrom([
   { value: () => Number.NaN, named: "is NaN" },
   { value: () => Number.POSITIVE_INFINITY, named: "is Infinity" },
@@ -299,7 +300,7 @@ describe("the plain-JSON gate", () => {
   it("lets every JSON value through unchanged, on either side", () =>
     hegel.testAsync(async (tc) => {
       const value = tc.draw(jsonValues);
-      expect(nonJsonPart(value, "v")).toBeNull();
+      expect(snapshot(value)).toEqual({ value });
       const copy = structuredClone(value);
       const record = await judgeOne({ actual: "value", compare: "equal", expected: "want" }, { want: copy }, { value });
       expect(record).toMatchObject({ outcome: "held" });
@@ -307,20 +308,21 @@ describe("the plain-JSON gate", () => {
       expect(deepEqual((record as { expected?: unknown }).expected, value)).toBe(true);
     }));
 
-  it("breaks a claim with a non-JSON part on either side, names it, and records no value for that side", () =>
+  it("judges no claim with a non-JSON part on either side, names it, and records no value for that side", () =>
     hegel.testAsync(async (tc) => {
       const { value, named } = tc.draw(valueWithNonJsonPart);
-      const problem = nonJsonPart(value, "v");
-      expect(problem).not.toBeNull();
-      expect(problem).toContain(named);
+      const taken = snapshot(value);
+      expect("refused" in taken).toBe(true);
+      const refusal = (taken as { refused: { at: string[]; problem: string } }).refused;
+      expect(["v", ...refusal.at].join(".") + " " + refusal.problem).toContain(named);
       const onActual = tc.draw(gs.booleans());
       const other = tc.draw(jsonValues);
       const record = onActual
         ? await judgeOne({ actual: "value", compare: "equal", expected: "want" }, { want: other }, { value })
         : await judgeOne({ actual: "value", compare: "equal", expected: "want" }, { want: value }, { value: other });
-      expect(record.outcome).toBe("broken");
+      expect(record.outcome).toBe("unjudged");
       expect(record.reason).toContain(named);
-      expect(record.reason).toContain("not a JSON value, so the record could not show what was compared");
+      expect(record.reason).toContain("which is not plain JSON, so the claim was not judged: the record could not show the value that was compared");
       expect(record).not.toHaveProperty(onActual ? "actual" : "expected");
     }));
 });
@@ -394,7 +396,8 @@ describe("view and at", () => {
     hegel.testAsync(async (tc) => {
       const { root, path, value } = tc.draw(rootWithPath);
       const viewed = applyView("json", JSON.stringify(root));
-      expect("value" in viewed && deepEqual(valueAt(viewed.value, path), value)).toBe(true);
+      const read = "value" in viewed ? readAt(viewed.value, path.split(".")) : { missing: 0 };
+      expect("value" in read && deepEqual(read.value, value)).toBe(true);
       const record = await judgeOne(
         { actual: "stdout", view: "json", at: path, compare: "equal", expected: "want" },
         { want: structuredClone(value) },
@@ -418,10 +421,11 @@ describe("view and at", () => {
       expect(record).not.toHaveProperty("actual");
     }));
 
-  it("valueAt on a path of a drawn object returns what walking the path reaches", () =>
+  it("readAt on a path of a drawn object returns a copy of what walking the path reaches", () =>
     hegel.test((tc) => {
       const { root, path, value } = tc.draw(rootWithPath);
-      expect(deepEqual(valueAt(root, path), value)).toBe(true);
+      const read = readAt(root, path.split("."));
+      expect("value" in read && deepEqual(read.value, value)).toBe(true);
     }));
 
   it("view lines at an index reads that line, whatever the line ending", () =>
@@ -711,7 +715,8 @@ describe("poll", () => {
 });
 
 describe("the record of a claim", () => {
-  const base: Omit<ClaimInputs, "args" | "observation"> = {
+  const base: Omit<ClaimInputs, "args" | "observed"> = {
+    schemaChanged: () => false,
     fromKeys: new Set(["result"]),
     argSide: (key: string) =>
       key === "result"
@@ -725,8 +730,8 @@ describe("the record of a claim", () => {
   it("names the actual value, its source, the compare, the expected value, its source, its text, and the outcome, in that order", async () => {
     const [judged] = await evaluateClaims([{ actual: "result.exitCode", compare: "equal", expected: "code" }], {
       ...base,
-      args: { code: 0, result: { exitCode: 0, stdout: "" } },
-      observation: undefined,
+      args: readerNow({ code: 0, result: { exitCode: 0, stdout: "" } }),
+      observed: readerNow(undefined),
     });
     expect(judged).toEqual({
       record: {
@@ -747,7 +752,7 @@ describe("the record of a claim", () => {
   it("puts view and at after the actual source, names them in the label, and gives no reason for a plain mismatch", async () => {
     const [judged] = await evaluateClaims(
       [{ actual: "page", view: "lines", at: "1", compare: "contains-text", expected: { observe: "title" } }],
-      { ...base, args: {}, observation: { page: "Header\nWelcome back\n", title: "Hello" } },
+      { ...base, args: readerNow({}), observed: readerNow({ page: "Header\nWelcome back\n", title: "Hello" }) },
     );
     expect(judged!.record).toEqual({
       actual: "Welcome back",
@@ -769,8 +774,8 @@ describe("the record of a claim", () => {
     const [judged] = await evaluateClaims([{ actual: "result.body", compare: "equal", expected: "body", expected_view: "json" }], {
       ...base,
       sentenceText: () => '{ "id": 7 }',
-      args: { body: '{ "id": 7 }', result: { body: { id: 7 } } },
-      observation: undefined,
+      args: readerNow({ body: '{ "id": 7 }', result: { body: { id: 7 } } }),
+      observed: readerNow(undefined),
     });
     expect(judged!.record).toEqual({
       actual: { id: 7 },
@@ -788,8 +793,8 @@ describe("the record of a claim", () => {
     const [judged] = await evaluateClaims([{ actual: "result.stderr", compare: "equal", expected: { literal: "" } }], {
       ...base,
       patterns: ["the tally exits with no error"],
-      args: { result: { stderr: "" } },
-      observation: undefined,
+      args: readerNow({ result: { stderr: "" } }),
+      observed: readerNow(undefined),
     });
     expect(judged!.record).toMatchObject({ expected: "", expected_from: "literal:no", expected_text: "no", outcome: "held" });
   });
@@ -797,8 +802,8 @@ describe("the record of a claim", () => {
   it("names a from value by the step and line that returned it", async () => {
     const [judged] = await evaluateClaims([{ actual: "rows", compare: "has-item", expected: { from: "result.id" } }], {
       ...base,
-      args: { result: { id: 7 } },
-      observation: { rows: [3, 7] },
+      args: readerNow({ result: { id: 7 } }),
+      observed: readerNow({ rows: [3, 7] }),
     });
     expect(judged!.record).toMatchObject({ expected: 7, expected_from: "from:run-tally@4.result.id", expected_text: null, outcome: "held" });
   });
@@ -806,8 +811,8 @@ describe("the record of a claim", () => {
   it("breaks a comparison of two different types with both types named", async () => {
     const [judged] = await evaluateClaims([{ actual: "result.exitCode", compare: "equal", expected: "code" }], {
       ...base,
-      args: { code: "0", result: { exitCode: 0 } },
-      observation: undefined,
+      args: readerNow({ code: "0", result: { exitCode: 0 } }),
+      observed: readerNow(undefined),
     });
     expect(judged!.record).toMatchObject({ outcome: "broken", reason: "equal compares a number with a string" });
   });
@@ -815,8 +820,8 @@ describe("the record of a claim", () => {
   it("breaks a claim whose actual is undefined, naming its source, and records no actual", async () => {
     const [judged] = await evaluateClaims([{ actual: "result.missing", compare: "equal", expected: "code" }], {
       ...base,
-      args: { code: 0, result: {} },
-      observation: undefined,
+      args: readerNow({ code: 0, result: {} }),
+      observed: readerNow(undefined),
     });
     expect(judged!.record).toEqual({
       actual_from: "from:run-tally@4.result.missing",
@@ -832,8 +837,8 @@ describe("the record of a claim", () => {
   it("reads own properties only, so a path through the prototype finds nothing", async () => {
     const [judged] = await evaluateClaims([{ actual: "result.constructor.name", compare: "equal", expected: "code" }], {
       ...base,
-      args: { code: "Object", result: {} },
-      observation: undefined,
+      args: readerNow({ code: "Object", result: {} }),
+      observed: readerNow(undefined),
     });
     expect(judged!.record).toMatchObject({ outcome: "broken", reason: "from:run-tally@4.result.constructor.name is undefined" });
   });
@@ -842,8 +847,8 @@ describe("the record of a claim", () => {
     for (const flag of [true, false]) {
       const [judged] = await evaluateClaims([{ actual: "count", compare: "equal", expected: { observe: "done" } }], {
         ...base,
-        args: {},
-        observation: { count: flag, done: flag },
+        args: readerNow({}),
+        observed: readerNow({ count: flag, done: flag }),
       });
       expect(judged!.record).toMatchObject({
         outcome: "broken",
@@ -862,8 +867,8 @@ describe("the record of a claim", () => {
       {
         ...base,
         patterns: ["the tally exits with 0 and prints {code}"],
-        args: { code: "x", result: { stdout: "x", exitCode: 0 } },
-        observation: undefined,
+        args: readerNow({ code: "x", result: { stdout: "x", exitCode: 0 } }),
+        observed: readerNow(undefined),
         testPattern: async () => {
           throw new Error("the worker stopped");
         },
@@ -893,14 +898,14 @@ describe("the record of a claim", () => {
       ],
       {
         ...base,
-        args: { kind: "food", limit: 10 },
-        observation: {
+        args: readerNow({ kind: "food", limit: 10 }),
+        observed: readerNow({
           rows: [
             { kind: "food", total: 4 },
             { kind: "rent", total: 100 },
             { kind: "food", total: 12 },
           ],
-        },
+        }),
       },
     );
     const where = (index: number, kind: string, outcome: string) => ({
@@ -942,8 +947,8 @@ describe("the record of a claim", () => {
     const rows = Array.from({ length: 25 }, (_, index) => ({ total: index }));
     const [judged] = await evaluateClaims([{ actual: "rows", each: { claims: [{ actual: "total", compare: "less-than", expected: "limit" }] } }], {
       ...base,
-      args: { limit: 3 },
-      observation: { rows },
+      args: readerNow({ limit: 3 }),
+      observed: readerNow({ rows }),
     });
     const each = (judged!.record as unknown as { each: { results: { index: number; outcome: string }[]; results_truncated?: number } }).each;
     expect(each.results).toHaveLength(20);

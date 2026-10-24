@@ -719,7 +719,7 @@ export type ClaimItemRecord =
       readonly index: number;
       readonly selected: true;
       readonly where?: readonly ClaimComparisonRecord[];
-      readonly outcome: "held" | "broken";
+      readonly outcome: "held" | "broken" | "unjudged";
       readonly claims: readonly ClaimComparisonRecord[];
     }
   | {
