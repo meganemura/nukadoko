@@ -12,6 +12,7 @@ import type { RunMappingChanges } from "../record/run-result.js";
 import { compareCriteria, criteriaOfFeature, criterionKey, type CriteriaComparison, type Criterion, type CriterionChange } from "./criteria.js";
 import { addWorktree, removeWorktree, repositoryPlace, trackedFiles, workingTreeFiles } from "./git-ref.js";
 import { compareMapping, configMappingText, programMappingOf, type MappingComparison, type MappingSnapshot } from "./mapping.js";
+import { runOnce } from "./process-signal.js";
 import { overlayBaseTree, within, writeOldTree, type TreeInput, type TreeSide } from "./trees.js";
 export { projectRelativeText } from "./trees.js";
 
@@ -204,6 +205,11 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     if (worktree) spawnSync("git", ["-C", top, "worktree", "remove", "--force", "--force", baseTop], { stdio: "ignore" });
     rmSync(baseTop, { recursive: true, force: true });
     rmSync(oldTop, { recursive: true, force: true });
+    try {
+      rmdirSync(treesDir);
+    } catch {
+      // Not empty after all, or already gone.
+    }
   };
   process.on("exit", removeTreesNow);
   try {
@@ -290,7 +296,13 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
       worktree = false;
       await removeWorktree(top, baseTop);
     }
-    let cleaned = false;
+    // The run ends the trees on its normal path and from a signal's
+    // handler, which may come while the other is removing them: both wait
+    // for the one removal, so the handler never exits halfway through it.
+    const cleanup = runOnce(async () => {
+      await removeTrees();
+      process.off("exit", removeTreesNow);
+    });
     return {
       ref: input.ref,
       commit: input.commit,
@@ -306,12 +318,7 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
       old: oldNeeded ? { root: path.join(oldTop, prefix) } : null,
       refFeatures,
       unparsed,
-      async cleanup() {
-        if (cleaned) return;
-        cleaned = true;
-        await removeTrees();
-        process.off("exit", removeTreesNow);
-      },
+      cleanup,
     };
   } catch (error) {
     await removeTrees();

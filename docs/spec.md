@@ -4163,7 +4163,10 @@ of a tree has its directory at `worlds/<environment>@base` or
 answers for (see "Program"). A tree's scenarios run in worker processes
 started in the tree, at any `--concurrency`; each worker runs `nuka check`
 on the tree's files first, unless `--no-check`, and a tree whose files do
-not load or check leaves its cells not run, with the reason.
+not load or check leaves its cells not run, with the reason. A signal stops
+a tree's world as it stops head's: it stops a start at once, and gives a
+running world SIGTERM and its 5 seconds (see "Program"), and the trees
+are removed before nukadoko exits.
 
 A row needs a world only where it can change the verdict, and only once
 head passed:

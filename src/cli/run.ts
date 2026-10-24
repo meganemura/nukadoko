@@ -1286,14 +1286,24 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // a world built from that tree. The base world builds and starts the
     // base tree's program file, from which it reads its environments and
     // their conditions; the old world runs head's code, so it starts
-    // head's recipe in the old tree. A signal stops the workers and removes
-    // the trees.
+    // head's recipe in the old tree. A signal stops the workers, aborts a
+    // tree world's start or stops the tree world, as head's pass does with
+    // its own, and then removes the trees: a program left running in a
+    // removed tree would outlive nukadoko.
     const runOtherWorlds = async (): Promise<void> => {
       if (base === undefined || old === undefined) return;
       const live = new Set<ChildProcess>();
+      let treeStart: { readonly abort: AbortController; readonly starting: Promise<unknown> } | null = null;
+      let treeWorld: StartedWorld | null = null;
       processSignal ??= installProcessSignalHandlers();
-      processSignal.setProcessCleanup(async () => {
+      const signals = processSignal;
+      signals.setProcessCleanup(async () => {
         for (const child of live) child.kill("SIGTERM");
+        if (treeStart !== null) {
+          treeStart.abort.abort();
+          await treeStart.starting.catch(() => {});
+        }
+        await treeWorld?.stop();
         await base.cleanup();
       });
       const serialOf = (document: { readonly feature?: { readonly tags: readonly { readonly name: string }[] } }): boolean =>
@@ -1338,6 +1348,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           programFromHead: world === "base" && base.base?.programFromHead === true,
         });
         for (const pass of passes) {
+          // A signal ends the run, so no tree world starts after it.
+          if (signals.interrupted) break;
           const environment = pass.resolvedEnv.name;
           const targets: TreeTarget[] = [];
           for (const { feature, pickle } of flatPickles) {
@@ -1369,18 +1381,23 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           }
           let started: StartedWorld | null = null;
           if (recipe !== null) {
-            const result = await starter.start(environment, recipe, pass.secrets);
+            const abort = new AbortController();
+            const starting = starter.start(environment, recipe, pass.secrets, abort.signal);
+            treeStart = { abort, starting };
+            const result = await starting;
+            treeStart = null;
             if (!result.ok) {
               if (result.unavailable === true) {
                 leaveNotRun(world, environment, `the ${world} world has no URL to reach: ${result.message}`);
               } else {
                 worlds.push(result.record());
-                leaveNotRun(world, environment, `the program did not start for the ${world} world`);
+                leaveNotRun(world, environment, result.aborted ? `a signal stopped the start of the ${world} world` : `the program did not start for the ${world} world`);
                 if (!result.aborted) warn({ severity: "warning", code: "program-start-failed", message: result.message });
               }
               continue;
             }
             started = result;
+            treeWorld = result;
           }
           const result = await runTreePass({
             world,
@@ -1429,6 +1446,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           });
           if (result.notRun !== null) leaveNotRun(world, environment, result.notRun);
           if (started !== null) await stopWorld(started, world);
+          treeWorld = null;
         }
       }
       processSignal.setProcessCleanup(null);
