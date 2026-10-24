@@ -1990,12 +1990,15 @@ only while the claims do not hold. Any read-until-it-holds has this
 property, and an `observe` that counts its calls can use it to return a
 value that walks toward the expected one. So the step record keeps the
 readings (`readings`): for each, its attempt number, its time, whether
-every claim held on it, and each claim's actual value, or the first line
-of what `observe` threw. Each reading's value is its own snapshot, taken
-when it was read. A poll of up to 40 readings keeps them all. A longer
+every claim held on it, and each claim's actual value (`actuals`), or the
+first line of what `observe` threw. When an expected value comes from
+`observe` too, each reading also keeps each claim's expected value
+(`expecteds`, an `each` claim's as its declarations' expected values by
+label), since the value that walks can be the expected one. Each
+reading's value is its own snapshot, taken when it was read. A poll of up to 40 readings keeps them all. A longer
 one keeps its first reading, its last, and every reading whose content
-(whether it held, and what each claim read or what `observe` threw)
-differs from the reading just before it, up to 38 of these change
+(whether it held, and what each claim read, in full before a long value
+is cut, or what `observe` threw) differs from the reading just before it, up to 38 of these change
 points: the earliest 19 and the latest 19. The record then says how many
 readings it left out and how many of those were change points
 (`readings_left_out: { readings, change_points }`), and the attempt

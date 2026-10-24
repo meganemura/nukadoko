@@ -411,9 +411,11 @@ just until 0.1.
   for each item whether `where` selected it and why. `observation` and
   `attempts` say whether and how many times the step read its values.
   A claim step that polls also has `readings`: the attempt number, the
-  time, whether every claim held, and each claim's actual value, for
+  time, whether every claim held, and each claim's actual value (and its
+  expected value, when an expected value comes from `observe`), for
   every reading of a poll of up to 40 and, past that, for the first, the
-  last, and up to 38 readings where the value changed, with
+  last, and up to 38 readings where a value changed, compared in full
+  before a long value is cut, with
   `readings_left_out` saying how many it left out, so an `observe`
   that walks toward the expected value is visible. `measured` also finds a process's exit code
   and a response's status, as numbers, in the producing step's record or

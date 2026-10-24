@@ -785,10 +785,10 @@ export interface ClaimEachRecord {
   readonly reason?: string;
 }
 
-/** What one claim read on one reading of a polled claim step: the value
- * it compared as actual, the start of that value's JSON and its size when
- * the JSON is longer than `CLAIM_READING_MAX_BYTES`, or why it had no
- * value. */
+/** What one side of one claim read on one reading of a polled claim step:
+ * the value (the raw actual value, or the expected value it was compared
+ * with), the start of that value's JSON and its size when the JSON is
+ * longer than `CLAIM_READING_MAX_BYTES`, or why it had no value. */
 export type ClaimReadingValue =
   | { readonly value: unknown }
   | { readonly json_start: string; readonly json_bytes: number }
@@ -796,13 +796,15 @@ export type ClaimReadingValue =
 
 /** One reading of a polled claim step: its number among the step's
  * readings, when it happened, whether every claim held on it, and either
- * what each claim read (`actuals`, in claim order) or the first line of
- * the error `observe` threw. */
+ * what each claim read (`actuals`, in claim order, and `expecteds` too
+ * when an expected value comes from `observe`) or the first line of the
+ * error `observe` threw. */
 export interface ClaimReading {
   readonly attempt: number;
   readonly at: string;
   readonly held: boolean;
   readonly actuals?: readonly ClaimReadingValue[];
+  readonly expecteds?: readonly ClaimReadingValue[];
   readonly error?: string;
 }
 

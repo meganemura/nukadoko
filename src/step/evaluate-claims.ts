@@ -1013,7 +1013,10 @@ export async function pollReadings(
 // record keeps what each reading read, and a value that walks toward the
 // expected one is there to see. A long poll keeps the readings where the
 // value changed, not the first and last few: a step that pads its
-// candidates with readings that repeat would otherwise push them out.
+// candidates with readings that repeat would otherwise push them out. The
+// walk can be on either side: when an expected value comes from `observe`
+// too, each reading keeps both sides, since a constant actual value says
+// nothing about an expected one that moved toward it.
 
 /** How many readings the record keeps: every reading of a poll this
  * short, and of a longer one the first, the last, and the readings whose
@@ -1036,14 +1039,59 @@ export function readingValue(raw: unknown, reason: string | undefined): ClaimRea
   return bytes <= CLAIM_READING_MAX_BYTES ? { value: raw } : { json_start: text.slice(0, CLAIM_READING_MAX_BYTES), json_bytes: bytes };
 }
 
-/** One reading as the record keeps it, from the claims judged on it. Pure. */
-export function readingOf(attempt: number, at: string, judged: readonly JudgedClaim[]): ClaimReading {
-  return {
+/** The value `record` compared as expected: a comparison's `expected`,
+ * or, for an `each`, every declaration's expected value under its label
+ * (one with none left out). `undefined` when a comparison had none. */
+function expectedOfRecord(record: ClaimComparisonRecord | ClaimEachRecord): unknown {
+  if (!("each" in record)) return "expected" in record ? record.expected : undefined;
+  const values: Record<string, unknown> = {};
+  const add = (label: string, declarations: readonly ClaimItemDeclaration[] | undefined): void => {
+    declarations?.forEach((declaration, index) => {
+      if ("expected" in declaration) values[`each.${label}[${index}]`] = declaration.expected;
+    });
+  };
+  add("where", record.each.where);
+  add("claims", record.each.claims);
+  return values;
+}
+
+/** A side's value in full, for comparing two readings. */
+function fullValue(raw: unknown, reason: string | undefined): unknown {
+  return raw === undefined ? { reason: reason ?? "no value" } : { value: raw };
+}
+
+/**
+ * One reading as the record keeps it, from the claims judged on it, and
+ * its content: whether it held and what each claim read, in full, so a
+ * reading that differs from the one before only past the point where a
+ * long value is cut is still a change point. `expecteds` is there when an
+ * expected value comes from `observe`. Pure.
+ */
+export function readingOf(attempt: number, at: string, judged: readonly JudgedClaim[]): { readonly reading: ClaimReading; readonly content: string } {
+  const held = judged.every((entry) => entry.record.outcome === "held");
+  const both = judged.some((entry) => entry.expectedOrigins.includes("observe"));
+  const expected = judged.map((entry) => expectedOfRecord(entry.record));
+  const reading: ClaimReading = {
     attempt,
     at,
-    held: judged.every((entry) => entry.record.outcome === "held"),
+    held,
     actuals: judged.map((entry) => readingValue(entry.rawActual, entry.record.reason)),
+    ...(both ? { expecteds: judged.map((entry, index) => readingValue(expected[index], entry.record.reason)) } : {}),
   };
+  let content: string;
+  try {
+    content = JSON.stringify([
+      held,
+      judged.map((entry) => fullValue(entry.rawActual, entry.record.reason)),
+      both ? judged.map((entry, index) => fullValue(expected[index], entry.record.reason)) : null,
+      null,
+    ]);
+  } catch {
+    // A value that is not JSON is kept as its reason, so the cut form is
+    // all there is to compare.
+    content = readingContent(reading);
+  }
+  return { reading, content };
 }
 
 /** A reading on which `observe` threw. Pure. */
@@ -1067,16 +1115,18 @@ export interface KeptReadings {
 }
 
 /** Collects a poll's readings in bounded memory (`CLAIM_READINGS_CAP`
- * readings and one more), keeping what `keptReadings` names. */
+ * readings and one more), keeping what `keptReadings` names. `content`
+ * is what `readingOf` returned beside the reading, and defaults to the
+ * reading as kept. */
 export interface ReadingsLog {
-  readonly add: (reading: ClaimReading) => void;
+  readonly add: (reading: ClaimReading, content?: string) => void;
   readonly kept: () => KeptReadings;
 }
 
 /** What a reading read, without when it happened or its number: two
  * readings with one content read the same thing. */
 function readingContent(reading: ClaimReading): string {
-  return JSON.stringify([reading.held, reading.actuals ?? null, reading.error ?? null]);
+  return JSON.stringify([reading.held, reading.actuals ?? null, reading.expecteds ?? null, reading.error ?? null]);
 }
 
 export function createReadingsLog(cap = CLAIM_READINGS_CAP): ReadingsLog {
@@ -1087,6 +1137,7 @@ export function createReadingsLog(cap = CLAIM_READINGS_CAP): ReadingsLog {
   let total = 0;
   let first: ClaimReading | null = null;
   let previous: ClaimReading | null = null;
+  let previousContent = "";
   // Whether `previous` differs from the reading before it. It joins the
   // change points only once a later reading shows it is not the last.
   let previousChanged = false;
@@ -1094,7 +1145,7 @@ export function createReadingsLog(cap = CLAIM_READINGS_CAP): ReadingsLog {
   const tail: ClaimReading[] = [];
   let dropped = 0;
   return {
-    add(reading) {
+    add(reading, content = readingContent(reading)) {
       total += 1;
       if (all !== null) {
         all.push(reading);
@@ -1114,9 +1165,10 @@ export function createReadingsLog(cap = CLAIM_READINGS_CAP): ReadingsLog {
         first = reading;
         previousChanged = false;
       } else {
-        previousChanged = readingContent(reading) !== readingContent(previous!);
+        previousChanged = content !== previousContent;
       }
       previous = reading;
+      previousContent = content;
     },
     kept() {
       if (all !== null) return { readings: [...all] };

@@ -7,7 +7,16 @@ import { type ChainedJsonType, wordLiteral } from "../src/cli/scaffold.js";
 import type { ClaimReading, StepRecord } from "../src/record/types.js";
 import { judgedBy, scenarioClaims } from "../src/run/run-document.js";
 import { ANY_INDEX, claimsProblem, LITERAL_WORDS, literalStatedBy } from "../src/step/claims.js";
-import { CLAIM_READING_MAX_BYTES, CLAIM_READINGS_CAP, failedReading, keptReadings, readingValue } from "../src/step/evaluate-claims.js";
+import {
+  CLAIM_READING_MAX_BYTES,
+  CLAIM_READINGS_CAP,
+  createReadingsLog,
+  failedReading,
+  keptReadings,
+  readingOf,
+  readingValue,
+  type JudgedClaim,
+} from "../src/step/evaluate-claims.js";
 
 // Responsibility: the pure parts of what a claim leaves in the record
 // (docs/spec.md "Claims" and "Records"), as properties over drawn values:
@@ -37,6 +46,17 @@ const jsonValue = (depth: number): Generator<unknown> => {
     }),
   );
 };
+
+/** A comparison judged as broken, read from `actual` and compared with
+ * `expected`, its expected value from each origin. */
+function judged(actual: unknown, expected: unknown, origins: readonly ("observe" | null)[]): JudgedClaim {
+  return {
+    record: { actual, actual_from: "observe:count", compare: "equal", expected, expected_from: "observe:want", expected_text: null, outcome: "broken" },
+    rawActual: actual,
+    fromKey: null,
+    expectedOrigins: origins,
+  };
+}
 
 function reading(attempt: number, value: number): ClaimReading {
   return { attempt, at: `2026-01-01T00:00:00.${String(attempt).padStart(3, "0")}Z`, held: value === 9, actuals: [{ value }] };
@@ -79,6 +99,33 @@ describe("the readings a poll keeps", () => {
       for (let step = 0; step < steps; step++) expect(keptValues).toContain(step);
       expect(keptValues.at(-1)).toBe(9);
       expect(kept.left_out?.change_points ?? 0).toBe(0);
+    }));
+
+  it("counts a reading whose value differs only past the cut as a change point, as the full values would", () =>
+    hegel.test((tc) => {
+      // Each value is a long text whose first CLAIM_READING_MAX_BYTES
+      // characters are one and the same, so every kept reading looks alike
+      // and only the full value tells two apart.
+      const cap = tc.draw(gs.integers({ minValue: 2, maxValue: 8 }));
+      const tails = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: 3 }), { maxSize: 30 }));
+      const log = createReadingsLog(cap);
+      tails.forEach((tail, index) => {
+        const { reading, content } = readingOf(index + 1, "2026-01-01T00:00:00.000Z", [judged("a".repeat(CLAIM_READING_MAX_BYTES + 4) + String(tail), 7, [null])]);
+        expect("json_start" in reading.actuals![0]!).toBe(true);
+        log.add(reading, content);
+      });
+      const want = wantedAttempts(tails, cap);
+      expect(log.kept().readings.map((entry) => entry.attempt)).toEqual(want.kept);
+    }));
+
+  it("keeps each claim's expected value too, exactly when an expected value comes from observe", () =>
+    hegel.test((tc) => {
+      const origins = tc.draw(gs.arrays(gs.sampledFrom<"observe" | null>(["observe", null]), { minSize: 1, maxSize: 4 }));
+      const claims = origins.map((origin, index) => judged(index, index * 10, [origin]));
+      const { reading } = readingOf(1, "2026-01-01T00:00:00.000Z", claims);
+      expect(reading.actuals).toEqual(origins.map((_, index) => ({ value: index })));
+      if (origins.includes("observe")) expect(reading.expecteds).toEqual(origins.map((_, index) => ({ value: index * 10 })));
+      else expect(reading.expecteds).toBeUndefined();
     }));
 
   it("keeps a value whose JSON fits whole, and the start and byte length of one that does not", () =>

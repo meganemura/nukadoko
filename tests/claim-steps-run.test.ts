@@ -1783,6 +1783,38 @@ export default defineStep({
   });
 });
 
+describe("a polled claim step whose expected value comes from observe records both sides", () => {
+  it("keeps each reading's expected value, so an expected value that walks to a constant actual one is visible", async () => {
+    const rootDir = await project({
+      "features/steps/the-badge-agrees.ts": `import { defineStep, z } from "nukadoko";
+let calls = 0;
+export default defineStep({
+  pattern: "the badge agrees with the counter",
+  args: z.object({}),
+  poll: { timeout_ms: 10000 },
+  observe() {
+    const counter = Math.min(calls, 3);
+    calls += 1;
+    return { badge: 3, counter };
+  },
+  claims: [{ actual: "badge", compare: "equal", expected: { observe: "counter" } }],
+});
+`,
+      "features/t.feature": feature("Then the badge agrees with the counter"),
+    });
+    await cli(rootDir, ["run", "features/t.feature"]);
+    const step = lastClaimStep(rootDir);
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), step.record, "record.json"), "utf8")) as { readings: Record<string, unknown>[] };
+    expect(record.readings.map((reading) => [reading.attempt, reading.held, reading.actuals, reading.expecteds])).toEqual([
+      [1, false, [{ value: 3 }], [{ value: 0 }]],
+      [2, false, [{ value: 3 }], [{ value: 1 }]],
+      [3, false, [{ value: 3 }], [{ value: 2 }]],
+      [4, true, [{ value: 3 }], [{ value: 3 }]],
+      [5, true, [{ value: 3 }], [{ value: 3 }]],
+    ]);
+  });
+});
+
 describe("a long poll keeps the readings where the value changed", () => {
   it("keeps every candidate a padded observe offered, and says how many readings it left out", async () => {
     const rootDir = await project({

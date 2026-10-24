@@ -496,8 +496,8 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   };
   const holds = async (value: unknown): Promise<boolean> => {
     const judged = await evaluateClaims(step.claims, claimInputs(value as Reader));
-    const reading = readingOf(attempts, readingAt(), judged);
-    log.add(reading);
+    const { reading, content } = readingOf(attempts, readingAt(), judged);
+    log.add(reading, content);
     return reading.held;
   };
   // A poll does not outlast the step: the deadline's timer starts with the
