@@ -157,10 +157,13 @@ async function main(): Promise<void> {
   const program = (await loadProgram(rootDir))?.program ?? null;
   const resolvedEnv = resolveEnvironment(config, program, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
   const world: WorldView | null = worldPath === null ? null : parseWorldView(readFileSync(worldPath, "utf8"));
-  if (world !== null) applyWorldEnv(world.env);
 
   const { vocabulary, compatParameterTypes, instantiateCompatWorld, compatHooks, compatRunHooks, defaultTimeoutMs } =
     await discoverSteps(rootDir, config.featuresDir);
+  // After the step files load, as at `--concurrency 1`, where the parent
+  // imports them before it starts the world: a module reads the same
+  // environment at import in both modes, and the world's env at step time.
+  if (world !== null) applyWorldEnv(world.env);
 
   const bindings: readonly StepBinding[] = buildStepBindings(vocabulary, config.parameterTypes, compatParameterTypes);
   const { patterns } = checkBindings(vocabulary, config.parameterTypes, compatParameterTypes);

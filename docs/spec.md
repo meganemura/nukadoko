@@ -2681,6 +2681,11 @@ During the world's pass, `process.env` holds `env`, and the previous
 values come back after the pass.
 The `env` fixture is the env files, then `env` over them.
 Under `--concurrency` each worker applies the same values.
+A step file is imported before any world's `env` is set, in a run at
+`--concurrency 1` and in every worker alike, so a module that reads
+`process.env` while it loads sees the same values in both.
+A step reads the world's `env` when it runs, from `process.env` or the
+`env` fixture, not when its file loads.
 
 ### Worlds
 

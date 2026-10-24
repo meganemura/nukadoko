@@ -240,6 +240,49 @@ describe("a program nukadoko serves", () => {
     expect(log).toContain("# setup\nseeding admin with {{secret.WORLD_TOKEN}}\nand with {{secret.WORLD_TOKEN}} again\n");
   });
 
+  it("imports the step files before the world's env is set, at --concurrency 1 and 2 alike, and gives it to the step when it runs", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      'import { defineProgram } from "./nukadoko-shim.js";\nexport default defineProgram({ env: { IMPORT_MARK: "from-the-world" } });\n',
+    );
+    await writeFile(
+      path.join(rootDir, "features", "steps", "read-at-import.ts"),
+      [
+        'import { z } from "zod";',
+        'import { defineStep } from "../../nukadoko-shim.js";',
+        "",
+        "// What IMPORT_MARK held when this module loaded, and when the step runs.",
+        'const atImport = process.env.IMPORT_MARK ?? "unset";',
+        "export default defineStep({",
+        '  pattern: "the step returns what it read at import",',
+        '  description: "IMPORT_MARK at import and at step time",',
+        "  args: z.object({}),",
+        "  returns: z.object({ atImport: z.string(), atStep: z.string() }),",
+        "  mutates: false,",
+        "  async run() {",
+        '    return { atImport, atStep: process.env.IMPORT_MARK ?? "unset" };',
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(path.join(rootDir, "features", "world.feature"), "Feature: A\n\n  Scenario: reads at import\n    When the step returns what it read at import\n");
+    await copyFile(path.join(rootDir, "features", "world.feature"), path.join(rootDir, "features", "world-again.feature"));
+
+    for (const concurrency of ["1", "2"]) {
+      const { exitCode, stderr } = await cli(rootDir, ["run", "--no-check", "--concurrency", concurrency]);
+      expect(exitCode, stderr).toBe(0);
+      const results = stepRecordIds(rootDir)
+        .map((id) => stepResult(rootDir, id))
+        .filter((record) => (record.run_id as string) === latestRunJson(rootDir).run_id)
+        .map((record) => record.result);
+      expect(results, `--concurrency ${concurrency}`).toEqual([
+        { atImport: "unset", atStep: "from-the-world" },
+        { atImport: "unset", atStep: "from-the-world" },
+      ]);
+    }
+  });
+
   it("names the log from the project root when the program exits during the pass", async () => {
     await writeFile(
       path.join(rootDir, "nukadoko.program.ts"),

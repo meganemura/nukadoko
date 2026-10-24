@@ -2214,6 +2214,10 @@ step も `env` を受け取ります。
 world の pass のあいだ、`process.env` は `env` を持ち、pass のあとに元の値に戻ります。
 `env` fixture は、env file の上に `env` を重ねたものです。
 `--concurrency` では、各 worker が同じ値を適用します。
+step ファイルは、`--concurrency 1` の run でも各 worker でも、どの world の `env` も設定される前に import されます。
+そのため、読み込み中に `process.env` を読むモジュールは、どちらでも同じ値を見ます。
+step が world の `env` を読むのは、ファイルの読み込み時ではなく、実行されるときです。
+`process.env` からでも `env` fixture からでも読めます。
 
 ### World
 

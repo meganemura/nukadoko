@@ -274,7 +274,9 @@ just until 0.1.
   stderr as it starts, and what `setup` prints reaches stderr and
   `program.log` redacted. A signal while a world starts stops it at once
   and leaves no program running, in `nuka do` and under `--concurrency`
-  as well. A placeholder a world has
+  as well. Step files load before any world's env is set, at every
+  `--concurrency`, and a step reads the world's env when it runs. A
+  placeholder a world has
   no value for is the check error `program-placeholder-unfilled`, for
   every world the file can start, and `nuka run` and `nuka do` refuse it
   with that code before any command runs. `nuka run` starts one world
