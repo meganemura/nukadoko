@@ -8,6 +8,7 @@ import {
   claimsProblem,
   LITERAL_WORDS,
   literalStatedBy,
+  itemPathsOverlap,
   placeAt,
   placesOverlap,
   placeViewed,
@@ -26,6 +27,7 @@ import {
   pollReadings,
   POLL_INTERVAL_MS,
   readerNow,
+  whereImplies,
   type ClaimInputs,
   type PatternTester,
   type Reading,
@@ -635,22 +637,88 @@ describe("where", () => {
     return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected };
   }
 
-  it("refuses a where claim that reads what an item claim reads, however actual, at, and view spell it, and accepts any other path", () =>
+  const decides = ["equal", "contains-text", "matches", "has-item"] as const;
+  const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
+
+  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, contains-text, matches, or has-item, however actual, at, and view spell the places", () =>
     hegel.test((tc) => {
       const wherePath = tc.draw(segmentsGen);
-      const itemPath = tc.draw(gs.booleans()) ? [...wherePath] : tc.draw(segmentsGen);
-      const where = spelled(tc, wherePath, tc.draw(gs.sampledFrom(["equal", "greater-than", "at-least"] as const)), "least");
+      const itemPath = tc.draw(gs.booleans()) ? [...wherePath, ...tc.draw(segmentsGen)].slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: 4 }))) : tc.draw(segmentsGen);
+      const whereCompare = tc.draw(gs.sampledFrom([...decides, ...leaves]));
+      const where = spelled(tc, wherePath, whereCompare, "least");
       const item = spelled(tc, itemPath, tc.draw(gs.sampledFrom(["equal", "at-least", "not-equal"] as const)), tc.draw(gs.sampledFrom(["least", "limit"])));
       const problem = claimsProblem([{ actual: "result", each: { where: [where], claims: [item] } }], shape);
-      const same = wherePath.length === itemPath.length && wherePath.every((segment, index) => segment === itemPath[index]);
-      if (!same) {
+      const overlap = itemPathsOverlap(wherePath, itemPath);
+      expect(overlap).toBe(itemPathsOverlap(itemPath, wherePath));
+      if (!overlap || !(decides as readonly string[]).includes(whereCompare)) {
         expect(problem).toBeNull();
         return;
       }
-      const place = wherePath.length === 0 ? "the item itself" : `the item at ${wherePath.join(".")}`;
+      const name = (segments: readonly string[]) => (segments.length === 0 ? "the item itself" : `the item at ${segments.join(".")}`);
+      const relation = itemPath.length === wherePath.length ? "the same place" : itemPath.length > wherePath.length ? "a place inside it" : "a place that holds it";
       expect(problem).toBe(
-        `claims[0].each.where[0] and claims[0].each.claims[0] both read ${place}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
+        `claims[0].each.where[0] selects by ${name(wherePath)} with ${whereCompare}, and claims[0].each.claims[0] reads ${name(itemPath)}, ${relation}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
       );
+    }));
+
+  it("overlap is symmetric, and holds exactly when one path starts the other", () =>
+    hegel.test((tc) => {
+      const a = tc.draw(segmentsGen);
+      const b = tc.draw(segmentsGen);
+      const starts = (x: readonly string[], y: readonly string[]) => x.length <= y.length && x.every((segment, index) => segment === y[index]);
+      expect(itemPathsOverlap(a, b)).toBe(itemPathsOverlap(b, a));
+      expect(itemPathsOverlap(a, b)).toBe(starts(a, b) || starts(b, a));
+    }));
+
+  /** A where clause and an item claim on one number, `n`, with their
+   * bounds, and items drawn around them. */
+  const orderPair = gs.composite((tc) => ({
+    where: tc.draw(gs.sampledFrom(leaves)),
+    whereBound: tc.draw(gs.integers({ minValue: -5, maxValue: 5 })),
+    claim: tc.draw(gs.sampledFrom(leaves)),
+    claimBound: tc.draw(gs.integers({ minValue: -5, maxValue: 5 })),
+    items: tc.draw(gs.arrays(gs.integers({ minValue: -8, maxValue: 8 }), { minSize: 1, maxSize: 6 })),
+  }));
+
+  /** Whether `value <compare> bound` holds. */
+  const holds = (compare: ClaimCompare, value: number, bound: number): boolean =>
+    compare === "greater-than" ? value > bound : compare === "at-least" ? value >= bound : compare === "less-than" ? value < bound : compare === "at-most" ? value <= bound : value !== bound;
+
+  it("whereImplies is true for a pair in one order direction, or two not-equal, exactly when every number the where clause selects holds the claim, and false for any other pair", () =>
+    hegel.test((tc) => {
+      const pair = tc.draw(orderPair);
+      // Over the integers and the halves between them, which separate
+      // every bound the draw can make.
+      const values: number[] = [];
+      for (let doubled = -24; doubled <= 24; doubled += 1) values.push(doubled / 2);
+      const everySelectedHolds = values.every((value) => !holds(pair.where, value, pair.whereBound) || holds(pair.claim, value, pair.claimBound));
+      const direction = (compare: ClaimCompare) => (compare === "greater-than" || compare === "at-least" ? "up" : compare === "not-equal" ? "not" : "down");
+      const implied = whereImplies(pair.where, pair.whereBound, pair.claim, pair.claimBound);
+      expect(implied).toBe(direction(pair.where) === direction(pair.claim) ? everySelectedHolds : false);
+    }));
+
+  it("an implied pair on one place always breaks, and a pair it does not imply is judged on the data", () =>
+    hegel.testAsync(async (tc) => {
+      const pair = tc.draw(orderPair);
+      const claim: Claim = {
+        actual: "result",
+        each: { where: [{ actual: "n", compare: pair.where, expected: "least" }], claims: [{ actual: "n", compare: pair.claim, expected: "limit" }] },
+      };
+      expect(claimsProblem([claim], shape)).toBeNull();
+      const rows = pair.items.map((n) => ({ n }));
+      const record = await judgeOne(claim, { least: pair.whereBound, limit: pair.claimBound, result: rows }, undefined, ["result"]);
+      if (whereImplies(pair.where, pair.whereBound, pair.claim, pair.claimBound)) {
+        expect(record).toMatchObject({
+          outcome: "broken",
+          reason: `each.where[0] selects the items whose n is ${pair.where} ${pair.whereBound}, and every such item holds each.claims[0], ${pair.claim} ${pair.claimBound}, whatever the data, so the claim measures nothing`,
+          each: { items: rows.length, selected: 0, results: [] },
+        });
+        return;
+      }
+      const selected = pair.items.filter((n) => holds(pair.where, n, pair.whereBound));
+      const expected = selected.length > 0 && selected.every((n) => holds(pair.claim, n, pair.claimBound)) ? "held" : "broken";
+      expect(record.outcome).toBe(expected);
+      expect(record).toMatchObject({ each: { items: rows.length, selected: selected.length } });
     }));
 });
 
@@ -677,7 +745,9 @@ describe("each", () => {
       const rows = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: 9 }).map((n) => ({ n })), { minSize: 1, maxSize: 6 }));
       const limit = tc.draw(gs.integers({ minValue: 9, maxValue: 100 }));
       const record = await judgeOne(
-        { actual: "rows", each: { where: [{ actual: "n", compare: "greater-than", expected: "limit" }], claims: itemClaims } },
+        // at-most: a claim the where clause does not imply, so the items
+        // are judged.
+        { actual: "rows", each: { where: [{ actual: "n", compare: "greater-than", expected: "limit" }], claims: [{ actual: "n", compare: "at-most", expected: "least" }] } },
         { least: 0, limit, rows },
         undefined,
         ["rows"],

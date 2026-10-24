@@ -1866,12 +1866,28 @@ an array. Paths inside are relative to the item, and an item claim with no
 to. When the array is empty, or `where` selects nothing, the claim breaks:
 "every item" over nothing is not a measurement.
 
-A `where` claim that reads what an item claim reads is refused at
-import, whatever the two compares are: it selects the items by the value
-the item claim then judges, so "every item" would read as "every item
-that holds". The path read is `actual` followed by `at`, so
-`{ actual: "a.b" }`, `{ actual: "a", at: "b" }`, and `{ at: "a.b" }`
-read one path, and a `view` reads the same value another way. A `where`
+A `where` claim and an item claim overlap when the path one reads is
+the start of the path the other reads. The path read is `actual`
+followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
+and `{ at: "a.b" }` read one path, and a `view` on either side does not
+separate them: it reads the same value another way. A `where` claim
+that overlaps an item claim and compares with `equal`, `contains-text`,
+`matches`, or `has-item` is refused at import. It selects the items by
+the value the item claim then judges, or by a part of it the claim cannot
+be told apart from, so "every item" would read as "every item that
+holds".
+
+An overlapping `where` claim that compares with `greater-than`,
+`at-least`, `less-than`, `at-most`, or `not-equal` is judged at run
+time, from the expected values in hand. When the two read one value (one
+path and one view) and the `where` claim implies the item claim, the
+claim breaks and names both: the same order direction with a bound at
+least as strict, or `not-equal` against the same value. "Every item
+over 10 costs more than 5" breaks with `each.where[0] selects the items
+whose price is greater-than 10, and every such item holds
+each.claims[0], greater-than 5, whatever the data, so the claim measures
+nothing`. Any other pair is judged on the data: "every item over 10
+costs at most 100" holds or breaks on the prices the items have. A `where`
 claim that cannot compare an item at all (an undefined value, two JSON
 types) breaks the whole claim and names the item, since leaving that
 item out would narrow "every item" without a word.

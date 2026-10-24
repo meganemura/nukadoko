@@ -1090,11 +1090,13 @@ export default defineStep({
   });
 
   it.each([
-    ["the same claim", `{ actual: "title", compare: "equal", expected: "title" }`, "the item at title"],
-    ["the same path through at", `{ at: "title", compare: "equal", expected: "title" }`, "the item at title"],
-    ["the same path through a view", `{ actual: "title", view: "text", compare: "equal", expected: "title" }`, "the item at title"],
-    ["the same path with another compare", `{ actual: "title", compare: "not-equal", expected: "title" }`, "the item at title"],
-  ])("refuses a where claim that reads what an item claim reads: %s", async (_name, itemClaim, place) => {
+    ["the same claim", `{ actual: "title", compare: "equal", expected: "title" }`, `{ actual: "title", compare: "equal", expected: "title" }`, "the item at title, the same place"],
+    ["the same path through at", `{ actual: "title", compare: "equal", expected: "title" }`, `{ at: "title", compare: "equal", expected: "title" }`, "the item at title, the same place"],
+    ["the same path through a view", `{ actual: "title", compare: "equal", expected: "title" }`, `{ actual: "title", view: "text", compare: "equal", expected: "title" }`, "the item at title, the same place"],
+    ["the same path with another compare", `{ actual: "title", compare: "equal", expected: "title" }`, `{ actual: "title", compare: "not-equal", expected: "title" }`, "the item at title, the same place"],
+    ["a place inside the one where reads", `{ compare: "equal", expected: "title" }`, `{ actual: "title", compare: "equal", expected: "title" }`, "the item at title, a place inside it"],
+    ["the text where reads, which the claim reads as json", `{ actual: "title", compare: "contains-text", expected: "title" }`, `{ actual: "title", view: "json", at: "done", compare: "equal", expected: "title" }`, "the item at title.done, a place inside it"],
+  ])("refuses a where clause that compares with equal or contains-text at a place that overlaps an item claim's: %s", async (_name, whereClaim, itemClaim, read) => {
     const rootDir = await project({
       "features/steps/every-item-is-titled.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -1103,7 +1105,7 @@ export default defineStep({
   args: z.object({ title: z.string(), cart: answer.returns.shape.cart }),
   from: { cart: [answer, "cart"] },
   claims: [{ actual: "cart.items", each: {
-    where: [{ actual: "title", compare: "equal", expected: "title" }],
+    where: [${whereClaim}],
     claims: [${itemClaim}],
   } }],
 });
@@ -1111,9 +1113,40 @@ export default defineStep({
       "features/t.feature": feature("When the app answers", 'Then every item is titled "a"'),
     });
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    const where = whereClaim.includes("actual") ? "the item at title" : "the item itself";
+    const compare = whereClaim.includes("contains-text") ? "contains-text" : "equal";
     expect(checked.stdout + checked.stderr).toContain(
-      `defineStep claims[0].each.where[0] and claims[0].each.claims[0] both read ${place}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where.`,
+      `defineStep claims[0].each.where[0] selects by ${where} with ${compare}, and claims[0].each.claims[0] reads ${read}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where.`,
     );
+  });
+
+  it("judges an order where on the data when it leaves the claim a range, and breaks the claim when the where clause implies it", async () => {
+    const step = (pattern: string, compare: string) => `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "${pattern}",
+  args: z.object({ over: z.number(), bound: z.number() }),
+  observe() { return { items: [{ price: 5 }, { price: 20 }, { price: ${pattern.includes("costly") ? 200 : 50} }] }; },
+  claims: [{ actual: "items", each: { where: [{ actual: "price", compare: "greater-than", expected: "over" }], claims: [{ actual: "price", compare: "${compare}", expected: "bound" }] } }],
+});
+`;
+    const rootDir = await project({
+      "features/steps/every-item-costs-at-most.ts": step("every item over {over:int} costs at most {bound:int}", "at-most"),
+      "features/steps/every-costly-item-costs-at-most.ts": step("every costly item over {over:int} costs at most {bound:int}", "at-most"),
+      "features/steps/every-item-costs-more.ts": step("every item over {over:int} costs more than {bound:int}", "greater-than"),
+      "features/t.feature": feature("Then every item over 10 costs at most 100"),
+      "features/u.feature": feature("Then every costly item over 10 costs at most 100"),
+      "features/v.feature": feature("Then every item over 10 costs more than 5"),
+    });
+    expect((await cli(rootDir, ["run", "features/t.feature"])).exitCode).toBe(0);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({ outcome: "held", each: { items: 3, selected: 2 } });
+    expect((await cli(rootDir, ["run", "features/u.feature"])).exitCode).toBe(1);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({ outcome: "broken", each: { items: 3, selected: 2 } });
+    expect((await cli(rootDir, ["run", "features/v.feature"])).exitCode).toBe(1);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({
+      outcome: "broken",
+      reason: "each.where[0] selects the items whose price is greater-than 10, and every such item holds each.claims[0], greater-than 5, whatever the data, so the claim measures nothing",
+      each: { items: 3, selected: 0, results: [] },
+    });
   });
 
   it.each([

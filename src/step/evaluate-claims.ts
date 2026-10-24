@@ -666,6 +666,8 @@ async function judgeEach(claim: EachClaim, rawActual: Side, readSegments: readon
   });
   const stop = schemaChange(readSegments, inputs, true) ?? stopOf(actual) ?? eachObserveReceived(claim, inputs);
   if (stop !== null) return "broken" in stop ? ended("broken", stop.broken) : ended("unjudged", stop.unjudged);
+  const implied = whereImplication(claim, inputs);
+  if (implied !== null) return ended("broken", implied);
   const value = (actual as { value: unknown }).value;
   if (!Array.isArray(value)) return ended("broken", `each reads an array, and the value is ${article(jsonType(value))}`);
   const items: unknown[] = value;
@@ -738,6 +740,56 @@ async function judgeEach(claim: EachClaim, rawActual: Side, readSegments: readon
     outcome: outcomes.includes("broken") ? "broken" : outcomes.includes("unjudged") ? "unjudged" : "held",
   };
 }
+
+/** Whether every value a `where` clause selects holds an item claim on
+ * the same value, whatever the value is: the same order direction with a
+ * bound at least as strict (`greater-than 10` then `at-least 5`), or
+ * `not-equal` against the same value. Then the claim holds on every
+ * item `where` selects, and "every item" measures nothing. A pair it does
+ * not imply (`greater-than 10` then `at-most 100`) can break on the data.
+ * Pure. */
+export function whereImplies(where: ClaimCompare, whereValue: unknown, claim: ClaimCompare, claimValue: unknown): boolean {
+  if (where === "not-equal") return claim === "not-equal" && jsonType(whereValue) === jsonType(claimValue) && deepEqual(whereValue, claimValue);
+  if (typeof whereValue !== "number" || typeof claimValue !== "number") return false;
+  const up = (compare: ClaimCompare): boolean => compare === "greater-than" || compare === "at-least";
+  const down = (compare: ClaimCompare): boolean => compare === "less-than" || compare === "at-most";
+  const strict = (compare: ClaimCompare): boolean => compare === "greater-than" || compare === "less-than";
+  if (up(where) && up(claim)) return !strict(where) && strict(claim) ? whereValue > claimValue : whereValue >= claimValue;
+  if (down(where) && down(claim)) return !strict(where) && strict(claim) ? whereValue < claimValue : whereValue <= claimValue;
+  return false;
+}
+
+/** The first pair of a `where` clause and an item claim that read one
+ * value (one path and one view) where the clause implies the claim
+ * (`whereImplies`), as the reason that breaks the `each`; `null` when
+ * there is none. `defineStep` already refuses an overlapping clause whose
+ * compare decides the value; this is the rest, which only the expected
+ * values in hand can decide. */
+function whereImplication(claim: EachClaim, inputs: ClaimInputs): string | null {
+  const expectedValue = (entry: ItemClaim): { readonly value: unknown } | null => {
+    const side = expectedSide(entry, inputs);
+    return "value" in side ? { value: side.value } : null;
+  };
+  for (const [whereIndex, where] of (claim.each.where ?? []).entries()) {
+    if (where.compare !== "not-equal" && !ORDER_COMPARES.has(where.compare)) continue;
+    const place = itemSegments(where);
+    for (const [claimIndex, entry] of claim.each.claims.entries()) {
+      const other = itemSegments(entry);
+      if (where.view !== entry.view || other.length !== place.length || !other.every((segment, index) => segment === place[index])) continue;
+      const whereValue = expectedValue(where);
+      const claimValue = expectedValue(entry);
+      if (whereValue === null || claimValue === null || !whereImplies(where.compare, whereValue.value, entry.compare, claimValue.value)) continue;
+      const what = `${place.length === 0 ? "value" : place.join(".")}${where.view === undefined ? "" : ` as ${where.view}`}`;
+      return (
+        `each.where[${whereIndex}] selects the items whose ${what} is ${where.compare} ${JSON.stringify(whereValue.value)}, ` +
+        `and every such item holds each.claims[${claimIndex}], ${entry.compare} ${JSON.stringify(claimValue.value)}, whatever the data, so the claim measures nothing`
+      );
+    }
+  }
+  return null;
+}
+
+const ORDER_COMPARES: ReadonlySet<ClaimCompare> = new Set(["greater-than", "at-least", "less-than", "at-most"]);
 
 /** `observeReceived` for every declaration of an `each`, before any item:
  * it does not depend on an item, and an empty array would hide it. */

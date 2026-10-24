@@ -55,9 +55,13 @@ just until 0.1.
   returned, in a `from` tuple or in `parts`, is kept as it is; an
   object that merely carries the step brand is copied. A change to the
   step file's objects after the call throws at import. Discovery runs
-  only the step `defineStep` returned, not a copy of it. A `where` claim that reads the path an
-  item claim reads (`actual` then `at`, with or without a `view`) is
-  refused, whatever its compare. `matches` runs on
+  only the step `defineStep` returned, not a copy of it. A `where` claim whose path
+  (`actual` then `at`, with or without a `view`) starts the path an
+  item claim reads, or the other way round, is refused when it compares
+  with `equal`, `contains-text`, `matches`, or `has-item`. With an
+  order compare or `not-equal`, the run breaks the claim when the
+  `where` claim implies it (`greater-than 10` then `greater-than 5`)
+  and judges any other pair on the data. `matches` runs on
   a worker thread, and judging as a whole is bounded by the step's
   deadline: a pattern still running when it passes is stopped, and each
   claim and item not judged by then is `unjudged`, with how many. `observe` receives every

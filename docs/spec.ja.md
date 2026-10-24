@@ -1532,10 +1532,19 @@ pattern には残り時間を与え、残りが無いときに与えることは
 配列が空のとき、または `where` が何も選ばないとき、claim は成り立ちません。
 何もない集合についての「すべての要素」は計測ではないからです。
 
-要素の claim が読むものを読む `where` の claim は、2 つの比較が何であっても、import の時点で拒否されます。
-要素の claim がこれから判定する値で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
+`where` の claim と要素の claim は、一方が読むパスが、もう一方が読むパスの始まりであるときに重なります。
 読むパスは `actual` に `at` を続けたものです。
-したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読み、`view` は同じ値を別の形で読みます。
+したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読みます。
+どちらかの側の `view` は、同じ値を別の形で読むだけなので、2 つを分けません。
+要素の claim と重なり、`equal`、`contains-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
+要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
+
+重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。
+2 つが 1 つの値(1 つのパスと 1 つの view)を読み、`where` の claim が要素の claim を含意するときは、claim は成り立たず、その 2 つを名指しします。
+含意するとは、同じ大小の向きで、境界が同じかより厳しいとき、または同じ値に対する `not-equal` のときです。
+「10 を超える要素はどれも 5 より高い」は、`each.where[0] selects the items whose price is greater-than 10, and every such item holds each.claims[0], greater-than 5, whatever the data, so the claim measures nothing` で成り立ちません。
+それ以外の組はデータのとおりに判定します。
+「10 を超える要素はどれも 100 以下である」は、要素が持つ価格のとおりに成り立つか成り立たないかが決まります。
 ある要素をまったく比較できない `where` の claim(undefined の値、2 つの JSON の型)では、claim 全体が成り立たず、その要素を名指しします。
 その要素を外すと、「すべての要素」が黙って狭まるからです。
 

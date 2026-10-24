@@ -633,20 +633,41 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
         checkComparison(itemLabel, entry as Record<string, unknown>, shape, "item", fromObserve);
       });
     }
-    // A where claim that reads what an item claim reads selects the
-    // items by the value the item claim then judges: "every item that is
-    // done is done", or "every item with more than 2 has at least 2". So
-    // "every item" would read as "every item that holds".
+    // A where clause whose place overlaps an item claim's, and whose
+    // compare decides the value there (equal), or selects by a part of it
+    // no claim can be told apart from (contains-text, matches, has-item),
+    // selects the items by the value the claim then judges: "every item
+    // that is done is done". An order compare or not-equal leaves a range
+    // the claim can still break on ("every item over 10 costs at most
+    // 100"), so the run judges that pair on its values
+    // (`whereImplies`).
     ((each.where ?? []) as Record<string, unknown>[]).forEach((entry, whereIndex) => {
+      if (!WHERE_DECIDES.has(entry["compare"] as string)) return;
       const place = itemPath(entry);
-      const same = (each.claims as Record<string, unknown>[]).findIndex((item) => samePath(itemPath(item), place));
-      if (same !== -1) {
-        throw new InvalidClaimError(
-          `${label}.each.where[${whereIndex}] and ${label}.each.claims[${same}] both read ${describeItemPath(place)}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
-        );
-      }
+      const overlapping = (each.claims as Record<string, unknown>[]).findIndex((item) => itemPathsOverlap(itemPath(item), place));
+      if (overlapping === -1) return;
+      const other = itemPath((each.claims as Record<string, unknown>[])[overlapping]!);
+      const relation = other.length === place.length ? "the same place" : other.length > place.length ? "a place inside it" : "a place that holds it";
+      throw new InvalidClaimError(
+        `${label}.each.where[${whereIndex}] selects by ${describeItemPath(place)} with ${String(entry["compare"])}, and ${label}.each.claims[${overlapping}] reads ${describeItemPath(other)}, ${relation}, so where selects the items by the value the claim then judges and "every item" says nothing. Select by another value, or drop where`,
+      );
     });
   });
+}
+
+/** The compares a `where` clause may not use on a place that overlaps an
+ * item claim's: each decides the value there, or selects by a part of it
+ * that the claim cannot be told apart from. */
+const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "contains-text", "matches", "has-item"]);
+
+/** Whether two places inside one item overlap: one path is the start of
+ * the other, after `actual` and `at` are joined (`itemPath`). Pure. */
+export function itemPathsOverlap(a: readonly string[], b: readonly string[]): boolean {
+  const length = Math.min(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    if (a[index] !== b[index]) return false;
+  }
+  return true;
 }
 
 /** The place inside one item that an item claim reads, as path segments:
@@ -657,10 +678,6 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
 export function itemPath(claim: { readonly actual?: unknown; readonly at?: unknown }): readonly string[] {
   const split = (path: unknown): readonly string[] => (typeof path === "string" ? (pathSegments(path) ?? [path]) : []);
   return [...split(claim.actual), ...split(claim.at)];
-}
-
-function samePath(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((segment, index) => segment === b[index]);
 }
 
 function describeItemPath(segments: readonly string[]): string {
