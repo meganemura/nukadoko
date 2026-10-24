@@ -50,7 +50,7 @@ import {
 import { buildTable, executionOutcome, foldCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
-import { runTreePass, type TreeTarget } from "../run/tree-pass.js";
+import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
@@ -1289,7 +1289,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // a world built from that tree. The base world builds and starts the
     // base tree's program file, from which it reads its environments and
     // their conditions; the old world runs head's code, so it starts
-    // head's recipe in the old tree. A signal stops the workers, aborts a
+    // head's recipe in the old tree. A signal stops the workers first
+    // (SIGTERM, a world's grace period, then SIGKILL), then aborts a
     // tree world's start or stops the tree world, as head's pass does with
     // its own, and then removes the trees: a program left running in a
     // removed tree would outlive nukadoko.
@@ -1301,7 +1302,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       processSignal ??= installProcessSignalHandlers();
       const signals = processSignal;
       signals.setProcessCleanup(async () => {
-        for (const child of live) child.kill("SIGTERM");
+        await stopTreeWorkers(live);
         if (treeStart !== null) {
           treeStart.abort.abort();
           await treeStart.starting.catch(() => {});
@@ -1446,6 +1447,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             warn,
             stderr,
             live,
+            runDir: runDirAbsolute,
           });
           if (result.notRun !== null) leaveNotRun(world, environment, result.notRun);
           if (started !== null) await stopWorld(started, world);

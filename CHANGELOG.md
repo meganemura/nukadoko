@@ -347,7 +347,10 @@ just until 0.1.
   approved with), and the gate is red on the last three. The base world
   builds the ref's program file, a `url` function receives `tree` to say
   where the base is deployed, and neither tree installs anything: both
-  resolve packages from head's project. git runs against a tree with the
+  resolve packages from head's project. A signal stops a tree's workers
+  (SIGTERM, the 5 seconds a world gets, then SIGKILL) before its world
+  and the trees, and a worker's files are written in the run directory.
+  git runs against a tree with the
   repository's hooks off, and the next `nuka run --base` and `nuka clean`
   remove a worktree registration a killed run left under `runs/` once its
   directory is gone. run.json's `table` gains `base`,

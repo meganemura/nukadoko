@@ -1,8 +1,8 @@
 import type { ChildProcess } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseFindings, type Finding } from "../finding/finding.js";
+import { STOP_GRACE_MS } from "../program/world.js";
 import { serializeWorldView, type WorldView } from "../program/world-view.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
 import { createLineBuffer } from "../sink/line-buffer.js";
@@ -30,7 +30,14 @@ import { parseWorkerEnvelope, type WorkerEnvelope, type WorkerTree } from "./wor
 // What goes wrong in a tree is the table's to say, not a failure of the
 // run: a tree whose files do not load, or a BeforeAll hook that fails, is
 // the reason its cells did not run, and the rows decide whether that turns
-// the gate red. So a worker's findings are relayed as warnings that name
+// the gate red.
+//
+// A worker's files (its target list, its world, its tree) are written in
+// the run directory, not the system's temporary directory, so nothing a
+// pass writes is outside the run. On a signal the caller stops the
+// workers with `stopTreeWorkers` before it stops the tree's world and
+// removes the trees: a worker busy in a step cannot run its own signal
+// handler, and one left running would outlive nukadoko and its tree. So a worker's findings are relayed as warnings that name
 // the tree, and a worker that exits without a record leaves cells that did
 // not run, with that reason, instead of the `run-incomplete` failure a
 // worker of head's pass reports.
@@ -74,8 +81,36 @@ export interface TreePassOptions {
   /** A worker's own stderr, relayed raw. */
   readonly stderr: WritableSink;
   /** Every worker while it runs, so the caller can stop them on a
-   * signal. */
+   * signal (`stopTreeWorkers`). */
   readonly live: Set<ChildProcess>;
+  /** The run directory, absolute: each worker's files are written in it. */
+  readonly runDir: string;
+}
+
+// Each worker has a process group of its own on POSIX (src/run/
+// spawn-run-worker.ts), so a signal to the group reaches a process a step
+// started too.
+const groups = process.platform !== "win32";
+
+function signalWorker(child: ChildProcess, signal: NodeJS.Signals): void {
+  try {
+    if (groups && child.pid !== undefined) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch {
+    // The group is gone already: nothing is left to signal.
+  }
+}
+
+/** Stops every worker in `live`: SIGTERM, the grace period a world's
+ * group gets, then SIGKILL to whatever is left. Resolves once that is
+ * done. */
+export async function stopTreeWorkers(live: ReadonlySet<ChildProcess>): Promise<void> {
+  const workers = [...live];
+  for (const child of workers) signalWorker(child, "SIGTERM");
+  const running = (): boolean => workers.some((child) => child.exitCode === null && child.signalCode === null);
+  const deadline = Date.now() + STOP_GRACE_MS;
+  while (running() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+  for (const child of workers) signalWorker(child, "SIGKILL");
 }
 
 export interface TreePassResult {
@@ -148,7 +183,7 @@ export async function runTreePass(options: TreePassOptions): Promise<TreePassRes
 
   const runGroup = async (targets: readonly TreeTarget[], proofRound: boolean): Promise<number> => {
     const seen = new Set<string>();
-    const tmpDir = await mkdtemp(path.join(tmpdir(), "nukadoko-tree-"));
+    const tmpDir = await mkdtemp(path.join(options.runDir, ".tree-pass-"));
     try {
       const featureListPath = path.join(tmpDir, "features.txt");
       await writeFile(featureListPath, `${targets.map((target) => `${target.feature}:${target.line}`).join("\n")}\n`, "utf8");

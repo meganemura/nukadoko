@@ -3328,7 +3328,11 @@ tree の world のディレクトリは `worlds/<environment>@base` か `worlds/
 tree の scenario は、`--concurrency` にかかわらず、その tree で始めた worker プロセスで走ります。
 各 worker は、`--no-check` でなければ、まず tree のファイルに `nuka check` を走らせます。
 ファイルが読み込めないか check を通らない tree のセルは、理由を添えて走らないままです。
-シグナルは、head の world を止めるのと同じように tree の world を止めます。
+worker に渡すファイルは run ディレクトリに書きます。
+シグナルは、まず tree の worker を止めます。
+SIGTERM を送り、world と同じ 5 秒を待ち、それから SIGKILL を送ります。
+step の中で手が離せない worker は、自分のハンドラを走らせられないからです。
+そのあと、head の world を止めるのと同じように tree の world を止めます。
 起動中ならすぐに止め、動いている world には SIGTERM と 5 秒を与えます(「テスト対象のプログラム」を参照)。
 tree は nukadoko が終了する前に取り除かれます。
 

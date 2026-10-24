@@ -160,7 +160,9 @@ export interface WorldStarter {
 
 const READY_POLL_MS = 100;
 const READY_REQUEST_MS = 2_000;
-const STOP_GRACE_MS = 5_000;
+/** How long a stop waits for what it sent SIGTERM before SIGKILL: a
+ * world's process group, and a tree pass's workers (src/run/tree-pass.ts). */
+export const STOP_GRACE_MS = 5_000;
 const STREAMS_CLOSE_MS = 1_000;
 const GROUP_POLL_MS = 50;
 
