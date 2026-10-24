@@ -17,6 +17,16 @@ just until 0.1.
   whose output a person or an agent is already reading; a separate
   command that reread the newest run reached almost nobody.
 
+### Removed
+
+- **Four notes are removed: `fixture-replaces-builtin`,
+  `fixture-touches-app`, `parameter-type-support-origin`, and
+  `post-navigation-read`.** A survey of the projects that use nukadoko
+  found the first three reported nowhere, and `post-navigation-read`
+  reported only the wait step itself, never a read that raced the page.
+  No job gated on any of them, so each one only added to what an agent
+  reads. Their modules and tests go with them.
+
 ### Added
 
 - **The skill says how to drive an app through an e2e session.** A project

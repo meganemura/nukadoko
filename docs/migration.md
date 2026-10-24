@@ -253,8 +253,7 @@ Two independent, incremental moves, safe to take alone, in either order:
   `nuka check` reports `step-file-import-failed`, and `nuka run` stops with
   the same message, which names the field.
 - **Parameter types**: a support-side `defineParameterType` call still
-  works, but `nuka tend` notes it (`parameter-type-support-origin`) and
-  points at `config.parameterTypes` as the typed-era home: moving the
+  works, and `config.parameterTypes` is the typed-era home: moving the
   registration changes nothing about what any pattern matches, unless it
   sets `preferForRegexpMatch`. A transformer's `this` is the scenario's
   World, and a Promise it returns is awaited before the step, for a string
@@ -291,9 +290,6 @@ step has.
   docs/spec.md "Keyword semantics"), so this flags a step with no static
   signal at all in that spot, not one the tool has caught doing anything.
   Promoting it to `defineStep` is how it gains a declaration to check.
-- `parameter-type-support-origin` moved to `nuka tend` (see Stage 1.5
-  above): it fires for as long as a suite has any compat left, which is a
-  normal state to be in, not one that should print before every run.
 - `step-file-import-failed` errors on a step file whose import threw: an
   unsupported name used as a value, a CommonJS `require`, or a deep subpath
   import (the first three gaps in "What the switch does not carry" above),

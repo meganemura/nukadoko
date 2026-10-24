@@ -197,7 +197,7 @@ World のサブクラスは、その page と request を `this.page = ...` と 
   `defineWorld` は import 時にどちらの名前も拒みます。
   `nuka check` は `step-file-import-failed` を報告し、`nuka run` は同じメッセージで止まります。
   そのメッセージはフィールド名を含みます。
-- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動きますが、`nuka tend` が指摘し(`parameter-type-support-origin`)、typed 時代の住まいとして `config.parameterTypes` を指し示します(`preferForRegexpMatch` を設定していなければ、登録を移してもどの pattern のマッチも変わりません)。
+- **Parameter types**: support 側の `defineParameterType` 呼び出しは引き続き動き、typed 時代の住まいは `config.parameterTypes` です(`preferForRegexpMatch` を設定していなければ、登録を移してもどの pattern のマッチも変わりません)。
   transformer の `this` はその scenario の World であり、返した Promise は step が走る前に await されます。
   string の pattern でも RegExp の pattern でも同じです。
   `preferForRegexpMatch` は、cucumber-js と同じく、複数の型が一致する RegExp のグループに使う型を選びます。
@@ -222,8 +222,6 @@ consumer より先に producer を昇格させます: `this` にデータを溜�
   compat の step には、そこで nukadoko が信頼できる宣言済みの `mutates` がありません(docs/spec.ja.md の「キーワードの意味論」を参照)。
   そのためこの警告が示しているのは、その位置に静的な手掛かりが何もないという事実であり、ツールが何かを捕まえたわけではありません。
   `defineStep` に昇格させることが、チェックできる宣言を得る方法です。
-- `parameter-type-support-origin` は `nuka tend` に移りました(上の Stage 1.5 参照)。
-  スイートに compat が残っている限り出続けるのが正常な状態であり、毎回の run の前に印字すべきものではないためです。
 - `step-file-import-failed` は、import が例外を投げた step ファイルにエラーを出します。
   未サポートの名前を値として使っている、CommonJS の `require`、深い subpath の import(上の「切り替えで引き継がれないもの」の最初の 3 つの gap です)のいずれかで、Node 自身のエラーメッセージとファイルパスを運びます。
   プロジェクトの残りはそれと並行して引き続き discovery され報告されます。

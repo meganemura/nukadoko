@@ -47,6 +47,14 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   `nuka tend` の `--fail-on` にこの code を並べていたジョブは、一覧から外します。
   tend はこれを `fail-on-unknown-code` で拒否します。
 
+- **4 つの note がなくなります。**
+  `fixture-replaces-builtin`、`fixture-touches-app`、`parameter-type-support-origin`、`post-navigation-read` は、もう報告されません。
+  これらのどれかでゲートしていた、または `--json` をこれらで絞り込んでいたジョブは、そのゲートを外します。
+  `nuka tend --fail-on` は、この 4 つの code を名指しで拒否します。
+  代わりになるものはありません。
+  これらが名指していた事実は、見る人のためにいまもディスク上にあります。
+  fixture の分割代入、support 側の `defineParameterType`、step record の `actions` です。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

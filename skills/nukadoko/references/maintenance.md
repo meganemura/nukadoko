@@ -4,8 +4,8 @@
 
 `nuka check` answers whether the next run can proceed. `nuka tend` answers
 a different question: whether the vocabulary and the records behind it are
-rotting. A step nothing binds any more, a fixture nothing names, a read
-that follows a navigation too closely: none of that stops a run, so
+rotting. A step nothing binds any more, a fixture nothing names, a field
+no description explains: none of that stops a run, so
 `nuka check` never mentions it. `nuka tend` is what finds it, and it is
 not a step of the acceptance loop.
 
@@ -70,17 +70,6 @@ opening that creates the record each scenario then reads by id stays in
 each scenario (`scenario-rules.md`, S8, and `examples/http-api.md`). A
 step that keeps the default `mutates: true` but writes nothing a later
 scenario reads is the one case to judge yourself.
-
-`post-navigation-read` is the one worth knowing the shape of, because
-there is a way to make it stop being true and only one. It reads every
-step record under `.nukadoko/runs/` and `.nukadoko/do/`, so a step that has only been
-exercised with `nuka do` still shows up here. It lists a call a step made
-shortly after its own navigation, and it never says the gap was too short,
-since how long an application takes to render after a navigation is not
-something this tool can know. A read that a `poll` call was already
-retrying is not listed at all. Reaching for a direct browser wait instead
-does not help: that wait is itself a call right after the navigation, so
-the note comes back naming it, which reads as though nothing silences it.
 
 Once a feature has moved into `featuresDir` (see "The loop" in
 `SKILL.md`, step 6), `nuka run` picks it up on every future commit, and each of

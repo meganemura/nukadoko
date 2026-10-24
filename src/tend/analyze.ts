@@ -7,15 +7,11 @@ import { discoverSteps } from "../discover/discover-steps.js";
 import { buildFixtureGraph } from "../fixture/graph.js";
 import { loadFeaturesFromDirs } from "../feature/load-features.js";
 import { findDescriptionTodos } from "./description-todo.js";
-import { findFixturesReplacingBuiltins } from "./fixture-replaces-builtin.js";
-import { findFixturesTouchingApp } from "./fixture-touches-app.js";
 import { findUnusedFixtures } from "./fixture-unused.js";
 import { findUnusedFromDeclarations } from "./from-unused.js";
 import { findTypelessPackageJsons } from "./package-type-missing.js";
 import { analyzeFieldDescriptions } from "./missing-describe.js";
-import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
-import { findPostNavigationReads } from "./post-navigation-read.js";
 import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { buildTendSummary } from "./summary.js";
@@ -24,8 +20,6 @@ import { tendCodeFix, type TendCode, type TendFinding, type TendIssue, type Tend
 
 // Findings about a config entry, which name the config file.
 const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
-  "fixture-replaces-builtin",
-  "fixture-touches-app",
   "fixture-unused",
   "parameter-type-unused",
   "secrets-public-key-unknown",
@@ -39,11 +33,10 @@ const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
 // needing to sort anything after the fact — src/cli/tend.ts pushes each
 // category's array through in one block rather than interleaving.
 // `fixtureGraph` (`buildFixtureGraph`, src/fixture/graph.ts) is built once,
-// here, and passed to both fixture findings, the same "never a second
+// here, and passed to the fixture finding, the same "never a second
 // computation path" rule `patterns` just below already follows for
-// `checkBindings`. `findSupportOriginParameterTypes` and
-// `findUnknownSecretsKeys` did not start here: they were `nuka check`
-// warnings that were later reclassified, on the same "does this have to be
+// `checkBindings`. `findUnknownSecretsKeys` did not start here: its two
+// codes were `nuka check` warnings that were later reclassified, on the same "does this have to be
 // known before the run" test docs/spec.md "Tending" states — their own
 // detection logic is untouched, only where a caller reads the finding from.
 // A configured-but-absent `additionalFeatureDirs` entry is `nuka check`'s
@@ -85,13 +78,6 @@ const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
 // never feeds `errors` or `notes` and never changes the caller's exit code
 // (src/cli/tend.ts still derives that from `errors` alone).
 //
-// `findPostNavigationReads` is a note: nothing here is wrong right now, only
-// a fact worth a human's attention (that module's own header explains why
-// it is never a verdict). It walks every step record directly, `do/` and
-// each run's `steps/` alike, so
-// `config.stateDir` is passed through to it rather than a
-// `featuresDir`-shaped path. Every step record counts.
-//
 // `findTypelessPackageJsons` reads the config file and the step files the
 // walk found, the files whose loads print Node's reparse warning.
 
@@ -127,12 +113,8 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findDescriptionTodos(vocabulary, rootDir),
     ...fieldDescriptions.issues,
     ...findUnusedParameterTypes(vocabulary, config.parameterTypes),
-    ...findSupportOriginParameterTypes(compatParameterTypes),
     ...findUnknownSecretsKeys(rootDir, config),
     ...findUnusedFixtures(vocabulary, fixtureGraph),
-    ...findFixturesTouchingApp(fixtureGraph),
-    ...findFixturesReplacingBuiltins(Object.keys(config.fixtures)),
-    ...findPostNavigationReads(rootDir, config.stateDir),
     ...findTypelessPackageJsons(rootDir, [...loadedConfigFile(rootDir), ...walkedFiles]),
   ];
 

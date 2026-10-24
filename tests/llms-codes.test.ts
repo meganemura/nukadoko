@@ -56,14 +56,13 @@ describe("nuka tend --codes", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const findings = parseFindings(stdout.text());
-    expect(findings).toHaveLength(13);
+    expect(findings).toHaveLength(9);
     expect(findings[0]).toEqual({
       severity: "note",
-      code: "fixture-replaces-builtin",
+      code: "fixture-unused",
       where: "-",
-      message:
-        "A config.fixtures definition has the name of a builtin fixture that a project may replace (scratch), so it replaces the builtin.",
-      fix: "Delete the fixture and its StepFixtures declaration if the builtin covers what it does; keep both if the project needs its own shape.",
+      message: "No typed step requires a config.fixtures definition, directly or through another fixture.",
+      fix: "Remove the fixture from config.fixtures, or keep it for nuka do.",
     });
     expect(stdout.text()).toContain(
       "note\tschema-field-undescribed\t-\tA field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.\n" +
@@ -83,7 +82,7 @@ describe("nuka tend --codes", () => {
     expect(Object.keys(document)).toEqual(["schema_version", "nukadoko", "command", "verdict", "findings", "codes"]);
     expect(document).toMatchObject({ schema_version: 2, command: "tend", verdict: "passed", findings: [] });
     const entries = document.codes;
-    expect(entries).toHaveLength(13);
+    expect(entries).toHaveLength(9);
     expect(entries.find((entry) => entry.code === "pattern-unbound")).toEqual({
       severity: "note",
       code: "pattern-unbound",

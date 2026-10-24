@@ -629,7 +629,7 @@ context は scenario の終わりに、スクリーンショットを撮った�
 また、typed step には `ctx` がありません。
 `browser` fixture は上で拒否しています。
 人ごとの context を `nukadoko.config.ts` で宣言すると、scenario の人がプロジェクトの設定に入り、新しい人が feature ファイルの 1 行ではなく設定の変更になります。
-1 つの context の中で人ごとにホスト名(`aki.localhost`)を与えるプロジェクトの fixture は、cookie をホストごとに分けるアプリでしか働かず、スクリプトを止めるにはタブごとに DevTools Protocol の呼び出しが要り、アプリに触れる fixture(`fixture-touches-app`)でもあります。
+1 つの context の中で人ごとにホスト名(`aki.localhost`)を与えるプロジェクトの fixture は、cookie をホストごとに分けるアプリでしか働かず、スクリプトを止めるにはタブごとに DevTools Protocol の呼び出しが要り、どの step も名指す前にアプリを操作する fixture でもあります。
 `pageAs` が名前を実行時に受け取るのは、人が scenario のデータであり、分割代入パターンに列挙できるものではないからです。
 それでも `pageAs` を分割代入することが、`check` が読む静的な宣言です(`needs_browser`、`playwright-missing`)。
 
@@ -943,23 +943,12 @@ scenario record はすでに閉じている場合があり、stderr がその失
 所見はその fixture を名指し、fixture についての文言で述べます。
 既定値の変換後のソースは引用しません。
 
-`tend` は 3 つの事実を追加で報告します。
+`tend` は 1 つの事実を追加で報告します。
 `fixture-unused` は、直接にも別の fixture 経由でも、どの typed step も要求しない `config.fixtures` エントリを特定します。
 そのエントリには `nuka do` から引き続き到達できます。
-`fixture-touches-app` は、直接または別の fixture 経由で `page`、`context`、`pageAs` のどれかに到達する fixture を特定します。
-ブラウザ fixture は、名指されていない前提条件によって scenario を成功させる場合があります。
-たとえば、どの step もログインを要求する前にユーザーをログインさせられます。
-これは、step の Given が説明しない作業と同じ効果を持ちます。
-この報告は、fixture からのブラウザアクセスを禁止しません。
-たとえば、fixture は正当な目的で `storageState` を生成できます。
-`fixture-replaces-builtin` は、置き換え可能な builtin(`scratch`)の名前を持つ `config.fixtures` エントリを特定します。
-そのエントリは builtin を置き換えます。
-`nuka check` も run もそうしたエントリを受け付けるので、builtin ができる前に自分の `scratch` を書いたプロジェクトに、builtin があると伝えるものは他にありません。
-note は builtin が何を与えるかを名指します。
-それでプロジェクト自身の形が足りるかは、読み手が判断します。
-`--json` では、この 3 つの所見は fixture の名前を `fixture` フィールドに入れ、`step` は設定しません。
+`--json` では、この所見は fixture の名前を `fixture` フィールドに入れ、`step` は設定しません。
 同じ名前の fixture と step を区別するためです。
-`tend` は fixture を特定するだけであり、各 fixture がそこに属するかは読み手が判断します。
+`tend` は fixture を特定するだけであり、その fixture がそこに属するかは読み手が判断します。
 
 リストが空でない場合だけ、step record は `fixtures` を含みます。
 このリストには、その実行で fixture の解決が触れたすべての `config.fixtures` エントリが入ります。
@@ -1366,7 +1355,6 @@ import { Given, When, Then } from "nukadoko/compat";
 - compat コードの `defineParameterType` と `config.parameterTypes` は、1 つのレジストリを使います。
   登録を config へ移しても pattern のマッチは変わらないため、チームはこの移動を早く行えます。
   例外は `preferForRegexpMatch` を設定する登録です(後述)。
-  `nuka tend` は support 由来の登録を note として列挙します(「Tending(手入れ)」を参照)。
   config が、それらの引退先です。
   transformer の `this` は、その scenario の World です。
   step と hook が動くのと同じオブジェクトです。
@@ -3323,18 +3311,10 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   step はそのまま実行できるので、`check` の所見ではなく注記です。
 - **どの pattern からも使われていない設定済みの parameter type。**
   これは使われていない設定であり、他のものと同様に報告されます。
-- **support コード側にまだ登録されたままの `defineParameterType`。**
-  それは動き続けます。
-  `config.parameterTypes` がその typed 時代の住まいであり、登録をそちらへ移してもマッチは何も変わりません。
-  例外は `preferForRegexpMatch` を設定する登録です。
-  config はこのキーを拒否するため、この note は、RegExp の step がそれに頼っている間は support コードに残すよう伝えます。
-  これはかつて `nuka check` の warning でしたが、その分類は誤りでした。
-  これは、スイートに compat が少しでも残っている限り現れ続けるものであり、それは正常な状態です。
-  毎回の run の前にそれを出力すれば、人々に本当に run を止める行を読み飛ばすことを覚えさせてしまいます。
 - **`secrets.public` または `secrets.redact` のエントリが、どの envFile も定義していないキーを名指ししているもの。**
   その指示は実在しますが、何にも届きません。
   自分が記述している対象のファイルから設定がずれているということです。
-  これも同じ理由で `check` から移されました。
+  これは `check` から移されました。
   この run を実行すべきかどうかは、これによって何も変わらないからです。
   その隣にある所見は `check` に残っており、対比する価値があります。
   値が短すぎて redact されない `redact` エントリと、secret らしいキーを持つ追跡済みの env file は、どちらも run が始まった瞬間に平文がログに届くことを意味します。
@@ -3351,30 +3331,6 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   そのため、存在しないディレクトリは報告すべき config の誤りであり、それは `featuresDir` が欠けている場合と同じです。
   ただし `tend` の所見はすべて注記です。
   そのため、`nuka check` が同じ事実をエラーとして報告する一方で、ここでは注記になります。
-- **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。**
-  `tend` はこれを `.nukadoko/runs/<run_id>/steps/` と `.nukadoko/do/` にあるツール自身の step record から読みます(「Records」を参照)。
-  そのため、いまもディスク上に step record を持つすべての step に届きます。
-  その step record 自身の `actions` にある `goto`・`reload`・`goBack`・`goForward` のそれぞれについて、その step が次に行った呼び出しまでの間隔を報告します。
-  同じ step record 自身の `poll` の窓の中に着地する読みは除外されます。
-  「Context API」の doctrine がすでに求めているとおり `poll()` を使って書かれた step は、構造上すでにリトライしています。
-  これは、この所見が見分けようとしている対象そのものではありません。
-  報告されるのは間隔そのものだけであり、判定ではありません。
-  navigation の後にページが描画を終えるまでどれだけかかるかは、このツールには測りようがありません。
-  どの Playwright の呼び出しが auto-wait するかを推測するテーブルも、作られていません。
-  そのようなテーブルは、このツールが計測したものではなく依存先自身の意味論を書き写すことになり、その依存先が変わるたびに古びるからです。
-  `actions` を一切持たない step record は、その step がブラウザに一度も触れなかったためであれ、そのフィールドが存在する前の記録であれ、静かに対象外のままになり、エラーにはなりません。
-
-この最後の所見こそ、このリスト全体が `check` ではなく `tend` に属する理由をいちばん明確に示しています。
-そこで名指しされる step はすでに run 済みであり、その step record はすでにその実行を計測しています。
-今日それの何も壊れておらず、それによって止まる run もありません。
-変わったのは、その実行がどのように起きたかについての事実をツールがいま見えるようになったことだけです。
-その実行が本物でなくなったわけではありません。
-`check` は run がいますぐ進めるかどうかに答えるために存在します。
-そのため、すでに run 済みの step についてはもう言うことがありません。
-`tend` はすでに run されたものがいまも健全かどうかに答えるために存在します。
-「たまたま走っているレースにまだ負けていない」というのは、まさにその問いが扱う健全さの一種です。
-これをエラーとして報告することは、まだ現れていない症状を、すでに現れたものとして扱うことになります。
-
 所見は、他の出力と同じく `--json` に対応します。
 所見はすべて注記であり、注記は exit code を変えません。
 プロジェクトはそれらを抱えたままでいることが許されているからです。
@@ -3805,14 +3761,9 @@ nuka tend [--json] [--fail-on <code>]
                               exercises, a patterned step no
                               feature binds, a
                               configured parameter type no pattern uses, a
-                              `defineParameterType` still registered from
-                              support code, a secrets entry naming a key no
-                              envFile defines,
-                              a fixture no typed step requires, a fixture
-                              reaching page, context, or pageAs, a step that
-                              made a call soon
-                              after its own navigation, and a schema field
-                              with no `.describe()`
+                              secrets entry naming a key no envFile defines,
+                              a fixture no typed step requires, and a schema
+                              field with no `.describe()`
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               a one-line description, and the code's
                               general do, instead of tending a project

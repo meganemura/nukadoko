@@ -326,7 +326,7 @@ const FIXTURE_NAME_MEMBERSHIP: Record<keyof FixtureBag, true> = {
 export const BUILTIN_FIXTURE_NAMES: readonly string[] = Object.keys(FIXTURE_NAME_MEMBERSHIP);
 
 /** The builtins that can open a browser: `needs_browser`, `playwright-missing`,
- * `fixture-touches-app`, and `page-override-unowned` all read this one set,
+ * and `page-override-unowned` all read this one set,
  * so a new browser builtin cannot reach one of them and miss another. */
 export const BROWSER_FIXTURE_NAMES: ReadonlySet<string> = new Set<keyof FixtureBag>(["page", "context", "pageAs"]);
 

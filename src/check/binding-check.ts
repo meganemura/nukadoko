@@ -55,12 +55,9 @@ export const CAPTURED_CLASS: ReadonlyMap<string, PrimitiveClass> = new Map([
 // This module also merges every compat-origin `defineParameterType` call
 // into the *same* registry config-origin entries use, so a name collision
 // between the two sources raises the exact same `parameter-type-invalid`
-// issue a config/config collision already does. Listing each compat-origin
-// registration as its own finding used to happen here too, as a warning;
-// it moved to src/tend/parameter-type-support-origin.ts
-// — it fires for as long as a suite has any compat left, which
-// is a normal in-progress state rather than a reason to stop a run, so it
-// no longer belongs on `nuka check`'s own report.
+// issue a config/config collision already does. A compat-origin
+// registration is not a finding of its own: it stays valid for as long as a
+// suite has any compat left, which is a normal in-progress state.
 
 export type CheckedPattern =
   | {

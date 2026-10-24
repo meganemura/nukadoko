@@ -107,12 +107,17 @@ export const TEND_CODES: ReadonlySet<string> = new Set(listTendCodes().map((entr
  * nine sign-off codes went away with `nuka accept`; the run summary that
  * `nuka run` writes is the evidence a person reads instead, and where the
  * approval is recorded is the team's process, outside nukadoko. The two codes that repeated a `nuka check` finding now live only
- * there, so `nuka check`'s exit code is the gate. */
+ * there, so `nuka check`'s exit code is the gate. Four notes went away
+ * because no project read them. */
 export const REMOVED_TEND_CODES: ReadonlyMap<string, string> = new Map([
   [
     "step-rationale-missing",
     "was removed with defineStep's `rationale` option. Delete the `rationale:` lines from your step files; `nuka check` names each one as step-option-ignored (docs/upgrading.md)",
   ],
+  ...["fixture-replaces-builtin", "fixture-touches-app", "parameter-type-support-origin", "post-navigation-read"].map((code) => [
+    code,
+    "was removed: no project gated on it or read it, so it only added to what an agent reads (docs/upgrading.md)",
+  ] as const),
   [
     "additional-feature-dir-missing",
     "is reported only by `nuka check` now, as an error, so a failing `nuka check` is the gate (docs/upgrading.md)",

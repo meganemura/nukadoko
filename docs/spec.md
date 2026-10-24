@@ -758,8 +758,8 @@ configuration, where a new person is a config change instead of a line in
 the feature file. A project fixture that gives each person a host name of
 their own (`aki.localhost`) in the one context works only for an app that
 scopes its cookies to the host, needs a DevTools Protocol call per tab to
-turn scripts off, and is a fixture that touches the app
-(`fixture-touches-app`). `pageAs` takes a name at run time because the
+turn scripts off, and is a fixture that drives the app before any step
+names it. `pageAs` takes a name at run time because the
 people are the scenario's data, not something a destructuring pattern can
 list; destructuring `pageAs` is still the static declaration that `check`
 reads (`needs_browser`, `playwright-missing`).
@@ -1196,26 +1196,13 @@ or that names `call`.
 The finding names that fixture and uses fixture wording. It does not quote
 the transformed source of a default value.
 
-`tend` adds three factual reports.
+`tend` adds one factual report.
 `fixture-unused` identifies a `config.fixtures` entry that no typed step requires,
 directly or through another fixture.
 The entry can still be reached through `nuka do`.
-`fixture-touches-app` identifies a fixture that reaches `page`, `context`, or
-`pageAs`, directly or through another fixture.
-A browser fixture can create an unnamed precondition that lets a scenario pass.
-For example, it can log in a user before any step requests a login.
-This has the same effect as work that a step's Given does not describe.
-The report does not prohibit browser access from a fixture.
-For example, a fixture can legitimately generate `storageState`.
-`fixture-replaces-builtin` identifies a `config.fixtures` entry named
-after a replaceable builtin (`scratch`), which replaces that builtin.
-`nuka check` and the run accept such an entry, so nothing else tells a
-project that wrote its own `scratch` before the builtin existed that the
-builtin is there. The note names what the builtin gives; whether that
-covers the project's own shape is the reader's call.
-In `--json`, all three findings name the fixture in a `fixture` field and leave `step` unset,
+In `--json`, the finding names the fixture in a `fixture` field and leaves `step` unset,
 so a fixture and a step of the same name stay apart.
-`tend` only identifies the fixtures, so a reader decides whether each one belongs.
+`tend` only identifies the fixture, so a reader decides whether it belongs.
 
 A step record contains `fixtures` only when the list is not empty.
 The list contains every `config.fixtures` entry that fixture resolution touched
@@ -1631,9 +1618,8 @@ import { Given, When, Then } from "nukadoko/compat";
 - `defineParameterType` in compat code and `config.parameterTypes` use one
   registry. Moving a registration to the config does not change pattern
   matching, so a team can make this move early. A registration that sets
-  `preferForRegexpMatch` is the exception (below). `nuka tend` lists
-  registrations that still come from support code (see "Tending"). The
-  config is their final location. A transformer's `this` is that scenario's World, the
+  `preferForRegexpMatch` is the exception (below). The config is their
+  final location. A transformer's `this` is that scenario's World, the
   same object the step and its hooks run against. A Promise the
   transformer returns is awaited before the step runs. This holds for a
   string pattern and a RegExp pattern alike. `preferForRegexpMatch` on a
@@ -3984,19 +3970,10 @@ The following findings show what `tend` inspects and why each item is rot rather
   note and not a `check` finding, because the step runs as it is.
 - **A configured parameter type that no pattern uses.** This is dead
   configuration, reported like any other.
-- **A `defineParameterType` still registered in support code.** It continues
-  to work, and `config.parameterTypes` is its typed-era home; moving the
-  registration changes no match. A registration that sets
-  `preferForRegexpMatch` is the exception: config rejects the key, so the
-  note says to keep it in support code while a RegExp step relies on it.
-  This one used to be a `nuka check`
-  warning, but that classification was wrong: it appears for as long as a suite has any
-  compat left, which is a normal state to be in, and printing it before
-  every run trains people past the lines that do stop a run.
 - **A `secrets.public` or `secrets.redact` entry that names a key no envFile
   defines.** The instruction is real but reaches nothing: configuration that has
-  drifted from the files it describes. Also moved from `check` for the same
-  reason: nothing about it changes whether this run should happen. Its
+  drifted from the files it describes. It moved from `check`, because
+  nothing about it changes whether this run should happen. Its
   neighbors stay on `check` and are worth the contrast: a `redact` entry
   whose value is too short to be redacted, and a tracked env file with a
   secret-looking key, both mean plaintext reaches a log the moment the run
@@ -4015,36 +3992,6 @@ The following findings show what `tend` inspects and why each item is rot rather
   a missing `featuresDir` is, except every `tend` finding is a note, so
   this is a note here even though
   `nuka check` reports the identical fact as an error.
-- **A step whose trace shows another call soon after a navigation
-  call.** `tend` reads this from the tool's step records under
-  `.nukadoko/runs/<run_id>/steps/` and `.nukadoko/do/` (see "Records"), so it reaches every step
-  that still has a step record on disk. For each `goto`, `reload`, `goBack`,
-  or `goForward` in that step record's own `actions`, the gap to whatever
-  call the step made next. A read that lands inside the same step
-  record's own `poll` window is left out: a step written to `poll()`
-  the way the doctrine in "Context API" already asks for is retrying by
-  construction, not the thing this note exists to tell apart from it. What
-  is reported is only the gap itself, never a verdict: how long a page
-  takes to render after a navigation is nothing this tool measures, and no
-  table of which Playwright calls auto-wait is built to guess at it, since a
-  table like that would describe a dependency's own semantics rather than
-  something this tool measured, and go stale the moment that dependency
-  changed. A step record with no `actions` at all, whether because the
-  step never touched the browser or because it predates that field,
-  silently remains out of scope and is not an error.
-
-This last finding most clearly explains why the whole list belongs to
-`tend` and not `check`. The step it names already ran, and its own step
-record already measured that execution; nothing about it is broken today,
-and no run is blocked by it. What changed is only that the tool can now
-see a fact about how that execution went, not that the execution stopped
-being real. `check` exists to answer whether a run can proceed right now,
-so a step that already ran has nothing left for it to say; `tend` exists
-to answer whether what already ran is still healthy, and "has not yet lost
-a race it happens to be running" is exactly the kind of health that
-question is for. Reporting this as an error would treat a symptom that has
-not appeared as if it had.
-
 Findings support `--json`, like the other output. Every finding is a note,
 and a note does not change the exit code, because a project is allowed to
 carry them. `--fail-on <code>` (repeatable, or
@@ -4479,14 +4426,9 @@ nuka tend [--json] [--fail-on <code>]
                               exercises, a patterned step no
                               feature binds, a
                               configured parameter type no pattern uses, a
-                              `defineParameterType` still registered from
-                              support code, a secrets entry naming a key no
-                              envFile defines,
-                              a fixture no typed step requires, a fixture
-                              reaching page, context, or pageAs, a step that
-                              made a call soon
-                              after its own navigation, and a schema field
-                              with no `.describe()`
+                              secrets entry naming a key no envFile defines,
+                              a fixture no typed step requires, and a schema
+                              field with no `.describe()`
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               a one-line description, and the code's
                               general do, instead of tending a project

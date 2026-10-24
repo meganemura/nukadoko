@@ -286,12 +286,11 @@ export function findPageOverrideUnowned(graph: FixtureGraph): FixtureDefinitionI
 }
 
 /** `true` when `name` reaches `page`/`context`, directly or through a
- * chain of `config.fixtures` dependencies — `nuka steps --json`'s
- * `needs_browser` transitive closure and
- * `nuka tend`'s `fixture-touches-app` finding both read
- * this, never re-deriving the traversal. `visited` guards against a cycle
- * (defense in depth only — `findFixtureCycles` already refuses a cyclic
- * config before either caller runs). */
+ * chain of `config.fixtures` dependencies: `nuka steps --json`'s
+ * `needs_browser` transitive closure reads this, so it never re-derives the
+ * traversal. `visited` guards against a cycle (defense in depth only:
+ * `findFixtureCycles` already refuses a cyclic config before a caller
+ * runs). */
 export function fixtureReachesBrowser(
   name: string,
   graph: FixtureGraph,

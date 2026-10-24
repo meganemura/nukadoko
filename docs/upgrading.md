@@ -54,6 +54,15 @@ This part does not change release to release.
   job that lists the code in `--fail-on` drops it from the list: tend
   refuses it with `fail-on-unknown-code`.
 
+- **Four notes are gone.** `fixture-replaces-builtin`,
+  `fixture-touches-app`, `parameter-type-support-origin`, and
+  `post-navigation-read` are no longer reported. A job that gated on one
+  of them, or filtered `--json` for it, drops that gate: `nuka tend
+  --fail-on` refuses the four codes by name. Nothing replaces them. The
+  facts they named are still on disk for a person who looks: a fixture's
+  destructuring, a support-side `defineParameterType`, a step record's
+  `actions`.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

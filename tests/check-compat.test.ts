@@ -9,11 +9,7 @@ import { bySeverity } from "./helpers/envelope.js";
 // detection across kind, and a Then-position compat step gets a soft
 // warning. A compat-origin defineParameterType still shares one registry
 // with config-origin entries (collision reuses the existing
-// `parameter-type-invalid` error) — but is no longer listed as a `check`
-// warning itself: `parameter-type-support-origin` moved to `nuka tend`
-// (see tests/tend-moved-findings.test.ts, which
-// reuses this same check-compat-project fixture to prove it now surfaces
-// there instead).
+// `parameter-type-invalid` error), and is not a finding of its own.
 
 describe("nuka check: compat integration", () => {
   it("reports kind-crossing duplicate-pattern and ambiguous-step errors, plus a then-compat-step warning", async () => {
@@ -49,9 +45,8 @@ describe("nuka check: compat integration", () => {
       ["ambiguous-step", "duplicate-pattern"].sort(),
     );
 
-    // parameter-type-support-origin no longer appears here (moved to
-    // `nuka tend`) even though this fixture's compat-glue.ts still registers
-    // a support-origin parameter type — only then-compat-step remains.
+    // compat-glue.ts registers a support-origin parameter type, and that is
+    // no warning: only then-compat-step remains.
     expect(report.warnings.map((issue) => issue.code)).toEqual(["then-compat-step"]);
 
     expect(exitCode).toBe(1);

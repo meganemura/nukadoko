@@ -20,10 +20,8 @@ Then("the compat outcome is observed", function () {
   return {};
 });
 
-// support-origin parameterType: no name collision (built-in or config) — it
-// still merges into the one registry config.parameterTypes also uses, so
-// compat and config-registered types never drift apart in meaning. `nuka
-// tend`, not `nuka check`, is what lists it as a finding now (see
-// tests/tend-moved-findings.test.ts, which reuses this fixture).
+// support-origin parameterType: no name collision (built-in or config), so
+// it merges into the one registry config.parameterTypes also uses, and
+// compat and config-registered types never drift apart in meaning.
 // See check-compat-parameter-type-collision-project for the colliding case.
 defineParameterType({ name: "shout-compat", regexp: /[A-Z]+/, transformer: (s: string) => s });
