@@ -1330,7 +1330,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           worldDir: (name) => path.join(runDirAbsolute, "worlds", `${name}@${world}`),
           recordPath: (absolutePath) => path.relative(runDirAbsolute, absolutePath).split(path.sep).join("/"),
           displayPath: (absolutePath) => path.relative(rootDir, absolutePath).split(path.sep).join("/"),
-          progress,
+          // A tree's commands are filled with the tree's absolute paths
+          // (`{root}`, `{dir}`), and every path nukadoko prints is
+          // relative to the project, so its lines name them from there.
+          progress: { write: (chunk: string) => progress.write(projectRelativeText(chunk, rootDir)) },
           tree: world,
           programFromHead: world === "base" && base.base?.programFromHead === true,
         });

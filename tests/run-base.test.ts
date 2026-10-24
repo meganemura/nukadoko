@@ -441,3 +441,78 @@ describe("nuka run --base, when the base's steps no longer load against head", (
     expect(notRun).toEqual([`old default  not run: ${rows[0]!.cells.find((cell) => cell.world === "old")!.reason}`]);
   });
 });
+
+describe("nuka run --base, with a program file at the base and at head", () => {
+  let rootDir: string;
+  let result: { exitCode: number; stdout: string; stderr: string };
+
+  const git = (...args: string[]): string =>
+    execFileSync("git", ["-C", rootDir, "-c", "user.email=test@example.com", "-c", "user.name=test", ...args], { encoding: "utf8" }).trim();
+
+  // Every world runs a prepare command that names its directory, so its
+  // progress line shows how a tree's path is printed. The environment
+  // `unused` names {port} and has neither serve nor url, which `nuka check`
+  // reports only for a run that starts it: this one starts `default` alone,
+  // at head and in both trees.
+  const PROGRAM = `import { defineProgram } from "./nukadoko-shim.js";
+
+export default defineProgram({
+  prepare: [["node", "-e", "", "{dir}"]],
+  environments: {
+    unused: { env: { WHERE: "{port}" } },
+  },
+});
+`;
+
+  beforeAll(async () => {
+    rootDir = await copyFixtureToTempDir("allure-identity-project");
+    for (const file of ["features/checkout.feature", "features/steps/a-cart.ts", "features/steps/cart-holds.ts"]) {
+      rmSync(path.join(rootDir, file));
+    }
+    writeFileSync(path.join(rootDir, "nukadoko.program.ts"), PROGRAM);
+    writeFileSync(path.join(rootDir, "nukadoko-shim.ts"), `export * from ${JSON.stringify(pathToFileURL(path.join(repoRoot, "src", "index.ts")).href)};\n`);
+    writeFileSync(path.join(rootDir, ".gitignore"), ".nukadoko/\n");
+    mkdirSync(path.join(rootDir, "lib"));
+    writeFileSync(path.join(rootDir, "lib", "cart.mjs"), "export function total(count) {\n  return count * 2;\n}\n");
+    writeFileSync(path.join(rootDir, "features", "cart.feature"), "Feature: Cart\n\n  Scenario: an empty cart\n    Given a cart with 0 items\n    Then the total is 0\n");
+    writeFileSync(path.join(rootDir, "features", "steps", "a-cart.ts"), STEP_A_CART);
+    writeFileSync(path.join(rootDir, "features", "steps", "total-is.ts"), claimStep("the total is {expected:int}", "equal"));
+    git("init", "-q");
+    git("add", "-A");
+    git("commit", "-qm", "base");
+    git("branch", "base-branch");
+    // Head: a discount from five items, a criterion for it, and a data file
+    // under the features directory, which changes the mapping.
+    writeFileSync(path.join(rootDir, "lib", "cart.mjs"), "export function total(count) {\n  return count >= 5 ? count * 2 - 1 : count * 2;\n}\n");
+    writeFileSync(
+      path.join(rootDir, "features", "cart.feature"),
+      "Feature: Cart\n\n  Scenario: an empty cart\n    Given a cart with 0 items\n    Then the total is 0\n\n  Scenario: five items\n    Given a cart with 5 items\n    Then the total is 9\n",
+    );
+    mkdirSync(path.join(rootDir, "features", "data"));
+    writeFileSync(path.join(rootDir, "features", "data", "discount.json"), '{ "from": 5 }\n');
+    git("add", "-A");
+    git("commit", "-qm", "head");
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "--base", "base-branch"], { rootDir, stdout, stderr });
+    result = { exitCode, stdout: stdout.text(), stderr: stderr.text() };
+  }, 120_000);
+
+  afterAll(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("checks the placeholders of only the worlds each tree starts, and names a tree's paths from the project root", () => {
+    expect(result.exitCode).toBe(0);
+    const document = latestRunJson(rootDir) as { run_dir: string; table: { rows: Row[] } };
+    expect(document.table.rows.map((row) => [row.name, row.change, row.verdict, row.cells.map((cell) => `${cell.world}:${cell.outcome}`)])).toEqual([
+      ["an empty cart", "unchanged", "held", ["head:pass", "old:pass"]],
+      ["five items", "new", "proven", ["head:pass", "base:fail"]],
+    ]);
+    const prepared = result.stderr.split("\n").filter((line) => line.includes("prepare started: "));
+    expect(prepared.filter((line) => line.startsWith("world default (base): ") || line.startsWith("world default (old): ")).sort()).toEqual([
+      `world default (base): prepare started: node -e '' ${document.run_dir}/worlds/default@base`,
+      `world default (old): prepare started: node -e '' ${document.run_dir}/worlds/default@old`,
+    ]);
+  });
+});
