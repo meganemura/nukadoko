@@ -158,7 +158,7 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   ```
 
   実行する step は、これまでどおり `resultOf` を使えます。
-  `observe` が受け取る `from` の値を期待値の `{ from }` も読んでいる claim step も、`nuka check` が拒否します(`claim-compares-itself`)。
+  `observe` が受け取る `from` の値を期待値の `{ from }` も読んでいる claim step も、期待値が `{ observe }` のときに実際の値が読む `from` の値を `observe` が受け取る claim step も、`nuka check` が拒否します(`claim-compares-itself`)。
   2 つのうち 1 つを別の step から取ってください。
 
 - **transformer を持つ parameter type は、claim の期待値を埋められません。**

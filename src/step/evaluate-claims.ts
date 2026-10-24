@@ -538,20 +538,23 @@ function stopOf(side: Side): Stop {
   return null;
 }
 
-/** Whether `observe` received the value an expected side reads, one that
- * holds it, or one inside it: then `observe` could return the value the
- * claim compares it with, and the claim holds whatever the behaviour is.
- * `observe` never receives an expected key itself, so only a second key
- * filled from the same earlier result can carry the value. `nuka check`
- * refuses the step for it (`claim-compares-itself`); the run breaks the
- * claim too, so a run under `--no-check` and `nuka do --use` judge it
- * the same way. `whose` names the expected side in the reason. */
-function observeReceived(expected: ClaimPlace, inputs: ClaimInputs, whose: string): Stop {
+/** Whether `observe` received the value `place` reads, one that holds
+ * it, or one inside it, where `place` is the side of a claim that
+ * `observe` does not answer: an expected `{ from }`, or an actual `from`
+ * value compared with `{ observe }`. Then `observe` could return the
+ * value the claim compares it with, and the claim holds whatever the
+ * behaviour is. `observe` never receives an expected key itself, so on
+ * that side only a second key filled from the same earlier result can
+ * carry the value; an actual key it does receive. `nuka check` refuses
+ * the step for either (`claim-compares-itself`); the run breaks the claim
+ * too, so a run under `--no-check` and `nuka do --use` judge it the same
+ * way. `reads` says, in the reason, which side reads `place`. */
+function observeReceived(place: ClaimPlace, inputs: ClaimInputs, reads: string): Stop {
   for (const key of inputs.observeReceived) {
     const input = argPlace(key, inputs);
-    if (!placesOverlap(input, expected)) continue;
+    if (!placesOverlap(input, place)) continue;
     return {
-      broken: `observe received args.${key}, which is ${input.label}, and ${whose} reads ${expected.label}, so observe could return the value the claim compares it with`,
+      broken: `observe received args.${key}, which is ${input.label}, and ${reads} ${place.label}, so observe could return the value the claim compares it with`,
     };
   }
   return null;
@@ -563,7 +566,9 @@ function precondition(actual: Side, actualSegments: readonly string[] | null, ex
   if (samePlace(actual.place, expected.place)) {
     return { broken: `both sides read ${actual.place.label}, so the claim compares a value with itself` };
   }
-  const received = observeReceived(expected.place, inputs, "the expected value");
+  const received =
+    observeReceived(expected.place, inputs, "the expected value reads") ??
+    (expected.fromObserve ? observeReceived(actual.place, inputs, "the actual value reads") : null);
   if (received !== null) return received;
   if (expected.fromObserve && "value" in expected && typeof expected.value === "boolean") {
     return { broken: `the expected value ${expected.place.label} is a boolean observe computed, which is a judgment made in code: return the thing measured and let the claim compare it` };
@@ -664,7 +669,7 @@ async function judgeEach(claim: EachClaim, rawActual: Side, readSegments: readon
     outcome,
     reason,
   });
-  const stop = schemaChange(readSegments, inputs, true) ?? stopOf(actual) ?? eachObserveReceived(claim, inputs);
+  const stop = schemaChange(readSegments, inputs, true) ?? stopOf(actual) ?? eachObserveReceived(claim, actual.place, inputs);
   if (stop !== null) return "broken" in stop ? ended("broken", stop.broken) : ended("unjudged", stop.unjudged);
   const implied = whereImplication(claim, inputs);
   if (implied !== null) return ended("broken", implied);
@@ -792,14 +797,19 @@ function whereImplication(claim: EachClaim, inputs: ClaimInputs): string | null 
 const ORDER_COMPARES: ReadonlySet<ClaimCompare> = new Set(["greater-than", "at-least", "less-than", "at-most"]);
 
 /** `observeReceived` for every declaration of an `each`, before any item:
- * it does not depend on an item, and an empty array would hide it. */
-function eachObserveReceived(claim: EachClaim, inputs: ClaimInputs): Stop {
+ * it does not depend on an item, and an empty array would hide it. A
+ * declaration whose expected value comes from `observe` reads inside
+ * every item of `array`, so `observe` must not receive the array's
+ * place either. */
+function eachObserveReceived(claim: EachClaim, array: ClaimPlace, inputs: ClaimInputs): Stop {
   const entries: readonly (readonly [string, ItemClaim])[] = [
     ...(claim.each.where ?? []).map((entry, index) => [`each.where[${index}]`, entry] as const),
     ...claim.each.claims.map((entry, index) => [`each.claims[${index}]`, entry] as const),
   ];
   for (const [label, entry] of entries) {
-    const stop = observeReceived(expectedPlace(entry, inputs), inputs, `${label}'s expected value`);
+    const stop =
+      observeReceived(expectedPlace(entry, inputs), inputs, `${label}'s expected value reads`) ??
+      (typeof entry.expected === "object" && "observe" in entry.expected ? observeReceived(array, inputs, `${label} reads each item of`) : null);
     if (stop !== null) return stop;
   }
   return null;

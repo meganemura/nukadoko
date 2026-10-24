@@ -453,6 +453,43 @@ describe("an expected value observe received", () => {
     }));
 });
 
+describe("an actual from value observe received, compared with an observe value", () => {
+  it("breaks a claim exactly when observe received a key from the same earlier result as the actual value, and names the key", () =>
+    hegel.testAsync(async (tc) => {
+      // The mirror of the rule above: the actual side is the from value,
+      // and observe answers the expected side, so observe must not have
+      // received the value the actual side reads.
+      const source = { cart: "cart", other: tc.draw(gs.sampledFrom(["cart", "out"])) } as const;
+      const received = tc.draw(gs.sampledFrom<readonly ("cart" | "other")[]>([[], ["cart"], ["other"], ["cart", "other"]]));
+      const path = tc.draw(gs.sampledFrom(["cart", "cart.count", "cart.items.0"]));
+      const cart = { count: 1, items: [1] };
+      const shown = path === "cart" ? cart : 1;
+      const asEach = tc.draw(gs.booleans());
+      const claim: Claim = asEach
+        ? { actual: "cart.items", each: { claims: [{ compare: "equal", expected: { observe: "item" } }] } }
+        : { actual: path, compare: "equal", expected: { observe: "shown" } };
+      const fromKeys = Object.keys(source);
+      const [judged] = await evaluateClaims([claim], {
+        ...inputs({ cart, other: cart }, { shown, item: 1 }, fromKeys),
+        argSide: (key) => {
+          const returnsKey = source[key as keyof typeof source];
+          return { origin: "record:produce", segments: [returnsKey], label: `from:produce@3.${returnsKey}` };
+        },
+        observeReceived: received,
+      });
+      const carrier = received.find((key) => source[key] === "cart");
+      if (carrier === undefined) {
+        expect(judged!.record.outcome).toBe("held");
+        return;
+      }
+      const reads = asEach ? "each.claims[0] reads each item of from:produce@3.cart.items" : `the actual value reads from:produce@3.${path}`;
+      expect(judged!.record).toMatchObject({
+        outcome: "broken",
+        reason: `observe received args.${carrier}, which is from:produce@3.cart, and ${reads}, so observe could return the value the claim compares it with`,
+      });
+    }));
+});
+
 describe("view and at", () => {
   it("view json with at reads the value at that path of the JSON text", () =>
     hegel.testAsync(async (tc) => {

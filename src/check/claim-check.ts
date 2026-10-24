@@ -28,7 +28,9 @@ import type { CheckIssue } from "./types.js";
 // schema does not have (`claim-path-unknown`), and a claim whose two sides
 // resolve to the same place (`claim-compares-itself`), which also covers
 // an `observe` that receives the value an expected `from` reads, or a
-// value that holds it or that it holds. Two findings are per bound step:
+// value that holds it or that it holds, and an `observe` that receives
+// the value an actual `from` reads when the expected value is
+// `{ observe }`. Two findings are per bound step:
 // a claim step whose `observe` reaches a browser page and does not state
 // `poll` (`claim-poll-unstated`), and an expected sentence key that a
 // parameter type with a transformer fills (`claim-expected-transformed`),
@@ -309,12 +311,18 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
       const where = actual.text === expected.text ? `${actual.text} on both sides` : `${actual.text} as its actual value and ${expected.text} as its expected value, one place`;
       report("claim-compares-itself", `Step "${stepName}"'s ${label} reads ${where}, so it holds whatever the behaviour is`);
     };
-    // Every expected `{ from }` place of the step, for the observe check.
-    const expectedFromPlaces: { readonly label: string; readonly place: CheckPlace }[] = [];
+    // Every place of the step that `observe` must not receive, for the
+    // observe check: each expected `{ from }` place, and each actual
+    // `from` place whose claim takes its expected value from `observe`.
+    const notObservePlaces: { readonly label: string; readonly place: CheckPlace }[] = [];
     const noteExpectedFrom = (label: string, expected: ClaimExpected): void => {
       if (typeof expected !== "object" || !("from" in expected)) return;
       const place = placeOf("from", expected.from, producerOf, lineOf);
-      if (place !== null) expectedFromPlaces.push({ label: `${label}.expected`, place });
+      if (place !== null) notObservePlaces.push({ label: `${label}.expected`, place });
+    };
+    const noteActualFrom = (label: string, expected: ClaimExpected, actual: CheckPlace | null, actualSource: "from" | "observe"): void => {
+      if (actual === null || actualSource !== "from" || typeof expected !== "object" || !("observe" in expected)) return;
+      notObservePlaces.push({ label: `${label}.actual`, place: actual });
     };
     step.claims.forEach((claim: Claim, index) => {
       const label = `claims[${index}]`;
@@ -334,12 +342,16 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
           if (typeof item.expected === "object" && "from" in item.expected) checkFromPath(`${itemLabel}.expected.from`, item.expected.from);
           noteExpectedFrom(itemLabel, item.expected);
           const itemSegments = item.actual === undefined ? [] : (pathSegments(item.actual) ?? null);
-          if (actual === null || itemSegments === null) continue;
+          if (actual === null || itemSegments === null) {
+            noteActualFrom(itemLabel, item.expected, actual, actualSource);
+            continue;
+          }
           const itemPlace = shapedPlace(
             placeUnder(actual, [ANY_INDEX, ...itemSegments], `${item.actual ?? "item"} of each item of ${actual.text}`),
             item.view,
             item.at,
           );
+          noteActualFrom(itemLabel, item.expected, itemPlace, actualSource);
           comparesItself(itemLabel, itemPlace, expectedPlace(item.expected, producerOf, lineOf));
         }
         return;
@@ -348,20 +360,24 @@ export function checkClaimSources(pickle: Pickle, vocabulary: Vocabulary, match:
         checkFromPath(`${label}.expected.from`, claim.expected.from);
       }
       noteExpectedFrom(label, claim.expected);
+      noteActualFrom(label, claim.expected, actual, actualSource);
       // expected_view is on a sentence key alone, which no other side reads.
       comparesItself(label, actual, expectedPlace(claim.expected, producerOf, lineOf));
     });
     // An observe that receives a value an expected `from` reads, or one
     // that holds it or that it holds, could return the expected value as
     // the actual one. `observe` never receives an expected key, so only a
-    // second key from the same producer can carry it.
+    // second key from the same producer can carry it. The mirror: an
+    // observe that receives the value an actual `from` reads could return
+    // it as the expected `{ observe }` value, and it does receive the
+    // actual key itself.
     if (step.observe !== undefined) {
       const withheld = expectedHeads(step.claims);
       for (const key of Object.keys(step.from)) {
         if (withheld.has(key)) continue;
         const input = placeOf("from", key, producerOf, lineOf);
         if (input === null) continue;
-        const hit = expectedFromPlaces.find((entry) => placesOverlap(input, entry.place));
+        const hit = notObservePlaces.find((entry) => placesOverlap(input, entry.place));
         if (hit === undefined) continue;
         report(
           "claim-compares-itself",

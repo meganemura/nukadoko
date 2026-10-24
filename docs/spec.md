@@ -1938,11 +1938,17 @@ can see, and the label is `observe:` then too.
 `nuka check` refuses a claim step whose `observe` receives a `from` value
 that an expected `{ from }` of the same step reads, or one that holds that
 value or sits inside it (`claim-compares-itself`): `observe` could return
-its input, and the claim would compare a value with itself. The run
-applies the same rule, so a run under `--no-check` and `nuka do --use`
+its input, and the claim would compare a value with itself. The mirror is
+refused the same way, whichever side is the actual: a claim whose actual
+value is a `from` value and whose expected value is `{ observe }`, when
+`observe` receives that value, one that holds it, or one inside it. An
+actual key is not withheld from `observe`, so the key itself counts. The
+run applies the same rule, so a run under `--no-check` and `nuka do --use`
 agree with the check: when an args key `observe` received reads the
-value an expected side reads, one that holds it, or one inside it, the
-claim breaks, and its reason names the key.
+value the other side reads, one that holds it, or one inside it, the
+claim breaks, and its reason names the key. An `each` breaks before any
+item when an item claim compares with `observe` and `observe` received
+the array's place.
 
 An `observe` that throws records the step as `unobserved`, with the error,
 and judges no claim. That is a different result from a broken claim: a

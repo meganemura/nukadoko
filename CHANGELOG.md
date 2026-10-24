@@ -387,7 +387,8 @@ just until 0.1.
   Given or When position, or on a `*` line. `claim-compares-itself`: a
   claim whose two sides resolve to the same place, `view` and `at`
   counted and `each` items included, or a claim step whose `observe`
-  receives a `from` value an expected `{ from }` reads. A run that
+  receives a `from` value an expected `{ from }` reads, or the `from`
+  value an actual reads when the expected value is `{ observe }`. A run that
   the check did not gate (`--no-check`, `nuka do --use`) breaks such
   a claim too, naming the key `observe` received.
   `claim-path-unknown`: a `from` path the producer's `returns` does not

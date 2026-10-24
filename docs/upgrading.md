@@ -177,8 +177,9 @@ This part does not change release to release.
 
   A step that runs keeps `resultOf` as it was. `nuka check` also refuses
   a claim step whose `observe` receives a `from` value that an expected
-  `{ from }` reads (`claim-compares-itself`): take one of the two from
-  another step.
+  `{ from }` reads, or the `from` value an actual reads when the expected
+  value is `{ observe }` (`claim-compares-itself`): take one of the two
+  from another step.
 
 - **A parameter type with a transformer cannot fill a claim's expected
   value.** `nuka check` reports such a pattern as
