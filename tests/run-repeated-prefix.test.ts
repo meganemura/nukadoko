@@ -1,17 +1,19 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { PickleStepArgument } from "@cucumber/messages";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { analyzeTend } from "../src/tend/analyze.js";
-import { findRepeatedScenarioPrefixes, stepPrefixKey } from "../src/tend/repeated-prefix.js";
-import { copyFixtureToTempDir, removeTempDir } from "./helpers/fixtures.js";
+import { runCli } from "../src/cli/run-cli.js";
+import { loadFeaturesFromDirs } from "../src/feature/load-features.js";
+import { findRepeatedScenarioPrefixes, stepPrefixKey, type RunFeature } from "../src/run/repeated-prefix.js";
+import { copyFixtureToTempDir, createCaptureSink, latestRunJson, removeTempDir } from "./helpers/fixtures.js";
 
 // Responsibility: verify the measured repeated-prefix note at its run.json
-// and step record boundary. These tests do not inspect the trie used to group scenario steps.
+// and step record boundary, and that `nuka run` reports it. These tests do
+// not inspect the trie used to group scenario steps.
 
 interface StepInput {
   readonly text: string;
@@ -75,7 +77,15 @@ function writeScenario(rootDir: string, input: ScenarioInput): void {
   writeFileSync(filePath, JSON.stringify(run));
 }
 
-describe("nuka tend: repeated-scenario-prefix", () => {
+/** The notes for the scenarios `writeScenario` wrote under `runId`, as
+ * `nuka run` computes them from its own entries before run.json. */
+function prefixNotes(rootDir: string, features: readonly RunFeature[] = [], runId = "run-new") {
+  const filePath = runJsonPath(rootDir, runId);
+  const scenarios = existsSync(filePath) ? JSON.parse(readFileSync(filePath, "utf8")).scenarios : [];
+  return findRepeatedScenarioPrefixes(path.dirname(filePath), scenarios, features);
+}
+
+describe("repeated-scenario-prefix", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -101,11 +111,9 @@ describe("nuka tend: repeated-scenario-prefix", () => {
       startedAt: "2026-08-30T00:00:01.000Z", durationMs: 10_000, steps: shared,
     });
 
-    const report = await analyzeTend(rootDir);
-    const notes = report.notes.filter((note) => note.code === "repeated-scenario-prefix");
-    expect(report.errors.filter((error) => error.code === "repeated-scenario-prefix")).toEqual([]);
+    const notes = prefixNotes(rootDir);
     expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatchObject({ code: "repeated-scenario-prefix", file: "features/a.feature" });
+    expect(notes[0]).toMatchObject({ severity: "note", code: "repeated-scenario-prefix", file: "features/a.feature" });
     expect(notes[0]!.message).toContain("2 scenarios");
     expect(notes[0]!.message).toContain("the same 3 steps");
     expect(notes[0]!.message).toContain("12 seconds");
@@ -122,35 +130,11 @@ describe("nuka tend: repeated-scenario-prefix", () => {
         durationMs: 10_000, steps: [{ text: "Given a cheap opening", ms: 100 }],
       });
     }
-    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")).toEqual([]);
+    expect(prefixNotes(rootDir)).toEqual([]);
   });
 
-  it("uses only the most recent run", async () => {
-    for (const id of ["old-a", "old-b"]) {
-      writeScenario(rootDir, {
-        id, runId: "run-old", feature: `features/${id}.feature`,
-        startedAt: "2026-08-29T00:00:00.000Z", durationMs: 20_000,
-        steps: [{ text: "Given an old expensive opening", ms: 8_000 }],
-      });
-    }
-    for (const id of ["new-a", "new-b"]) {
-      writeScenario(rootDir, {
-        id, runId: "run-new", feature: `features/${id}.feature`,
-        startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
-        steps: [{ text: "Given a new opening", ms: 1_000 }],
-      });
-    }
-
-    const notes = findRepeatedScenarioPrefixes(rootDir, ".nukadoko");
-    expect(notes).toHaveLength(1);
-    expect(notes[0]!.message).toContain("2 seconds");
-    expect(notes[0]!.message).toContain("10%");
-    expect(notes[0]!.message).not.toContain("old expensive");
-  });
-
-  it("returns no notes when the project has no scenario records", async () => {
-    const report = await analyzeTend(rootDir);
-    expect(report.notes.filter((note) => note.code === "repeated-scenario-prefix")).toEqual([]);
+  it("returns no notes when the run has no scenarios", () => {
+    expect(prefixNotes(rootDir)).toEqual([]);
   });
 
   it("returns no notes when every prefix belongs to only one scenario", async () => {
@@ -159,24 +143,9 @@ describe("nuka tend: repeated-scenario-prefix", () => {
       startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000,
       steps: [{ text: "Given a unique opening", ms: 5_000 }],
     });
-    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")).toEqual([]);
+    expect(prefixNotes(rootDir)).toEqual([]);
   });
 
-  it("ignores a run.json scenario whose shape cannot supply steps", async () => {
-    const filePath = runJsonPath(rootDir, "run-new");
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(
-      filePath,
-      JSON.stringify({
-        command: "run",
-        verdict: "passed",
-        run_id: "run-new",
-        started_at: "2026-08-30T00:00:00.000Z",
-        scenarios: [{ feature: "features/a.feature", line: 3, started_at: "2026-08-30T00:00:00.000Z", finished_at: "2026-08-30T00:00:01.000Z" }],
-      }),
-    );
-    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")).toEqual([]);
-  });
 });
 
 const SHARED_FEATURE = [
@@ -226,7 +195,7 @@ const LIST_STEPS = [
   { text: "it is shown", ms: 1_000 },
 ];
 
-describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", () => {
+describe("repeated-scenario-prefix reads the scenario's own steps", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -238,8 +207,8 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
     await removeTempDir(rootDir);
   });
 
-  async function prefixNotes() {
-    return (await analyzeTend(rootDir)).notes.filter((note) => note.code === "repeated-scenario-prefix");
+  function sharedNotes() {
+    return prefixNotes(rootDir, loadFeaturesFromDirs(rootDir, "features", []).features);
   }
 
   it("does not group a sentence whose docstring differs", async () => {
@@ -249,7 +218,7 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
         startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000, steps: LIST_STEPS,
       });
     }
-    expect(await prefixNotes()).toEqual([]);
+    expect(sharedNotes()).toEqual([]);
   });
 
   it("groups the same sentence and docstring, up to the first When, and says the docstring is shared", async () => {
@@ -259,7 +228,7 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
         startedAt: "2026-08-30T00:00:00.000Z", durationMs: 10_000, steps: LIST_STEPS,
       });
     }
-    const notes = await prefixNotes();
+    const notes = sharedNotes();
     expect(notes.map((note) => note.message)).toEqual([
       "2 scenarios begin with the same 1 step, which took 6 seconds across them, 30% of this run's summed " +
         'scenario time. The shared steps: "a list". The shared steps take the same docstring or table. ' +
@@ -280,11 +249,11 @@ describe("nuka tend: repeated-scenario-prefix reads the scenario's own steps", (
         ],
       });
     }
-    expect(await prefixNotes()).toEqual([]);
+    expect(sharedNotes()).toEqual([]);
   });
 });
 
-describe("nuka tend: repeated-scenario-prefix names an opening that timing does not decide", () => {
+describe("repeated-scenario-prefix names an opening that timing does not decide", () => {
   const permutations = (items: readonly string[]): string[][] =>
     items.length === 0 ? [[]] : items.flatMap((item, index) =>
       permutations([...items.slice(0, index), ...items.slice(index + 1)]).map((rest) => [item, ...rest]));
@@ -311,7 +280,7 @@ describe("nuka tend: repeated-scenario-prefix names an opening that timing does 
             steps,
           });
         }
-        const notes = findRepeatedScenarioPrefixes(rootDir, ".nukadoko");
+        const notes = prefixNotes(rootDir);
         expect(notes.map((note) => [note.file, note.message.split(", which took")[0]])).toEqual([
           ["features/a.feature", "2 scenarios begin with the same 2 steps"],
         ]);
@@ -322,7 +291,7 @@ describe("nuka tend: repeated-scenario-prefix names an opening that timing does 
     }));
 });
 
-describe("nuka tend: repeated-scenario-prefix reads each shared step's mutates declaration", () => {
+describe("repeated-scenario-prefix reads each shared step's mutates declaration", () => {
   let rootDir: string;
 
   beforeEach(async () => {
@@ -348,7 +317,7 @@ describe("nuka tend: repeated-scenario-prefix reads each shared step's mutates d
 
   it("names a process-scope fixture when every shared step declares mutates: false", () => {
     writePair([false, false]);
-    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko").map((note) => note.message)).toEqual([
+    expect(prefixNotes(rootDir).map((note) => note.message)).toEqual([
       "2 scenarios begin with the same 2 steps, which took 8 seconds across them, 40% of this run's summed " +
         'scenario time. The shared steps: "Given the catalog is loaded", "And the dashboard is open". ' +
         'Every shared step declares mutates: false, so a "process"-scope fixture (nukadoko.config.ts fixtures) ' +
@@ -358,7 +327,7 @@ describe("nuka tend: repeated-scenario-prefix reads each shared step's mutates d
 
   it("names the first shared step that may write, and does not offer a process-scope fixture for it", () => {
     writePair([false, true]);
-    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko").map((note) => note.message)).toEqual([
+    expect(prefixNotes(rootDir).map((note) => note.message)).toEqual([
       "2 scenarios begin with the same 2 steps, which took 8 seconds across them, 40% of this run's summed " +
         'scenario time. The shared steps: "Given the catalog is loaded", "And the dashboard is open". ' +
         '"And the dashboard is open" does not declare mutates: false, so a later scenario may read what this ' +
@@ -369,7 +338,7 @@ describe("nuka tend: repeated-scenario-prefix reads each shared step's mutates d
 
   it("treats a compat step, which declares no mutates, as one that may write", () => {
     writePair([null, false]);
-    expect(findRepeatedScenarioPrefixes(rootDir, ".nukadoko")[0]!.message).toContain(
+    expect(prefixNotes(rootDir)[0]!.message).toContain(
       '"Given the catalog is loaded" does not declare mutates: false',
     );
   });
@@ -392,4 +361,65 @@ describe("stepPrefixKey", () => {
       const b = tc.draw(prefixStep);
       expect(stepPrefixKey(a) === stepPrefixKey(b)).toBe(JSON.stringify(a) === JSON.stringify(b));
     }));
+});
+
+describe("nuka run: repeated-scenario-prefix", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await copyFixtureToTempDir("check-clean-project");
+    await writeFile(
+      path.join(rootDir, "features", "steps", "load-catalog.ts"),
+      [
+        'import { z } from "zod";',
+        'import { defineStep } from "../../nukadoko-shim.js";',
+        "",
+        "export default defineStep({",
+        '  pattern: "the catalog is loaded",',
+        '  description: "Load the catalog, slowly",',
+        "  args: z.object({}),",
+        "  returns: z.object({}),",
+        "  mutates: false,",
+        "  async run() {",
+        "    await new Promise((resolve) => setTimeout(resolve, 200));",
+        "    return {};",
+        "  },",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(rootDir, "features", "catalog.feature"),
+      [
+        "Feature: catalog",
+        "",
+        "  Scenario: first lookup",
+        "    Given the catalog is loaded",
+        '    Then the project "acme" can be looked up',
+        "",
+        "  Scenario: second lookup",
+        "    Given the catalog is loaded",
+        '    Then the project "beta" can be looked up',
+        "",
+      ].join("\n"),
+    );
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("adds the note to run.json and to the text at the end of the run, and keeps the exit code 0", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/catalog.feature"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(0);
+    const notes = latestRunJson(rootDir).findings.filter((finding: { code: string }) => finding.code === "repeated-scenario-prefix");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ severity: "note", file: "features/catalog.feature" });
+    expect(notes[0].message).toContain('2 scenarios begin with the same 1 step');
+    expect(notes[0].message).toContain('Every shared step declares mutates: false');
+    expect(stderr.text()).toMatch(/^note\trepeated-scenario-prefix\tfeatures\/catalog\.feature\t2 scenarios begin/m);
+  });
 });

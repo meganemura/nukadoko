@@ -58,7 +58,7 @@ describe("nuka tend --fail-on", () => {
 
   it("exits 0 when the code is valid but nothing reported it", async () => {
     const stderr = createCaptureSink();
-    const exitCode = await runCli(["tend", "--fail-on", "repeated-scenario-prefix"], { rootDir, stdout: createCaptureSink(), stderr });
+    const exitCode = await runCli(["tend", "--fail-on", "fixture-unused"], { rootDir, stdout: createCaptureSink(), stderr });
     expect(exitCode).toBe(0);
     expect(stderr.text()).not.toContain("fail-on:");
   });
@@ -109,13 +109,13 @@ describe("nuka tend --fail-on", () => {
   it("takes a comma-separated list and a repeated flag alike", async () => {
     const commaErr = createCaptureSink();
     expect(
-      await runCli(["tend", "--fail-on", "repeated-scenario-prefix,schema-field-undescribed"], { rootDir, stdout: createCaptureSink(), stderr: commaErr }),
+      await runCli(["tend", "--fail-on", "fixture-unused,schema-field-undescribed"], { rootDir, stdout: createCaptureSink(), stderr: commaErr }),
     ).toBe(1);
     expect(commaErr.text()).toBe("fail-on: schema-field-undescribed reported 2 findings\n");
 
     const repeatedErr = createCaptureSink();
     expect(
-      await runCli(["tend", "--fail-on", "repeated-scenario-prefix", "--fail-on", "schema-field-undescribed"], {
+      await runCli(["tend", "--fail-on", "fixture-unused", "--fail-on", "schema-field-undescribed"], {
         rootDir,
         stdout: createCaptureSink(),
         stderr: repeatedErr,

@@ -134,8 +134,8 @@ questions: "what happens if this is deleted" and "who gets to change it":
   run, the newest `retention.runs` runs (default 20) are kept. A run that
   ended is a `runs/<run_id>/` with the `run.json` it wrote when it ended
   (see "Scenarios (the scripted path)"), dated by its `started_at`: the
-  same rule `nuka tend` uses to name the newest run, so the two commands
-  never disagree about which run that is. Every older run directory is
+  same rule `nuka report` uses to name the newest run, so the two never
+  disagree about which run that is. Every older run directory is
   removed whole, with the export files its own `runs/<run_id>/exports`
   lists and its messages stream. A `run.json` that cannot be read, or
   whose `started_at` does not parse, dates no run. A run that may still
@@ -2024,16 +2024,16 @@ line after the failed list, `<passed> of <n> passed`, with no verdict
 attached: a scenario that fails every time is not flaky, and the count is
 what a reader needs. The flag exists for a failure that reproduces one time
 in several. Without it, the answer was a shell loop of `nuka run`, which
-spreads the evidence over that many run ids, while the run summary and
-`nuka tend` read one. In the messages stream each execution is its own
+spreads the evidence over that many run ids, while the run summary reads
+one. In the messages stream each execution is its own
 `testCase`, not a retry of one, so a formatter that lists test cases lists
 every execution. In Allure, every execution in one environment carries the scenario's own
 identity, so a report shows one test with the other executions as its
 retries, which is where a scenario that sometimes fails is easiest to read.
 The run summary's cell reads `<passed> of <n> passed`: green three times is
-a different claim from green once, and a reviewer sees the count. `nuka
-tend` counts a scenario
-once however many times it ran. Under `--concurrency`, each worker repeats
+a different claim from green once, and a reviewer sees the count. The
+`repeated-scenario-prefix` note counts a scenario once however many times
+it ran. Under `--concurrency`, each worker repeats
 its own files, so the unit of distribution stays the file: a target naming
 one file still runs at 1, and running one scenario on several workers at
 once is not what this flag does.
@@ -2081,6 +2081,42 @@ step's `run` is trusted as written, and the step the implementing agent
 wrote for itself is the one most likely to check nothing. Under
 `--concurrency` each worker probes its own scenarios, and under `--repeat`
 every execution probes.
+
+Every run ends with one more measurement: scenarios that begin with the
+same steps, and what the repetition cost (`repeated-scenario-prefix`, a
+note). A shared opening is ordinary: several scenarios about one page
+reasonably start by getting to that page. It turns into rot when the
+opening is expensive and nothing has been lifted out of it, because the
+cost grows with every scenario added. The note is measured rather than
+read off the feature files. Before `run.json` is written, the run groups
+its own scenarios by their leading steps, reads those steps' records for
+what each took, and names the group, its steps, and the total. An opening
+ends before the first When or Then, and two steps are the same step only
+when their docstring or table is the same too. One note per family, so
+one nested group is never counted again at three depths. The depth it
+names does not depend on timing: the opening that covers the most step
+executions (scenarios times shared steps), then the longer opening, then
+the one that comes first in the feature files. Ranking by time named a
+different opening from run to run on a fast suite, where the differences
+were noise. Two gates keep it quiet: two scenarios at least, and at least
+2% of the run's summed scenario time. That floor came from measuring a
+real suite, where it removed exactly the groups whose cost rounded to zero
+and gave up 0.2 of the 101.5 seconds the finding otherwise named. The
+denominator is summed scenario time rather than wall clock, so this reads
+the same at any `--concurrency`. A scenario that ran more than once in
+the run (`--repeat`, or more than one `--env`) counts once, as its last
+execution. It stops at the number. What to do about a shared opening
+depends on whether its steps write state a later scenario reads, and the
+step records carry each step's own `mutates` declaration. When every
+shared step declares `mutates: false`, the note names the place a lift
+goes: a `process`-scope fixture (see "Fixtures"). When one does not (it
+declares `mutates: true`, is a compat step with no declaration, or has no
+step record), the note names that step and says a `process`-scope
+fixture would share what it writes between scenarios. Following that
+advice on a writing opening broke two of seven scenarios in a measured
+HTTP API project. Naming a saving would be claiming the lift is possible,
+which nothing here measured. Like a probe note, it never changes a
+scenario's status or the exit code.
 
 `--since <git ref>` says what moved in the criteria since a base a person
 approved, such as the target branch of a pull request, as far as the
@@ -2155,7 +2191,7 @@ runs in every environment. Under `--concurrency`, each environment is a
 pass of its own: its parallel phase and then its `@nukadoko:serial` files,
 before the next environment's workers start. A signal stops the run before
 the next environment starts. Retention counts runs, and a run over two
-environments is one run directory. `nuka tend` reads the newest run, and
+environments is one run directory. The `repeated-scenario-prefix` note
 counts a scenario once however many environments it ran in. In the
 messages stream each execution is its own `testCase`, as under `--repeat`.
 In Allure the environment is part of a result's identity, so a scenario
@@ -3979,40 +4015,6 @@ The following findings show what `tend` inspects and why each item is rot rather
   a missing `featuresDir` is, except every `tend` finding is a note, so
   this is a note here even though
   `nuka check` reports the identical fact as an error.
-- **Scenarios that begin with the same steps, and what the repetition
-  cost.** A shared opening is ordinary: several scenarios about one page
-  reasonably start by getting to that page. It turns into rot when the
-  opening is expensive and nothing has been lifted out of it, because the
-  cost grows with every scenario added. This finding is measured rather
-  than read off the feature files. It groups the scenarios of the most
-  recent run that wrote its `run.json` by their leading step text, reads those steps' own
-  records for what each took, and names the group, its steps, and the
-  total. One finding per family, so one nested group is never counted
-  again at three depths. The depth it names does not depend on timing: the
-  opening that covers the most step executions (scenarios times shared
-  steps), then the longer opening, then the one that comes first in the
-  feature files. Ranking by time named a different opening from run to run
-  on a fast suite, where the differences were noise. Two
-  gates keep it quiet: two scenarios at least, and at least 2% of that
-  run's summed scenario time. That floor came from measuring a real
-  suite, where it removed exactly the groups whose cost rounded to zero
-  and gave up 0.2 of the 101.5 seconds the finding otherwise named. The
-  denominator is summed scenario time rather than wall clock, so this
-  reads the same at any `--concurrency`. A run still in progress has no
-  `run.json` yet, so the finding reads the newest run that ended. A
-  scenario that ran more than once in that run (`--repeat`, or more than
-  one `--env`) counts once, as its last execution. It
-  stops at the number. What to do about a shared opening depends on
-  whether its steps write state a later scenario reads, and the step
-  records carry each step's own `mutates` declaration. When every shared
-  step declares `mutates: false`, the note names the place a lift goes: a
-  `process`-scope fixture (see "Fixtures"). When one does not (it declares
-  `mutates: true`, is a compat step with no declaration, or has no step
-  record), the note names that step and says a `process`-scope fixture
-  would share what it writes between scenarios. Following that advice on a
-  writing opening broke two of seven scenarios in a measured HTTP API
-  project. Naming a saving would be claiming the lift is possible, which
-  nothing here measured.
 - **A step whose trace shows another call soon after a navigation
   call.** `tend` reads this from the tool's step records under
   `.nukadoko/runs/<run_id>/steps/` and `.nukadoko/do/` (see "Records"), so it reaches every step
@@ -4110,6 +4112,11 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               line (nuka run <feature>:<line>). Then one retention
                               line, when a run older than the newest
                               retention.runs was removed (see "Artifacts").
+                              A repeated-scenario-prefix note names
+                              scenarios that open with the same steps up to
+                              the first When, docstrings and tables compared
+                              too, and what that opening took (measured, no
+                              advice); the exit code is unchanged.
                               --json drops every one of these lines, and
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records
@@ -4478,11 +4485,8 @@ nuka tend [--json] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page, context, or pageAs, a step that
                               made a call soon
-                              after its own navigation, scenarios that
-                              open with the same steps up to the first When,
-                              docstrings and tables compared too (measured,
-                              no advice), and a schema field with no
-                              `.describe()`
+                              after its own navigation, and a schema field
+                              with no `.describe()`
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               a one-line description, and the code's
                               general do, instead of tending a project

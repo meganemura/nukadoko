@@ -42,6 +42,7 @@ import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
 import { probeFindings } from "../run/probe.js";
+import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
@@ -761,8 +762,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const finishRun = async (
       verdict: "passed" | "failed",
       failedScenarios: readonly FailedScenario[],
-    ): Promise<{ summaryPath: string | null; retention: string | null; runResultWritten: boolean; exitCode: number; notRun: number }> => {
-      runFindings.push(...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf));
+    ): Promise<{ summaryPath: string | null; retention: string | null; runResultWritten: boolean; exitCode: number; notRun: number; notes: readonly Finding[] }> => {
+      // Read from the run's own scenario entries and the step records they
+      // cite, which are on disk by now, so the notes reach run.json in its
+      // one write, and a run another process finishes meanwhile is never
+      // the one measured.
+      const notes = findRepeatedScenarioPrefixes(path.join(rootDir, runRelativeDir(config.stateDir, runId)), runScenarios, selected.features);
+      runFindings.push(...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf), ...notes);
       // The run's `scenarios/` goes too once no scenario left evidence in it.
       for (const dir of [...emptyEvidenceDirs, path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios)]) {
         try {
@@ -865,7 +871,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
       }
       if (options.json) options.stdout.write(document);
-      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run };
+      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run, notes };
     };
     // The text a person reads at the end, after the files are written: where
     // they are, the count, each failed scenario, the repeat tallies, and
@@ -875,7 +881,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       counts: { total: number; passed: number },
       failedScenarios: readonly FailedScenario[],
       tallies: Parameters<typeof writeRepeatTallies>[1],
-      end: { summaryPath: string | null; retention: string | null; runResultWritten: boolean; notRun?: number },
+      end: { summaryPath: string | null; retention: string | null; runResultWritten: boolean; notRun?: number; notes?: readonly Finding[] },
     ): void => {
       writeOutputLocations(progress, [...locations, ...summaryLocation(end.summaryPath, end.runResultWritten)]);
       writeRunSummary(progress, {
@@ -885,7 +891,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(end.notRun !== undefined ? { notRun: end.notRun } : {}),
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf)]) {
+      for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf), ...(end.notes ?? [])]) {
         progress.write(formatFinding(withHint(finding)));
       }
       writeRepeatTallies(progress, tallies, conditionsOf);

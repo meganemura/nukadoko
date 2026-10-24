@@ -1,21 +1,25 @@
-import { PickleStepType, type PickleStepArgument } from "@cucumber/messages";
-import type { FeatureFile, FeaturePickleStep } from "../feature/load-features.js";
-import { rankRunsNewestFirst } from "../record/newest-run.js";
 import path from "node:path";
+import { PickleStepType, type Pickle, type PickleStep, type PickleStepArgument } from "@cucumber/messages";
+import type { Finding } from "../finding/finding.js";
+import { runCodeInfo } from "../finding/run-codes.js";
 import { readStepRecord } from "../record/read-step-record.js";
-import { readEndedRuns } from "../record/run-result.js";
-import { runRelativeDir } from "../record/state-layout.js";
-import type { TendIssue } from "./types.js";
+import type { RunScenario } from "../record/run-result.js";
 
-// Responsibility: find repeated scenario openings in the latest run's live
-// records. It reports measured repetition, and names a process-scope fixture
+// Responsibility: the `repeated-scenario-prefix` note of a finished run:
+// scenarios of this run that open with the same steps. Boundary: it reads
+// the run's own scenario entries and the step records they cite, and
+// writes nothing; `nuka run` adds the notes to the run's findings before
+// run.json is written, so run.json, the summary, and `--json` carry the
+// same notes. A note never changes the exit code.
+//
+// It reports measured repetition, and names a process-scope fixture
 // as the place to lift an opening only when every shared step declares
 // `mutates: false`. An opening ends at the first When or Then, since a step
 // there is what the scenario exercises, not its setup; and two steps are the
 // same step only when their docstring or table is the same too. Both facts
-// come from the scenario as the scanned features hold it now. A record whose
-// scenario is no longer there, or no longer has the same step texts, is keyed
-// by its texts alone.
+// come from the scenario as the run's features hold it. An entry whose
+// scenario the features do not hold with the same step texts is keyed by
+// its texts alone.
 //
 // Which opening a note names depends on the scenarios alone: within one
 // family of nested openings, the one that covers the most step executions,
@@ -49,7 +53,7 @@ function comesBefore(a: SourcePosition, b: SourcePosition): boolean {
   return a.feature < b.feature || (a.feature === b.feature && a.line < b.line);
 }
 
-/** One scenario of the latest run, as its run.json entry names it. */
+/** One scenario of the run, with each step's record directory resolved. */
 interface ScenarioRecord {
   readonly feature: string;
   readonly line: number;
@@ -60,39 +64,22 @@ interface ScenarioRecord {
   readonly steps: readonly { readonly text: string; readonly recordDir: string | null }[];
 }
 
-/** One run.json scenario entry, with each step's `record` (relative to the
+/** A run.json scenario entry, with each step's `record` (relative to the
  * run directory) resolved against `runDir`. */
-function asScenario(value: unknown, runDir: string): ScenarioRecord | null {
-  if (value === null || typeof value !== "object") return null;
-  const entry = value as Record<string, unknown>;
-  if (
-    typeof entry.feature !== "string" ||
-    typeof entry.line !== "number" ||
-    typeof entry.started_at !== "string" ||
-    typeof entry.finished_at !== "string" ||
-    !Array.isArray(entry.steps)
-  ) return null;
-  const steps: { text: string; recordDir: string | null }[] = [];
-  for (const value of entry.steps) {
-    if (value === null || typeof value !== "object") return null;
-    const step = value as Record<string, unknown>;
-    if (typeof step.text !== "string" || (step.record !== null && typeof step.record !== "string")) return null;
-    steps.push({ text: step.text, recordDir: step.record === null ? null : path.join(runDir, step.record) });
-  }
-  return { feature: entry.feature, line: entry.line, started_at: entry.started_at, finished_at: entry.finished_at, steps };
+function asScenario(entry: RunScenario, runDir: string): ScenarioRecord {
+  return {
+    feature: entry.feature,
+    line: entry.line,
+    started_at: entry.started_at,
+    finished_at: entry.finished_at,
+    steps: entry.steps.map((step) => ({ text: step.text, recordDir: step.record === null ? null : path.join(runDir, step.record) })),
+  };
 }
 
-/** The scenarios of the newest run that wrote its run.json. A damaged entry
- * cannot support measured timing, but it must not hide healthy entries from
- * the same run. */
-function readLatestRunScenarios(rootDir: string, stateDir: string): ScenarioRecord[] {
-  const latest = rankRunsNewestFirst(readEndedRuns(rootDir, stateDir))[0];
-  if (latest === undefined) return [];
-  const runDir = path.join(rootDir, runRelativeDir(stateDir, latest.runId));
-  return latest.run.scenarios.flatMap((entry) => {
-    const scenario = asScenario(entry, runDir);
-    return scenario === null ? [] : [scenario];
-  });
+/** The features the run selected: each file's path and the pickles it ran. */
+export interface RunFeature {
+  readonly relativePath: string;
+  readonly pickles: readonly Pickle[];
 }
 
 function elapsedMs(startedAt: string, finishedAt: string): number {
@@ -112,19 +99,19 @@ export function stepPrefixKey(step: { readonly text: string; readonly argument?:
   ]);
 }
 
-/** The pickle steps of the scenario a record ran, when the scanned features
- * still hold that scenario with the same step texts. */
+/** The pickle steps of the scenario a record ran, when the run's features
+ * hold that scenario with the same step texts. */
 function pickleStepsFor(
   record: ScenarioRecord,
-  pickles: ReadonlyMap<string, readonly FeaturePickleStep[]>,
-): readonly FeaturePickleStep[] | undefined {
-  const steps = typeof record.line === "number" ? pickles.get(`${record.feature}\u0000${record.line}`) : undefined;
+  pickles: ReadonlyMap<string, readonly PickleStep[]>,
+): readonly PickleStep[] | undefined {
+  const steps = pickles.get(`${record.feature}\u0000${record.line}`);
   if (steps === undefined || steps.length !== record.steps.length) return undefined;
   return steps.every((step, index) => step.text === record.steps[index]!.text) ? steps : undefined;
 }
 
-function picklesByScenario(features: readonly FeatureFile[]): Map<string, readonly FeaturePickleStep[]> {
-  const pickles = new Map<string, readonly FeaturePickleStep[]>();
+function picklesByScenario(features: readonly RunFeature[]): Map<string, readonly PickleStep[]> {
+  const pickles = new Map<string, readonly PickleStep[]>();
   for (const feature of features) {
     for (const pickle of feature.pickles) {
       if (pickle.location !== undefined) {
@@ -135,12 +122,7 @@ function picklesByScenario(features: readonly FeatureFile[]): Map<string, readon
   return pickles;
 }
 
-function buildTrie(
-  rootDir: string,
-  stateDir: string,
-  records: readonly ScenarioRecord[],
-  features: readonly FeatureFile[],
-): TrieNode {
+function buildTrie(records: readonly ScenarioRecord[], features: readonly RunFeature[]): TrieNode {
   const root: TrieNode = {
     texts: [], withArgument: false, parent: null, children: new Map(), count: 0, ms: 0, first: null, mayWrite: false,
   };
@@ -149,10 +131,7 @@ function buildTrie(
   for (const record of records) {
     let node = root;
     let prefixMs = 0;
-    const position: SourcePosition = {
-      feature: record.feature,
-      line: typeof record.line === "number" ? record.line : Number.POSITIVE_INFINITY,
-    };
+    const position: SourcePosition = { feature: record.feature, line: record.line };
     const pickleSteps = pickleStepsFor(record, pickles);
     for (const [index, step] of record.steps.entries()) {
       const pickleStep = pickleSteps?.[index];
@@ -245,7 +224,7 @@ function formatNumber(value: number, maximumFractionDigits: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits, useGrouping: false });
 }
 
-function toIssue(node: TrieNode, totalScenarioMs: number): TendIssue {
+function toFinding(node: TrieNode, totalScenarioMs: number): Finding {
   // One decimal on the seconds: a wall-clock measurement of a whole
   // scenario prefix carries nowhere near millisecond accuracy, and printing
   // three decimals would claim it does.
@@ -262,9 +241,12 @@ function toIssue(node: TrieNode, totalScenarioMs: number): TendIssue {
       : `"${writer}" does not declare mutates: false, so a later scenario may read what this opening writes: ` +
         `a "process"-scope fixture would share that state between scenarios. ` +
         `A Background keeps the shared steps in one place and still runs them for each scenario.`;
+  const info = runCodeInfo("repeated-scenario-prefix");
   return {
+    severity: info.severity,
     code: "repeated-scenario-prefix",
-    file: node.first?.feature,
+    ...(node.first === null ? {} : { file: node.first.feature }),
+    fix: info.fix,
     message:
       `${node.count} scenarios begin with the same ${node.texts.length} ` +
       `step${node.texts.length === 1 ? "" : "s"}, which took ${seconds} seconds across them, ` +
@@ -293,20 +275,22 @@ function onePerScenario(records: readonly ScenarioRecord[]): ScenarioRecord[] {
   return [...latest.values()];
 }
 
+/** The run's `repeated-scenario-prefix` notes. `runDir` is the run
+ * directory, absolute, that each step's `record` is relative to. */
 export function findRepeatedScenarioPrefixes(
-  rootDir: string,
-  stateDir: string,
-  features: readonly FeatureFile[] = [],
-): TendIssue[] {
-  const records = onePerScenario(readLatestRunScenarios(rootDir, stateDir));
+  runDir: string,
+  scenarios: readonly RunScenario[],
+  features: readonly RunFeature[],
+): Finding[] {
+  const records = onePerScenario(scenarios.map((entry) => asScenario(entry, runDir)));
   if (records.length === 0) return [];
   const totalScenarioMs = records.reduce(
     (total, record) => total + elapsedMs(record.started_at, record.finished_at),
     0,
   );
   if (totalScenarioMs === 0) return [];
-  const root = buildTrie(rootDir, stateDir, records, features);
+  const root = buildTrie(records, features);
   return removeOverlaps(collectCandidates(root, totalScenarioMs * 0.02)).map((node) =>
-    toIssue(node, totalScenarioMs),
+    toFinding(node, totalScenarioMs),
   );
 }

@@ -16,7 +16,7 @@ import { doRelativeDir, runsRelativeDir } from "./state-layout.js";
 //
 // 1. The run rule. A run that ended is a run directory with a run.json
 //    (src/record/run-result.ts), dated by its `started_at`
-//    (src/record/newest-run.ts, the rule `nuka tend` uses too). The newest
+//    (src/record/newest-run.ts, the rule `nuka report` uses too). The newest
 //    `retention.runs` runs are kept; every older run directory is removed,
 //    with the export files its manifest lists (src/record/run-exports.ts):
 //    what `nuka report` wrote under the state directory for it. The run that is applying retention counts as

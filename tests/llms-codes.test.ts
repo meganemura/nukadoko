@@ -56,7 +56,7 @@ describe("nuka tend --codes", () => {
     expect(exitCode).toBe(0);
     expect(stderr.text()).toBe("");
     const findings = parseFindings(stdout.text());
-    expect(findings).toHaveLength(14);
+    expect(findings).toHaveLength(13);
     expect(findings[0]).toEqual({
       severity: "note",
       code: "fixture-replaces-builtin",
@@ -83,7 +83,7 @@ describe("nuka tend --codes", () => {
     expect(Object.keys(document)).toEqual(["schema_version", "nukadoko", "command", "verdict", "findings", "codes"]);
     expect(document).toMatchObject({ schema_version: 2, command: "tend", verdict: "passed", findings: [] });
     const entries = document.codes;
-    expect(entries).toHaveLength(14);
+    expect(entries).toHaveLength(13);
     expect(entries.find((entry) => entry.code === "pattern-unbound")).toEqual({
       severity: "note",
       code: "pattern-unbound",

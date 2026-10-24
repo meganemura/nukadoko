@@ -57,9 +57,10 @@ the `TODO: describe <name>` that `nuka scaffold` wrote without
 and `nuka describe` show that TODO to whoever picks a step. Write what the
 step does in its place.
 
-`repeated-scenario-prefix` shows which scenarios in the most recent run
-shared the same opening steps. It also shows the measured time for that
-opening and its share of the run's summed scenario time. An opening ends
+`nuka run` ends with a `repeated-scenario-prefix` note when scenarios of
+that run shared the same opening steps; the note never changes the run's
+exit code. It shows the measured time for that opening and its share of
+the run's summed scenario time. An opening ends
 before the first When, and two steps share it only when their docstring
 or table is the same too. The note names the same opening on every run:
 the one that covers the most step executions, not the slowest. It names a

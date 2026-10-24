@@ -16,7 +16,6 @@ import { analyzeFieldDescriptions } from "./missing-describe.js";
 import { findSupportOriginParameterTypes } from "./parameter-type-support-origin.js";
 import { findUnboundPatternedSteps } from "./pattern-unbound.js";
 import { findPostNavigationReads } from "./post-navigation-read.js";
-import { findRepeatedScenarioPrefixes } from "./repeated-prefix.js";
 import { findUnknownSecretsKeys } from "./secrets-unknown-key.js";
 import { resolveStepOccurrences } from "./step-bindings.js";
 import { buildTendSummary } from "./summary.js";
@@ -95,11 +94,6 @@ const CONFIG_ENTRY_CODES: ReadonlySet<TendCode> = new Set<TendCode>([
 //
 // `findTypelessPackageJsons` reads the config file and the step files the
 // walk found, the files whose loads print Node's reparse warning.
-//
-// `findRepeatedScenarioPrefixes` also reads live records, but starts from
-// the newest run.json. It reads only that run's scenarios before it reads
-// the cited step records, so two runs never count the same scenario work
-// twice.
 
 function loadedConfigFile(rootDir: string): string[] {
   const fileName = resolveConfigFileName(rootDir);
@@ -139,7 +133,6 @@ export async function analyzeTend(rootDir: string): Promise<TendReport> {
     ...findFixturesTouchingApp(fixtureGraph),
     ...findFixturesReplacingBuiltins(Object.keys(config.fixtures)),
     ...findPostNavigationReads(rootDir, config.stateDir),
-    ...findRepeatedScenarioPrefixes(rootDir, config.stateDir, features),
     ...findTypelessPackageJsons(rootDir, [...loadedConfigFile(rootDir), ...walkedFiles]),
   ];
 

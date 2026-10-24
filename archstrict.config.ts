@@ -297,6 +297,7 @@ export default {
         "verdicts.ts",
         "process-signal.ts",
         "progress-log.ts",
+        "repeated-prefix.ts",
         "run-concurrent.ts",
         "run-document.ts",
         "run-id.ts",

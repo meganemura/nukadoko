@@ -24,7 +24,7 @@ import type { ErrorKind, ObservedCounts } from "./types.js";
 // It is also the run's completion marker. Only the invocation that ran
 // everything knows the run is over and how it ended (a run-scope hook can
 // fail after every scenario passed), so it writes this file last, and
-// retention and `nuka tend` read its presence as proof that the run ended.
+// retention and `nuka report` read its presence as proof that the run ended.
 // A rename makes the write atomic, so retention in another process never
 // reads half a file as "no marker".
 

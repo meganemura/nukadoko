@@ -134,7 +134,7 @@ nukadoko が扱うものはすべて、4 つの種類のどれかに属します
   run は計測したものすべてとともに消え、保たれた run の中のものが単独で消えることはありません。
   毎回の run の終わりに、最新 `retention.runs` 回分(既定 20)の run が保たれます。
   終わった run とは、終わったときに書いた `run.json` を持つ `runs/<run_id>/` のことで(「Scenario(スクリプト化された経路)」を参照)、その `started_at` で日付を持ちます。
-  `nuka tend` が最新の run を名指すときの規則と同じなので、2 つのコマンドが「どの run か」で食い違うことはありません。
+  `nuka report` が最新の run を名指すときの規則と同じなので、両者が「どの run か」で食い違うことはありません。
   それより古い run ディレクトリは丸ごと消え、その run 自身の `runs/<run_id>/exports` が列挙する export ファイルと messages ストリームも一緒に消えます。
   読めない `run.json` や、`started_at` を日時として解釈できない `run.json` は、どの run の日付にもなりません。
   まだ書いている可能性のある run は順位付けされません。
@@ -1710,14 +1710,14 @@ Gherkin のタグは自由記述なので、名前空間は、短いタグ名を
 毎回失敗する scenario は flaky ではなく、読み手に要るのは回数だからです。
 このフラグは、数回に 1 回だけ再現する失敗のためにあります。
 これが無いときの答えはシェルで `nuka run` を回すループで、それは証拠をその回数ぶんの run id に散らします。
-run サマリと `nuka tend` が読むのは 1 つの run です。
+run サマリが読むのは 1 つの run です。
 messages ストリームでは、各実行は 1 つの retry ではなく、それぞれ自分の `testCase` になります。
 test case を列挙する formatter は、すべての実行を列挙します。
 Allure では、1 つの environment の中の各実行が scenario 自身の identity を持つため、レポートは 1 つのテストとして表示し、他の実行をその retry として並べます。
 ときどき失敗する scenario が最も読みやすいのはそこです。
 run サマリのセルは `<passed> of <n> passed` と読めます。
 3 回 green は 1 回 green とは別の主張であり、レビュアーはその回数を目にします。
-`nuka tend` は、何回走ったかによらず scenario を 1 回と数えます。
+`repeated-scenario-prefix` の note は、何回走ったかによらず scenario を 1 回と数えます。
 `--concurrency` の下では、各 worker が自分のファイルを繰り返すので、配る単位はファイルのままです。
 1 つのファイルを名指す target は変わらず 1 で走ります。
 1 つの scenario を複数の worker で同時に走らせることは、このフラグの仕事ではありません。
@@ -1753,6 +1753,33 @@ scenario の `run.json` のエントリは再実行ごとに 1 つずつ `probes
 probe は、nukadoko がこれまで問えなかった 1 つの問いに答えます。
 step の `run` は書かれたとおりに信頼されており、実装したエージェントが自分のために書いた step こそ、何も確かめていない見込みが最も高いのです。
 `--concurrency` の下では各 worker が自分の scenario を probe し、`--repeat` の下ではすべての実行が probe します。
+
+どの run も、最後にもう 1 つ計測をします。
+同じ step で始まる scenario と、その繰り返しにかかったコストです(`repeated-scenario-prefix`、note)。
+同じ始まりを共有することはよくあります。
+1 つのページについて扱う複数の scenario が、どれもそのページへ移動するところから始まるのは自然です。
+その始まりに時間がかかるのに何も切り出されていない場合は腐敗となり、scenario が増えるたびにコストも増えます。
+この note は feature ファイルから読むのではなく、計測して得られます。
+`run.json` を書く前に、run は自分の scenario を先頭の step でグループ化し、各 step の record から所要時間を読み、そのグループ、step、合計時間を名指しします。
+始まりは最初の When または Then の手前で終わり、2 つの step が同じ step とみなされるのは docstring や table も同じときだけです。
+同じ始まりを持つ一群ごとに note を 1 件だけ出すため、入れ子になった 1 つのグループが 3 つの深さで重複して数えられることはありません。
+どの深さを名指すかは所要時間に左右されません。
+共有する step の実行回数(scenario の数と共有する step の数の積)が最も多い始まりを選び、同じなら長いほうを、それも同じなら feature ファイルで先に出てくるほうを選びます。
+所要時間で順位を付けていたときは、速いスイートでは run ごとに違う始まりを名指していました。
+そこでの差は誤差でした。
+note を出す条件は 2 つあり、scenario が 2 つ以上あることと、その run の scenario の合計時間の 2% 以上を占めることです。
+この下限は実際のスイートを 1 つ計測して決めました。
+そのスイートでは、コストを丸めるとゼロになるグループだけが除かれ、名指せる 101.5 秒のうち失ったのは 0.2 秒でした。
+分母に scenario の合計時間を使うため、どの `--concurrency` でも同じ結果になります。
+その run で 2 回以上走った scenario(`--repeat`、または 2 つ以上の `--env`)は、最後の実行として 1 回だけ数えます。
+この note が報告するのは数値までです。
+同じ始まりに対する処置は、その step が後の scenario の読む状態へ書き込むかどうかに左右されます。
+step record には、各 step 自身の `mutates` の宣言が載っています。
+共有する step がすべて `mutates: false` を宣言しているときは、切り出し先として `process` スコープの fixture を名指します(「Fixtures」を参照)。
+そうでない step があるとき(`mutates: true` を宣言している、宣言を持たない compat step である、または step record が無い)は、その step を名指し、`process` スコープの fixture ではその step が書き込むものを scenario の間で共有してしまうと伝えます。
+計測した HTTP API のプロジェクトでは、書き込む始まりにこの助言を当てはめると、7 つの scenario のうち 2 つが失敗しました。
+節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
+probe の note と同じく、scenario の status も終了コードも変えません。
 
 `--since <git ref>` は、人が承認した基点(pull request の向かう先のブランチなど)から、受け入れ基準の何が動いたかを、以下の比較が届く範囲で述べます。
 何かを実行する前に、run が対象にした feature ファイルを、ref が名指すコミットと比べます。
@@ -1804,7 +1831,7 @@ nukadoko は feature flag という概念を持たず、2 つの environment の
 並列の段階と `@nukadoko:serial` のファイルを終えてから、次の environment の worker が始まります。
 シグナルは、次の environment が始まる前に run を止めます。
 retention は run を数え、2 つの environment にまたがる run も 1 つの run ディレクトリです。
-`nuka tend` は最新の run を読み、scenario がいくつの environment で走っても 1 回と数えます。
+`repeated-scenario-prefix` の note は、scenario がいくつの environment で走っても 1 回と数えます。
 messages ストリームでは、`--repeat` のときと同じく各実行がそれぞれ自分の `testCase` になります。
 Allure では environment が result の identity の一部なので、ある environment で通り別の environment で失敗した scenario は、retry ではなく 2 つのテストになります。
 environment が 2 つ以上あるとき、所見と `repeat` の行は scenario の後に environment を名指し、進捗のログは各回を `environment <name>` の行で始めます。
@@ -3324,30 +3351,6 @@ step record の `world` と `declared` の件数は、スイートが昇格す�
   そのため、存在しないディレクトリは報告すべき config の誤りであり、それは `featuresDir` が欠けている場合と同じです。
   ただし `tend` の所見はすべて注記です。
   そのため、`nuka check` が同じ事実をエラーとして報告する一方で、ここでは注記になります。
-- **同じ step で始まる scenario と、その繰り返しにかかったコスト。**
-  同じ始まりを共有することはよくあります。
-  1 つのページについて扱う複数の scenario が、どれもそのページへ移動するところから始まるのは自然です。
-  その始まりに時間がかかるのに何も切り出されていない場合は腐敗となり、scenario が増えるたびにコストも増えます。
-  この所見は実行記録を計測して得られます。
-  `run.json` を書いた直近の run の scenario を先頭の step のテキストでグループ化し、各 step 自身の record から所要時間を読み、そのグループ、step、合計時間を名指しします。
-  同じ始まりを持つ一群ごとに所見を 1 件だけ出すため、入れ子になった 1 つのグループが 3 つの深さで重複して数えられることはありません。
-  どの深さを名指すかは所要時間に左右されません。
-  共有する step の実行回数(scenario の数と共有する step の数の積)が最も多い始まりを選び、同じなら長いほうを、それも同じなら feature ファイルで先に出てくるほうを選びます。
-  所要時間で順位を付けていたときは、速いスイートでは run ごとに違う始まりを名指していました。
-  そこでの差は誤差でした。
-  所見を出す条件は 2 つあり、scenario が 2 つ以上あることと、その run の scenario の合計時間の 2% 以上を占めることです。
-  この下限は実際のスイートを 1 つ計測して決めました。
-  そのスイートでは、コストを丸めるとゼロになるグループだけが除かれ、名指せる 101.5 秒のうち失ったのは 0.2 秒でした。
-  分母に scenario の合計時間を使うため、どの `--concurrency` でも同じ結果になります。
-  実行中の run にはまだ `run.json` が無いので、この所見は終わった run のうち最新のものを読みます。
-  その run で 2 回以上走った scenario(`--repeat`、または 2 つ以上の `--env`)は、最後の実行として 1 回だけ数えます。
-  この所見が報告するのは数値までです。
-  同じ始まりに対する処置は、その step が後の scenario の読む状態へ書き込むかどうかに左右されます。
-  step record には、各 step 自身の `mutates` の宣言が載っています。
-  共有する step がすべて `mutates: false` を宣言しているときは、切り出し先として `process` スコープの fixture を名指します(「Fixtures」を参照)。
-  そうでない step があるとき(`mutates: true` を宣言している、宣言を持たない compat step である、または step record が無い)は、その step を名指し、`process` スコープの fixture ではその step が書き込むものを scenario の間で共有してしまうと伝えます。
-  計測した HTTP API のプロジェクトでは、書き込む始まりにこの助言を当てはめると、7 つの scenario のうち 2 つが失敗しました。
-  節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
 - **step 自身の trace が、navigation の呼び出しのすぐ後ろに別の呼び出しが着地していることを示しているもの。**
   `tend` はこれを `.nukadoko/runs/<run_id>/steps/` と `.nukadoko/do/` にあるツール自身の step record から読みます(「Records」を参照)。
   そのため、いまもディスク上に step record を持つすべての step に届きます。
@@ -3436,6 +3439,11 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               line (nuka run <feature>:<line>). Then one retention
                               line, when a run older than the newest
                               retention.runs was removed (see "Artifacts").
+                              A repeated-scenario-prefix note names
+                              scenarios that open with the same steps up to
+                              the first When, docstrings and tables compared
+                              too, and what that opening took (measured, no
+                              advice); the exit code is unchanged.
                               --json drops every one of these lines, and
                               warnings go into run.json's findings.
                               stdout is empty unless asked: --records
@@ -3803,11 +3811,8 @@ nuka tend [--json] [--fail-on <code>]
                               a fixture no typed step requires, a fixture
                               reaching page, context, or pageAs, a step that
                               made a call soon
-                              after its own navigation, scenarios that
-                              open with the same steps up to the first When,
-                              docstrings and tables compared too (measured,
-                              no advice), and a schema field with no
-                              `.describe()`
+                              after its own navigation, and a schema field
+                              with no `.describe()`
 nuka tend --codes [--json]    list every finding code nuka tend can report,
                               a one-line description, and the code's
                               general do, instead of tending a project

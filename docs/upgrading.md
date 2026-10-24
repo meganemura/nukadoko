@@ -43,6 +43,17 @@ This part does not change release to release.
   whose range ends above your version: a project on 0.13.0, 0.13.1, or
   0.14.0 starts at "0.14.0 to 0.14.1".
 
+## 0.21.0 to the next release
+
+- **`repeated-scenario-prefix` comes from `nuka run`.** `nuka tend` no
+  longer reports it. Every `nuka run` adds it to its own findings as a
+  note, measured from that run: it is in `run.json`'s `findings`, in
+  the `--json` document, and on stderr after the count line. It never
+  changes the exit code. A job that read it from `nuka tend --json` reads
+  the `findings` of the run instead, and filters by `code`. A `nuka tend`
+  job that lists the code in `--fail-on` drops it from the list: tend
+  refuses it with `fail-on-unknown-code`.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

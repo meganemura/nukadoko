@@ -36,6 +36,17 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   自分のバージョンより上で終わる最初の節から読み始めます。
   たとえば 0.13.0、0.13.1、0.14.0 のプロジェクトは、「0.14.0 から 0.14.1 へ」から読み始めます。
 
+## 0.21.0 から次のリリースへ
+
+- **`repeated-scenario-prefix` は `nuka run` が出します。**
+  `nuka tend` はもう報告しません。
+  どの `nuka run` も、その run から計測した note として、自分の findings に加えます。
+  `run.json` の `findings`、`--json` の文書、stderr の件数の行の後に出ます。
+  終了コードは変えません。
+  `nuka tend --json` から読んでいたジョブは、代わりに run の `findings` を読み、`code` で絞り込みます。
+  `nuka tend` の `--fail-on` にこの code を並べていたジョブは、一覧から外します。
+  tend はこれを `fail-on-unknown-code` で拒否します。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

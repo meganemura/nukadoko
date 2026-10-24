@@ -3,7 +3,7 @@ import * as gs from "@hegeldev/hegel/generators";
 import { describe, expect, it } from "vitest";
 import { rankRunsNewestFirst } from "../src/record/newest-run.js";
 
-// Responsibility: the newest-run rule retention and `nuka tend` share, through its one ranking function.
+// Responsibility: the newest-run rule retention and `nuka report` share, through its one ranking function.
 
 interface Run {
   readonly run_id: string;

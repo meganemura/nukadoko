@@ -231,6 +231,12 @@ const FAILED_SCENARIO_LINE = /^failed\tscenario-failed\t/;
 // each failed scenario finding is followed by its rerun command.
 const STEP_FAILURE_LINE = /^ {6}\S/;
 const RERUN_LINE = /^ {2}do: nuka run /;
+// The run's repeated-opening note. Whether it fires depends on what each
+// step took on this machine, against a 2% floor, so a test that asserts
+// "nothing unexpected happened" would pass or fail with the machine's load.
+// tests/run-repeated-prefix.test.ts asserts the note itself.
+const PREFIX_NOTE_LINE = /^note\trepeated-scenario-prefix\t/;
+const FINDING_DETAIL_LINE = /^ {2}(fix|do): /;
 
 /** Strips `nuka run`'s own progress-log lines
  * out of captured stderr text, leaving any warning/error line a test still
@@ -238,8 +244,13 @@ const RERUN_LINE = /^ {2}do: nuka run /;
  * test's own point predates this feature and was really asserting "nothing
  * unexpected happened", not "this command is silent". */
 export function stripRunProgressLines(text: string): string {
+  let inPrefixNote = false;
   return text
     .split("\n")
+    .filter((line) => {
+      inPrefixNote = PREFIX_NOTE_LINE.test(line) || (inPrefixNote && FINDING_DETAIL_LINE.test(line));
+      return !inPrefixNote;
+    })
     .filter(
       (line) =>
         !SCENARIO_BOUNDARY_LINE.test(line) &&

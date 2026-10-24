@@ -58,11 +58,6 @@ const TEND_CODE_INFO = {
       "A step's trace shows a call shortly after a navigation, and nothing shows that the page had finished rendering. The note gives the gap and makes no judgment.",
     fix: "If the read can run before the page renders, wait for the element, or retry the read with ctx.poll.",
   },
-  "repeated-scenario-prefix": {
-    description:
-      "Scenarios in the latest run open with the same steps, before the first When, with the same docstrings and tables. The note reports the measured repetition, and names a process-scope fixture only when every shared step declares mutates: false.",
-    fix: "No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.",
-  },
   "schema-field-undescribed": {
     description: "A field of a typed step's args or returns schema has no .describe(), so an agent choosing a step cannot read what it means.",
     fix: "Add a .describe() that says what the field means to each field that the message names.",

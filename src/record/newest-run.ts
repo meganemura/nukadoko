@@ -1,5 +1,5 @@
 // Responsibility: the one rule for which `nuka run` is newer than another.
-// Retention keeps the newest runs and `nuka tend` reads the newest run, so
+// Retention keeps the newest runs and `nuka report` renders the newest run, so
 // both rank runs here and never disagree about which run that is. Reading
 // run.json, and what to do with a run once it is ranked, stay with each
 // caller.

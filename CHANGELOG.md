@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Changed
+
+- **`repeated-scenario-prefix` is a note of `nuka run`, not of `nuka
+  tend`.** The run that just ended computes it from its own scenarios
+  and step records, before `run.json` is written, so it is in `run.json`,
+  the summary, `--json`, and the text after the count line. It never
+  changes the exit code. It measures one run, and that run is the one
+  whose output a person or an agent is already reading; a separate
+  command that reread the newest run reached almost nobody.
+
 ### Added
 
 - **The skill says how to drive an app through an e2e session.** A project

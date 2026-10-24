@@ -35,6 +35,12 @@ const RUN_CODES = {
     description: "A worker reported a record that matches no selected scenario, so nuka report cannot render it.",
     fix: "Run again without changing feature files while the run is in progress.",
   },
+  "repeated-scenario-prefix": {
+    severity: "note",
+    description:
+      "Scenarios in this run open with the same steps, before the first When, with the same docstrings and tables. The note reports the measured repetition, and names a process-scope fixture only when every shared step declares mutates: false.",
+    fix: "No change is necessary. A Background can hold the shared steps. A process-scope fixture fits only an opening whose steps all declare mutates: false.",
+  },
   "retention-failed": {
     severity: "warning",
     description: "The run finished, and removing old run directories under retention failed.",
