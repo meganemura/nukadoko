@@ -36,7 +36,9 @@ just until 0.1.
   leaves the claim `unjudged`, and the reason names it.
   `defineStep` freezes what it validated, and discovery runs only the
   step `defineStep` returned, not a copy of it. `matches` runs on a
-  worker thread that the step's deadline stops. `observe` receives every
+  worker thread, and judging as a whole is bounded by the step's
+  deadline: a pattern still running when it passes is stopped, and each
+  claim and item not judged by then is `unjudged`, with how many. `observe` receives every
   args key except the ones a claim compares with, and `resultOf` throws
   inside a claim step, so an earlier step's value reaches a claim only
   through `from`, under a label that names it. `poll: { timeout_ms }`

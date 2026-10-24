@@ -93,7 +93,7 @@ export function testPatternInWorker(pattern: string, text: string, timeoutMs: nu
   return new Promise<PatternOutcome>((resolve, reject) => {
     const timer = setTimeout(() => {
       if (!pending.delete(id)) return;
-      resolve({ reason: `matches did not finish within ${Math.round(timeoutMs)}ms (${limit}), so nukadoko stopped the pattern` });
+      resolve({ stopped: `matches did not finish within ${Math.round(timeoutMs)}ms (${limit}), so nukadoko stopped the pattern` });
       if (worker === current) stop(new Error("the worker that tests regular expressions was stopped for a pattern that ran too long"));
     }, timeoutMs);
     pending.set(id, {

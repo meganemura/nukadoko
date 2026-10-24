@@ -525,8 +525,8 @@ export default defineStep({
   });
 });
 
-describe("a matches pattern runs where it can be stopped", () => {
-  it("breaks a pattern that backtracks past the step's deadline, and the run ends", async () => {
+describe("a matches pattern runs where it can be stopped, within the step's deadline", () => {
+  it("leaves a pattern that backtracks past the step's deadline unjudged, and the run ends", async () => {
     const rootDir = await project({
       "features/steps/the-output-matches.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -544,9 +544,42 @@ export default defineStep({
     const result = await cli(rootDir, ["run", "features/t.feature"]);
     expect(Date.now() - started).toBeLessThan(15_000);
     expect(result.exitCode).toBe(1);
-    const claim = lastClaimStep(rootDir).claims[0];
-    expect(claim.outcome).toBe("broken");
-    expect(claim.reason).toMatch(/^matches did not finish within \d+ms \(the time left of the step's deadline\), so nukadoko stopped the pattern$/);
+    const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("claim_unjudged");
+    expect(step.claims[0].outcome).toBe("unjudged");
+    expect(step.claims[0].reason).toMatch(/^matches did not finish within \d+ms \(the time left of the step's deadline\), so nukadoko stopped the pattern$/);
+  });
+
+  it("stops judging every item once the deadline passed, without a worker for each item, and names how many were not judged", async () => {
+    const rootDir = await project({
+      "features/steps/every-line-matches.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  pattern: "all {n:int} lines match {re:string}",
+  args: z.object({ n: z.number(), re: z.string() }),
+  timeout: 1500,
+  observe() { return { lines: Array.from({ length: 400 }, () => "a".repeat(34) + "!"), total: 400 }; },
+  poll: false,
+  claims: [
+    { actual: "lines", each: { claims: [{ compare: "matches", expected: "re" }] } },
+    { actual: "total", compare: "equal", expected: "n" },
+  ],
+});
+`,
+      "features/t.feature": feature('Then all 400 lines match "^(a+)+$"'),
+    });
+    const started = Date.now();
+    await cli(rootDir, ["run", "features/t.feature"]);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    const step = lastClaimStep(rootDir);
+    expect(step.error.kind).toBe("claim_unjudged");
+    expect(step.claims[0]).toMatchObject({
+      outcome: "unjudged",
+      reason: "the step's deadline passed, so nukadoko stopped judging: 400 of 400 items were not judged",
+    });
+    expect(step.claims[1]).toMatchObject({
+      outcome: "unjudged",
+      reason: "the step's deadline passed, so nukadoko stopped judging: 1 of 2 claims were not judged",
+    });
   });
 });
 

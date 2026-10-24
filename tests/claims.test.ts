@@ -22,6 +22,7 @@ import {
   deepEqual,
   evaluateClaims,
   jsonType,
+  judgingBudget,
   pollReadings,
   POLL_INTERVAL_MS,
   readerNow,
@@ -116,6 +117,7 @@ function inputs(args: Record<string, unknown>, observation: unknown, fromKeys: r
     sentenceText: (key) => (fromKeys.includes(key) || !(key in args) ? null : `text of ${key}`),
     patterns: ["the value is {want}"],
     testPattern: testInProcess,
+    budget: judgingBudget(Number.POSITIVE_INFINITY, "a test's budget"),
   };
 }
 
@@ -125,7 +127,7 @@ async function judgeOne(claim: Claim, args: Record<string, unknown>, observation
 }
 
 function compare(compare: ClaimCompare, actual: unknown, expected: unknown) {
-  return compareValues(compare, actual, expected, testInProcess);
+  return compareValues(compare, actual, expected, (pattern, text) => testInProcess(pattern, text, Number.POSITIVE_INFINITY, "a test"));
 }
 
 function article(word: string): string {
@@ -150,8 +152,9 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "at-most",
 ];
 
-function holds(result: { holds: boolean } | { reason: string }): boolean {
+function holds(result: { holds: boolean } | { reason: string } | { stopped: string }): boolean {
   if ("reason" in result) throw new Error(`expected a comparison, got the reason: ${result.reason}`);
+  if ("stopped" in result) throw new Error(`expected a comparison, got: ${result.stopped}`);
   return result.holds;
 }
 
@@ -714,6 +717,85 @@ describe("poll", () => {
     }));
 });
 
+describe("judging is bounded by one budget", () => {
+  const LIMIT = "a test's budget";
+  const claims: Claim[] = [
+    { actual: "lines", each: { claims: [{ compare: "matches", expected: "re" }] } },
+    { actual: "count", compare: "equal", expected: "n" },
+  ];
+
+  /** Judges `claims` over `count` lines on a clock that the pattern of
+   * line `stopAt` runs out, as a pattern stopped by its timer does. */
+  async function judgeWithStop(count: number, stopAt: number | null) {
+    let now = 0;
+    const timeouts: number[] = [];
+    const budget = judgingBudget(100, LIMIT, () => now);
+    const lines = Array.from({ length: count }, (_, index) => `line ${index}`);
+    const judged = await evaluateClaims(claims, {
+      ...inputs({ re: "line", n: 0 }, { lines, count: 0 }),
+      budget,
+      testPattern: async (_pattern, text, timeoutMs, limit) => {
+        timeouts.push(timeoutMs);
+        if (text === `line ${stopAt}`) {
+          now = 100;
+          return { stopped: `matches did not finish within ${timeoutMs}ms (${limit}), so nukadoko stopped the pattern` };
+        }
+        now += 1;
+        return { holds: true, matchesEmpty: false };
+      },
+    });
+    return { records: judged.map((entry) => entry.record), timeouts };
+  }
+
+  it("never tests a pattern with no time left, stops at the first pattern that ran out, and names how many items and claims were not judged", () =>
+    hegel.testAsync(async (tc) => {
+      const count = tc.draw(gs.integers({ minValue: 1, maxValue: 12 }));
+      const stopAt = tc.draw(gs.oneOf<number | null>(gs.just(null), gs.integers({ minValue: 0, maxValue: count - 1 })));
+      const { records, timeouts } = await judgeWithStop(count, stopAt);
+      for (const timeout of timeouts) expect(timeout).toBeGreaterThan(0);
+      if (stopAt === null) {
+        expect(timeouts).toHaveLength(count);
+        expect(records.map((record) => record.outcome)).toEqual(["held", "held"]);
+        return;
+      }
+      expect(timeouts).toHaveLength(stopAt + 1);
+      expect(records[0]).toMatchObject({
+        outcome: "unjudged",
+        reason: `${LIMIT} passed, so nukadoko stopped judging: ${count - stopAt} of ${count} items were not judged`,
+      });
+      expect(records[1]).toMatchObject({ outcome: "unjudged", reason: `${LIMIT} passed, so nukadoko stopped judging: 1 of 2 claims were not judged` });
+    }));
+
+  it("records the item whose pattern was stopped, with the time it was given", async () => {
+    const { records } = await judgeWithStop(3, 1);
+    const each = records[0] as unknown as { each: { results: { index: number; claims?: { outcome: string; reason?: string }[] }[] } };
+    expect(each.each.results.map((result) => [result.index, result.claims?.[0]?.outcome])).toEqual([
+      [0, "held"],
+      [1, "unjudged"],
+    ]);
+    expect(each.each.results[1]!.claims![0]!.reason).toBe(`matches did not finish within 99ms (the time left of ${LIMIT}), so nukadoko stopped the pattern`);
+  });
+
+  it("leaves every claim unjudged, with one count, when the budget is spent before judging starts", async () => {
+    const budget = judgingBudget(0, LIMIT, () => 1);
+    const judged = await evaluateClaims(claims, { ...inputs({ re: "x", n: 0 }, { lines: ["x"], count: 0 }), budget });
+    expect(judged.map((entry) => entry.record)).toEqual([
+      expect.objectContaining({ outcome: "unjudged", reason: `${LIMIT} passed, so nukadoko stopped judging: 2 of 2 claims were not judged` }),
+      expect.objectContaining({ outcome: "unjudged", reason: `${LIMIT} passed, so nukadoko stopped judging: 2 of 2 claims were not judged` }),
+    ]);
+  });
+
+  it("records a claim whose pattern tester threw as it was called, without a promise, as unjudged", async () => {
+    const [judged] = await evaluateClaims([{ actual: "out", compare: "matches", expected: "re" }], {
+      ...inputs({ re: "a" }, { out: "a" }),
+      testPattern: () => {
+        throw new Error("Access to this API has been restricted");
+      },
+    });
+    expect(judged!.record).toMatchObject({ outcome: "unjudged", reason: "nukadoko could not judge this claim: Access to this API has been restricted" });
+  });
+});
+
 describe("the record of a claim", () => {
   const base: Omit<ClaimInputs, "args" | "observed"> = {
     schemaChanged: () => false,
@@ -725,6 +807,7 @@ describe("the record of a claim", () => {
     sentenceText: (key: string) => (key === "result" ? null : `text of ${key}`),
     patterns: ["the tally exits with {code:int}"],
     testPattern: testInProcess,
+    budget: judgingBudget(Number.POSITIVE_INFINITY, "a test's budget"),
   };
 
   it("names the actual value, its source, the compare, the expected value, its source, its text, and the outcome, in that order", async () => {

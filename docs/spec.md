@@ -1804,12 +1804,23 @@ from: under `contains-text`, a text of only whitespace or nothing; under
 `matches`, a pattern that matches the empty string.
 
 `matches` tests the regular expression on a worker thread, which nukadoko
-starts outside the step's recorded actions, and gives it the time left of
-the step's deadline (10 seconds for a step with no deadline). A pattern
-that runs longer, as one that backtracks can for minutes on a short text,
-is stopped, and the claim breaks with that reason. A regular expression
-cannot be interrupted on the thread that runs it, so without the worker
-such a pattern held the run past its deadline and past SIGTERM.
+starts outside the step's recorded actions. A regular expression cannot be
+interrupted on the thread that runs it, so without the worker a pattern
+that backtracks, as one can for minutes on a short text, held the run past
+its deadline and past SIGTERM.
+
+Judging is bounded by the step's deadline as a whole (10 seconds for each
+judging of a step with no deadline), not claim by claim: each claim, each
+item of an `each`, and each pattern takes its time from what is left. A
+pattern gets the time left, never none, and one still running when it
+runs out is stopped; its claim, or its item, is `unjudged` with that
+reason. nukadoko then stops judging, and each claim and each item it did
+not reach is `unjudged` too, with a reason that says the deadline passed
+and how many were not judged: `the step's deadline passed, so nukadoko
+stopped judging: 400 of 400 items were not judged`. An `each` whose
+judged items already broke one is `broken`, with the same reason. No
+worker is started after the deadline passed, so a slow pattern under an
+`each` of 400 items costs one stopped worker, not 400.
 
 #### Each
 
@@ -1868,10 +1879,14 @@ guard inside `observe` that throws is visible as not having measured,
 never as a claim that held or broke. `unobserved` means exactly that
 `observe` threw. A step deadline that passes first is `timeout`, a
 fixture that cannot be set up is the step's own error, as for any step,
-and a step with no `observe` is never `unobserved`. When nukadoko itself
-fails while judging a claim (the worker that tests `matches` stops), the
-claim's outcome is `unjudged` and the step fails with `claim_unjudged`,
-never `claim_broken`: nothing is known about the criterion.
+and a step with no `observe` is never `unobserved`. When nukadoko cannot
+judge a claim after `observe` returned, the claim's outcome is `unjudged`
+with the reason, and the step fails with `claim_unjudged`, never
+`claim_broken` and never a step error with no claims: nothing is known
+about the criterion. That covers the worker that tests `matches`
+stopping or failing to start (as under `node --permission` without
+`--allow-worker`), a value no snapshot could take, the step's deadline
+passing while it judges, and any other failure while a claim is judged.
 
 #### Poll
 

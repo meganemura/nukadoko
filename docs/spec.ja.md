@@ -1491,9 +1491,17 @@ JSON の型が違う 2 つの値の比較では、claim は成り立たず、両
 `contains-text` では空白だけか空のテキスト、`matches` では空文字列に一致する pattern です。
 
 `matches` は正規表現を worker スレッドで試します。
-nukadoko はこのスレッドを step の記録される操作の外で起動し、step の締め切りの残り時間(締め切りのない step では 10 秒)を与えます。
-バックトラックする pattern のようにそれより長く走る pattern は止められ、claim はその理由で成り立ちません。
-正規表現は、それを実行しているスレッドの上では中断できないので、worker がなければそのような pattern は締め切りも SIGTERM も越えて実行を止めていました。
+nukadoko はこのスレッドを step の記録される操作の外で起動します。
+正規表現は、それを実行しているスレッドの上では中断できないので、worker がなければ、短いテキストに対して何分もバックトラックする pattern は、締め切りも SIGTERM も越えて実行を止めていました。
+
+判定は、claim ごとではなく全体として、step の締め切りで区切られます(締め切りのない step では、判定 1 回ごとに 10 秒)。
+各 claim、`each` の各要素、各 pattern は、残った時間から自分の時間を使います。
+pattern には残り時間を与え、残りが無いときに与えることはありません。
+時間が尽きてもまだ走っている pattern は止められ、その claim か要素は、その理由とともに `unjudged` になります。
+そのあと nukadoko は判定を止め、たどり着かなかった各 claim と各要素も `unjudged` になります。
+理由は、締め切りが過ぎたことと、判定しなかった数を述べます(`the step's deadline passed, so nukadoko stopped judging: 400 of 400 items were not judged`)。
+判定した要素の中にすでに成り立たないものがある `each` は、同じ理由とともに `broken` になります。
+締め切りが過ぎたあとに worker を起動することはないので、400 個の要素を持つ `each` の下の遅い pattern で止める worker は、400 個ではなく 1 個です。
 
 #### each
 
@@ -1540,8 +1548,9 @@ throw した `observe` は、その step をエラーとともに `unobserved` �
 `observe` の中で throw するガードは、計測しなかったこととして見え、成り立った claim や成り立たなかった claim としては見えません。
 `unobserved` は、`observe` が throw したことだけを意味します。
 step の締め切りが先に来た場合は `timeout`、fixture を用意できなかった場合はどの step とも同じく step 自身のエラーであり、`observe` のない step が `unobserved` になることはありません。
-nukadoko 自身が claim の判定の途中で失敗したとき(`matches` を試す worker が止まったとき)、その claim の `outcome` は `unjudged` で、step は `claim_broken` ではなく `claim_unjudged` で失敗します。
+`observe` が返ったあとで nukadoko が claim を判定できないとき、その claim の `outcome` は理由とともに `unjudged` で、step は `claim_broken` でも claim を持たない step のエラーでもなく、`claim_unjudged` で失敗します。
 受け入れ基準については何もわからないからです。
+これには、`matches` を試す worker が止まったときや起動できないとき(`--allow-worker` のない `node --permission` の下など)、スナップショットを取れない値、判定の途中で step の締め切りが過ぎたとき、claim の判定中のその他の失敗が含まれます。
 
 #### poll
 

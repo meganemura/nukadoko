@@ -125,9 +125,10 @@ side is a copy taken where the value comes from (when `observe`
 returns, before the args schema runs), so a value changed later is not
 the one judged, and `observe` gets a copy of its inputs.
 An expected text every string holds breaks too (blank under
-`contains-text`, a pattern that matches `""` under `matches`), and a
-`matches` pattern that runs past the step's deadline is stopped and
-breaks. `nuka check` reads each `from` path against the producer's
+`contains-text`, a pattern that matches `""` under `matches`). Judging
+as a whole has the step's deadline: a `matches` pattern still running
+when it passes is stopped, and that claim and every claim or item not
+judged by then is `unjudged`, with how many. `nuka check` reads each `from` path against the producer's
 `returns` (`claim-path-unknown`), reports a claim whose sides are one place
 (`claim-compares-itself`), and refuses a parameter type with a transformer
 on an expected key (`claim-expected-transformed`).

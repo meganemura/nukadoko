@@ -41,7 +41,7 @@ describe("the pattern worker", () => {
       ].join("\n"),
     );
     expect(JSON.parse(stdout)).toEqual({
-      slow: { reason: "matches did not finish within 50ms (a test), so nukadoko stopped the pattern" },
+      slow: { stopped: "matches did not finish within 50ms (a test), so nukadoko stopped the pattern" },
       next: { holds: true, matchesEmpty: false },
     });
     expect(ms).toBeLessThan(10_000);

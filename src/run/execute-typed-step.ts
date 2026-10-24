@@ -22,8 +22,10 @@ import {
   readKey,
   takeReads,
   unobservedClaims,
+  judgingBudget,
   type ArgSide,
   type ClaimInputs,
+  type JudgingBudget,
   type JudgedClaim,
   type PatternTester,
   type PollClock,
@@ -236,8 +238,8 @@ function observeInputs(args: Readonly<Record<string, unknown>>, withheld: Readon
   });
 }
 
-/** The time a `matches` pattern may take when the step has no deadline at
- * all, which only a caller that passes no `stepTimeout` can arrange. */
+/** The time one judging may take when the step has no deadline at all,
+ * which only a caller that passes no `stepTimeout` can arrange. */
 export const PATTERN_LIMIT_MS = 10_000;
 
 function testsPatterns(claims: readonly Claim[]): boolean {
@@ -251,10 +253,11 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const args = (typeof input.args === "object" && input.args !== null ? input.args : {}) as Readonly<Record<string, unknown>>;
   const deadline = deadlineOf(step, config);
   const startedAt = Date.now();
-  const testPattern: PatternTester = (pattern, text) =>
-    deadline.ms === undefined
-      ? testPatternInWorker(pattern, text, PATTERN_LIMIT_MS, "the limit for a step with no deadline")
-      : testPatternInWorker(pattern, text, Math.max(1, startedAt + deadline.ms - Date.now()), "the time left of the step's deadline");
+  const testPattern: PatternTester = testPatternInWorker;
+  // Judging is bounded by the step's deadline as a whole: every claim,
+  // item, and reading takes its time from what is left of it.
+  const stepBudget = deadline.ms === undefined ? null : judgingBudget(startedAt + deadline.ms, "the step's deadline");
+  const budgetOf = (): JudgingBudget => stepBudget ?? judgingBudget(Date.now() + PATTERN_LIMIT_MS, "the 10 second limit for judging a step with no deadline");
   const fromKeys = new Set(Object.keys(step.from));
   const reads = claimReads(step.claims, fromKeys);
   // A caller that took no snapshot before the schema ran (none does) gets
@@ -271,6 +274,7 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
     sentenceText: input.sentenceText,
     patterns: step.patterns,
     testPattern,
+    budget: budgetOf(),
   });
   let fixtureUsage: FixtureUsageEntry[] = [];
   let attempts = 0;

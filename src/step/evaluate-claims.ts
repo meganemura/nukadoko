@@ -109,14 +109,49 @@ export function applyView(view: ClaimView | undefined, value: unknown): { readon
 }
 
 /** What testing a regular expression found: whether it matches the text
- * and whether it matches the empty string, or why it could not be tested
- * (it does not build, or it ran past the step's deadline). */
-export type PatternOutcome = { readonly holds: boolean; readonly matchesEmpty: boolean } | { readonly reason: string };
+ * and whether it matches the empty string, why it could not be tested (it
+ * does not build), or that it was stopped when its time ran out. */
+export type PatternOutcome =
+  | { readonly holds: boolean; readonly matchesEmpty: boolean }
+  | { readonly reason: string }
+  | { readonly stopped: string };
 
-/** Tests `pattern` against `text`. The runner gives one that runs where it
- * can be stopped, since a pattern that backtracks can run for longer than
- * the step may. It throws only when it could not test at all. */
-export type PatternTester = (pattern: string, text: string) => Promise<PatternOutcome>;
+/** Tests `pattern` against `text`, giving it at most `timeoutMs`;
+ * `limit` says in a reason what that time is. The runner gives one that
+ * runs where it can be stopped, since a pattern that backtracks can run for
+ * longer than the step may. It throws only when it could not test at all. */
+export type PatternTester = (pattern: string, text: string, timeoutMs: number, limit: string) => Promise<PatternOutcome>;
+
+/** The time one judging may take, shared by every claim and item it
+ * judges, so a slow claim takes its time from the claims after it rather
+ * than each claim getting the whole of it. */
+export interface JudgingBudget {
+  /** The milliseconds judging may still take; 0 or less once spent. */
+  readonly left: () => number;
+  /** Marks the budget spent: a pattern ran until it was stopped. */
+  readonly spend: () => void;
+  /** What the budget is, as a reason names it: `the step's deadline`. */
+  readonly limit: string;
+}
+
+/** A budget that ends at `endsAt` on `now`'s clock. Pure apart from
+ * reading the clock. */
+export function judgingBudget(endsAt: number, limit: string, now: () => number = Date.now): JudgingBudget {
+  let spent = false;
+  return {
+    left: () => (spent ? 0 : endsAt - now()),
+    spend: () => {
+      spent = true;
+    },
+    limit,
+  };
+}
+
+/** Why a claim, or the rest of an `each`, was not judged once the
+ * budget was spent. */
+function budgetSpent(budget: JudgingBudget, notJudged: number, of: number, what: "claims" | "items"): string {
+  return `${budget.limit} passed, so nukadoko stopped judging: ${notJudged} of ${of} ${what} were not judged`;
+}
 
 /** Whether `actual <compare> expected` holds, or why the two sides cannot
  * be compared at all. Both sides are plain JSON. A comparison across two
@@ -128,8 +163,8 @@ export async function compareValues(
   compare: ClaimCompare,
   actual: unknown,
   expected: unknown,
-  testPattern: PatternTester,
-): Promise<{ readonly holds: boolean } | { readonly reason: string }> {
+  testPattern: (pattern: string, text: string) => Promise<PatternOutcome>,
+): Promise<{ readonly holds: boolean } | { readonly reason: string } | { readonly stopped: string }> {
   const actualType = jsonType(actual);
   const expectedType = jsonType(expected);
   switch (compare) {
@@ -151,7 +186,7 @@ export async function compareValues(
       }
       if (text === "") return { reason: "matches has an empty expected value, which every string holds" };
       const tested = await testPattern(text, actual as string);
-      if ("reason" in tested) return tested;
+      if ("reason" in tested || "stopped" in tested) return tested;
       if (tested.matchesEmpty) return { reason: `matches has a pattern that matches the empty string, so every string holds it` };
       return { holds: tested.holds };
     }
@@ -278,6 +313,7 @@ export interface ClaimInputs {
   readonly sentenceText: (key: string) => string | null;
   readonly patterns: readonly string[];
   readonly testPattern: PatternTester;
+  readonly budget: JudgingBudget;
 }
 
 /** One claim as judged, with the raw actual value (before `view` and
@@ -442,9 +478,23 @@ async function judgeComparison(claim: ItemClaim, rawActual: Side, actualSegments
   };
   const stop = precondition(actual, actualSegments, expected, inputs);
   if (stop !== null) return "broken" in stop ? { ...base, outcome: "broken", reason: stop.broken } : { ...base, outcome: "unjudged", reason: stop.unjudged };
-  const result = await compareValues(claim.compare, (actual as { value: unknown }).value, (expected as { value: unknown }).value, inputs.testPattern);
+  const result = await compareValues(claim.compare, (actual as { value: unknown }).value, (expected as { value: unknown }).value, (pattern, text) =>
+    testWithinBudget(pattern, text, inputs),
+  );
+  if ("stopped" in result) return { ...base, outcome: "unjudged", reason: result.stopped };
   if ("reason" in result) return { ...base, outcome: "broken", reason: result.reason };
   return { ...base, outcome: result.holds ? "held" : "broken" };
+}
+
+/** Tests a pattern with the time left of the budget, and never with none:
+ * a pattern stopped when its time ran out spends the budget, so no later
+ * item starts a worker only to stop it again. */
+async function testWithinBudget(pattern: string, text: string, inputs: ClaimInputs): Promise<PatternOutcome> {
+  const left = inputs.budget.left();
+  if (left <= 0) return { stopped: `${inputs.budget.limit} had passed, so nukadoko did not test the pattern` };
+  const tested = await inputs.testPattern(pattern, text, left, `the time left of ${inputs.budget.limit}`);
+  if ("stopped" in tested) inputs.budget.spend();
+  return tested;
 }
 
 /** At most this many items of one `each` are kept on the record. */
@@ -487,7 +537,24 @@ async function judgeEach(claim: EachClaim, rawActual: Side, actualSegments: read
   const items: unknown[] = value;
   if (items.length === 0) return ended("broken", "the array is empty, and a claim on every item of nothing measures nothing");
   const judged: ClaimItemRecord[] = [];
+  // The record of an each the budget ran out on, before item `next`. An
+  // item whose pattern was stopped counts as not judged too, and an item
+  // that already broke decides the claim; otherwise nothing is known about
+  // the items left.
+  const stopped = (next: number): ClaimEachRecord => {
+    const selectedSoFar = judged.filter((entry) => entry.selected);
+    const broke = selectedSoFar.some((entry) => entry.selected && entry.outcome === "broken");
+    const unjudged = selectedSoFar.filter((entry) => entry.selected && entry.outcome === "unjudged").length;
+    const kept = keptItems(judged);
+    return {
+      ...base,
+      each: { ...declared, items: items.length, selected: selectedSoFar.length, results: kept, ...(judged.length > kept.length ? { results_truncated: judged.length } : {}) },
+      outcome: broke ? "broken" : "unjudged",
+      reason: budgetSpent(inputs.budget, items.length - next + unjudged, items.length, "items"),
+    };
+  };
   for (let index = 0; index < items.length; index += 1) {
+    if (inputs.budget.left() <= 0) return stopped(index);
     const itemPlace = placeAt(actual.place, String(index));
     const whereRecords: ClaimComparisonRecord[] = [];
     for (const entry of where) {
@@ -518,6 +585,7 @@ async function judgeEach(claim: EachClaim, rawActual: Side, actualSegments: read
       claims,
     });
   }
+  if (inputs.budget.left() <= 0 && judged.some((entry) => entry.selected && entry.outcome === "unjudged")) return stopped(items.length);
   const selected = judged.filter((entry) => entry.selected);
   const kept = keptItems(judged);
   const truncated = judged.length > kept.length ? { results_truncated: judged.length } : {};
@@ -632,8 +700,15 @@ function fromKeyOf(claim: Claim, fromKeys: ReadonlySet<string>): string | null {
  * and the other claims are still judged. */
 export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInputs): Promise<readonly JudgedClaim[]> {
   const judged: JudgedClaim[] = [];
-  for (const claim of claims) {
+  // Where the budget ran out: every claim from there on says the same count.
+  let stoppedAt: number | null = null;
+  for (const [index, claim] of claims.entries()) {
     const fromKey = fromKeyOf(claim, inputs.fromKeys);
+    if (stoppedAt === null && inputs.budget.left() <= 0) stoppedAt = index;
+    if (stoppedAt !== null) {
+      judged.push({ record: notJudged(claim, inputs, "unjudged", budgetSpent(inputs.budget, claims.length - stoppedAt, claims.length, "claims")), rawActual: undefined, fromKey });
+      continue;
+    }
     let rawActual: unknown;
     try {
       const actual = topLevelSide(claim.actual, inputs);
