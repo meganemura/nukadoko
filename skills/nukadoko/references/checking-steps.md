@@ -8,10 +8,9 @@ where the value it compares with comes from. nukadoko compares, and the
 step record keeps each claim with both values and where each came from.
 A typed Then never calls `expect` or `node:assert`. `defineStep` refuses a
 claim step that also declares `run`, `returns`, `mutates`, or `parts`.
-`nuka check` refuses a Then bound to a step that runs
-(`then-without-claims`) and a claim step bound in a Given or a When
-(`claims-outside-then`): a step that reads a value for a later Then is a
-When.
+`nuka check` refuses a Then bound to a step that runs (`then-without-claims`)
+and a claim step in a Given or a When (`claims-outside-then`): a step
+that reads a value for a later Then is a When.
 
 ```ts
 import { defineStep, z } from "nukadoko";
@@ -19,7 +18,6 @@ import runTally from "./run-tally.ts";
 
 export default defineStep({
   pattern: "it exits with {code:int}",
-  description: "The process exit code is exactly this",
   args: z.object({
     code: z.number().describe("The expected exit code"),
     exitCode: runTally.returns.shape.exitCode,
@@ -32,10 +30,10 @@ export default defineStep({
 A claim is `{ actual, view?, at?, compare, expected, expected_view? }`.
 `nuka scaffold --then --from <step>.<key>` writes this shape when the
 line states one value; `examples/` has a finished Then for a CLI, an API,
-and a workflow. Write the claims as plain data (no getter, no Proxy, no
-class instance) and export what `defineStep` returned, unchanged: it
-validates and freezes one copy of the definition, and a copy of the step
-(`{ ...step, claims }`) fails to import.
+and a workflow (`examples/workflow.md` claims a literal and a sentence
+value in one step). Write claims as plain data (no getter, Proxy, or
+class instance) and export what `defineStep` returned: it validates and
+freezes one copy, and a copy of the step (`{ ...step }`) fails to import.
 
 ## Where the expected value comes from
 
@@ -67,7 +65,6 @@ import countItems from "./count-items.ts";
 
 export default defineStep({
   pattern: "the item count is unchanged",
-  description: "The API lists as many items as the earlier count found",
   args: z.object({ before: countItems.returns.shape.count }),
   from: { before: [countItems, "count"] },
   async observe({ request }) {
@@ -83,7 +80,6 @@ import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "{first:string} is listed before {second:string}",
-  description: "The first title renders above the second",
   args: z.object({
     first: z.string().describe("The title expected first"),
     second: z.string().describe("The title expected after it"),
@@ -99,43 +95,36 @@ export default defineStep({
 });
 ```
 
-A literal sits beside the other sources: `examples/workflow.md` claims
-`{ literal: "refused" }` on `outcome` and the sentence's reason on
-`reason`, in one step.
-
 ## The actual value
 
 `actual` is a path whose first segment is a `from` key or a key `observe`
-returns, never a key the sentence fills. `view: "text"` trims the end (the
-newline a program prints last), `"lines"` also splits it into lines, and
-`"json"` parses it; `at` then takes a path inside the viewed value, so
-parsing is data: `{ actual: "stdout", view: "json", at:
+returns, never a key the sentence fills; a path reads own properties
+only (not `constructor`, not a getter). `view: "text"` trims the end
+(the newline a program prints last), `"lines"` also splits it into
+lines, and `"json"` parses it; `at` then takes a path inside the viewed
+value, so parsing is data: `{ actual: "stdout", view: "json", at:
 "sections.git.0.dirty_count", compare: "equal", expected: "count" }`.
 `{ actual, each: { where?, claims } }` applies item claims to every item
 of an array (paths inside are relative to the item), and breaks when the
 array, or what `where` selects, is empty. A `where` claim that reads
-what an item claim reads (`actual` then `at`, with or without a `view`)
-is refused, whatever its compare: it would turn "every item" into "every
-item that holds". A path reads own properties only (not `constructor`,
-not a getter).
+what an item claim reads (`actual` then `at`, any `view`, any compare)
+is refused: "every item" would read as "every item that holds".
 
 The compares: `equal` (structural; key order does not count), `not-equal`,
 `contains-text`, `has-item`, `matches`, `greater-than`, `at-least`,
 `less-than`, `at-most`. Two values of different JSON types break the
-claim. A value that is not plain JSON (a `Date`, a bigint, `NaN`, an
-`undefined` item, a `Proxy`) or that nests deeper than 256 levels
-leaves it `unjudged`: return an ISO string or a number instead. Each
-side is a copy taken where the value comes from (when `observe`
-returns, before the args schema runs), so a value changed later is not
-the one judged, and `observe` gets a copy of its inputs.
-An expected text every string holds breaks too (blank under
-`contains-text`, a pattern that matches `""` under `matches`). Judging
-as a whole has the step's deadline: a `matches` pattern still running
-when it passes is stopped, and that claim and every claim or item not
-judged by then is `unjudged`, with how many. `nuka check` reads each `from` path against the producer's
-`returns` (`claim-path-unknown`), reports a claim whose sides are one place
-(`claim-compares-itself`), and refuses a parameter type with a transformer
-on an expected key (`claim-expected-transformed`).
+claim, and so does an expected text every string holds (blank under
+`contains-text`, a pattern that matches `""` under `matches`). Each side
+is a plain JSON copy taken where the value comes from (when `observe`
+returns, before the args schema runs), and `observe` gets a copy of its
+inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a `Proxy`, or
+nesting past 256 levels leaves the claim `unjudged` (return an ISO
+string or a number). Judging has the step's deadline: each claim or item
+not judged by then, a running `matches` pattern included, is
+`unjudged`, with how many. `nuka check` reads each `from` path against
+the producer's `returns` (`claim-path-unknown`), reports a claim whose
+sides are one place (`claim-compares-itself`), and refuses a parameter
+type with a transformer on an expected key (`claim-expected-transformed`).
 
 ## Observe, poll, and a boolean
 
@@ -143,8 +132,7 @@ on an expected key (`claim-expected-transformed`).
 the value. It gets every args key except the ones a claim compares with,
 and reading one of those, or calling `resultOf`, throws: an earlier
 step's value reaches a claim through `from` alone. An `observe` that
-throws records `unobserved`; a claim nukadoko failed to judge is
-`claim_unjudged`.
+throws records `unobserved`; a claim not judged is `claim_unjudged`.
 
 Return what you measured, never a verdict: a count, a text, a list. A
 boolean literal is refused when the actual value comes from `observe`,
@@ -172,11 +160,10 @@ source. The step fails with `claim_broken`, and the run summary lists
 every claim under "Claims" with its outcome. A broken claim is fixed in
 the implementation or by asking the person, never by a weaker compare.
 
-**One step per claim, or one step with the expected value in the line?**
-Let the sentence decide, since the sentence is what a non-engineer agreed
-to. "the total is {expected:int}" carries its expected value naturally, so
-that is one step. "is in trial" and "is not in trial" read as two
-different claims, so they are two steps.
+**One step per claim, or the expected value in the line?** Let the
+sentence a non-engineer agreed to decide: "the total is {expected:int}"
+carries its value, so it is one step; "is in trial" and "is not in
+trial" read as two claims, so they are two steps.
 
 ## `expect` in a step that runs
 
@@ -195,7 +182,6 @@ import { defineStep, z } from "nukadoko";
 
 export default defineStep({
   pattern: "the results are titled, in this order",
-  description: "The rendered result titles, in render order",
   args: z.object({
     expected: z.string().describe("Expected titles, one per line, in render order"),
   }),
