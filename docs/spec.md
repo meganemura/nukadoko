@@ -1999,7 +1999,9 @@ for a write, which this tool does not let overrule a declaration.
   only drives a flow can be what the author meant, but the run records
   it: the scenario's entry in `run.json` says what judged it
   (`judged_by`), and the run summary lists it under "Scenarios with no
-  claim".
+  claim". The run decides that from what it judged, not from what the
+  lines bind: a scenario whose Then claim step never ran, observed
+  nothing, or judged no claim for any other reason is listed too.
 
 Compat steps are not covered by these two codes. They are the migration
 door (see "Compat steps (the migration door)"), and a compat step cannot
@@ -3638,15 +3640,16 @@ to act on the run without opening another file:
   does not need them.
 - Every scenario has `claims`, the claims of its step records counted
   by outcome: `held` and `broken` always, and `unobserved` and `unjudged`
-  when there are any. A scenario none of whose Then lines binds a claim
-  step has `judged_by`: `compat` when a compat step in Then position
-  judged it, by throwing or not, and `nothing` otherwise, when it passes
-  whenever its steps run without an error. A claim step on a Given, When,
-  or `*` line does not count, the same rule `scenario-without-then`
-  applies, so a run under `--no-check` that runs one still names the
-  scenario. A scenario with a claim step on a Then line has no
-  `judged_by`, and neither has one with a Then line that binds no step,
-  since what that line would judge is unknown.
+  when there are any. A scenario in which no claim on a Then line was
+  judged (held, broken, or unjudged) has `judged_by`: `compat` when a
+  compat step is bound in Then position, which may have judged by
+  throwing or not, and `nothing` otherwise. It is read from the step
+  records, not from what the lines bind, so a scenario whose Then claim
+  step never ran (an earlier step failed), observed nothing, or had no
+  claim to judge is named, and so is one whose Then line binds no step. A
+  claim on a Given, When, or `*` line does not count, the same rule
+  `scenario-without-then` applies, so a run under `--no-check` that
+  runs one still names the scenario.
 - `check` is `ran` when `nuka check` ran before the scenarios and found
   no error that held the run back, and `skipped` under `nuka run
   --no-check`, so a run that started past the check says so.
@@ -4667,8 +4670,8 @@ holds:
   `expected measured` for an expected value from `from` or `observe`
   (see "Claims");
 - "Scenarios with no claim", one line per scenario whose entry has
-  `judged_by`: its location, its name, and what judged it (only a compat
-  step, or nothing);
+  `judged_by`: its location, its name, and that no claim judged it (with
+  a compat step in Then position that may have);
 - "Unmeasured actions", when a step did something the tool saw but could
   not measure (`observed.unmeasured`), started a request or a
   `runCommand` process after its record was written (`after_step_end`),

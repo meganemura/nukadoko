@@ -1630,6 +1630,8 @@ step record は、他の step の書き込みと同じようにそれを計測�
   Then を持たないか(`*` の行だけの scenario を含みます)、どの Then の行も claim step に結び付きません。
   流れを動かすだけの scenario が作者の意図どおりのこともあるので警告のままですが、実行はそれを記録します。
   `run.json` のその scenario の要素が何で判定したか(`judged_by`)を述べ、run サマリが「Scenarios with no claim」の下に並べます。
+  run はそれを、行が何に結び付くかではなく、何を判定したかから決めます。
+  Then の claim step が動かなかった、何も観測できなかった、ほかの理由でどの claim も判定しなかった scenario も並べます。
 
 compat step は、この 2 つのコードの対象外です。
 compat step は移行の扉であり(「Compat steps(移行の扉)」を参照)、claim を宣言できません。
@@ -2967,13 +2969,12 @@ run が終わったとき、最後の step record と run サマリの後に、�
   大きくなりうるうえ、次の判断には要らないからです。
 - すべての scenario は `claims` を持ちます。
   その scenario の step record の claim を成否ごとに数えたもので、`held` と `broken` は常にあり、`unobserved` と `unjudged` は 1 つでもあるときにあります。
-  どの Then の行も claim step に結び付かない scenario は `judged_by` を持ちます。
-  Then の位置にある compat step が throw するかどうかで判定したときは `compat`、それ以外は `nothing` で、step がエラーなく動けば必ず通ることを意味します。
-  Given、When、`*` の行にある claim step は数えません。
+  Then の行のどの claim も判定されなかった(成り立つ、成り立たない、判定できなかったのどれでもない)scenario は `judged_by` を持ちます。
+  Then の位置に compat step が結び付いていて、それが throw するかどうかで判定したかもしれないときは `compat`、それ以外は `nothing` です。
+  これは行が何に結び付くかではなく step record から読みます。
+  そのため、Then の claim step が動かなかった(前の step が失敗した)、何も観測できなかった、判定する claim がなかった scenario も挙げ、どの step にも結び付かない Then の行を持つ scenario も挙げます。
+  Given、When、`*` の行にある claim は数えません。
   `scenario-without-then` と同じ規則なので、そのような claim step を動かす `--no-check` の run でも、その scenario を挙げます。
-  Then の行に claim step が結び付く scenario は `judged_by` を持ちません。
-  どの step にも結び付かない Then の行を持つ scenario も持ちません。
-  その行が何を判定するはずだったかが分からないからです。
 - `check` は、scenario の前に `nuka check` が動いて run を止めるエラーを見つけなかったときは `ran`、`nuka run --no-check` のときは `skipped` です。
   そのため check を飛ばして始まった run は、そのことを述べます。
 - 失敗した scenario は、それだけを走らせるコマンドである `do` を持ちます。
@@ -3676,7 +3677,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - 「Claims」。
   claim を宣言した Then ごとに 1 つの項目で、その場所と文、読み取りが 2 回以上ならその回数を載せ、その下に claim ごとに 1 行を、失敗メッセージと同じ言葉に成否と `measured: <channel>` か `measured: none` を続け、`from` か `observe` から来た期待値には `expected measured` も続けて載せます(「Claims」を参照)。
 - 「Scenarios with no claim」。
-  要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、何が判定したか(compat step だけか、何もないか)を載せます。
+  要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、どの claim も判定しなかったこと(判定したかもしれない compat step が Then の位置にあればそのこと)を載せます。
 - 「Unmeasured actions」。
   step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、または step のあとに届いたプログラムのログの行があるとき(`program_log_late`)、step ごとに 1 行を載せます。
   行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es)`、world の停止がそうした行を見つけたときは `<n> line(s) of the program's log after the step ended, in program-log-late.txt`(「テスト対象のプログラム」を参照)、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。

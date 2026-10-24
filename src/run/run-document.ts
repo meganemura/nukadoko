@@ -181,23 +181,31 @@ export function scenarioClaims(stepRecords: readonly (StepRecord | null)[]): Run
   };
 }
 
-/** What judged a scenario none of whose Then lines binds a claim step, or
- * `undefined` for one with a claim step on a Then line, run or not. This
- * is the rule `nuka check` warns `scenario-without-then` by: a claim step
- * on a Given, When, or `*` line is not the scenario's criterion
- * (`claims-outside-then`), and a run under `--no-check` must not read as
- * judged because of one. A Then line that binds no step, or one this run
- * cannot name, has an error of its own, and what it would have judged is
- * unknown, so such a scenario is `undefined` too, as the check is
- * silent on it. Pure. */
+/** What judged a scenario in which no claim on a Then line was judged,
+ * or `undefined` for one in which at least one was: held, broken, or
+ * unjudged, read from the step records. It is decided from what was
+ * judged, not from what the lines bind: a claim step that never ran (an
+ * earlier step failed), that observed nothing, or whose claims were
+ * somehow empty judged nothing, and a scenario that passed with no claim
+ * judged must not read as judged. A claim step on a Given, When, or `*`
+ * line is not the scenario's criterion (`claims-outside-then`), so its
+ * claims do not count. `compat` when a compat step is bound in Then
+ * position, since it may have judged by throwing, and `nothing`
+ * otherwise. Pure. */
 export function judgedBy(
   names: readonly (string | null)[],
   inThen: (index: number) => boolean,
   stepKind: RunScenarioInput["stepKind"],
+  stepRecords: readonly (StepRecord | null)[],
 ): "compat" | "nothing" | undefined {
-  const thenKinds = names.flatMap((name, index) => (inThen(index) ? [name === null ? null : stepKind(name)] : []));
-  if (thenKinds.includes("claim") || thenKinds.includes(null)) return undefined;
-  return thenKinds.includes("compat") ? "compat" : "nothing";
+  const thenIndexes = names.flatMap((_, index) => (inThen(index) ? [index] : []));
+  const judged = thenIndexes.some((index) => (stepRecords[index]?.claims ?? []).some((claim) => claim.outcome !== "unobserved"));
+  if (judged) return undefined;
+  const compat = thenIndexes.some((index) => {
+    const name = names[index];
+    return name !== null && name !== undefined && stepKind(name) === "compat";
+  });
+  return compat ? "compat" : "nothing";
 }
 
 export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput): RunScenario {
@@ -229,14 +237,14 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
           }),
     };
   });
+  const stepRecords = record.steps.map((entry) => (entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null)));
   const judged = judgedBy(
     steps.map((entry) => entry.step),
     input.inThen,
     input.stepKind,
+    stepRecords,
   );
-  const claims = scenarioClaims(
-    record.steps.map((entry) => (entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null))),
-  );
+  const claims = scenarioClaims(stepRecords);
   return {
     scenario_record_id: record.scenario_record_id,
     feature: record.feature,

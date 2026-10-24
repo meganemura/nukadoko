@@ -124,6 +124,6 @@ it is never a Then. A scenario with steps of its own and no Then, in it
 or in the Background (a scenario of only `*` lines included), passes
 whenever its steps run, and so does one whose Then lines bind no claim
 step, so `nuka check` warns `scenario-without-then`, and run.json marks
-the scenario with `judged_by`. Add the Then line that names
+a scenario in which no Then claim was judged with `judged_by`. Add the Then line that names
 what the reader must observe afterwards; a step that checks something
 but sits under Given or When belongs under Then instead.

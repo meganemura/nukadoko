@@ -454,7 +454,7 @@ function renderUnmeasured(document: RunDocument): string[] {
   ];
 }
 
-// One line per scenario none of whose Then lines binds a claim step
+// One line per scenario in which no claim on a Then line was judged
 // (run.json's `judged_by`): it passed or failed without a Then judging a
 // claim, which a reader approving the run has to see beside the green.
 // Under `--repeat` or several environments the scenario is one line.
@@ -466,8 +466,8 @@ function renderUnjudged(document: RunDocument): string[] {
     if (lines.has(key)) continue;
     const why =
       scenario.judged_by === "compat"
-        ? "only a compat step in Then position judged it, by throwing or not, and nukadoko cannot see what it checked"
-        : "no Then line judged it, so it passes whenever its steps run without an error";
+        ? "no claim judged it, and a compat step in Then position may have, by throwing or not, where nukadoko cannot see what it checked"
+        : "no claim on a Then line was judged in it";
     lines.set(key, {
       sortKey: [scenario.feature, scenario.line],
       text: `- ${cellCode(`${scenario.feature}:${scenario.line}`)} ${cellText(scenario.scenario)}: ${why}`,
@@ -475,7 +475,7 @@ function renderUnjudged(document: RunDocument): string[] {
   }
   if (lines.size === 0) return [];
   const sorted = [...lines.values()].sort((a, b) => a.sortKey[0].localeCompare(b.sortKey[0]) || a.sortKey[1] - b.sortKey[1]);
-  return ["", "## Scenarios with no claim", "", "No Then line of each scenario below binds a claim step.", "", ...sorted.map((line) => line.text)];
+  return ["", "## Scenarios with no claim", "", "In each scenario below, no claim on a Then line was judged (held, broken, or unjudged).", "", ...sorted.map((line) => line.text)];
 }
 
 function channelText(measured: MeasuredChannel | null | undefined, ownRecordId: string | null): string {

@@ -163,17 +163,23 @@ describe("a scenario entry's claims and judged_by", () => {
       }
     }));
 
-  it("names no judge when a claim step or an unbound line stands in Then position, compat when only a compat step does, and nothing otherwise, wherever else a claim step stands", () =>
+  it("names no judge exactly when a claim on a Then line was judged, compat when none was and a compat step stands in Then position, and nothing otherwise", () =>
     hegel.testAsync(async (tc) => {
       const kinds = tc.draw(gs.arrays(gs.sampledFrom(["claim", "run", "compat", null, "undefined"] as const), { maxSize: 5 }));
       const then = tc.draw(gs.arrays(gs.booleans(), { minSize: kinds.length, maxSize: kinds.length }));
+      // A claim step's record holds the outcomes it judged: none when it
+      // never ran or its claims were empty, unobserved when observe threw.
+      const records = kinds.map((kind) =>
+        kind === "claim" ? tc.draw(gs.oneOf<StepRecord | null>(gs.just(null), gs.arrays(gs.sampledFrom(OUTCOMES), { maxSize: 3 }).map(stepWith))) : null,
+      );
       const names = kinds.map((kind, index) => (kind === "undefined" ? null : `step${index}`));
       const kindOf = (name: string): "claim" | "run" | "compat" | null => {
         const kind = kinds[Number(name.slice(4))];
         return kind === "undefined" || kind === undefined ? null : kind;
       };
-      const judged = judgedBy(names, (index) => then[index] ?? false, kindOf);
-      if (kinds.some((kind, index) => then[index] && (kind === "claim" || kind === null || kind === "undefined"))) expect(judged).toBeUndefined();
+      const judged = judgedBy(names, (index) => then[index] ?? false, kindOf, records);
+      const judgedOnThen = records.some((record, index) => then[index] && (record?.claims ?? []).some((claim) => claim.outcome !== "unobserved"));
+      if (judgedOnThen) expect(judged).toBeUndefined();
       else if (kinds.some((kind, index) => kind === "compat" && then[index])) expect(judged).toBe("compat");
       else expect(judged).toBe("nothing");
     }));

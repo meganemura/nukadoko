@@ -201,7 +201,7 @@ This part does not change release to release.
   such a Then line with a note on stderr instead of writing a stub.
 
 - **run.json has three more fields.** Each scenario entry has `claims`,
-  and one none of whose Then lines binds a claim step has `judged_by`;
+  and one in which no claim on a Then line was judged has `judged_by`;
   the document has `check`. A reader that compares a scenario entry or the document as a
   whole adds them; a reader that reads keys by name has nothing to do.
   The run summary gains "Scenarios with no claim", a `check: skipped`

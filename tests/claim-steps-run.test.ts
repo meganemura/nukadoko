@@ -1112,7 +1112,8 @@ describe("run.json and the summary say what judged each scenario", () => {
     // "claim off Then" binds a claim step on a When line, which nuka check
     // refuses (claims-outside-then); under --no-check it runs, and its
     // claim is counted, but no Then judged the scenario. "unbound Then"
-    // has a Then line no step matches, so what it judges is unknown.
+    // has a Then line no step matches, and "skipped Then" a claim step
+    // that never ran: no claim on a Then line was judged in either.
     const rootDir = await project({
       "features/steps/it-counts.ts": `import { defineStep, z } from "nukadoko";
 import answer from "./the-app-answers.ts";
@@ -1140,6 +1141,9 @@ export default defineStep({
         "  Scenario: unbound Then",
         "    When the app answers",
         "    Then no step matches this line",
+        "  Scenario: skipped Then",
+        "    When no step matches this line",
+        "    Then it counts 1",
         "",
       ].join("\n"),
     });
@@ -1152,20 +1156,22 @@ export default defineStep({
       ["compat", { held: 0, broken: 0 }, "compat"],
       ["nothing", { held: 0, broken: 0 }, "nothing"],
       ["claim off Then", { held: 1, broken: 0 }, "nothing"],
-      ["unbound Then", { held: 0, broken: 0 }, undefined],
+      ["unbound Then", { held: 0, broken: 0 }, "nothing"],
+      ["skipped Then", { held: 0, broken: 0 }, "nothing"],
     ]);
     const summary = await readFile(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary).toContain("- check: skipped (`nuka run --no-check`), so no finding of `nuka check` held this run back\n");
-    expect(summary).not.toContain("unbound Then:");
     expect(summary).toContain(
       [
         "## Scenarios with no claim",
         "",
-        "No Then line of each scenario below binds a claim step.",
+        "In each scenario below, no claim on a Then line was judged (held, broken, or unjudged).",
         "",
-        "- `features/t.feature:6` compat: only a compat step in Then position judged it, by throwing or not, and nukadoko cannot see what it checked",
-        "- `features/t.feature:9` nothing: no Then line judged it, so it passes whenever its steps run without an error",
-        "- `features/t.feature:11` claim off Then: no Then line judged it, so it passes whenever its steps run without an error",
+        "- `features/t.feature:6` compat: no claim judged it, and a compat step in Then position may have, by throwing or not, where nukadoko cannot see what it checked",
+        "- `features/t.feature:9` nothing: no claim on a Then line was judged in it",
+        "- `features/t.feature:11` claim off Then: no claim on a Then line was judged in it",
+        "- `features/t.feature:14` unbound Then: no claim on a Then line was judged in it",
+        "- `features/t.feature:17` skipped Then: no claim on a Then line was judged in it",
       ].join("\n"),
     );
 
