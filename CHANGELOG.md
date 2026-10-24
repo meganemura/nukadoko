@@ -446,7 +446,10 @@ just until 0.1.
 - **Reports show each claim.** An Allure step gets one zero-width child
   step per claim, named by its claim line, passed, failed, or broken,
   with `actual`, `actual from`, `expected`, `expected from`, and
-  `measured` as parameters. The messages stream attaches the claims as
+  `measured` (`none` when no channel holds the value) as parameters, and
+  `expected measured` for an expected value from `from` or `observe`,
+  one per declaration in an `each`. The messages stream attaches the
+  claims, with a polled step's readings, as
   `claims.json` (`application/vnd.nukadoko.claims+json`), and a step
   that failed with `claim_broken` carries an `exception` of type
   `nukadoko.ClaimBroken`. `nuka steps` prints one `claim:` line per

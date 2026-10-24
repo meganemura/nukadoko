@@ -4275,8 +4275,10 @@ claim は assertion であり、Allure で assertion を表す単位は自分の
 そのため claim step の各 claim は、タイムラインの後に置かれる幅ゼロの child step 1 つになります(「Claims」を参照)。
 名前は claim の行で、run サマリが出力するのと同じ言葉です(例: `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`)。
 status は、claim が成り立ったときは passed、成り立たなかったときは failed、step が何も観測できなかったときや nukadoko が claim を判定できなかったときは broken です。
-parameter は `actual`、`actual from`、`expected`、`expected from` で、生の actual 値を持つ channel があれば `measured` も加わります。
-`from` か `observe` から来た期待値には、そのチャネルか `none` を値とする `expected measured` が加わります。
+parameter は `actual`、`actual from`、`expected`、`expected from`、`measured` で、`measured` の値は生の actual 値を持つ channel か `none` です。
+`none` は、run サマリと同じく、定数がどう見えるかを示します。
+`from` か `observe` から来た期待値には、そのチャネルか `none` を値とする `expected measured` が加わり、`each` では、それを持つ宣言ごとに 1 つ加わります(`expected measured claims[0]`)。
+step が何も観測できなかった claim には、`measured` の parameter はありません。
 読み手は `record.json` を開かずに両方の値を確認できます。
 `claim_broken` で失敗した step は、`step_error` や `result_invalid` と同じく failed です。
 成り立たなかった claim は基準が満たされなかったことであり、それが Allure の failed の意味だからです。
@@ -4381,8 +4383,8 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   そのためスキーマが開いていたとしても、part がここで取る形はありません(「Parts」を参照)。
   Allure がそれを入れ子にできるのは、Allure 自身のモデルがそうしているからです。
 - Attachment は step が自分自身について宣言したものだけを含みます: `declared` の attachment、ログの行、claim step の claim です。
-  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` を持ちます(「Claims」を参照)。
-  claim は、step ファイルが確かめると宣言したものであり、比べた値を伴います。
+  claim は media type `application/vnd.nukadoko.claims+json` の `claims.json` という attachment になり、step record と同じ形の `claims`、`observation`、`attempts` と、poll する step では `readings` と `readings_left_out` を持ちます(「Claims」を参照)。
+  claim は、step ファイルが確かめると宣言したものであり、比べた値を伴い、読み取りは各読み取りが読んだものを示します。
   ログの行は cucumber-js の `text/x.cucumber.log+plain` という media type(`this.log()` が生成するもの)を使います。
   trace、スクリーンショット、HTTP log、バリデーション済みの result は Allure だけに留まります。
   その計測の余剰にはすでに置き場所があり、ここで trace を base64 で埋め込んでも、それを望む消費者がいないままストリームを太らせるだけだからです。

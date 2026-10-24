@@ -10,7 +10,7 @@ import type {
   TableRow,
 } from "@cucumber/messages";
 import type { DeclaredSnapshot } from "../../compat/declared.js";
-import type { ActionEntry, CallEntry, ClaimRecord, ErrorKind, PollRecord, StepRecord } from "../../record/types.js";
+import type { ActionEntry, CallEntry, ClaimRecord, ErrorKind, MeasuredChannel, PollRecord, StepRecord } from "../../record/types.js";
 import { claimLine } from "../summary/claim-line.js";
 import { hookDisplayTitle, type ScenarioHookRecord, type ScenarioRecord, type ScenarioStepEntry } from "../../record/scenario-record.js";
 import { contentTypeForFileName } from "../media-type.js";
@@ -902,18 +902,35 @@ function claimStatus(outcome: ClaimRecord["outcome"]): MappedStatus {
   return outcome === "held" ? "passed" : outcome === "broken" ? "failed" : "broken";
 }
 
+function channelValue(measured: MeasuredChannel | null): string {
+  return measured === null ? "none" : `${measured.step_record_id} ${measured.channel}`;
+}
+
+// `measured: none` is what a constant in step code looks like, so it is
+// shown, as the run summary shows it; a claim that read nothing has no
+// value to have measured. An expected value an earlier step returned or
+// observe read gets the same, as `expected measured`, and an `each`
+// names each declaration that has one, as the summary does.
 function claimParameters(claim: ClaimRecord): MappedParameter[] {
   const parameters: MappedParameter[] = [];
   if ("actual" in claim && claim.actual !== undefined) parameters.push({ name: "actual", value: JSON.stringify(claim.actual) });
   parameters.push({ name: "actual from", value: claim.actual_from });
   if ("expected" in claim && claim.expected !== undefined) parameters.push({ name: "expected", value: JSON.stringify(claim.expected) });
   if ("expected_from" in claim) parameters.push({ name: "expected from", value: claim.expected_from });
-  if (claim.measured !== null) parameters.push({ name: "measured", value: `${claim.measured.step_record_id} ${claim.measured.channel}` });
-  // Present only for an expected value an earlier step returned or observe
-  // read, where `none` is what a constant looks like, so it is shown.
-  if ("expected_measured" in claim && claim.expected_measured !== undefined) {
-    const measured = claim.expected_measured;
-    parameters.push({ name: "expected measured", value: measured === null ? "none" : `${measured.step_record_id} ${measured.channel}` });
+  if (claim.outcome === "unobserved") return parameters;
+  parameters.push({ name: "measured", value: channelValue(claim.measured) });
+  const has = (entry: object): entry is { readonly expected_measured: MeasuredChannel | null } =>
+    Object.hasOwn(entry, "expected_measured") && (entry as { expected_measured?: unknown }).expected_measured !== undefined;
+  if (!("each" in claim)) {
+    if (has(claim)) parameters.push({ name: "expected measured", value: channelValue(claim.expected_measured) });
+    return parameters;
+  }
+  const declared = [
+    ...(claim.each.where ?? []).map((entry, index) => [`where[${index}]`, entry] as const),
+    ...claim.each.claims.map((entry, index) => [`claims[${index}]`, entry] as const),
+  ];
+  for (const [name, entry] of declared) {
+    if (has(entry)) parameters.push({ name: `expected measured ${name}`, value: channelValue(entry.expected_measured) });
   }
   return parameters;
 }

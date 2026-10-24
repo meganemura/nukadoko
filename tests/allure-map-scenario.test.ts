@@ -1909,3 +1909,46 @@ describe("mapGwtStep: tag resolution moved to mapScenario -- resolveTagLabels is
     expect(rawTagValues).toEqual(["@smoke"]);
   });
 });
+
+describe("mapGwtStep: a claim step's claims as child steps", () => {
+  it("shows measured: none for a value no channel holds, and expected measured for each declaration of an each that has one", () => {
+    const { gherkinDocument, pickles } = parse();
+    const pickle = pickles[0]!;
+    const channel = { step_record_id: "step-0", channel: "observed.processes[0].stdout" };
+    const stepRecord = baseStepRecord({
+      claims: [
+        { actual: 3, actual_from: "observe:badge", compare: "equal", expected: 3, expected_from: "observe:counter", expected_text: null, outcome: "held", expected_measured: null, measured: null },
+        {
+          actual_from: "from:list@3.rows",
+          each: {
+            where: [{ actual: "kind", compare: "equal", expected: "food", expected_from: "sentence:kind", expected_text: "food" }],
+            claims: [
+              { actual: "price", compare: "at-most", expected: 10, expected_from: "observe:limit", expected_text: null, expected_measured: null },
+              { actual: "name", compare: "not-equal", expected: "", expected_from: "from:list@3.blank", expected_text: null, expected_measured: channel },
+            ],
+            items: 1,
+            selected: 1,
+            results: [],
+          },
+          outcome: "held",
+          measured: channel,
+        },
+        { actual_from: "observe:count", compare: "equal", expected: 1, expected_from: "sentence:n", expected_text: "1", outcome: "unobserved", measured: null },
+      ],
+      observation: "observed",
+      attempts: 1,
+    } as Partial<StepRecord>);
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+
+    const { step: mapped } = callMapGwtStep({ record: step, stepRecord, gherkinDocument, pickle });
+
+    const parameters = mapped.childSteps.map((child) => child.parameters);
+    expect(parameters[0]).toContainEqual({ name: "measured", value: "none" });
+    expect(parameters[0]).toContainEqual({ name: "expected measured", value: "none" });
+    expect(parameters[1]).toContainEqual({ name: "measured", value: "step-0 observed.processes[0].stdout" });
+    expect(parameters[1]).toContainEqual({ name: "expected measured claims[0]", value: "none" });
+    expect(parameters[1]).toContainEqual({ name: "expected measured claims[1]", value: "step-0 observed.processes[0].stdout" });
+    expect(parameters[1]!.map((parameter) => parameter.name)).not.toContain("expected measured where[0]");
+    expect(parameters[2]!.map((parameter) => parameter.name)).not.toContain("measured");
+  });
+});

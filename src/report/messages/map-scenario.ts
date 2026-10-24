@@ -180,7 +180,15 @@ function claimsAttachment(stepRecord: StepRecord, testCaseStartedId: string, tes
     {
       kind: "built",
       attachment: {
-        body: JSON.stringify({ claims: stepRecord.claims, observation: stepRecord.observation, attempts: stepRecord.attempts }),
+        // The readings go with the claims: a value that walked toward the
+        // expected one across a poll is visible only in them.
+        body: JSON.stringify({
+          claims: stepRecord.claims,
+          observation: stepRecord.observation,
+          attempts: stepRecord.attempts,
+          ...(stepRecord.readings === undefined ? {} : { readings: stepRecord.readings }),
+          ...(stepRecord.readings_left_out === undefined ? {} : { readings_left_out: stepRecord.readings_left_out }),
+        }),
         contentEncoding: AttachmentContentEncoding.IDENTITY,
         mediaType: CLAIMS_MEDIA_TYPE,
         fileName: "claims.json",

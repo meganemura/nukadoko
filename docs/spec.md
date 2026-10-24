@@ -5319,7 +5319,7 @@ Never clamped to the parent step entry's own start/stop range: a timeline entry 
 A claim is an assertion, and Allure's unit of an assertion is a step with its own status, so each claim of a claim step becomes one zero-width child step after the timeline (see "Claims").
 Its name is the claim's line, the same words the run summary prints (e.g. `0 (from:run-tally@16.exitCode) equal 0 (sentence:code) held`).
 Its status is passed when the claim held, failed when it broke, and broken when the step observed nothing or nukadoko could not judge the claim.
-Its parameters are `actual`, `actual from`, `expected`, `expected from`, and, when a channel holds the raw actual value, `measured`, so a reader sees both values without opening `record.json`. An expected value from `from` or `observe` adds `expected measured`, with its channel or `none`.
+Its parameters are `actual`, `actual from`, `expected`, `expected from`, and `measured`, with the channel that holds the raw actual value or `none`, so a reader sees both values without opening `record.json`; `none` is what a constant looks like, as in the run summary. An expected value from `from` or `observe` adds `expected measured`, with its channel or `none`, and an `each` adds one per declaration that has one (`expected measured claims[0]`). A claim the step observed nothing for has no `measured` parameter.
 A step that failed with `claim_broken` is failed, like `step_error` and `result_invalid`: a broken claim is a criterion failing, which is what Allure's failed means.
 
 `page_events` becomes up to three parameters (see "Records"): `console errors (observed)`, `page errors (observed)`, and `failed requests (observed)`. It adds a parameter only when that category has an entry, so readers can see the count without opening `record.json`.
@@ -5431,9 +5431,10 @@ manifest, so retention and `nuka clean` remove it with the run.
   attachments and log lines, and a claim step's claims. The claims are a
   `claims.json` attachment of media type
   `application/vnd.nukadoko.claims+json`, holding `claims`,
-  `observation`, and `attempts` as the step record has them (see
-  "Claims"): a claim is what the step file declared it checks, with the
-  values it compared. Log lines use cucumber-js's
+  `observation`, and `attempts`, and a polled step's `readings` and
+  `readings_left_out`, as the step record has them (see "Claims"): a
+  claim is what the step file declared it checks, with the values it
+  compared, and the readings show what each reading read. Log lines use cucumber-js's
   `text/x.cucumber.log+plain` media type (the one `this.log()` produces).
   Trace, screenshots, the HTTP log, and the validated result stay
   Allure-only: that measurement surplus already has a home, and

@@ -1,7 +1,7 @@
 import { HookType, IdGenerator, TestStepResultStatus, TimeConversion } from "@cucumber/messages";
 import { describe, expect, it } from "vitest";
 import { parseFeatureSource } from "../src/feature/load-features.js";
-import { mapScenario } from "../src/report/messages/map-scenario.js";
+import { CLAIMS_MEDIA_TYPE, mapScenario } from "../src/report/messages/map-scenario.js";
 import type { StepRecord } from "../src/record/types.js";
 import type { ScenarioHookRecord, ScenarioRecord, ScenarioStepEntry } from "../src/record/scenario-record.js";
 
@@ -448,5 +448,38 @@ describe("mapScenario (messages): failed step message, no exception", () => {
     const result = mapped.steps[0]!.testStepFinished.testStepResult;
     expect(result.message).toBe("it broke on purpose");
     expect(result.exception).toBeUndefined();
+  });
+});
+
+describe("mapScenario (messages): a claim step's claims attachment", () => {
+  it("carries the readings and readings_left_out of a polled claim step beside the claims", () => {
+    const { pickles } = parse();
+    const pickle = pickles[0]!;
+    const readings = [
+      { attempt: 1, at: "2026-08-01T00:00:00.600Z", held: false, actuals: [{ value: 3 }], expecteds: [{ value: 0 }] },
+      { attempt: 9, at: "2026-08-01T00:00:00.900Z", held: true, actuals: [{ value: 3 }], expecteds: [{ value: 3 }] },
+    ];
+    const claims = [
+      { actual: 3, actual_from: "observe:badge", compare: "equal", expected: 3, expected_from: "observe:counter", expected_text: null, outcome: "held", expected_measured: null, measured: null },
+    ];
+    const stepRecord = baseStepRecord({
+      claims,
+      observation: "observed",
+      attempts: 9,
+      readings,
+      readings_left_out: { readings: 7, change_points: 0 },
+    } as Partial<StepRecord>);
+    const step: ScenarioStepEntry = { text: "the cart has items", status: "passed", step_record_id: "step-1" };
+    const mapped = mapScenario({
+      record: baseRecord({ steps: [step] }),
+      stepRecords: new Map([["step-1", stepRecord]]),
+      pickle,
+      newId: IdGenerator.incrementing(),
+      hookIds: {},
+    });
+    const attachment = mapped.steps[0]!.attachments.find((plan) => plan.kind === "built" && plan.attachment.mediaType === CLAIMS_MEDIA_TYPE);
+    expect(attachment).toBeDefined();
+    const body = JSON.parse((attachment as { attachment: { body: string } }).attachment.body);
+    expect(body).toEqual({ claims, observation: "observed", attempts: 9, readings, readings_left_out: { readings: 7, change_points: 0 } });
   });
 });
