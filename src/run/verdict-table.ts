@@ -213,6 +213,11 @@ export interface TableInput {
   /** How many selected criteria the run left out, having no required cell
    * in an environment `--env` named. */
   readonly leftOut: number;
+  /** Why a proof round could not record a control's run, when one could
+   * not (src/run/run-concurrent.ts): the cell reads `broke` at the
+   * scenario's line with that reason, whatever its earlier runs came to,
+   * since a proof that could not finish proves nothing. */
+  readonly proofProblem?: (feature: string, line: number, environment: string) => string | undefined;
 }
 
 /** The table: rows by feature path and line, cells in the run's
@@ -222,13 +227,14 @@ export function buildTable(input: TableInput): RunTable {
     const roles = rolesOf(criterion.tags, input.environments);
     const cells: RunTableCell[] = input.environments.map((environment, index) => {
       const folded = foldCell(input.outcomes(criterion.feature, criterion.line, environment.name));
+      const problem = roles[index] === "control" ? input.proofProblem?.(criterion.feature, criterion.line, environment.name) : undefined;
       return {
         world: "head",
         environment: environment.name,
         role: roles[index]!,
         conditions: conditionsOfCell(criterion.tags, environment.conditions),
-        ...folded,
-        ...(folded.outcome === "not-run" ? { reason: input.notRunReason(environment.name) ?? "no execution of it was recorded" } : {}),
+        ...(problem === undefined ? folded : { outcome: "broke" as const, line: criterion.line, runs: folded.runs, reason: problem }),
+        ...(problem === undefined && folded.outcome === "not-run" ? { reason: input.notRunReason(environment.name) ?? "no execution of it was recorded" } : {}),
       };
     });
     return {

@@ -53,6 +53,12 @@ const RUN_CODES = {
       "The program in nukadoko.program.ts did not start for a world: a build or prepare command failed or did not finish within its timeout_ms, the server did not answer its ready path in time, or setup or the url function threw or did not finish within its timeout_ms. The world's scenarios did not run.",
     fix: "Correct what the message names; the end of the world's program.log is in the message, and the whole file is in the world's directory.",
   },
+  "proof-run-incomplete": {
+    severity: "warning",
+    description:
+      "Under --concurrency, a proof round could not record a control's run: a BeforeAll or AfterAll hook failed in the worker the round started, or the worker exited without a record. Each control cell the round was given reads broke with the reason, and the run's verdict does not change.",
+    fix: "Correct what the message names, such as the hook; the control proves on the next run.",
+  },
   "record-unmatched": {
     severity: "warning",
     description: "A worker reported a record that matches no selected scenario, so nuka report cannot render it.",

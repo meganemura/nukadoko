@@ -318,7 +318,11 @@ just until 0.1.
   when it breaks a claim at a Then line, it runs again until it has done so
   at the same line `--proof-runs <n>` times (2 by default), and then the
   row is `proven`. One failure could be the program being slow once, and
-  proof is the one verdict that reads a failure as good news. `nuka check`
+  proof is the one verdict that reads a failure as good news. Under
+  `--concurrency`, a proof round runs in a worker of its own, which runs
+  BeforeAll and AfterAll again; what goes wrong there makes the round's
+  control cells `broke` with the reason and a `proof-run-incomplete`
+  warning, never the run red. `nuka check`
   reports `condition-tag-malformed` (`@with:x=true` among them, which
   names the boolean as text), `condition-unknown` (a condition no
   environment declares, with what to do once its switch is removed), and

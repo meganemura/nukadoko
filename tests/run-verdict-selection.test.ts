@@ -155,7 +155,7 @@ describe("nuka run: which criteria a run selects", () => {
         const again = await cli(rootDir, command.slice(1));
         expect(again.stderr, command.join(" ")).not.toMatch(/^refused\t/m);
         expect(again.exitCode, command.join(" ")).toBe(1);
-        expect(again.stderr, command.join(" ")).toContain(`failed\thook-failed\t-\tAfterAll failed in environment "${command[3]}": AfterAll fails\n`);
+        expect(again.stderr, command.join(" ")).toContain(`failed\thook-failed\t-\tAfterAll failed in environment "${command[3]}": AfterAll call `);
       }
       // With the hook fixed, each one passes, and counts what it left out:
       // flag-off meets neither @with:banner scenario, and flag-on does not

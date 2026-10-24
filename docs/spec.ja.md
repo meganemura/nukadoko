@@ -2885,6 +2885,7 @@ Allure では environment が result の identity の一部なので、ある en
 environment が 2 つ以上あるとき、所見と `repeat` の行は scenario の後に environment を名指し、進捗のログは各回を `environment <name>` の行で始めます。
 
 worker はプロセスであるため、`"process"` スコープの fixture は worker ごとに 1 回構築され、compat の `BeforeAll`/`AfterAll` も worker ごとに 1 回実行されます。
+証明の回(「断定」を参照)も worker を起動するので、`BeforeAll` と `AfterAll` がもう一度実行されることがあります。
 「Fixtures」節はすでに `process` スコープを、1 つのアドレス空間ごとに 1 回と定義しています。
 このフラグは、その定義が姿を見せる場所です。
 データベースのシードやポートを所有するモックサーバのように、世界で正確に 1 回だけ起こる必要がある処理は、どの並行度でもこの 2 つの場所のどちらにも属しません。
@@ -3296,6 +3297,12 @@ Then の行で失敗した対照のセルは、同じ pass の同じ world で�
 各証明の実行は、番号の付いた scenario の行とは別に、stderr の `proof run <k>/<n>` の行になります。
 対照自身の scenario の行は `(control)` で終わります。
 
+`--concurrency` のもとでは、各証明の回は自分の worker で走り、その worker は `BeforeAll` と `AfterAll` をもう一度実行します。
+回の中でうまくいかなかったこと(それらの hook の失敗、または与えられたセルの record を書かずに worker が終了したこと)は、その回のセルが負い、run は負いません。
+その回の対照のセルはそれぞれ、理由とともに scenario の行で `broke` になり、その environment の証明の回は止まり、`proof-run-incomplete` の warning が何が起きたかを言います。
+run を赤にすることはありません。
+終わらなかった証明は何も証明しないので、行は `held` です。
+
 **断定。**
 行は次のどれかです:
 
@@ -3308,6 +3315,7 @@ Then の行で失敗した対照のセルは、同じ pass の同じ world で�
   必須のセルがすべて `pass` で、それを証明する対照がないときです。
 
 行が `failed` のとき、または run がどの scenario の外でも失敗したとき(hook、world、worker)、終了コードは 1 です。
+environment の回で失敗した `BeforeAll` や `AfterAll` は、どの `--concurrency` でも run を失敗にし、証明の回の worker で失敗したものは失敗にしません。
 `held` と `proven` はどちらも green です。
 対照が通った `held` の行は、読むべき行です。
 スイッチが Then の確かめるものに届いていないか、Then がスイッチの変えるものを確かめていないかのどちらかです。

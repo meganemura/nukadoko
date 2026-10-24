@@ -41,7 +41,9 @@ its runs disagree; or `·`, it did not run, and its `reason` says why.
 `(control)` marks a control, and `(2 runs)` how often it ran. A control
 that failed at a Then line runs again until it has failed there
 `--proof-runs` times (2 by default), each a `proof run <k>/<n>` line on
-stderr.
+stderr. Under `--concurrency`, a proof round whose worker could not
+finish (its BeforeAll or AfterAll failed) leaves the control `broke` with
+the reason and a `proof-run-incomplete` warning: correct the hook.
 
 ## What to do for each verdict
 

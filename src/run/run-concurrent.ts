@@ -103,6 +103,15 @@ import { serializeWorldView, type WorldView } from "../program/world-view.js";
 // `@nukadoko:serial` file still runs alone and a round never races
 // another. The caller decides which cells are due, from the records
 // `onRecord` hands it.
+//
+// A proof round's worker is a process of its own, so it runs BeforeAll and
+// AfterAll again. What goes wrong in a round (one of those hooks fails,
+// or the worker exits without a record of a cell it was given) is the
+// round's cells' to carry, never the run's: each cell of the round is
+// `broke` with the reason (`onProofProblem`), the rounds stop, and a
+// `proof-run-incomplete` warning says what happened. The run is red
+// only for what it is red for without the round. Outside the rounds, a
+// worker's failed hook fails the run, as it does at `--concurrency 1`.
 
 const SERIAL_TAG = "@nukadoko:serial";
 
@@ -142,6 +151,17 @@ export interface ConcurrentCells {
   readonly runsOf: (feature: string, line: number, environment: string) => number;
   /** `--proof-runs`. */
   readonly proofRuns: number;
+  /** Hears that a proof round could not record a control's run, and why,
+   * so its cell reads `broke` with the reason. */
+  readonly onProofProblem: (feature: string, line: number, environment: string, reason: string) => void;
+}
+
+/** One proof round: the cells it was given, the ones it recorded a run
+ * of, and what went wrong in its worker. */
+interface ProofRound {
+  readonly cells: readonly { readonly feature: string; readonly line: number }[];
+  readonly recorded: Set<string>;
+  readonly problems: string[];
 }
 
 export interface RunConcurrentOptions {
@@ -254,13 +274,23 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   // A worker writes each note as one finding in its text grammar. A note
   // that does not parse is still reported, so nothing a worker says is lost.
   let currentEnvironment = "";
-  function relayNote(text: string): void {
+  // A failure a proof round's worker reports (a hook, a lost channel) is
+  // the round's to carry, so it is kept for its cells rather than relayed
+  // as a failure of the run. Outside the rounds, it fails the run.
+  function relayNote(text: string, round: ProofRound | null): void {
     const parsed = parseFindings(text);
     if (parsed.length === 0) {
       warn({ severity: "warning", code: "worker-output-unreadable", message: text });
       return;
     }
     for (const finding of parsed) {
+      if (finding.severity === "failed") {
+        if (round !== null) {
+          round.problems.push(finding.message);
+          continue;
+        }
+        allPassed = false;
+      }
       warn({
         severity: finding.severity,
         code: finding.code,
@@ -275,14 +305,16 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     }
   }
 
-  function handleEnvelope(envelope: WorkerEnvelope, filesWithRecords: Set<string>, worker: number, proofRound: boolean): void {
+  function handleEnvelope(envelope: WorkerEnvelope, filesWithRecords: Set<string>, worker: number, round: ProofRound | null): void {
     if (envelope.kind === "note") {
-      relayNote(envelope.text);
+      relayNote(envelope.text, round);
       return;
     }
 
+    // A proof round's BeforeAll leaves its cells without a run, which the
+    // round reports for them; the environment's other cells did run.
     if (envelope.kind === "before-all-failed") {
-      options.onBeforeAllFailed(currentEnvironment);
+      if (round === null) options.onBeforeAllFailed(currentEnvironment);
       return;
     }
 
@@ -298,6 +330,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
 
     const { record, stepLines, notes } = envelope;
     filesWithRecords.add(record.feature);
+    round?.recorded.add(pickleKey(record.feature, record.line));
     recordsWritten += 1;
     const control = cells.roleOf(record.feature, record.line, record.environment) === "control";
 
@@ -314,7 +347,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
     onRecord(record);
 
-    if (proofRound) {
+    if (round !== null) {
       writeProofRunBoundary(progress, {
         relativeFeaturePath: record.feature,
         line: record.line,
@@ -336,7 +369,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const line of stepLines) {
       progress.write(`${line}\n`);
     }
-    for (const note of notes) relayNote(note);
+    for (const note of notes) relayNote(note, round);
 
     const match = pickleByKey.get(pickleKey(record.feature, record.line));
     if (match === undefined) {
@@ -360,13 +393,13 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   let interruptedBy: NodeJS.Signals | null = null;
 
   // `targets` are what a worker's list file holds: a feature path, or a
-  // path and line. `proofRound` runs each target once, as a proof run.
+  // path and line. A `round` runs each target once, as a proof run.
   async function runWorkerGroup(
     targets: readonly string[],
     worker: number,
     envArg: string | null,
     world: WorldView | null,
-    proofRound: boolean,
+    round: ProofRound | null,
   ): Promise<WorkerGroupResult> {
     const filesWithRecords = new Set<string>();
     if (interruptedBy !== null) {
@@ -382,7 +415,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
       if (interruptedBy !== null) {
         return { exitCode: exitCodeForSignal(interruptedBy), filesWithRecords };
       }
-      const child = spawnRunWorker({ rootDir, runId, env: envArg, featureListPath, repeat: proofRound ? 1 : repeat, worldPath });
+      const child = spawnRunWorker({ rootDir, runId, env: envArg, featureListPath, repeat: round !== null ? 1 : repeat, worldPath });
       liveWorkers.add(child);
 
       const stdoutBuffer = createLineBuffer((line) => {
@@ -394,7 +427,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
           warn({ severity: "warning", code: "worker-output-unreadable", message: `A worker produced an unreadable line on its own stdout: ${line}` });
           return;
         }
-        handleEnvelope(envelope, filesWithRecords, worker, proofRound);
+        handleEnvelope(envelope, filesWithRecords, worker, round);
       });
       // Relayed raw, never parsed: this worker's own real stderr carries a
       // pre-try/catch Node crash and project code's own stdout writes
@@ -495,7 +528,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         buckets[index % workerCount]!.push(feature);
       });
 
-      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(targetsOf(bucket), bucketIndex + 1, envArg, world, false)));
+      const results = await Promise.all(buckets.map((bucket, bucketIndex) => runWorkerGroup(targetsOf(bucket), bucketIndex + 1, envArg, world, null)));
       for (const [bucketIndex, result] of results.entries()) {
         if (result.exitCode !== 0) {
           for (const feature of buckets[bucketIndex]!) {
@@ -513,7 +546,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     for (const feature of serialFeatures) {
       // Worker 1: a `@nukadoko:serial` file runs alone, so there is never a
       // second number to tell it apart from.
-      const result = await runWorkerGroup(targetsOf([feature]), 1, envArg, world, false);
+      const result = await runWorkerGroup(targetsOf([feature]), 1, envArg, world, null);
       if (result.exitCode !== 0 && !result.filesWithRecords.has(feature.relativePath)) {
         failedFiles.add(envArg === null ? feature.relativePath : `${feature.relativePath} (${envArg})`);
       }
@@ -521,31 +554,49 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
   }
 
   // One round at a time, so a cell stops at the first run that disagrees.
-  // A round that wrote fewer records than it was given ends the rounds:
-  // the cells it left out would be due again forever, and the count
-  // below reports the records that are missing.
+  // A round that went wrong (a hook of its worker failed, or the worker
+  // left a cell without a record) ends the rounds: each of its cells is
+  // `broke` with the reason, and its missing records are not counted as
+  // missing from the run, since the cells account for them. A signal that
+  // stopped the round leaves the count to report them.
   async function runProofRounds(pass: ConcurrentPass, world: WorldView | null): Promise<void> {
     for (;;) {
       if (interruptedBy !== null) return;
       const due = flatPickles.filter(({ feature, pickle }) => cells.needsProof(feature.relativePath, pickle.location?.line ?? 0, pass.environment));
       if (due.length === 0) return;
       expectedRecords += due.length;
-      const before = recordsWritten;
+      const round: ProofRound = {
+        cells: due.map(({ feature, pickle }) => ({ feature: feature.relativePath, line: pickle.location?.line ?? 0 })),
+        recorded: new Set(),
+        problems: [],
+      };
       const result = await runWorkerGroup(
-        due.map(({ feature, pickle }) => `${feature.relativePath}:${pickle.location?.line ?? 0}`),
+        round.cells.map((cell) => pickleKey(cell.feature, cell.line)),
         1,
         pass.envArg,
         world,
-        true,
+        round,
       );
-      if (result.exitCode !== 0) {
-        for (const { feature } of due) {
-          if (!result.filesWithRecords.has(feature.relativePath)) {
-            failedFiles.add(pass.envArg === null ? feature.relativePath : `${feature.relativePath} (${pass.envArg})`);
-          }
-        }
-      }
-      if (recordsWritten - before < due.length) return;
+      if (interruptedBy !== null) return;
+      const missing = round.cells.filter((cell) => !round.recorded.has(pickleKey(cell.feature, cell.line)));
+      const reason =
+        round.problems.length > 0
+          ? `the worker of its proof run failed: ${round.problems.join("; ")}`
+          : missing.length > 0
+            ? `the worker of its proof run exited with code ${result.exitCode} and recorded no run of it`
+            : undefined;
+      if (reason === undefined) continue;
+      expectedRecords -= missing.length;
+      for (const cell of round.cells) cells.onProofProblem(cell.feature, cell.line, pass.environment, reason);
+      const named = round.cells.map((cell) => pickleKey(cell.feature, cell.line)).join(", ");
+      warn({
+        severity: "warning",
+        code: "proof-run-incomplete",
+        message:
+          `A proof round in environment "${pass.environment}" did not finish: ${reason}. ` +
+          `The control ${round.cells.length === 1 ? "cell" : "cells"} it was given (${named}) ${round.cells.length === 1 ? "reads" : "read"} broke, and the run's verdict does not change`,
+      });
+      return;
     }
   }
 

@@ -328,6 +328,29 @@ describe("buildTable", () => {
       }
     }));
 
+  it("reads a control whose proof round went wrong as broke at its scenario line, with the reason, and leaves a required cell as it ran", () =>
+    hegel.test((tc) => {
+      const executions = tc.draw(gs.arrays(outcome, { minSize: 1, maxSize: 3 }));
+      const role = tc.draw(gs.sampledFrom(["@with:banner", "@without:banner"]));
+      const table = buildTable({
+        criteria: [{ feature: "a.feature", line: 3, name: "s", tags: [role] }],
+        environments: [{ name: "flag-off", conditions: { banner: false } }],
+        outcomes: () => executions,
+        notRunReason: () => undefined,
+        proofRuns: 2,
+        leftOut: 0,
+        proofProblem: () => "the worker of its proof run failed: boom",
+      });
+      const cell = table.rows[0]!.cells[0]!;
+      if (cell.role === "control") {
+        expect(cell).toMatchObject({ outcome: "broke", line: 3, runs: executions.length, reason: "the worker of its proof run failed: boom" });
+        expect(table.rows[0]!.verdict).not.toBe("proven");
+      } else {
+        expect(cell).toMatchObject(foldCell(executions));
+        expect(cell.reason).toBeUndefined();
+      }
+    }));
+
   it("says how many criteria --env left out, in the same words on stderr and in the summary", () => {
     expect(leftOutText(1)).toBe("1 criterion not run: its conditions hold in no selected environment");
     expect(leftOutText(3)).toBe("3 criteria not run: their conditions hold in no selected environment");

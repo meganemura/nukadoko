@@ -844,6 +844,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
     const roleOf = (feature: string, line: number, environment: string): CellRole => roleByCell.get(cellKey(feature, line, environment)) ?? "required";
     const cellOutcomes = new Map<string, ExecutionOutcome[]>();
+    // Why a proof round could not record a control's run, under
+    // --concurrency (src/run/run-concurrent.ts).
+    const proofProblems = new Map<string, string>();
     const needsProof = (feature: string, line: number, environment: string): boolean =>
       needsProofRun(roleOf(feature, line, environment), cellOutcomes.get(cellKey(feature, line, environment)) ?? [], proofRuns);
     // Why a pass ran no scenario, for its cells that did not run.
@@ -991,6 +994,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         },
         proofRuns,
         leftOut,
+        proofProblem: (feature, line, environment) => proofProblems.get(cellKey(feature, line, environment)),
       });
       // A red row with no required cell has no failed execution to carry
       // its finding, so it gets one of its own. An environment the run did
@@ -1234,6 +1238,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             needsProof,
             runsOf: (feature, line, environment) => cellOutcomes.get(cellKey(feature, line, environment))?.length ?? 0,
             proofRuns,
+            onProofProblem: (feature, line, environment, reason) => proofProblems.set(cellKey(feature, line, environment), reason),
           },
           onRecord: noteRecord,
           onBeforeAllFailed: (environment) => beforeAllFailedIn.add(environment),

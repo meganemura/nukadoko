@@ -3608,6 +3608,8 @@ with an `environment <name>` line.
 
 A `"process"`-scope fixture is built once per worker, and a compat
 `BeforeAll`/`AfterAll` runs once per worker, because a worker is a process.
+A proof round (see "Verdicts") starts a worker too, so it may run
+`BeforeAll` and `AfterAll` again.
 The "Fixtures" section already defines `process` scope as once per address
 space, and this flag is where that definition becomes visible. Something
 that must happen exactly once in the world, a database seed or a mock
@@ -4116,6 +4118,15 @@ passed or broke is not run again. Each proof run is a `proof run <k>/<n>`
 line on stderr, apart from the numbered scenario lines, and a control's
 own scenario line ends with `(control)`.
 
+Under `--concurrency`, each proof round runs in a worker of its own,
+which runs `BeforeAll` and `AfterAll` again. What goes wrong in a round
+(one of those hooks fails, or the worker exits without a record of a
+cell it was given) is its cells' and not the run's: each control cell of
+the round is `broke` at the scenario's line, with the reason, the rounds
+in that environment stop, and a `proof-run-incomplete` warning says what
+happened. It never turns the run red, and a proof that could not finish
+proves nothing, so the row is `held`.
+
 **Verdicts.** A row is:
 
 - `failed` when a required cell is not `pass`, or when the row has no
@@ -4129,8 +4140,10 @@ own scenario line ends with `(control)`.
 - `held` otherwise: every required cell is `pass`, and no control proves it.
 
 The exit code is 1 when a row is `failed`, or when the run failed outside
-every scenario (a hook, a world, a worker). `held` and `proven` are both
-green. A `held` row whose control passed is the one to read: the switch
+every scenario (a hook, a world, a worker): a `BeforeAll` or `AfterAll`
+that fails in an environment's pass fails the run at any `--concurrency`,
+and one that fails in a proof round's worker does not. `held` and
+`proven` are both green. A `held` row whose control passed is the one to read: the switch
 does not reach what the Then checks, or the Then does not check what the
 switch changes. The stderr count line counts the executions of required
 cells, and a run with a control adds a `criteria: <held> held, <proven>
