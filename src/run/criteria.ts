@@ -19,11 +19,16 @@ import { HELD_TAG, isConditionShaped } from "../condition/condition.js";
 //
 // Matching, in order: the same identity and the same content is
 // `unchanged`; the same content under another identity is `unchanged` with
-// `renamed_from`, the same file first; the same identity left over once on
-// each side is `changed`; what is left at head is `new`, and what is left at
-// the ref is `removed`. A name that repeats with differing content on both
-// sides is left `new` and `removed` rather than paired by position, which
-// would be a guess; both of those are judged as strictly as `changed`.
+// `renamed_from`; the same identity left over once on each side is
+// `changed`; what is left at head is `new`, and what is left at the ref is
+// `removed`. A rename is taken only where it is the one answer: a candidate
+// in the same feature file first, then one anywhere, and in each round only
+// a pair where the head criterion has one candidate and that candidate one
+// head criterion claiming it. Taking the first of several would make the
+// answer depend on the order the files were read in, and either of two
+// equal candidates is a guess. A name that repeats with differing content
+// on both sides is left `new` and `removed` rather than paired by position,
+// for the same reason; all of those are judged as strictly as `changed`.
 
 /** One pickle as `--base` reads it. */
 export interface Criterion {
@@ -175,12 +180,22 @@ export function compareCriteria(base: readonly Criterion[], head: readonly Crite
     if (found === undefined) unmatchedHead.push(criterion);
     else take(found, criterion, false);
   }
-  const leftAfterRename: Criterion[] = [];
-  for (const criterion of unmatchedHead) {
-    const sameContent = [...unmatchedBase].filter((candidate) => candidate.content === criterion.content);
-    const found = sameContent.find((candidate) => candidate.feature === criterion.feature) ?? sameContent[0];
-    if (found === undefined) leftAfterRename.push(criterion);
-    else take(found, criterion, true);
+  let leftAfterRename = unmatchedHead;
+  for (const sameFile of [true, false]) {
+    const candidatesOf = new Map<Criterion, Criterion[]>();
+    const claimants = new Map<Criterion, number>();
+    for (const criterion of leftAfterRename) {
+      const candidates = [...unmatchedBase].filter((candidate) => candidate.content === criterion.content && (!sameFile || candidate.feature === criterion.feature));
+      candidatesOf.set(criterion, candidates);
+      for (const candidate of candidates) claimants.set(candidate, (claimants.get(candidate) ?? 0) + 1);
+    }
+    const left: Criterion[] = [];
+    for (const criterion of leftAfterRename) {
+      const candidates = candidatesOf.get(criterion)!;
+      if (candidates.length === 1 && claimants.get(candidates[0]!) === 1) take(candidates[0]!, criterion, true);
+      else left.push(criterion);
+    }
+    leftAfterRename = left;
   }
   const byIdentity = (list: Iterable<Criterion>): Map<string, Criterion[]> => {
     const groups = new Map<string, Criterion[]>();

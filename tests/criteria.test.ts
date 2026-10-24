@@ -190,6 +190,46 @@ describe("compareCriteria", () => {
     expect(comparison.removed).toEqual([base[0]]);
   });
 
+  it("takes no rename when a head criterion in another file claims the same candidate, whichever file is read first", () => {
+    const base = [criterion("features/a.feature", 3, "old", "X")];
+    const copy = criterion("features/0.feature", 3, "copy", "X");
+    const renamed = criterion("features/a.feature", 3, "renamed", "X");
+    for (const head of [[copy, renamed], [renamed, copy]]) {
+      const comparison = compareCriteria(base, head);
+      expect(comparison.changes.get(criterionKey("features/a.feature", 3))).toEqual({
+        change: "unchanged",
+        at: { feature: "features/a.feature", line: 3 },
+        renamedFrom: { feature: "features/a.feature", name: "old" },
+      });
+      expect(comparison.changes.get(criterionKey("features/0.feature", 3))).toEqual({ change: "new" });
+    }
+  });
+
+  it("takes no rename from another file when more than one candidate matches", () => {
+    const base = [criterion("features/a.feature", 3, "one", "X"), criterion("features/b.feature", 3, "two", "X")];
+    const comparison = compareCriteria(base, [criterion("features/c.feature", 3, "three", "X")]);
+    expect(comparison.changes.get(criterionKey("features/c.feature", 3))).toEqual({ change: "new" });
+    expect(comparison.removed).toEqual(base);
+  });
+
+  it("does not depend on the order the feature files were read in", () =>
+    hegel.test((tc) => {
+      const files = ["features/a.feature", "features/b.feature", "features/c.feature"];
+      const entry = gs.tuples(gs.sampledFrom(files), gs.sampledFrom(["one", "two", "three"]), gs.sampledFrom(["A", "B"]));
+      const side = (drawn: [string, string, string][]): Criterion[] => drawn.map(([feature, name, content], index) => criterion(feature, index + 1, name, content));
+      const base = side(tc.draw(gs.arrays(entry, { maxSize: 6 })));
+      const head = side(tc.draw(gs.arrays(entry, { maxSize: 6 })));
+      // Another order of the files, each file's criteria kept in its own order.
+      const orders = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]].map((order) => order.map((index) => files[index]!));
+      const rank = new Map(tc.draw(gs.sampledFrom(orders)).map((file, index) => [file, index]));
+      const reordered = (list: Criterion[]): Criterion[] => [...list].sort((a, b) => rank.get(a.feature)! - rank.get(b.feature)! || a.line - b.line);
+      const canonical = (comparison: ReturnType<typeof compareCriteria>) => ({
+        changes: [...comparison.changes.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        removed: comparison.removed.map((entry) => criterionKey(entry.feature, entry.line)).sort(),
+      });
+      expect(canonical(compareCriteria(reordered(base), reordered(head)))).toEqual(canonical(compareCriteria(base, head)));
+    }));
+
   it("leaves a name that repeats with differing content new and removed rather than pairing by position", () => {
     const base = [criterion("f", 3, "same", "A"), criterion("f", 6, "same", "B")];
     const head = [criterion("f", 3, "same", "C"), criterion("f", 6, "same", "D")];

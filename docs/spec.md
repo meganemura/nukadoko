@@ -4109,8 +4109,12 @@ not content, so a scenario renamed, moved to another file, or tagged
 `@smoke` still says what it said. Against the ref, a criterion is:
 
 - `unchanged`: the same identity and content, or the same content under
-  another identity, which the row names in `renamed_from` (a match in the
-  same file first);
+  another identity, which the row names in `renamed_from`. A rename is
+  taken only where it is the one answer: a match in the same feature file
+  first, then one in any file, and only where the head criterion has one
+  such match and no other head criterion claims it. Otherwise the head
+  criterion is `new`, so the answer never depends on the order the files
+  are read in;
 - `changed`: the same identity, other content;
 - `new`: neither, at head;
 - `removed`: at the ref, and no longer at head.

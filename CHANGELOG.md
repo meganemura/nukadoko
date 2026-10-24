@@ -326,9 +326,11 @@ just until 0.1.
   judges it.** A criterion is its feature file and name; its content is
   its steps with their effective keywords, docstrings, and tables, its
   Examples row, and its condition tags and `@held`, so a rename, a move,
-  or a tag such as `@smoke` leaves it `unchanged` (with `renamed_from`),
-  and any edit to what a person approved makes it `changed`; the others
-  are `new` or `removed`. The mapping (the files under the features
+  or a tag such as `@smoke` leaves it `unchanged` (with `renamed_from`,
+  taken only where one candidate matches, the same file first, so the
+  answer never depends on the order the files are read in), and any
+  edit to what a person approved makes it `changed`; the others are `new`
+  or `removed`. The mapping (the files under the features
   directory other than `.feature` files, the config's `fixtures`,
   `parameterTypes`, `secrets`, and `worldParameters`, and each
   environment's `conditions` and the `defaultEnvironments` list) is
