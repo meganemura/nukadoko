@@ -18,7 +18,7 @@ describe("readStepRecord", () => {
 
   it("reads a valid record.json back", async () => {
     const stepRecord: StepRecord = {
-      schema_version: 3,
+      schema_version: 4,
       nukadoko: "0.0.0-test",
       step_record_id: "step-20260801-143022-a1b2",
       step: "noop",
@@ -32,7 +32,7 @@ describe("readStepRecord", () => {
       started_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),
       evidence: { dir: ".nukadoko/runs/run-1/steps/step-20260801-143022-a1b2", screenshots: [] },
-      observed: { http_reads: 0, http_writes: 0, processes: null },
+      observed: { processes: null },
       mutates: true,
     };
     await writeFile(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}\n`);
@@ -54,7 +54,7 @@ describe("readStepRecord", () => {
       started_at: "2026-08-01T14:30:22.000Z",
       finished_at: "2026-08-01T14:30:23.000Z",
       evidence: { dir: ".nukadoko/runs/run-1/steps/step-20260801-143022-a1b2", screenshots: [] },
-      observed: { http_reads: 0, http_writes: 0, processes: null },
+      observed: { processes: null },
       mutates: true,
     };
     await writeFile(path.join(dir, "record.json"), `${JSON.stringify(written, null, 2)}\n`);

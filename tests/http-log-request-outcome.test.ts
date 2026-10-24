@@ -67,7 +67,7 @@ describe("ctx.request() / http.jsonl entry per call outcome", () => {
   }
 
   it("logs a call that throws on a failed status, with status 0 and an error", async () => {
-    const { ctx, dispose, observedCounts } = createStepContext({ config: baseConfig({ baseURL }), evidenceDir, env: {} });
+    const { ctx, dispose } = createStepContext({ config: baseConfig({ baseURL }), evidenceDir, env: {} });
     const request = await ctx.request();
 
     await expect(request.get("/boom", { failOnStatusCode: true })).rejects.toThrow(/500/);
@@ -77,7 +77,6 @@ describe("ctx.request() / http.jsonl entry per call outcome", () => {
     expect(rest).toEqual([]);
     expect(line).toMatchObject({ method: "GET", url: "/boom", status: 0, via: "request" });
     expect(line?.error).toEqual(expect.stringContaining("500"));
-    expect(observedCounts()).toMatchObject({ http_reads: 1 });
   });
 
   it("logs a refused connection with the declared URL, status 0 and an error", async () => {

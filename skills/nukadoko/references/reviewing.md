@@ -19,14 +19,12 @@ from nothing is evidence, so the walk adds no state of its own.
 ## 1. Run it once
 
 ```sh
-npx nuka run features/checkout.feature:12 --probe --json
+npx nuka run features/checkout.feature:12 --json
 ```
 
 `--json` prints `run.json`. Take the scenario's `steps` in order: each has
 its `line`, its `text`, the `step` it matched, its `status`, and `record`,
-the step record's directory under `run_dir`. `--probe` adds `probes`: a
-Then that still passes with its capture changed is worth naming when the
-walk reaches it. A `:line` target makes `selection` partial, which is
+the step record's directory under `run_dir`. A `:line` target makes `selection` partial, which is
 fine for a walk and is not the run a reviewer approves.
 
 ## 2. Gather one step
@@ -42,16 +40,15 @@ For each step, before you say anything about it:
 
 What each part of `observed` says:
 
-- `http_reads` and `http_writes` count requests through `request`,
-  `page`, `context`, or `pageAs`. `null` means nothing was measured, not
-  that nothing happened.
 - `processes` lists each `runCommand`, with its command, `cwd`,
   `exit_code`, `files` (what it added, changed, or removed under its
   working directory), and `stdout` and `stderr`: the files in the
-  record's directory that hold what it printed.
+  record's directory that hold what it printed. `null` means nothing was
+  measured, not that nothing happened.
 - `used` names the earlier step records this step read through `from`,
   and the values it took from them.
-- `evidence` points at the screenshots, the trace, `http.jsonl`, and any
+- `evidence` points at the screenshots, the trace, `http.jsonl` (each
+  request through `request`, `page`, `context`, or `pageAs`), and any
   attachment the step made. Name the file the person can open.
 
 ## 3. Judge it with fresh eyes

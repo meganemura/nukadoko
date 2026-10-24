@@ -107,7 +107,7 @@ describe("call / parts", () => {
     // invite-member (the only part project-with-member calls) is the one
     // that actually issues the POST; project-with-member's own run() never
     // touches `request` at all.
-    expect(stepRecord.observed).toEqual({ http_reads: 0, http_writes: 1, processes: null });
+    expect(stepRecord.observed).toEqual({ processes: null });
   });
 
   it("records args (as given) and result (validated) on calls[0], with a part-of-a-part nested under calls[0].calls", async () => {

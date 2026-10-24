@@ -9,11 +9,11 @@
 
 /** The `schema_version` of every command's `--json` envelope, run.json
  * included. It moves when a field the envelope already had changes
- * meaning, type, or name. */
-export const ENVELOPE_SCHEMA_VERSION = 2;
+ * meaning, type, or name, or is removed. */
+export const ENVELOPE_SCHEMA_VERSION = 3;
 
 export const SCHEMA_VERSIONS = {
-  step_record: 3,
+  step_record: 4,
   run_sources: 1,
 } as const;
 

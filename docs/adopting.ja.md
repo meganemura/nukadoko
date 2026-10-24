@@ -160,23 +160,11 @@ run       .nukadoko/runs/run-20261018-232314-j5x1/run.json
 `nuka run` は先に `nuka check` を実行し、エラーがあれば止まります。
 scenario が失敗すると、stderr にその step、エラー、step record、そしてその scenario だけを再実行する `nuka run features/greet.feature:3` のような `do:` の行が出ます。
 
-最初の scenario を書いているあいだは、2 つのフラグが役に立ちます:
-
-- `nuka run --probe` は、読み取り専用の Then をキャプチャを変えてもう一度実行します。
-  それでも通る Then は、その行が言っていることを検査していません。
-  scaffold が書いた比較を `assert.ok(actual.startsWith("Hello"))` に置き換えると、run は通ったまま note が 1 つ増えます:
-
-  ```text
-  note	then-passed-with-changed-capture	features/greet.feature:5	the output says "Hello, Ada!": step "the-output-says" passed with text "Hello, Ada!-probe" in place of "Hello, Ada!"
-    fix: Make the step compare its result with the capture the message names; a step whose sentence also allows the changed value, such as "at least n", can stay as it is.
-    do: nuka run features/greet.feature:3 --probe
-  ```
-
-- `nuka run --env <name>` は、`nukadoko.config.ts` の `environments` が名付けた environment に対して実行します。
-  各 environment は自分の `baseURL`、`envFiles`、`policy` を持ちます。
-  `policy: "read-only"` の environment は、`mutates: true` と宣言された step を実行前にすべて拒否します。
-  `--command` の scaffold は `mutates: true` を書くので、プログラムが scratch ディレクトリの外を何も変えないなら `false` にします。
-  [docs/spec.ja.md](spec.ja.md) の「Environment、secret」を参照してください。
+`nuka run --env <name>` は、`nukadoko.config.ts` の `environments` が名付けた environment に対して実行します。
+各 environment は自分の `baseURL`、`envFiles`、`policy` を持ちます。
+`policy: "read-only"` の environment は、`mutates: true` と宣言された step を実行前にすべて拒否します。
+`--command` の scaffold は `mutates: true` を書くので、プログラムが scratch ディレクトリの外を何も変えないなら `false` にします。
+[docs/spec.ja.md](spec.ja.md) の「Environment、secret」を参照してください。
 
 ## 6. run ディレクトリを読む
 

@@ -28,7 +28,7 @@ describe("refuse", () => {
         expect(stderr.text()).toBe("");
         const document = JSON.parse(stdout.text()) as Record<string, unknown>;
         expect(Object.keys(document)).toEqual(["schema_version", "nukadoko", "command", "verdict", "findings"]);
-        expect(document).toMatchObject({ schema_version: 2, command: "check", verdict: "refused", findings: [expected] });
+        expect(document).toMatchObject({ schema_version: 3, command: "check", verdict: "refused", findings: [expected] });
       } else {
         expect(stdout.text()).toBe("");
         const { severity, code, message: text, ...hints } = expected;

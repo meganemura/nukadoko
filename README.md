@@ -314,8 +314,7 @@ npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then -
 
 `get-greeting` is one ``request.fetch(`/greet/${name}`, { method: "GET" })``
 call that returns `status` and `body` (the response text). Each request
-lands in the step record's `http.jsonl` and in `observed.http_reads` and
-`observed.http_writes`.
+lands in the step record's `http.jsonl`.
 
 `--request "<METHOD> <path>"` resolves the path against `baseURL`. Each
 `{key}` in the path is that args key's value, put in as it is, and
@@ -384,10 +383,8 @@ export default defineStep({
 
 `fetch` needs nothing installed. `ctx.request()`, Playwright's
 `APIRequestContext`, is the other way to call the server: it needs
-`playwright` installed, and it is what counts the step's calls in the step
-record's `observed.http_reads` and `observed.http_writes`. A step that only
-calls `fetch` records both as `null`: nukadoko did not see its requests, and
-`null` says so where `0` would claim a measurement.
+`playwright` installed, and each of its calls lands in the step record's
+`http.jsonl`. nukadoko does not see a `fetch` call.
 
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way
@@ -536,7 +533,7 @@ afterward. The result is a step record, not a pass/fail line.
   "args": { "title": "Buy milk" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 1, "processes": null }
+  "observed": { "processes": null }
 }
 ```
 
@@ -812,19 +809,20 @@ they are most familiar, not because it is the only layer that has them.
 |---|---|
 | Duplicate steps: which one matched? | `nuka check` reports **duplicate patterns** (the same text registered twice) and **ambiguous steps** (one line in a feature that two different patterns could both match), before anything runs |
 | `this.foo`: an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name: a dependency that shows up as an import in the diff, a read that lands on the receiving step's step record, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
-| A report that only says `passed` | Every execution writes a step record: validated result, the network reads and writes the tool itself observed, evidence, environment, target version |
+| A report that only says `passed` | Every execution writes a step record: validated result, the HTTP calls and processes the tool itself recorded, evidence, environment, target version |
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
 | A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the step record for review |
 
-The last row requires precision because the tool once failed on the count
+The last row requires precision because the tool once failed on a count
 instead of the promise. That behavior made a claim the measurement could
-not support. Write detection uses the HTTP method as a proxy. This proxy
-fails for GraphQL, RPC-over-POST, and vendor query APIs that perform a pure
-read over POST. A truthful `mutates: false` step that calls one of these
-APIs still looks like a write. No general HTTP-layer rule can distinguish
-that call from a real write. Nukadoko therefore trusts the declaration. It
-still counts every call other than GET and HEAD made through its request context and page,
-but the step record presents the count as a fact, not a verdict.
+not support. The count used the HTTP method as a proxy for a write. This
+proxy fails for GraphQL, RPC-over-POST, and vendor query APIs that perform
+a pure read over POST. A truthful `mutates: false` step that calls one of
+these APIs still looks like a write. No general HTTP-layer rule can
+distinguish that call from a real write. Nukadoko therefore trusts the
+declaration and never infers a write from a method. The step record keeps
+each request it measured, with its method, URL, and status, as a fact, not
+a verdict.
 
 ## Reports fill themselves
 
@@ -834,8 +832,7 @@ project must write and maintain hook boilerplate for traces and screenshots.
 writes results in its format and never renders HTML itself.
 `nuka report --format allure` fills the report from every step record of a
 finished run without additional wiring. It adds
-the validated result, trace, HTTP log, observed reads and writes,
-environment, and version. One item cannot be added on the report side in
+the validated result, trace, HTTP log, environment, and version. One item cannot be added on the report side in
 classic Cucumber because Cucumber discards step return values: the
 validated result for each step.
 
@@ -1011,8 +1008,8 @@ assignment stays unmeasured. Each step can then move to `defineStep` independent
 partially promoted suite continues to pass.
 
 The door is an entry point, not a destination. A compat step gains a step
-record with status and timing from the first run; evidence and `observed`
-counts follow once its glue opens the browser or request through
+record with status and timing from the first run; evidence and the
+`http.jsonl` lines follow once its glue opens the browser or request through
 `this.openPage()` / `this.openRequest()` (the measured upgrade in
 [docs/migration.md](docs/migration.md)). However, nukadoko discards its return value, and its
 step record contains `result: null`. Features that require a validated
@@ -1222,17 +1219,6 @@ invocation, for a failure that reproduces one time in several. Each
 execution is its own record under one run id, and a scenario that failed
 at least once is tallied after the summary, `<passed> of <n> passed`.
 
-`nuka run --probe` asks whether each passed Then could have failed. Right
-after a read-only Then that captured a value, or was given a table or a
-docstring, passes, and before the next step, it runs again, alone, with one
-capture changed (a string suffixed, a number +1, a boolean flipped), and
-once more with its docstring suffixed or the last cell of its table
-suffixed. A Then that still passes is a
-`then-passed-with-changed-capture` note in `run.json` and the run summary,
-and a Then the probe could not measure (it or its re-run wrote, or its args
-schema refused the changed value) is a `then-probe-not-measured` note. It
-is a measurement, so the exit code stays the run's.
-
 `nuka run --since <git ref>` says what moved in the criteria since a base
 a person approved, such as `origin/main`, as far as its comparison
 reaches. Each scenario's criteria (its
@@ -1275,21 +1261,17 @@ whatever their env files and `baseURL` say.
   truthfully does what its description claims rests on PR review. The tool
   guarantees the shape of inputs and outputs and the fact of execution. A
   typed contract makes an empty assertion easier to spot in review, but
-  nothing rejects one automatically. `nuka run --probe` measures one part
-  of it: a read-only Then that still passes with a capture changed is a
-  note, never a failure, and a Then the probe catches can still check the
-  wrong thing.
+  nothing rejects one automatically.
 - **`mutates` is trusted, not re-derived from what the network shows.**
-  Write detection runs on HTTP method as a proxy for write semantics, not
-  the semantics itself: purely client-side state and a server that mutates
-  on GET are invisible to it, and a step calling a semantically pure read
-  implemented over POST (GraphQL, RPC-over-POST, many vendors' query
-  endpoints) would count as a write it never made. No general HTTP-layer
-  rule can tell those two cases apart, which is why nukadoko stopped
-  failing steps on the count. See
+  The HTTP method is a proxy for write semantics, not the semantics
+  itself: purely client-side state and a server that mutates on GET are
+  invisible to it, and a semantically pure read implemented over POST
+  (GraphQL, RPC-over-POST, many vendors' query endpoints) would look like a
+  write it never made. No general HTTP-layer rule can tell those two cases
+  apart, so nukadoko never infers a write from a method. See
   [Keyword semantics](docs/spec.md#keyword-semantics) for the fuller
-  argument. The count is still recorded, on the step record and in Allure, so a
-  wrong `mutates` declaration is falsifiable after the fact; the
+  argument. The step record keeps each request it measured as a fact, so a
+  wrong `mutates` declaration can be checked after the fact; the
   declaration and review carry the judgment.
 - **CommonJS suites cannot use `nukadoko/compat`** without a module-format
   change first (above).

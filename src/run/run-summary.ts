@@ -3,11 +3,6 @@ import path from "node:path";
 import { whereOf, type Finding } from "../finding/finding.js";
 import { runDir } from "../record/run-exports.js";
 import type { RunDocument, RunScenario, RunVerdict } from "../record/run-result.js";
-import {
-  collectDeclaredVsObserved,
-  renderDeclaredVsObserved,
-  type ComparedStep,
-} from "../report/summary/declared-vs-observed.js";
 import { hookLabel } from "../report/summary/hook-label.js";
 import { scenarioKey } from "./criteria-since.js";
 import {
@@ -254,18 +249,6 @@ function renderFeatures(document: RunDocument): string[] {
   return lines;
 }
 
-// Only steps with a step record carry a declaration and a measurement. A
-// step that never began has nothing to set against its declaration.
-function comparedSteps(scenarios: readonly RunScenario[]): ComparedStep[] {
-  return scenarios.flatMap((scenario) =>
-    scenario.steps.flatMap((step) =>
-      step.mutates === undefined || step.observed === undefined
-        ? []
-        : [{ scenarioName: scenario.scenario, stepText: step.text, stepRecord: { mutates: step.mutates, observed: step.observed } }],
-    ),
-  );
-}
-
 // What moved in the criteria since `--since`'s ref, for the person who
 // approved that base: one row per scenario (environments and repeats of it
 // counted once), the text of each scenario that is not unchanged quoted in
@@ -361,12 +344,6 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderCondition(document),
     ...renderCriteriaSince(document),
     ...renderFeatures(document),
-    ...renderDeclaredVsObserved(
-      collectDeclaredVsObserved(
-        comparedSteps(document.scenarios),
-        document.scenarios.reduce((total, scenario) => total + scenario.steps.filter((step) => step.record_unreadable === true).length, 0),
-      ),
-    ),
     ...renderFindings(document),
     ...renderRerun(document),
   ];

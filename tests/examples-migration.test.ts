@@ -6,7 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTodoApp } from "../examples/todo/app/server.js";
-import { copyExampleToTempDir, removeTempDir, repoRoot, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
+import { copyExampleToTempDir, httpLogLines, removeTempDir, repoRoot, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -129,17 +129,18 @@ describe("examples/migration", () => {
     const stashReadStepRecord = await readStepRecord(rootDir, stashReadStep.step_record_id);
     expect(stashReadStepRecord.world).toEqual({ reads: ["note"], writes: [] });
 
-    // The seeding step: both `observed` (2 POSTs) and `world` (the one
-    // declared key, seededCount) show up on the same step record -- the exact
-    // claim README.md's "measured for free" section quotes.
+    // The seeding step: both its http.jsonl (2 POSTs) and `world` (the one
+    // declared key, seededCount) show up beside the same step record -- the
+    // exact claim README.md's "measured for free" section quotes.
     const seedStepRecord = await readStepRecord(rootDir, seedStep.step_record_id);
     expect(seedStepRecord.result).toBeNull();
-    expect(seedStepRecord.observed).toEqual({ http_reads: 0, http_writes: 2, processes: null });
+    expect(seedStepRecord.observed).toEqual({ processes: null });
+    expect(httpLogLines(rootDir, seedStep.step_record_id).map((line) => line.method)).toEqual(["POST", "POST"]);
     expect(seedStepRecord.world).toEqual({ reads: [], writes: ["seededCount"] });
 
     // The RegExp-pattern count assertion: read-only, no World touch.
     const countStepRecord = await readStepRecord(rootDir, countStep.step_record_id);
-    expect(countStepRecord.observed).toEqual({ http_reads: 1, http_writes: 0, processes: null });
+    expect(countStepRecord.observed).toEqual({ processes: null });
     expect(countStepRecord.world).toBeUndefined();
 
     // Scenario 2 (the promoted pair): the producer's validated result is

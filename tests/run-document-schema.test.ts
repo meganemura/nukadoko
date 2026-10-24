@@ -8,7 +8,7 @@ import { parseRunDocument } from "../src/report/run-document-schema.js";
 // them is refused naming that field, never cast and read.
 
 const VALID = {
-  schema_version: 2,
+  schema_version: 3,
   nukadoko: "0.17.0",
   command: "run",
   verdict: "passed",
@@ -54,7 +54,7 @@ describe("parseRunDocument", () => {
     }));
 
   it("refuses another schema version before it reads a field", () => {
-    expect(parseRunDocument(JSON.stringify({ schema_version: 3 }))).toEqual({ problem: "has schema_version 3, and this release reads 2" });
+    expect(parseRunDocument(JSON.stringify({ schema_version: 2 }))).toEqual({ problem: "has schema_version 2, and this release reads 3" });
     expect(parseRunDocument("[")).toEqual({ problem: "does not parse as JSON: Unexpected end of JSON input" });
   });
 });

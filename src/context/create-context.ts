@@ -83,15 +83,12 @@ import { createUsedCollector } from "./used.js";
 // dir for both, one observed tally spanning the whole execution — is
 // unchanged.
 //
-// `beginStep` also resets the `observed` tally: the http.jsonl sink and the
-// observed collector share one
-// step-boundary concept, so one call advances both rather than risking a
-// caller that redirects the log dir but forgets to reset the tally (or vice
-// versa). The collector itself is created once, here, and handed to both
-// http-log.ts's wrapper and browser-evidence.ts's launch — the one object
-// every network path this ctx opens tallies into, never exposed on `ctx`
-// (same trust-model rule as `dispose`/`beginStep`: a step cannot see or
-// reset its own observation).
+// `beginStep` also resets the `observed` collector: the http.jsonl sink and
+// the observed collector share one step-boundary concept, so one call
+// advances both rather than risking a caller that redirects the log dir but
+// forgets to reset the collector (or vice versa). The collector is created
+// once, here, and never exposed on `ctx` (same trust-model rule as
+// `dispose`/`beginStep`: a step cannot see or reset its own observation).
 //
 // `beginStep` resets `sections` the same way: `nuka run` shares one `ctx`, hence one `sections` collector,
 // across every step of a pickle, so without this reset a later step's
@@ -312,9 +309,8 @@ import { createUsedCollector } from "./used.js";
 // state is now per entry: its trace chunk is open or not, and it writes its
 // own chunk file and final screenshot (context-name.ts's
 // `contextFileName`). The collectors stay one per `ctx`: every context
-// records into the same `observed`, `pageEvents`, and http.jsonl, tagged
-// with `as`, so a step record's counts cover every person the step acted
-// as. The browser is launched on the first context's demand and closed in
+// records into the same `pageEvents` and http.jsonl, tagged with `as`, so a
+// step record covers every person the step acted as. The browser is launched on the first context's demand and closed in
 // `dispose`, after every context's own `finalize`.
 
 export interface EvidenceResult {
@@ -347,11 +343,9 @@ export interface StepContextHandle {
    * `status` parameter here would itself be a misleading residue, implying
    * evidence still varies by outcome when it no longer does. */
   dispose(): Promise<DisposeResult>;
-  /** Executor-only: the network calls tallied since the current step
-   * boundary began (this execution's whole lifetime for `nuka do`, since
-   * `nuka run` since the last `beginStep`) — GET/HEAD as reads, anything
-   * else as writes, through `ctx.request()`, `page.request`,
-   * `context.request`, and the page alike. Never exposed on `ctx`. */
+  /** Executor-only: what the current step boundary reached outside its own
+   * process (this execution's whole lifetime for `nuka do`, since the last
+   * `beginStep` for `nuka run`). Never exposed on `ctx`. */
   observedCounts(): ObservedCounts;
   /** Executor-only: every step record this execution actually read a value
    * from since the current step boundary began — through `ctx.resultOf` or a
@@ -437,7 +431,7 @@ export interface StepContextHandle {
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
    * already-memoized request context's cookies, and resets the `observed`
-   * tally, the `used` log, the `sections` log, the `polls` log, the
+   * collector, the `used` log, the `sections` log, the `polls` log, the
    * `required_env` log, the `pageEvents` log, and the `httpOmitted` tally to
    * empty. `nuka run`'s executor calls this once per step, right before
    * running it, so a pickle's shared ctx still logs and tallies each step's
@@ -613,10 +607,8 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // meaningful when `pendingChunkTitle !== undefined`; `beginStep` is the
   // only thing that ever changes it.
   let pendingChunkFileName = "trace.zip";
-  // One collector for this ctx's whole lifetime; `beginStep` resets its
-  // *counts*, never replaces the object itself, so every network path
-  // opened before or after a reset still tallies into the same instance.
-  // The state directory is where this run writes step records and traces
+  // One collector for this ctx's whole lifetime; `beginStep` resets what it
+  // holds, never replaces the object itself. The state directory is where this run writes step records and traces
   // while a step runs, so a `runCommand` snapshot would otherwise read the
   // executor's own writes as the program's.
   const observed = createObservedCollector({
@@ -878,12 +870,10 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     },
     baseURL: config.baseURL,
     async page(): Promise<Page> {
-      observed.watchHttp();
       return pageOf(undefined, undefined);
     },
     async pageAs(name: string, options?: BrowserContextOptions): Promise<Page> {
       assertValidContextName(name);
-      observed.watchHttp();
       if (requestedOptions.has(name)) {
         // A later call without options reaches the context as it is. One
         // with options must ask for what the context already has: Playwright
@@ -902,7 +892,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     async request(): Promise<APIRequestContext> {
       // Same sharing as `ctx.page()`: two concurrent first calls must not each
       // open a context and leak the first.
-      observed.watchHttp();
       requestSetup ??= setUpRequest().finally(() => {
         requestSetup = undefined;
       });
@@ -1027,7 +1016,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         ...(as !== undefined ? { as } : {}),
         contextOptions: contextOptionsFor(as, options),
         evidenceDir,
-        observed,
         pageEvents,
         // Same getter/secrets pair `ctx.request()` (below) already reads
         // at call time: page-issued traffic lands on the very same
@@ -1099,7 +1087,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
         raw,
         () => path.join(boundaryDir, "http.jsonl"),
         secrets,
-        observed,
         httpLogFailed,
       );
     }

@@ -44,7 +44,7 @@ describe("nuka run: run.json", () => {
     const passedStep = result.scenarios.find((s: { status: string }) => s.status === "passed").steps[0];
 
     expect(result).toEqual({
-      schema_version: 2,
+      schema_version: 3,
       nukadoko: readOwnVersion(),
       command: "run",
       verdict: "failed",
@@ -110,7 +110,7 @@ describe("nuka run: run.json", () => {
               step_record_id: passedStep.step_record_id,
               record: path.join("steps", passedStep.step_record_id),
               mutates: true,
-              observed: { http_reads: null, http_writes: null, processes: null },
+              observed: { processes: null },
             },
           ],
           hooks: [],
@@ -180,7 +180,7 @@ describe("nuka run: run.json", () => {
       expect(exitCode, stderr.text()).toBe(0);
       const printed = JSON.parse(stdout.text());
       // The envelope carries run.json's fields beside its own five.
-      expect(printed).toEqual({ ...readRunJson(rootDir, onlyRunId(rootDir)), schema_version: 2, command: "run", findings: [] });
+      expect(printed).toEqual({ ...readRunJson(rootDir, onlyRunId(rootDir)), schema_version: 3, command: "run", findings: [] });
       expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0, not_run: 0 }]);
       expect(printed.scenarios.map((s: { feature: string }) => s.feature).sort()).toEqual([
         "features/basic/a.feature",

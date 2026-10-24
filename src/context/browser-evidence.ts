@@ -16,7 +16,6 @@ import type { HttpLogFailedCollector } from "./http-log-failed.js";
 import type { HttpOmittedCollector } from "./http-omitted.js";
 import { instrumentApiRequestContext } from "./http-log.js";
 import { loadPlaywright } from "./load-playwright.js";
-import type { ObservedCollector } from "./observed.js";
 import type { PageEventsCollector } from "./page-events.js";
 import { subscribePageHttpLogging } from "./page-http-log.js";
 
@@ -44,28 +43,16 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // the timestamp is the information a second file was standing in for
 // without ever stating it.
 //
-// The browser context's own `request` events are also tallied into
-// `observed`: every request the page itself issues — navigation, fetch,
-// XHR — is counted read/write the
-// same way http-log.ts counts `ctx.request()` calls. `observed` keeps
-// counting every one of them regardless of what the second subscription
-// below goes on to do with it — the two are deliberately different tallies
-// (http-omitted.ts's own header). The subscription above is set up once, at
-// context creation, and lives for the context's whole lifetime — it is
-// `observed`'s own `reset()` (create-context.ts's `beginStep`) that advances
-// the step boundary, not resubscribing.
+// The context's `request` event does not see `page.request` or
+// `context.request`. Those are one APIRequestContext Playwright hangs on
+// the browser context, and its calls never emit `request`.
+// `instrumentApiRequestContext` (http-log.ts) logs that object in place,
+// once, when the context opens, so a step that destructures `page` or
+// `context` and calls `.request.post` / `.request.delete` still lands on
+// http.jsonl. A later page copies the same reference, so it is already
+// covered.
 //
-// That listener does not see `page.request` or `context.request`. Those
-// are one APIRequestContext Playwright hangs on the browser context, and
-// its calls never emit `request`. `instrumentApiRequestContext`
-// (http-log.ts) logs that object in place, once, at the same moment the
-// listener is attached, so a step that destructures `page` or `context`
-// and calls `.request.post` / `.request.delete` still lands on `observed`
-// and http.jsonl. A later page copies the same reference, so it is
-// already covered. GET and HEAD stay reads, the same classification
-// `ctx.request()` already uses.
-//
-// A second, separate subscription — `subscribePageHttpLogging`
+// A separate subscription — `subscribePageHttpLogging`
 // (page-http-log.ts), wired in below — is what now also appends page-issued
 // traffic to http.jsonl itself: document/xhr/fetch responses only, each
 // entry marked `via: "page"` so it reads apart
@@ -82,7 +69,7 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // page, and cucumber-js has no browser context of its own to have ever
 // recorded that from. Subscribed on `context`, not
 // `page`, for the same "outlives a future page-fixture override" reason
-// `observed`'s own `request` subscription is (src/context/page-events.ts's
+// the http.jsonl subscription is (src/context/page-events.ts's
 // own header). `console` is filtered to `msg.type() === "error"` right here
 // — a warning is routine SPA noise, not evidence — the other two categories
 // have no such filter: every `weberror`/`requestfailed` is worth recording.
@@ -175,9 +162,6 @@ export interface TracedContextOptions {
   contextOptions: BrowserContextOptions;
   /** Where the final screenshot is written. Must already exist. */
   evidenceDir: string;
-  /** Tallies every request this context's page(s) make (this file's own
-   * header). */
-  observed: ObservedCollector;
   /** Records console errors, uncaught page errors, and failed requests this
    * context's page(s) produce (this file's own header). */
   pageEvents: PageEventsCollector;
@@ -251,17 +235,13 @@ async function openTracedContext(browser: Browser, options: TracedContextOptions
   // the context before the error propagates, or it stays open in a browser
   // that later contexts of this scenario share.
   try {
-    context.on("request", (request) => {
-      options.observed.record(request.method());
-    });
-    // Not the listener above: `page.request` / `context.request` do not emit
-    // `request` (this file's own header). One call covers every page, because
+    // `page.request` / `context.request` do not emit the context's
+    // `request` event (this file's own header). One call covers every page, because
     // they share this object.
     instrumentApiRequestContext(
       context.request,
       options.logPath,
       options.secrets,
-      options.observed,
       options.httpLogFailed,
       as,
     );

@@ -247,19 +247,12 @@ export interface HttpOmittedCounts {
 /** What one step boundary reached (`nuka do`'s whole execution, or one
  * `nuka run` pickle step). Mirrors the step record's own `observed` shape
  * (docs/spec.md "Records"). */
-export type ObservedCounts = ObservedHttp & {
+export interface ObservedCounts {
   /** Every child process `runCommand` started during this execution, in
    * call order (docs/spec.md "Records"). `null` when the execution never
    * called `runCommand`. */
   processes: ProcessEntry[] | null;
-};
-
-/** Both counts are numbers when the execution reached `ctx.request()`,
- * `page`, `context`, or `pageAs`, or a request was recorded during it, and
- * both are `null` otherwise. */
-export type ObservedHttp =
-  | { http_reads: number; http_writes: number }
-  | { http_reads: null; http_writes: null };
+}
 
 /** One process `runCommand` ran. Measured by the helper itself, never
  * declared by the step. */

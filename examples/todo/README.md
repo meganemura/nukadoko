@@ -105,7 +105,7 @@ nuka do add-todo --args '{"title":"Buy milk"}'
   "args": { "title": "Buy milk" },
   "result": { "id": "0d8b52bf-2281-4cde-9572-a885533c03d9", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 1, "processes": null }
+  "observed": { "processes": null }
 }
 ```
 
@@ -332,9 +332,7 @@ The `summary` line `nuka run` prints on stderr names the file, under
 `.nukadoko/runs/<run_id>/summary.md`. It holds the
 run's verdict and scenario counts; the condition (the commit, whether the
 tree had uncommitted changes, the environment, the browsers, and the
-times); one table per feature, with a row per scenario; and a closing
-"Declared vs observed" section listing any step that declared
-`mutates: false` while measured making a write. Every step here goes
+times); and one table per feature, with a row per scenario. Every step here goes
 through `request`, never `page`, so the browsers line reads "none
 launched". The summary is built only from what the run measured, so the
 `.nukadoko/` records stay out of git and the summary is what a person

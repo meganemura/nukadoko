@@ -7,7 +7,7 @@ import { copyFixtureToTempDir, createCaptureSink, removeTempDir } from "./helper
 
 // Responsibility: a step record that cannot be read back when nuka run
 // builds the scenario's run.json entry. The step is marked, a warning names
-// the record, and the summary counts it apart instead of leaving it out.
+// the record, and the summary lists that warning instead of leaving it out.
 
 // Overwrites every step record the run has written so far, which is the
 // earlier step's: its own is written after it returns.
@@ -58,7 +58,7 @@ describe("nuka run with a step record it cannot read back", () => {
     await removeTempDir(rootDir);
   });
 
-  it("marks the step, warns, and counts it in Declared vs observed", async () => {
+  it("marks the step, warns, and lists the warning in the summary", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["run", "--json", "features/damaged.feature"], { rootDir, stdout, stderr: createCaptureSink() });
     expect(exitCode).toBe(0);
@@ -76,6 +76,6 @@ describe("nuka run with a step record it cannot read back", () => {
     );
     const runsDir = path.join(rootDir, ".nukadoko", "runs");
     const summary = readFileSync(path.join(runsDir, readdirSync(runsDir)[0]!, "summary.md"), "utf8");
-    expect(summary).toContain("1 step has a step record nukadoko could not read, so nothing was compared for it.\n");
+    expect(summary).toContain("- warning `step-record-unreadable` ");
   });
 });

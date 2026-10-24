@@ -612,7 +612,7 @@ matcher が Playwright のテストと同じようにアサーションするか
 `pageAs(name)` は、2 つ目の context に至る計測された経路です。
 executor はそれを自分が起動したブラウザの中で開き、デフォルトの context が持つ購読をすべて付けるので、同じ step record に記録されます:
 
-- リクエスト数(`observed`)と、`"as": "<name>"` を持つ http.jsonl の行
+- `"as": "<name>"` を持つ http.jsonl の行
 - `as` を持つ `page_events` のエントリ
 - `pageAs(name)` を呼んだ step または hook ごとに 1 つの trace チャンク
   `trace.zip` の隣に `trace.<name>.zip` として書かれ、`evidence.named_traces` に載ります。
@@ -1253,7 +1253,7 @@ scenario record は、その step record を引用します。
 操作に有用な契約、入力、result がある場合は、part を使います。
 いずれもない場合は、`features/steps/lib/` の下にある通常の関数を使います。
 ヘルパーには、独立した record エントリがありません。
-その HTTP 呼び出しは呼び出し元の step の `observed` に引き続き加わり、`section` は実行の進行を示せます。
+その HTTP 呼び出しは呼び出し元の step の http.jsonl に引き続き載り、`section` は実行の進行を示せます。
 コマンドラインのプログラムを実行するヘルパーは `runCommand` を使います(「Records」を参照してください)。
 そうすると、ヘルパーが起動した各プロセスは、呼び出し元の step の `observed.processes` に並びます。
 たとえば、payload を整形する関数や fixture ファイルを選ぶ関数には、通常、保存する価値がある契約や result がありません。
@@ -1284,43 +1284,37 @@ Gherkin のキーワードが事実を運ぶのは、nukadoko が **`mutates` �
 - **読み取り専用の environment は、宣言上 mutate する step を実行前に拒否します。**
   この規則には、`call` を経由して到達した part も含まれます(「Parts」を参照)。
   宣言が実行をゲートする場所は、ここだけです。
-- **実行時には**、step record が実行内容を保存します。
-  ツールが `request` fixture、`page.request`、`context.request`、または page を通じて観測した、すべてのネットワーク呼び出しを保存します。
-  GET/HEAD 以外の呼び出しを観測された書き込みとして数え、宣言された `mutates` 値の隣に置きます。
-  この回数は、Then の位置も、読み取り専用 environment のポリシーも決めません。
-  nukadoko は、`observed` の値にかかわらず `mutates: false` を信頼します。
+- **実行時には**、step record が実行内容を、ツールが正確に計測できる範囲で保存します(「Records」を参照)。
+  書き込みについての断定は保存しません。
+  保存したものは、Then の位置も、読み取り専用 environment のポリシーも決めません。
+  nukadoko は、step record が何を持っていても `mutates: false` を信頼します。
 - Gherkin は、`And` または `But` の step を、直前の主要キーワード(Given、When、Then)の pickle step type で分類します。
   Gherkin の pickle コンパイラが、この挙動を定義します。
   したがって、`Then` のあとの操作は、その位置にある他の step と同じ Then 位置の観測を受けます。
   その位置は、操作をゲートしません。
 - 計測では、この事実を決められません。
-  書き込みの検出は HTTP メソッドを使い、GET/HEAD 以外の各 request を書き込みとして数えます。
-  HTTP メソッドは、書き込みの意味論を示すプロキシです。
-  GraphQL、RPC-over-POST、多くのベンダー query API は、意味的に純粋な読み取りに POST を使います。
+  HTTP メソッドは、書き込みの意味論そのものではなく、そのプロキシです。
+  GraphQL、RPC-over-POST、多くのベンダー query API は、意味的に純粋な読み取りに POST を使い、サーバは GET で状態を変えることもあります。
   呼び出しがサーバの状態を変えるかは、外部システムが定義します。
   nukadoko が観測するのは、その下にある HTTP レイヤーだけです。
   各プロトコルは、読み取りと書き込みを区別するために異なるデータを使います。
   たとえば、GraphQL body の `query` または `mutation`、RPC のメソッド名、ベンダーの path 規約です。
   汎用の機械的な規則では、この区別を判断できません。
-  回数は、step が送ったものを保証します。
-  サーバの状態が変わったことは保証しません。
-- record は、すべての計測を保持します。
-  `observed`、http.jsonl、Allure の declared/observed テーブルは変わりません。
-  したがって、読み手は実行後にそれらを使って誤った宣言を反証できます。
+  そのため規則は、正確に計測できるものを計測し、計測できないものはそうと印を付け、メソッドから書き込みを推測しない、です。
+  step record は、step が送ったものと受け取ったものを残します。
+  サーバの状態が変わったかどうかは述べません。
+- 読み手は実行後に step record を使って誤った宣言を反証できます。
   この境界は、mutation の意味論に対するツールの権限が終わる場所を示します。
 - nukadoko は、この比較を実行しません。
-  運用者は、別の artifact を使わずに、同じ step record にある `mutates` と `observed` を比較できます。
-  しかし、`nuka run` と `nuka check` は、これらの値が矛盾すると主張しません。
+  `nuka run`、`nuka check`、run サマリは、計測と宣言が矛盾すると主張しません。
   その主張は、HTTP メソッドのプロキシを確定した事実として扱います。
   GraphQL の読み取り、RPC-over-POST の読み取り、ベンダー API の POST による読み取りを、すべて偽陽性として報告します。
   同じ理由で、nukadoko は実行時に mutation の意味論を強制しません。
-  この比較を書き出すのは run サマリだけです(「Records」の「Declared vs observed」節を参照)。
-  pull request をレビューする人は、そこですでに run を読み、判断します。
-  サマリは、生の事実を `nuka run` や `nuka check` の呼び出しの失敗に変えずに示せます。
+  pull request をレビューする人が、宣言と step record を並べて読みます。
 - Compat(型のない)step には、`mutates` の宣言がありません(「Compat steps(移行の扉)」を参照)。
   `nuka check` の `then-compat-step` 警告は、compat step が Then の位置に結び付けられたときに、このカバレッジの欠落を示します。
   mutation の矛盾は示しません。
-  実行時の観測は他の step と同じ回数を記録しますが、その回数は何もゲートしません。
+  実行時の観測は他の step と同じ計測を記録しますが、それは何もゲートしません。
 
 ## Compat steps(移行の扉)
 
@@ -1388,7 +1382,7 @@ import { Given, When, Then } from "nukadoko/compat";
   より複雑な式は、静かな誤マッチを防ぐために明示的に失敗します。
   hook は自分の step record を持たず、scenario record の `hooks` 配列に現れます。
   hook 内のネットワーク通信は、どの step の境界にも属しません。
-  http.jsonl と observed の読み書きカウントは scenario 全体で共有され続け、個々の hook 呼び出しに紐付けられることはありません。
+  http.jsonl の行は scenario 全体で共有され続け、個々の hook 呼び出しに紐付けられることはありません。
   ただし Playwright の trace は違います。
   `this.openPage()` に触れた Before/After/AfterStep の個々の呼び出しは、それぞれ自分自身の trace chunk と `actions` のリストを持ち、同じ `hooks` 配列のエントリ上に記録されます。
   `trace`/`actions`/`truncated` は、step 自身の record と同じ形です(「Records」を参照)。
@@ -1616,7 +1610,7 @@ Playwright の `test()` は Playwright runner の外では動かないため、i
 ### Scenario(スクリプト化された経路)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--since <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--since <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` は、ファイルをフラットで自己完結した pickle にコンパイルします。
@@ -1711,38 +1705,6 @@ run サマリのセルは `<passed> of <n> passed` と読めます。
 1 つのファイルを名指す target は変わらず 1 で走ります。
 1 つの scenario を複数の worker で同時に走らせることは、このフラグの仕事ではありません。
 
-`--probe` は、通った Then が失敗しえたかどうかを計測します。
-Then の位置(Gherkin の `Then` と、その後の `And` や `But`)で走り、`mutates: false` を宣言し、pattern の capture を 1 つ以上、または表か docstring を結び付けた step を、通った直後、その AfterStep hook と次の step より前に、もう一度走らせます。
-そのため再実行は、Then が見たのと同じ状態を見ます。
-同じ scenario の ctx と fixture の中で単独で走り、結び付けたときの args のまま、capture を 1 つだけ変えます。
-文字列には接尾辞 `-probe` を付け、数には 1 を足し、真偽値は反転します。
-変えた args は、最初の実行と同じく step の args schema を通ります。
-ほかの型の capture と、1 を足しても変わらない数は probe しません。
-`mutates` を宣言しない compat の step も probe しません。
-capture ごとに 1 回ずつ再実行し、`from` が埋めた値は変えません。
-表や docstring は Then の期待値そのものであることが多いので、capture の後にそれも 1 回再実行します。
-docstring には接尾辞 `-probe` を付け、表は最後の行の最後のセルだけを変えます。
-表の最初の行は、step が比べずに照合に使う見出しであることが多いからです。
-その `key` は docstring が埋めた args のキー、表なら `<key>[<row>][<column>]` で、`recorded` と `changed` はそのセルの値です。
-When は再実行しません。
-走ったときの観測に process か HTTP の書き込みがある step も再実行しないので、probe は feature が名指していないものを 2 度目に走らせません。
-それでも通った Then は、その Then の行の `then-passed-with-changed-capture` という note になります。
-note は step の文、step、キー、両方の値を名指し、もう一度計測する `nuka run <file>:<line> --probe` を添えます。
-Then が変更を捕まえたとみなすのは、step 自身の `run` が throw したときだけです。
-そこまで届かなかった probe は、理由を持つ `then-probe-not-measured` という note になります。
-理由は、走ったとき、または probe 自身の再実行で書き込んだ(`wrote`)、args schema が変えた値を拒んだ(`args-rejected`)、fixture が失敗した(`setup-failed`)、再実行がタイムアウトした(`timeout`)、returns schema が戻り値を拒んだ(`returns-rejected`)のいずれかです。
-probe 自身の再実行も step と同じように観測を読み、書き込んだ再実行の結果は使わず、その step を残りのキーで再実行することもしません。
-`--repeat` の下では、1 つの environment での 1 つの scenario の実行が、step、キー、理由ごとに 1 つの note にまとまります。
-一部の実行でだけ成り立った note は、`in <k> of <n> executions` で終わります。
-これは計測であって断定ではありません。
-「at least {n}」のような文は n+1 で正しく通りえるので、note は scenario の status も終了コードも変えません。
-probe は step ではありません。
-step record を書かず、`steps` にエントリを持たず、trace のチャンクも開きません。
-scenario の `run.json` のエントリは再実行ごとに 1 つずつ `probes` を持つので、読み手は probe が捕まえた Then と、probe しなかった Then を見分けられます。
-probe は、nukadoko がこれまで問えなかった 1 つの問いに答えます。
-step の `run` は書かれたとおりに信頼されており、実装したエージェントが自分のために書いた step こそ、何も確かめていない見込みが最も高いのです。
-`--concurrency` の下では各 worker が自分の scenario を probe し、`--repeat` の下ではすべての実行が probe します。
-
 どの run も、最後にもう 1 つ計測をします。
 同じ step で始まる scenario と、その繰り返しにかかったコストです(`repeated-scenario-prefix`、note)。
 同じ始まりを共有することはよくあります。
@@ -1768,7 +1730,7 @@ step record には、各 step 自身の `mutates` の宣言が載っています
 そうでない step があるとき(`mutates: true` を宣言している、宣言を持たない compat step である、または step record が無い)は、その step を名指し、`process` スコープの fixture ではその step が書き込むものを scenario の間で共有してしまうと伝えます。
 計測した HTTP API のプロジェクトでは、書き込む始まりにこの助言を当てはめると、7 つの scenario のうち 2 つが失敗しました。
 節約できる時間を示すことは、切り出しが可能だと主張することになりますが、ここでの計測はその可能性を裏付けません。
-probe の note と同じく、scenario の status も終了コードも変えません。
+scenario の status も終了コードも変えません。
 
 `--since <git ref>` は、人が承認した基点(pull request の向かう先のブランチなど)から、受け入れ基準の何が動いたかを、以下の比較が届く範囲で述べます。
 何かを実行する前に、run が対象にした feature ファイルを、ref が名指すコミットと比べます。
@@ -1906,7 +1868,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "nukadoko": "...",
   "command": "run",
   "verdict": "failed",
@@ -1947,8 +1909,6 @@ run が終わったとき、最後の step record と run サマリの後に、�
           "record": "steps/step-20260801-143023-e5f6",
           "mutates": false,
           "observed": {
-            "http_reads": null,
-            "http_writes": null,
             "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41 }]
           }
         },
@@ -1960,7 +1920,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
           "step_record_id": "step-20260801-143023-g7h8",
           "record": "steps/step-20260801-143023-g7h8",
           "mutates": false,
-          "observed": { "http_reads": null, "http_writes": null, "processes": null },
+          "observed": { "processes": null },
           "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
           "used": [
             {
@@ -2005,7 +1965,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
 - `scenarios` には、scenario の実行ごとに 1 件のエントリが、終わった順に入り、それぞれが走った `environment` を持ちます。
   各 step は、feature ファイルでの `line`、`text`、一致した `step`(一致がないか複数あれば `null`)、`status` を持ちます。
   始まった step は、`step_record_id`(`nuka do --use` が受け取る値)と、step record のディレクトリである `record` を持ち、その `mutates` の宣言と `observed` の計測も持ちます。
-  step record を読み戻せなかった step は、その代わりに `record_unreadable: true` を持ち、`step-record-unreadable` の警告がそのファイルを名指し、サマリの「Declared vs observed」の節はそれを比べなかった step として数えます。
+  step record を読み戻せなかった step は、その代わりに `record_unreadable: true` を持ち、`step-record-unreadable` の警告がそのファイルを名指します。
   失敗した step、または理由があって始まらなかった step(`undefined`、`ambiguous`)は、step record の `kind`(step record が言わなければ `null`)と最初のメッセージを持つ `error` を持ちます。
   `from` で前の結果を読んで失敗した step は `used` を持ち、各 producer の step、record、読んだ結果を載せます。
   JSON が 4096 バイトを超える結果は、代わりにプレビューになり、`truncated: true` と、値全体の大きさである `result_bytes` を持ちます。
@@ -2017,12 +1977,6 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `scenario-failed` の所見の `do:` 行が出すのと同じコマンドです。
   自分の evidence(最終スクリーンショット、hook の trace や添付)を書いた scenario は、run の `scenarios/` の下のそのディレクトリを `evidence` に持ちます。
   何も書かなかった scenario は `evidence` を持たず、その空のディレクトリは run の終わりに消されます。
-- `--probe` のとき、probe する Then があった scenario は `probes` を持ちます。
-  再実行ごとの `line`、`step`、`text`(step の文)、`key`、`recorded` の値、`changed` の値、その `status` です。
-  `passed` は変えた値でも通った Then で、`findings` の `then-passed-with-changed-capture` の note です。
-  `caught` は `run` が throw した Then です。
-  `not-measured` は `reason` と `message` を持ち、`then-probe-not-measured` の note です。
-  probe には step record がありません。
 - すべての scenario は `criteria` を持ちます。
   `changed_since` は、`--since` がなければ `null` です。
   あれば `unchanged`、`changed`、`new`、`ambiguous`、`unknown` のどれかで、後の 2 つは `reason` を持ちます。
@@ -2030,7 +1984,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `since` は、フラグがなければ `null` です。
   あれば `ref`、その `commit`、比べた対象の `compared`、消えた受け入れ基準の `removed`、各 step ファイルの `file` とその `change`(`unchanged`、`changed`、`untracked`)を持ちます。
 - `findings` は、run が出したすべての所見を持ちます。
-  失敗した各 scenario と、各 probe の note と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
+  失敗した各 scenario と、各 note と、各警告(書けなかったファイル、失敗した hook や fixture の teardown、例外を投げたバージョン probe)で、テキストのとき stderr に出るのと同じ所見です。
 - `verdicts` は scenario と environment の組ごとに 1 つのセルを持ち、feature はパス順、scenario は行順、environment は与えた順に並びます。
   セルの中の実行が 1 つでも失敗していれば `verdict` は `failed` で、`executions` はその数(`--repeat` のとき 2 以上)、`passed` は通った数です。
   選んだ scenario がある environment で一度も走らなかったとき(その environment の BeforeAll が失敗したときなど)は、`verdict` が `not-run` で実行が 0 のセルになります。
@@ -2088,9 +2042,6 @@ trace はかつて、共有された context 全体にまたがる 1 本のフ�
 `via: "page"` として載る page 由来のリクエストは `document`/XHR/`fetch` の 3 種類だけです(1 回のページ読み込みは画像やスタイルシート、スクリプトの束を何十件も引き込みうるため、それを全部保持しようとするファイルは読み手が開けるものではなくなってしまいます)。
 ただし落とされたことが黙って消えるわけではありません。
 落とされた分は step record 自身に、リソースタイプ別に `http_omitted` として載ります(「Records」を参照)。
-`observed` はこれによって一切狭められません。
-image や script の通信も含め、ツールが見たリクエストをすべて数え続けます。
-それは http.jsonl とは違う問いに答えているからであり、2 つの数は一致することを期待されていません。
 
 pickle が実行される前に、その step たちの `from` 宣言は自分自身の step の順序と照合されます。
 required な連鎖キーの生産者が欠けているか、より後ろで束ねられている場合、その scenario は何かが起動するより前に失敗します。
@@ -2174,7 +2125,7 @@ scenario record は独立したファイルではなく、その run の `run.js
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
@@ -2183,7 +2134,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   "result": { "id": "p_0001", "name": "acme" },
   "status": "passed",
   "mutates": true,
-  "observed": { "http_reads": 2, "http_writes": 1, "processes": null },
+  "observed": { "processes": null },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "scenario_record_id": null,
@@ -2243,7 +2194,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   | `step_error` | それ以外で、step または hook 自身のコードが throw した |
 
 - `mutates` は step 自身の宣言を保持します(compat の step には記録すべき宣言がないため `null` になり、`false` にはなりません)。
-  `observed` のカウントと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
+  step record が計測したものと並んで置かれるため、宣言された値と計測された値を別の artifact なしに比較できます。
 - Evidence は harness によって収集され、step が自己申告することは決してありません。
   ブラウザが使われるときは Playwright の trace とスクリーンショット、`request` fixture の呼び出し、`page.request` と `context.request` の呼び出し、page 自身の document/XHR/fetch の通信はすべて http.jsonl に記録され、step record 自体が一次記録になります。
 - `evidence.screenshots` は browser context ごとに 1 つのエントリを持ちます。
@@ -2260,15 +2211,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
 - `observed` は、その実行が届いたものとしてツールが見たものを、チャネルごとに 1 つのキーで持ちます。
   実行が一度も届かなかったチャネルは `0` ではなく `null` です。
-  「何も計測しなかった」と「0 を計測した」は別の事実であり、`fetch` を呼ぶ step の request は nukadoko のどのチャネルにも見えないからです。
-- `observed.http_reads` と `observed.http_writes` は、その実行に対してツール自身が見たネットワーク呼び出しを数えます(`request` fixture、`page.request`、`context.request`、page のすべてを通じたもの)。
-  GET/HEAD 以外はすべて書き込みとして数えられます。
-  これは書き込みの意味論そのものではなく、HTTP メソッドをそのプロキシとして使っているため、一度も書き込んでいない step に POST ベースの読み取りが不利に働くことがあります(キーワードの意味論を参照してください)。
-  実行が `ctx.request()`、`ctx.page()`、`pageAs()` のどれかを呼んだとき(`request`、`page`、`context` の fixture は、直接でもプロジェクトの fixture を通じてでも、そのどれかを呼びます)、またはその実行の間に request が記録されたとき、2 つはどちらも数値で、`0` も含みます。
-  それ以外のとき、2 つはどちらも `null` です。
-  この回数はそれ単独では何も決めません。
-  Then の位置も読み取り専用の environment も、作用する対象は `mutates` の宣言であり、この回数では決してありません。
-  `observed` は `mutates`(宣言)の隣に置かれているため、誤った宣言はここでも Allure のレポートでも反証可能です。
+  「何も計測しなかった」と「0 を計測した」は別の事実だからです。
+  正確に計測できるものを記録し、そこから何も推測しません。
+  step が書き込んだかどうかを述べるフィールドはありません(「キーワードの意味論」を参照)。
 - `observed.processes`(実行が一度も `runCommand` を呼ばなかったときは `null`)は、その実行の間に `runCommand` が起動した子プロセスを、呼び出し順に並べます。
   各エントリは `{ "command", "cwd", "exit_code", "duration_ms" }` です。
   シグナルがプロセスを終了させた場合は `"signal"` が加わり、`timeout` オプションがプロセスを止めた場合は `"timed_out": true` が加わります。
@@ -2316,7 +2261,6 @@ scenario record は独立したファイルではなく、その run の `run.js
   失敗は `http_log_failed`(下記)に数えられます。
   page のリクエストの行は、そのリクエストを送った step のものです。
   パスはリクエストが始まった時点で決まり、その step が返ったあとにレスポンスが届いても、そこへ追記されます。
-  それは `observed` がすでにそのリクエストを数えた step と同じです。
   page の通信のうち http.jsonl に届くのは `document`、`xhr`、`fetch`(Playwright 自身の `request.resourceType()`)のリクエストだけです。
   実際のページ読み込みは画像やスタイルシート、スクリプトを何十件も引き込みますが、それを受け入れ確認の目的で読み手が 1 つずつ追うことはなく、そのすべてを保持しようとするファイルはそもそも読み手が開けるものではなくなってしまいます。
 - `evidence.attachments`(空でないときだけ現れます)は、`evidence.attach`/`evidence.path` がこの実行で実際に書き込んだものを、`{ "name", "file", "at" }` の形でそれぞれ並べたものです(「Context API」を参照)。
@@ -2348,13 +2292,9 @@ scenario record は独立したファイルではなく、その run の `run.js
   省かれたものを数えることで、その省略を可視化します。
   http.jsonl に入らなかった分をリソースタイプ別に数えます。
   例えば `{ "image": 34, "stylesheet": 5, "script": 12 }` です。
-  `observed`(上記)はこれによって一切狭められません。
-  image や script の通信も含め、harness が見たリクエストをすべて数え続けます。
-  それは http.jsonl とは違う問い(実際に何回の読み取り・書き込みが起きたか)に答えているのに対し、http.jsonl が答えるのは(そのうちどれが 1 つずつ読む価値があるか)という別の問いだからです。
-  2 つの数は互いに一致することを期待されておらず、どちらかがもう一方より小さくてもバグではありません。
 - `http_log_failed`(数値)は、少なくとも 1 行の http.jsonl への追記に失敗したときだけ現れます。
   例えば step のディレクトリが無い、ディスクが満杯、権限が無い、といった場合です。
-  失われた行の数を数えるので、`observed` が数えたのに http.jsonl に無いリクエストが黙って消えることはありません。
+  失われた行の数を数えるので、step が送ったのに http.jsonl に無いリクエストが黙って消えることはありません。
   追記の失敗で step が失敗することはありません。
   計測が実行を壊してはならないからです。
 - `used`(空でないときだけ現れます)は、この実行が値を引き出した以前の実行の一覧です。
@@ -2516,16 +2456,6 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   scenario ごとに 1 行を行番号順に並べ、scenario、行、environment ごとに 1 列(列名は environment の名前)のセルの断定(`--repeat` のときは `<passed> of <n> passed`)、その行のすべての実行の所要時間を載せます。
   失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
   これは失敗した environment ごとに 1 つずつ載り、run に environment が 2 つ以上あればその environment の名前が前に付きます。
-- 「Declared vs observed」。
-  実行されて step record を持つすべての step が対象です。
-  `mutates: false` を宣言しながら計測上 1 回以上書き込んだ(`observed.http_writes > 0`、「キーワードの意味論」を参照)step、または作業ディレクトリが変わったプロセスを実行した(`observed.processes[].files`)step を、断定ではなく生の事実として(宣言の値と計測した件数、そして変わったパスを 3 つまで並べて)示します。
-  POST で読み取る step は、設計上いつもここに載ります。
-  実行時の `mutates` の強制を当てにならなくしたのと同じ、HTTP メソッドによる代理だからです。
-  run 全体で 1 つの節なので、うっかり読み飛ばされません。
-  何も食い違わなくても書かれるので、「比べて何も無かった」と「比べなかった」は区別できます。
-  `mutates: false` を宣言しながら HTTP のチャネルに届かず、ファイルを計測したプロセスも実行しなかった step(`observed.http_writes` が `null`)は比べられておらず、この節はそれらを 1 行で数えます("2 steps that declared `mutates: false` reached no HTTP channel nukadoko observes ...")。
-  そのため、`fetch` を呼んだ step や自分でファイルを書いた step が書き込まなかったと報告されることはありません。
-  compat step(`mutates: null`、「Compat steps(移行の扉)」を参照)には比べる宣言が無く、別に数えます。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。
 - 失敗した run では、失敗した各 scenario の `do` である `nuka run <feature>:<line>` コマンド。
@@ -3066,7 +2996,7 @@ action は自分の開始点から `ms` 後まで幅を持ち、名前は自分�
 否定された assertion では `not` が畳み込まれます。
 `goto` の対象が `url` から自明であるのと違い、`expect` の matcher と対象はどちらも `method` だけからは分かりません。
 `ms` も `timeout_ms` も名前には決して入りません。
-`ms` は child step 自身の幅としてすでに見えており、これは `page_events` の `observed` count を step の名前に入れない理由と同じです。
+`ms` は child step 自身の幅としてすでに見えており、これは `page_events` の件数を step の名前に入れない理由と同じです。
 `timeout_ms` は `record.json` という attachment の中にとどまります。
 `actions` 自身が 100 件で打ち切られていたとき(「Records」の `truncated.actions` を参照)、タイムラインの末尾にもう 1 つ、幅ゼロで passed の child step が加わり、打ち切りの事実を名指しします(例: `... 4113 more actions not shown`)。
 タイムラインだけを見た読み手が、打ち切られたリストを全部だと取り違えることが決してないようにするためです。
@@ -3079,13 +3009,10 @@ parameter は `console errors (observed)`、`page errors (observed)`、`failed r
 収集側が打ち切った種類は、表示件数の隣に真の総数を示します(例えば `100 of 4213`)。
 表示件数だけでは、実際に起きたことを過少に見せてしまいます。
 
-step entry の parameter は、その宣言と実際に `observed` されたものを並べて運びます。
-計測された `http reads (observed)` / `http writes (observed)`(compat の step では `world reads (observed)` / `world writes (observed)` も)の隣に `mutates (declared)` が置かれます。
-step が HTTP のチャネルに届かなかったときは、`http reads (observed)` と `http writes (observed)` はどちらも `not observed` です。
-これは自動で照合されるからではなく、レビュアーが自分の目で見比べられるようにするためです。
-宣言は nukadoko が信頼し作用する対象であり、`observed` の回数は実際に起きたことであり、この行は両者を目で見比べられる場所です。
-`observed` は意味論上の判定ではなく HTTP メソッドによるプロキシです(「キーワードの意味論」を参照)。
-step が POST ベースの読み取りを呼んでいた場合、正直な `mutates (declared): false` の隣にゼロでない `http writes (observed)` が並ぶことがありますが、それはこのプロキシがテーブルに透けて見えているだけであり、どちらの数値も嘘をついているわけではありません。
+step entry の parameter は、その宣言である `mutates (declared)` と、compat の step では World で読み書きしたもの `world reads (observed)` / `world writes (observed)` を運びます。
+HTTP の書き込みを数える parameter はありません。
+メソッドによる回数はプロキシであり、書き込みの計測ではないからです(「キーワードの意味論」を参照)。
+step が送ったものと受け取ったものは、隣に添付された step record が持ちます。
 
 失敗した scenario は `statusDetails.message` に `[nukadoko.failure=<kind>]` を入れます。
 元の error message は `statusDetails.trace` に書きます。
@@ -3169,7 +3096,7 @@ scenario 自身のスクリーンショットと各 hook の trace はストリ�
   Allure は nukadoko の計測の余剰を公開し、このストリームは compat の忠実さを保ちます。
   唯一の仕事は、移行したスイートの既存フォーマッタと JUnit ベースの CI が、nukadoko の run を従来の cucumber-js の run と同じように読み続けられるようにすることです。
 - step record の内部情報はストリームに入りません。
-  対象はバリデーション済みの result、`mutates`、`observed` の件数、`error.kind`、`calls` です。
+  対象はバリデーション済みの result、`mutates`、`observed`、`error.kind`、`calls` です。
   `TestStepResult` と `TestStepFinished` は closed schema(`additionalProperties: false`)であり、そのどれにもフィールドがなく、Allure 自身の `[nukadoko.failure=<kind>]` label のような marker を通じてこっそり忍び込ませることもできません。
   `calls` には、それに加えてもう 1 つの理由があります。
   この形式には step の中の step という概念がそもそもありません。
@@ -3410,12 +3337,6 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
-                              --probe re-runs each read-only Then right after
-                              it passes, with one capture changed, and notes
-                              one that still passes
-                              (then-passed-with-changed-capture) or that it
-                              could not measure (then-probe-not-measured);
-                              the exit code is unchanged.
                               --since <git ref> compares each scenario's
                               criteria (tags, steps with their effective
                               keyword, docstrings, tables, its Examples row)
@@ -3794,10 +3715,12 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 この番号は、文書がすでに持つフィールドの意味、型、名前が変わったとき、またはフィールドが削除されたときに上がります。
 フィールドが追加されただけでは上がりません。
 読み手は、形を信頼する前にこの番号を確かめます。
-step record は 3 です。
+step record は 4 です。
 2 で、実行が届かなかった `observed` のチャネルが `null` になり、`observed.processes` が常に存在するようになりました。
 3 で `session` フィールドがなくなりました。
-envelope は 2 です。
+4 で、`observed` から HTTP メソッドによる 2 つの回数がなくなりました。
+envelope は 3 です。
+run.json の scenario から `probes` が、各 step の `observed` から同じ 2 つの回数がなくなりました。
 `schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。
 
 ### envelope
@@ -3807,7 +3730,7 @@ envelope は 2 です。
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "nukadoko": "0.17.0",
   "command": "check",
   "verdict": "failed",

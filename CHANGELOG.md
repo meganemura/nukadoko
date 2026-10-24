@@ -52,6 +52,34 @@ just until 0.1.
   No job gated on any of them, so each one only added to what an agent
   reads. Their modules and tests go with them.
 
+- **`nuka run --probe` is removed.** It ran a passed read-only Then a
+  second time with one capture changed and noted a Then that still
+  passed. The second run was an execution the feature did not name, it
+  reached only typed steps that declared `mutates: false`, and its note
+  was wrong by design for a sentence such as "at least n", so a quiet
+  probe said less than it seemed to. A Then is judged from its step
+  record and its step file instead. `nuka run --probe` now refuses with
+  `removed-flag`, the `then-passed-with-changed-capture` and
+  `then-probe-not-measured` notes are gone, and run.json's scenarios
+  have no `probes`.
+
+- **`observed.http_reads` and `observed.http_writes` are removed**, from
+  the step record and run.json, with the Allure parameters `http reads
+  (observed)` and `http writes (observed)`. They counted requests by
+  HTTP method, and a method is a proxy for a write, not a measurement of
+  one: a GraphQL or RPC-over-POST read counted as a write, and a server
+  that writes on a GET counted as a read. They also saw only `request`,
+  `page`, `context`, and `pageAs`, so a step that called `fetch`
+  counted nothing. Fields were removed, so the step record's
+  `schema_version` is 4 and the envelope's is 3.
+
+- **The run summary's "Declared vs observed" section is removed.** It set
+  `mutates: false` against the method counts and against the files a
+  `runCommand` process changed. It put a proxy beside a declaration as if
+  the two could disagree, and every read over POST appeared there by
+  design. A reviewer reads the declaration and the step record side by
+  side.
+
 ### Added
 
 - **The skill says how to drive an app through an e2e session.** A project

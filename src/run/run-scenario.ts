@@ -4,7 +4,6 @@ import { formatFinding, withoutWarningPrefix } from "../finding/finding.js";
 import { runCodeInfo } from "../finding/run-codes.js";
 import { readOwnVersion } from "../version.js";
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   TimeConversion,
@@ -35,7 +34,7 @@ import type { HookParameter, HookRegistration } from "../compat/hooks.js";
 import { hookApplies } from "../compat/tag-expression.js";
 import type { InstantiatedWorld } from "../compat/world.js";
 import type { NukadokoConfig } from "../config/schema.js";
-import type { FixtureBag, StepContext } from "../step/context.js";
+import type { StepContext } from "../step/context.js";
 import { createStepContext, type DisposeResult } from "../context/create-context.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, traceFileFields, type TraceEvidence } from "../context/trace-actions.js";
@@ -55,9 +54,8 @@ import {
 
 export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
-import { probeTargets } from "./probe.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
-import type { ErrorKind, FixtureUsageEntry, ObservedCounts, StepRecord } from "../record/types.js";
+import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -72,8 +70,6 @@ import type { StepProgressInfo } from "./progress-log.js";
 import {
   hookDisplayTitle,
   type ScenarioHookRecord,
-  type ProbeNotMeasuredReason,
-  type ScenarioProbe,
   type ScenarioRecord,
   type ScenarioStepEntry,
 } from "../record/scenario-record.js";
@@ -119,8 +115,8 @@ import { generateScenarioId } from "./scenario-id.js";
 // `true` is refused before it ever runs — a "never began" outcome, alongside
 // undefined/ambiguous, with `step_record_id: null` and the rest of the scenario
 // skipped. There is no longer a measured backstop for a step that declares
-// `mutates: false` yet is observed writing anyway — `observed.http_writes`
-// is still tallied and still lands on the step record (docs/spec.md
+// `mutates: false` yet is observed writing anyway: `observed` still
+// lands on the step record (docs/spec.md
 // "Records"), it just no longer decides `status`; a wrong declaration stays
 // visible there and in http.jsonl for a report to catch, rather than failing
 // the run that exposed it.
@@ -283,7 +279,7 @@ export interface RunScenarioOptions {
    * `undefined` means no restriction. A step
    * declared `mutates: false` that is nonetheless measured writing is no
    * longer demoted for it — the
-   * declaration is trusted, and `observed.http_writes` on its step record is
+   * declaration is trusted, and `observed` on its step record is
    * where a wrong one stays visible instead. */
   readonly policy: "read-only" | undefined;
   readonly targetVersion: string | undefined;
@@ -361,9 +357,6 @@ export interface RunScenarioOptions {
    * scenario cache down and disposes the context. Omitted by a caller that
    * has no signal handler of its own. */
   readonly processSignal?: ProcessSignal;
-  /** `nuka run --probe`: after the scenario's steps pass, re-run each
-   * read-only Then with one capture changed (src/run/probe.ts). */
-  readonly probe?: boolean;
 }
 
 /** The same message `nuka check`'s undefined-step finding carries, whose
@@ -791,7 +784,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     fixtureGraph,
     fixtureProcessCache,
     processSignal,
-    probe = false,
   } = options;
 
   // This pickle's own `"scenario"`-scope fixture cache — fresh per pickle,
@@ -952,113 +944,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   });
 
   const stepRecords: ScenarioStepEntry[] = [];
-  // `--probe` re-runs a Then right after it passes, before its AfterStep
-  // hooks and the next step, so the re-run sees the state the Then saw: a
-  // probe after the last step would read whatever a later When left, and
-  // pass or fail by coincidence. It has a boundary of its own in a
-  // directory removed afterwards: a probe is not a step, so nothing it
-  // does lands in a step record, and it opens no trace chunk. Its outcome
-  // never touches `scenarioFailed`. Only a throw from the step's own `run`
-  // is the Then catching the change; anything that stops the re-run
-  // before that is `not-measured`, so a probe that never compared is not
-  // read as one that did.
-  const probes: ScenarioProbe[] = [];
-  const probeStep = async (
-    step: Step,
-    stepName: string,
-    args: Record<string, unknown>,
-  ): Promise<{ status: "passed" | "caught" } | { status: "not-measured"; reason: ProbeNotMeasuredReason; message: string }> => {
-    const argsResult = strictArgsSchema(step.args).safeParse(args);
-    if (!argsResult.success) {
-      return { status: "not-measured", reason: "args-rejected", message: formatValidationIssues(argsResult.error.issues) };
-    }
-    let fixtures: FixtureBag;
-    try {
-      const resolved = await resolveFixtures({
-        names: stepFixtureNames(step),
-        graph: fixtureGraph,
-        ctx: contextHandle.ctx,
-        scenarioCache: fixtureScenarioCache,
-        processCache: fixtureProcessCache,
-        defaultTimeoutMs: config.fixtureTimeout,
-      });
-      fixtures = resolved.fixtures;
-    } catch (error) {
-      return { status: "not-measured", reason: "setup-failed", message: error instanceof Error ? error.message : String(error) };
-    }
-    contextHandle.beginStepRun(step, fixtures);
-    let result: unknown;
-    try {
-      result = await runWithTimeout(
-        () => contextHandle.recordingProcesses(() => Promise.resolve(step.run(fixtures, argsResult.data))),
-        step.timeout ?? config.stepTimeout,
-        "Step",
-        stepName,
-        step.timeout === undefined ? "config" : "step",
-      );
-    } catch (error) {
-      if (classifyCaughtError(error) === "timeout") {
-        return { status: "not-measured", reason: "timeout", message: error instanceof Error ? error.message : String(error) };
-      }
-      return { status: "caught" };
-    }
-    const returnsResult = parseStepReturns(step, result);
-    return returnsResult.success ? { status: "passed" } : { status: "not-measured", reason: "returns-rejected", message: returnsResult.message };
-  };
-  const probeThen = async (
-    stepIndex: number,
-    stepName: string,
-    text: string,
-    step: Step,
-    args: Record<string, unknown>,
-    keys: readonly string[],
-    attachmentKey: string | null,
-  ): Promise<void> => {
-    // A step that wrote is not run again: the probe runs nothing the
-    // feature did not name a second time, and a read-only declaration
-    // that the step's own observation contradicts is not trusted for it.
-    // The probe's own re-run is held to the same rule: a step can write
-    // only for the changed value, so the re-run's observation is read
-    // too, and a re-run that wrote is not a measurement. The keys after it
-    // are not run at all, since the step has now been seen to write.
-    const writes = (counts: ObservedCounts): string | null => {
-      const httpWrites = counts.http_writes ?? 0;
-      const processCount = counts.processes?.length ?? 0;
-      if (httpWrites === 0 && processCount === 0) return null;
-      return [
-        ...(processCount > 0 ? [`ran ${processCount} process${processCount === 1 ? "" : "es"}`] : []),
-        ...(httpWrites > 0 ? [`made ${httpWrites} HTTP write${httpWrites === 1 ? "" : "s"}`] : []),
-      ].join(" and ");
-    };
-    const stepWrote = writes(contextHandle.observedCounts());
-    let probeWrote = false;
-    const probeDir = path.join(scenarioDir, ".probe");
-    try {
-      for (const target of probeTargets(args, keys, attachmentKey)) {
-        const base = { step_index: stepIndex, step: stepName, text, key: target.key, recorded: target.recorded, changed: target.changed };
-        if (stepWrote !== null) {
-          probes.push({ ...base, status: "not-measured", reason: "wrote", message: `the step ${stepWrote} when it ran, so it is not run again` });
-          continue;
-        }
-        if (probeWrote) {
-          probes.push({ ...base, status: "not-measured", reason: "wrote", message: "an earlier re-run of the step wrote, so it is not run again" });
-          continue;
-        }
-        await mkdir(probeDir, { recursive: true });
-        await contextHandle.beginStep(probeDir);
-        const outcome = await probeStep(step, stepName, target.args);
-        const rerunWrote = writes(contextHandle.observedCounts());
-        if (rerunWrote !== null) {
-          probeWrote = true;
-          probes.push({ ...base, status: "not-measured", reason: "wrote", message: `the probe's own re-run ${rerunWrote}, so its outcome is not used` });
-          continue;
-        }
-        probes.push({ ...base, ...outcome });
-      }
-    } finally {
-      await rm(probeDir, { recursive: true, force: true });
-    }
-  };
   const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
   // The outcome After reads. A passing scenario contributes the last
@@ -1162,8 +1047,8 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
    * (typed only — `undefined` for a compat step, since
    * a World is shared compat-to-compat only), then builds, redacts, and writes the
    * step record
-   * and this step's own scenario-record entry. `observed.http_writes` (every
-   * network path this ctx opens tallies into whichever kind of step opened
+   * and this step's own scenario-record entry. `observed` (every
+   * channel this ctx records lands on whichever kind of step opened
    * it, typed or compat alike) is recorded on every step record below
    * regardless of position or policy, but no longer demotes `status` from it
    * (measurement stays a record, never a
@@ -1217,7 +1102,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     await contextHandle.endStep();
     const traceEvidence = await collectTraceEvidence(begun.recordDir, onUnknownTraceVersion, "trace.zip", contextHandle.namedContexts());
 
-    // `observed.http_writes`/`http_reads` are tallied every occurrence,
+    // `observed` is recorded every occurrence,
     // typed or compat alike, and always land on the step record below — this
     // is a record, not a verdict: nukadoko no
     // longer demotes `status` for what a step's execution measured, whether
@@ -2089,29 +1974,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           entry.step.mutates,
           fixtureUsage,
         );
-        if (
-          probe &&
-          status === "passed" &&
-          pickleStep.type === "Outcome" &&
-          entry.step.mutates === false &&
-          (outcome.captures.length > 0 || attachmentKey !== null) &&
-          bindResult.ok &&
-          bindResult.value !== null &&
-          typeof bindResult.value === "object"
-        ) {
-          // The raw bound args, before the args schema parsed them: the
-          // probe validates the changed value through the same schema the
-          // step ran under, so a transform is not applied twice.
-          await probeThen(
-            stepIndex,
-            outcome.stepName,
-            pickleStep.text,
-            entry.step,
-            bindResult.value as Record<string, unknown>,
-            [...captureKeys],
-            attachmentKey,
-          );
-        }
         await runAfterStepHooks(stepIndex, {
           pickleStep,
           testStepId: recordId,
@@ -2528,9 +2390,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       screenshots: browserEvidence.screenshots,
     },
     ...(fixtureTeardownErrors.length > 0 ? { teardown_errors: fixtureTeardownErrors } : {}),
-    // An After hook can still fail the scenario, and a probe of a failed
-    // scenario is not about a pass.
-    ...(probes.length > 0 && !scenarioFailed ? { probes } : {}),
   };
 
   const redactedRecord = redact(record, secrets) as ScenarioRecord;

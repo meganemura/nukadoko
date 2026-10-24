@@ -1,5 +1,3 @@
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,8 +7,7 @@ import { copyFixtureToTempDir, createCaptureSink, initGitRepo, latestRunJson, re
 
 // Responsibility: the Markdown run summary as `nuka run` actually writes it:
 // to the run's own directory, and appended to
-// `$GITHUB_STEP_SUMMARY`; once for a whole `--concurrency` run; and with a
-// real declared/observed disagreement measured against a local HTTP server.
+// `$GITHUB_STEP_SUMMARY`, and once for a whole `--concurrency` run.
 // The exact layout of each section is pinned in run-summary-render.test.ts;
 // here the input is a real run, so only the values a run cannot fix in
 // advance (run id, times, versions, record ids) are normalized.
@@ -75,12 +72,6 @@ describe("nuka run: the run summary", () => {
         "| --- | --- | --- | --- | --- |",
         "| create and check a thing | 3 | passed | <d>s |  |",
         "",
-        "## Declared vs observed",
-        "",
-        "No step declared `mutates: false` and was measured making a write or changing a file.",
-        "",
-        "1 step that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`) and ran no process through `runCommand` whose files were measured, so nothing was compared for it.",
-        "",
       ].join("\n"),
     );
   });
@@ -111,10 +102,6 @@ describe("nuka run: the run summary", () => {
         "| scenario | line | default | duration | failure |",
         "| --- | --- | --- | --- | --- |",
         '| an operation fails partway through | 3 | failed | <d>s | step "the operation fails": `operation failed on purpose`<br>record `steps/<id>` |',
-        "",
-        "## Declared vs observed",
-        "",
-        "No step declared `mutates: false` and was measured making a write or changing a file.",
         "",
         "## Rerun a failed scenario",
         "",
@@ -176,51 +163,5 @@ describe("nuka run --concurrency: the run summary", () => {
       expect(summary).toContain(`## ${record.feature}`);
       expect(rows.filter((row) => row.startsWith(`| ${record.scenario} | ${record.line} |`))).toHaveLength(1);
     }
-  });
-});
-
-describe("nuka run: the summary's declared vs observed section", () => {
-  let server: Server;
-  let rootDir: string;
-
-  beforeEach(async () => {
-    server = createServer((_req, res) => {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
-    });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const { port } = server.address() as AddressInfo;
-    rootDir = await copyFixtureToTempDir("observed-project");
-    await writeFile(
-      path.join(rootDir, "nukadoko.config.ts"),
-      `import { defineConfig } from "./nukadoko-shim.js";\nexport default defineConfig({ baseURL: "http://127.0.0.1:${port}" });\n`,
-    );
-  });
-
-  afterEach(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    await removeTempDir(rootDir);
-  });
-
-  it("lists a step that declared mutates: false and was measured posting", async () => {
-    const stdout = createCaptureSink();
-    const exitCode = await runCli(["run", "--no-check", "features/read-only-policy.feature:7"], {
-      rootDir,
-      stdout,
-      stderr: createCaptureSink(),
-    });
-    expect(exitCode).toBe(0);
-
-    const summary = await readRunSummary(rootDir, newestRunId(rootDir));
-    expect(summary.slice(summary.indexOf("## Declared vs observed"))).toBe(
-      [
-        "## Declared vs observed",
-        "",
-        "Steps that declared `mutates: false` and were measured making writes or changing files. This is a comparison, not a verdict: a step that reads over POST records writes by design, and a file change is a change under a process's working directory, whoever made it.",
-        "",
-        '- "a step lying about being read-only runs" (scenario "a step that declares mutates false but actually writes is trusted anyway"): declared mutates: false, observed 1 write',
-        "",
-      ].join("\n"),
-    );
   });
 });

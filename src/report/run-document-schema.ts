@@ -18,7 +18,6 @@ import { ENVELOPE_SCHEMA_VERSION } from "../record/schema-version.js";
 // field does not move the version.
 
 const errorKind = z.enum(["args_invalid", "result_invalid", "binding_invalid", "world_invalid", "timeout", "unsupported", "step_error"]);
-const probeValue = z.union([z.string(), z.number(), z.boolean()]);
 
 const process = z.looseObject({
   command: z.array(z.string()),
@@ -43,8 +42,6 @@ const process = z.looseObject({
 });
 
 const observed = z.looseObject({
-  http_reads: z.number().nullable(),
-  http_writes: z.number().nullable(),
   processes: z.array(process).nullable(),
 });
 
@@ -107,21 +104,6 @@ const scenario = z.looseObject({
     .optional(),
   teardown_errors: z.array(z.looseObject({ fixture: z.string(), message: z.string() })).optional(),
   do: z.string().optional(),
-  probes: z
-    .array(
-      z.looseObject({
-        line: z.number().int().nullable(),
-        step: z.string(),
-        text: z.string(),
-        key: z.string(),
-        recorded: probeValue,
-        changed: probeValue,
-        status: z.enum(["passed", "caught", "not-measured"]),
-        reason: z.enum(["wrote", "args-rejected", "setup-failed", "timeout", "returns-rejected"]).optional(),
-        message: z.string().optional(),
-      }),
-    )
-    .optional(),
   criteria: z
     .looseObject({
       changed_since: z.enum(["unchanged", "changed", "new", "ambiguous", "unknown"]).nullable(),

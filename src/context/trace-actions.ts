@@ -242,7 +242,7 @@ function readAfter(entry: Record<string, unknown>): TraceAfter | undefined {
  * `ActionEntry` type, so nothing beyond this list ever exists in memory as
  * part of a step-record-bound value. `timeout` on the trace side becomes
  * `timeout_ms` here, and `isNot` becomes `is_not`, matching the step
- * record's own snake_case field convention (`http_reads`, `waited_ms`, ...). */
+ * record's own snake_case field convention (`exit_code`, `waited_ms`, ...). */
 function allowedParams(
   params: Record<string, unknown> | undefined,
 ): Pick<ActionEntry, "expression" | "selector" | "url" | "is_not" | "timeout_ms"> {

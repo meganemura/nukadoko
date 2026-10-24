@@ -78,6 +78,23 @@ This part does not change release to release.
   looks: a fixture's destructuring, a support-side `defineParameterType`,
   a step record's `actions`.
 
+- **`nuka run --probe` is removed.** Take the flag out of scripts and CI
+  jobs: it now refuses with `removed-flag`. A job that read
+  `then-passed-with-changed-capture` or `then-probe-not-measured` from
+  `findings`, or `probes` from run.json, drops that read. Nothing
+  replaces the note: read each Then's step record and step file.
+
+- **The HTTP method counts are gone, and two version numbers moved.** A
+  reader of `observed.http_reads` or `observed.http_writes`, in a step
+  record or in run.json, drops them; the step record's `http.jsonl` lists
+  each request with its method. A reader that tests `schema_version`
+  accepts 4 for a step record, and 3 for run.json and every `--json`
+  document. `nuka report` refuses a run.json that an earlier release
+  wrote, so report a run with the release that ran it.
+
+- **The run summary has no "Declared vs observed" section.** A job that
+  read it from `summary.md` drops that read.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

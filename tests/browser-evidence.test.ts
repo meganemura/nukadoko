@@ -357,19 +357,13 @@ describe("createStepContext / ctx.page(): config.browserContext reaches newConte
   );
 });
 
-// Responsibility: the page-side half of measured mutates — a real local
-// http server, so
-// `ctx.page()` can issue a genuine GET (navigation) and POST (in-page
-// fetch), proving `observedCounts()` tallies both. Also now the page-origin
-// half of http.jsonl itself: a
-// navigation and an in-page `fetch` are both `document`/`fetch`
-// resourceTypes, so both are expected to land on http.jsonl, each marked
-// `via: "page"` — the assertion this block used to make (that page traffic
-// never reaches http.jsonl at all) was this task's own starting point, not
-// a fact that survived it. Kept in its own describe block, with its own
+// Responsibility: the page-origin half of http.jsonl, against a real local
+// http server, so `ctx.page()` issues a genuine GET (navigation) and POST
+// (in-page fetch). Both are `document`/`fetch` resourceTypes, so both land
+// on http.jsonl, each marked `via: "page"`. Kept in its own describe block, with its own
 // server, rather than folded into the block above: the existing tests there
 // use `page.setContent`, deliberately with no navigation and no server.
-describe("createStepContext / ctx.page(): observed network writes", () => {
+describe("createStepContext / ctx.page(): page traffic in http.jsonl", () => {
   let evidenceDir: string;
   let server: Server;
   let baseURL: string;
@@ -391,7 +385,7 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
   });
 
   it.skipIf(!chromiumAvailable)(
-    "counts a page navigation as a read and a page-issued POST as a write, and logs both to http.jsonl as via: page",
+    "logs a page navigation and a page-issued POST to http.jsonl as via: page",
     async () => {
       const { ctx, dispose, observedCounts } = createStepContext({
         config: baseConfig(),
@@ -409,13 +403,11 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
         `${baseURL}/`,
       );
 
-      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 1, processes: null });
+      expect(observedCounts()).toEqual({ processes: null });
 
       const { evidence } = await dispose();
       // Both the navigation (`document`) and the in-page `fetch` land on
-      // http.jsonl now — `observed` above
-      // is unchanged by that; the two fields answer different questions
-      // (this file's own header).
+      // http.jsonl.
       expect(evidence.http).toBe("http.jsonl");
       const lines = (await readFile(path.join(evidenceDir, "http.jsonl"), "utf8"))
         .trim()
@@ -434,9 +426,8 @@ describe("createStepContext / ctx.page(): observed network writes", () => {
 // Responsibility: writes made through Playwright's APIRequestContext on
 // `page.request` and `context.request`. Those calls share the browser
 // context's cookie jar, but they do not emit the context `request` event
-// the page-traffic listener tallies, so a step can POST or DELETE and
-// leave `observed.http_writes` at 0 with no http.jsonl line. A GET on the
-// same objects must stay a read. The server receipt is asserted first so
+// the page-traffic listener reads, so a step could POST or DELETE with
+// no http.jsonl line. The server receipt is asserted first so
 // a miss is "the call happened and was not recorded", not "the call never
 // left the step".
 describe("createStepContext / page.request and context.request", () => {
@@ -464,7 +455,7 @@ describe("createStepContext / page.request and context.request", () => {
   });
 
   it.skipIf(!chromiumAvailable)(
-    "counts a write through page.request or context.request in observed and http.jsonl, and a read stays a read",
+    "logs a call through page.request or context.request in http.jsonl",
     async () => {
       const { ctx, dispose, observedCounts } = createStepContext({
         config: baseConfig(),
@@ -484,7 +475,7 @@ describe("createStepContext / page.request and context.request", () => {
         "DELETE /via-page-request-DELETE",
         "GET /via-page-request-GET",
       ]);
-      expect(observedCounts()).toEqual({ http_reads: 1, http_writes: 2, processes: null });
+      expect(observedCounts()).toEqual({ processes: null });
 
       const { evidence } = await dispose();
       expect(evidence.http).toBe("http.jsonl");
@@ -521,7 +512,7 @@ describe("createStepContext / page.request and context.request", () => {
 // `page.goto("/path")` must resolve against `config.baseURL` without the
 // step assembling the full URL itself, unlike `ctx.request()`'s own baseURL
 // handling (already covered by create-context.test.ts). Own server, own
-// describe block, same reasoning as the "observed network writes" block
+// describe block, same reasoning as the "page traffic in http.jsonl" block
 // above.
 describe("createStepContext / ctx.page(): baseURL wired into the browser context", () => {
   let evidenceDir: string;

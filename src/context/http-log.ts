@@ -3,7 +3,6 @@ import type { APIRequestContext, APIResponse } from "playwright";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
-import type { ObservedCollector } from "./observed.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
@@ -24,7 +23,7 @@ import type { ObservedCollector } from "./observed.js";
 // (`instrumentApiRequestContext` below). `"page"` is page-http-log.ts's
 // own. Those two APIRequestContext objects are the same one Playwright
 // hangs on the browser context, and they do not emit the context
-// `request` event page-http-log.ts and `observed`'s page listener read,
+// `request` event page-http-log.ts reads,
 // so leaving them to that listener records nothing.
 // `appendHttpLogEntry` below is exported for that module to call: one
 // redact-and-append call site for both paths, so neither can drift into
@@ -32,7 +31,7 @@ import type { ObservedCollector } from "./observed.js";
 //
 // A call is logged whatever its outcome, from a `finally`: a call that
 // throws (a refused connection, `failOnStatusCode` on a 4xx/5xx) still
-// happened and `observed` already counted it. With no response the line
+// happened. With no response the line
 // carries `status: 0` and an `error` (the first line of the message only:
 // Playwright appends a call log that can hold request headers). With a
 // response, `url` is `response.url()`, the absolute URL after params and
@@ -43,12 +42,6 @@ import type { ObservedCollector } from "./observed.js";
 // page-http-log.ts has: it is counted into `httpLogFailed` (the step
 // record's `http_log_failed`). A throw from the `finally` would also replace
 // the call's own error.
-//
-// Every call is also tallied into `observed` (an `ObservedCollector` this
-// module never creates, only writes to — create-context.ts owns and resets
-// it): GET/HEAD counts as a read, anything else as a write, the same
-// measured-not-declared fact docs/spec.md "Keyword semantics" and
-// "Records" (`observed`) describe.
 //
 // A manual per-method wrapper, not a Proxy: Playwright's client classes are
 // plain JS objects/prototypes as far as this package can see, but a Proxy
@@ -109,16 +102,10 @@ async function logCall(
   method: string,
   url: string,
   secrets: SecretSet,
-  observed: ObservedCollector,
   httpLogFailed: HttpLogFailedCollector,
   send: () => Promise<APIResponse>,
   as?: string,
 ): Promise<APIResponse> {
-  // Recorded before `send()` resolves, not after: the method is known
-  // upfront regardless of outcome, and a write attempt that fails on the
-  // wire (thrown, never reaching the append below) is still an observed
-  // write, not a declared one that quietly didn't happen.
-  observed.record(method);
   const startedAt = performance.now();
   let response: APIResponse | undefined;
   let failure: unknown;
@@ -179,35 +166,33 @@ function methodOf(
 
 /** Wraps `target` so get/post/put/patch/delete/head/fetch are logged to
  * whatever `logPath()` currently returns, with `secrets` redacted from each
- * logged line, and tallied into `observed`; `dispose`/`storageState` pass
- * straight through unlogged and untallied. */
+ * logged line; `dispose`/`storageState` pass
+ * straight through unlogged. */
 export function wrapRequestContextWithLogging(
   target: APIRequestContext,
   logPath: () => string,
   secrets: SecretSet,
-  observed: ObservedCollector,
   httpLogFailed: HttpLogFailedCollector,
 ): APIRequestContext {
   return {
     get: (url, options) =>
-      logCall(logPath, "GET", url, secrets, observed, httpLogFailed, () => target.get(url, options)),
+      logCall(logPath, "GET", url, secrets, httpLogFailed, () => target.get(url, options)),
     post: (url, options) =>
-      logCall(logPath, "POST", url, secrets, observed, httpLogFailed, () => target.post(url, options)),
+      logCall(logPath, "POST", url, secrets, httpLogFailed, () => target.post(url, options)),
     put: (url, options) =>
-      logCall(logPath, "PUT", url, secrets, observed, httpLogFailed, () => target.put(url, options)),
+      logCall(logPath, "PUT", url, secrets, httpLogFailed, () => target.put(url, options)),
     patch: (url, options) =>
-      logCall(logPath, "PATCH", url, secrets, observed, httpLogFailed, () => target.patch(url, options)),
+      logCall(logPath, "PATCH", url, secrets, httpLogFailed, () => target.patch(url, options)),
     delete: (url, options) =>
-      logCall(logPath, "DELETE", url, secrets, observed, httpLogFailed, () => target.delete(url, options)),
+      logCall(logPath, "DELETE", url, secrets, httpLogFailed, () => target.delete(url, options)),
     head: (url, options) =>
-      logCall(logPath, "HEAD", url, secrets, observed, httpLogFailed, () => target.head(url, options)),
+      logCall(logPath, "HEAD", url, secrets, httpLogFailed, () => target.head(url, options)),
     fetch: (urlOrRequest, options) =>
       logCall(
         logPath,
         methodOf(urlOrRequest, options),
         urlOf(urlOrRequest),
         secrets,
-        observed,
         httpLogFailed,
         () => target.fetch(urlOrRequest, options),
       ),
@@ -229,17 +214,16 @@ export function wrapRequestContextWithLogging(
 // once logs every verb once and leaves the real object in place.
 const instrumentedApiRequests = new WeakSet<APIRequestContext>();
 
-/** Logs `target`'s HTTP verbs into http.jsonl and `observed`, in place,
+/** Logs `target`'s HTTP verbs into http.jsonl, in place,
  * for as long as `target` lives (the launched browser closes it).
  * Idempotent: a second call on the same object does nothing, so
- * one POST cannot be counted twice when both `page.request` and
+ * one POST cannot be logged twice when both `page.request` and
  * `context.request` are passed, or when a later page copies the same
  * reference. */
 export function instrumentApiRequestContext(
   target: APIRequestContext,
   logPath: () => string,
   secrets: SecretSet,
-  observed: ObservedCollector,
   httpLogFailed: HttpLogFailedCollector,
   as?: string,
 ): void {
@@ -254,7 +238,6 @@ export function instrumentApiRequestContext(
       methodOf(urlOrRequest, options),
       urlOf(urlOrRequest),
       secrets,
-      observed,
       httpLogFailed,
       () => originalFetch(urlOrRequest, options),
       as,

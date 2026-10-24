@@ -11,7 +11,7 @@ import type { StepRecord } from "../record/types.js";
 // step record: the line, the step it matched, the record path, and, for a
 // failure, the message, the error kind, and the results it read. The
 // declaration and the measurement (`mutates`, `observed`) ride along so the
-// run summary's "Declared vs observed" section is rendered from run.json
+// run summary can name a failed step's process from run.json
 // alone. Args and the step's own result stay in the step record: they can be
 // large, and nothing on the next decision needs them. A failed step's
 // `used` results are the exception, because the failure often is what an
@@ -135,11 +135,6 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
     ...(wroteScenarioEvidence(record) ? { evidence: { ...record.evidence, dir: input.evidenceDir } } : {}),
     ...(record.teardown_errors === undefined ? {} : { teardown_errors: record.teardown_errors }),
     ...(record.status === "failed" ? { do: input.rerun } : {}),
-    ...(record.probes === undefined
-      ? {}
-      : {
-          probes: record.probes.map(({ step_index, ...probe }) => ({ line: input.stepLine(step_index), ...probe })),
-        }),
   };
 }
 

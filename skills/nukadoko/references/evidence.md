@@ -14,15 +14,14 @@ async run({ evidence, request }, args) {
 ```
 
 A call through `page.request` or `context.request` is already part of the
-automatic evidence above. It lands on `observed` and on `http.jsonl` with
-`via: "request"`, the same way the `request` fixture does, and a GET or
-HEAD stays a read. In-page `fetch` and navigation stay `via: "page"`.
+automatic evidence above. It lands on `http.jsonl` with `via: "request"`,
+the same way the `request` fixture does. In-page `fetch` and navigation
+stay `via: "page"`.
 
 A step that reaches none of `request`, `page`, `context`, or `pageAs` (a
-step that calls Node's own `fetch`, for instance) records
-`observed.http_reads` and `http_writes` as `null`, not `0`: nothing was
-measured. The run summary counts such read-only steps apart, as not
-compared. Use the `request` fixture when the count has to mean something.
+step that calls Node's own `fetch`, for instance) writes no `http.jsonl`
+line: nothing was measured. Use the `request` fixture when the call has
+to be on the record.
 
 `evidence.attach(name, body)` writes and lists the attachment on the step
 record's `evidence.attachments` in one call. `evidence.path(name)` only

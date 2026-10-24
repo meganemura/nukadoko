@@ -234,8 +234,8 @@ and a later read returns that assignment, ahead of the page `openPage()`
 or `openRequest()` stored. Replace that bootstrapping
 with `await this.openPage()` / `await this.openRequest()` (delegating to
 the same context a mixed scenario's typed steps share, one browser and one
-session per scenario), and that step's step record gains a trace, an
-`http.jsonl` log, and `observed` read/write counts, no other code change.
+session per scenario), and that step's step record gains a trace and an
+`http.jsonl` log, no other code change.
 
 ## Stage 1.5: declare what you rely on
 
@@ -396,9 +396,6 @@ These hold whichever door the suite came in through.
   the new step, run it with `nuka do`, then remove the old one.
 - **Fix what `nuka check` and `nuka run` report, not a hunch.** Each
   finding names the file and a `fix:` or `do:` line.
-- **A quiet `nuka run --probe` says nothing about compat Thens.** The probe
-  re-runs only typed steps declared `mutates: false`. Promote a Then
-  before its probe means anything.
 
 Facts a migration runs into:
 
@@ -428,7 +425,7 @@ Facts a migration runs into:
 ## Known limits
 
 - A hook's own network traffic sits outside any step's boundary: it is
-  never counted in any step's `observed`.
+  never in any step's record.
 - World measurement only sees a World's own data properties; `#private`
   fields never appear in `world.reads`/`world.writes`, by construction.
 - Declared attachment file contents are not redacted: the same honest

@@ -175,6 +175,8 @@ const RETIRED_CODES: ReadonlySet<string> = new Set([
   "fixture-touches-app",
   "parameter-type-support-origin",
   "post-navigation-read",
+  "then-passed-with-changed-capture",
+  "then-probe-not-measured",
   "import-failures-unseen",
   "feature-never-signed",
   "signed-feature-unscanned",
@@ -344,7 +346,7 @@ const REMOVED_COMMANDS = new Set([
 ]);
 const REMOVED_FLAGS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["init", new Set(["--env", "--env-files", "--base-url", "--features-dir"])],
-  ["run", new Set(["--session", "--quiet", "--summary"])],
+  ["run", new Set(["--session", "--quiet", "--summary", "--probe"])],
   ["do", new Set(["--session"])],
   ["clean", new Set(["--records", "--cache", "--export"])],
 ]);

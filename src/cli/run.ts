@@ -41,7 +41,6 @@ import type { NukadokoConfig } from "../config/schema.js";
 import { shellWord } from "../shell/shell-word.js";
 import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
 import { generateRunId } from "../run/run-id.js";
-import { probeFindings } from "../run/probe.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
 import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
@@ -264,11 +263,6 @@ export interface RunRunOptions {
    * Under `--concurrency`, each worker repeats its own files; a target
    * naming one file still runs at 1 (docs/spec.md "Scenarios"). */
   repeat: number;
-  /** `--probe`: after each scenario passes, re-run every read-only Then
-   * with one capture changed, and note each one that still passes or that
-   * the probe could not measure
-   * (src/run/probe.ts). A note never changes the exit code. */
-  probe: boolean;
   /** `--since <ref>`: compare each scenario's criteria, and each step file
    * it bound to, with the commit `ref` names, and report what moved. It
    * reports only; the exit code is unchanged. `undefined` without it. */
@@ -768,7 +762,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // one write, and a run another process finishes meanwhile is never
       // the one measured.
       const notes = findRepeatedScenarioPrefixes(path.join(rootDir, runRelativeDir(config.stateDir, runId)), runScenarios, selected.features);
-      runFindings.push(...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf), ...notes);
+      runFindings.push(...failedScenarioFindings(failedScenarios, conditionsOf), ...notes);
       // The run's `scenarios/` goes too once no scenario left evidence in it.
       for (const dir of [...emptyEvidenceDirs, path.join(rootDir, runRelativeDir(config.stateDir, runId), RUN_FILE_DIRS.scenarios)]) {
         try {
@@ -891,7 +885,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(end.notRun !== undefined ? { notRun: end.notRun } : {}),
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
-      for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...probeFindings(runScenarios, conditionsOf), ...(end.notes ?? [])]) {
+      for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...(end.notes ?? [])]) {
         progress.write(formatFinding(withHint(finding)));
       }
       writeRepeatTallies(progress, tallies, conditionsOf);
@@ -980,7 +974,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           config,
           runId,
           repeat,
-          probe: options.probe,
           runHookDo,
           conditions: conditions.map((condition) => ({
             envArg: condition.envArg,
@@ -1137,7 +1130,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
               fixtureGraph,
               fixtureProcessCache,
               processSignal,
-              probe: options.probe,
             });
 
             // One JSON line per completed scenario record, streamed as it

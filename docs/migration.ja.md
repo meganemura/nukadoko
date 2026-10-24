@@ -181,7 +181,7 @@ glue はテキストとして読むだけで、実行はしていません。
 
 自前で Playwright のブラウザや request クライアントを起動する glue は、計測されないまま動き続けます(nukadoko は一切手を触れません)。
 World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入し、後から読むと、`openPage()` や `openRequest()` が保存した値より先にその代入した値が返ります。
-その bootstrapping を `await this.openPage()` / `await this.openRequest()` に置き換えると(混在 scenario の typed step と同じ context に委譲し、scenario ごとに 1 つのブラウザと 1 つのセッションです)、その step の step record は他のコード変更なしに trace、`http.jsonl` log、`observed` の読み書き件数を得ます。
+その bootstrapping を `await this.openPage()` / `await this.openRequest()` に置き換えると(混在 scenario の typed step と同じ context に委譲し、scenario ごとに 1 つのブラウザと 1 つのセッションです)、その step の step record は他のコード変更なしに trace と `http.jsonl` log を得ます。
 
 ## Stage 1.5: 依存しているものを宣言する
 
@@ -299,9 +299,6 @@ pattern の無い step も完全な語彙であり、`nuka do` で実行でき�
   新しい step を書き、`nuka do` で走らせてから、古いものを消します。
 - **直すのは `nuka check` と `nuka run` が報告したもので、勘ではない。**
   各 finding は、ファイルと `fix:` または `do:` の行を挙げます。
-- **静かな `nuka run --probe` は、compat の Then について何も言っていない。**
-  probe が再実行するのは、`mutates: false` を宣言した型付きの step だけです。
-  probe に意味を持たせるには、先に Then を昇格させます。
 
 移行で出会う事実です。
 
@@ -324,7 +321,7 @@ pattern の無い step も完全な語彙であり、`nuka do` で実行でき�
 
 ## 既知の限界
 
-- hook 自身のネットワーク通信はどの step の境界にも属しません(どの step の `observed` にもカウントされません)。
+- hook 自身のネットワーク通信はどの step の境界にも属しません(どの step の record にも載りません)。
 - World の計測が見るのは World 自身の own データプロパティだけです。
   `#private` のフィールドは、構造上 `world.reads`/`world.writes` に現れません。
 - 宣言された attachment のファイル内容は redact されません(trace や screenshot がすでに抱えているのと同じ正直な限界です)。

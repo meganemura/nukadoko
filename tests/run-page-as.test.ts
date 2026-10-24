@@ -49,7 +49,6 @@ function startServer(): Promise<{ server: Server; baseURL: string }> {
 interface StepRecord {
   readonly status: string;
   readonly result: { readonly who: string; readonly script?: string };
-  readonly observed: { readonly http_reads: number };
   readonly evidence: {
     readonly dir: string;
     readonly trace?: string;
@@ -155,8 +154,7 @@ describe("nuka run: pageAs gives each person a browser context of their own", ()
     const benGotos = (benSignsIn!.actions ?? []).filter((action) => action.method === "goto");
     expect(benGotos.map((action) => action.as)).toEqual(["ben"]);
 
-    // Page traffic is counted and logged, tagged with the context's name.
-    expect(akiSignsIn!.observed.http_reads).toBeGreaterThan(0);
+    // Page traffic is logged, tagged with the context's name.
     expect(await httpLines(rootDir, akiSignsIn!)).toEqual([
       expect.objectContaining({ url: `${baseURL}/sign-in?name=aki`, via: "page", as: "aki" }),
     ]);

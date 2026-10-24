@@ -32,6 +32,20 @@ describe("removed flags", () => {
     );
   });
 
+  it("refuses nuka run --probe and names the step record in its place", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["run", "features/x.feature", "--probe"], { rootDir: fixture("basic-project"), stdout, stderr });
+
+    expect(exitCode).toBe(2);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      "refused\tremoved-flag\t-\tnuka run --probe is removed: a Then is judged from its step record and its step file, " +
+        "not from a second run with a changed value.\n" +
+        "  fix: Use what the message names in its place.\n",
+    );
+  });
+
   it("refuses nuka do --session and names a fixture in its place", async () => {
     const stdout = createCaptureSink();
     const stderr = createCaptureSink();

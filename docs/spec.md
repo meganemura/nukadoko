@@ -733,8 +733,7 @@ context. The executor opens it in the browser it launched and gives it
 every subscription the default context has, so it records into the same
 step records:
 
-- request counts (`observed`) and http.jsonl lines, each line with
-  `"as": "<name>"`;
+- http.jsonl lines, each with `"as": "<name>"`;
 - `page_events` entries, each with `as`;
 - one trace chunk per step or hook that called `pageAs(name)`, written as
   `trace.<name>.zip` beside `trace.zip` and listed in
@@ -1506,8 +1505,8 @@ it a step. The scenario record then cites its step record. Otherwise,
 consider what a failure record must show. Use a part when the operation
 has a useful contract, useful inputs, and a useful result. Use an ordinary
 function under `features/steps/lib/` when it has none of these. A helper
-has no separate record entry. Its HTTP calls still contribute to the
-calling step's `observed`, and `section` can show its execution progress.
+has no separate record entry. Its HTTP calls still land in the calling
+step's http.jsonl, and `section` can show its execution progress.
 A helper that runs a command-line program uses `runCommand` (see
 "Records"), so each process it starts is listed in the calling step's
 `observed.processes`.
@@ -1540,48 +1539,43 @@ per-occurrence fact:
 - **Read-only environments refuse a declared-mutating step before it
   runs.** This rule includes a part reached through `call` (see "Parts").
   This is the only place where the declaration gates execution.
-- **At run time**, the step record stores what the execution did. It stores
-  every network call that the tool observed through the `request` fixture,
-  through `page.request` or `context.request`, or through the page. It
-  counts non-GET/HEAD calls as observed writes beside the
-  declared `mutates` value. This count does not decide Then position or a
+- **At run time**, the step record stores what the execution did, as far
+  as the tool can measure it exactly (see "Records"). It stores no verdict
+  about writes. What it stores does not decide Then position or a
   read-only environment's policy. Nukadoko trusts `mutates: false`
-  regardless of the `observed` value.
+  whatever the step record holds.
 - Gherkin classifies an `And` or `But` step with the pickle step type of
   the preceding primary keyword (Given, When, or Then). Gherkin's pickle
   compiler defines this behavior. Therefore, an action after `Then` gets
   the same Then-position observation as other steps in that position. The
   position does not gate the action.
-- Measurement cannot decide this fact. Write detection uses the HTTP
-  method and counts each non-GET/HEAD request as a write. The method is a
-  proxy for write semantics. GraphQL, RPC-over-POST, and many vendor query
-  APIs use POST for a semantically pure read. The external system defines
-  whether a call changes server state. Nukadoko observes only the lower
-  HTTP layer. Each protocol uses different data to distinguish reads from
-  writes. Examples include a GraphQL body's `query` or `mutation`, an RPC
-  method name, and a vendor path convention. A general mechanical rule
-  cannot make this distinction. The count guarantees what a step sent. It
-  does not guarantee that the server state changed.
-- The record retains all measurements. `observed`, http.jsonl, and the
-  Allure declared/observed table remain unchanged. A reader can therefore
-  use them to disprove an incorrect declaration after execution. This
-  boundary marks the end of the tool's authority over mutation semantics.
-- Nukadoko does not perform that comparison. An operator can compare
-  `mutates` and `observed` in the same step record without another artifact.
-  However, `nuka run` and `nuka check` do not claim that the values conflict.
-  Such a claim would treat the HTTP-method proxy as a settled fact. It would
-  report every GraphQL read, RPC-over-POST read, or vendor POST read as a
-  false positive. For the same reason, nukadoko does not enforce mutation
-  semantics at run time. The run summary is the only place that writes
-  this comparison (its "Declared vs observed" section, see "Records"). A
-  person reviewing the pull request already reads and judges the run there.
-  The summary can show the raw facts without turning them into a failure of
-  any `nuka run` or `nuka check` invocation.
+- Measurement cannot decide this fact. The HTTP method is a proxy for
+  write semantics, not the semantics itself. GraphQL, RPC-over-POST, and
+  many vendor query APIs use POST for a semantically pure read, and a
+  server can change state on a GET. The external system defines whether a
+  call changes server state. Nukadoko observes only the lower HTTP layer.
+  Each protocol uses different data to distinguish reads from writes.
+  Examples include a GraphQL body's `query` or `mutation`, an RPC method
+  name, and a vendor path convention. A general mechanical rule cannot
+  make this distinction. The rule is therefore: measure what can be
+  measured exactly, mark what cannot, and never infer a write from a
+  method. The step record keeps what a step sent and received. It does
+  not say whether the server state changed.
+- A reader can use the step record to disprove an incorrect declaration
+  after execution. This boundary marks the end of the tool's authority
+  over mutation semantics.
+- Nukadoko does not perform that comparison. `nuka run`, `nuka check`,
+  and the run summary do not claim that a measurement and a declaration
+  conflict. Such a claim would treat the HTTP-method proxy as a settled
+  fact. It would report every GraphQL read, RPC-over-POST read, or vendor
+  POST read as a false positive. For the same reason, nukadoko does not
+  enforce mutation semantics at run time. A person reviewing the pull
+  request reads the declaration and the step record side by side.
 - Compat (untyped) steps have no `mutates` declaration (see "Compat steps (the
   migration door)"). The `then-compat-step` warning from `nuka check` identifies
   this coverage gap when a compat step is bound in Then position. It does
   not identify a mutation conflict. Run-time observation records the same
-  counts as it does for any step, but those counts gate nothing.
+  measurements as it does for any step, but they gate nothing.
 
 ## Compat steps (the migration door)
 
@@ -1654,8 +1648,8 @@ import { Given, When, Then } from "nukadoko/compat";
   `not @tag`. More complex expressions fail explicitly to prevent a silent
   mismatch. Hooks appear in the scenario record's `hooks` array and do not
   create step records. Their network traffic remains outside all step
-  boundaries. The http.jsonl file and observed read/write totals remain
-  scenario-wide and do not identify one hook invocation. Playwright traces
+  boundaries. The http.jsonl lines remain scenario-wide and do not
+  identify one hook invocation. Playwright traces
   use a narrower boundary. Each Before, After, or AfterStep invocation that
   uses `this.openPage()` gets a separate trace chunk and `actions` list in
   its `hooks` entry. The entry has `trace`, `actions`, and `truncated`, which
@@ -1903,7 +1897,7 @@ However, its location shows that the existing suite owns it.
 ### Scenarios (the scripted path)
 
 ```sh
-nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--probe] [--since <git ref>] [--records] [--json]
+nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]... [--concurrency <n>] [--repeat <n>] [--since <git ref>] [--records] [--json]
 ```
 
 `@cucumber/gherkin` compiles the file into flat, self-contained pickles.
@@ -2025,50 +2019,6 @@ its own files, so the unit of distribution stays the file: a target naming
 one file still runs at 1, and running one scenario on several workers at
 once is not what this flag does.
 
-`--probe` measures whether a passed Then could have failed. Each step
-that ran in a Then position (the Gherkin `Then`, and an `And` or `But`
-after it), declared `mutates: false`, and bound at least one capture from
-its pattern, or a table or docstring, runs again right after it passes, before its AfterStep hooks
-and the next step, so the re-run sees the state the Then saw. It runs
-alone, in the same scenario's ctx and fixtures, with the args it was bound
-with and one capture changed: a string gets the suffix `-probe`, a number
-+1, and a boolean is flipped. The changed args go through the step's args
-schema as the first run's did. A capture of another type, or a number +1
-does not change, is not probed, and neither is a compat step, which
-declares no `mutates`. Each capture gets its own re-run, and a value
-`from` filled is never changed. A table or docstring is often the whole
-expected value of a Then, so it gets one re-run too, after the captures:
-a docstring gets the suffix `-probe`, and a table changes only the last
-cell of its last row, since its first row is often a header a step matches
-on. Its `key` is the args key the docstring filled, or
-`<key>[<row>][<column>]` for the table cell, with that cell's values as
-`recorded` and `changed`. The When is not re-run, and a step whose
-own observation shows a process or an HTTP write is not re-run either, so
-a probe runs nothing the feature did not name a second time. A Then that
-still passes is a `then-passed-with-changed-capture` note at the Then's
-line, naming the step's sentence, the step, the key, and both values,
-with the `nuka run <file>:<line> --probe` that measures it again. Only a
-throw from the step's own `run` is the Then catching the change. A probe
-that never reached that point is a `then-probe-not-measured` note with its
-reason: the step wrote when it ran, or the probe's own re-run did (`wrote`; the
-re-run's observation is read as the step's is, its outcome is not used,
-and the step is not re-run for its other keys), the args schema refused the
-changed value (`args-rejected`), a fixture failed (`setup-failed`), the
-re-run timed out (`timeout`), or the returns schema refused what it
-returned (`returns-rejected`). Under `--repeat`, the executions of one
-scenario in one environment fold into one note per step, key, and reason, and a
-note that held in only some of them ends with `in <k> of <n> executions`. It is a measurement, not a
-verdict: a sentence like "at least {n}" can rightly pass with n+1, so the
-note never changes a scenario's status or the exit code. A probe is not a
-step: it writes no step record, has no entry in `steps`, and opens no
-trace chunk. The scenario's `run.json` entry gets `probes`, one per
-re-run, so a reader tells a Then the probe caught from one it never
-probed. The probe answers one question nukadoko could not ask before: a
-step's `run` is trusted as written, and the step the implementing agent
-wrote for itself is the one most likely to check nothing. Under
-`--concurrency` each worker probes its own scenarios, and under `--repeat`
-every execution probes.
-
 Every run ends with one more measurement: scenarios that begin with the
 same steps, and what the repetition cost (`repeated-scenario-prefix`, a
 note). A shared opening is ordinary: several scenarios about one page
@@ -2102,8 +2052,8 @@ step record), the note names that step and says a `process`-scope
 fixture would share what it writes between scenarios. Following that
 advice on a writing opening broke two of seven scenarios in a measured
 HTTP API project. Naming a saving would be claiming the lift is possible,
-which nothing here measured. Like a probe note, it never changes a
-scenario's status or the exit code.
+which nothing here measured. It never changes a scenario's status or the
+exit code.
 
 `--since <git ref>` says what moved in the criteria since a base a person
 approved, such as the target branch of a pull request, as far as the
@@ -2287,7 +2237,7 @@ to act on the run without opening another file:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "nukadoko": "...",
   "command": "run",
   "verdict": "failed",
@@ -2329,8 +2279,6 @@ to act on the run without opening another file:
           "record": "steps/step-20260801-143023-e5f6",
           "mutates": false,
           "observed": {
-            "http_reads": null,
-            "http_writes": null,
             "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41 }]
           }
         },
@@ -2342,7 +2290,7 @@ to act on the run without opening another file:
           "step_record_id": "step-20260801-143023-g7h8",
           "record": "steps/step-20260801-143023-g7h8",
           "mutates": false,
-          "observed": { "http_reads": null, "http_writes": null, "processes": null },
+          "observed": { "processes": null },
           "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
           "used": [
             {
@@ -2395,8 +2343,7 @@ to act on the run without opening another file:
   takes) and a `record`, the step record's directory, with its `mutates`
   declaration and what it `observed`. A step whose step record could not
   be read back has `record_unreadable: true` in their place, a
-  `step-record-unreadable` warning names the file, and the summary's
-  "Declared vs observed" section counts it as not compared. A step that failed, or never began
+  `step-record-unreadable` warning names the file. A step that failed, or never began
   for a reason (`undefined`, `ambiguous`), has an `error` with the step
   record's `kind` (`null` when no step record says) and its first message.
   A failed step that read earlier results through `from` has `used`, each
@@ -2415,14 +2362,6 @@ to act on the run without opening another file:
   has `evidence`, its directory under the run's `scenarios/`. A scenario
   that wrote none has no `evidence`, and its empty directory is removed
   when the run ends.
-- Under `--probe`, a scenario that had a Then to probe has `probes`: each
-  re-run's `line`, `step`, `text` (the step's sentence), `key`, the
-  `recorded` value, the `changed` one, and its `status`. `passed` is a Then
-  that passed with the changed value too, and is the
-  `then-passed-with-changed-capture` note in `findings`. `caught` is a
-  Then whose `run` threw. `not-measured` carries a `reason` and a
-  `message`, and is the `then-probe-not-measured` note. A probe has no
-  step record.
 - Every scenario has `criteria`. `changed_since` is `null` without
   `--since`; with it, `unchanged`, `changed`, `new`, `ambiguous`, or
   `unknown`, with a `reason` for the last two, the current `lines` of every
@@ -2431,7 +2370,7 @@ to act on the run without opening another file:
   targets, the `removed` criteria, and each step file's `file` and its
   `change` (`unchanged`, `changed`, or `untracked`).
 - `findings` holds every finding the run raised: each failed scenario, each
-  probe note, and each warning (a file that was not written, a hook or a fixture teardown
+  note, and each warning (a file that was not written, a hook or a fixture teardown
   that failed, a version probe that threw), the same findings stderr prints
   in text.
 - `verdicts` has one cell per selected scenario and environment, features
@@ -2521,10 +2460,7 @@ page load can pull in dozens of images, a stylesheet, and a
 script bundle, and a file trying to hold all of that would stop being
 something a reader opens), but nothing about the drop is silent: what got
 left out lands on the step record itself, by resource type, as `http_omitted`
-(see "Records"). `observed` is untouched by any of this: it keeps counting
-every request the page makes, image and script traffic included, because it
-answers a different question than http.jsonl does, and the two counts are
-not expected to match.
+(see "Records").
 
 Before a pickle runs, its steps' `from` declarations are checked against
 its own step order: a required chained key whose producer is absent or
@@ -2631,7 +2567,7 @@ its scenario record's id, so either record leads to the other.
 
 ```json
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "nukadoko": "...",
   "step_record_id": "step-20260801-143022-a1b2",
   "step": "create-project",
@@ -2640,7 +2576,7 @@ its scenario record's id, so either record leads to the other.
   "result": { "id": "p_0001", "name": "acme" },
   "status": "passed",
   "mutates": true,
-  "observed": { "http_reads": 2, "http_writes": 1, "processes": null },
+  "observed": { "processes": null },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "scenario_record_id": null,
@@ -2710,8 +2646,9 @@ its scenario record's id, so either record leads to the other.
   | `step_error` | anything else: the step's or hook's own code threw |
 
 - `mutates` contains the step's declaration (`null` for a compat step, which
-  has none to record, not `false`), sitting beside the `observed` counts
-  so declared and measured can be compared without a second artifact.
+  has none to record, not `false`), sitting beside what the step record
+  measured so declared and measured can be compared without a second
+  artifact.
 - The harness collects evidence; the step never reports it: Playwright
   tracing and screenshots when the browser is used, every `request` fixture
   call, every `page.request` or `context.request` call, and the page's own
@@ -2736,22 +2673,9 @@ its scenario record's id, so either record leads to the other.
   this execution's own timeline the screenshot was actually taken.
 - `observed` holds what the tool saw the execution reach, one key per
   channel. A channel the execution never reached is `null`, never `0`:
-  "nothing was measured" and "measured zero" are different facts, and a
-  step that calls `fetch` makes requests no channel of nukadoko sees.
-- `observed.http_reads` and `observed.http_writes` count the network calls
-  that the tool saw during the execution, through the `request` fixture,
-  through `page.request` or `context.request`, and through the page;
-  non-GET/HEAD counts as a write (HTTP method as a proxy for write
-  semantics, not semantics itself), so a POST-based read counts against a
-  step that never wrote anything (see Keyword semantics). Both are
-  numbers, `0` included, when the execution called `ctx.request()`,
-  `ctx.page()`, or `pageAs()` (a `request`, `page`, or `context` fixture
-  calls one, directly or through a fixture of the project), or when a
-  request was recorded during it. Otherwise both are `null`. The counts
-  settle nothing on their own: Then position and read-only environments
-  act on the `mutates` declaration, never on this count. `observed` sits
-  beside `mutates` (declared) so a wrong declaration is falsifiable, here
-  and in the Allure report.
+  "nothing was measured" and "measured zero" are different facts. It
+  records what can be measured exactly and infers nothing from it: no
+  field says whether a step wrote (see "Keyword semantics").
 - `observed.processes` (`null` when the execution never called
   `runCommand`) lists each child process that `runCommand` started during the execution,
   in call order: `{ "command", "cwd", "exit_code", "duration_ms" }`, plus
@@ -2814,8 +2738,7 @@ its scenario record's id, so either record leads to the other.
   string is then the only URL known, so it is `url`. A failed append does
   not fail the step; it is counted in `http_log_failed` (below). A page request's line belongs to the step that sent it. The
   path is taken when the request starts, and the response is appended there
-  even when it arrives after that step has returned. That is the same step
-  `observed` already counted. Only `document`, `xhr`, and `fetch` requests (Playwright's own
+  even when it arrives after that step has returned. Only `document`, `xhr`, and `fetch` requests (Playwright's own
   `request.resourceType()`) ever reach http.jsonl for page traffic; a real
   page load can pull in dozens of images, stylesheets, and scripts that
   nobody reading a step record for acceptance purposes traces one by one,
@@ -2865,18 +2788,12 @@ its scenario record's id, so either record leads to the other.
 - `http_omitted` appears only when at least one page request was omitted.
   It makes the omission visible by counting what
   didn't make it into http.jsonl, by resource type, e.g.
-  `{ "image": 34, "stylesheet": 5, "script": 12 }`. `observed` (above) is not
-  narrowed by any of this: it tallies every request the harness saw, image
-  and script traffic included, because it answers a different question (how
-  many reads and writes actually happened) than http.jsonl does (which of
-  those calls are worth reading one by one). The two counts are not
-  expected to add up to each other, and neither being lower than the other
-  is a bug.
+  `{ "image": 34, "stylesheet": 5, "script": 12 }`.
 - `http_log_failed` (a number) appears only when at least one http.jsonl
   line could not be appended, for example because the step directory was
   missing, the disk was full, or a permission was denied. It counts the
-  lines lost, so a request `observed` counted but http.jsonl lacks is
-  never silent. A failed append does not fail the step: measurement does
+  lines lost, so a request the step made but http.jsonl lacks is never
+  silent. A failed append does not fail the step: measurement does
   not break execution.
 - `used` (included only when it has entries) lists the earlier executions whose
   results this one drew a value from: through a `from` injection, a
@@ -3133,25 +3050,6 @@ holds:
   its stdout when stderr is empty (as on stderr), the last command the step ran through `runCommand` that did not
   exit 0, and the record's path, once for each environment it failed in
   and prefixed by that environment when the run had more than one;
-- "Declared vs observed", over every step that ran and has a step record:
-  each step that declared `mutates: false` but made at least one measured
-  write (`observed.http_writes > 0`, see "Keyword semantics") or ran a
-  process whose working directory changed (`observed.processes[].files`),
-  stated as a raw fact (the declared value beside the observed count, and
-  up to three changed paths), never a verdict.
-  A step that declared `mutates: false`, reached no HTTP channel
-  (`observed.http_writes` is `null`), and ran no process whose files were
-  measured was not compared, and the section counts those steps in one
-  line ("2 steps that declared `mutates: false` reached no HTTP channel
-  nukadoko observes ..."), so a step that called `fetch` or wrote a file
-  itself is never reported as having made no write.
-  A step that reads over POST lands here every time, by design: the same
-  HTTP-method proxy that made run-time `mutates` enforcement unreliable. It
-  is one section for the whole run, so it cannot be scanned past by
-  accident, and it is written even when nothing disagrees, so "compared,
-  found nothing" stays distinguishable from "never compared". A compat step
-  (`mutates: null`, see "Compat steps (the migration door)") has no
-  declaration to compare and is counted separately;
 - "Findings", when the run raised any finding other than a failed scenario
   (a warning such as a file that was not written or a teardown that
   failed), one line each with its severity, code, location, and message;
@@ -3701,16 +3599,14 @@ A section renders as a zero-width marker named after its own label.
 A poll spans its own start through `waited_ms` later, named `<description> (<attempts> attempts)`: the duration alone cannot tell a wait that resolved on the first attempt from one that took forty, and the count is the one fact only the name can carry.
 A poll's own outcome sets the child step's status: `resolved` is passed, `timed_out` is failed (the condition it waited for was never met, the step's own contract not holding), `failed` is broken (the poll's own callback threw, unrelated to whatever it was waiting for).
 An action spans its own start through `ms` later, named after its own `method` plus, when the call carried one, its `selector` or `url` (e.g. `goto /orders`); an `expect` call is named with its matcher and target instead (e.g. `expect #late to.be.visible`, with `not` folded in for a negated assertion), since neither is implied by `method` alone the way a `goto`'s own target is implied by `url`.
-Neither `ms` nor `timeout_ms` ever lands in the name: `ms` is already visible as the child step's own width, the same reason `page_events`'s observed counts stay off step names too, and `timeout_ms` stays in the `record.json` attachment.
+Neither `ms` nor `timeout_ms` ever lands in the name: `ms` is already visible as the child step's own width, the same reason `page_events`'s counts stay off step names too, and `timeout_ms` stays in the `record.json` attachment.
 When `actions` itself was capped at 100 entries (see "Records", `truncated.actions`), the timeline gets one more child step at its own tail, zero-width and passed, naming the cut (e.g. `... 4113 more actions not shown`), so a reader scanning only the timeline never mistakes a capped list for everything that happened.
 Never clamped to the parent step entry's own start/stop range: a timeline entry outside that range already happened, and hiding it would make it unreadable rather than making it not true.
 
 `page_events` becomes up to three parameters (see "Records"): `console errors (observed)`, `page errors (observed)`, and `failed requests (observed)`. It adds a parameter only when that category has an entry, so readers can see the count without opening `record.json`.
 A category the collector truncated reports its true total beside the shown count, e.g. `100 of 4213`: the shown count alone would understate what actually happened.
 
-A step entry's parameters carry its declaration and what was actually observed side by side: `mutates (declared)` next to the measured `http reads (observed)` / `http writes (observed)`, each `not observed` when the step reached no HTTP channel (and, for a compat step, `world reads (observed)` / `world writes (observed)`), not because the two are checked against each other automatically, but so a reviewer can.
-The declaration is what nukadoko trusts and acts on, the observed counts are what actually happened, and this row is where the two sit close enough to compare by eye.
-The observed side is an HTTP-method proxy, not a semantic judgment (see "Keyword semantics"): a row can show a truthful `mutates (declared): false` next to a nonzero `http writes (observed)` when the step called a POST-based read, and that is the proxy showing through the table, not either number lying.
+A step entry's parameters carry its declaration, `mutates (declared)`, and, for a compat step, what it read and wrote on the World, `world reads (observed)` / `world writes (observed)`. No parameter counts HTTP writes: a count by method is a proxy, not a measurement of a write (see "Keyword semantics"). The step record attached beside them holds what the step sent and received.
 
 A failed scenario puts `[nukadoko.failure=<kind>]` in `statusDetails.message`.
 It writes the original error message in `statusDetails.trace`.
@@ -3802,7 +3698,7 @@ manifest, so retention and `nuka clean` remove it with the run.
   formatters and JUnit-based CI keep reading a nukadoko-produced run the
   way they read a classic cucumber-js one.
 - Step record internals do not enter the stream. This excludes the validated
-  result, `mutates`, `observed` counts, `error.kind`, and `calls`.
+  result, `mutates`, `observed`, `error.kind`, and `calls`.
   `TestStepResult` and
   `TestStepFinished` are closed schemas (`additionalProperties: false`)
   with no field for any of them, and there is no smuggling them in through
@@ -4071,13 +3967,6 @@ nuka run [<feature[:line]|dir>...] [--no-check] [--env <name>]...
                               execution its own record under the one run_id;
                               a scenario that failed at least once gets a
                               repeat line after the failed list.
-                              --probe re-runs each read-only Then right after
-                              it passes, with one capture, its table, or its
-                              docstring changed, and notes
-                              one that still passes
-                              (then-passed-with-changed-capture) or that it
-                              could not measure (then-probe-not-measured);
-                              the exit code is unchanged.
                               --since <git ref> compares each scenario's
                               criteria (tags, steps with their effective
                               keyword, docstrings, tables, its Examples row)
@@ -4454,9 +4343,12 @@ step record and the envelope. `run.json` is the `nuka run --json`
 envelope, so it carries the envelope's. The
 number moves when a field the document already has changes its meaning,
 its type, or its name, or is removed. An added field does not move it. A
-reader checks the number before it trusts the shape. The step record is 3: 2 made an `observed` channel the
+reader checks the number before it trusts the shape. The step record is 4: 2 made an `observed` channel the
 execution never reached `null` and `observed.processes` always
-present, and 3 removed the `session` field. The envelope is 2. A record without `schema_version` was written
+present, 3 removed the `session` field, and 4 removed the two HTTP
+method counts from `observed`. The envelope is 3: it removed `probes`
+from run.json's scenarios and the same two counts from each step's
+`observed`. A record without `schema_version` was written
 by nukadoko 0.16.1 or earlier.
 
 ### The envelope
@@ -4466,7 +4358,7 @@ has no text form, always does:
 
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "nukadoko": "0.17.0",
   "command": "check",
   "verdict": "failed",

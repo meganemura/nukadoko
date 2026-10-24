@@ -84,11 +84,11 @@ change against before writing it.
 
 - **Declaration and measurement answer different questions.** The tool
   measures what it can measure exactly and trusts a declaration for what it
-  cannot. Where the only available measurement is a proxy — HTTP method
-  standing in for write semantics — it is recorded beside the declaration
-  and never used to overrule it. Do not automate a verdict on top of a
-  proxy; a check that is wrong for GraphQL or RPC-over-POST every time is
-  worse than no check.
+  cannot. A proxy is not a measurement: HTTP method does not stand in for
+  write semantics, so the step record keeps each request as it was sent,
+  never a count of writes inferred from methods. Do not automate a verdict
+  on top of a proxy; a check that is wrong for GraphQL or RPC-over-POST
+  every time is worse than no check.
 - **The feature file names everything that ran.** Nothing executes that the
   scenario did not ask for. A missing dependency is a mistake to fix in the
   feature, never something the engine inserts quietly to make a run

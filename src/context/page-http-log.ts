@@ -7,8 +7,8 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // Responsibility: the page-origin half of http.jsonl — everything a step's
 // `ctx.page()` itself sends, as opposed to
 // http-log.ts's `ctx.request()` half. Subscribed once, at browser-context
-// creation (browser-evidence.ts), the same place `observed`'s own `request`
-// listener and page-events.ts's `console`/`weberror`/`requestfailed`
+// creation (browser-evidence.ts), the same place
+// page-events.ts's `console`/`weberror`/`requestfailed`
 // listeners already are — a context-level subscription, not a page-level
 // one, so a popup (`window.open`) is covered without a second listener
 // (browser-evidence.ts's own header).
@@ -30,9 +30,7 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // dropped. The step record's own
 // `http_omitted` field (create-context.ts's `httpOmittedSnapshot`, wired
 // into the step record by cli/do.ts and run-scenario.ts) is that tally's own
-// read side. `observed` (browser-evidence.ts's own `request` listener) is
-// untouched by any of this — it keeps counting every request regardless of
-// what this module goes on to do with it (http-omitted.ts's own header).
+// read side.
 //
 // `via: "page"` (http-log.ts's own `HttpLogEntry`) is what tells an entry
 // this module wrote apart from one `ctx.request()` produced, on the same
@@ -52,9 +50,7 @@ import type { HttpOmittedCollector } from "./http-omitted.js";
 // directory lands in the new step. Reading the getter again when the
 // response arrives would write the line into whichever step is current
 // then. A click that returns before its POST finishes would leave the POST
-// on the next step, whose `observed` says it wrote nothing, while the step
-// that sent it already counted the write (browser-evidence.ts records
-// `observed` on `request`, not on `response`).
+// on the next step's http.jsonl, not on the step that sent it.
 //
 // A write failure here (`appendHttpLogEntry` rejecting) does not throw: an
 // event handler has no caller to propagate a throw to, and losing one

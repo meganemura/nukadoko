@@ -7,6 +7,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  httpLogLines,
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
@@ -176,8 +177,8 @@ describe("nuka run: compat step execution", () => {
 
     const stepRecord = await readStepRecord(rootDir, record.steps[0].step_record_id);
     expect(stepRecord.status).toBe("passed");
-    // The measured tally is unchanged by this task (this file's own header)
-    // — only whether it fails the step changed.
-    expect((stepRecord as { observed: { http_writes: number } }).observed.http_writes).toBe(1);
+    // The write is still recorded (this file's own header): only whether
+    // it fails the step changed.
+    expect(httpLogLines(rootDir, record.steps[0].step_record_id).map((line) => line.method)).toEqual(["POST"]);
   });
 });

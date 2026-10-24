@@ -215,7 +215,7 @@ describe("formatStepFailure: a used producer that exited nonzero", () => {
   });
 
   it("compacts a JSON stdout, which a pretty printer starts with a bare brace, and cuts it at 200 characters", () => {
-    const refusal = { schema_version: 2, verdict: "refused", findings: [{ code: "unknown-environment" }] };
+    const refusal = { schema_version: 3, verdict: "refused", findings: [{ code: "unknown-environment" }] };
     expect(failed([{ step: "run-nuka", result: { exitCode: 2, stdout: JSON.stringify(refusal, null, 2), stderr: "" } }])[1]).toBe(
       `used    run-nuka  exit 2  stdout: ${JSON.stringify(refusal)}`,
     );

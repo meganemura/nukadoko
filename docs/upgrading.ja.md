@@ -66,6 +66,22 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   これらが名指していた事実は、見る人のためにいまもディスク上にあります。
   fixture の分割代入、support 側の `defineParameterType`、step record の `actions` です。
 
+- **`nuka run --probe` は削除されました。**
+  スクリプトと CI のジョブからこのフラグを外します。
+  いまは `removed-flag` で拒否します。
+  `findings` から `then-passed-with-changed-capture` や `then-probe-not-measured` を、または run.json から `probes` を読んでいたジョブは、その読み取りを外します。
+  この note に代わるものはありません。
+  各 Then の step record と step ファイルを読みます。
+
+- **HTTP メソッドによる回数がなくなり、2 つのバージョン番号が上がりました。**
+  step record や run.json で `observed.http_reads` や `observed.http_writes` を読んでいたものは、それを外します。
+  step record の `http.jsonl` は、各 request をそのメソッドとともに並べます。
+  `schema_version` を確かめる読み手は、step record では 4 を、run.json とすべての `--json` の文書では 3 を受け入れます。
+  `nuka report` は以前のリリースが書いた run.json を拒否するので、run はそれを走らせたリリースでレポートします。
+
+- **run サマリに「Declared vs observed」の節はありません。**
+  `summary.md` からそれを読んでいたジョブは、その読み取りを外します。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

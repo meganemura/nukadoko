@@ -383,7 +383,7 @@ export interface StepSummary {
    * one at all. Same presence rule as `needs`: present for every typed
    * entry, absent for a compat one. JSON key is `needs_browser`, not
    * `needsBrowser` (this project's own snake_case convention for a
-   * `--json` field, matching `record.json`'s `waited_ms`/`http_reads`).
+   * `--json` field, matching `record.json`'s `waited_ms`/`exit_code`).
    * Also omitted, alongside `needs: null`, when `stepNeeds` throws — a
    * browser-need verdict this file can't derive is not one it states. */
   readonly needs_browser?: boolean;

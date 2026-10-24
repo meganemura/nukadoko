@@ -19,7 +19,7 @@ describe("nuka check", () => {
 
     expect(stderr.text()).toBe("");
     expect(JSON.parse(stdout.text())).toEqual({
-      schema_version: 2,
+      schema_version: 3,
       nukadoko: readOwnVersion(),
       command: "check",
       verdict: "passed",

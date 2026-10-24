@@ -61,7 +61,7 @@ describe("nuka run: World constructor throw", () => {
         step_record_id: second.steps[0].step_record_id,
         record: `steps/${second.steps[0].step_record_id}`,
         mutates: null,
-        observed: { http_reads: null, http_writes: null, processes: null },
+        observed: { processes: null },
       },
     ]);
 

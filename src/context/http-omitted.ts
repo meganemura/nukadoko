@@ -9,18 +9,10 @@ import type { HttpOmittedCounts } from "../record/types.js";
 // by Playwright's own `request.resourceType()`, so a step's own step record
 // can say
 // how many were dropped and of what kind instead of a reader having to
-// assume http.jsonl already shows everything. Same collector shape as observed.ts/page-events.ts
+// assume http.jsonl already shows everything. Same collector shape as page-events.ts
 // (`record()`/`snapshot()`/`reset()`, executor-owned, reset at each step
 // boundary by create-context.ts's `beginStep`, never reachable from a
 // step's own `run`).
-//
-// Deliberately separate from `observed` (observed.ts): `observed` counts
-// every request the harness saw, whether or not http.jsonl went on to keep
-// it — it answers "how many reads and writes actually happened". This
-// collector answers a different question, "how much did http.jsonl leave
-// out, and of what kind" — the two numbers are not expected to add up to
-// each other, and neither http-log.ts nor page-http-log.ts ever tries to
-// make them (docs/spec.md "Records").
 
 export interface HttpOmittedCollector {
   /** Tallies one request left out of http.jsonl, by its own resourceType. */

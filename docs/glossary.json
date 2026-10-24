@@ -460,7 +460,7 @@
     },
     {
       "term": "probe",
-      "why": "`nuka run --probe` と run.json の `probes` に直接対応する仕組みの名。environment のバージョン probe と同じく英語のまま。訳すとフラグとの対応が切れる"
+      "why": "environment の `version` probe(config の `version` 関数)を指す名。訳すと config の設定との対応が切れるので英語のまま。`nuka run --probe` は削除済み"
     },
     {
       "term": "Trusted Publisher",

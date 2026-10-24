@@ -5,7 +5,6 @@ import type { APIRequestContext, APIResponse, Request } from "playwright";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createHttpLogFailedCollector } from "../src/context/http-log-failed.js";
 import { wrapRequestContextWithLogging } from "../src/context/http-log.js";
-import { createObservedCollector } from "../src/context/observed.js";
 
 // Responsibility: pins urlOf/methodOf's fetch(string | Request) branch —
 // the one branch in http-log.ts with no
@@ -58,8 +57,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
   }
 
   it("fetch(url string): method defaults to GET, url is the string as given", async () => {
-    const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], createHttpLogFailedCollector());
 
     await wrapped.fetch("https://example.com/items");
 
@@ -67,7 +65,6 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("GET");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0, processes: null });
   });
 
   // Every
@@ -76,8 +73,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
   // for a reader to infer from its shape alone (this file's own module
   // header).
   it('every entry carries via: "request", explicitly', async () => {
-    const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], createHttpLogFailedCollector());
 
     await wrapped.fetch("https://example.com/items");
 
@@ -87,8 +83,7 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
   });
 
   it('fetch(url string, { method: "post" }): method is upper-cased to POST', async () => {
-    const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], createHttpLogFailedCollector());
 
     await wrapped.fetch("https://example.com/items", { method: "post" });
 
@@ -96,12 +91,10 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("POST");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it("fetch(Request) with no options: method comes from the Request itself, not GET", async () => {
-    const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], createHttpLogFailedCollector());
     const request = fakeRequest("https://example.com/items", "POST");
 
     await wrapped.fetch(request);
@@ -110,15 +103,13 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     // This is the branch with no prior direct test: if methodOf ever fell
     // back to "GET" for a Request target (instead of asking the Request its
-    // own method), this line and the tally below would both silently lie.
+    // own method), this line would silently lie.
     expect(lines[0]?.method).toBe("POST");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it('fetch(Request, { method: "PUT" }): options.method wins over the Request\'s own method', async () => {
-    const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], createHttpLogFailedCollector());
     const request = fakeRequest("https://example.com/items", "POST");
 
     await wrapped.fetch(request, { method: "PUT" });
@@ -127,12 +118,10 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.method).toBe("PUT");
     expect(lines[0]?.url).toBe("https://example.com/items");
-    expect(observed.snapshot()).toEqual({ http_reads: 0, http_writes: 1, processes: null });
   });
 
   it("fetch(Request): url is taken from request.url()", async () => {
-    const observed = createObservedCollector();
-    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], observed, createHttpLogFailedCollector());
+    const wrapped = wrapRequestContextWithLogging(fakeRequestContext(), () => logFile, [], createHttpLogFailedCollector());
     const request = fakeRequest("https://example.com/from-request", "GET");
 
     await wrapped.fetch(request);
@@ -141,6 +130,5 @@ describe("wrapRequestContextWithLogging / fetch(url | Request)", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]?.url).toBe("https://example.com/from-request");
     expect(lines[0]?.method).toBe("GET");
-    expect(observed.snapshot()).toEqual({ http_reads: 1, http_writes: 0, processes: null });
   });
 });

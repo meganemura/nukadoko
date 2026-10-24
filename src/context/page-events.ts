@@ -4,13 +4,13 @@ import type { ConsoleErrorEntry, FailedRequestEntry, PageErrorEntry, PageEventsS
 // (`page_events`) describes — console errors, uncaught page errors, and
 // failed requests a browser context saw during a step, none of which
 // cucumber-js can hold at all (it has no browser context of its own). Same
-// collector shape as observed.ts/sections.ts (`snapshot()`/`reset()`,
+// collector shape as sections.ts (`snapshot()`/`reset()`,
 // executor-owned, never reachable from a step's own `run`): browser-
 // evidence.ts subscribes this collector to `BrowserContext`'s `console`/
 // `weberror`/`requestfailed` events once, at context creation, the same
-// place it already subscribes `observed` to `request`; create-context.ts
+// place it subscribes page-http-log.ts to `response`; create-context.ts
 // resets it at each `beginStep` boundary
-// the same way it resets `observed`/`sections`/`polls`.
+// the same way it resets `sections`/`polls`.
 //
 // Subscribed on `BrowserContext`, not `Page`: overriding a builtin fixture is legitimate in this design (a
 // config author is free to wrap the `page` this module hands back later,
@@ -83,7 +83,7 @@ export interface PageEventsCollector {
   /** Executor-only: zeroes every category's tally at a step boundary. The
    * context's own event subscriptions are untouched — they were set up once,
    * at context creation (browser-evidence.ts), and outlive any number of
-   * resets, the same way `observed`'s own `request` subscription does. */
+   * resets, the same way the http.jsonl subscription does. */
   reset(): void;
 }
 

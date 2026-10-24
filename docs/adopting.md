@@ -170,27 +170,14 @@ fails, stderr names the step, its error, its step record, and a `do:`
 line such as `nuka run features/greet.feature:3` that reruns that one
 scenario.
 
-Two flags help while you write the first scenarios:
-
-- `nuka run --probe` runs each read-only Then again with its capture
-  changed. A Then that still passes does not check what its line says.
-  With `assert.ok(actual.startsWith("Hello"))` in place of the scaffolded
-  comparison, the run still passes and adds a note:
-
-  ```text
-  note	then-passed-with-changed-capture	features/greet.feature:5	the output says "Hello, Ada!": step "the-output-says" passed with text "Hello, Ada!-probe" in place of "Hello, Ada!"
-    fix: Make the step compare its result with the capture the message names; a step whose sentence also allows the changed value, such as "at least n", can stay as it is.
-    do: nuka run features/greet.feature:3 --probe
-  ```
-
-- `nuka run --env <name>` runs against an environment that
-  `nukadoko.config.ts` names under `environments`, each with its own
-  `baseURL`, `envFiles`, and `policy`. An environment with
-  `policy: "read-only"` refuses every step declared `mutates: true`
-  before it runs. The `--command` scaffold writes `mutates: true`; set
-  it to `false` when the program changes nothing outside its scratch
-  directory. See
-  [Environments and secrets](spec.md#environments-and-secrets).
+`nuka run --env <name>` runs against an environment that
+`nukadoko.config.ts` names under `environments`, each with its own
+`baseURL`, `envFiles`, and `policy`. An environment with
+`policy: "read-only"` refuses every step declared `mutates: true`
+before it runs. The `--command` scaffold writes `mutates: true`; set
+it to `false` when the program changes nothing outside its scratch
+directory. See
+[Environments and secrets](spec.md#environments-and-secrets).
 
 ## 6. Read the run directory
 

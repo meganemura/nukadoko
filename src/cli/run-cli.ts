@@ -114,9 +114,6 @@ interface RunArgs {
    * (that file's own header explains why the check lives there and not
    * here). */
   concurrency?: number;
-  /** `--probe`: re-run each passed read-only Then with one capture
-   * changed. */
-  probe?: boolean;
 }
 
 interface InitArgs {
@@ -551,6 +548,9 @@ export async function runCli(
         summary:
           "nuka run --summary is removed: nuka report --format markdown --out <path> writes the run summary of the " +
           "newest run to a path.",
+        probe:
+          "nuka run --probe is removed: a Then is judged from its step record and its step file, not from a second run " +
+          "with a changed value.",
       })
         .positional("feature", {
           type: "string",
@@ -602,16 +602,6 @@ export async function runCli(
             "(default 1); for a failure that reproduces one time in several. Each execution is its own scenario " +
             "record under the one run_id, and a scenario that failed at least once gets a `repeat` line after the summary",
         })
-        .option("probe", {
-          type: "boolean",
-          default: false,
-          describe:
-            "right after a read-only Then passes, and before the next step, run it again with one capture changed (a " +
-            "string suffixed, a number +1, a boolean flipped), and once with its docstring or the last cell of its table " +
-            "suffixed; a Then that still passes is a " +
-            "then-passed-with-changed-capture note, and one the probe could not measure is a then-probe-not-measured " +
-            "note. Never changes the exit code",
-        })
         .option("since", {
           type: "string",
           nargs: 1,
@@ -636,7 +626,6 @@ export async function runCli(
         json: args.json ?? false,
         concurrency: args.concurrency ?? 1,
         repeat: args.repeat ?? 1,
-        probe: args.probe ?? false,
         ...(args.since !== undefined ? { since: args.since } : {}),
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.

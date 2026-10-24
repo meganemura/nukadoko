@@ -12,7 +12,7 @@ import { USED_RESULT_MAX_BYTES, boundUsedResult, buildRunScenario, gherkinStepLi
 
 function stepRecord(id: string, status: "passed" | "failed", used: boolean): StepRecord {
   const base = {
-    schema_version: 3 as const,
+    schema_version: 4 as const,
     nukadoko: "0.17.0",
     step_record_id: id,
     step: "a-step",
@@ -24,7 +24,7 @@ function stepRecord(id: string, status: "passed" | "failed", used: boolean): Ste
     started_at: "2026-10-18T00:00:00.000Z",
     finished_at: "2026-10-18T00:00:01.000Z",
     evidence: { dir: `.nukadoko/runs/run-1/steps/${id}`, screenshots: [] },
-    observed: { http_reads: 1, http_writes: 0, processes: null },
+    observed: { processes: null },
     mutates: false,
   };
   return status === "passed"

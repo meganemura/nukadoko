@@ -57,10 +57,9 @@ describe("nuka report on a run.json with one field deleted or null", () => {
     // deleting or nulling it is part of what the property tries.
     const [first, failed] = [document.scenarios[0], document.scenarios.find((scenario: { status: string }) => scenario.status === "failed")];
     first.browser = { type: "chromium", version: "1.0.0" };
-    first.probes = [{ line: 4, step: "a step", text: "a step", key: "n", recorded: 1, changed: 2, status: "not-measured", reason: "timeout", message: "m" }];
     const failedStep = failed.steps.find((step: { status: string }) => step.status === "failed");
     failedStep.used = [{ step: "producer", record: "steps/producer", result: { exitCode: 1, stderr: "boom" } }];
-    failedStep.observed = { http_reads: 1, http_writes: 1, processes: [{ command: ["false"], cwd: ".", exit_code: 1, duration_ms: 1 }] };
+    failedStep.observed = { processes: [{ command: ["false"], cwd: ".", exit_code: 1, duration_ms: 1 }] };
     failed.hooks = [
       {
         type: "after_step",

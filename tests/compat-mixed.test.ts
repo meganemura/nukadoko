@@ -7,6 +7,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  httpLogLines,
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
@@ -101,7 +102,7 @@ describe("nuka run: typed and compat steps sharing one pickle's context", () => 
     // (observed), same as a typed step's ctx.request() would be.
     const compatStepRecord = await readStepRecord(rootDir, record.steps[2].step_record_id);
     expect(compatStepRecord.result).toBeNull();
-    expect((compatStepRecord as { observed: { http_reads: number } }).observed.http_reads).toBe(1);
+    expect(httpLogLines(rootDir, record.steps[2].step_record_id).map((line) => line.method)).toEqual(["GET"]);
 
     // The typed step's own request context sees the compat step's cookie —
     // proof the two share one underlying Playwright APIRequestContext.

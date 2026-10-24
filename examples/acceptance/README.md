@@ -14,7 +14,7 @@ Two checks keep a project and its Markdown equal:
 - `npm run skill-examples` runs
   [`scripts/skill-examples.ts`](../../scripts/skill-examples.ts). It packs
   this checkout, installs the tarball into a copy of each project outside
-  the repository, runs `nuka check`, `nuka run`, and `nuka run --probe`, and
+  the repository, runs `nuka check` and `nuka run`, and
   compares their output with the Markdown's transcript blocks. A `...`
   line in a transcript stands for any run of lines, durations are masked,
   and a finding line is compared up to its file. CI runs it.

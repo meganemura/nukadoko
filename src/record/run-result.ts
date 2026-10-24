@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
-import type { ProbeNotMeasuredReason, ProbeStatus, ProbeValue, ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
+import type { ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
 import type { ErrorKind, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
@@ -99,9 +99,6 @@ export interface RunScenario {
   /** For a failed scenario: the command that runs it alone, in its own
    * environment. */
   readonly do?: string;
-  /** Under `--probe`: each Then re-run with one capture changed. Not a
-   * step: it has no step record. */
-  readonly probes?: readonly RunProbe[];
   /** What moved in this scenario's criteria since `nuka run --since`'s
    * ref. Absent in a run.json an earlier build wrote. */
   readonly criteria?: RunCriteria;
@@ -156,21 +153,6 @@ export interface RunSince {
   /** Every file a scenario's `step_files` names, and how it compares with
    * the commit. */
   readonly step_files: readonly { readonly file: string; readonly change: StepFileChange }[];
-}
-
-export interface RunProbe {
-  /** The Then's line in its feature file, or `null`. */
-  readonly line: number | null;
-  readonly step: string;
-  readonly text: string;
-  readonly key: string;
-  readonly recorded: ProbeValue;
-  readonly changed: ProbeValue;
-  /** `passed` is the `then-passed-with-changed-capture` note, and
-   * `not-measured` the `then-probe-not-measured` note. */
-  readonly status: ProbeStatus;
-  readonly reason?: ProbeNotMeasuredReason;
-  readonly message?: string;
 }
 
 /** One scenario under one environment: `failed` when any of its

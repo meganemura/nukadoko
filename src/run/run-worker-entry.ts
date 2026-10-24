@@ -78,7 +78,7 @@ import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.
 // redacted before they are written. The parent parses each note back into
 // its finding and reports it as the serial path does.
 
-const [rootDirArg, runIdArg, envArg0, featureListPathArg, repeatRawArg, probeRawArg] = process.argv.slice(2);
+const [rootDirArg, runIdArg, envArg0, featureListPathArg, repeatRawArg] = process.argv.slice(2);
 
 if (
   rootDirArg === undefined ||
@@ -86,8 +86,7 @@ if (
   envArg0 === undefined ||
   featureListPathArg === undefined ||
   repeatRawArg === undefined ||
-  !/^[1-9][0-9]*$/.test(repeatRawArg) ||
-  probeRawArg === undefined
+  !/^[1-9][0-9]*$/.test(repeatRawArg)
 ) {
   process.exit(1);
 }
@@ -102,7 +101,6 @@ const runId: string = runIdArg;
 const featureListPath: string = featureListPathArg;
 const env = envArg0 === "" ? null : envArg0;
 const repeat: number = Number(repeatRawArg);
-const probe = probeRawArg === "1";
 
 const envelopeStdout = divertProcessStdoutToStderr();
 const parentPid = process.ppid;
@@ -325,7 +323,6 @@ async function main(): Promise<void> {
           fixtureGraph,
           fixtureProcessCache,
           processSignal,
-          probe,
         });
 
         const teardownNotes = (record.teardown_errors ?? []).map((teardownError) =>

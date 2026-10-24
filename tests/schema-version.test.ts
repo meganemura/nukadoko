@@ -77,7 +77,7 @@ describe("schema_version", () => {
   ])("nuka %s --json prints the envelope first", (name, command, verdict) => {
     const document = envelopes.get(name)!;
     expect(Object.keys(document).slice(0, 5)).toEqual(ENVELOPE_KEYS);
-    expect(document).toMatchObject({ schema_version: 2, nukadoko: readOwnVersion(), command, verdict });
+    expect(document).toMatchObject({ schema_version: 3, nukadoko: readOwnVersion(), command, verdict });
     expect(Array.isArray(document.findings)).toBe(true);
   });
 

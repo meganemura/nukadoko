@@ -220,8 +220,8 @@ describe(`README.md: ${SELF_STARTED}`, () => {
         path.join(stepRecordDir(projectDir, record.steps[0]!.step_record_id), "record.json"),
         "utf8",
       ),
-    ) as { observed: { http_reads: number | null; http_writes: number | null } };
-    expect(when.observed).toMatchObject({ http_reads: null, http_writes: null });
+    ) as { evidence: { http?: string } };
+    expect(when.evidence.http).toBeUndefined();
   }, 120_000);
 });
 
@@ -332,7 +332,9 @@ describe("README.md: An HTTP API", () => {
     expect(record.status).toBe("passed");
     const when = JSON.parse(
       await readFile(path.join(stepRecordDir(apiDir, record.steps[0]!.step_record_id), "record.json"), "utf8"),
-    ) as { observed: { http_reads: number; http_writes: number } };
-    expect(when.observed).toMatchObject({ http_reads: 1, http_writes: 0 });
+    ) as { evidence: { http?: string } };
+    expect(when.evidence.http).toBe("http.jsonl");
+    const lines = (await readFile(path.join(stepRecordDir(apiDir, record.steps[0]!.step_record_id), "http.jsonl"), "utf8")).trim().split("\n");
+    expect(lines.map((line) => (JSON.parse(line) as { method: string; via: string }))).toMatchObject([{ method: "GET", via: "request" }]);
   }, 120_000);
 });

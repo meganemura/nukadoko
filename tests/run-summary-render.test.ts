@@ -6,16 +6,15 @@ import { renderRunSummary } from "../src/run/run-summary.js";
 import { foldVerdicts } from "../src/run/verdicts.js";
 
 // Responsibility: the exact Markdown of the run summary, rendered from
-// literal run.json documents: a green run, a red run, a run over two
-// environments under `--repeat`, and a run whose step declared
-// `mutates: false` and was measured writing. The properties are that every
-// scenario of a run gets exactly one row, whatever its name, feature, or
-// line, and that the title says the document's verdict, so a reader never
-// reads a run with a scenario missing, counted twice, or with a verdict
-// run.json does not hold.
+// literal run.json documents: a green run, a red run, and a run over two
+// environments under `--repeat`. The properties are that every scenario of
+// a run gets exactly one row, whatever its name, feature, or line, and that
+// the title says the document's verdict, so a reader never reads a run with
+// a scenario missing, counted twice, or with a verdict run.json does not
+// hold.
 
 const base: RunDocument = {
-  schema_version: 2,
+  schema_version: 3,
   nukadoko: "0.14.1",
   command: "run",
   verdict: "passed",
@@ -111,10 +110,6 @@ describe("renderRunSummary", () => {
         "| a member signs in | 3 | passed | 2.0s |  |",
         "| a wrong password is refused | 9 | passed | 0.8s |  |",
         "",
-        "## Declared vs observed",
-        "",
-        "No step declared `mutates: false` and was measured making a write or changing a file.",
-        "",
       ].join("\n"),
     );
   });
@@ -133,15 +128,13 @@ describe("renderRunSummary", () => {
             step("the seed ran", {
               record: "steps/stp-0",
               mutates: true,
-              observed: { http_reads: null, http_writes: null, processes: null },
+              observed: { processes: null },
             }),
             step("the error <b>Locked</b> is shown", {
               status: "failed",
               record: "steps/stp-1",
               mutates: false,
               observed: {
-                http_reads: null,
-                http_writes: null,
                 processes: [
                   { command: ["npm", "run", "migrate"], cwd: "/tmp/x", exit_code: 0, duration_ms: 5 },
                   { command: ["npm", "run", "seed"], cwd: "/tmp/x", exit_code: 1, duration_ms: 5 },
@@ -184,12 +177,6 @@ describe("renderRunSummary", () => {
         "| a member signs in | 3 | passed | 1.0s |  |",
         '| a wrong password \\| is refused | 9 | failed | 0.4s | step "the error &lt;b>Locked&lt;/b> is shown": `` expected `Locked` \\| got `Open` ``<br>used the-seed-ran exit 2: `seed: no database`<br>ran `npm run seed`<br>record `steps/stp-1` |',
         "| a session expires | 15 | failed | 0.0s | Before hook: `(no message)`<br>record `scenarios/scn-2` |",
-        "",
-        "## Declared vs observed",
-        "",
-        "No step declared `mutates: false` and was measured making a write or changing a file.",
-        "",
-        "1 step that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`) and ran no process through `runCommand` whose files were measured, so nothing was compared for it.",
         "",
         "## Rerun a failed scenario",
         "",
@@ -246,10 +233,6 @@ describe("renderRunSummary", () => {
         '| the banner is shown | 4 | 2 of 2 passed | 1 of 2 passed | 2.0s | flag-off: step "the banner is shown": `no banner`<br>record `steps/stp-9` |',
         "| the page loads | 9 | 2 of 2 passed | 2 of 2 passed | 1.0s |  |",
         "",
-        "## Declared vs observed",
-        "",
-        "No step declared `mutates: false` and was measured making a write or changing a file.",
-        "",
         "## Rerun a failed scenario",
         "",
         "```sh",
@@ -300,42 +283,6 @@ describe("renderRunSummary", () => {
     });
     expect(markdown.split("\n").slice(1, 2)).toEqual(["# nukadoko run failed: 1 scenario, 0 passed, 1 not run"]);
     expect(markdown).toContain("| s | 2 | not run | 0.0s |  |\n");
-  });
-
-  it("lists a step that declared mutates: false and was measured writing", () => {
-    const observed = (writes: number | null) =>
-      writes === null
-        ? { http_reads: null, http_writes: null, processes: null }
-        : { http_reads: 0, http_writes: writes, processes: null };
-    const markdown = renderRunSummary(run({
-      scenarios: [
-        scenario("features/a.feature", 2, "a report is read", "passed", 10, {
-          steps: [
-            step("the report is fetched", { mutates: false, observed: observed(1) }),
-            step("the cache is read", { mutates: false, observed: observed(0) }),
-            step("a compat step", { mutates: null, observed: observed(0) }),
-            step("another compat step", { mutates: null, observed: observed(null) }),
-            step("a fetch", { mutates: false, observed: observed(null) }),
-            step("a write", { mutates: true, observed: observed(3) }),
-            step("a step that never began", { status: "undefined", step: null }),
-          ],
-        }),
-      ],
-    }));
-    expect(markdown.slice(markdown.indexOf("## Declared vs observed"))).toBe(
-      [
-        "## Declared vs observed",
-        "",
-        "Steps that declared `mutates: false` and were measured making writes or changing files. This is a comparison, not a verdict: a step that reads over POST records writes by design, and a file change is a change under a process's working directory, whoever made it.",
-        "",
-        '- "the report is fetched" (scenario "a report is read"): declared mutates: false, observed 1 write',
-        "",
-        "1 step that declared `mutates: false` reached no HTTP channel nukadoko observes (`request`, `page`, `context`, `pageAs`) and ran no process through `runCommand` whose files were measured, so nothing was compared for it.",
-        "",
-        "2 compat steps have no `mutates` declaration to compare.",
-        "",
-      ].join("\n"),
-    );
   });
 
   const scenariosGen = gs.arrays(

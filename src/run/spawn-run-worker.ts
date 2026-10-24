@@ -46,9 +46,6 @@ export interface SpawnRunWorkerOptions {
   readonly featureListPath: string;
   /** `--repeat`: how many times this worker runs its own files. */
   readonly repeat: number;
-  /** `--probe`: whether this worker probes each passed scenario's Then
-   * steps. */
-  readonly probe: boolean;
 }
 
 // `detached` on POSIX puts each worker in its own process group, so a
@@ -62,11 +59,11 @@ export interface SpawnRunWorkerOptions {
 const detached = process.platform !== "win32";
 
 export function spawnRunWorker(options: SpawnRunWorkerOptions): ChildProcessByStdio<null, Readable, Readable> {
-  const { rootDir, runId, env, featureListPath, repeat, probe } = options;
+  const { rootDir, runId, env, featureListPath, repeat } = options;
   const here = fileURLToPath(import.meta.url);
   const ext = path.extname(here);
   const workerEntry = path.join(path.dirname(here), `run-worker-entry${ext}`);
-  const args = [rootDir, runId, env ?? "", featureListPath, String(repeat), probe ? "1" : "0"];
+  const args = [rootDir, runId, env ?? "", featureListPath, String(repeat)];
   const nodeArgs =
     ext === ".ts" ? ["--import", loaderUrl, workerEntry] : [workerEntry];
 

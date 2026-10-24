@@ -88,7 +88,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     started_at: "2026-08-01T00:00:00.500Z",
     finished_at: "2026-08-01T00:00:01.000Z",
     evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [] },
-    observed: { http_reads: 0, http_writes: 0, processes: null },
+    observed: { processes: null },
     mutates: true,
     ...overrides,
   } as StepRecord;
@@ -358,14 +358,14 @@ describe("mapGwtStep: step parameters", () => {
     expect(mapped.parameters).toContainEqual({ name: "mutates (declared)", value: "not declared" });
   });
 
-  it("reports mutates: true/false literally, plus observed http/world counts and used step records", () => {
+  it("reports mutates: true/false literally, plus observed world keys and used step records", () => {
     const { gherkinDocument, pickles } = parse();
     const pickle = pickles[0]!;
     const stepRecord = baseStepRecord({
       status: "passed",
       result: null,
       mutates: false,
-      observed: { http_reads: 2, http_writes: 1, processes: null },
+      observed: { processes: null },
       world: { reads: ["a", "b"], writes: ["c"] },
       used: [{ step_record_id: "step-0", step: "create-cart" }],
     });
@@ -375,8 +375,6 @@ describe("mapGwtStep: step parameters", () => {
 
     expect(mapped.parameters).toContainEqual({ name: "step record id", value: "step-1" });
     expect(mapped.parameters).toContainEqual({ name: "mutates (declared)", value: "false" });
-    expect(mapped.parameters).toContainEqual({ name: "http reads (observed)", value: "2" });
-    expect(mapped.parameters).toContainEqual({ name: "http writes (observed)", value: "1" });
     expect(mapped.parameters).toContainEqual({ name: "world reads (observed)", value: "a, b" });
     expect(mapped.parameters).toContainEqual({ name: "world writes (observed)", value: "c" });
     expect(mapped.parameters).toContainEqual({ name: "used step records", value: "step-0" });
@@ -397,8 +395,6 @@ describe("mapGwtStep: step parameters", () => {
     expect(mapped.parameters.map((p) => p.name)).toEqual([
       "step record id",
       "mutates (declared)",
-      "http reads (observed)",
-      "http writes (observed)",
       "declared-only",
     ]);
   });

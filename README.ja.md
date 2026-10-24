@@ -300,7 +300,7 @@ npx nuka scaffold greeting-is --pattern "the greeting is {text:string}" --then -
 ```
 
 `get-greeting` は ``request.fetch(`/greet/${name}`, { method: "GET" })`` の呼び出し 1 つで、`status` と `body`(レスポンスのテキスト)を返します。
-各 request は step record の `http.jsonl` と、`observed.http_reads` と `observed.http_writes` に記録されます。
+各 request は step record の `http.jsonl` に記録されます。
 
 `--request "<METHOD> <path>"` は path を `baseURL` を基準に解決します。
 path の中の `{key}` はその args キーの値で、そのまま埋め込まれます。
@@ -370,9 +370,8 @@ export default defineStep({
 `fetch` には何もインストールする必要がありません。
 サーバを呼ぶもう 1 つの方法は、Playwright の `APIRequestContext` である `ctx.request()` です。
 こちらは `playwright` のインストールが必要です。
-step の呼び出しを step record の `observed.http_reads` と `observed.http_writes` に数えるのは `ctx.request()` だけです。
-`fetch` だけを呼ぶ step では、どちらも `null` になります。
-nukadoko はその request を見ておらず、`0` なら計測したと主張するところを、`null` はそのとおりに伝えます。
+その呼び出しは 1 つずつ step record の `http.jsonl` に記録されます。
+nukadoko は `fetch` の呼び出しを見ません。
 
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。
@@ -507,7 +506,7 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
   "args": { "title": "Buy milk" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "http_reads": 0, "http_writes": 1, "processes": null }
+  "observed": { "processes": null }
 }
 ```
 
@@ -759,19 +758,19 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 |---|---|
 | 重複する step(どれが一致したか分からない) | `nuka check` は、何かが実行される前に、同じテキストが 2 回登録されている **duplicate patterns** と、feature の 1 行に異なる 2 つの pattern がどちらも一致し得る **ambiguous steps** を報告します |
 | `this.foo`(型のない袋) | step は `returns` スキーマに対して値を返し、後続の step はそのうち 1 つのキーを名前で読むために `from` を宣言します。この依存関係は diff 上で見える import として現れ、読んだ事実は読み手側 step の step record に記録され、束縛の順序が壊れていれば `nuka check` が実行前に検出します(参照: [step の連鎖](docs/spec.ja.md#step-の連鎖)) |
-| `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が観測したネットワークの読み書き、evidence、environment、target version を記録した step record を書きます |
+| `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が記録した HTTP の呼び出しとプロセス、evidence、environment、target version を記録した step record を書きます |
 | 実行時に見つかる undefined な step | `nuka check <feature>` はそれらを実行前に静的に検出して失敗し、何にも一致しなかったテキストの名前を挙げます |
 | 黙って状態を変える `Then` | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否され、`Then` に結び付けられていれば `nuka check` が警告します。実際に何が起きたかは、レビューのためにいまも step record に記録されます。 |
 
 最後の項目には、正確な説明が必要です。
-このツールはかつて、約束ではなく計測された回数に対して失敗していました。
+このツールはかつて、約束ではなく回数に対して失敗していました。
 この挙動は、計測が支えられない主張をしていました。
-書き込みの検出は HTTP メソッドをプロキシとして使います。
+その回数は HTTP メソッドを書き込みのプロキシとして使っていました。
 このプロキシは、GraphQL、RPC-over-POST、純粋な読み取りを POST 上に実装するベンダーの query API では破綻します。
 そうした API を呼ぶ正直な `mutates: false` の step も、書き込みに見えます。
 一般的な HTTP レイヤーのルールでは、その呼び出しと本物の書き込みを区別できません。
-そこで nukadoko は宣言を信頼します。
-自身の request context と page を通じて行われたGET と HEAD を除く呼び出しはいまも数えますが、step record はその回数を断定ではなく事実として示します。
+そこで nukadoko は宣言を信頼し、メソッドから書き込みを推測することはしません。
+step record は、計測した各 request をメソッド、URL、status とともに、断定ではなく事実として残します。
 
 ## Reports fill themselves
 
@@ -781,7 +780,7 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 各プロジェクトが、trace やスクリーンショットのための hook の boilerplate を書いて保守します。
 [Allure](https://allurereport.org/) はテストレポートのダッシュボードで、nukadoko はその形式で結果を書くだけで、HTML 自体は決してレンダリングしません。
 `nuka report --format allure` は、追加の設定なしで、終わった run のあらゆる step record からレポートを満たします。
-バリデーション済みの result、trace、HTTP log、observed な読み書き、environment、version を追加します。
+バリデーション済みの result、trace、HTTP log、environment、version を追加します。
 そのうち、各 step のバリデーション済み result は、従来型の Cucumber ではレポート側から追加できません。
 Cucumber が step の返り値を捨てるためです。
 
@@ -927,7 +926,7 @@ World のサブクラスは `this.page` と `this.request` に代入できます
 
 扉は入口であり、行き先ではありません。
 compat の step は、最初の run から status と時間を持つ step record を得ます。
-evidence と `observed` の件数が付くのは、その glue がブラウザや request を `this.openPage()` / `this.openRequest()` で開くようにしてからです([docs/migration.ja.md](docs/migration.ja.md) の measured upgrade)。
+evidence と `http.jsonl` の行が付くのは、その glue がブラウザや request を `this.openPage()` / `this.openRequest()` で開くようにしてからです([docs/migration.ja.md](docs/migration.ja.md) の measured upgrade)。
 ただし、nukadoko は return 値を捨て、step record には `result: null` が入ります。
 バリデーション済みの result が必要な機能は使えません。
 `nuka check` には feature と比較する契約がなく、`from` は依存関係を宣言できません。
@@ -1109,13 +1108,6 @@ retry が無ければ、その失敗はそのまま run を赤くします。
 各実行は 1 つの run id の下でそれぞれ自分の record になります。
 1 回でも失敗した scenario は、summary の後に `<passed> of <n> passed` の形で集計されます。
 
-`nuka run --probe` は、通った各 Then が失敗しえたかどうかを問います。
-値を capture した、または表か docstring を渡された読み取り専用の Then が通った直後、次の step より前に、capture を 1 つ変えて(文字列には接尾辞、数には 1、真偽値は反転)もう一度単独で走らせます。
-docstring に接尾辞を付けたもの、または表の最後のセルに接尾辞を付けたものでも、もう 1 回走らせます。
-それでも通った Then は、`run.json` と run サマリの `then-passed-with-changed-capture` の note になります。
-probe が計測できなかった Then(走ったとき、または再実行で書き込んだ、あるいは args schema が変えた値を拒んだ)は、`then-probe-not-measured` の note になります。
-これは計測なので、終了コードは run のものから変わりません。
-
 `nuka run --since <git ref>` は、人が承認した基点(`origin/main` など)から、受け入れ基準の何が動いたかを、その比較が届く範囲で述べます。
 各 scenario の受け入れ基準(tag、実効の keyword を持つ Background と scenario 自身の step、docstring、table、Examples の行)を、そのコミットの同じ scenario と比べます。
 受け入れ基準はコンパイルした scenario から読むので、インデント、コメント、docstring の区切りは数えません。
@@ -1147,17 +1139,14 @@ environment はそれでも設定にすぎません。
   ある step がその description の主張どおりに正直に動くかどうかは、PR レビューに委ねられます。
   ツールが保証するのは入出力の形と実行された事実だけです。
   型付きの契約は、空の assertion をレビューで見つけやすくしますが、それを自動的に拒むものは何もありません。
-  `nuka run --probe` はその一部を計測します。
-  capture を変えても通る読み取り専用の Then は note になり、失敗にはなりません。
-  probe が捕まえた Then でも、違うものを確かめている可能性は残ります。
 - **`mutates` は信頼される宣言であり、network が示す内容から導き直されるものではありません。**
-  書き込みの検出は HTTP メソッドに基づいており、これは書き込みの意味論そのものではなく、そのためのプロキシです。
+  HTTP メソッドは書き込みの意味論そのものではなく、そのためのプロキシです。
   純粋にクライアント側だけの状態や、GET で mutate してしまうサーバは、これでは見えません。
-  一方で、意味的には純粋な読み取りを POST 上に実装している step(GraphQL、RPC-over-POST、多くのベンダーの query エンドポイント)は、一度も行っていない書き込みとしてカウントされてしまいます。
+  一方で、意味的には純粋な読み取りを POST 上に実装している呼び出し(GraphQL、RPC-over-POST、多くのベンダーの query エンドポイント)は、一度も行っていない書き込みに見えてしまいます。
   この 2 つのケースを一般的な HTTP レイヤーのルールで区別することはできません。
-  だからこそ nukadoko は、その回数で step を失敗させるのをやめました。
+  だから nukadoko は、メソッドから書き込みを推測することはしません。
   詳しい議論は [キーワードの意味論](docs/spec.ja.md#キーワードの意味論) を参照してください。
-  その回数はいまも step record と Allure に記録されるため、誤った `mutates` の宣言は事後に反証可能です。
+  step record は計測した各 request を事実として残すため、誤った `mutates` の宣言は事後に確かめられます。
   判断を担うのは宣言とレビューです。
 - **CommonJS のスイートは、先にモジュール形式を変えない限り `nukadoko/compat` を使えません**(上記)。
 - **CI レポーティングと HTML のレンダリングは組み込まれていません。**

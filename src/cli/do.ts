@@ -71,7 +71,7 @@ import type { WritableSink } from "../sink/writable-sink.js";
 //      throw is `status: "passed"`. The setup phase's read-only refusal above
 //      only ever sees the step's *declared* `mutates`, and that declaration
 //      is trusted — an otherwise-"passed" run
-//      that observed a network write in a read-only environment is no
+//      that wrote in a read-only environment is no
 //      longer demoted for it; `record.observed` still records what
 //      happened, it just doesn't decide `status` any more. `--use`'s own
 //      values, already resolved and validated in setup above, are actually

@@ -35,7 +35,7 @@ const PIXEL_GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
 interface StoredStepRecord {
   status: string;
   evidence: { dir: string; http?: string };
-  observed: { http_reads: number; http_writes: number };
+  observed: { processes: unknown };
   http_omitted?: Record<string, number>;
 }
 
@@ -171,13 +171,6 @@ describe("page-issued traffic on http.jsonl and http_omitted", () => {
 
     // The asset drop is never silent: http_omitted names what got left out.
     expect(stepRecord.http_omitted).toEqual({ image: 1, stylesheet: 1, script: 1 });
-
-    // observed counts every request the harness saw, image/stylesheet/
-    // script included — it is not narrowed by http.jsonl's own filter. Six
-    // GETs total:
-    // the document, three assets, the page-issued fetch, and the
-    // ctx.request() call.
-    expect(stepRecord.observed).toEqual({ http_reads: 6, http_writes: 0, processes: null });
 
     // The raw token must appear nowhere: not in stdout, not in http.jsonl or
     // record.json on disk (the same three-exits check tests/secrets.test.ts

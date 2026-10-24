@@ -319,6 +319,17 @@ export function stepRecordDir(rootDir: string, id: string, stateDir = ".nukadoko
   return doDir;
 }
 
+/** The http.jsonl lines of the step record `id`, parsed, or `[]` when the
+ * step wrote none. */
+export function httpLogLines(rootDir: string, id: string, stateDir = ".nukadoko"): Record<string, any>[] {
+  const file = path.join(stepRecordDir(rootDir, id, stateDir), "http.jsonl");
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8")
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, any>);
+}
+
 /** Every step record id in the state directory, `do/` and every run's
  * `steps/` together, sorted. */
 export function stepRecordIds(rootDir: string, stateDir = ".nukadoko"): string[] {
