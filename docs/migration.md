@@ -311,6 +311,11 @@ stays a compat `Then`: a compat step cannot declare claims, and nothing
 in the compat door changes what it does. Promote a `Then` after its
 producer, since its claims read the producer's `returns`.
 
+Only a claim proves a criterion (docs/spec.md "Verdicts"). A failed
+assertion in a compat step, or in a step with `run`, bound in `Then`
+position is `broke`, not `fail`, so a compat suite's criteria are `held`
+or `failed`, never `proven`, until their `Then`s become claim steps.
+
 ## The dashboard is `nuka check`
 
 `nuka check` is the running meter of how much migration is left:

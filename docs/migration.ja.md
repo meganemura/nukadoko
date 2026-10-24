@@ -242,6 +242,10 @@ compat の step は claim を宣言できず、compat の扉はその動作を�
 `Then` は、その producer の後に昇格させます。
 その claim が producer の `returns` を読むからです。
 
+受け入れ基準を証明するのは claim だけです(docs/spec.ja.md の「断定」を参照)。
+`Then` の位置に結び付けられた compat の step や `run` を持つ step で失敗したアサーションは、`fail` ではなく `broke` です。
+そのため compat のスイートの受け入れ基準は、その `Then` が claim step になるまで、`held` か `failed` で、`proven` にはなりません。
+
 ## ダッシュボードは `nuka check`
 
 `nuka check` は、移行がどれだけ残っているかを示す走行メーターです:

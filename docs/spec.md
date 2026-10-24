@@ -4108,13 +4108,17 @@ or the ones a run without `--env` selects), and reports three errors:
 | --- | --- |
 | `pass` | every one passed |
 | `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
-| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a line no step matches, a claim nukadoko could not judge, or, at the scenario's line, a hook |
+| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, a claim nukadoko could not judge, or, at the scenario's line, a hook |
 | `flaky@<line>` | they disagree (two that broke two claims of one line disagree too); the line is the first one's that did not pass |
 | `·` | none ran, and `reason` says why: the program did not start for its world, or a BeforeAll failed |
 
 Only a Then proves. A When that errors where the behaviour is absent says
 nothing about whether the Then can tell the difference, so it is
-`broke`, never `fail`.
+`broke`, never `fail`. Only a claim proves, too: a compat step or a step
+with `run` bound in Then position judges no claim, so its failed
+assertion is `broke`, and a compat suite's criteria are `held` or
+`failed`, never `proven`, until their Thens become claim steps (see
+"Claims").
 
 A required cell runs once, or `--repeat` times. A control that failed at a
 Then line runs again, in the same pass and the same world, until it has

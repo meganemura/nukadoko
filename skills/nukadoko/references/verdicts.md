@@ -38,6 +38,9 @@ When that errors there proves nothing.
 A cell reads `pass`; `fail@<line>`, a claim broke at that Then line;
 `broke@<line>`, it stopped there before a claim was judged; `flaky@<line>`,
 its runs disagree; or `·`, it did not run, and its `reason` says why.
+Only a claim proves: a failed assertion in a compat or `run` step bound
+in Then position is `broke`, so a compat suite's rows are `held` or
+`failed`, never `proven`, until their Thens become claim steps.
 `(control)` marks a control, and `(2 runs)` how often it ran. A control
 that failed at a Then line runs again until it has broken the same claim
 there `--proof-runs` times (2 by default), each a `proof run <k>/<n>` line on

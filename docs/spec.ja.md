@@ -3283,13 +3283,16 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
 | --- | --- |
 | `pass` | すべて通った |
 | `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
-| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、どの step にも一致しない行、nukadoko が判定できなかった claim、または scenario の行では hook |
+| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim、または scenario の行では hook |
 | `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も食い違いです)。行は通らなかった最初の実行のもの |
 | `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、または BeforeAll が失敗した) |
 
 証明するのは Then だけです。
 振る舞いが無いところでエラーになる When は、Then が違いを見分けられるかどうかについて何も言いません。
 そのためそれは `broke` で、`fail` にはなりません。
+証明するのは claim だけでもあります。
+Then の位置に結び付けられた compat の step や `run` を持つ step は claim を判定しないので、その失敗したアサーションは `broke` です。
+そのため compat のスイートの受け入れ基準は、その Then が claim step になるまで、`held` か `failed` で、`proven` にはなりません(「Claims」を参照)。
 
 必須のセルは 1 回、または `--repeat` の回数だけ走ります。
 Then の行で失敗した対照のセルは、同じ pass の同じ world でもう一度走ります。
