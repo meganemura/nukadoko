@@ -35,6 +35,50 @@ just until 0.1.
   agent is already reading; a separate command that reread the newest run
   reached almost nobody.
 
+- **A step record measures each channel a step reaches, and names what
+  it cannot measure.** `observed` gains three keys. `http` counts the
+  requests the step's process sent through `fetch`, `node:http`,
+  `node:https`, or a Playwright request context, and each one is a line
+  in `http.jsonl` with its `request_body` and `response_body`, kept as
+  redacted text of at most 16 KiB each; headers are never written.
+  `files` lists the paths the step changed in a scratch directory or
+  wrote through `node:fs`, with their content after the step, at most
+  8 KiB per file and 64 KiB per step. A `fetch` body is read only to
+  just past 32 KiB, so recording a body of any length costs about that
+  much memory, and a body nukadoko stopped reading has `bytes_read`
+  instead of `bytes`. A request with no response when the step ends is
+  written with `status: 0` and an `error` that says so, from every
+  client; an upgrade or a CONNECT is a line with its real status. A
+  request or a `runCommand` process a step starts after its record was
+  written is written beside that record, marked `after_step_end`,
+  never in the next step's files. `unmeasured` lists, as
+  `{ kind, detail }`, each process started without `runCommand` (by
+  its program and argument count, never its arguments), `Worker`, and
+  connection that carries no recorded request, one the step opened or
+  one opened before the step that it wrote to, and the run
+  summary gives each such step one line under "Unmeasured actions",
+  with what it started after it ended. Each
+  `runCommand` process gains `env`, its environment as a difference
+  from the runner's, and `stdin`, the file that holds its `input`;
+  `ctx.evidence` refuses `process-<n>.stdin.txt` and `process-<n>.json`
+  as harness names (see docs/upgrading.md).
+  `env` names every variable, and shows a value only when it is an
+  absolute path that exists when the process ends, a decimal integer, or
+  `true` or `false`; any other value is `{ "hidden_bytes": <n> }`,
+  so a token a step passes through `env` stays out of the record, even
+  one that starts with `/`. `args_origin` names where each key of `args` came
+  from: a capture, the docstring, the table, an earlier step's result,
+  the command line, or the schema. `nuka do` writes the same shape.
+  Before this, a step that called `fetch` or `node:child_process`
+  directly left a record that looked complete and was not. Each channel
+  is now measured where it can be measured exactly and marked where it
+  cannot, and a write is still never inferred from a method. The patches
+  install once per process, record only inside a step, and keep each
+  builtin's name, length, promise form, and synchronous throws, so msw
+  and nock keep working (measured with msw 2.15.0 and nock 14.0.17), and
+  nukadoko's own I/O, Playwright's trace files included, is not
+  recorded as the step's.
+
 ### Removed
 
 - **`nuka tend` is removed.** Its findings are notes and warnings of

@@ -151,7 +151,7 @@ describe("writeAllureResults", () => {
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [], http: "http.jsonl", trace: "step-trace.zip" },
-        observed: { processes: null },
+        observed: { processes: null, http: null, files: null, unmeasured: [] },
         mutates: true,
         declared: {
           attachments: ["note.txt"],
@@ -177,7 +177,7 @@ describe("writeAllureResults", () => {
         started_at: "2026-08-01T00:00:01.000Z",
         finished_at: "2026-08-01T00:00:01.200Z",
         evidence: { dir: ".nukadoko/runs/run-1/steps/step-2", screenshots: [] },
-        observed: { processes: null },
+        observed: { processes: null, http: null, files: null, unmeasured: [] },
         mutates: false,
       };
       writeStepRecordFile(rootDir, stepRecord2);
@@ -595,7 +595,7 @@ describe("writeAllureResults", () => {
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         evidence: { dir: ".nukadoko/runs/run-1/steps/step-fail-1", screenshots: [] },
-        observed: { processes: null },
+        observed: { processes: null, http: null, files: null, unmeasured: [] },
         mutates: true,
         error: { message: "it broke on purpose", kind: "step_error" },
       };
@@ -801,7 +801,7 @@ describe("writeAllureResults", () => {
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:00.500Z",
         evidence: { dir: ".nukadoko/runs/run-1/steps/step-broken", screenshots: [], http: "http.jsonl" },
-        observed: { processes: null },
+        observed: { processes: null, http: null, files: null, unmeasured: [] },
         mutates: true,
       };
       writeStepRecordFile(rootDir, stepRecord);
@@ -862,7 +862,7 @@ describe("writeAllureResults", () => {
         started_at: "2026-08-01T00:00:00.000Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         evidence: { dir: ".nukadoko/runs/run-1/steps/step-parts", screenshots: [] },
-        observed: { processes: null },
+        observed: { processes: null, http: null, files: null, unmeasured: [] },
         mutates: true,
         calls: [
           {

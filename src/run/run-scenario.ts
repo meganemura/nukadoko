@@ -55,7 +55,7 @@ import {
 export type { CachedFixture, FixtureInstance };
 import { runOnce, type ProcessSignal } from "./process-signal.js";
 import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
-import type { ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
+import type { ArgOrigin, ErrorKind, FixtureUsageEntry, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { redact, redactString, fixtureTeardownWarning } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
@@ -64,10 +64,12 @@ import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step
 import { parseStepReturns } from "../step/parse-returns.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
+import { argOrigins } from "./arg-origins.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
 import type { GitState } from "./probe-git.js";
 import type { StepProgressInfo } from "./progress-log.js";
 import {
+  type AfterStepEndCounts,
   hookDisplayTitle,
   type ScenarioHookRecord,
   type ScenarioRecord,
@@ -516,6 +518,9 @@ function injectFrom(
   chain: ReadonlyMap<Step, ChainEntry>,
   stepNameOf: ReadonlyMap<Step, string>,
   recordUsed: (recordId: string, stepName: string, result: unknown) => void,
+  // Told each key it filled, and from where: the step record's
+  // `args_origin`.
+  onFilled: (key: string, from: { step_record_id: string; step: string; key: string }) => void = () => undefined,
 ): Map<string, string> {
   const stillMissing = new Map<string, string>();
   for (const [key, entry] of Object.entries(step.from)) {
@@ -553,8 +558,15 @@ function injectFrom(
     const { upstreamKey, chainEntry } = present[0]!;
     value[key] = (chainEntry.result as Record<string, unknown>)[upstreamKey];
     recordUsed(chainEntry.recordId, chainEntry.stepName, chainEntry.result);
+    onFilled(key, { step_record_id: chainEntry.recordId, step: chainEntry.stepName, key: upstreamKey });
   }
   return stillMissing;
+}
+
+/** The step record's `args_origin` field, or nothing when there are no
+ * keys to name. */
+function optionalArgsOrigin(origins: Record<string, ArgOrigin> | undefined): { args_origin?: Record<string, ArgOrigin> } {
+  return origins === undefined ? {} : { args_origin: origins };
 }
 
 /**
@@ -944,6 +956,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
   });
 
   const stepRecords: ScenarioStepEntry[] = [];
+  // Each written step record's count of actions its code started after the
+  // record was written, live until the scenario record is built.
+  const afterStepEnd = new Map<string, AfterStepEndCounts>();
   const hookRecords: ScenarioHookRecord[] = [];
   let scenarioFailed = false;
   // The outcome After reads. A passing scenario contributes the last
@@ -1079,6 +1094,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // show instead: a binding/args-validation failure, or a compat step,
     // which has no `args` schema to validate against at all.
     recordedArgs: unknown,
+    // Where each key of `recordedArgs` came from; `undefined` for a compat
+    // step, whose arguments are positional.
+    argsOrigin: Record<string, ArgOrigin> | undefined,
     chainKey: Step | undefined,
     // This step's own declared `mutates` (typed) or `null` (compat, which
     // has no declaration at all).
@@ -1099,6 +1117,11 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // starts, well after this step's own step record is already written): a
     // step's own `evidence.trace` has to be knowable *now*, from this
     // step's own chunk having already been written to disk.
+    // First, before the trace chunk closes: the step boundary is the
+    // moment its `run` returned, and a body still arriving belongs to it
+    // for at most the flush's second.
+    const observed = await contextHandle.observedSnapshot();
+    afterStepEnd.set(begun.recordId, contextHandle.afterStepEnd());
     await contextHandle.endStep();
     const traceEvidence = await collectTraceEvidence(begun.recordDir, onUnknownTraceVersion, "trace.zip", contextHandle.namedContexts());
 
@@ -1111,7 +1134,6 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // read-only refusal above (before this step ever ran) and `nuka
     // check`'s static Then-position warning, neither of which this function
     // touches.
-    const observed = contextHandle.observedCounts();
     const usedEntries = contextHandle.usedSnapshot();
     // Labels `ctx.section` was called with since the current step boundary
     // began — reset at the same
@@ -1193,6 +1215,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step: outcomeStepName,
             kind: "run",
             args: recordedArgs,
+            ...(argsOrigin !== undefined ? { args_origin: argsOrigin } : {}),
             result,
             status: "passed",
             environment,
@@ -1237,6 +1260,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             step: outcomeStepName,
             kind: "run",
             args: recordedArgs,
+            ...(argsOrigin !== undefined ? { args_origin: argsOrigin } : {}),
             // `errorKind` is guaranteed set by this point: the caller always
             // passes one alongside `initialStatus === "failed"`, and this
             // function no longer demotes a "passed" status to "failed" itself.
@@ -1720,6 +1744,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
       // step record it has to write.
       readonly mutates: boolean | null;
       rawArgs: unknown;
+      // Names where a key of `rawArgs` came from, for the backstop's step
+      // record; `undefined` for a compat step.
+      originOf: ((key: string) => ArgOrigin | undefined) | undefined;
     } | null = null;
     // Every `config.fixtures` entry this step's own bag actually resolved —
     // hoisted to this scope, alongside
@@ -1825,6 +1852,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           startedAt: new Date(),
           mutates: entry.step.mutates,
           rawArgs: undefined,
+          originOf: undefined,
         };
 
         const bindResult = bindStepArgs(
@@ -1842,6 +1870,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           bindResult.ok && pickleStep.argument !== undefined && bindResult.value !== null && typeof bindResult.value === "object"
             ? (Object.keys(bindResult.value).find((key) => !captureKeys.has(key)) ?? null)
             : null;
+        const attachmentOrigin: ArgOrigin | undefined =
+          pickleStep.argument?.docString !== undefined ? "docstring" : pickleStep.argument?.dataTable !== undefined ? "table" : undefined;
+        const fromOrigins = new Map<string, ArgOrigin>();
+        const originOf = (key: string): ArgOrigin | undefined =>
+          captureKeys.has(key) ? "capture" : key === attachmentKey ? attachmentOrigin : fromOrigins.get(key);
+        began.originOf = originOf;
 
         const stepStartedAt = new Date();
         let status: "passed" | "failed";
@@ -1876,6 +1910,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             chain,
             stepNameOf,
             contextHandle.recordUsed,
+            (key, from) => fromOrigins.set(key, { from }),
           );
           const argsResult = strictArgsSchema(entry.step.args).safeParse(bindResult.value);
           if (!argsResult.success) {
@@ -1970,6 +2005,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           errorKind,
           result,
           recordedArgs,
+          argOrigins(recordedArgs, originOf),
           entry.step,
           entry.step.mutates,
           fixtureUsage,
@@ -2007,6 +2043,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           // coerced to `false`.
           mutates: null,
           rawArgs: undefined,
+          originOf: undefined,
         };
 
         // Positional args: the matched values, then — when the pickle step
@@ -2097,6 +2134,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           null,
           rawArgsList,
           undefined,
+          undefined,
           null,
           [],
         );
@@ -2138,11 +2176,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         // too: `began !== null` means this step's own `beginStep` already
         // ran, so `ctx.page()` could already have opened one before the
         // uncaught throw this backstop exists for.
+        // Before the chunk closes and before http.jsonl is looked for: the
+        // flush can still append request lines (`finishExecutedStep`).
+        const observed = await contextHandle.observedSnapshot();
+        afterStepEnd.set(began.recordId, contextHandle.afterStepEnd());
         await contextHandle.endStep();
         const traceEvidence = await collectTraceEvidence(began.recordDir, onUnknownTraceVersion, "trace.zip", contextHandle.namedContexts());
         const stepFinishedAt = new Date();
         const httpLogExists = existsSync(path.join(began.recordDir, "http.jsonl"));
-        const observed = contextHandle.observedCounts();
         const usedEntries = contextHandle.usedSnapshot();
         // Same backstop-only read as `observed`/`used` just above —
         // whatever labels this step
@@ -2185,6 +2226,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           step: began.stepName,
           kind: "run",
           args: began.rawArgs,
+          ...(began.originOf !== undefined ? optionalArgsOrigin(argOrigins(began.rawArgs, began.originOf)) : {}),
           // This is the true catch-all: whatever threw here was never
           // turned into an `ErrorKind` by any of the classification points
           // above, so this is the default-to-step_error-when-uncertain case
@@ -2382,7 +2424,12 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     ...(browserInfo !== undefined ? { browser: browserInfo } : {}),
     started_at: startedAt.toISOString(),
     finished_at: finishedAt.toISOString(),
-    steps: stepRecords,
+    steps: stepRecords.map((entry) => {
+      const late = entry.step_record_id === null ? undefined : afterStepEnd.get(entry.step_record_id);
+      return late === undefined || (late.requests === 0 && late.processes === 0)
+        ? entry
+        : { ...entry, after_step_end: { requests: late.requests, processes: late.processes } };
+    }),
     hooks: hookRecords,
     ...(git !== undefined ? { git } : {}),
     evidence: {

@@ -48,7 +48,7 @@ describe("writeStepRecord", () => {
       started_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),
       evidence: { dir: ".nukadoko/records/steps/step-20260801-143022-a1b2", screenshots: [] },
-      observed: { processes: null },
+      observed: { processes: null, http: null, files: null, unmeasured: [] },
       mutates: true,
     };
 

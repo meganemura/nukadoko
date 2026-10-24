@@ -24,7 +24,7 @@ function stepRecord(id: string, status: "passed" | "failed", used: boolean): Ste
     started_at: "2026-10-18T00:00:00.000Z",
     finished_at: "2026-10-18T00:00:01.000Z",
     evidence: { dir: `.nukadoko/runs/run-1/steps/${id}`, screenshots: [] },
-    observed: { processes: null },
+    observed: { processes: null, http: null, files: null, unmeasured: [] },
     mutates: false,
   };
   return status === "passed"

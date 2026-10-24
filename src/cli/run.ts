@@ -87,6 +87,7 @@ import { checkCodeFix } from "../check/codes.js";
 import type { RefusalCode } from "./refusal-codes.js";
 import { RefusalError, formatEnvelope, refuse, withHint, type Hint } from "./refusal.js";
 import type { WritableSink } from "../sink/writable-sink.js";
+import { installChannelPatches } from "../context/create-context.js";
 
 // Responsibility: `nuka run`'s work, kept out of run-cli.ts so it is
 // unit-testable without going through yargs (same split as cli/do.ts).
@@ -346,6 +347,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // `return`, so that line's own elapsed time covers the whole invocation
   // (config load and discovery included), not just the pickle loop.
   const invocationStartedAt = new Date();
+
+  // Before the config and the step files load: a module that copies
+  // `fetch` or `http.request` while it loads keeps whatever it copied, and
+  // the channel patches (src/context/channels.ts) see only calls that go
+  // through them.
+  installChannelPatches();
 
   // --- Setup phase: any failure here writes nothing. ---
   let config;

@@ -91,7 +91,8 @@ If none is true, ask what this is supposed to do before writing anything.
    first line of its error, its step record, and a `do:` that reruns it; read the
    record before running again (`references/diagnosing.md`). A red Then is
    fixed in the implementation or by asking the person, never by weakening
-   it.
+   it. A step under "Unmeasured actions" did something its record has no
+   evidence of; `references/evidence.md` says what to change.
 5. **Commit before the run you report**, push, and open the pull
    request; CI posts the run summary (`docs/ci.md` in the package), and
    `nuka run --since <base>` quotes each criterion that moved or went.

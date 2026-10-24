@@ -549,7 +549,7 @@ fixture の名前:
 - `evidence.attach(name, body)` / `evidence.path(name)`: 他の fixture が扱わない唯一の不足を埋めます。
   上の他の fixture はすべて、harness が自分で収集するものを返します。
   以前は、step だけが生成できるアプリ固有の証跡を受け取る fixture がありませんでした。
-  たとえば、API response body、DB snapshot、生成したファイルの内容です。
+  たとえば、DB のスナップショット、子プロセスが scratch のディレクトリの外に書いたファイル、http.jsonl が残す 16 KiB を超えたレスポンス本文の全体です。
   `attach` は `body`(`string | Uint8Array`)を、この実行自身の evidence directory に書き込みます。
   このファイルを step record の `evidence.attachments` に記録します(「Records」を参照)。
   同じ `name` で 2 回呼ぶと、最初のファイルを上書きせず、両方のファイルを残します。
@@ -564,7 +564,7 @@ fixture の名前:
   パス区切りを含む `name` は拒否されます。
   `.`、`..`、空文字列のいずれかと等しい `name` も拒否されます。
   `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name` も拒否されます。
-  `process-<n>.stdout.txt` と `process-<n>.stderr.txt` という形の `name` も拒否されます。
+  `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も拒否されます。
   大文字小文字だけが違う綴りも同じです。
   それらは harness がその directory に自分で書くファイルであり、step の名前がそこに重なるとそのファイルを置き換えるからです。
   拒否は `ReservedEvidenceNameError` です。
@@ -1359,10 +1359,11 @@ import { Given, When, Then } from "nukadoko/compat";
   キーごと config へ移すと config のエラーになり、キーを外して移すと 2 つの型が一致する RegExp のグループは再び失敗します。
   2 つの型が 1 つの正規表現を優先する場合や、ある型が `{int}` のような組み込み型の正規表現を優先する場合は、`parameter-type-invalid` エラーです。
 - 実行は 2 つの形をサポートします。
-  自前で Playwright を起動する glue は計測されないまま動き続けます。
+  自前で Playwright を起動する glue は、trace も page のログもないまま動き続けます。
   World のサブクラスは、その page と request を `this.page = ...` と `this.request = ...` で代入します。
   `this.page` と `this.request` は、`openPage()` や `openRequest()` が保存した値より先に、その代入した値を返します。
-  その代入は計測されません。
+  代入した page には trace もスクリーンショットもありません。
+  代入した request context を通して step が送ったリクエストは、それでも http.jsonl の `node:http` または `node:https` の行になります(「Records」を参照)。
   `await this.openPage()` と `await this.openRequest()` は、harness の計測対象である page と request を返します。
   代入がないとき、対応する `openPage()` または `openRequest()` が解決する前に `this.page` または `this.request` を読むと、例外を投げます。
   混在 scenario の typed step は、同じ context と cookie を共有します。
@@ -1909,7 +1910,10 @@ run が終わったとき、最後の step record と run サマリの後に、�
           "record": "steps/step-20260801-143023-e5f6",
           "mutates": false,
           "observed": {
-            "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41 }]
+            "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41, "env": { "inherited": true } }],
+            "http": null,
+            "files": null,
+            "unmeasured": []
           }
         },
         {
@@ -1920,7 +1924,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
           "step_record_id": "step-20260801-143023-g7h8",
           "record": "steps/step-20260801-143023-g7h8",
           "mutates": false,
-          "observed": { "processes": null },
+          "observed": { "processes": null, "http": null, "files": null, "unmeasured": [] },
           "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
           "used": [
             {
@@ -2131,10 +2135,11 @@ scenario record は独立したファイルではなく、その run の `run.js
   "step": "create-project",
   "kind": "do",
   "args": { "name": "acme" },
+  "args_origin": { "name": "command_line" },
   "result": { "id": "p_0001", "name": "acme" },
   "status": "passed",
   "mutates": true,
-  "observed": { "processes": null },
+  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "scenario_record_id": null,
@@ -2163,6 +2168,15 @@ scenario record は独立したファイルではなく、その run の `run.js
   `failed` な record では与えられたものをそのまま保持します。
   スキーマがすでに拒否した値を、検証済みの形に組み立て直すことはできないからです。
   compat の step の `args` は、検証対象のスキーマが無いため、どちらの結果でも検証されません。
+- `args_origin` は、`args` の各キーの出所を示します。
+  `"capture"` は pattern の capture です。
+  `"docstring"` と `"table"` は feature の行に付いたものです。
+  `{ "from": { "step_record_id", "step", "key" } }` は前の step の result で、scenario の中の `from` か `nuka do` の `--use` を通したものです。
+  `key` は読んだ result のキーです。
+  `"command_line"` は `nuka do --args` です。
+  `"schema"` は、検証の間に args のスキーマがそのキーを作ったことを示します(`.default(...)` や transform)。
+  間違った値を見つけた読み手は、feature の行、step、上流の record を手で突き合わせずに、どの入力を直すべきかが分かります。
+  位置で引数を受け取る compat の step と、キーのない args では現れません。
 - bigint は、`args` でも `result` でも record のほかのどこでも、10 進数の文字列として保存されます。
   JSON には bigint が無いからです。
   `{biginteger}` のキャプチャを `z.bigint()` に結び付けると、`"v": "123456789012345678901234567890"` と記録されます。
@@ -2210,10 +2224,39 @@ scenario record は独立したファイルではなく、その run の `run.js
   `started_at`/`finished_at` と同じ形式)は、その 2 つ目のファイルが一度も明言せずに肩代わりしていたものを、実物として言い当てます。
   この実行自身のタイムラインから何秒後にそのスクリーンショットが実際に撮られたか、です。
 - `observed` は、その実行が届いたものとしてツールが見たものを、チャネルごとに 1 つのキーで持ちます。
+  キーは `processes`、`http`、`files`、`unmeasured` です。
+  どのチャネルも 1 つの規則に従います。
+  正確に計測できるものは計測し、計測できないものはそうと印を付け、メソッドから書き込みを推測しません。
   実行が一度も届かなかったチャネルは `0` ではなく `null` です。
   「何も計測しなかった」と「0 を計測した」は別の事実だからです。
-  正確に計測できるものを記録し、そこから何も推測しません。
+  `unmeasured` は常にリストです。
+  見えたが計測できなかったものを挙げるリストです。
+  空のリストは、下の差し替えが計測できないものを何も見なかったことを言います。
+  どの差し替えも届かないもの(この項目の終わり)については、何も言いません。
   step が書き込んだかどうかを述べるフィールドはありません(「キーワードの意味論」を参照)。
+  POST はリクエストであって書き込みではなく、ファイルが `files` に載るのはディスク上のそのファイルの同一性が変わったからです。
+  チャネルを記録するのは、step 自身の `run`、それが呼ぶ part、compat step の関数の中です。
+  executor はその周りにスコープを開きます。
+  nukadoko は `fetch`、`node:http`、`node:https`、`node:child_process`、`net.Socket#connect` と `write` と `end`、`node:fs` の書き込み、`worker_threads.Worker` をプロセスごとに 1 回だけ差し替え、そのスコープに記録します。
+  step の外では、差し替えたものは元の関数を呼ぶだけで、何も記録しません。
+  差し替えたどの関数も、元の関数の `name`、`length`、promise の形(`exec` と `execFile` の `util.promisify`)、同期的な throw を保ちます。
+  そのため step の外のコードには、Node が出荷したとおりの組み込みに見えます。
+  step の中の nukadoko 自身の I/O は、step のものとして記録しません。
+  `runCommand` の起動、ブラウザの起動、`request` fixture の呼び出しの送信(その行がすでに記録します)、state ディレクトリの下への書き込み、Playwright が nukadoko のために書くファイル(trace のチャンク、ネットワークのログ、リソース、context が求めたときの HAR と動画)がそれです。
+  Playwright のファイルは、起動の `artifactsDir` と `tracesDir` に書かれます。
+  `config.browser` が名指せばそのディレクトリで、名指さなければ nukadoko が作り、ブラウザを閉じるときに消す一時ディレクトリです。
+  Playwright のサーバは step 自身のプロセスで動きます。
+  そのため、これがなければ、context のオプションをヘッダと資格情報ごと持つ trace の書き込みが、step のファイルとして読まれてしまいます。
+  差し替えより前に `fetch` や `http.request` を変数に写したモジュールは元の関数を持ち続けます。
+  そのため `nuka run` と `nuka do` は、config や step のファイルを読み込む前に差し替えを入れます。
+  インターセプタは、どちらの順で入れても動き続けます。
+  どの差し替えも、すべての引数をそのまま渡し、元の関数が返したものを返すからです。
+  Node 22.22.0 で msw 2.15.0 と nock 14.0.17(どちらも @mswjs/interceptors 0.41.9 の上)を使い、step の中でモックした `node:http` の GET と `fetch` を 1 つずつ送って計測しました。
+  差し替えより前に入れた場合は、どちらのリクエストもモックのレスポンスを持つ行になりました。
+  差し替えより後に入れた場合は、`node:http` のリクエストは行になり、`fetch` はなりませんでした。
+  インターセプタの `fetch` が、自分が置き換えた `fetch` を呼ばずに答えるからです。
+  Worker 自身のグローバル、ネイティブアドオン、子プロセス自身の通信、差し替えより前に写された関数、差し替えより前に開いた接続、step より前に開いた接続を step が読むだけのときにその接続が運ぶもの、step の非同期コンテキストの外で動く処理(fixture が始めたサーバが呼ぶコールバックなど)には、どの差し替えも届きません。
+  これらは `unmeasured` に載りません。
 - `observed.processes`(実行が一度も `runCommand` を呼ばなかったときは `null`)は、その実行の間に `runCommand` が起動した子プロセスを、呼び出し順に並べます。
   各エントリは `{ "command", "cwd", "exit_code", "duration_ms" }` です。
   シグナルがプロセスを終了させた場合は `"signal"` が加わり、`timeout` オプションがプロセスを止めた場合は `"timed_out": true` が加わります。
@@ -2230,6 +2273,23 @@ scenario record は独立したファイルではなく、その run の `run.js
   値はその directory にあるファイルの名前(`process-<n>.stdout.txt` または `process-<n>.stderr.txt`)で、ファイルは stream の全体を持ちます。
   中身は http.jsonl と同じく redact され、step 自身の `redact` の値も置き換えられます。
   出力をフィールドではなくファイルにするのは、出力は大きくなることがあり、`run.json` が写すエントリを小さく保つためです。
+  step がプロセスに `input` を書いたときは、`"stdin"` がそれを持つ `process-<n>.stdin.txt` を指します。
+  中身は同じように redact されます。
+  各エントリには `"env"` も加わります。
+  これはランナーの環境変数に対するプロセスの環境変数の差で、`{ "added": {...}, "changed": {...}, "removed": [...] }` か、step が `env` を渡さなかったときは `{ "inherited": true }` です。
+  環境変数の全体ではなく差にするのは、ランナーの環境変数は step について何も言わない変数を何十も持ち、その一部は資格情報だからです。
+  名前はすべて記録され、`removed` は名前のリストです。
+  値を見せるのは、資格情報ではないと nukadoko が判断できるときだけです。
+  それは、制御文字を含まず、プロセスが終わったときに存在する絶対パス(`/...`、または `C:\...` のような Windows のドライブのパス)、10 進の整数、`true` か `false` で、エントリのほかの部分と同じく redact されます。
+  それ以外の値は `{ "hidden_bytes": <n> }` で、UTF-8 のバイト長です。
+  ここでは、読み込んだ secret を redact するだけでは足りません。
+  step は、自分で持つ値(step が署名したトークンなど)を `env` で渡すからです。
+  record が資格情報の漏れる場所になってはいけません。
+  それでも、step を判断する読み手にはパスと数値が必要で、バイト長は値が空かどうかを伝えます。
+  パスが存在することを求めるのは、形だけでは何も証明できないからです。
+  base64 は `/` で始まることがあるので、トークンがパスに見えることがあります。
+  しかし、トークンはどのファイルも指しません。
+  その結果、プログラムに作るよう伝えたのに作られなかったパスは隠されます。
   `n` は実行の中のプロセスを 1 から数えます。
   1 つの scenario の hook が同じ directory を共有するときは、空いている次の番号に進みます。
   step を確かめる人には、プログラムが出力したものが必要です。
@@ -2245,18 +2305,107 @@ scenario record は独立したファイルではなく、その run の `run.js
   そのため step はどのプラットフォームでも同じ名前でプログラムを指定でき、`command` には step が書いた名前が残ります。
   step の `run`、part、compat step の中の呼び出しはエントリを加えます。
   それ以外の場所の呼び出しは同じように動き、エントリを加えません。
-  step がほかの手段(`node:child_process` の直接利用)で起動したプロセスは計測されないため、ここには現れません。
+  step がほかの手段(`node:child_process` の直接利用)で起動したプロセスは計測されず、代わりに `observed.unmeasured` に載ります。
+  step の record を作る時点でまだ動いているプロセスは載りません。
+  step の record を書いたあとに step のコードが起動したプロセス(残したタイマーから、またはタイムアウトのあとに)は、その step のものであり、そのとき動いている step のものではありません。
+  record は確定しているので、そのエントリは record の隣に `"after_step_end": true` を付けた `process-<n>.json` として書かれ、出力のファイルはいつもどおり書かれ、run サマリがそれを数えます(下の `after_step_end`)。
+- `observed.http`(実行が何も送らなかったときは `null`)は、step 自身のプロセスが `fetch`、`node:http`、`node:https`、または Playwright の request context(`request` fixture、`page.request`、`context.request`)を通して送ったリクエストを数えます。
+  各リクエストは step の http.jsonl(下の `evidence.http`)の 1 行で、本文を持ちます。
+  page 自身の通信は数えません。
+  送ったのはブラウザであり、その http.jsonl の行と trace がすでにそれを持つからです。
+  step のコードが自分で作った request context(`playwright` の `request.newContext()` で、compat の World が作ることがあります)は step 自身のプロセスから送るので、そのリクエストは `via: "node:http"` か `"node:https"` の行です。
+  step の record を書いたあとに step のコードが始めたリクエストは、ここでは数えません。
+  その行は、`"after_step_end": true` を付けて、その step の http.jsonl に書かれます。
+- `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
+  各エントリは `{ "path", "change", "bytes", "content" }` です。
+  2 つの出どころをまとめます。
+  1 つは scratch のディレクトリ(「Context API」を参照)の、step の `run` の前と後の比較です。
+  これは `runCommand` の子プロセスを含むどのプロセスの書き込みも見ます。
+  step の間に作られた scratch のディレクトリは、空のディレクトリと比べます。
+  もう 1 つは、step 自身のプロセスの `node:fs` の書き込みの呼び出し(`writeFile`、`appendFile`、`mkdir`、`rm`、`rename`、`copyFile`、書き込みフラグ付きの `open`、書き込み stream と、それぞれの sync 版と promise 版)です。
+  これは state ディレクトリの外のどこのパスでも名指し、最初の呼び出しと step の終わりとでそのパスの同一性(サイズ、更新時刻、変更時刻、inode)が違えば、そのパスを数えます。
+  したがって、失敗した呼び出し、すでにあるディレクトリの `mkdir`、step の中で作って消したファイルは載りません。
+  両方の出どころが同じパスを名指すときは、scratch の比較が勝ちます。
+  project のルートはたどりません。
+  たどると多くの step の所要時間より長くかかり、dev サーバの書き込みを step のものと読んでしまうからです。
+  `path` は絶対パスで、ディレクトリは末尾に `/` が付きます。
+  `change` は `added`、`changed`、`removed` のどれかです。
+  `bytes` は step の後のファイルのサイズで、`content` は step の後のそのテキスト(下記)です。
+  `content` は 1 ファイルあたり 8 KiB、1 step あたり 64 KiB までです。
+  step の上限を超えたファイルは開きません。
+  その `bytes` は `lstat` によるサイズで、`content` は `{ "text": "", "bytes", "truncated": true }` です。
+  ディレクトリと消えたパスはどちらも持ちません。
+  `run.json` は `content` を除いてリストを写します。
+  20000 を超えるパスに書いた step では、最初の 20000 が載り、残りについて `unmeasured` のエントリが 1 つ加わります。
+  比べられなかった scratch のディレクトリも `unmeasured` のエントリになります。
+- `observed.unmeasured` は、step が行い、ツールには見えたが計測できない操作を、異なる操作ごとに 1 回ずつ `{ "kind", "detail" }` で並べます。
+  `child_process` は `runCommand` ではなく `node:child_process` で起動したプロセスです。
+  `detail` は、その呼び出し、プログラムの名前(パスの最後の部分、またはシェルのコマンドラインの最初の語)、渡された引数の数で、たとえば `execFile git with 2 arguments` です。
+  引数は載せません。
+  そのプロセスは計測しておらず、step は自分が持つトークンを、ほかのどこへでも渡すのと同じくらい簡単にコマンドラインへ渡します。
+  しかもこれらの呼び出しには、それを名指す `redact` のオプションがありません。
+  コマンドを記録したい step は、それを `runCommand` で起動します。
+  `worker_thread` は `worker_threads.Worker` です。
+  そのグローバルにはどの差し替えも届かず、`detail` はそのスクリプトを名指します。
+  `socket` は、記録したリクエストのどれにも属さないクライアントの通信で、step の record を作るときに判定します。
+  step が開いた接続(データベースのクライアント)では、`detail` は `connect <host>:<port>` か socket のパスです。
+  step より前に開いた接続に step が書いた場合(fixture が開いたプール、keep-alive のクライアント)は、接続ごとに 1 回、`write to <host>:<port>, a connection opened before the step` です。
+  Upgrade した接続や CONNECT のトンネルがハンドシェイクのあとに運ぶものは、`traffic after the upgrade of <url>` か `traffic through the CONNECT tunnel to <host>:<port>` です。
+  そのハンドシェイクのリクエストは、それ自身の行になります。
+  接続は、nukadoko 自身の I/O が開いたとき、または `fetch`、`node:http`、`node:https`、`request` fixture、ブラウザからの記録したリクエストを運ぶときに、計測済みと数えます。
+  agent がいつその接続をリクエストに渡しても同じで、少し遅れて接続する proxy の agent も含みます。
+  判定するのは `Socket#connect` を呼ぶ接続だけです。
+  そのため、コンソールの出力、`process.stdout` と `process.stderr`、`runCommand` が書く stdin、サーバが受け入れた接続、`--concurrency` の worker プロセスが使う IPC のチャネルは、これに当たりません。
+  `files` は、比べられなかった scratch のディレクトリか、パスの上限を超えた step です。
+  run サマリは、ここにエントリがある step ごとに 1 行を載せ(下の run サマリを参照)、エントリがない step については何も加えません。
+- `after_step_end`: step のコードは、残したタイマーから、またはタイムアウトのあとに、record を書いたあとも動き続けることがあります。
+  そのとき始めたリクエストや `runCommand` のプロセスは、その step のものであり、そのとき動いている step のものではありません。
+  どの境界も、開いたときの evidence のディレクトリを持ち続けるからです。
+  record は確定しており書き直さないので、その操作は record の隣に `"after_step_end": true` を付けて書かれます。
+  リクエストはその step の http.jsonl の行に、プロセスは `process-<n>.json` のエントリになります。
+  scenario record の step のエントリと `run.json` の step は、`"after_step_end": { "requests", "processes" }` を持ちます。
+  これは scenario が終わる前に始まったものの数で、run サマリはそれを step の行に挙げます。
+  record を書いたあとのファイルの書き込み、socket、`runCommand` を通さずに起動したプロセスは、どこにも記録されません。
+- 本文やファイルの中身はテキストとして `{ "text", "bytes" }` で残します。
+  `text` が先頭だけを持つときは `"truncated": true` が加わります。
+  バイト列が UTF-8 でなければ `"binary": true` が加わり、`text` はありません。
+  nukadoko がまったく読まなかったとき(Playwright が自分でエンコードする multipart の本文)は `{ "unread": "<理由>" }` です。
+  バイト列はデコードし、redact してから切り詰めます。
+  そのため、切り詰めが分断するはずの secret はすでに置き換わっており、読んだ部分の終わりに残った secret の断片は捨てられます。
+  `bytes` は、終わりまで読んだ本文か、サイズが分かる本文(文字列、バッファ、Blob)の、redact する前の全体のサイズです。
+  nukadoko が自分の複製から読む `fetch` の本文(レスポンス、stream や FormData のアップロード)は、最初の 32 KiB を 1 チャンク超えるところまでしか読まず、そこで手放します。
+  そのため、どれだけ長い本文でも、記録のために step のプロセスが使うのはその分までで、step 自身の複製は自分のペースを保ちます。
+  nukadoko がそこで読むのをやめた本文と、step の境界が待つのをやめたときにまだ届いていた本文は、`bytes` の代わりに `"bytes_read"` を持ちます。
+  これは nukadoko がやめる前に読んだバイト数で、全体のサイズではありません。
+  そうした本文には必ず `"truncated": true` が付き、step の境界が待つのをやめたときは `"incomplete": true` も付きます。
+  step の境界は、まだ届いているレスポンス本文を最大 1 秒待ち、届いた分を残します。
+  event stream は終わらず、step record はそれを待たないからです。
+  step が文字列として求めた本文(`setEncoding` のあと、またはエンコーディングを渡した書き込み)は、まずバイト列に戻すので、同じようにデコードし redact します。
 - `evidence.http`(少なくとも 1 回の呼び出しが記録されたときだけ現れます)は http.jsonl を指します。
-  1 行に 1 つの JSON オブジェクトで、形は `{ "method", "url", "status", "duration_ms", "via" }` です。
-  `via` は `request` fixture、または `page.request` か `context.request` を通した呼び出しなら `"request"`、page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
-  どちらの経路のエントリにも必ず付くため、読み手はその行がどちらの経路から来たかを形だけから推測せずに済みます。
-  `via: "request"` の呼び出しは、結果にかかわらず記録されます。
+  1 行に 1 つの JSON オブジェクトで、形は `{ "method", "url", "status", "duration_ms", "via", "request_body", "response_body" }` です。
+  `via` は、`request` fixture、または `page.request` か `context.request` を通した呼び出しなら `"request"` です。
+  step 自身のコードがその API で送ったもの(`observed` を参照)なら `"fetch"`、`"node:http"`、`"node:https"` です。
+  page 自身が行ったもの(`page` のナビゲーションや page 内の `fetch`/XHR)なら `"page"` です。
+  どのエントリにも必ず付くため、読み手はその行がどの経路から来たかを形だけから推測せずに済みます。
+  `"page"` 以外のどの行にも `"request_body"`(リクエストが何も送らなかったときはありません)と `"response_body"`(レスポンスが届かなかったか、HEAD や 204 のように本文がなかったときは、どのクライアントでもありません)があり、それぞれ 16 KiB までのテキストとして残します(下記)。
+  ヘッダは書きません。
+  ヘッダは cookie と資格情報を運び、page のヘッダは trace が持つからです。
+  page の行は本文を持ちません。
+  page の通信は trace がすでに持つからです。
+  step 自身が行った呼び出しは、結果にかかわらず記録されます。
   接続の拒否や、エラーステータスに対する `failOnStatusCode` のように、throw した呼び出しも含みます。
   `url` はレスポンスが返ってきた絶対 URL で、`params` が適用され、リダイレクトも辿られた後のものです。
   `via: "page"` のエントリと同じ形です。
   `declared_url` は step が渡した文字列で、`url` と異なるときだけ現れます。
   レスポンスが無いときは `status` が `0` になり、`error` に失敗メッセージの最初の 1 行が入ります。
   そのとき分かっている URL は宣言された文字列だけなので、それが `url` になります。
+  `status` が `0` なら、必ず `error` があります。
+  どのクライアントにも 1 つの規則が当てはまります。
+  step の境界が待つのをやめたとき(最大 1 秒)にレスポンスがないリクエストは、そのときに `"error": "no response within <n> ms of the step's end"` を付けて書かれ、あとで届いたレスポンスは何も変えません。
+  レスポンスもエラーもなく閉じたリクエストは `"error": "the request was closed before a response arrived"` を持ちます。
+  送る前に throw する `fetch`(使用済みの Request、本文付きの GET)は、`fetch` が出すエラーを持つ行になり、step はそのエラーをそのまま受け取ります。
+  Upgrade(WebSocket)や CONNECT は、ハンドシェイクの実際のステータス(101 またはトンネルのステータス)を持つ行で、CONNECT の `url` はその宛先の `<host>:<port>` です。
+  接続がそのあとに運ぶものは `unmeasured` の socket になり、step の境界はそれを待ちません。
   追記の失敗で step が失敗することはありません。
   失敗は `http_log_failed`(下記)に数えられます。
   page のリクエストの行は、そのリクエストを送った step のものです。
@@ -2275,7 +2424,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   ディスク上に存在すると確認できたファイルだけが載るという、`evidence.http`/`evidence.trace` がすでに従っている「証跡は存在するファイルだけを指す」規則と同じです。
   `path()` で払い出したファイルが実際に書かれたかどうかは、harness が確認して決めるのであって、fixture 自身が呼び出しを覚えておいて決めるのではありません。
   パス区切りを含む、あるいは `.`/`..`/空文字列のいずれかと等しい `name` は、何も書き込む前に拒否され、黙って安全な形に書き換えられることはありません。
-  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt` と `process-<n>.stderr.txt` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
+  `record.json`、`final.png`、`trace.zip`、`http.jsonl` と等しい `name`、有効な `pageAs` の名前についての `trace.<name>.zip` と `final.<name>.png` という形の `name`、そして `process-<n>.stdout.txt`、`process-<n>.stderr.txt`、`process-<n>.stdin.txt`、`process-<n>.json` という形の `name` も、同じように拒否されます(`ReservedEvidenceNameError`)。
   大文字小文字だけが違う綴りも拒否されます。
   それらは harness がこの directory に自分で書くファイルです。
   100 件で上限を設け、`at` で並べ替えます。
@@ -2456,6 +2605,10 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   scenario ごとに 1 行を行番号順に並べ、scenario、行、environment ごとに 1 列(列名は environment の名前)のセルの断定(`--repeat` のときは `<passed> of <n> passed`)、その行のすべての実行の所要時間を載せます。
   失敗した行には、どこで失敗したか(passed でも skipped でもない最初の step、それが無ければ最初に失敗した hook)、そのエラーの 1 行目、その step が読んだ step のうちプロセスが 0 以外で終わったものとその exit code と stderr の最初の行(stderr が空なら stdout の最初の行で、stderr と同じもの)、その step が `runCommand` で実行して 0 以外で終わった最後のコマンド、そして record のパスを載せます。
   これは失敗した environment ごとに 1 つずつ載り、run に environment が 2 つ以上あればその environment の名前が前に付きます。
+- 「Unmeasured actions」。
+  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、または record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、step ごとに 1 行を載せます。
+  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s), <n> process(es)`、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
+  どちらもない step は何も加えず、`--repeat` のときは同じ行を持つ同じ step が 1 行になります。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。
 - 失敗した run では、失敗した各 scenario の `do` である `nuka run <feature>:<line>` コマンド。
@@ -3718,7 +3871,7 @@ nukadoko が書く、または出力する JSON の文書はすべて `schema_ve
 step record は 4 です。
 2 で、実行が届かなかった `observed` のチャネルが `null` になり、`observed.processes` が常に存在するようになりました。
 3 で `session` フィールドがなくなりました。
-4 で、`observed` から HTTP メソッドによる 2 つの回数がなくなりました。
+4 で、`observed` から HTTP メソッドによる 2 つの回数がなくなりました(`observed.http`、`observed.files`、`observed.unmeasured`、プロセスの `stdin` と `env`、`args_origin` も同時に入りました)。
 envelope は 3 です。
 run.json の scenario から `probes` が、各 step の `observed` から同じ 2 つの回数がなくなりました。
 `schema_version` のない record は nukadoko 0.16.1 以前が書いたものです。

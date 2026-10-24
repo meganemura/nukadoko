@@ -1,19 +1,33 @@
 import { appendFile } from "node:fs/promises";
 import type { APIRequestContext, APIResponse } from "playwright";
+import type { KeptText } from "../record/types.js";
 import { redact } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
+import { type ChannelHttpLine, channelRecorder, recordRequest, withoutChannelRecording } from "./channels.js";
 import type { HttpLogFailedCollector } from "./http-log-failed.js";
+import { bodyFields, type RawBody, rawBodyOf } from "./kept-text.js";
 
 // Responsibility: wrap the APIRequestContext `ctx.request()` hands to a
 // step's `run()` so every HTTP call it makes is measured and appended to
-// http.jsonl — one JSON object per line, method/url/status/duration_ms/via
-// only (never request/response bodies: docs/spec.md "Records" says
-// evidence is collected by the harness, not asserted by the step). `url` is
-// the one field that can carry a secret (e.g. a token in a query string): it
-// is redacted at the same point the line is built, before it ever reaches
-// disk — one of the three exits docs/spec.md "Environments and secrets" requires redaction
-// at, alongside record.json and `do`'s stdout copy (both handled by
-// cli/do.ts).
+// http.jsonl, one JSON object per line: method, url, status, duration_ms,
+// via, and the request and response bodies as text (kept-text.ts: capped
+// at 16 KiB each, marked when cut). Headers are never written: they carry
+// cookies and authorization, and the trace already holds what a reader
+// needs of them. The line is redacted at the same point it is built,
+// before it ever reaches disk, one of the three exits docs/spec.md
+// "Environments and secrets" requires redaction at, alongside record.json
+// and `do`'s stdout copy (both handled by cli/do.ts).
+//
+// The send runs outside the channel patches' recording (channels.ts):
+// Playwright sends from this process through `node:http`, and this line
+// already records the request, so it must not be recorded twice. Inside a
+// step the line goes through the recorder of the step that made the call
+// (`recordRequest`), the same as a `fetch` line: it is counted into that
+// step's `observed.http`, written beside that step's record even when the
+// response arrives after the next step began, and written with the
+// no-response error when the step's flush ends first. Outside a step (a
+// hook, a fixture) the line goes to the http.jsonl the boundary had when
+// the call started.
 //
 // `via` is added now: a page's own document/xhr/fetch traffic now lands on
 // the same http.jsonl, appended by page-http-log.ts rather than this
@@ -57,13 +71,15 @@ import type { HttpLogFailedCollector } from "./http-log-failed.js";
 // intact), but each step's http.jsonl must land in that step's own step
 // record
 // dir — the executor advances the getter's target at each step boundary;
-// this module just reads it at call time.
+// this module reads it when a call starts.
 
 /** One http.jsonl line (docs/spec.md "Records"). `via` names which path
  * produced it. `"request"` is a call made through `ctx.request()`, or
  * through `page.request` / `context.request` (the same logging, via
  * `instrumentApiRequestContext`). `"page"` is one the page itself made
- * (page-http-log.ts). Always present, on every entry either path
+ * (page-http-log.ts). `"fetch"`, `"node:http"`, and `"node:https"` are
+ * requests a step's own code sent, which the channel patches recorded
+ * (channels.ts, observed.ts). Always present, on every entry either path
  * builds: a field only one of the two ever set would leave a reader
  * guessing "absent means page" instead of reading it. */
 export interface HttpLogEntry {
@@ -71,17 +87,40 @@ export interface HttpLogEntry {
   url: string;
   status: number;
   duration_ms: number;
-  via: "request" | "page";
+  via: "request" | "page" | "fetch" | "node:http" | "node:https";
   /** `via: "request"` only: the URL the step passed, when it differs from
    * `url` (a relative path, a `params` option, a redirect). */
   declared_url?: string;
-  /** `via: "request"` only: why the call threw. Present exactly when no
-   * response exists, and then `status` is 0. */
+  /** Why no response exists. Present exactly when `status` is 0. */
   error?: string;
   /** The `pageAs(name)` context whose page made the call (through the
    * page itself, or through `page.request`). Absent for the default
    * context and for `ctx.request()`. */
   as?: string;
+  /** Not `"page"`: the body the request sent. Absent when it sent none. */
+  request_body?: KeptText;
+  /** Not `"page"`: the body of the response. Absent when no response
+   * arrived or it had no body. */
+  response_body?: KeptText;
+  /** The request started after its step's record was written, so the
+   * record does not count it (docs/spec.md "Records"). */
+  after_step_end?: true;
+}
+
+/** The http.jsonl entry of one line a channel patch or a request context
+ * recorded: its bodies kept as redacted text. */
+export function httpLogEntryOf(line: ChannelHttpLine, secrets: SecretSet): HttpLogEntry {
+  return {
+    method: line.method,
+    url: line.url,
+    ...(line.declared_url !== undefined ? { declared_url: line.declared_url } : {}),
+    status: line.status,
+    duration_ms: line.duration_ms,
+    via: line.via,
+    ...(line.error !== undefined ? { error: line.error } : {}),
+    ...(line.as !== undefined ? { as: line.as } : {}),
+    ...bodyFields(line.request_body, line.response_body, secrets),
+  };
 }
 
 /** Redacts `entry` and appends it to whatever `logPath()` currently points
@@ -104,48 +143,107 @@ async function logCall(
   secrets: SecretSet,
   httpLogFailed: HttpLogFailedCollector,
   send: () => Promise<APIResponse>,
+  requestBody: () => Promise<RawBody | undefined>,
   as?: string,
 ): Promise<APIResponse> {
   const startedAt = performance.now();
+  const elapsed = (): number => Math.round(performance.now() - startedAt);
+  const failed = (error: string, sent?: RawBody): ChannelHttpLine => ({
+    method,
+    url,
+    status: 0,
+    duration_ms: elapsed(),
+    via: "request",
+    error,
+    ...(as !== undefined ? { as } : {}),
+    ...(sent !== undefined ? { request_body: sent } : {}),
+  });
+  const rec = channelRecorder();
+  const write = rec === undefined ? undefined : recordRequest(rec, (waitedMs) => failed(`no response within ${waitedMs} ms of the step's end`));
+  const path = logPath();
   let response: APIResponse | undefined;
   let failure: unknown;
   try {
-    response = await send();
+    response = await withoutChannelRecording(send);
     return response;
   } catch (error) {
     failure = error;
     throw error;
   } finally {
-    const durationMs = Math.round(performance.now() - startedAt);
-    const entry: HttpLogEntry = response
+    const sent = await requestBody().catch((): RawBody => ({ unread: "the request body could not be read" }));
+    const received = response === undefined ? undefined : await responseBodyOf(response);
+    const line: ChannelHttpLine = response
       ? {
           method,
           url: response.url(),
           ...(response.url() === url ? {} : { declared_url: url }),
           status: response.status(),
-          duration_ms: durationMs,
+          duration_ms: elapsed(),
           via: "request",
           ...(as !== undefined ? { as } : {}),
+          ...(sent !== undefined ? { request_body: sent } : {}),
+          ...(received !== undefined ? { response_body: received } : {}),
         }
-      : {
-          method,
-          url,
-          status: 0,
-          duration_ms: durationMs,
-          via: "request",
-          error: firstLine(failure instanceof Error ? failure.message : String(failure)),
-          ...(as !== undefined ? { as } : {}),
-        };
-    try {
-      await appendHttpLogEntry(logPath, entry, secrets);
-    } catch {
-      httpLogFailed.record();
+      : failed(firstLine(failure instanceof Error ? failure.message : String(failure)), sent);
+    if (write !== undefined) {
+      write(line);
+    } else {
+      try {
+        await appendHttpLogEntry(() => path, httpLogEntryOf(line, secrets), secrets);
+      } catch {
+        httpLogFailed.record();
+      }
     }
   }
 }
 
 function firstLine(message: string): string {
   return message.split("\n", 1)[0] ?? "";
+}
+
+/** The response's body, read from Playwright, which already holds all of
+ * it. A disposed response cannot be read any more, and says so. */
+async function responseBodyOf(response: APIResponse): Promise<RawBody | undefined> {
+  try {
+    const bytes = await withoutChannelRecording(() => response.body());
+    return bytes.byteLength === 0 ? undefined : rawBodyOf(bytes);
+  } catch {
+    return { unread: "the response was disposed before it could be read" };
+  }
+}
+
+type FetchOptions = Parameters<APIRequestContext["fetch"]>[1];
+
+/** The body Playwright sends for `options`, encoded the way Playwright
+ * encodes it: `data` as given, or as JSON when it is neither text nor
+ * bytes, and an object `form` as URL-encoded text. A multipart body's
+ * boundary exists only inside Playwright, so it is not read. */
+function optionsBody(options: FetchOptions): RawBody | undefined {
+  if (options === undefined) return undefined;
+  const { data, form, multipart } = options as { data?: unknown; form?: unknown; multipart?: unknown };
+  if (data !== undefined) {
+    if (typeof data === "string") return rawBodyOf(Buffer.from(data, "utf8"));
+    if (data instanceof Uint8Array) return rawBodyOf(data);
+    return rawBodyOf(Buffer.from(JSON.stringify(data) ?? "", "utf8"));
+  }
+  if (form !== undefined) {
+    if (form instanceof FormData) return { unread: "a multipart form, encoded by Playwright" };
+    const pairs = Object.entries(form as Record<string, unknown>).map(([name, value]): [string, string] => [name, String(value)]);
+    return rawBodyOf(Buffer.from(new URLSearchParams(pairs).toString(), "utf8"));
+  }
+  if (multipart !== undefined) return { unread: "a multipart body, encoded by Playwright" };
+  return undefined;
+}
+
+/** The body of a call: from `options` when given, and otherwise from a
+ * Playwright `Request` (`route.fetch()` passes the intercepted one). */
+function bodyOf(target: Parameters<APIRequestContext["fetch"]>[0], options: FetchOptions): () => Promise<RawBody | undefined> {
+  return async () => {
+    const fromOptions = optionsBody(options);
+    if (fromOptions !== undefined || typeof target === "string") return fromOptions;
+    const bytes = target.postDataBuffer();
+    return bytes === null || bytes.byteLength === 0 ? undefined : rawBodyOf(bytes);
+  };
 }
 
 function urlOf(target: Parameters<APIRequestContext["fetch"]>[0]): string {
@@ -176,17 +274,17 @@ export function wrapRequestContextWithLogging(
 ): APIRequestContext {
   return {
     get: (url, options) =>
-      logCall(logPath, "GET", url, secrets, httpLogFailed, () => target.get(url, options)),
+      logCall(logPath, "GET", url, secrets, httpLogFailed, () => target.get(url, options), bodyOf(url, options)),
     post: (url, options) =>
-      logCall(logPath, "POST", url, secrets, httpLogFailed, () => target.post(url, options)),
+      logCall(logPath, "POST", url, secrets, httpLogFailed, () => target.post(url, options), bodyOf(url, options)),
     put: (url, options) =>
-      logCall(logPath, "PUT", url, secrets, httpLogFailed, () => target.put(url, options)),
+      logCall(logPath, "PUT", url, secrets, httpLogFailed, () => target.put(url, options), bodyOf(url, options)),
     patch: (url, options) =>
-      logCall(logPath, "PATCH", url, secrets, httpLogFailed, () => target.patch(url, options)),
+      logCall(logPath, "PATCH", url, secrets, httpLogFailed, () => target.patch(url, options), bodyOf(url, options)),
     delete: (url, options) =>
-      logCall(logPath, "DELETE", url, secrets, httpLogFailed, () => target.delete(url, options)),
+      logCall(logPath, "DELETE", url, secrets, httpLogFailed, () => target.delete(url, options), bodyOf(url, options)),
     head: (url, options) =>
-      logCall(logPath, "HEAD", url, secrets, httpLogFailed, () => target.head(url, options)),
+      logCall(logPath, "HEAD", url, secrets, httpLogFailed, () => target.head(url, options), bodyOf(url, options)),
     fetch: (urlOrRequest, options) =>
       logCall(
         logPath,
@@ -195,6 +293,7 @@ export function wrapRequestContextWithLogging(
         secrets,
         httpLogFailed,
         () => target.fetch(urlOrRequest, options),
+        bodyOf(urlOrRequest, options),
       ),
     dispose: (options) => target.dispose(options),
     storageState: (options) => target.storageState(options),
@@ -240,6 +339,7 @@ export function instrumentApiRequestContext(
       secrets,
       httpLogFailed,
       () => originalFetch(urlOrRequest, options),
+      bodyOf(urlOrRequest, options),
       as,
     );
 }

@@ -120,7 +120,7 @@ describe("writeMessagesStream", () => {
         started_at: "2026-08-01T00:00:00.500Z",
         finished_at: "2026-08-01T00:00:01.000Z",
         evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [], http: "http.jsonl" },
-        observed: { processes: null },
+        observed: { processes: null, http: null, files: null, unmeasured: [] },
         mutates: true,
         declared: { attachments: ["note.txt"], logs: ["did the thing"] },
       };
@@ -352,7 +352,7 @@ describe("writeMessagesStream", () => {
       started_at: "2026-08-01T00:00:00.000Z",
       finished_at: "2026-08-01T00:00:00.500Z",
       evidence: { dir: ".nukadoko/runs/run-1/steps/step-missing-file", screenshots: [] },
-      observed: { processes: null },
+      observed: { processes: null, http: null, files: null, unmeasured: [] },
       mutates: true,
       declared: { attachments: ["never-written.txt"] },
     };

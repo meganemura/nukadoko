@@ -7,6 +7,7 @@ import { runCli } from "../src/cli/run-cli.js";
 import {
   copyFixtureToTempDir,
   createCaptureSink,
+  httpLogLines,
   removeTempDir,
   stepRecordDir,
   stripRunProgressLines,
@@ -78,7 +79,7 @@ describe("measured mutates: request-side observed counts", () => {
     expect(stderr.text()).toBe("");
     const stepRecord = JSON.parse(stdout.text());
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 2, files: null, unmeasured: [] });
   });
 
   it("nuka run: each step record carries the step record schema version and its observed", async () => {
@@ -99,9 +100,9 @@ describe("measured mutates: request-side observed counts", () => {
       }),
     );
     expect(observed).toEqual([
-      [4, "setup-step", { processes: null }],
-      [4, "only-a-read-happens", { processes: null }],
-      [4, "a-fetch-read-happens", { processes: null }],
+      [4, "setup-step", { processes: null, http: null, files: null, unmeasured: [] }],
+      [4, "only-a-read-happens", { processes: null, http: 1, files: null, unmeasured: [] }],
+      [4, "a-fetch-read-happens", { processes: null, http: 1, files: null, unmeasured: [] }],
     ]);
   });
 
@@ -154,15 +155,15 @@ describe("measured mutates: request-side observed counts", () => {
       ),
     );
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
   });
 
   // The "lie backstop": a declared `mutates: false` step that actually
   // POSTed under a read-only environment used to be demoted to
   // `status: "failed"`. nukadoko now trusts the declaration instead of
-  // measuring against it, so this succeeds — the write still lands on
-  // `observed`, unredacted and unchanged, for a report to catch the wrong
-  // declaration after the fact.
+  // measuring against it, so this succeeds. The request is still counted on
+  // `observed` and written to http.jsonl with its method, for a person
+  // reading the record to catch the wrong declaration after the fact.
   it("read-only environment: a declared mutates:false step that actually POSTs passes, and the write still lands on observed", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(
@@ -173,7 +174,8 @@ describe("measured mutates: request-side observed counts", () => {
     expect(exitCode).toBe(0);
     const stepRecord = JSON.parse(stdout.text());
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
+    expect(httpLogLines(rootDir, stepRecord.step_record_id).map((line) => [line.method, line.via, line.status])).toEqual([["POST", "request", 200]]);
   });
 
   // `nuka run` against a read-only environment: the gap the previous slice
@@ -231,6 +233,6 @@ describe("measured mutates: request-side observed counts", () => {
       ),
     );
     expect(stepRecord.status).toBe("passed");
-    expect(stepRecord.observed).toEqual({ processes: null });
+    expect(stepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
   });
 });

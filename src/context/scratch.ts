@@ -26,6 +26,10 @@ export interface ScratchCollector {
   /** Executor-only: the directories created since the last `reset()`, in
    * creation order. */
   snapshot(): string[];
+  /** Executor-only: every directory this collector created that
+   * `removeAll()` has not removed yet, in creation order. The step
+   * record's `observed.files` compares these before and after a step. */
+  allDirs(): string[];
   /** Executor-only: starts a new step boundary. The directories stay on
    * disk and stay listed for `removeAll()`. */
   reset(): void;
@@ -74,6 +78,9 @@ export function createScratchCollector(options: ScratchCollectorOptions): Scratc
     scratch: { dir, copy },
     snapshot(): string[] {
       return [...sinceBoundary];
+    },
+    allDirs(): string[] {
+      return [...all];
     },
     reset(): void {
       sinceBoundary = [];

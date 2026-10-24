@@ -53,6 +53,7 @@ function stubHandle() {
   return {
     contexts,
     browserInfo: { type: "chromium", version: "0" },
+    outputDirs: [],
     openTracedContext: vi.fn(async (options: { as?: string }) => {
       await new Promise((resolve) => setTimeout(resolve, 5));
       const context = stubContext(options.as === undefined ? "stub-page" : `stub-page-${options.as}`);

@@ -43,6 +43,11 @@ const process = z.looseObject({
 
 const observed = z.looseObject({
   processes: z.array(process).nullable(),
+  http: z.number().int().nullable(),
+  files: z
+    .array(z.looseObject({ path: z.string(), change: z.enum(["added", "changed", "removed"]), bytes: z.number().int().optional() }))
+    .nullable(),
+  unmeasured: z.array(z.looseObject({ kind: z.enum(["child_process", "worker_thread", "socket", "files"]), detail: z.string() })),
 });
 
 const step = z.looseObject({
@@ -57,6 +62,7 @@ const step = z.looseObject({
   record_unreadable: z.literal(true).optional(),
   error: z.looseObject({ kind: errorKind.nullable(), message: z.string() }).optional(),
   used: z.array(z.looseObject({ step: z.string(), record: z.string(), result: z.unknown() })).optional(),
+  after_step_end: z.looseObject({ requests: z.number().int(), processes: z.number().int() }).optional(),
 });
 
 const declared = z.looseObject({

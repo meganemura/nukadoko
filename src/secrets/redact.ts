@@ -137,6 +137,13 @@ function applyReplacements(input: string, replacements: readonly Replacement[]):
   return input.replace(pattern, (match) => tokenBySpelling.get(match) ?? match);
 }
 
+/** Every spelling `redactString` replaces for `secrets`: each loaded
+ * value and its encoded forms. A caller that holds only the start of a
+ * text needs them to find a secret the end of that start cut through. */
+export function secretSpellings(secrets: SecretSet): string[] {
+  return buildReplacements(secrets).map((entry) => entry.value);
+}
+
 /** Replaces every occurrence of a secret value inside `input` with its
  * `{{secret.NAME}}` token, including the percent-encoded and JSON-escaped
  * spellings of that value. An occurrence already inside such a token is

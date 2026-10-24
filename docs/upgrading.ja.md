@@ -82,6 +82,21 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **run サマリに「Declared vs observed」の節はありません。**
   `summary.md` からそれを読んでいたジョブは、その読み取りを外します。
 
+- **`observed` のキーが 3 つ増え、どのキーも常にあります。**
+  `{ "processes": null }` のように `observed` を丸ごと比べていた読み手は、代わりに `{ "processes": null, "http": null, "files": null, "unmeasured": [] }` と比べます。
+  キーを名前で読む読み手には、することはありません。
+  step 自身のコードが `fetch`、`node:http`、`node:https` で送ったリクエストも `http.jsonl` の行になったので、そこで行を数えていたジョブはそれも数えるか、`via` で絞り込みます。
+
+- **`runCommand` は、step が stdin に書いた `input` を残します。**
+  新しい `stdin` のファイルが redact されるのは、env ファイルから読み込んだ値か `redact` で名指した値のときだけで、`command` と同じ規則です。
+  そのため、step 自身が持つ値を `input` で渡す step は、その値を `redact` で名指します。
+  `observed.files` の中身が redact されるのは、env ファイルから読み込んだ値だけです。
+  そのため、step がファイルに書く secret は、env ファイルから読み込んだものにします。
+
+- **evidence の名前がさらに 2 つ、harness のものになりました。**
+  `ctx.evidence.attach` と `ctx.evidence.path` は、`process-<n>.stdin.txt` と `process-<n>.json`(step が終わったあとに始まった `runCommand` のプロセスのエントリ)を、大文字小文字にかかわらず `ReservedEvidenceNameError` で拒否します。
+  どちらかの名前でファイルを添付していた step は、別の名前を選んでください。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

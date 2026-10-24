@@ -33,6 +33,7 @@ import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { serializeWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
+import { installChannelPatches } from "../context/create-context.js";
 
 // Responsibility: one `nuka run --concurrency <n>` worker's own process
 // entry point (src/run/worker-protocol.ts's own argv/envelope contract;
@@ -138,6 +139,11 @@ function readFeatureList(): string[] {
 }
 
 async function main(): Promise<void> {
+  // Before the config and the step files load: a module that copies
+  // `fetch` or `http.request` while it loads keeps whatever it copied, and
+  // the channel patches (src/context/channels.ts) see only calls that go
+  // through them.
+  installChannelPatches();
   const config = await loadConfig(rootDir);
   const resolvedEnv = resolveEnvironment(config, env ?? DEFAULT_ENVIRONMENT_NAME, env !== null);
 

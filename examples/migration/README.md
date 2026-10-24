@@ -251,7 +251,7 @@ output (`evidence`/`environment`/timestamps trimmed for space):
   "kind": "run",
   "result": null,
   "status": "passed",
-  "observed": { "processes": null },
+  "observed": { "processes": null, "http": 2, "files": null, "unmeasured": [] },
   "world": { "reads": [], "writes": ["seededCount"] }
 }
 ```
@@ -259,8 +259,9 @@ output (`evidence`/`environment`/timestamps trimmed for space):
 `result: null` is honest -- this is still a compat step, with no validated
 contract (docs/spec.md "Records": "Compat steps record result: null").
 Everything else on this step record is new, for free, from the import switch
-alone: its `http.jsonl` holds the 2 POSTs the harness itself watched this
-execution make through `this.request`, and `world` is the one World key this step
+alone: `observed.http` counts the 2 requests the harness itself watched this
+execution make through `this.request`, its `http.jsonl` holds each POST
+with its request body and response body, and `world` is the one World key this step
 touched, in access order -- the data flow a plain `this.foo = ...` used to
 hide entirely.
 
@@ -364,7 +365,7 @@ and `step-...-9x9l`), trimmed the same way:
   "step": "create-todo",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90", "title": "Read a book", "done": false },
   "status": "passed",
-  "observed": { "processes": null }
+  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
 }
 ```
 
@@ -374,7 +375,7 @@ and `step-...-9x9l`), trimmed the same way:
   "step": "read-created-todo-id",
   "result": { "id": "41e0acba-2e60-4418-a43c-e00c0a44aa90" },
   "status": "passed",
-  "observed": { "processes": null },
+  "observed": { "processes": null, "http": null, "files": null, "unmeasured": [] },
   "used": [{ "step_record_id": "step-20260802-141751-4kfn", "step": "create-todo" }]
 }
 ```

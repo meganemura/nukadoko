@@ -175,7 +175,7 @@ scenario が失敗すると、stderr にその step、エラー、step record、
 - `summary.md` は Markdown の run サマリです。
   GitHub Actions では、ジョブのサマリページにも載ります。
 - `steps/<id>/record.json` は step record 1 つです。
-  引数、バリデーション済みの結果、そしてツールが観測したもの(`runCommand` が起動したプロセスなど)を持ちます。
+  引数とその出所、バリデーション済みの結果、そしてツールが観測したもの(`runCommand` が起動したプロセス、step が送ったリクエスト、step が変えたファイル、見えたが計測できなかった操作)を持ちます。
   evidence のファイル(trace、スクリーンショット、`http.jsonl`)はその隣に置かれます。
 - `scenarios/<id>/` は、scenario が自分の evidence を書いたときにだけ、それを持ちます。
 - `sources.json` は run が読んだ feature のテキストで、`exports` はこの run から `nuka report` が `.nukadoko/export/` の下に書いたファイルの一覧です。

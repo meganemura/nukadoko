@@ -91,6 +91,33 @@ describe("runCommand result", () => {
     ]);
   });
 
+  it("records every name in env, and hides each value that is not a path that exists, an integer, or a boolean", async () => {
+    const observed = createObservedCollector();
+    const { PATH: _path, ...rest } = process.env;
+    const added = {
+      NUKADOKO_TEST_DIR: process.cwd(),
+      NUKADOKO_TEST_KEY: "/q8Zx+Lr0aW==",
+      NUKADOKO_TEST_PORT: "8080",
+      NUKADOKO_TEST_CI: "true",
+      NUKADOKO_TEST_TOKEN: "ghp_0123456789abcdef",
+    };
+    const result = await withProcessRecording(observed, () =>
+      runCommand(node, ["-e", "process.stdout.write(process.env.NUKADOKO_TEST_TOKEN)"], { env: { ...rest, ...added } }),
+    );
+    expect(result.stdout).toBe("ghp_0123456789abcdef");
+    expect(observed.snapshot().processes?.[0]?.env).toEqual({
+      added: {
+        NUKADOKO_TEST_CI: "true",
+        NUKADOKO_TEST_DIR: process.cwd(),
+        NUKADOKO_TEST_KEY: { hidden_bytes: 13 },
+        NUKADOKO_TEST_PORT: "8080",
+        NUKADOKO_TEST_TOKEN: { hidden_bytes: 20 },
+      },
+      changed: {},
+      removed: process.env.PATH === undefined ? [] : ["PATH"],
+    });
+  });
+
   it("writes a value named in redact as its token in what the process printed", async () => {
     const dir = await createEmptyTempDir();
     try {
@@ -123,7 +150,7 @@ describe("runCommand result", () => {
   it("records nothing outside a step", async () => {
     const observed = createObservedCollector();
     await runCommand(node, ["-e", ""]);
-    expect(observed.snapshot()).toEqual({ processes: null });
+    expect(observed.snapshot()).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
   });
 });
 
@@ -201,8 +228,8 @@ describe("observed.processes on a step record", () => {
     // The files under the working directory are measured, but this test
     // runs in the repository root, where other tests write at the same time.
     expect(processes.map(({ duration_ms: _ms, files: _files, ...rest }) => rest)).toEqual([
-      { command: [node, "-e", "process.exit(3)"], cwd: process.cwd(), exit_code: 3 },
-      { command: [node, "-e", "process.stdout.write('hello')"], cwd: process.cwd(), exit_code: 0, stdout: "process-2.stdout.txt" },
+      { command: [node, "-e", "process.exit(3)"], cwd: process.cwd(), exit_code: 3, env: { inherited: true } },
+      { command: [node, "-e", "process.stdout.write('hello')"], cwd: process.cwd(), exit_code: 0, stdout: "process-2.stdout.txt", env: { inherited: true } },
     ]);
     // The first process printed nothing, so it names no file.
     expect(await readFile(path.join(rootDir, stepRecord.evidence.dir, "process-2.stdout.txt"), "utf8")).toBe("hello");
@@ -236,9 +263,9 @@ describe("observed.processes on a step record", () => {
     ]);
   });
 
-  it("nuka run: a step that runs nothing has null processes and null HTTP counts", async () => {
+  it("nuka run: a step that runs nothing has null processes, no requests, no files, and no unmeasured action", async () => {
     const stepRecord = await stepRecordOf(15);
-    expect(stepRecord.observed).toEqual({ processes: null });
+    expect(stepRecord.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
   });
 
   it("nuka do: the step record carries the processes too", async () => {

@@ -228,14 +228,17 @@ step record; nothing else has to change for that to start happening.
 ## The measured upgrade (optional)
 
 Glue that launches its own Playwright browser or request client keeps
-working, unmeasured: nukadoko never touches it. A World subclass assigns
+working, with no trace and no page log: nukadoko does not hand it a
+context. A request a step sends through such a request client still lands
+in `http.jsonl`, as a `node:http` or `node:https` line, because the client
+sends from the step's own process. A World subclass assigns
 that page and request with `this.page = ...` and `this.request = ...`,
 and a later read returns that assignment, ahead of the page `openPage()`
 or `openRequest()` stored. Replace that bootstrapping
 with `await this.openPage()` / `await this.openRequest()` (delegating to
 the same context a mixed scenario's typed steps share, one browser and one
-session per scenario), and that step's step record gains a trace and an
-`http.jsonl` log, no other code change.
+session per scenario), and that step's step record gains a trace and the
+page's own lines in `http.jsonl`, no other code change.
 
 ## Stage 1.5: declare what you rely on
 

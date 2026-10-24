@@ -42,6 +42,9 @@ export interface ResolveUseSuccess {
    * for a key it already set), so this is offered up unconditionally, not
    * pre-filtered. */
   readonly filled: Readonly<Record<string, unknown>>;
+  /** For each key of `filled`, the key of the upstream result it was read
+   * from: the step record's `args_origin`. */
+  readonly sources: Readonly<Record<string, string>>;
   /** The `{ step_record_id, step, result }` shape the `used` collector
    * (src/context/used.ts) already records — handed straight to
    * `StepContextHandle.recordUsed`, the sole path into that collector, once
@@ -137,6 +140,7 @@ export function resolveUse(
 
   const result = stepRecord.result;
   const filled: Record<string, unknown> = {};
+  const sources: Record<string, string> = {};
   for (const [key, upstreamKey] of matches) {
     if (!isRecord(result) || !(upstreamKey in result)) {
       return {
@@ -145,6 +149,7 @@ export function resolveUse(
       };
     }
     filled[key] = result[upstreamKey];
+    sources[key] = upstreamKey;
   }
 
   return {
@@ -152,6 +157,7 @@ export function resolveUse(
     // The record holds the stored form, so a bigint this step's args
     // declare arrives as its decimal string until it is revived here.
     filled: reviveStoredForm(step.args, filled, "input") as Record<string, unknown>,
+    sources,
     used: { step_record_id: recordId, step: stepRecord.step, result: stepRecord.result },
   };
 }

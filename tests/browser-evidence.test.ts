@@ -387,7 +387,7 @@ describe("createStepContext / ctx.page(): page traffic in http.jsonl", () => {
   it.skipIf(!chromiumAvailable)(
     "logs a page navigation and a page-issued POST to http.jsonl as via: page",
     async () => {
-      const { ctx, dispose, observedCounts } = createStepContext({
+      const { ctx, dispose, observedSnapshot } = createStepContext({
         config: baseConfig(),
         evidenceDir,
         env: {},
@@ -403,7 +403,7 @@ describe("createStepContext / ctx.page(): page traffic in http.jsonl", () => {
         `${baseURL}/`,
       );
 
-      expect(observedCounts()).toEqual({ processes: null });
+      expect(await observedSnapshot()).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
 
       const { evidence } = await dispose();
       // Both the navigation (`document`) and the in-page `fetch` land on
@@ -457,7 +457,7 @@ describe("createStepContext / page.request and context.request", () => {
   it.skipIf(!chromiumAvailable)(
     "logs a call through page.request or context.request in http.jsonl",
     async () => {
-      const { ctx, dispose, observedCounts } = createStepContext({
+      const { ctx, dispose, observedSnapshot } = createStepContext({
         config: baseConfig(),
         evidenceDir,
         env: {},
@@ -475,7 +475,7 @@ describe("createStepContext / page.request and context.request", () => {
         "DELETE /via-page-request-DELETE",
         "GET /via-page-request-GET",
       ]);
-      expect(observedCounts()).toEqual({ processes: null });
+      expect(await observedSnapshot()).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
 
       const { evidence } = await dispose();
       expect(evidence.http).toBe("http.jsonl");

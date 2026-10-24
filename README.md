@@ -383,8 +383,8 @@ export default defineStep({
 
 `fetch` needs nothing installed. `ctx.request()`, Playwright's
 `APIRequestContext`, is the other way to call the server: it needs
-`playwright` installed, and each of its calls lands in the step record's
-`http.jsonl`. nukadoko does not see a `fetch` call.
+`playwright` installed. Either way, each call lands in the step record's
+`http.jsonl` with its request body and response body.
 
 The Then step comes from `nuka scaffold message-is --pattern "the message
 is {text:string}" --then --from get-greeting.message`, the same way
@@ -531,14 +531,29 @@ afterward. The result is a step record, not a pass/fail line.
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },
+  "args_origin": { "title": "command_line" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "processes": null }
+  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
 }
 ```
 
 (`evidence`, `environment`, and the timestamps are trimmed above
 for space; the real step record has them too.)
+
+`args_origin` names where each argument came from: here the command line,
+in a scenario a capture, the docstring, the table, or an earlier step's
+result. `observed` holds what nukadoko measured while the step ran. Its
+keys are `processes` (each `runCommand` process, with its stdin and the
+environment variables it was given, a value shown only when it is a path
+that exists, an integer, or a boolean), `http` (a count of the requests the step sent; each one is a
+line in the step record's `http.jsonl`, with its request body and
+response body), `files` (the files the step changed in a scratch
+directory or wrote through `node:fs`, with their content), and
+`unmeasured`. That last one lists what nukadoko saw but cannot measure,
+such as a process started without `runCommand`, so a record does not
+look complete when nukadoko saw that it is not. A key is `null` when the step did nothing
+of that kind.
 
 An existing cucumber-js suite reaches this door too, by switching one
 import (see [The compat door](#the-compat-door) below). But a compat step
@@ -809,7 +824,7 @@ they are most familiar, not because it is the only layer that has them.
 |---|---|
 | Duplicate steps: which one matched? | `nuka check` reports **duplicate patterns** (the same text registered twice) and **ambiguous steps** (one line in a feature that two different patterns could both match), before anything runs |
 | `this.foo`: an untyped bag | A step returns a value against a `returns` schema; a later step declares `from` to read one key of it by name: a dependency that shows up as an import in the diff, a read that lands on the receiving step's step record, and a binding order `nuka check` verifies before anything runs (see [Chaining steps](docs/spec.md#chaining-steps)) |
-| A report that only says `passed` | Every execution writes a step record: validated result, the HTTP calls and processes the tool itself recorded, evidence, environment, target version |
+| A report that only says `passed` | Every execution writes a step record: validated result, the HTTP calls with their bodies, the processes, and the files the tool itself recorded, what it saw but could not measure, evidence, environment, target version |
 | Undefined steps found at run time | `nuka check <feature>` fails on them statically, and names the text that matched nothing |
 | A `Then` that quietly mutates state | `mutates` is a declaration nukadoko trusts, not a number it re-derives: a step declaring `mutates: true` is refused before it runs in a read-only environment and flagged by `nuka check` when bound to `Then`; what actually ran is still recorded on the step record for review |
 
@@ -821,8 +836,9 @@ a pure read over POST. A truthful `mutates: false` step that calls one of
 these APIs still looks like a write. No general HTTP-layer rule can
 distinguish that call from a real write. Nukadoko therefore trusts the
 declaration and never infers a write from a method. The step record keeps
-each request it measured, with its method, URL, and status, as a fact, not
-a verdict.
+each request it measured, with its method, URL, status, and bodies, as a
+fact, not a verdict, and it names what it could not measure instead of
+guessing.
 
 ## Reports fill themselves
 
@@ -1003,12 +1019,13 @@ where there is one.
 To migrate an existing Cucumber + Playwright suite, switch one import from
 `@cucumber/cucumber` to `nukadoko/compat`. The same pattern syntax, hooks,
 and World continue to work while nukadoko's harness starts measuring step
-records. A World subclass can assign `this.page` and `this.request`. That
-assignment stays unmeasured. Each step can then move to `defineStep` independently, so a
+records. A World subclass can assign `this.page` and `this.request`. Such
+a page gets no trace and no page log, though a request sent through such a
+`this.request` from a step still lands in `http.jsonl`. Each step can then move to `defineStep` independently, so a
 partially promoted suite continues to pass.
 
 The door is an entry point, not a destination. A compat step gains a step
-record with status and timing from the first run; evidence and the
+record with status and timing from the first run; evidence and the page's
 `http.jsonl` lines follow once its glue opens the browser or request through
 `this.openPage()` / `this.openRequest()` (the measured upgrade in
 [docs/migration.md](docs/migration.md)). However, nukadoko discards its return value, and its
@@ -1273,6 +1290,19 @@ whatever their env files and `baseURL` say.
   argument. The step record keeps each request it measured as a fact, so a
   wrong `mutates` declaration can be checked after the fact; the
   declaration and review carry the judgment.
+- **It does not see every action a step takes.** It records what a step
+  sends through `fetch`, `node:http`, `node:https`, and Playwright,
+  each `runCommand` process, the files in scratch directories, and the
+  `node:fs` writes of its own process. A process started without
+  `runCommand` (named by its program and argument count only), a
+  Worker, a connection the step opens or writes to that carries no
+  recorded request, and what a WebSocket carries after its handshake are
+  named in `observed.unmeasured`, with no evidence of what they did. A
+  native addon, a child process's own traffic, a write a child process
+  makes outside a scratch directory and its working directory, a
+  connection opened before the step that it only reads from, and a
+  `fetch` an interceptor installed after nukadoko (such as msw) answers
+  itself are not seen at all.
 - **CommonJS suites cannot use `nukadoko/compat`** without a module-format
   change first (above).
 - **No CI reporting or HTML rendering built in.** Allure's dashboard is the

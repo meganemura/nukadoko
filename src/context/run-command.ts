@@ -1,8 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import type { ProcessEntry, ProcessFiles, ProcessOutput } from "../record/types.js";
+import type { EnvValue, ProcessEntry, ProcessEnv, ProcessFiles, ProcessOutput } from "../record/types.js";
 import { redactString } from "../secrets/redact.js";
+import type { SecretSet } from "../secrets/types.js";
+import { withoutChannelRecording } from "./channels.js";
+import { type EnvDifference, envDifference } from "./env-difference.js";
 import { diffSnapshots, takeSnapshot } from "./file-snapshot.js";
 import { windowsSpawnPlan } from "./windows-command.js";
 
@@ -57,7 +61,16 @@ import { windowsSpawnPlan } from "./windows-command.js";
 // and the step's result keeps only the part the step chose to return. A
 // second argument, rather than a new entry field, keeps a recorder from an
 // older copy of this module working: it ignores the argument, and the
-// output never lands inline in its record.
+// output never lands inline in its record. The `input` the step wrote to
+// stdin goes the same way, so a reader sees what the program was given.
+//
+// The entry's `env` is the child's environment written as its difference
+// from the runner's (env-difference.ts), with the step's `redact` values
+// replaced: a reader wants the variables the step chose, not the tens the
+// runner already had.
+//
+// The spawn runs outside the channel patches' recording (channels.ts): the
+// process is measured here, so it is not also an unmeasured one.
 
 /** Receives one finished process. The shape stays this small because two
  * copies of this module, from two versions, can share one scope. */
@@ -153,12 +166,14 @@ export async function runCommand(
       : { file: command, args: [...args], verbatim: false };
 
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(plan.file, plan.args, {
-      cwd,
-      env,
-      stdio: ["pipe", "pipe", "pipe"],
-      windowsVerbatimArguments: plan.verbatim,
-    });
+    const child = withoutChannelRecording(() =>
+      spawn(plan.file, plan.args, {
+        cwd,
+        env,
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsVerbatimArguments: plan.verbatim,
+      }),
+    );
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let timedOut = false;
@@ -172,7 +187,10 @@ export async function runCommand(
             // Stopping cmd.exe alone would leave the program it started
             // running, so the whole tree is ended.
             if (plan.verbatim && child.pid !== undefined) {
-              spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" }).on("error", () => child.kill());
+              withoutChannelRecording(() => spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" })).on(
+                "error",
+                () => child.kill(),
+              );
             } else {
               child.kill("SIGTERM");
             }
@@ -213,7 +231,12 @@ export async function runCommand(
         ...(timedOut ? { timed_out: true as const } : {}),
         duration_ms: durationMs,
         ...(files === undefined ? {} : { files }),
-      }, { stdout: redactString(out, secrets), stderr: redactString(err, secrets) });
+        env: recordedEnv(envDifference(process.env, options.env), secrets),
+      }, {
+        stdout: redactString(out, secrets),
+        stderr: redactString(err, secrets),
+        ...(options.input !== undefined && options.input !== "" ? { stdin: redactString(options.input, secrets) } : {}),
+      });
       if (timedOut) {
         rejectPromise(
           new Error(
@@ -231,4 +254,39 @@ export async function runCommand(
       });
     });
   });
+}
+
+// A value nukadoko can tell is not a credential: an absolute path (POSIX,
+// or a Windows drive path) that exists when the process ends, a decimal
+// integer, or a boolean. Redacting only
+// the loaded secrets is not enough here, because a step that holds a token
+// itself passes it through `env`, and the record must not become the place
+// it leaks to. A reader still needs paths and numbers to judge a step, so
+// those stay; the rest is its byte length, which tells set from empty. A
+// path with a control character in it is hidden too: a line break can carry
+// a second value that no reader would take for part of the path. The shape
+// of a path is not enough on its own, because base64 can start with `/`, so
+// a token can look like a path; a file that exists is measured, and a token
+// names no file. A path the program was told to create and did not is
+// hidden, which costs the reader that one value.
+const PATH_SHAPE = /^(?:\/|[A-Za-z]:[\\/])[^\u0000-\u001f\u007f]*$/;
+const PLAIN_VALUE = /^(?:-?[0-9]+|true|false)$/;
+
+/** The value `runCommand` records for one environment variable. */
+function recordedEnvValue(value: string, secrets: SecretSet, exists: (path: string) => boolean): EnvValue {
+  const shown = PLAIN_VALUE.test(value) || (PATH_SHAPE.test(value) && exists(value));
+  return shown ? redactString(value, secrets) : { hidden_bytes: Buffer.byteLength(value, "utf8") };
+}
+
+/** The record's `env`: every name, and each value as `recordedEnvValue`
+ * gives it. `exists` is the file system's answer, replaced in tests. */
+export function recordedEnv(
+  env: EnvDifference,
+  secrets: SecretSet,
+  exists: (path: string) => boolean = existsSync,
+): ProcessEnv {
+  if ("inherited" in env) return env;
+  const each = (values: Readonly<Record<string, string>>): Record<string, EnvValue> =>
+    Object.fromEntries(Object.entries(values).map(([name, value]) => [name, recordedEnvValue(value, secrets, exists)]));
+  return { added: each(env.added), changed: each(env.changed), removed: env.removed };
 }

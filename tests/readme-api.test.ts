@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { repoRoot, stepRecordDir, withoutCheckNotes } from "./helpers/fixtures.js";
+import { httpLogLines, repoRoot, stepRecordDir, withoutCheckNotes } from "./helpers/fixtures.js";
 
 // Responsibility: README.md's two HTTP sections work as written.
 //
@@ -207,7 +207,7 @@ describe(`README.md: ${SELF_STARTED}`, () => {
     expect(typed.code).toBe(0);
   }, 120_000);
 
-  it("runs green, and the fetch call is not observed", async () => {
+  it("runs green, and the fetch call lands in http.jsonl with its response body", async () => {
     const result = await nuka(["run", "--records"]);
     expect(result.code, result.stderr).toBe(0);
     const record = JSON.parse(result.stdout.trim().split("\n").at(-1)!) as {
@@ -220,8 +220,13 @@ describe(`README.md: ${SELF_STARTED}`, () => {
         path.join(stepRecordDir(projectDir, record.steps[0]!.step_record_id), "record.json"),
         "utf8",
       ),
-    ) as { evidence: { http?: string } };
-    expect(when.evidence.http).toBeUndefined();
+    ) as { evidence: { http?: string }; observed: { http: number | null } };
+    expect(when.evidence.http).toBe("http.jsonl");
+    expect(when.observed.http).toBe(1);
+    const lines = httpLogLines(projectDir, record.steps[0]!.step_record_id);
+    expect(lines.map(({ method, via, status, response_body }) => ({ method, via, status, response_body }))).toEqual([
+      { method: "GET", via: "fetch", status: 200, response_body: { text: JSON.stringify({ message: "Hello, Ada!" }), bytes: expect.any(Number) } },
+    ]);
   }, 120_000);
 });
 

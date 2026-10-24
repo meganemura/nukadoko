@@ -110,7 +110,7 @@ describe("nuka run: run.json", () => {
               step_record_id: passedStep.step_record_id,
               record: path.join("steps", passedStep.step_record_id),
               mutates: true,
-              observed: { processes: null },
+              observed: { processes: null, http: null, files: null, unmeasured: [] },
             },
           ],
           hooks: [],

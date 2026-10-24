@@ -78,6 +78,12 @@ describe("nuka do --use", () => {
     // reader must be able to tell it apart from a value never validated.
     expect(archiveStepRecord.args).toEqual({ projectId: "p_acme" });
     expect(archiveStepRecord.result).toEqual({ archived: true, projectId: "p_acme" });
+    // Where each key came from: the producer's from the command line, the
+    // consumer's from the step record `--use` named.
+    expect(createStepRecord.args_origin).toEqual({ name: "command_line" });
+    expect(archiveStepRecord.args_origin).toEqual({
+      projectId: { from: { step_record_id: createStepRecord.step_record_id, step: "create-project", key: "id" } },
+    });
     expect(archiveStepRecord.used).toEqual([
       { step_record_id: createStepRecord.step_record_id, step: "create-project" },
     ]);

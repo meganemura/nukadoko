@@ -34,22 +34,46 @@ For each step, before you say anything about it:
 - The sentence: the step's `text` in `run.json`.
 - The contract: `npx nuka describe <step>` gives its `description`,
   `mutates`, `from`, `args`, `returns`, and `file`, the step file to read.
-- The record: `<run_dir>/<record>/record.json`. Read `args`, `result`
-  (or `error` when it failed), `mutates`, `observed`, `used`, `calls`, and
-  `evidence`.
+- The record: `<run_dir>/<record>/record.json`. Read `args`,
+  `args_origin`, `result` (or `error` when it failed), `mutates`,
+  `observed`, `used`, `calls`, and `evidence`.
 
 What each part of `observed` says:
 
 - `processes` lists each `runCommand`, with its command, `cwd`,
   `exit_code`, `files` (what it added, changed, or removed under its
-  working directory), and `stdout` and `stderr`: the files in the
-  record's directory that hold what it printed. `null` means nothing was
-  measured, not that nothing happened.
+  working directory), `stdout` and `stderr` (the files in the record's
+  directory that hold what it printed), `stdin` (the file that holds
+  what it was given), and `env` (how its environment differed from the
+  runner's: every name, and a value only when it is an absolute path that
+  exists, a decimal integer, or a boolean; any other value is its
+  `hidden_bytes`).
+- `http` counts the requests the step sent. Each is a line in
+  `http.jsonl` with its method, URL, status, request body, and response
+  body. A line marked `after_step_end` started after the record was
+  written, so the record does not count it; the run summary names it.
+- `files` lists the paths the step changed in a scratch directory or
+  wrote through `node:fs`, each with its content after the step.
+- `unmeasured` lists what the step did that nukadoko saw but cannot
+  measure: a process started without `runCommand` (its program and
+  argument count only), a `Worker`, a connection that carries no recorded
+  request. The record has no evidence of what such an action did, so a
+  claim that rests on it is cannot tell. An empty list is not proof that
+  nothing else happened: a child process's own traffic is never seen.
+
+A `null` channel means nothing was measured there, not that nothing
+happened.
+
+The other fields:
+
+- `args_origin` says where each argument came from (a capture, the
+  docstring, the table, an earlier step's result, the command line, or
+  the schema), which names the input to fix when an argument is wrong.
 - `used` names the earlier step records this step read through `from`,
   and the values it took from them.
 - `evidence` points at the screenshots, the trace, `http.jsonl` (each
-  request through `request`, `page`, `context`, or `pageAs`), and any
-  attachment the step made. Name the file the person can open.
+  request the step or its page sent), and any attachment the step made.
+  Name the file the person can open.
 
 ## 3. Judge it with fresh eyes
 
@@ -66,7 +90,8 @@ says. Expect one of four answers, each citing the field it rests on:
   write under a `mutates: false` declaration, a file the sentence never
   mentions, a request to another endpoint).
 - **cannot tell**: the evidence does not reach the claim (an
-  `observed` that is `null`, a result that only echoes an argument).
+  `observed` channel that is `null` or an entry in `observed.unmeasured`
+  where the claim needs evidence, a result that only echoes an argument).
 
 Without a subagent, judge it yourself from the record alone and say so.
 

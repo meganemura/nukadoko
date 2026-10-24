@@ -200,7 +200,7 @@ describe("nuka do", () => {
       expect(stepRecord.evidence.http).toBeUndefined();
       // The step reached no channel nukadoko observes, so every channel
       // is null rather than a count of zero.
-      expect(stepRecord.observed).toEqual({ processes: null });
+      expect(stepRecord.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
       // `echo` declares `mutates: false` explicitly: a typed step's step
       // record carries that declaration verbatim, never `null` (`null` is
       // reserved for a compat step, which has no declaration at all).

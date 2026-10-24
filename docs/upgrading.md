@@ -95,6 +95,29 @@ This part does not change release to release.
 - **The run summary has no "Declared vs observed" section.** A job that
   read it from `summary.md` drops that read.
 
+- **`observed` has three more keys, and every one is always present.**
+  A reader that compares `observed` as a whole, such as
+  `{ "processes": null }`, compares
+  `{ "processes": null, "http": null, "files": null, "unmeasured": [] }`
+  instead; a reader that reads keys by name has nothing to do. A request
+  the step's own code sends through `fetch`, `node:http`, or
+  `node:https` is now a line in `http.jsonl`, so a job that counted
+  lines there counts these too, or filters on `via`.
+
+- **`runCommand` keeps the `input` a step writes to stdin.** The new
+  `stdin` file is redacted only for a value loaded from an env file or
+  named in `redact`, the same rule as `command`, so a step that passes
+  a value it holds itself as `input` names it in `redact`. The content
+  in `observed.files` is redacted only for a value loaded from an env
+  file, so a secret a step writes to a file is one it loaded from an env
+  file.
+
+- **Two more evidence names are the harness's.** `ctx.evidence.attach`
+  and `ctx.evidence.path` refuse `process-<n>.stdin.txt` and
+  `process-<n>.json` (the entry of a `runCommand` process that started
+  after its step ended) with `ReservedEvidenceNameError`, in any case. A
+  step that attached a file under either name picks another name.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

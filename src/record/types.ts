@@ -246,13 +246,111 @@ export interface HttpOmittedCounts {
 
 /** What one step boundary reached (`nuka do`'s whole execution, or one
  * `nuka run` pickle step). Mirrors the step record's own `observed` shape
- * (docs/spec.md "Records"). */
+ * (docs/spec.md "Records"). The name is older than the shape: it holds
+ * the measurements themselves, not only counts, and it stays because the
+ * package exports it. */
 export interface ObservedCounts {
   /** Every child process `runCommand` started during this execution, in
    * call order (docs/spec.md "Records"). `null` when the execution never
    * called `runCommand`. */
   processes: ProcessEntry[] | null;
+  /** How many requests the step's own process sent through `fetch`,
+   * `node:http`, `node:https`, or a Playwright request context, each one
+   * a line of the step's http.jsonl. `null` when it sent none. A page's
+   * own traffic is not counted: it is in the trace. */
+  http: number | null;
+  /** The files the step changed: its scratch directories compared before
+   * and after the step, and every `node:fs` write its own process made
+   * anywhere outside the state directory. `null` when it changed none. */
+  files: FileChange[] | null;
+  /** What the step did that nukadoko could not measure. Empty when there
+   * was nothing. */
+  unmeasured: UnmeasuredEntry[];
 }
+
+/** A body or a file's content, kept as text. The bytes are decoded as
+ * UTF-8, redacted, and then cut, so a secret that the cut would split is
+ * already replaced. */
+export interface KeptText {
+  /** The text, redacted. Absent when the bytes are not UTF-8 text
+   * (`binary`) or were not read (`unread`). */
+  readonly text?: string;
+  /** The whole size in bytes, before redaction. Absent when nukadoko
+   * stopped reading before the end (`bytes_read`) or did not read it
+   * (`unread`). */
+  readonly bytes?: number;
+  /** A body nukadoko stopped reading before its end: the bytes it read, at
+   * the cap or when the step boundary stopped waiting (`incomplete`). The
+   * body is at least this long; its whole size was never seen. */
+  readonly bytes_read?: number;
+  /** `text` holds only the start. */
+  readonly truncated?: true;
+  /** The bytes are not UTF-8 text, so none is kept. */
+  readonly binary?: true;
+  /** The body had not ended when the step boundary stopped waiting for
+   * it (an event stream, for example). */
+  readonly incomplete?: true;
+  /** Why nukadoko did not read the body at all. */
+  readonly unread?: string;
+}
+
+/** One path the step changed. A directory's path ends in `/` and has no
+ * `bytes`; a removed path has neither `bytes` nor `content`. */
+export interface FileChange {
+  /** The absolute path. */
+  readonly path: string;
+  readonly change: "added" | "changed" | "removed";
+  /** The file's size after the step. */
+  readonly bytes?: number;
+  /** The file's content after the step, within the per-file and per-step
+   * caps. */
+  readonly content?: KeptText;
+}
+
+/** One action nukadoko saw the step take and could not measure. */
+export interface UnmeasuredEntry {
+  /** `child_process`: a process started without `runCommand`.
+   * `worker_thread`: a `worker_threads.Worker`, whose own globals no
+   * patch reaches. `socket`: a connection that carries no recorded HTTP
+   * request (one the step opened, or one opened before the step that the
+   * step wrote to), or what an upgraded connection or a CONNECT tunnel
+   * carried after its recorded handshake. `files`: a scratch directory
+   * that could not be compared. */
+  readonly kind: "child_process" | "worker_thread" | "socket" | "files";
+  /** One line that names it: the program and its argument count (never
+   * its arguments), the script, the address or URL, or the directory and
+   * why. */
+  readonly detail: string;
+}
+
+/** Where one args key's value came from. `capture`, `docstring`, and
+ * `table` are the feature line's own; `from` names the step record and
+ * the result key it was read from; `command_line` is `nuka do --args`;
+ * `schema` is the step's args schema producing a key nothing gave (a
+ * default, or a transform). */
+export type ArgOrigin =
+  | "capture"
+  | "docstring"
+  | "table"
+  | "command_line"
+  | "schema"
+  | { readonly from: { readonly step_record_id: string; readonly step: string; readonly key: string } };
+
+/** One recorded environment value. The text itself only when it cannot
+ * be a credential: an absolute path, a decimal integer, or `true` or
+ * `false`, with secrets redacted. Any other value is its UTF-8 length. */
+export type EnvValue = string | { readonly hidden_bytes: number };
+
+/** The environment a process got, against the runner's own. Every name is
+ * recorded; a value only as an {@link EnvValue}. `inherited` when the step
+ * passed no `env`. */
+export type ProcessEnv =
+  | { readonly inherited: true }
+  | {
+      readonly added: Readonly<Record<string, EnvValue>>;
+      readonly changed: Readonly<Record<string, EnvValue>>;
+      readonly removed: readonly string[];
+    };
 
 /** One process `runCommand` ran. Measured by the helper itself, never
  * declared by the step. */
@@ -279,6 +377,11 @@ export interface ProcessEntry {
   readonly stdout?: string;
   /** The same, for stderr. */
   readonly stderr?: string;
+  /** The same, for the `input` the step wrote to the process's stdin. */
+  readonly stdin?: string;
+  /** The environment the process got, against the runner's. Present for
+   * every process this release's `runCommand` ran. */
+  readonly env?: ProcessEnv;
 }
 
 /** What a process wrote, decoded as UTF-8, handed to the collector beside
@@ -286,6 +389,9 @@ export interface ProcessEntry {
 export interface ProcessOutput {
   readonly stdout: string;
   readonly stderr: string;
+  /** What the step wrote to stdin, redacted. Absent when it wrote
+   * nothing. */
+  readonly stdin?: string;
 }
 
 /** Paths relative to the process's `cwd`, `/`-separated, a directory's
@@ -703,13 +809,13 @@ export interface StepRecordBase {
   started_at: string;
   finished_at: string;
   evidence: EvidenceMeta;
-  /** Network calls the tool itself saw this execution make, through
-   * `ctx.request()` and the page alike — GET/HEAD as reads, everything else
-   * as writes. Measured, never declared, and never a verdict: the HTTP
-   * method is only a proxy for write semantics, so Then position and
-   * read-only environments act on the declared `mutates`, and this count
-   * sits beside it to make a wrong declaration visible (docs/spec.md
-   * "Keyword semantics", "Records"). */
+  /** Where each args key's value came from. Present for a typed step;
+   * absent for a compat step, whose arguments are positional. */
+  args_origin?: Readonly<Record<string, ArgOrigin>>;
+  /** What the execution reached outside its own code: processes, HTTP,
+   * files, and what could not be measured. Measured, never declared, and
+   * never a verdict: Then position and read-only environments act on the
+   * declared `mutates` (docs/spec.md "Keyword semantics", "Records"). */
   observed: ObservedCounts;
   /** Env var names `ctx.requireEnv` was actually called with during this
    * execution (docs/spec.md "Records"). Present only when non-empty;
@@ -767,8 +873,8 @@ export interface StepRecordBase {
    * only when at least one request was left out. */
   http_omitted?: HttpOmittedCounts;
   /** How many http.jsonl lines this execution could not append (a missing
-   * directory, a full disk, a permission error), so a request `observed`
-   * counted may be absent from the file. Present only when at least one
+   * directory, a full disk, a permission error), so a request the step
+   * sent may be absent from the file. Present only when at least one
    * append failed. */
   http_log_failed?: number;
   /** Every Playwright call this step made through `ctx.page()`, read back
@@ -792,9 +898,9 @@ export interface StepRecordBase {
    * combine into this single field, so `nuka run`/`nuka do` can never
    * report the two through two different mechanisms. */
   truncated?: { actions?: number; evidence?: number };
-  /** This step's own declared `mutates` (`defineStep`'s, default `true`) —
-   * the counterpart to `observed` a step record needs to let "declared vs
-   * observed" be checked from the step record alone. `null` for a compat
+  /** This step's own declared `mutates` (`defineStep`'s, default `true`),
+   * beside `observed` so a reader can set the declaration against what
+   * was measured from the step record alone. `null` for a compat
    * step: compat has no
    * `mutates` declaration to
    * report (`then-compat-step`'s own warning exists for exactly this gap), so

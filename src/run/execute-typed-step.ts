@@ -10,6 +10,10 @@ import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
 import { classifyCaughtError, runWithTimeout } from "./run-scenario.js";
 
+// `nuka do` names where each args key came from the same way `nuka run`
+// does, and reaches the run layer through this file.
+export { argOrigins } from "./arg-origins.js";
+
 // Responsibility: one typed step, run once in a ctx the caller already
 // holds. Validate the args, open the fixture bag, call `run` under the
 // step's deadline, and validate what it returned. `nuka do` runs a step

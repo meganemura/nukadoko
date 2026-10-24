@@ -110,6 +110,16 @@ export interface ScenarioStepEntry {
    * needs no explanation (it is a symptom of an earlier step's failure, not
    * its own), and `passed` has nothing to explain. */
   readonly error?: { readonly message: string };
+  /** How many requests and `runCommand` processes the step's code started
+   * after its step record was written, while the scenario was still
+   * running. Present only when either is above 0 (docs/spec.md "Records"). */
+  readonly after_step_end?: AfterStepEndCounts;
+}
+
+/** Actions a step started after its record was written. */
+export interface AfterStepEndCounts {
+  readonly requests: number;
+  readonly processes: number;
 }
 
 /** One Before/After hook's own outcome — a hook that didn't apply to this

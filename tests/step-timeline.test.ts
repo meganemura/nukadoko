@@ -42,7 +42,7 @@ function stepRecordFor(index: number, startMs: number, stopMs: number): StepReco
     started_at: new Date(startMs).toISOString(),
     finished_at: new Date(stopMs).toISOString(),
     evidence: { dir: `.nukadoko/records/steps/step-${index}`, screenshots: [] },
-    observed: { processes: null },
+    observed: { processes: null, http: null, files: null, unmeasured: [] },
     mutates: true,
   };
   return stepRecord;

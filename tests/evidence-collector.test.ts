@@ -156,6 +156,16 @@ describe("EvidenceCollector", () => {
     },
   );
 
+  it("refuses the names a runCommand process's files and a late process's entry are written to, and leaves near names free", () => {
+    const collector = createEvidenceCollector(() => dir);
+    for (const name of ["process-1.stdout.txt", "process-2.stderr.txt", "process-3.stdin.txt", "process-4.json", "PROCESS-12.JSON"]) {
+      expect(() => collector.path(name), name).toThrowError(expect.objectContaining({ name: "ReservedEvidenceNameError" }));
+    }
+    for (const name of ["process-0.json", "process-1.yaml", "process.json", "process-1.stdout.json"]) {
+      expect(() => collector.path(name), name).not.toThrow();
+    }
+  });
+
   it("keeps two names that differ only by case on different paths, and still attaches a normal name", async () => {
     const collector = createEvidenceCollector(() => dir);
 

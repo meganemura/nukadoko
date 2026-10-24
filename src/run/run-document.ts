@@ -1,7 +1,7 @@
 import type { GherkinDocument, Pickle, Step as GherkinStep } from "@cucumber/messages";
 import type { RunScenario, RunStep, RunUsed } from "../record/run-result.js";
 import type { ScenarioRecord } from "../record/scenario-record.js";
-import type { StepRecord } from "../record/types.js";
+import type { ObservedCounts, StepRecord } from "../record/types.js";
 
 // Responsibility: one scenario's entry in run.json, built from the scenario
 // as it ran and the step records it wrote. Pure: the caller reads the step
@@ -11,8 +11,10 @@ import type { StepRecord } from "../record/types.js";
 // step record: the line, the step it matched, the record path, and, for a
 // failure, the message, the error kind, and the results it read. The
 // declaration and the measurement (`mutates`, `observed`) ride along so the
-// run summary can name a failed step's process from run.json
-// alone. Args and the step's own result stay in the step record: they can be
+// run summary can name a failed step's process, and a step's unmeasured
+// actions, from run.json alone. A changed file's content stays in the step
+// record, as a process's output does: run.json carries the path, the
+// change, and the size. Args and the step's own result stay in the step record: they can be
 // large, and nothing on the next decision needs them. A failed step's
 // `used` results are the exception, because the failure often is what an
 // upstream step returned (a process that exited nonzero, and its stderr).
@@ -99,6 +101,12 @@ function usedOf(stepRecord: StepRecord, recordPath: (id: string) => string): Run
   return stepRecord.used.map((entry) => ({ step: entry.step, record: recordPath(entry.step_record_id), ...boundUsedResult(entry.result) }));
 }
 
+/** `observed` without the content of each changed file. */
+function observedForRun(observed: ObservedCounts): ObservedCounts {
+  if (!Array.isArray(observed.files)) return observed;
+  return { ...observed, files: observed.files.map(({ content: _content, ...rest }) => rest) };
+}
+
 export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput): RunScenario {
   const steps = record.steps.map((entry, index): RunStep => {
     const stepRecord = entry.step_record_id === null ? null : (input.stepRecords.get(entry.step_record_id) ?? null);
@@ -115,9 +123,10 @@ export function buildRunScenario(record: ScenarioRecord, input: RunScenarioInput
         ? entry.step_record_id === null
           ? {}
           : { record_unreadable: true as const }
-        : { mutates: stepRecord.mutates, observed: stepRecord.observed }),
+        : { mutates: stepRecord.mutates, observed: observedForRun(stepRecord.observed) }),
       ...(entry.error === undefined ? {} : { error: { kind, message: entry.error.message } }),
       ...(used === undefined ? {} : { used }),
+      ...(entry.after_step_end === undefined ? {} : { after_step_end: entry.after_step_end }),
     };
   });
   return {

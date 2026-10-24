@@ -640,7 +640,8 @@ The fixture names:
   the other fixtures do not cover. Every other fixture above returns something
   that the harness collects by itself. Previously, no fixture accepted
   application-specific evidence that only a step can produce. Examples include
-  an API response body, a DB snapshot, and a generated file's contents.
+  a DB snapshot, a file outside the scratch directories that a child process
+  wrote, and the whole of a response body past the 16 KiB http.jsonl keeps.
   `attach` writes `body` (`string | Uint8Array`) into this execution's own
   evidence directory. It records the file in the step record's
   `evidence.attachments` (see "Records"). Two calls with the same `name` keep
@@ -657,7 +658,7 @@ The fixture names:
   `name` that contains a path separator is refused. A `name` equal to `.`,
   `..`, or the empty string is also refused. A `name` of `record.json`,
   `final.png`, `trace.zip`, or `http.jsonl`, or of the shape
-  `process-<n>.stdout.txt` or `process-<n>.stderr.txt`, is refused too,
+  `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused too,
   including a spelling that differs only by case (`ReservedEvidenceNameError`). Those
   are files the harness writes in that directory, and a step name that
   landed on one of them would replace it. Nukadoko never silently rewrites
@@ -1625,10 +1626,12 @@ import { Given, When, Then } from "nukadoko/compat";
   that prefer one regexp, or a type that prefers a built-in type's regexp
   such as `{int}`'s, are a `parameter-type-invalid` error.
 - Execution supports two forms. Glue that starts its own Playwright
-  continues to work without measurement. A World subclass assigns that
+  continues to work, with no trace and no page log. A World subclass assigns that
   page and request with `this.page = ...` and `this.request = ...`, and
   the getter returns the assigned value ahead of anything `openPage()` or
-  `openRequest()` stored. That assignment is not measured. `await
+  `openRequest()` stored. The assigned page gets no trace or screenshot;
+  a request a step sends through the assigned request context is still a
+  `node:http` or `node:https` line in http.jsonl (see "Records"). `await
   this.openPage()` and `await this.openRequest()` return the measured
   page and request from the harness. With no assignment, reading
   `this.page` or `this.request` before the matching opener has resolved
@@ -2279,7 +2282,10 @@ to act on the run without opening another file:
           "record": "steps/step-20260801-143023-e5f6",
           "mutates": false,
           "observed": {
-            "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41 }]
+            "processes": [{ "command": ["node", "greet.js", "Ada"], "cwd": "...", "exit_code": 0, "duration_ms": 41, "env": { "inherited": true } }],
+            "http": null,
+            "files": null,
+            "unmeasured": []
           }
         },
         {
@@ -2290,7 +2296,7 @@ to act on the run without opening another file:
           "step_record_id": "step-20260801-143023-g7h8",
           "record": "steps/step-20260801-143023-g7h8",
           "mutates": false,
-          "observed": { "processes": null },
+          "observed": { "processes": null, "http": null, "files": null, "unmeasured": [] },
           "error": { "kind": "step_error", "message": "text: expected \"Hi, Ada!\", got \"Hello, Ada!\"" },
           "used": [
             {
@@ -2573,10 +2579,11 @@ its scenario record's id, so either record leads to the other.
   "step": "create-project",
   "kind": "do",
   "args": { "name": "acme" },
+  "args_origin": { "name": "command_line" },
   "result": { "id": "p_0001", "name": "acme" },
   "status": "passed",
   "mutates": true,
-  "observed": { "processes": null },
+  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] },
   "environment": "dev",
   "target_version": "1.4.2+abc123",
   "scenario_record_id": null,
@@ -2605,6 +2612,17 @@ its scenario record's id, so either record leads to the other.
   given, since a value the schema already rejected cannot be reconstructed
   into the validated shape. A compat step's `args` is never validated
   either way, having no schema to validate against.
+- `args_origin` names where each key of `args` came from: `"capture"`
+  (a pattern capture), `"docstring"` or `"table"` (the attachment on the
+  feature line), `{ "from": { "step_record_id", "step", "key" } }` (an
+  earlier step's result, through `from` in a scenario or `--use` on
+  `nuka do`, where `key` is the result key it was read from),
+  `"command_line"` (`nuka do --args`), or `"schema"` (the args schema
+  produced the key during validation: a `.default(...)` or a transform).
+  A reader who finds a wrong value knows which input to fix without
+  matching the feature line, the step, and the upstream records by hand.
+  It is absent for a compat step, whose arguments are positional, and for
+  args with no keys.
 - A bigint is stored as its decimal string, in `args`, in `result`, and
   anywhere else in a record, because JSON has no bigint. A `{biginteger}`
   capture bound to `z.bigint()` records `"v": "123456789012345678901234567890"`.
@@ -2672,10 +2690,53 @@ its scenario record's id, so either record leads to the other.
   for without ever stating it, and it says the real thing: how long after
   this execution's own timeline the screenshot was actually taken.
 - `observed` holds what the tool saw the execution reach, one key per
-  channel. A channel the execution never reached is `null`, never `0`:
-  "nothing was measured" and "measured zero" are different facts. It
-  records what can be measured exactly and infers nothing from it: no
-  field says whether a step wrote (see "Keyword semantics").
+  channel: `processes`, `http`, `files`, and `unmeasured`. Every channel
+  follows one rule: measure what can be measured exactly, mark what
+  cannot, and never infer a write from a method. A channel the execution
+  never reached is `null`, never `0`: "nothing was measured" and
+  "measured zero" are different facts. `unmeasured` is always a list,
+  since it names what was seen and not measured. An empty list says the
+  patches below saw nothing they could not measure; it says nothing about
+  what no patch reaches (the end of this item). No field says whether a step wrote (see "Keyword
+  semantics"): a POST is a request, never a write, and a file is in
+  `files` because its identity changed on disk.
+  The channels are recorded inside the step's own `run`, the parts it
+  calls, and a compat step's function: the executor opens a scope around
+  it, and nukadoko patches `fetch`, `node:http`, `node:https`,
+  `node:child_process`, `net.Socket#connect`, `write`, and `end`, the
+  `node:fs` writes, and `worker_threads.Worker`, once per process, to
+  record into that scope.
+  Outside a step the patches call the original and record nothing, and
+  every patched function keeps the original's `name`, `length`, promise
+  form (`util.promisify` of `exec` and `execFile`), and synchronous
+  throws, so code outside a step sees the builtins as Node ships them.
+  nukadoko's own I/O inside a step is not recorded as the step's: a
+  `runCommand` spawn, the browser launch, the send of a `request` fixture
+  call (its own line already records it), the writes under the state
+  directory, and the files Playwright writes for nukadoko (trace chunks,
+  network logs, resources, and HAR and video when a context asks for
+  them). Those go to the launch's `artifactsDir` and `tracesDir`: the
+  ones `config.browser` names, or otherwise a temporary directory
+  nukadoko creates and removes when the browser closes. Playwright's
+  server runs in the step's own process, so without this its trace
+  writes, which hold the context's options with its headers and
+  credentials, would read as the step's files. A module that copied `fetch` or `http.request` into a
+  variable before the patches existed keeps the original, so `nuka run`
+  and `nuka do` install them before they load the config or a step file.
+  An interceptor keeps working either way, since each patch passes every
+  argument through and returns what the original returned. Measured on
+  Node 22.22.0 with msw 2.15.0 and nock 14.0.17 (both on
+  @mswjs/interceptors 0.41.9), one mocked `node:http` GET and one mocked
+  `fetch` inside a step: installed before the patches, both requests are
+  lines with the mocked response; installed after them, the `node:http`
+  request is a line and the `fetch` is not, because the interceptor's
+  `fetch` answers without calling the one it replaced. No patch reaches a
+  Worker's own globals, a native addon, a child process's own traffic, a
+  function copied before the patches were installed, a connection opened
+  before they were installed, what a connection opened before the step
+  carries when the step only reads from it, or work that runs outside the
+  step's async context (a callback a server started by a fixture
+  invokes). None of these appears in `unmeasured`.
 - `observed.processes` (`null` when the execution never called
   `runCommand`) lists each child process that `runCommand` started during the execution,
   in call order: `{ "command", "cwd", "exit_code", "duration_ms" }`, plus
@@ -2699,7 +2760,28 @@ its scenario record's id, so either record leads to the other.
   `process-<n>.stderr.txt`, that holds the whole stream, redacted like
   http.jsonl, with a step's own `redact` values replaced too. The output
   is a file rather than a field because it can be large, and the entry
-  that `run.json` copies stays small. `n` counts the processes of the
+  that `run.json` copies stays small. `"stdin"` names
+  `process-<n>.stdin.txt`, the `input` the step wrote to the process,
+  redacted the same way, when it wrote any. Each entry also has `"env"`:
+  the process's environment against the runner's, `{ "added": {...},
+  "changed": {...}, "removed": [...] }`, or `{ "inherited": true }` when
+  the step passed no `env`. It is a difference, not the whole
+  environment, because the runner's holds tens of variables that say
+  nothing about the step, and some are credentials. Every name is
+  recorded, and `removed` is a list of names. A value is shown only when
+  nukadoko can tell it is not a credential: an absolute path (`/...`, or
+  a Windows drive path such as `C:\...`) with no control character that
+  exists when the process ends, a decimal integer, or `true` or
+  `false`, redacted like the rest of the entry. Any other value is
+  `{ "hidden_bytes": <n> }`, its length in UTF-8 bytes. Redacting the
+  loaded secrets is not enough here: a step passes a value it holds
+  itself, such as a token it signed, through `env`, and the record must
+  not become a place credentials leak to. A reader still needs paths and
+  numbers to judge a step, and a byte length tells a set value from an
+  empty one. The path must exist because its shape alone proves nothing:
+  base64 can start with `/`, so a token can look like a path, but it
+  names no file. A path the program was told to create and did not is
+  hidden as a result. `n` counts the processes of the
   execution from 1, and moves to the next free number when hooks of one
   scenario share a directory. A person reviewing a step needs what the
   program printed, and the step's result keeps only what the step chose
@@ -2720,22 +2802,154 @@ its scenario record's id, so either record leads to the other.
   A call inside a step's `run`, a part, or a compat step adds an entry;
   a call anywhere else runs the same way and adds none. A process that a
   step starts by other means (`node:child_process` directly) is not
-  measured, so it does not appear here.
+  measured: it is in `observed.unmeasured` instead. A process still
+  running when the step's record is built is not listed. A process the
+  step's code starts after its record was written (from a timer it left,
+  or after a timeout) belongs to that step, never to the step running at
+  the time: the record is final, so its entry is written beside it as
+  `process-<n>.json` with `"after_step_end": true`, its output files as
+  usual, and the run summary counts it (`after_step_end`, below).
+- `observed.http` (`null` when the execution sent none) counts the
+  requests the step's own process sent through `fetch`, `node:http`,
+  `node:https`, or a Playwright request context (the `request` fixture,
+  `page.request`, `context.request`). Each is one line of the step's
+  http.jsonl (`evidence.http`, below), with its bodies. A page's own
+  traffic is not counted: the browser sent it, and its http.jsonl lines
+  and the trace already hold it. A request context the step's code
+  creates itself (`request.newContext()` from `playwright`, as a compat
+  World may) sends from the step's own process, so its requests are
+  lines with `via: "node:http"` or `"node:https"`. A request the step's
+  code starts after its record was written is not counted here: its line
+  is still written to that step's http.jsonl, with `"after_step_end":
+  true`.
+- `observed.files` (`null` when the execution changed none) lists the
+  paths the step changed, sorted: `{ "path", "change", "bytes", "content" }`.
+  Two sources are merged. Every scratch directory (see "Context API") is
+  compared before the step's `run` and after it, which sees a write from
+  any process, a `runCommand` child included; a scratch directory created
+  during the step is compared with an empty one. Every `node:fs` write
+  call of the step's own process (`writeFile`, `appendFile`, `mkdir`,
+  `rm`, `rename`, `copyFile`, `open` with a write flag, a write stream,
+  and their sync and promise forms) names a path anywhere outside the
+  state directory, and the path counts when its identity (size,
+  modification time, change time, inode) differs between the first call
+  and the end of the step. A failed call, a `mkdir` of a directory that
+  exists, and a file created and removed within the step are therefore
+  not listed. Where both sources name a path, the scratch comparison
+  wins. The project root is not walked: it would cost more than most
+  steps take, and would read a dev server's writes as the step's. `path`
+  is absolute, with a trailing `/` for a directory, and `change` is
+  `added`, `changed`, or `removed`. `bytes` is the file's size after
+  the step and `content` its text after the step (below), at most 8 KiB
+  per file and 64 KiB per step; past the step's budget a file is not
+  opened, its `bytes` is its size from `lstat`, and its content is
+  `{ "text": "", "bytes", "truncated": true }`. A directory and a removed
+  path have neither. `run.json` copies the list without `content`. A step
+  that writes more than 20000 paths has the first 20000 listed and an
+  `unmeasured` entry for the rest; a scratch directory that cannot be
+  compared is an `unmeasured` entry too.
+- `observed.unmeasured` lists what the step did that the tool can see but
+  not measure, each distinct action once, as `{ "kind", "detail" }`.
+  `child_process` is a process started through `node:child_process`
+  instead of `runCommand`, and `detail` is the call, the program's name
+  (the last segment of its path, or the first word of a shell command
+  line), and how many arguments it was given, such as `execFile git with
+  2 arguments`. The arguments are left out: the process was not
+  measured, and a step passes a token it holds on a command line as
+  easily as anywhere else, with no `redact` option on these calls to
+  name it. A step that needs the command recorded runs it through
+  `runCommand`. `worker_thread` is a `worker_threads.Worker`, whose own globals no
+  patch reaches, and `detail` names its script. `socket` is client
+  traffic that no recorded request accounts for, judged when the step's
+  record is built: a connection the step opened (a database client),
+  with `detail` `connect <host>:<port>` or the socket's path; a
+  connection opened before the step that the step wrote to (a pool a
+  fixture opened, a kept-alive client), `write to <host>:<port>, a
+  connection opened before the step`, once per connection; or what an
+  upgraded connection or a CONNECT tunnel carries after its handshake,
+  whose request is a line of its own, `traffic after the upgrade of
+  <url>` or `traffic through the CONNECT tunnel to <host>:<port>`. A
+  connection is accounted for when nukadoko's own I/O opened it, or when
+  it carries a recorded request from `fetch`, `node:http`,
+  `node:https`, the `request` fixture, or the browser, whenever its
+  agent hands it over (a proxy agent that connects a moment later
+  included). Only connections that call `Socket#connect` are judged, so
+  console output, `process.stdout` and `process.stderr`, the stdin
+  `runCommand` writes, a server's accepted connections, and the IPC
+  channel `--concurrency` workers use are never one. `files` is a scratch directory that could not be compared,
+  or a step past the path limit. The run summary gives each step with an
+  entry here one line (see the run summary, below), and adds nothing for
+  a step without one.
+- `after_step_end`: a step's code can keep running after its record is
+  written, from a timer it left or past a timeout. A request or a
+  `runCommand` process it starts then belongs to that step, never to the
+  step running at the time: each boundary keeps the evidence directory it
+  opened with. The record is final and is not rewritten, so the action is
+  written beside it marked `"after_step_end": true`: a request's line in
+  that step's http.jsonl, a process's entry as `process-<n>.json`. The
+  scenario record's step entry, and the step in `run.json`, carry
+  `"after_step_end": { "requests", "processes" }`, the counts of what
+  started before the scenario ended, and the run summary names them on
+  the step's line. A file write, a socket, or a process started without
+  `runCommand` after the record was written is not recorded anywhere.
+- A body or a file's content is kept as text: `{ "text", "bytes" }`, plus
+  `"truncated": true` when `text` holds only the start,
+  `"binary": true` (and no `text`) when
+  the bytes are not UTF-8, or `{ "unread": "<why>" }` when nukadoko did
+  not read it at all (a multipart body Playwright encodes itself). The
+  bytes are decoded, redacted, and only then cut, so a secret the cut
+  would split is already replaced, and a piece of a secret left at the
+  end of what was read is dropped. `bytes` is the whole size, before
+  redaction, of a body read to its end or one whose size is known (a
+  string, a buffer, a Blob). A `fetch` body nukadoko reads from its own
+  copy (a response, a stream or FormData upload) is read only to one chunk
+  past the first 32 KiB and then left, so a body of any length costs the
+  step's process at most that much to record, and the step's own copy
+  keeps its pace. A body nukadoko stopped reading there, and one still
+  arriving when the step boundary stopped waiting, has `"bytes_read"` instead of `bytes`: the
+  bytes read before nukadoko stopped, which is not the whole size. It is
+  always `"truncated": true`, and `"incomplete": true` when the step
+  boundary stopped waiting for it. The step boundary waits up to one
+  second for a response body still arriving, then keeps what arrived: an
+  event stream never ends, and the step record does not wait for it. A
+  body the step asked for as strings (after `setEncoding`, or a write
+  given an encoding) is turned back into its bytes first, so it is
+  decoded and redacted the same way.
 - `evidence.http` (included only after at least one call was logged) points to
   http.jsonl, one JSON object per line: `{ "method", "url", "status",
-  "duration_ms", "via" }`. `via` is `"request"` for a call made through the
-  `request` fixture, or through `page.request` or `context.request`, and
-  `"page"` for one the page itself made (a `page`
-  navigation, or an in-page `fetch`/XHR), present on every entry either path
-  produces, so a reader never has to guess which one wrote a line from its
-  shape alone. A `via: "request"` call is logged whatever its outcome,
+  "duration_ms", "via", "request_body", "response_body" }`. `via` is
+  `"request"` for a call made through the `request` fixture, or through
+  `page.request` or `context.request`, `"fetch"`, `"node:http"`, or
+  `"node:https"` for one the step's own code sent through that API (see
+  `observed`), and `"page"` for one the page itself made (a `page`
+  navigation, or an in-page `fetch`/XHR), present on every entry, so a
+  reader never has to guess which path wrote a line from its shape alone.
+  Every line but a `"page"` one has `"request_body"` (absent when the
+  request sent none) and `"response_body"` (absent when no response
+  arrived or it had no body, as for HEAD or a 204, from every client),
+  kept as text of at most 16 KiB each (below).
+  Headers are never written: they carry cookies and credentials, and the
+  trace holds a page's. A page line has no bodies: the trace already holds
+  the page's traffic. A call the step itself made is logged whatever its outcome,
   including one that throws (a refused connection, `failOnStatusCode` on an
   error status). `url` is the absolute URL the response came from, with
   `params` applied and any redirect followed, the same shape a `via: "page"`
   entry has. `declared_url` is the string the step passed and is present
   only when it differs from `url`. When no response exists, `status` is `0`
   and `error` holds the first line of the failure message; the declared
-  string is then the only URL known, so it is `url`. A failed append does
+  string is then the only URL known, so it is `url`. `status` `0` always
+  comes with an `error`. One rule holds for every client: a request with
+  no response when the step boundary stops waiting (up to one second) is
+  written then, with `"error": "no response within <n> ms of the step's
+  end"`, and a response that arrives later changes nothing. A request
+  that closed with neither a response nor an error has `"error": "the
+  request was closed before a response arrived"`. A `fetch` that throws
+  before it sends (a used Request, a GET with a body) is a line with the
+  error `fetch` gives, and the step gets exactly that error. An upgrade
+  (a WebSocket) or a CONNECT is a line with the handshake's real status,
+  101 or the tunnel's, and `url` is the CONNECT target `<host>:<port>`;
+  what the connection carries afterwards is an `unmeasured` socket, and
+  the step boundary does not wait for it. A failed append does
   not fail the step; it is counted in `http_log_failed` (below). A page request's line belongs to the step that sent it. The
   path is taken when the request starts, and the response is appended there
   even when it arrives after that step has returned. Only `document`, `xhr`, and `fetch` requests (Playwright's own
@@ -2769,7 +2983,7 @@ its scenario record's id, so either record leads to the other.
   rewritten into something safe. A `name` of `record.json`, `final.png`,
   `trace.zip`, or `http.jsonl`, of the shape `trace.<name>.zip` or
   `final.<name>.png` for a valid `pageAs` name, or of the shape
-  `process-<n>.stdout.txt` or `process-<n>.stderr.txt`, is refused the same way
+  `process-<n>.stdout.txt`, `process-<n>.stderr.txt`, `process-<n>.stdin.txt`, or `process-<n>.json`, is refused the same way
   (`ReservedEvidenceNameError`), including a spelling that differs only by
   case: those are files the harness writes in this directory. Capped at 100
   entries, sorted by `at`, the
@@ -3050,6 +3264,16 @@ holds:
   its stdout when stderr is empty (as on stderr), the last command the step ran through `runCommand` that did not
   exit 0, and the record's path, once for each environment it failed in
   and prefixed by that environment when the run had more than one;
+- "Unmeasured actions", when a step did something the tool saw but could
+  not measure (`observed.unmeasured`), or started a request or a
+  `runCommand` process after its record was written (`after_step_end`):
+  one line per step, with its location, its text, its environment when
+  the run had more than one, up to three of its actions and how many
+  more, `started after the step ended: <n> request(s), <n> process(es)`
+  when it did, the advice to start a process with `runCommand` when one
+  of its actions is a `child_process`, and its record's path. A step
+  with neither adds nothing, and under `--repeat` the same step with the
+  same line is one line;
 - "Findings", when the run raised any finding other than a failed scenario
   (a warning such as a file that was not written or a teardown that
   failed), one line each with its severity, code, location, and message;
@@ -4346,7 +4570,9 @@ its type, or its name, or is removed. An added field does not move it. A
 reader checks the number before it trusts the shape. The step record is 4: 2 made an `observed` channel the
 execution never reached `null` and `observed.processes` always
 present, 3 removed the `session` field, and 4 removed the two HTTP
-method counts from `observed`. The envelope is 3: it removed `probes`
+method counts from `observed` (`observed.http`, `observed.files`,
+`observed.unmeasured`, `stdin` and `env` on a process, and
+`args_origin` arrived with it). The envelope is 3: it removed `probes`
 from run.json's scenarios and the same two counts from each step's
 `observed`. A record without `schema_version` was written
 by nukadoko 0.16.1 or earlier.

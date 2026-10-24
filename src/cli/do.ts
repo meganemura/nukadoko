@@ -1,10 +1,10 @@
 import { SCHEMA_VERSIONS } from "../record/schema-version.js";
 import { readOwnVersion } from "../version.js";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "../run/process-signal.js";
-import { executeTypedStep } from "../run/execute-typed-step.js";
+import { argOrigins, executeTypedStep } from "../run/execute-typed-step.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
-import { createStepContext, type DisposeResult } from "../context/create-context.js";
+import { createStepContext, installChannelPatches, type DisposeResult } from "../context/create-context.js";
 import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
 import { evidenceMetaFields, mergeTruncated } from "../context/evidence.js";
 import { collectTraceEvidence, createTraceVersionWarner } from "../context/trace-actions.js";
@@ -23,7 +23,7 @@ import { createRecordDir, generateStepRecordId } from "../record/record-id.js";
 import { readStepRecordById } from "../record/read-step-record.js";
 import { doRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { retentionNote } from "../record/retention.js";
-import type { ErrorKind, StepRecord } from "../record/types.js";
+import type { ArgOrigin, ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -130,6 +130,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   const sinks = { json: false, stdout, stderr, command: "do" };
   const warnings = (code: string): WritableSink =>
     warningSink(code, (finding) => stderr.write(formatFinding(withHint(finding))));
+
+  // Before the config and the step files load: a module that copies
+  // `fetch` or `http.request` while it loads keeps whatever it copied, and
+  // the channel patches (src/context/channels.ts) see only calls that go
+  // through them.
+  installChannelPatches();
 
   // --- Setup phase: any failure here writes nothing. ---
   let config;
@@ -476,14 +482,21 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // --args is JSON, which has no bigint or Date, so a value this step's
     // args declare as one arrives as its stored string.
     parsedArgs = reviveStoredForm(entry.step.args, parsedArgs, "input");
+    // Where each args key came from, for the step record's `args_origin`:
+    // `--args` first, then each `--use` that filled a key `--args` left.
+    const origins = new Map<string, ArgOrigin>();
     if (typeof parsedArgs === "object" && parsedArgs !== null && !Array.isArray(parsedArgs)) {
       const argsObject = parsedArgs as Record<string, unknown>;
+      for (const key of Object.keys(argsObject)) origins.set(key, "command_line");
       for (const resolved of resolvedUses) {
         let filledAnyKey = false;
         for (const [key, value] of Object.entries(resolved.filled)) {
           if (!(key in argsObject)) {
             argsObject[key] = value;
             filledAnyKey = true;
+            origins.set(key, {
+              from: { step_record_id: resolved.used.step_record_id, step: resolved.used.step, key: resolved.sources[key] ?? key },
+            });
           }
         }
         // Only a step record actually drawn from lands in `used` (docs/spec.md
@@ -509,6 +522,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     });
     const { status, fixtureUsage } = outcome;
     const recordedArgs = outcome.args;
+    const argsOrigin = argOrigins(recordedArgs, (key) => origins.get(key));
     const result = outcome.status === "passed" ? outcome.result : undefined;
     const errorMessage = outcome.status === "failed" ? outcome.error.message : "";
     const errorKind: ErrorKind | undefined = outcome.status === "failed" ? outcome.error.kind : undefined;
@@ -519,7 +533,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // the declaration is trusted, and
     // `observed` below still records what actually happened, for a report
     // to catch a wrong declaration after the fact.
-    const observed = contextHandle.observedCounts();
+    const observed = await contextHandle.observedSnapshot();
     // `ctx.section` works the same under `nuka do` as under `nuka run` —
     // there is no scenario/pickle
     // concept here to special-case, so this is read the same way
@@ -601,6 +615,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             step: name,
             kind: "do",
             args: recordedArgs,
+            ...(argsOrigin !== undefined ? { args_origin: argsOrigin } : {}),
             result,
             status: "passed",
             environment: resolvedEnv.name,
@@ -639,6 +654,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
             step: name,
             kind: "do",
             args: recordedArgs,
+            ...(argsOrigin !== undefined ? { args_origin: argsOrigin } : {}),
             // `errorKind` is always set by this point: `status` only ever
             // becomes `"failed"` alongside it, at each branch above. The
             // `?? "step_error"` fallback is a

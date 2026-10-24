@@ -32,7 +32,7 @@ describe("readStepRecord", () => {
       started_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),
       evidence: { dir: ".nukadoko/runs/run-1/steps/step-20260801-143022-a1b2", screenshots: [] },
-      observed: { processes: null },
+      observed: { processes: null, http: null, files: null, unmeasured: [] },
       mutates: true,
     };
     await writeFile(path.join(dir, "record.json"), `${JSON.stringify(stepRecord, null, 2)}\n`);
@@ -54,7 +54,7 @@ describe("readStepRecord", () => {
       started_at: "2026-08-01T14:30:22.000Z",
       finished_at: "2026-08-01T14:30:23.000Z",
       evidence: { dir: ".nukadoko/runs/run-1/steps/step-20260801-143022-a1b2", screenshots: [] },
-      observed: { processes: null },
+      observed: { processes: null, http: null, files: null, unmeasured: [] },
       mutates: true,
     };
     await writeFile(path.join(dir, "record.json"), `${JSON.stringify(written, null, 2)}\n`);

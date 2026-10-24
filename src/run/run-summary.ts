@@ -316,6 +316,71 @@ function renderCriteriaSince(document: RunDocument): string[] {
   return lines;
 }
 
+// How many unmeasured actions one line names before it counts the rest.
+const UNMEASURED_SHOWN = 3;
+
+// `plural` above adds an s, which "process" does not take.
+function countOf(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+// The item that names what a step started after its record was written
+// (docs/spec.md "Records"): those lines are in the step's own files, but
+// its record was already final, so this line is the one place that says
+// they exist.
+function afterStepEndItem(step: RunScenario["steps"][number]): string | undefined {
+  const late = step.after_step_end;
+  if (late === undefined) return undefined;
+  const parts = [
+    ...(late.requests > 0 ? [countOf(late.requests, "request", "requests")] : []),
+    ...(late.processes > 0 ? [countOf(late.processes, "process", "processes")] : []),
+  ];
+  return parts.length === 0 ? undefined : `started after the step ended: ${parts.join(", ")}`;
+}
+
+// One line per step that did something nukadoko could not measure (the
+// step record's `observed.unmeasured`), or that started an action after
+// its record was written: a reader approving the run needs to know which
+// steps' evidence has a gap, and nothing else is added for a step without
+// one. A process started without `runCommand` names only its program and
+// argument count, so the line says how to get it recorded. Under
+// `--repeat` the same step with the same gap is one line, citing its
+// first record.
+function renderUnmeasured(document: RunDocument): string[] {
+  const named = document.environments.length > 1;
+  const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
+  for (const scenario of document.scenarios) {
+    for (const step of scenario.steps) {
+      const unmeasured = step.observed?.unmeasured ?? [];
+      const late = afterStepEndItem(step);
+      if (unmeasured.length === 0 && late === undefined) continue;
+      const shown = unmeasured.slice(0, UNMEASURED_SHOWN).map((entry) => `${entry.kind.replace("_", " ")} ${cellCode(entry.detail)}`);
+      if (unmeasured.length > UNMEASURED_SHOWN) shown.push(`and ${unmeasured.length - UNMEASURED_SHOWN} more`);
+      if (late !== undefined) shown.push(late);
+      const where = `${scenario.feature}:${step.line ?? scenario.line}`;
+      const environment = named ? ` (${cellText(scenario.environment)})` : "";
+      const hint = unmeasured.some((entry) => entry.kind === "child_process") ? "; start a process with `runCommand` to record it" : "";
+      const head = `- ${cellCode(where)} ${cellText(step.text)}${environment}: ${shown.join(", ")}${hint}`;
+      if (lines.has(head)) continue;
+      lines.set(head, {
+        sortKey: [scenario.feature, step.line ?? scenario.line],
+        text: step.record === null ? head : `${head}; record ${cellCode(step.record)}`,
+      });
+    }
+  }
+  if (lines.size === 0) return [];
+  const sorted = [...lines.values()].sort((a, b) => a.sortKey[0].localeCompare(b.sortKey[0]) || a.sortKey[1] - b.sortKey[1]);
+  return [
+    "",
+    "## Unmeasured actions",
+    "",
+    "Each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did.",
+    "An action a step started after its record was written is in that step's own files, marked `after_step_end`, and not in its record.",
+    "",
+    ...sorted.map((line) => line.text),
+  ];
+}
+
 function renderFindings(document: RunDocument): string[] {
   const findings = runFindings(document);
   if (findings.length === 0) return [];
@@ -344,6 +409,7 @@ export function renderRunSummary(document: RunDocument): string {
     ...renderCondition(document),
     ...renderCriteriaSince(document),
     ...renderFeatures(document),
+    ...renderUnmeasured(document),
     ...renderFindings(document),
     ...renderRerun(document),
   ];

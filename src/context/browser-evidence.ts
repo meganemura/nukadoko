@@ -1,4 +1,5 @@
-import { writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
   Browser,
@@ -108,6 +109,17 @@ import { subscribePageHttpLogging } from "./page-http-log.js";
 // caught nor reworded, since it already names the missing engine as part of
 // the executable path it looked for.
 //
+// Playwright writes its own files while a step drives the page: trace
+// chunks, network logs, and resources (and HAR and video, when a context
+// asks for them) go to the launch's `artifactsDir` and `tracesDir`. Its
+// server runs in this process, in the step's own async context, so the
+// `node:fs` patch would read those writes as the step's, and a trace
+// chunk holds the context's options, credentials and headers included.
+// So the launch always names both directories: the config's own when it
+// sets them, otherwise one nukadoko creates and removes when the browser
+// closes. `outputDirs` names them, and create-context.ts leaves them out
+// of the step's files.
+//
 // One browser, several contexts. `launchBrowser` starts the engine once per
 // `ctx`, and `openTracedContext` gives each browser context its own
 // instrumentation: the default context `page` belongs to, and one per
@@ -143,9 +155,13 @@ export interface BrowserHandle {
    * file's own header). Never derived from `options.browserType`, which
    * only says what was *asked* for. */
   readonly browserInfo: { readonly type: string; readonly version: string };
+  /** The directories Playwright writes its own files to while the browser
+   * runs (this file's own header). */
+  readonly outputDirs: readonly string[];
   /** Opens one instrumented browser context in this browser. */
   openTracedContext(options: TracedContextOptions): Promise<TracedContextHandle>;
-  /** Closes the browser. Swallows its own failure, the same as
+  /** Closes the browser and removes the output directory nukadoko created
+   * for it. Swallows its own failure, the same as
    * `TracedContextHandle.finalize`: a browser already gone is not a reason
    * to lose a record. */
   close(): Promise<void>;
@@ -213,9 +229,22 @@ export async function launchBrowser(options: LaunchBrowserOptions): Promise<Brow
   // never reaches this line.
   const playwright = await loadPlaywright(options.neededBy);
   const engine = playwright[options.browserType ?? "chromium"];
-  const browser: Browser = await engine.launch(options.browser);
+  const created = options.browser?.artifactsDir === undefined ? await mkdtemp(path.join(tmpdir(), "nukadoko-playwright-")) : undefined;
+  const artifactsDir = options.browser?.artifactsDir ?? (created as string);
+  const tracesDir = options.browser?.tracesDir ?? artifactsDir;
+  const removeCreated = async (): Promise<void> => {
+    if (created !== undefined) await rm(created, { recursive: true, force: true }).catch(() => undefined);
+  };
+  let browser: Browser;
+  try {
+    browser = await engine.launch({ ...options.browser, artifactsDir, tracesDir });
+  } catch (error) {
+    await removeCreated();
+    throw error;
+  }
   return {
     browserInfo: { type: browser.browserType().name(), version: browser.version() },
+    outputDirs: [...new Set([artifactsDir, tracesDir])],
     openTracedContext: (contextOptions) => openTracedContext(browser, contextOptions),
     async close(): Promise<void> {
       try {
@@ -223,6 +252,7 @@ export async function launchBrowser(options: LaunchBrowserOptions): Promise<Brow
       } catch {
         // See the interface's own doc comment above.
       }
+      await removeCreated();
     },
   };
 }

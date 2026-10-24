@@ -29,15 +29,19 @@ export { InvalidPollOptionsError, PollTimeoutError } from "./context/poll.js";
 export type { PollOptions } from "./step/context.js";
 export type {
   ActionEntry,
+  ArgOrigin,
   ConsoleErrorEntry,
   FailedRequestEntry,
+  FileChange,
   FixtureScope,
   FixtureUsageEntry,
   HttpOmittedCounts,
+  KeptText,
   ObservedCounts,
   PageErrorEntry,
   PageEventsSnapshot,
   PageEventsTruncated,
+  UnmeasuredEntry,
   UsedEntry,
   UsedEntryWithResult,
 } from "./record/types.js";
@@ -48,12 +52,14 @@ export type { RunningServer, RunServerOptions } from "./context/run-server.js";
 export type { DeclaredLabel, DeclaredLink, DeclaredParameter, DeclaredSnapshot } from "./compat/declared.js";
 export type {
   CallEntry,
+  EnvValue,
   ErrorKind,
   EvidenceAttachmentEntry,
   EvidenceMeta,
   NamedTraceEntry,
   PollRecord,
   ProcessEntry,
+  ProcessEnv,
   ProcessFiles,
   ScreenshotEntry,
   SectionEntry,

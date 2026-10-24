@@ -59,7 +59,7 @@ describe("nuka report on a run.json with one field deleted or null", () => {
     first.browser = { type: "chromium", version: "1.0.0" };
     const failedStep = failed.steps.find((step: { status: string }) => step.status === "failed");
     failedStep.used = [{ step: "producer", record: "steps/producer", result: { exitCode: 1, stderr: "boom" } }];
-    failedStep.observed = { processes: [{ command: ["false"], cwd: ".", exit_code: 1, duration_ms: 1 }] };
+    failedStep.observed = { processes: [{ command: ["false"], cwd: ".", exit_code: 1, duration_ms: 1 }], http: null, files: null, unmeasured: [] };
     failed.hooks = [
       {
         type: "after_step",

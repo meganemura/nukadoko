@@ -134,13 +134,13 @@ describe("examples/migration", () => {
     // exact claim README.md's "measured for free" section quotes.
     const seedStepRecord = await readStepRecord(rootDir, seedStep.step_record_id);
     expect(seedStepRecord.result).toBeNull();
-    expect(seedStepRecord.observed).toEqual({ processes: null });
+    expect(seedStepRecord.observed).toEqual({ processes: null, http: 2, files: null, unmeasured: [] });
     expect(httpLogLines(rootDir, seedStep.step_record_id).map((line) => line.method)).toEqual(["POST", "POST"]);
     expect(seedStepRecord.world).toEqual({ reads: [], writes: ["seededCount"] });
 
     // The RegExp-pattern count assertion: read-only, no World touch.
     const countStepRecord = await readStepRecord(rootDir, countStep.step_record_id);
-    expect(countStepRecord.observed).toEqual({ processes: null });
+    expect(countStepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
     expect(countStepRecord.world).toBeUndefined();
 
     // Scenario 2 (the promoted pair): the producer's validated result is
@@ -153,6 +153,7 @@ describe("examples/migration", () => {
 
     const createStepRecord = await readStepRecord(rootDir, createStep.step_record_id);
     expect(createStepRecord.result).toMatchObject({ title: "Read a book", done: false });
+    expect(createStepRecord.observed).toEqual({ processes: null, http: 1, files: null, unmeasured: [] });
     expect(createStepRecord.world).toBeUndefined();
 
     const resultOfStepRecord = await readStepRecord(rootDir, resultOfStep.step_record_id);
@@ -160,6 +161,7 @@ describe("examples/migration", () => {
       { step_record_id: createStep.step_record_id, step: createStepRecord.step },
     ]);
     expect(resultOfStepRecord.result).toEqual({ id: (createStepRecord.result as { id: string }).id });
+    expect(resultOfStepRecord.observed).toEqual({ processes: null, http: null, files: null, unmeasured: [] });
     expect(resultOfStepRecord.world).toBeUndefined();
   });
 });

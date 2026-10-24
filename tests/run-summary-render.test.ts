@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { RunDocument, RunScenario, RunStep } from "../src/record/run-result.js";
+import type { UnmeasuredEntry } from "../src/record/types.js";
 import { renderRunSummary } from "../src/run/run-summary.js";
 import { foldVerdicts } from "../src/run/verdicts.js";
 
@@ -72,6 +73,69 @@ function step(text: string, extra: Partial<RunStep> = {}): RunStep {
 }
 
 describe("renderRunSummary", () => {
+  it("names each step with unmeasured actions or actions started after it ended on one line, and adds nothing for the others", () => {
+    const quiet = { processes: null, http: 2, files: null, unmeasured: [] };
+    const gap = (unmeasured: UnmeasuredEntry[]) => ({
+      processes: null,
+      http: null,
+      files: null,
+      unmeasured,
+    });
+    const markdown = renderRunSummary(run({
+      scenarios: [
+        scenario("features/sync.feature", 3, "the mirror syncs", "passed", 100, {
+          steps: [
+            step("the mirror is fetched", {
+              line: 4,
+              record: "steps/stp-1",
+              observed: gap([
+                { kind: "child_process", detail: "exec git with 2 arguments" },
+                { kind: "socket", detail: "connect db.internal:5432" },
+              ]),
+            }),
+            step("the count is shown", { line: 5, record: "steps/stp-2", observed: quiet }),
+            step("the mirror is pinged", { line: 6, record: "steps/stp-4", observed: quiet, after_step_end: { requests: 2, processes: 1 } }),
+            step("the mirror is closed", {
+              line: 7,
+              record: "steps/stp-5",
+              observed: gap([{ kind: "socket", detail: "write to db.internal:5432, a connection opened before the step" }]),
+              after_step_end: { requests: 0, processes: 1 },
+            }),
+          ],
+        }),
+        scenario("features/sync.feature", 9, "the report renders", "passed", 100, {
+          steps: [
+            step("the report is built", {
+              line: 10,
+              record: "steps/stp-3",
+              observed: gap([
+                { kind: "worker_thread", detail: "new Worker ./render.js" },
+                { kind: "child_process", detail: "spawn convert with 2 arguments" },
+                { kind: "child_process", detail: "spawn optipng with 1 argument" },
+                { kind: "socket", detail: "connect /tmp/render.sock" },
+              ]),
+            }),
+          ],
+        }),
+      ],
+    }));
+    expect(markdown.split("\n").slice(-10)).toEqual([
+      "## Unmeasured actions",
+      "",
+      "Each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did.",
+      "An action a step started after its record was written is in that step's own files, marked `after_step_end`, and not in its record.",
+      "",
+      "- `features/sync.feature:4` the mirror is fetched: child process `exec git with 2 arguments`, socket `connect db.internal:5432`; start a process with `runCommand` to record it; record `steps/stp-1`",
+      "- `features/sync.feature:6` the mirror is pinged: started after the step ended: 2 requests, 1 process; record `steps/stp-4`",
+      "- `features/sync.feature:7` the mirror is closed: socket `write to db.internal:5432, a connection opened before the step`, started after the step ended: 1 process; record `steps/stp-5`",
+      "- `features/sync.feature:10` the report is built: worker thread `new Worker ./render.js`, child process `spawn convert with 2 arguments`, child process `spawn optipng with 1 argument`, and 1 more; start a process with `runCommand` to record it; record `steps/stp-3`",
+      "",
+    ]);
+    expect(renderRunSummary(run({
+      scenarios: [scenario("features/sync.feature", 3, "the mirror syncs", "passed", 100, { steps: [step("the count is shown", { observed: quiet })] })],
+    }))).not.toContain("Unmeasured");
+  });
+
   it("renders a green run", () => {
     const markdown = renderRunSummary(run({
       scenarios: [
@@ -128,7 +192,7 @@ describe("renderRunSummary", () => {
             step("the seed ran", {
               record: "steps/stp-0",
               mutates: true,
-              observed: { processes: null },
+              observed: { processes: null, http: null, files: null, unmeasured: [] },
             }),
             step("the error <b>Locked</b> is shown", {
               status: "failed",
@@ -139,6 +203,9 @@ describe("renderRunSummary", () => {
                   { command: ["npm", "run", "migrate"], cwd: "/tmp/x", exit_code: 0, duration_ms: 5 },
                   { command: ["npm", "run", "seed"], cwd: "/tmp/x", exit_code: 1, duration_ms: 5 },
                 ],
+                http: null,
+                files: null,
+                unmeasured: [],
               },
               error: { kind: "step_error", message: "expected `Locked` | got `Open`\nmore detail" },
               used: [

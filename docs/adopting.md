@@ -187,10 +187,11 @@ Every `nuka run` writes one directory under `.nukadoko/runs/`:
   scenario's record with its rerun command.
 - `summary.md` is the Markdown run summary. On GitHub Actions it also
   goes to the job's summary page.
-- `steps/<id>/record.json` is one step record: its arguments, its
-  validated result, and what the tool observed, such as the processes a
-  `runCommand` started. Evidence files (a trace, screenshots,
-  `http.jsonl`) sit beside it.
+- `steps/<id>/record.json` is one step record: its arguments and where
+  each came from, its validated result, and what the tool observed (the
+  processes a `runCommand` started, the requests the step sent, the files
+  it changed, and what it saw but could not measure). Evidence files (a
+  trace, screenshots, `http.jsonl`) sit beside it.
 - `scenarios/<id>/` holds a scenario's own evidence, when it wrote any.
 - `sources.json` is the feature text the run parsed, and `exports` lists
   the files `nuka report` wrote from this run under

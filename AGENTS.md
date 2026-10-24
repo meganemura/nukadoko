@@ -83,8 +83,9 @@ The reasoning is in `docs/spec.md`; this is the short list to check a
 change against before writing it.
 
 - **Declaration and measurement answer different questions.** The tool
-  measures what it can measure exactly and trusts a declaration for what it
-  cannot. A proxy is not a measurement: HTTP method does not stand in for
+  measures what it can measure exactly, marks what it sees but cannot
+  measure (`observed.unmeasured`) instead of leaving a record that looks
+  complete, and trusts a declaration for what it cannot. A proxy is not a measurement: HTTP method does not stand in for
   write semantics, so the step record keeps each request as it was sent,
   never a count of writes inferred from methods. Do not automate a verdict
   on top of a proxy; a check that is wrong for GraphQL or RPC-over-POST

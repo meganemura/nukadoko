@@ -93,9 +93,13 @@ run `nuka run --json`.
 A library function that starts a program calls `runCommand` from
 `nukadoko`. Inside a step the process lands on the step record
 (`observed.processes`); called from the CLI it runs the same way,
-unrecorded. `runCommand` records the full argv, and only values loaded
-from env files are redacted, so pass a token through `env`, never as an
-argument.
+unrecorded. A program the library starts through `node:child_process`
+instead is only named in the step's `observed.unmeasured`, by its
+program and argument count, with nothing of what it printed or changed. `runCommand` records the full argv, and
+only values loaded from env files or named in `redact` are redacted, so
+pass a token through `env`, never as an argument. The record names every
+variable in `env` but shows a value only when it is an absolute path that
+exists, a decimal integer, or `true` or `false`.
 
 ## 4. Doctor and readiness
 
@@ -128,7 +132,8 @@ transcript of argv, exit code, stdout, and stderr, and a diff of the files
 each command wrote. A step that runs the tool through `runCommand`
 gets that diff measured: each process lists the files added, changed,
 and removed under its working directory (`observed.processes[].files`),
-and the run summary sets them against `mutates: false`. Confirm the evidence exists after the verification skill's cleanup
+and the step's `observed.files` lists what changed in its scratch
+directories, with the content. Confirm the evidence exists after the verification skill's cleanup
 has run.
 
 ## 6. Reproducing a report

@@ -88,7 +88,7 @@ function baseStepRecord(overrides: Partial<StepRecord> = {}): StepRecord {
     started_at: "2026-08-01T00:00:00.500Z",
     finished_at: "2026-08-01T00:00:01.000Z",
     evidence: { dir: ".nukadoko/runs/run-1/steps/step-1", screenshots: [] },
-    observed: { processes: null },
+    observed: { processes: null, http: null, files: null, unmeasured: [] },
     mutates: true,
     ...overrides,
   } as StepRecord;
@@ -365,7 +365,7 @@ describe("mapGwtStep: step parameters", () => {
       status: "passed",
       result: null,
       mutates: false,
-      observed: { processes: null },
+      observed: { processes: null, http: null, files: null, unmeasured: [] },
       world: { reads: ["a", "b"], writes: ["c"] },
       used: [{ step_record_id: "step-0", step: "create-cart" }],
     });

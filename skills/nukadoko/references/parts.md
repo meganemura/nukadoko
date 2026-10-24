@@ -40,7 +40,9 @@ After a failure, what should be knowable about it?
   itself, and each process it starts is listed in the calling step's
   `observed.processes`, so a failure record shows the command, its working
   directory, its exit code, and the files it changed (`files`, also on the
-  result, so "writes nothing" needs no hand-rolled diff). A secret the step holds itself and passes
+  result, so "writes nothing" needs no hand-rolled diff). A process
+  started through `spawnSync` or `execFileSync` instead is only named in
+  `observed.unmeasured`, with nothing of what it printed or changed. A secret the step holds itself and passes
   as an argument goes in `redact: { NAME: value }`, so the record shows
   `{{secret.NAME}}` instead of the value.
 

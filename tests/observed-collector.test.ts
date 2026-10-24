@@ -26,6 +26,9 @@ describe("createObservedCollector", () => {
           processes === 0
             ? null
             : Array.from({ length: processes }, () => ({ command: ["x"], cwd: "/", exit_code: 0, duration_ms: 1 })),
+        http: null,
+        files: null,
+        unmeasured: [],
       });
     }));
 });

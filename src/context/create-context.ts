@@ -31,6 +31,12 @@ import {
   snapshotContextOptions,
 } from "./context-name.js";
 import { createCallsCollector } from "./calls.js";
+import { installChannelPatches, withoutChannelRecording } from "./channels.js";
+
+// The commands install the patches before they load the config and the
+// step files, earlier than any context exists; this module is the context
+// layer's surface for them.
+export { installChannelPatches };
 import { loadPlaywright } from "./load-playwright.js";
 import { cloneForCaller } from "./clone-stored.js";
 import { createEnvReadsCollector } from "./env-reads.js";
@@ -40,7 +46,7 @@ import { createScratchCollector } from "./scratch.js";
 import { wrapRequestContextWithLogging } from "./http-log.js";
 import { createHttpLogFailedCollector } from "./http-log-failed.js";
 import { createHttpOmittedCollector } from "./http-omitted.js";
-import { createObservedCollector } from "./observed.js";
+import { type AfterStepEnd, createObservedCollector } from "./observed.js";
 import { createPageEventsCollector } from "./page-events.js";
 import { pollWithRecording } from "./poll.js";
 import { createPollsCollector } from "./polls.js";
@@ -141,7 +147,7 @@ import { createUsedCollector } from "./used.js";
 // the `used` collector below — the same
 // "step cannot see or reset its own observation" trust rule as `observed`,
 // applied to provenance instead of network calls. `usedSnapshot()` (the
-// handle's read side) and `beginStep`'s reset mirror `observedCounts()`/its
+// handle's read side) and `beginStep`'s reset mirror `observedSnapshot()`/its
 // own reset exactly, for the same reason: one step boundary, two tallies.
 //
 // `isRegisteredStep`: before even
@@ -344,13 +350,23 @@ export interface StepContextHandle {
    * evidence still varies by outcome when it no longer does. */
   dispose(): Promise<DisposeResult>;
   /** Executor-only: what the current step boundary reached outside its own
-   * process (this execution's whole lifetime for `nuka do`, since the last
-   * `beginStep` for `nuka run`). Never exposed on `ctx`. */
-  observedCounts(): ObservedCounts;
+   * code (this execution's whole lifetime for `nuka do`, since the last
+   * `beginStep` for `nuka run`): processes, requests, files, and what
+   * could not be measured. Waits up to a second for requests still open
+   * first, and closes the boundary: a request or a `runCommand` process
+   * this step's code starts afterwards is written beside its record with
+   * `after_step_end` and counted by `afterStepEnd()`. Never exposed on
+   * `ctx`. */
+  observedSnapshot(): Promise<ObservedCounts>;
+  /** Executor-only: how many requests and `runCommand` processes the
+   * current boundary's code started after `observedSnapshot()` closed it.
+   * Live: read it when the scenario record is built. Never exposed on
+   * `ctx`. */
+  afterStepEnd(): AfterStepEnd;
   /** Executor-only: every step record this execution actually read a value
    * from since the current step boundary began — through `ctx.resultOf` or a
    * `from` injection alike — deduplicated by step record id, in read order.
-   * Never exposed on `ctx` — same rule as `observedCounts()`. */
+   * Never exposed on `ctx` — same rule as `observedSnapshot()`. */
   usedSnapshot(): UsedEntryWithResult[];
   /** Executor-only: records one provenance read the same `used` collector
    * `ctx.resultOf`'s own wrapper writes into, for a read that happens
@@ -364,13 +380,13 @@ export interface StepContextHandle {
   recordUsed(recordId: string, stepName: string, result: unknown): void;
   /** Executor-only: the `ctx.section` calls made since the current step
    * boundary began, in call order, each entry carrying `at`. Never exposed on
-   * `ctx` — same rule as `observedCounts()`/`usedSnapshot()`. */
+   * `ctx` — same rule as `observedSnapshot()`/`usedSnapshot()`. */
   sectionsSnapshot(): SectionEntry[];
   /** Executor-only: every `ctx.call(part, args)` invocation made *directly*
    * by the current step boundary's own execution, in call order, with a
    * part-of-a-part call already nested under its own entry's `calls` (docs/
    * spec.md "Parts"). Never exposed on `ctx` — same rule as
-   * `observedCounts()`/`usedSnapshot()`/`sectionsSnapshot()`. */
+   * `observedSnapshot()`/`usedSnapshot()`/`sectionsSnapshot()`. */
   callsSnapshot(): CallEntry[];
   /** Executor-only: opens the current step boundary's own root call frame
    * (`step`, whose `parts` the first `ctx.call()` this boundary makes is
@@ -383,13 +399,16 @@ export interface StepContextHandle {
    * exposed on `ctx`. */
   beginStepRun(step: Step, fixtures: FixtureBag): void;
   /** Executor-only: runs a step's own body (`step.run`, or a compat
-   * step's glue function) so that every `runCommand` it reaches records
-   * into this boundary's `observed.processes` (src/context/run-command.ts).
-   * Never exposed on `ctx`: a step cannot open a scope of its own. */
+   * step's glue function) so that every `runCommand` it reaches, and every
+   * request, file write, and unmeasured action the channel patches see
+   * (src/context/channels.ts), records into this boundary's `observed`.
+   * The first call in a boundary also reads the scratch directories, the
+   * "before" side of `observed.files`. Never exposed on `ctx`: a step
+   * cannot open a scope of its own. */
   recordingProcesses<T>(fn: () => T): T;
   /** Executor-only: every `ctx.poll` call that finished since the current
    * step boundary began, in completion order.
-   * Never exposed on `ctx` — same rule as `observedCounts()`/
+   * Never exposed on `ctx` — same rule as `observedSnapshot()`/
    * `sectionsSnapshot()`. */
   pollsSnapshot(): PollRecord[];
   /** Executor-only: the names of the `pageAs(name)` contexts opened so far,
@@ -399,14 +418,14 @@ export interface StepContextHandle {
   /** Executor-only: the names `ctx.requireEnv` was called with since the
    * current step boundary began, deduplicated, in read order — recorded
    * even for a call that went on to throw `MissingEnvError`. Never exposed on `ctx` — same rule as
-   * `observedCounts()`/`usedSnapshot()`/`sectionsSnapshot()`. */
+   * `observedSnapshot()`/`usedSnapshot()`/`sectionsSnapshot()`. */
   envReadsSnapshot(): string[];
   /** Executor-only: console errors, uncaught page errors, and failed
    * requests the browser context saw since the current step boundary began,
    * or `undefined` when none of the three
    * happened at all — whether because `ctx.page()` was never called this
    * step, or because it was and the page simply stayed clean. Never exposed
-   * on `ctx` — same rule as `observedCounts()`/`sectionsSnapshot()`/
+   * on `ctx` — same rule as `observedSnapshot()`/`sectionsSnapshot()`/
    * `pollsSnapshot()`. */
   pageEventsSnapshot(): PageEventsSnapshot | undefined;
   /** Executor-only: how many page-issued requests since the current step
@@ -415,7 +434,7 @@ export interface StepContextHandle {
    * left out this step — whether because `ctx.page()` was never called, or
    * because every request it made was a document/xhr/fetch and none were
    * dropped. Never exposed on `ctx` — same rule as
-   * `observedCounts()`/`pageEventsSnapshot()`. */
+   * `observedSnapshot()`/`pageEventsSnapshot()`. */
   httpOmittedSnapshot(): HttpOmittedCounts | undefined;
   /** Executor-only: how many http.jsonl lines since the current step
    * boundary began could not be appended, or `undefined` when none failed.
@@ -426,7 +445,7 @@ export interface StepContextHandle {
    * src/context/evidence.ts's own `EvidenceCollector.snapshot` doc comment.
    * `async`, unlike every other snapshot on this handle, because confirming
    * a `path()`-allocated file's existence needs a filesystem read. Never
-   * exposed on `ctx` — same rule as `observedCounts()`/`sectionsSnapshot()`. */
+   * exposed on `ctx` — same rule as `observedSnapshot()`/`sectionsSnapshot()`. */
   evidenceSnapshot(): Promise<EvidenceSnapshot>;
   /** Executor-only: advances to the next step boundary — redirects where the
    * *next* `ctx.request()` call logs to (http.jsonl), without disturbing an
@@ -588,6 +607,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // (strict) instead of sticking. It is not a Proxy: a direct read has to
   // stay invisible to `requireEnv`'s log.
   const env = Object.freeze({ ...sourceEnv });
+  // Once per process, and before any step file has run: a module that
+  // copies `fetch` or `http.request` into a variable before the patches
+  // exist keeps the original, and its requests are not seen. The run and
+  // do commands install earlier still, before they load step files.
+  installChannelPatches();
   // Mutable, unlike browser evidence's fixed `evidenceDir`: `beginStep`
   // (below) is the only way this ever changes, and `do` never calls it, so
   // `do`'s http.jsonl stays exactly where it always has.
@@ -611,10 +635,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // holds, never replaces the object itself. The state directory is where this run writes step records and traces
   // while a step runs, so a `runCommand` snapshot would otherwise read the
   // executor's own writes as the program's.
+  // Created before `observed`, which counts a request line it could not
+  // append into it.
+  const httpLogFailed = createHttpLogFailedCollector();
   const observed = createObservedCollector({
     unwatchedDirs: config.stateDir === undefined ? [] : [path.resolve(options.rootDir ?? process.cwd(), config.stateDir)],
     outputDir: () => boundaryDir,
     secrets,
+    httpLogFailed,
   });
   // Same lifetime rule as `observed`, for provenance instead of network
   // calls.
@@ -645,7 +673,6 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   // handed to browser-evidence.ts's launch below, and only ever populated
   // if `ctx.page()` is actually called this ctx's lifetime.
   const httpOmitted = createHttpOmittedCollector();
-  const httpLogFailed = createHttpLogFailedCollector();
   // Same lifetime rule again, for `ctx.evidence.attach`/`.path` —
   // `() => boundaryDir` is the exact same moving-pointer getter
   // `ctx.request()`'s own http.jsonl logging already reads (this file's own
@@ -892,7 +919,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     async request(): Promise<APIRequestContext> {
       // Same sharing as `ctx.page()`: two concurrent first calls must not each
       // open a context and leak the first.
-      requestSetup ??= setUpRequest().finally(() => {
+      // Outside the channel recording, like the browser below: the request
+      // context's own setup is nukadoko's, not the step's.
+      requestSetup ??= withoutChannelRecording(() => setUpRequest()).finally(() => {
         requestSetup = undefined;
       });
       return requestSetup;
@@ -959,7 +988,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   function pageOf(as: string | undefined, options: BrowserContextOptions | undefined): Promise<Page> {
     let setup = pageSetups.get(as);
     if (setup === undefined) {
-      setup = setUpPage(as, options).finally(() => {
+      // Outside the channel recording: launching the browser spawns it and
+      // writes Playwright's own files, and those are nukadoko's actions,
+      // not the step's. Everything the browser emits later runs in the
+      // context it was launched in, so its later work is left out too.
+      setup = withoutChannelRecording(() => setUpPage(as, options)).finally(() => {
         pageSetups.delete(as);
       });
       pageSetups.set(as, setup);
@@ -981,6 +1014,9 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     })
       .then((launched) => {
         browserHandle = launched;
+        // Playwright's own files, written while a step drives the page,
+        // are not the step's (browser-evidence.ts's own header).
+        for (const dir of launched.outputDirs) observed.ignoreDir(dir);
         return launched;
       })
       .finally(() => {
@@ -1181,8 +1217,11 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
     };
   }
 
-  function observedCounts(): ObservedCounts {
-    return observed.snapshot();
+  async function observedSnapshot(): Promise<ObservedCounts> {
+    await observed.flush();
+    const counts = observed.snapshot(scratch.allDirs());
+    observed.close();
+    return counts;
   }
 
   function usedSnapshot(): UsedEntryWithResult[] {
@@ -1266,13 +1305,14 @@ export function createStepContext(options: CreateStepContextOptions): StepContex
   return {
     ctx,
     dispose,
-    observedCounts,
+    observedSnapshot,
+    afterStepEnd: () => observed.afterStepEnd(),
     usedSnapshot,
     recordUsed,
     sectionsSnapshot,
     callsSnapshot,
     beginStepRun,
-    recordingProcesses: <T>(fn: () => T): T => withProcessRecording(observed, fn),
+    recordingProcesses: <T>(fn: () => T): T => withProcessRecording(observed.openRun(scratch.allDirs()), fn),
     pollsSnapshot,
     namedContexts,
     envReadsSnapshot,

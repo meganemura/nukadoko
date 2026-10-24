@@ -74,7 +74,7 @@
     {
       "en": ["handshake"],
       "ja": "ハンドシェイク",
-      "note": "MCP の接続のうち、initialize が完了するまでの部分。接続そのものとは書き分ける。失敗したときは client を返さず、起動したプロセスを止める"
+      "note": "MCP の接続のうち、initialize が完了するまでの部分。接続そのものとは書き分ける。失敗したときは client を返さず、起動したプロセスを止める。HTTP の Upgrade や CONNECT で接続を切り替える最初のリクエストとレスポンスも同じ語で書く(http.jsonl の 1 行になる部分)"
     },
     {
       "en": ["journey"],
@@ -353,6 +353,81 @@
       "en": ["several people in one scenario", "person", "people"],
       "ja": "1 つの scenario の複数の人",
       "note": "docs/spec.md \"Context API\" の pageAs(name) の段落の見出し語。person は受け入れ条件に出てくる人(主催者、参加者など)を指し、ユーザーやアクターと訳さず「人」と書く。pageAs が開く専用の context は browser context のまま英語で書く"
+    },
+    {
+      "en": ["body", "request body", "response body"],
+      "ja": "本文",
+      "note": "HTTP のリクエストやレスポンスの本文。リクエスト本文、レスポンス本文と書く。http.jsonl のフィールド名 `request_body` / `response_body` はコードスパンで英語のまま。setContent の HTML 本文が先例"
+    },
+    {
+      "en": ["truncated", "cut (at a cap)"],
+      "ja": "切り詰める / 切り詰め",
+      "note": "上限で先頭だけを残すこと。フィールド `truncated` はコードスパンで英語のまま。Node のタイマーの説明の「切り詰める」が先例"
+    },
+    {
+      "en": ["unmeasured", "unmeasured action"],
+      "ja": "計測できない / 計測できない操作",
+      "note": "nukadoko が見えるが計測できない操作(runCommand を通らない子プロセス、Worker、記録した request に属さない socket)。フィールド `observed.unmeasured` はコードスパンで英語のまま。Keyword semantics の「計測できないものはそうと印を付け」と揃える"
+    },
+    {
+      "en": ["scratch directory", "scratch directories"],
+      "ja": "scratch のディレクトリ",
+      "note": "`scratch` fixture が作るディレクトリ。単に「一時ディレクトリ」と書くと OS の一時ディレクトリと区別がつかないので、fixture の名前を残す"
+    },
+    {
+      "en": ["interceptor"],
+      "ja": "インターセプタ",
+      "note": "msw や nock のように fetch や node:http を差し替えてリクエストに答える仕組み"
+    },
+    {
+      "en": ["upgrade (an HTTP connection)", "upgraded connection"],
+      "ja": "Upgrade / Upgrade した接続",
+      "note": "HTTP の Upgrade ヘッダで接続を別のプロトコル(WebSocket など)に切り替えること。ヘッダ名のまま英語で書く。アップグレードとカタカナにすると、npm の版を上げる upgrade(アップグレード)と読めてしまう"
+    },
+    {
+      "en": ["tunnel (CONNECT)", "CONNECT tunnel"],
+      "ja": "CONNECT のトンネル",
+      "note": "CONNECT リクエストのあとに proxy が中継する接続。unmeasured の detail の英語(traffic through the CONNECT tunnel to ...)はコードスパンで英語のまま"
+    },
+    {
+      "en": ["connection (a socket)", "connect"],
+      "ja": "接続 / 接続する",
+      "note": "net.Socket の接続。observed.unmeasured の socket の説明で使う。Socket#connect などの API 名と detail の connect <host>:<port> はコードスパンで英語のまま"
+    },
+    {
+      "en": ["after the step ended", "after its record was written"],
+      "ja": "step が終わったあと / record を書いたあと",
+      "note": "step のコードが残したタイマーなどから、step record を書いたあとに始めた操作。フィールド after_step_end と run サマリの started after the step ended はコードスパンで英語のまま"
+    },
+    {
+      "en": ["patch (a built-in API)", "patches"],
+      "ja": "差し替える / 差し替え",
+      "note": "nukadoko が fetch、node:http、node:fs などをプロセスごとに 1 回だけ包み、step のスコープに記録させること。パッチとカタカナにしない"
+    },
+    {
+      "en": ["identity (of a path)"],
+      "ja": "同一性",
+      "note": "observed.files がパスの変化を判断する、サイズ、更新時刻、変更時刻、inode の組"
+    },
+    {
+      "en": ["environment variable"],
+      "ja": "環境変数",
+      "note": "OS のプロセスの環境変数。nukadoko の environment(keep_english)とは別の語なので、environment だけで書かない"
+    },
+    {
+      "en": ["runner (the process running nuka)"],
+      "ja": "ランナー",
+      "note": "nuka run や nuka do を実行しているプロセス。runCommand の子プロセスの env は、このプロセスの環境変数との差として記録される"
+    },
+    {
+      "en": ["credential"],
+      "ja": "資格情報",
+      "note": "トークン、パスワード、cookie のように、持つ者に権限を与える値。nukadoko の secret(env ファイルから読み込んだ値)より広い語なので、secret と訳し分ける。env の値を record に見せるかどうかは、資格情報でないと判断できるかで決まる"
+    },
+    {
+      "en": ["origin (of an argument)", "where an argument came from"],
+      "ja": "出所",
+      "note": "args の各キーの値がどこから来たか。フィールド `args_origin` とその値(`capture`、`docstring`、`table`、`from`、`command_line`、`schema`)はコードスパンで英語のまま"
     }
   ],
   "keep_english": [
@@ -469,6 +544,10 @@
     {
       "term": "oath",
       "why": "config の `oaths` と、Varar が Markdown の実行可能な例を呼ぶ語。誓いと訳すと config のキーとの対応が切れ、Varar の文書とも一致しなくなる。見出しは英語のまま(`Markdown oaths`)。地の文でも oath のまま使う"
+    },
+    {
+      "term": "redact",
+      "why": "secret を `{{secret.NAME}}` に置き換える操作。spec.ja.md の地の文で「redact され」「redaction」と英語のまま使われてきた。訳すと runCommand の `redact` オプションとの対応が切れる"
     }
   ],
   "identifiers": {

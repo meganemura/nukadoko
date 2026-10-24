@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Finding } from "../finding/finding.js";
 import { runDir } from "./run-exports.js";
 import { runRelativeDir, runsRelativeDir } from "./state-layout.js";
-import type { ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
+import type { AfterStepEndCounts, ScenarioEvidence, ScenarioHookRecord, ScenarioStepStatus } from "./scenario-record.js";
 import type { ErrorKind, ObservedCounts } from "./types.js";
 
 // Responsibility: run.json, the one document a `nuka run` leaves in its
@@ -73,6 +73,9 @@ export interface RunStep {
   /** For a failed step that read results from earlier steps: each one, and
    * the result it read. */
   readonly used?: readonly RunUsed[];
+  /** The step record's scenario entry's `after_step_end`: actions the step
+   * started after its record was written. */
+  readonly after_step_end?: AfterStepEndCounts;
 }
 
 export interface RunScenario {

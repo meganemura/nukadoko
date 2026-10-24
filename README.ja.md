@@ -370,8 +370,7 @@ export default defineStep({
 `fetch` には何もインストールする必要がありません。
 サーバを呼ぶもう 1 つの方法は、Playwright の `APIRequestContext` である `ctx.request()` です。
 こちらは `playwright` のインストールが必要です。
-その呼び出しは 1 つずつ step record の `http.jsonl` に記録されます。
-nukadoko は `fetch` の呼び出しを見ません。
+どちらの方法でも、呼び出しは 1 つずつ、リクエスト本文とレスポンス本文とともに step record の `http.jsonl` に記録されます。
 
 Then の step は `nuka scaffold message-is --pattern "the message is {text:string}" --then --from get-greeting.message` で作ります。
 `output-says` を `run-greet` から作ったのと同じ方法です。
@@ -504,14 +503,30 @@ error	from-order-violation	features/chain.feature:11	Step "archive-project"'s fr
   "step": "add-todo",
   "kind": "do",
   "args": { "title": "Buy milk" },
+  "args_origin": { "title": "command_line" },
   "result": { "id": "5c07a3aa-d06a-4421-a708-9d69d8a238e3", "title": "Buy milk", "done": false },
   "status": "passed",
-  "observed": { "processes": null }
+  "observed": { "processes": null, "http": 1, "files": null, "unmeasured": [] }
 }
 ```
 
 (`evidence`、`environment`、および各種タイムスタンプは、上では紙面の都合で省いています。
 実物の step record にはそれらも入っています。)
+
+`args_origin` は、各引数の出所を示します。
+ここではコマンドラインです。
+scenario の中では、capture、docstring、table、または前の step の result です。
+`observed` は、step の実行中に nukadoko が計測したものを持ちます。
+キーは次のとおりです。
+`processes` は `runCommand` で起動した各プロセスで、stdin と、渡された環境変数も含みます。
+環境変数の値を見せるのは、存在するパス、整数、真偽値のときだけです。
+`http` は step が送ったリクエストの数です。
+各リクエストは step record の `http.jsonl` の 1 行で、リクエスト本文とレスポンス本文を持ちます。
+`files` は、step が scratch のディレクトリで変えたファイルと、`node:fs` で書いたファイルで、その中身も含みます。
+`unmeasured` は、nukadoko が見えたが計測できない操作の一覧です。
+たとえば `runCommand` を通さずに起動したプロセスです。
+これにより、nukadoko が完全でないと見た record は、完全には見えません。
+step がその種類のことを何もしなかったキーは `null` です。
 
 既存の cucumber-js のスイートも、import を 1 つ切り替えるだけでこの扉に届きます(下の [The compat door](#the-compat-door) を参照)。
 ただし compat の step には型付きの契約がなく、`nuka check` にはここで feature の行を突き合わせる相手がありません。
@@ -758,7 +773,7 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 |---|---|
 | 重複する step(どれが一致したか分からない) | `nuka check` は、何かが実行される前に、同じテキストが 2 回登録されている **duplicate patterns** と、feature の 1 行に異なる 2 つの pattern がどちらも一致し得る **ambiguous steps** を報告します |
 | `this.foo`(型のない袋) | step は `returns` スキーマに対して値を返し、後続の step はそのうち 1 つのキーを名前で読むために `from` を宣言します。この依存関係は diff 上で見える import として現れ、読んだ事実は読み手側 step の step record に記録され、束縛の順序が壊れていれば `nuka check` が実行前に検出します(参照: [step の連鎖](docs/spec.ja.md#step-の連鎖)) |
-| `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が記録した HTTP の呼び出しとプロセス、evidence、environment、target version を記録した step record を書きます |
+| `passed` としか言わない報告 | あらゆる実行が、バリデーション済みの result、ツール自身が記録した HTTP の呼び出しとその本文、プロセス、ファイル、見えたが計測できなかった操作、evidence、environment、target version を記録した step record を書きます |
 | 実行時に見つかる undefined な step | `nuka check <feature>` はそれらを実行前に静的に検出して失敗し、何にも一致しなかったテキストの名前を挙げます |
 | 黙って状態を変える `Then` | `mutates` は nukadoko が信頼する宣言であり、計測から導き直す数値ではありません。`mutates: true` を宣言した step は、read-only な environment では実行前に拒否され、`Then` に結び付けられていれば `nuka check` が警告します。実際に何が起きたかは、レビューのためにいまも step record に記録されます。 |
 
@@ -770,7 +785,8 @@ cucumber-js を引き合いに出しているのは、そこが最もなじみ�
 そうした API を呼ぶ正直な `mutates: false` の step も、書き込みに見えます。
 一般的な HTTP レイヤーのルールでは、その呼び出しと本物の書き込みを区別できません。
 そこで nukadoko は宣言を信頼し、メソッドから書き込みを推測することはしません。
-step record は、計測した各 request をメソッド、URL、status とともに、断定ではなく事実として残します。
+step record は、計測した各 request をメソッド、URL、status、本文とともに、断定ではなく事実として残します。
+計測できなかったものは、推測せずにそうと名前を挙げます。
 
 ## Reports fill themselves
 
@@ -921,12 +937,13 @@ skill が代わりに運ぶのは、放っておくと agent が自分では思�
 既存の Cucumber + Playwright スイートを移行するには、import を `@cucumber/cucumber` から `nukadoko/compat` に切り替えます。
 同じ pattern の構文、hooks、World はそのまま動き、その間に nukadoko の harness が step record の計測を始めます。
 World のサブクラスは `this.page` と `this.request` に代入できます。
-その代入は計測されないままです。
+そのような page には trace も page のログもありません。
+ただし、そのような `this.request` を通して step から送ったリクエストは、`http.jsonl` に記録されます。
 その後は各 step を個別に `defineStep` へ昇格できるため、一部だけを昇格したスイートも通り続けます。
 
 扉は入口であり、行き先ではありません。
 compat の step は、最初の run から status と時間を持つ step record を得ます。
-evidence と `http.jsonl` の行が付くのは、その glue がブラウザや request を `this.openPage()` / `this.openRequest()` で開くようにしてからです([docs/migration.ja.md](docs/migration.ja.md) の measured upgrade)。
+evidence と、page の `http.jsonl` の行が付くのは、その glue がブラウザや request を `this.openPage()` / `this.openRequest()` で開くようにしてからです([docs/migration.ja.md](docs/migration.ja.md) の measured upgrade)。
 ただし、nukadoko は return 値を捨て、step record には `result: null` が入ります。
 バリデーション済みの result が必要な機能は使えません。
 `nuka check` には feature と比較する契約がなく、`from` は依存関係を宣言できません。
@@ -1148,6 +1165,10 @@ environment はそれでも設定にすぎません。
   詳しい議論は [キーワードの意味論](docs/spec.ja.md#キーワードの意味論) を参照してください。
   step record は計測した各 request を事実として残すため、誤った `mutates` の宣言は事後に確かめられます。
   判断を担うのは宣言とレビューです。
+- **step のすべての操作が見えるわけではありません。**
+  記録するのは、step が `fetch`、`node:http`、`node:https`、Playwright を通して送ったもの、`runCommand` で起動した各プロセス、scratch のディレクトリのファイル、そして自分のプロセスの `node:fs` の書き込みです。
+  `runCommand` を通さずに起動したプロセス(プログラムと引数の数だけで名指します)、Worker、step が開くか書き込む接続のうち記録したリクエストを運ばないもの、WebSocket がハンドシェイクのあとに運ぶものは `observed.unmeasured` に名前が挙がりますが、それが何をしたかの証拠はありません。
+  ネイティブアドオン、子プロセス自身の通信、子プロセスが scratch のディレクトリと自分の作業ディレクトリの外で行う書き込み、step より前に開いた接続を step が読むだけのときのその接続、nukadoko の後に入れたインターセプタ(msw など)が自分で答えた `fetch` は、まったく見えません。
 - **CommonJS のスイートは、先にモジュール形式を変えない限り `nukadoko/compat` を使えません**(上記)。
 - **CI レポーティングと HTML のレンダリングは組み込まれていません。**
   レンダリングを担うのは Allure のダッシュボードです(上記)。
