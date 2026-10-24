@@ -8,7 +8,8 @@ import { matchPickleStepText } from "../check/feature-check.js";
 import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
-import { loadProgram } from "../config/load-program.js";
+import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
+import { placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
@@ -370,9 +371,12 @@ export async function runRun(options: RunRunOptions): Promise<number> {
   // --- Setup phase: any failure here writes nothing. ---
   let config;
   let program;
+  let programFile = PROGRAM_FILE_NAME;
   try {
     config = await loadConfig(rootDir);
-    program = (await loadProgram(rootDir))?.program ?? null;
+    const loaded = await loadProgram(rootDir);
+    program = loaded?.program ?? null;
+    programFile = loaded?.fileName ?? programFile;
   } catch (error) {
     return refused(error);
   }
@@ -607,6 +611,16 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     if (fixtureDefinitionIssues.length > 0) {
       return refused(formatFixtureDefinitionIssues(fixtureDefinitionIssues));
     }
+
+    // A placeholder a world has no value for is refused before any world
+    // runs a command, the build a later world shares included, and before
+    // an environment's version probe: `nuka check` reports the same gap,
+    // and this is the same refusal under `--no-check`.
+    const unfilled = placeholderRefusal(
+      resolvedEnvs.flatMap((resolvedEnv) => (resolvedEnv.program === null ? [] : [{ name: resolvedEnv.name, recipe: resolvedEnv.program }])),
+      programFile,
+    );
+    if (unfilled !== undefined) return refused(new Error(unfilled.message), "program-placeholder-unfilled", { fix: unfilled.fix });
 
     // Each environment is a condition of its own: its env files, the
     // secrets they hold, its version probe, and the world its pass starts

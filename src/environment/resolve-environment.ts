@@ -34,6 +34,17 @@ export { ReadOnlyEnvironmentError } from "./errors.js";
 
 export const DEFAULT_ENVIRONMENT_NAME = "default";
 
+/** Every world `program` can start, each with its recipe: the implicit
+ * default world, unless the file names `default` itself, and each named
+ * environment's. */
+export function programWorlds(program: Program): { readonly name: string; readonly recipe: ProgramRecipe }[] {
+  const environments = program.environments ?? {};
+  return [
+    ...(Object.hasOwn(environments, DEFAULT_ENVIRONMENT_NAME) ? [] : [{ name: DEFAULT_ENVIRONMENT_NAME, recipe: layerProgram(program, undefined) }]),
+    ...Object.entries(environments).map(([name, environment]) => ({ name, recipe: layerProgram(program, environment) })),
+  ];
+}
+
 export interface ResolvedEnvironment {
   readonly name: string;
   readonly envFiles: readonly string[];

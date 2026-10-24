@@ -264,7 +264,10 @@ just until 0.1.
   `ready`, `timeout_ms`) or `url`, `env` with the placeholders
   `{port}`, `{url}`, `{dir}`, `{root}`, `{world}`, and `{token}`,
   `setup(world)`, and `environments`. A command is an argv array or a
-  string split on whitespace, never a shell. `nuka run` starts one world
+  string split on whitespace, never a shell. A placeholder a world has
+  no value for is the check error `program-placeholder-unfilled`, for
+  every world the file can start, and `nuka run` and `nuka do` refuse it
+  with that code before any command runs. `nuka run` starts one world
   per environment, in `.nukadoko/runs/<run_id>/worlds/<env>/`, before the
   BeforeAll hooks, and stops it after the scenarios; under `--concurrency`
   the parent process owns it. `nuka do` starts one for its execution. The

@@ -2602,6 +2602,14 @@ may name `{root}` alone.
 A placeholder the world has no value for is refused by name before
 anything runs: `{port}` in a world that does not serve, or `{url}` in one
 with neither `serve` nor `url`.
+The recipe alone says which placeholders a world has, so the refusal does
+not wait for the world.
+`nuka check` reports `program-placeholder-unfilled`, an error, for each
+gap of each world the file can start: the default world, unless
+`environments` names `default`, and each environment.
+`nuka run` and `nuka do` refuse with the same code for the worlds they
+start, before any `build`, `prepare`, or version probe runs, so a
+`build` shared by a later world does not run either.
 Any other text in braces stays as written, so a JSON value or a shell
 brace in a command needs no escape.
 

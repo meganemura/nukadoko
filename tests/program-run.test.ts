@@ -246,6 +246,43 @@ describe("a program nukadoko serves", () => {
     expect(existsSync(path.join(stepRecordDir(rootDir, id!), "record.json"))).toBe(false);
   });
 
+  it("refuses a placeholder a world has no value for before any command runs, in check, run, run --no-check, and do", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.program.ts"),
+      [
+        'import { defineProgram } from "./nukadoko-shim.js";',
+        "export default defineProgram({",
+        '  build: [["node", "-e", "require(\'fs\').writeFileSync(\'build-ran\', \'\')"]],',
+        '  prepare: ["echo {port}"],',
+        '  url: "http://127.0.0.1:9",',
+        '  environments: { local: { serve: { command: "node app/server.mjs" }, env: { PORT: "{port}" } } },',
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const gap = "world default: prepare[0] names {port}, which has no value here: this world does not serve";
+    const fix = "  fix: Remove {port} from prepare[0] of nukadoko.program.ts, or give world default serve.\n";
+
+    const check = await cli(rootDir, ["check"]);
+    expect(check.exitCode).toBe(1);
+    expect(check.stdout).toContain(`error\tprogram-placeholder-unfilled\tnukadoko.program.ts\t${gap}\n${fix}`);
+    expect(check.stdout).not.toContain("world local");
+
+    for (const args of [["run", "--no-check"], ["do", "ask-program", "--args", "{}"]]) {
+      const refused = await cli(rootDir, args);
+      expect(refused.exitCode, args.join(" ")).toBe(2);
+      expect(refused.stderr).toBe(`refused\tprogram-placeholder-unfilled\t-\t${gap}; nothing ran\n${fix}`);
+    }
+    expect((await cli(rootDir, ["run"])).stderr).toContain("program-placeholder-unfilled");
+    expect(existsSync(path.join(rootDir, "build-ran"))).toBe(false);
+    // nuka check reports every world the file can start, so the gap stops a
+    // checked run of any environment; a run refuses only for the worlds it
+    // starts, and the world that serves has every value.
+    expect((await cli(rootDir, ["run", "--env", "local"])).exitCode).toBe(2);
+    const local = await cli(rootDir, ["run", "--env", "local", "--no-check"]);
+    expect(local.stderr).toMatch(/^world local: build \S+, prepare \S+, serve \S+, http:\/\/localhost:\d+ /m);
+  });
+
   it("nuka check refuses a program file that does not parse, naming the file", async () => {
     await writeFile(path.join(rootDir, "nukadoko.program.ts"), 'export default { serve: { command: "x" }, url: "http://a.example" };\n');
     const { exitCode, stderr } = await cli(rootDir, ["check"]);

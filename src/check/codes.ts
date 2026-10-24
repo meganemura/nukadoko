@@ -264,6 +264,12 @@ const CHECK_CODES = {
     severity: "error",
     fix: "Install the package that the message names in the project, at the version that the message names.",
   },
+  "program-placeholder-unfilled": {
+    description:
+      "A command or an env value in nukadoko.program.ts names a placeholder a world has no value for: {port} in a world that does not serve, {url} in one with neither serve nor url, or anything but {root} in a build command.",
+    severity: "error",
+    fix: "Remove the placeholder from the field the message names, or give the world what fills it: serve for {port}, serve or url for {url}.",
+  },
   "scenario-without-then": {
     description:
       "A scenario judges no claim, so it passes whenever its steps run without an error: it has steps of its own and no Then step, in it or in its Background (a scenario of only * lines included, since a * line has no position), or each of its Then lines binds a step that is not a claim step, such as a compat step.",

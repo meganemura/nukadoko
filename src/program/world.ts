@@ -12,7 +12,7 @@ import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import { shellWord } from "../shell/shell-word.js";
 import type { WritableSink } from "../sink/writable-sink.js";
-import { fillPlaceholders, type PlaceholderValues } from "./placeholders.js";
+import { describePlaceholderGap, fillPlaceholders, placeholderGaps, type PlaceholderValues } from "./placeholders.js";
 import { openProgramLog, type ProgramLog } from "./program-log.js";
 import type { WorldView } from "./world-view.js";
 
@@ -174,6 +174,11 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       };
 
       try {
+        // Refused before the build, which may be shared with a world that
+        // has no gap: nothing of this world runs. The commands refuse it
+        // earlier still, for every world they start (src/cli/run.ts).
+        const gap = placeholderGaps(recipe)[0];
+        if (gap !== undefined) throw new WorldStartError(describePlaceholderGap(gap));
         const buildArgvs = recipe.build.map((command, index) => filledArgv(command, { root: options.rootDir }, `build[${index}]`));
         if (buildArgvs.length > 0) {
           const key = JSON.stringify(buildArgvs);
@@ -298,13 +303,8 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
 function filledText(text: string, values: PlaceholderValues, where: string): string {
   const filled = fillPlaceholders(text, values);
   if ("text" in filled) return filled.text;
-  // A build fills {root} alone, and a world lacks only what it does not reach.
-  const why = where.startsWith("build")
-    ? "build runs once per tree, before any world exists"
-    : filled.missing === "port"
-      ? "this world does not serve"
-      : "this world has neither serve nor url";
-  throw new WorldStartError(`${where} names {${filled.missing}}, which has no value here: ${why}`);
+  // Not reached: `start` refused every gap before anything ran.
+  throw new WorldStartError(`${where} names {${filled.missing}}, which has no value here`);
 }
 
 function filledArgv(command: Command, values: PlaceholderValues, where: string): string[] {

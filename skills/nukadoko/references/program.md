@@ -38,6 +38,11 @@ program learns its port only from `{port}`, in the command or in `env`.
 | `{world}` | the environment's name |
 | `{token}` | random per world, redacted as `{{secret.WORLD_TOKEN}}` in every record |
 
+A placeholder a world has no value for (`{port}` without `serve`, `{url}`
+with neither `serve` nor `url`, anything but `{root}` in `build`) is
+`program-placeholder-unfilled`: `nuka check` reports it for every world,
+and `nuka run` and `nuka do` refuse it before any command runs.
+
 One world serves every scenario of an environment, so what one scenario
 writes is there for the next: a scenario creates what it reads and claims
 only on that (`scenario-rules.md`, S8, and `examples/http-api.md`).

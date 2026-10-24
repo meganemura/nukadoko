@@ -11,7 +11,8 @@ import {
 } from "../run/execute-typed-step.js";
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
-import { loadProgram } from "../config/load-program.js";
+import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
+import { placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { createStepContext, finalizeOpenRequests, installChannelPatches, type DisposeResult } from "../context/create-context.js";
@@ -162,9 +163,12 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   // --- Setup phase: any failure here writes nothing. ---
   let config;
   let program;
+  let programFile = PROGRAM_FILE_NAME;
   try {
     config = await loadConfig(rootDir);
-    program = (await loadProgram(rootDir))?.program ?? null;
+    const loaded = await loadProgram(rootDir);
+    program = loaded?.program ?? null;
+    programFile = loaded?.fileName ?? programFile;
   } catch (error) {
     return refuse(sinks, error, "unexpected-error");
   }
@@ -179,6 +183,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   } catch (error) {
     return refuse(sinks, error, "unexpected-error");
   }
+  // Refused before anything runs, as `nuka run` refuses it (src/cli/run.ts).
+  const unfilled =
+    resolvedEnv.program === null ? undefined : placeholderRefusal([{ name: resolvedEnv.name, recipe: resolvedEnv.program }], programFile);
+  if (unfilled !== undefined) return refuse(sinks, new Error(unfilled.message), "program-placeholder-unfilled", { fix: unfilled.fix });
 
   // Installed once this execution's fixture caches exist. `stop()` in the
   // `finally` below removes it on a normal return.

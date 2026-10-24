@@ -5,6 +5,8 @@ import { skippedEnvFileLines } from "../env/parse-env-file.js";
 import { resolveConfigFileName } from "../config/load-config.js";
 import { PROGRAM_FILE_NAME, type LoadedProgram } from "../config/load-program.js";
 import type { NukadokoConfig } from "../config/schema.js";
+import { programWorlds } from "../environment/resolve-environment.js";
+import { describePlaceholderGap, placeholderGapFix, placeholderGaps } from "../program/placeholders.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { MIN_REDACTABLE_LENGTH } from "../secrets/types.js";
 import type { CheckIssue } from "./types.js";
@@ -149,6 +151,22 @@ export async function checkConfig(
           message: `environments.${environmentName}.envFiles names "${relativePath}", which does not exist`,
           file: relativePath,
           fix: `Create ${relativePath}, or remove ${JSON.stringify(relativePath)} from environments.${environmentName}.envFiles in ${programFile}.`,
+        });
+      }
+    }
+  }
+
+  // Every world the program file can start, not only the one a run picks:
+  // a placeholder with no value fails the world before its server starts,
+  // and the recipe alone says so.
+  if (program !== null) {
+    for (const world of programWorlds(program.program)) {
+      for (const gap of placeholderGaps(world.recipe)) {
+        errors.push({
+          code: "program-placeholder-unfilled",
+          message: `world ${world.name}: ${describePlaceholderGap(gap)}`,
+          file: programFile,
+          fix: placeholderGapFix(gap, world.name, programFile),
         });
       }
     }

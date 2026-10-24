@@ -2150,6 +2150,11 @@ pass の途中でプログラムが終わったときは、world を止める時
 `build` は tree ごとに 1 回、どの world よりも前に実行するので、`build` のコマンドが名指せるのは `{root}` だけです。
 world が値を持たないプレースホルダーは、何かを実行する前に名前を挙げて拒否されます。
 serve しない world の `{port}` や、`serve` も `url` も無い world の `{url}` です。
+world がどのプレースホルダーを持つかはレシピだけで決まるので、この拒否は world を待ちません。
+`nuka check` は、ファイルが起動しうる各 world のそれぞれの欠けについて、error `program-placeholder-unfilled` を報告します。
+起動しうる world とは、`environments` が `default` を名指さないときの default の world と、各 environment です。
+`nuka run` と `nuka do` は、起動する world について、どの `build`、`prepare`、version の probe よりも前に、同じコードで拒否します。
+そのため、あとの world と共有する `build` も実行されません。
 波括弧で囲まれたそれ以外のテキストは書いたまま残るので、コマンドの中の JSON の値や shell の波括弧はエスケープ不要です。
 
 `{token}` は、プログラムと step が共有し、ほかの誰にも読ませない値のためのものです。
