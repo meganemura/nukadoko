@@ -12,7 +12,11 @@ import { HELD_TAG, isConditionShaped } from "../condition/condition.js";
 // pure. Reading the ref's files is src/run/base-run.ts's.
 //
 // Other tags and the name are not content: a scenario renamed, moved to
-// another file, or tagged `@smoke` still says what it said. A name and a
+// another file, or tagged `@smoke` still says what it said. A tag can still
+// change what runs (a hook selected by tag, a World that reads the tags),
+// so a criterion whose tags changed keeps its identity and its change and
+// is marked `retagged`, which runs it in the old world as a changed
+// mapping does. A name and a
 // line are what a person reads, so the lines a row carries are rebuilt from
 // the document, and only the content is compared, as JSON, so a table cell
 // that holds `|` cannot collide with two cells.
@@ -41,6 +45,8 @@ export interface Criterion {
   readonly content: string;
   /** Its condition tags and `@held`, the tags that are content. */
   readonly tags: readonly string[];
+  /** Every tag it carries, each once, sorted: what a retag compares. */
+  readonly allTags: readonly string[];
   /** The criterion as a person reads it. Display only. */
   readonly lines: readonly string[];
 }
@@ -59,6 +65,8 @@ export type CriterionChange =
       readonly at: { readonly feature: string; readonly line: number };
       /** Present when the ref holds it under another name or file. */
       readonly renamedFrom?: CriterionPlace;
+      /** Present when its tags differ from the ref's. */
+      readonly retagged?: true;
     }
   | { readonly change: "changed" | "new" };
 
@@ -152,7 +160,8 @@ export function criteriaOfFeature(feature: string, document: GherkinDocument, pi
       ...place.scenario.steps.flatMap(stepLines),
       ...(example === undefined ? [] : [...(example.header === undefined ? [] : [rowLine(example.header)]), rowLine(example.row)]),
     ];
-    criteria.push({ feature, line: pickle.location?.line ?? 0, name: pickle.name, content, tags, lines });
+    const allTags = [...new Set(pickle.tags.map((tag) => tag.name))].sort();
+    criteria.push({ feature, line: pickle.location?.line ?? 0, name: pickle.name, content, tags, allTags, lines });
   }
   return criteria;
 }
@@ -173,6 +182,7 @@ export function compareCriteria(base: readonly Criterion[], head: readonly Crite
       change: "unchanged",
       at: { feature: found.feature, line: found.line },
       ...(renamed ? { renamedFrom: { feature: found.feature, name: found.name } } : {}),
+      ...(found.allTags.join("\u0000") === criterion.allTags.join("\u0000") ? {} : { retagged: true as const }),
     });
   };
   for (const criterion of head) {

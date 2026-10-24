@@ -242,6 +242,7 @@ const table = z.looseObject({
       name: z.string(),
       change: z.enum(["unchanged", "changed", "new", "removed"]).nullable(),
       renamed_from: z.looseObject({ feature: z.string(), name: z.string() }).optional(),
+      retagged: z.literal(true).optional(),
       conditions: z.array(z.string()),
       cells: z.array(tableCell),
       verdict: z.enum(["held", "proven", "removed", "failed", "unproven", "moved"]),

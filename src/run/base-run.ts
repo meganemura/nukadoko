@@ -80,7 +80,8 @@ export interface PreparedBase {
   readonly mappingChanges: RunMappingChanges;
   /** `null` when no selected row is new or changed. */
   readonly base: (PreparedTree & { readonly programFromHead: boolean }) | null;
-  /** `null` unless the mapping changed and a selected row is unchanged. */
+  /** `null` unless a selected row is unchanged and the mapping changed or
+   * the row was retagged. */
   readonly old: PreparedTree | null;
   /** The ref's feature files that were compared, by path relative to the
    * project root. */
@@ -286,9 +287,9 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     };
     const mapping = compareMapping(refSnapshot, headSnapshot);
 
-    const changes = [...input.selected].map((key) => criteria.changes.get(key)?.change);
-    const baseNeeded = changes.some((change) => change === "changed" || change === "new");
-    const oldNeeded = mapping.changed && changes.some((change) => change === "unchanged");
+    const changes = [...input.selected].map((key) => criteria.changes.get(key));
+    const baseNeeded = changes.some((change) => change?.change === "changed" || change?.change === "new");
+    const oldNeeded = changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true));
     const treeInput: TreeInput = { headFiles, refFiles, head: headSide, ref: refSide, stateDir: inRepo(config.stateDir) };
     const roots = { head: top, ref: baseTop };
     if (oldNeeded) writeOldTree(treeInput, roots, oldTop);

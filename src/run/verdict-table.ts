@@ -40,8 +40,10 @@ import { shellWord } from "../shell/shell-word.js";
 // tagged `@held` always runs there, since `@held` says the base has the
 // behaviour and only the base can show that. The old world (head's code
 // under the ref's criteria and mapping) runs an unchanged row when the
-// mapping changed and head passed, where it shows the approved sentence
-// still means what it meant.
+// mapping changed or the row was retagged, and head passed, where it shows
+// the approved sentence still means what it meant. A retag is judged as a
+// mapping change because a tag can select a hook or steer a World: the
+// sentence is the same, and what runs it may not be.
 
 /** One execution, read for the table. A `fail` names the claim that broke,
  * by its position among its step's claims, and the actual value it saw. */
@@ -135,11 +137,22 @@ function runsText(runs: number): string {
 }
 
 /** What `nuka run --base` knows of one criterion: how it compares with the
- * ref, whether it carries `@held`, and whether the mapping changed. */
+ * ref, whether it carries `@held`, whether the mapping changed, and
+ * whether its own tags changed. */
 export interface RowContext {
   readonly change: "unchanged" | "changed" | "new";
   readonly held: boolean;
   readonly mappingChanged: boolean;
+  readonly retagged: boolean;
+}
+
+// What changed under an unchanged row since the base, as the clause of its
+// reason, or `null` when nothing did.
+function underneathChange(context: RowContext): string | null {
+  if (context.mappingChanged && context.retagged) return "the mapping and its tags changed since the base";
+  if (context.mappingChanged) return "the mapping changed since the base";
+  if (context.retagged) return "its tags changed since the base";
+  return null;
 }
 
 /** The environments a row needs a base cell and an old cell in, from its
@@ -155,7 +168,7 @@ export function plannedWorldCells(
   const required = headCells.filter((cell) => cell.role === "required");
   if (required.length === 0 || required.some((cell) => cell.outcome !== "pass")) return none;
   const environments = required.map((cell) => cell.environment);
-  if (context.change === "unchanged") return context.mappingChanged ? { base: [], old: environments } : none;
+  if (context.change === "unchanged") return underneathChange(context) !== null ? { base: [], old: environments } : none;
   if (!context.held && headCells.some((cell) => proves({ ...cell, world: "head" }, proofRuns))) return none;
   return { base: environments, old: [] };
 }
@@ -219,14 +232,15 @@ export function judgeRow(
   }
 
   if (context.change === "unchanged") {
-    if (!context.mappingChanged) return { verdict: "held", reason: `passes in ${passedIn}, and neither it nor the mapping changed since the base` };
+    const changed = underneathChange(context);
+    if (changed === null) return { verdict: "held", reason: `passes in ${passedIn}, and neither it nor the mapping changed since the base` };
     const old = cells.filter((cell) => cell.world === "old");
     const moved = old.find((cell) => cell.outcome !== "pass");
     if (old.length === 0) {
-      return { verdict: "moved", reason: `passes in ${passedIn}, but the mapping changed since the base and the old world did not run it` };
+      return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed} and the old world did not run it` };
     }
     if (moved !== undefined) {
-      return { verdict: "moved", reason: `passes in ${passedIn}, but the mapping changed since the base, and ${worldCellClause(moved, proofRuns)}` };
+      return { verdict: "moved", reason: `passes in ${passedIn}, but ${changed}, and ${worldCellClause(moved, proofRuns)}` };
     }
     return { verdict: "held", reason: `passes in ${passedIn}, and in the old world, where the base's mapping runs head's code` };
   }
@@ -387,7 +401,10 @@ export interface TableBase {
   readonly mappingChanged: boolean;
   /** Each selected criterion's change, and where the ref holds it under
    * another name or file. */
-  readonly changeOf: (feature: string, line: number) => { readonly change: "unchanged" | "changed" | "new"; readonly renamedFrom?: { readonly feature: string; readonly name: string } };
+  readonly changeOf: (
+    feature: string,
+    line: number,
+  ) => { readonly change: "unchanged" | "changed" | "new"; readonly renamedFrom?: { readonly feature: string; readonly name: string }; readonly retagged?: true };
   readonly removed: readonly RemovedCriterion[];
 }
 
@@ -444,7 +461,7 @@ export function buildTable(input: TableInput): RunTable {
     const context: RowContext | undefined =
       input.base === undefined || compared === undefined
         ? undefined
-        : { change: compared.change, held: readCriterionTags(criterion.tags).held, mappingChanged: input.base.mappingChanged };
+        : { change: compared.change, held: readCriterionTags(criterion.tags).held, mappingChanged: input.base.mappingChanged, retagged: compared.retagged === true };
     const planned = plannedWorldCells(headCells, input.proofRuns, context);
     const roleIn = (environment: string): CellRole => headCells.find((cell) => cell.environment === environment)?.role ?? "required";
     const cells = [
@@ -459,6 +476,7 @@ export function buildTable(input: TableInput): RunTable {
       name: criterion.name,
       change,
       ...(compared?.renamedFrom === undefined ? {} : { renamed_from: compared.renamedFrom }),
+      ...(compared?.retagged === true ? { retagged: true as const } : {}),
       conditions: conditionTagsOf(criterion.tags),
       cells,
       ...judgeRow(cells, input.proofRuns, context),

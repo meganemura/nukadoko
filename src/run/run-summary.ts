@@ -305,7 +305,7 @@ function renderTable(document: RunDocument): string[] {
   const change = (row: RunTableRow): string[] => {
     if (base === null) return [];
     const renamed = row.renamed_from === undefined ? "" : `, renamed from ${cellCode(row.renamed_from.feature)} ${cellText(row.renamed_from.name)}`;
-    return [`${row.change ?? ""}${renamed}`];
+    return [`${row.change ?? ""}${renamed}${row.retagged === true ? ", retagged" : ""}`];
   };
   return [
     ...renderBase(document),

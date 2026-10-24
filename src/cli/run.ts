@@ -1057,7 +1057,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
                   // started, so a row without a change is a bug here.
                   if (found === undefined) throw new Error(`${feature}:${line} ran but was not compared with the base`);
                   return found.change === "unchanged"
-                    ? { change: "unchanged" as const, ...(found.renamedFrom === undefined ? {} : { renamedFrom: found.renamedFrom }) }
+                    ? {
+                        change: "unchanged" as const,
+                        ...(found.renamedFrom === undefined ? {} : { renamedFrom: found.renamedFrom }),
+                        ...(found.retagged === true ? { retagged: true as const } : {}),
+                      }
                     : { change: found.change };
                 },
                 removed: base.criteria.removed.map((criterion) => ({
@@ -1316,13 +1320,19 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       for (const { feature, pickle } of flatPickles) {
         const line = pickle.location?.line ?? 0;
         const key = criterionKey(feature.relativePath, line);
-        const change = base.criteria.changes.get(key)?.change ?? "new";
+        const compared = base.criteria.changes.get(key);
+        const change = compared?.change ?? "new";
         const headCells = tableEnvironments.map((environment) => ({
           environment: environment.name,
           role: roleOf(feature.relativePath, line, environment.name),
           ...foldCell(cellOutcomes.get(cellKey(feature.relativePath, line, environment.name)) ?? []),
         }));
-        const context = { change, held: readCriterionTags(pickle.tags.map((tag) => tag.name)).held, mappingChanged: base.mapping.changed };
+        const context = {
+          change,
+          held: readCriterionTags(pickle.tags.map((tag) => tag.name)).held,
+          mappingChanged: base.mapping.changed,
+          retagged: compared?.change === "unchanged" && compared.retagged === true,
+        };
         planned.set(key, plannedWorldCells(headCells, proofRuns, context));
       }
       // A tree's cells that will not run say why on stderr too, beside the

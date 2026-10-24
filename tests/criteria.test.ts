@@ -82,6 +82,9 @@ function only(feature: Spec, path?: string): Criterion {
   return criteria[0]!;
 }
 
+// Every tag a scenario carries, each once, in a fixed order.
+const tagSet = (feature: Spec): string => [...new Set([...feature.otherTags, ...feature.conditionTags])].sort().join(" ");
+
 // The keyword an And continues, so spelling it out says the same.
 function resolvedKeyword(steps: readonly Step[], index: number): Step["keyword"] {
   for (let at = index; at >= 0; at -= 1) if (steps[at]!.keyword !== "And") return steps[at]!.keyword;
@@ -89,7 +92,7 @@ function resolvedKeyword(steps: readonly Step[], index: number): Step["keyword"]
 }
 
 describe("criterion identity", () => {
-  it("is the same criterion after a rename, a move, a tag that is not a condition, and an And spelled out", () =>
+  it("is the same criterion after a rename, a move, a tag that is not a condition, and an And spelled out, and retagged exactly when its tags differ", () =>
     hegel.test((tc) => {
       const before = tc.draw(spec);
       const renamed = tc.draw(gs.booleans());
@@ -111,6 +114,7 @@ describe("criterion identity", () => {
         change: "unchanged",
         at: { feature: base.feature, line: base.line },
         ...(renamed ? { renamedFrom: { feature: base.feature, name: base.name } } : {}),
+        ...(tagSet(before) === tagSet(after) ? {} : { retagged: true }),
       });
     }));
 
@@ -177,7 +181,7 @@ describe("criterion identity", () => {
 });
 
 describe("compareCriteria", () => {
-  const criterion = (feature: string, line: number, name: string, content: string): Criterion => ({ feature, line, name, content, tags: [], lines: [] });
+  const criterion = (feature: string, line: number, name: string, content: string): Criterion => ({ feature, line, name, content, tags: [], allTags: [], lines: [] });
 
   it("pairs a rename within the same file before one in another file", () => {
     const base = [criterion("features/b.feature", 3, "old name", "X"), criterion("features/a.feature", 3, "old name", "X")];

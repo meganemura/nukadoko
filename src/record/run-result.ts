@@ -231,6 +231,9 @@ export interface RunTableRow {
   /** For an `unchanged` criterion the ref holds under another name or in
    * another file: where. */
   readonly renamed_from?: { readonly feature: string; readonly name: string };
+  /** For an `unchanged` criterion whose tags differ from the ref's: `true`.
+   * Its row runs in the old world, as one under a changed mapping does. */
+  readonly retagged?: true;
   /** The criterion's condition tags and `@held`, as written, each once. */
   readonly conditions: readonly string[];
   /** One cell per world and environment the criterion runs in, in the

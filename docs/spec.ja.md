@@ -3129,7 +3129,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `worlds` はその列 `{ world, environment }` を並べます。
   run の各 environment の `head` を run の順に、そのあとに、ある行がセルを持つ各 environment の `base` と `old` です。
   `rows` は選んだ受け入れ基準ごとに 1 行を持ち、feature はパス順、scenario は行順に並び、そのあとに消えた受け入れ基準ごとに 1 行が続きます。
-  行は `feature`、`line`、`name`、`change`(`--base` が無ければ `null`、あれば `unchanged`、`changed`、`new`、`removed`)、基点が別の同一性のもとで持つ変わっていない行の `renamed_from`(基点での `{ feature, name }`)、持っている condition の tag と `@held` を並べた `conditions`、走った world と environment ごとに 1 つのセル、`verdict`(`held`、`proven`、`removed`、`failed`、`unproven`、`moved`)、1 文の `reason` を持ちます。
+  行は `feature`、`line`、`name`、`change`(`--base` が無ければ `null`、あれば `unchanged`、`changed`、`new`、`removed`)、基点が別の同一性のもとで持つ変わっていない行の `renamed_from`(基点での `{ feature, name }`)、tag が基点と違う変わっていない行の `retagged`(`true`)、持っている condition の tag と `@held` を並べた `conditions`、走った world と environment ごとに 1 つのセル、`verdict`(`held`、`proven`、`removed`、`failed`、`unproven`、`moved`)、1 文の `reason` を持ちます。
   消えた行はセルを持たず、その `line` は基点のもので、`lines` が基点での文を持ちます。
   セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、head の environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、`fail` のときはすべての実行が成り立たなかった `claim`(step の claim の中の位置で、0 から数えます)と、各実行で見た実際の値を実行の順に並べた `actuals`(`{ value }`、run.json が切り詰めた値には `{ json_start, json_bytes }`、値が無ければ `{ reason }`)、そして `not-run` のときと、証明の回が終わらなかったために `broke` になった対照のときは `reason` を持ちます。
   `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
@@ -3281,6 +3281,9 @@ environment を 1 つ名指せばそこに当てはまるものが走るので�
 step の並び(Background の step が先で、各 step は実効の keyword、本文、docstring、表を持ち、`And` と `But` は続けている keyword を取ります)、Examples の行、そしてどこで成り立たなければならないかを決める condition の tag と `@held` です。
 ほかの tag、名前、ファイルの中の位置は中身に入りません。
 そのため、名前を変えた scenario、別のファイルへ移した scenario、`@smoke` を付けた scenario は、言っていたことをそのまま言っています。
+それでも tag は走るものを変えることがあります(tag で選ばれる hook、tag を読む World)。
+そのため、tag が基点と違う `unchanged` の受け入れ基準は `retagged` です。
+同一性と変化はそのまま保ち、行は `retagged: true` を持ち、対応づけが変わった行と同じように old の world で走ります。
 基点と比べて、受け入れ基準は次のどれかです:
 
 - `unchanged`: 同一性と中身が同じもの、または別の同一性のもとで中身が同じもの。
@@ -3351,7 +3354,7 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 - `new` か `changed` の行は、head のセルが必須で通った各 environment で、base の world で走ります。
   ただし head の対照がすでに証明しているときは走りません。
   `@held` の付いた行は、基点がその振る舞いを持つことを示せるのは基点だけなので、常にそこで走ります。
-- `unchanged` の行は、対応づけが変わったとき、そうした各 environment で、基点の feature ファイルが与える行で、old の world で走ります。
+- `unchanged` の行は、対応づけが変わったとき、または行が `retagged` のとき、そうした各 environment で、基点の feature ファイルが与える行で、old の world で走ります。
 - 必須の head のセルが通らなかった行は、どちらでも走りません。
 
 **セル。**
@@ -3416,7 +3419,7 @@ run を赤にすることはありません。
 - `unproven`: `new` か `changed` の行が head で通り、その振る舞いが無いところで Then が失敗したことを示すものが無いとき。
   base のセルが通った、`broke` になった、食い違った、`--proof-runs` 回より少なくしか失敗しなかった、または走らなかったときで、それを証明する対照も無いときです。
   base のセルが `pass` でない `@held` の行も、振る舞いが無いところのセルがそれを証明しない限り `unproven` です。
-- `moved`: `unchanged` の行が head で通り、対応づけが変わり、old の world で通らなかったとき。
+- `moved`: `unchanged` の行が head で通り、対応づけが変わったか行が `retagged` で、old の world で通らなかったとき。
   承認された文を、承認された step で読むと、もう head のコードに対して成り立たず、その意味がその下で動いたということです。
   基点の対応づけが head に対して読み込めないか check を通らないために走らなかった old のセルも、その理由を添えて行を `moved` にします。
   文が今も同じ意味であることを示すものが無いからです。

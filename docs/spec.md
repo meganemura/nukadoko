@@ -3891,7 +3891,8 @@ to act on the run without opening another file:
   per removed criterion: its `feature`, `line`, and `name`, `change`
   (`null` without `--base`; `unchanged`, `changed`, `new`, or
   `removed` under it), `renamed_from` (`{ feature, name }` at the ref)
-  for an unchanged row the ref holds under another identity, the
+  for an unchanged row the ref holds under another identity, `retagged`
+  (`true`) for an unchanged row whose tags differ from the ref's, the
   condition tags and `@held` it carries as `conditions`, one cell per
   world and environment it ran in, its `verdict` (`held`, `proven`,
   `removed`, `failed`, `unproven`, or `moved`), and the `reason`, one
@@ -4106,7 +4107,12 @@ keyword it continues), its text, its docstring, and its table; its
 Examples row; and its condition tags and `@held`, which decide where it
 has to hold. Other tags, the name, and where it stands in the file are
 not content, so a scenario renamed, moved to another file, or tagged
-`@smoke` still says what it said. Against the ref, a criterion is:
+`@smoke` still says what it said. A tag can still change what runs (a
+hook selected by a tag, a World that reads the tags), so an `unchanged`
+criterion whose tags differ from the ref's is `retagged`: it keeps its
+identity and its change, the row says `retagged: true`, and it runs in
+the old world as a row under a changed mapping does. Against the ref, a
+criterion is:
 
 - `unchanged`: the same identity and content, or the same content under
   another identity, which the row names in `renamed_from`. A rename is
@@ -4197,7 +4203,8 @@ head passed:
   already proves it. A row tagged `@held` always runs there, since only
   the base can show the base has the behaviour.
 - An `unchanged` row runs in the old world in each such environment when
-  the mapping changed, at the line the ref's feature file gives it.
+  the mapping changed or the row is retagged, at the line the ref's
+  feature file gives it.
 - A row whose required head cell did not pass runs in neither.
 
 **Cells.** A cell is what its executions came to:
@@ -4278,8 +4285,8 @@ Three are red:
   run, and no control proves it. A row tagged `@held` whose base cell is
   not `pass` is `unproven` too, unless a cell where its behaviour is
   absent proves it.
-- `moved`: an `unchanged` row passes at head, the mapping changed, and
-  the old world did not pass it: the approved sentence, read through the
+- `moved`: an `unchanged` row passes at head, the mapping changed or the
+  row is retagged, and the old world did not pass it: the approved sentence, read through the
   approved steps, no longer holds against head's code, so its meaning
   moved under it. An old cell that did not run, because the ref's mapping
   does not load or check against head, makes the row `moved` with that

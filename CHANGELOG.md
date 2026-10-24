@@ -329,7 +329,9 @@ just until 0.1.
   Examples row, and its condition tags and `@held`, so a rename, a move,
   or a tag such as `@smoke` leaves it `unchanged` (with `renamed_from`,
   taken only where one candidate matches, the same file first, so the
-  answer never depends on the order the files are read in), and any
+  answer never depends on the order the files are read in; a criterion
+  whose other tags changed is marked `retagged` and runs in the old
+  world, since a tag can select a hook), and any
   edit to what a person approved makes it `changed`; the others are `new`
   or `removed`. The mapping (the files under the features
   directory other than `.feature` files, the whole config but
@@ -341,7 +343,8 @@ just until 0.1.
   ref's code under head's criteria and mapping, runs a new or changed row,
   and its Then has to fail there in `--proof-runs` runs for the row to
   be `proven`; `old`, head's code under the ref's criteria and mapping,
-  runs an unchanged row when the mapping changed, and it has to pass
+  runs an unchanged row when the mapping changed or the row is retagged,
+  and it has to pass
   there. The rows are `held`, `proven`, `removed`, `failed`,
   `unproven` (nothing shows a Then failing without the change), or
   `moved` (an approved sentence no longer holds under the steps it was
