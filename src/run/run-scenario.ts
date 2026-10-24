@@ -65,6 +65,7 @@ import { malformedFromEntryMessage, tryFromCandidates, type Step } from "../step
 import { strictArgsSchema } from "../step/strict-args.js";
 import { argOrigins, claimArgSide, sentenceTextOf } from "./arg-origins.js";
 import { runValidatedStep, snapshotClaimArgs, type ClaimExecution } from "./execute-typed-step.js";
+import { copyOf, type Refusal, type Snapshot } from "../step/snapshot.js";
 import { channelsOfStepRecord, recordedChannels, withMeasured } from "./measured.js";
 import { gherkinStepLines, pickleStepLines } from "./run-document.js";
 import { bindStepArgs, matchPickleStep, type StepBinding } from "./match-step.js";
@@ -238,6 +239,12 @@ import { generateScenarioId } from "./scenario-id.js";
  * without a second vocabulary lookup. */
 interface ChainEntry {
   readonly result: unknown;
+  /** The snapshot of each key of `result`, taken the moment the step
+   * returned. A `from` value is a fresh copy of one, so nothing the
+   * producing step's code still holds reaches a later step; a key whose
+   * snapshot was refused is passed on as it was returned, for a step that
+   * runs, and no claim judges it. */
+  readonly snapshots: ReadonlyMap<string, Snapshot>;
   readonly recordId: string;
   readonly stepName: string;
 }
@@ -525,7 +532,9 @@ function injectFrom(
   recordUsed: (recordId: string, stepName: string, result: unknown) => void,
   // Told each key it filled, and from where: the step record's
   // `args_origin`.
-  onFilled: (key: string, from: { step_record_id: string; step: string; key: string }) => void = () => undefined,
+  // `refused` is set when the producing step's snapshot of that key was
+  // refused, and the key holds the value as it was returned.
+  onFilled: (key: string, from: { step_record_id: string; step: string; key: string }, refused: Refusal | undefined) => void = () => undefined,
 ): Map<string, string> {
   const stillMissing = new Map<string, string>();
   for (const [key, entry] of Object.entries(step.from)) {
@@ -561,9 +570,21 @@ function injectFrom(
     }
 
     const { upstreamKey, chainEntry } = present[0]!;
-    value[key] = (chainEntry.result as Record<string, unknown>)[upstreamKey];
+    // A fresh copy for every step that receives it: one step changing its
+    // args reaches neither the producing step nor any other receiver.
+    const taken = chainEntry.snapshots.get(upstreamKey);
+    value[key] =
+      taken === undefined
+        ? undefined
+        : "value" in taken
+          ? copyOf(taken)
+          : (chainEntry.result as Record<string, unknown>)[upstreamKey];
     recordUsed(chainEntry.recordId, chainEntry.stepName, chainEntry.result);
-    onFilled(key, { step_record_id: chainEntry.recordId, step: chainEntry.stepName, key: upstreamKey });
+    onFilled(
+      key,
+      { step_record_id: chainEntry.recordId, step: chainEntry.stepName, key: upstreamKey },
+      taken !== undefined && "refused" in taken ? taken.refused : undefined,
+    );
   }
   return stillMissing;
 }
@@ -1044,7 +1065,9 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Where each key of `recordedArgs` came from; `undefined` for a compat
     // step, whose arguments are positional.
     argsOrigin: Record<string, ArgOrigin> | undefined,
-    chainKey: Step | undefined,
+    // The step and the snapshots of its result (`ChainEntry`), for a
+    // typed step; `undefined` for a compat step.
+    chainKey: { readonly step: Step; readonly snapshots: ReadonlyMap<string, Snapshot> } | undefined,
     // This step's own declared `mutates` (typed) or `null` (compat, which
     // has no declaration at all).
     mutates: boolean | null,
@@ -1150,7 +1173,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
     // Only a step whose *final* status is "passed" ever becomes readable via
     // `ctx.resultOf`, and only when `chainKey` is given at all (typed only).
     if (status === "passed" && chainKey !== undefined) {
-      chain.set(chainKey, { result, recordId: begun.recordId, stepName: outcomeStepName });
+      chain.set(chainKey.step, { result, snapshots: chainKey.snapshots, recordId: begun.recordId, stepName: outcomeStepName });
     }
 
     const stepFinishedAt = new Date();
@@ -1830,6 +1853,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const attachmentOrigin: ArgOrigin | undefined =
           pickleStep.argument?.docString !== undefined ? "docstring" : pickleStep.argument?.dataTable !== undefined ? "table" : undefined;
         const fromOrigins = new Map<string, ArgOrigin>();
+        const refusedFrom = new Map<string, Refusal>();
         const originOf = (key: string): ArgOrigin | undefined =>
           captureKeys.has(key) ? "capture" : key === attachmentKey ? attachmentOrigin : fromOrigins.get(key);
         began.originOf = originOf;
@@ -1837,6 +1861,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
         const stepStartedAt = new Date();
         let status: "passed" | "failed";
         let result: unknown;
+        let resultSnapshots: ReadonlyMap<string, Snapshot> = new Map();
         let errorMessage = "";
         let errorKind: ErrorKind | undefined;
         let thrown: unknown;
@@ -1868,11 +1893,14 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             chain,
             stepNameOf,
             contextHandle.recordUsed,
-            (key, from) => fromOrigins.set(key, { from }),
+            (key, from, refused) => {
+              fromOrigins.set(key, { from });
+              if (refused !== undefined) refusedFrom.set(key, refused);
+            },
           );
           // Before the schema runs: what a claim judges is the value the
           // line or the earlier step gave, never what the schema made of it.
-          const claimArgs = snapshotClaimArgs(entry.step, bindResult.value);
+          const claimArgs = snapshotClaimArgs(entry.step, bindResult.value, refusedFrom);
           const argsResult = strictArgsSchema(entry.step.args).safeParse(bindResult.value);
           if (!argsResult.success) {
             status = "failed";
@@ -1921,6 +1949,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
             if (executed.status === "passed") {
               status = "passed";
               result = executed.result;
+              resultSnapshots = executed.snapshots ?? new Map();
             } else {
               status = "failed";
               errorMessage = executed.error.message;
@@ -1941,7 +1970,7 @@ export async function runScenario(options: RunScenarioOptions): Promise<Scenario
           result,
           recordedArgs,
           argOrigins(recordedArgs, originOf),
-          entry.step,
+          { step: entry.step, snapshots: resultSnapshots },
           entry.step.mutates,
           fixtureUsage,
           claimExecution,

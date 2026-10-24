@@ -340,6 +340,111 @@ export default defineStep({
     expect(record.result.cart.count).toBe(1);
   });
 
+  it("judges a from value as the producing step returned it, though the step changes it afterwards or a step before the claim changes its own copy", async () => {
+    const rootDir = await project({
+      "features/steps/i-fetch-the-cart.ts": `import { defineStep, z } from "nukadoko";
+export default defineStep({
+  description: "Fetches the cart",
+  pattern: "I fetch the cart",
+  args: z.object({}),
+  returns: z.object({ items: z.any() }),
+  mutates: false,
+  run() {
+    const items: string[] = [];
+    setTimeout(() => items.push("apple"), 30);
+    return { items };
+  },
+});
+`,
+      "features/steps/i-add-to-my-copy.ts": `import { defineStep, z } from "nukadoko";
+import fetch from "./i-fetch-the-cart.ts";
+export default defineStep({
+  description: "Changes the cart it received",
+  pattern: "I add apple to my copy",
+  args: z.object({ items: z.any() }),
+  from: { items: [fetch, "items"] },
+  mutates: false,
+  async run({}, { items }) {
+    items.push("apple");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  },
+});
+`,
+      "features/steps/the-cart-holds.ts": `import { defineStep, z } from "nukadoko";
+import fetch from "./i-fetch-the-cart.ts";
+export default defineStep({
+  pattern: "the cart holds {item:string}",
+  args: z.object({ items: z.array(z.string()), item: z.string() }),
+  from: { items: [fetch, "items"] },
+  claims: [{ actual: "items", compare: "has-item", expected: "item" }],
+});
+`,
+      "features/t.feature": feature("When I fetch the cart", "And I add apple to my copy", 'Then the cart holds "apple"'),
+    });
+    const result = await cli(rootDir, ["run", "features/t.feature"]);
+    expect(result.exitCode).toBe(1);
+    const [producer, , step] = latestRunJson(rootDir).scenarios[0].steps;
+    expect(step.claims[0]).toMatchObject({ actual: [], expected: "apple", outcome: "broken" });
+    const record = JSON.parse(await readFile(path.join(latestRunDir(rootDir), producer.record, "record.json"), "utf8")) as { result: { items: string[] } };
+    expect(record.result.items).toEqual([]);
+  });
+
+  it("leaves every claim unjudged, and does not call observe, when an input observe would receive cannot be copied", async () => {
+    const rootDir = await project({
+      "features/steps/i-connect.ts": `import { defineStep, z } from "nukadoko";
+class Client { count = 1; send = () => 1; }
+export default defineStep({
+  description: "Connects",
+  pattern: "I connect",
+  args: z.object({}),
+  returns: z.object({ client: z.any(), list: z.any() }),
+  mutates: false,
+  run() {
+    return { client: new Client(), list: new Proxy([], {}) };
+  },
+});
+`,
+      "features/steps/the-client-counts.ts": `import { defineStep, z } from "nukadoko";
+import connect from "./i-connect.ts";
+export default defineStep({
+  pattern: "the client counts {n:int}",
+  args: z.object({ client: z.any(), n: z.number() }),
+  from: { client: [connect, "client"] },
+  observe({}, { client }) { globalThis.observed = true; return { count: client.count }; },
+  claims: [{ actual: "count", compare: "equal", expected: "n" }],
+});
+`,
+      "features/steps/the-list-is-empty.ts": `import { defineStep, z } from "nukadoko";
+import connect from "./i-connect.ts";
+export default defineStep({
+  pattern: "the list has {n:int} items",
+  args: z.object({ list: z.any(), n: z.number() }),
+  from: { list: [connect, "list"] },
+  observe({}, { list }) { return { count: list.length }; },
+  claims: [{ actual: "count", compare: "equal", expected: "n" }],
+});
+`,
+      "features/t.feature": feature("When I connect", "Then the client counts 1"),
+      "features/u.feature": feature("When I connect", "Then the list has 0 items"),
+    });
+    for (const [file, key, problem] of [
+      ["features/t.feature", "client", "holds a function at send"],
+      ["features/u.feature", "list", "is a Proxy"],
+    ] as const) {
+      const result = await cli(rootDir, ["run", file]);
+      expect(result.exitCode).toBe(1);
+      const step = lastClaimStep(rootDir);
+      expect(step.error.kind).toBe("claim_unjudged");
+      expect(step.observation).toBe("unobserved");
+      expect(step.attempts).toBe(0);
+      expect(step.claims[0]).toMatchObject({
+        outcome: "unjudged",
+        reason: `observe would receive args.${key}, which ${problem}, and observe receives only copies of its inputs, so observe did not run and no claim was judged`,
+      });
+    }
+    expect((globalThis as { observed?: boolean }).observed).toBeUndefined();
+  });
+
   it("leaves a Proxy observe returned unjudged, at the root or inside, and runs no trap that answers otherwise", async () => {
     const rootDir = await project({
       "features/steps/the-list-includes.ts": `import { defineStep, z } from "nukadoko";

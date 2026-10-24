@@ -294,11 +294,14 @@ export interface ArgSide {
 
 /** What a claim step read, and how to name each value's source. */
 export interface ClaimInputs {
-  /** The args a claim names, as snapshots taken before the args schema
-   * ran: a sentence value after its parameter type, a `from` value as the
-   * producing step recorded it. Read by `[key, ...path]`. */
+  /** The args a claim names, as snapshots the runner took of the bound
+   * args before the args schema ran: a sentence value after its parameter
+   * type, and a `from` value, which is a fresh copy of the snapshot taken
+   * of the producing step's result the moment it returned (the value its
+   * record shows). Read by `[key, ...path]`. */
   readonly args: Reader;
-  /** What `observe` returned, as snapshots taken when it returned. */
+  /** What `observe` returned, as snapshots taken the moment it returned.
+   * `observe` itself received copies of its inputs, never the args. */
   readonly observed: Reader;
   /** Whether the args schema's output differs from the snapshot at these
    * segments: a claim on such a value judged nothing the line or the
@@ -789,6 +792,18 @@ export async function evaluateClaims(claims: readonly Claim[], inputs: ClaimInpu
     }
   }
   return judged;
+}
+
+/** Each claim's record when nukadoko could not judge any of them for
+ * `reason`, before anything was read: what each side would have been
+ * named, nothing compared. */
+export function unjudgedClaims(claims: readonly Claim[], inputs: ClaimInputs, reason: string): readonly JudgedClaim[] {
+  return claims.map((claim): JudgedClaim => ({
+    record: notJudged(claim, inputs, "unjudged", reason),
+    rawActual: undefined,
+    fromKey: fromKeyOf(claim, inputs.fromKeys),
+    expectedOrigins: expectedOriginsOf(claim, inputs.fromKeys),
+  }));
 }
 
 /** Each claim's record when the step read no values: what each side would

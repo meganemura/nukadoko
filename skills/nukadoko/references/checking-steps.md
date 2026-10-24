@@ -117,7 +117,7 @@ The compares: `equal` (structural; key order does not count), `not-equal`,
 claim, and so does an expected text every string holds (blank under
 `contains-text`, a pattern that matches `""` under `matches`). Each side
 is a plain JSON copy taken where the value comes from (when `observe`
-returns, before the args schema runs), and `observe` gets a copy of its
+returns, when a producer returns), and `observe` gets a clone of its
 inputs; a `Date`, a bigint, `NaN`, an `undefined` item, a `Proxy`, or
 nesting past 256 levels leaves the claim `unjudged` (return an ISO
 string or a number). Judging has the step's deadline: each claim or item

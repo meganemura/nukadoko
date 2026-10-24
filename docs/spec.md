@@ -1757,17 +1757,27 @@ and the next another, so two reads of it are not one value.
 - A value `observe` returns is copied the moment `observe` returns, or
   the moment its promise settles. A value it changes later, in a timer, in
   a callback, or on its next call, is not the one judged.
-- A `from` value is copied from the args before the claim step's args
-  schema runs, and before `observe` runs.
+- A `from` value is copied the moment the producing step returns, key by
+  key of its result, and each later step that receives it receives a fresh
+  copy of that copy. A value the producing step changes later, or one a
+  step in between changes in its own args, is not the one judged. A result
+  key that is not plain JSON reaches a step that runs as it was returned,
+  and a claim that reads any part of it is `unjudged`, naming the place.
 - A sentence value is copied after its parameter type has read the line
   and before the args schema runs. `expected_view` then reads the copy.
 - Each reading of a poll is its own copy, taken when it is read.
 
-`observe` receives its inputs as a deep copy, made again for each call,
-so nothing it does to them reaches what a claim reads, an earlier step's
-result, or its next reading.
+`observe` receives its inputs as a structured clone, made again for each
+call, so nothing it does to them reaches what a claim reads, an earlier
+step's result, or its next reading. An input that a structured clone
+cannot copy (a `Proxy`, a function, a class instance that holds one)
+leaves every claim `unjudged` and `observe` does not run: `observe would
+receive args.client, which holds a function at send, and observe receives
+only copies of its inputs, so observe did not run and no claim was
+judged`. The error kind is `claim_unjudged`.
 
-The args schema still runs, and its output is what `observe` receives.
+The args schema still runs, and a copy of its output is what `observe`
+receives.
 After it runs, nukadoko compares its output with the copy, at every place
 a claim reads. Where the two differ, the claim breaks, and the reason
 names the key: `the args schema changed args.cart at count from the value
@@ -2024,7 +2034,7 @@ A claim step's record has these fields of its own (see "Records"):
   every string holds, a view that could not apply, a side compared with
   itself, a value the args schema changed) or when nukadoko could not
   judge it (a value that is not plain JSON, a `Proxy`, a value nested
-  too deep), `measured`, and `expected_measured` when the expected value
+  too deep, an input `observe` could not receive as a copy), `measured`, and `expected_measured` when the expected value
   came from `from` or `observe`. An `each` claim carries `actual_from`,
   the `each` declarations (each with `expected_measured` on the same
   terms), counts, and item results, and the same `outcome`, `reason`,
@@ -2032,7 +2042,8 @@ A claim step's record has these fields of its own (see "Records"):
 - `observation`: `observed` when the step read its values, `unobserved`
   when it could not. The step's `error` then says why.
 - `attempts`: how many times the step read its values. Each `observe` call
-  counts; a step with no `observe` reads its `from` values once.
+  counts; a step with no `observe` reads its `from` values once, and a
+  step whose `observe` never ran records `0`.
 - `readings`, under `poll` only: the readings the step kept (see "Poll"),
   and `readings_left_out` when it did not keep them all.
 

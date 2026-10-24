@@ -5,9 +5,12 @@ import { types } from "node:util";
 // returns either a fresh copy made only of plain JSON, sharing no object
 // with the value it was given, or a refusal that names where the first part
 // that is not plain JSON sits and what it is. `readAt` walks a path to the
-// value a claim names and takes its snapshot. Both are pure and run no code
-// of the value's own: a getter is refused by its descriptor, never called,
-// and a Proxy is refused before any of its traps can run.
+// value a claim names and takes its snapshot, and `snapshotKeys` takes one
+// of each key of a step's result. They are pure and run no code of the
+// value's own: a getter is refused by its descriptor, never called, and a
+// Proxy is refused before any of its traps can run. `inputCopy` is the one
+// copy here that may run code (a structured clone calls getters): it makes
+// what `observe` receives, which no claim reads.
 //
 // Why one copy: a claim used to read the live value step code returned, so
 // the value that was compared and the value the record showed were two
@@ -176,44 +179,67 @@ export function readAt(root: unknown, segments: readonly string[], maxDepth = SN
   return "refused" in taken ? { refused: { ...taken.refused, at: [...segments, ...taken.refused.at] } } : taken;
 }
 
-/** A copy of `value` that step code may change without reaching the value
- * it was copied from: a structured clone where one can be made, and
- * otherwise a copy of every array and plain object, with each part a clone
- * cannot copy (a function, a Proxy) kept as it is. For `observe`'s inputs,
- * which the claims never read (they read snapshots taken before), so a
- * value that is not JSON is not refused here. */
-export function detachedCopy(value: unknown): unknown {
-  try {
-    return structuredClone(value);
-  } catch {
-    // Falls through to the copy below, which keeps what a clone refuses.
+/**
+ * The snapshot of each key of a step's result, taken the moment the step
+ * returned: what every later `from` value is a fresh copy of, so nothing
+ * the producing step's code still holds reaches a later step or a claim.
+ * A key whose value is `undefined` is absent, as in JSON; a key read
+ * through a getter is refused without calling it. A result that is not an
+ * object has no keys. Pure.
+ */
+export function snapshotKeys(result: unknown): ReadonlyMap<string, Snapshot> {
+  const snapshots = new Map<string, Snapshot>();
+  if (typeof result !== "object" || result === null || types.isProxy(result)) return snapshots;
+  for (const key of Object.keys(result)) {
+    const descriptor = Object.getOwnPropertyDescriptor(result, key)!;
+    if (!("value" in descriptor)) snapshots.set(key, { refused: { at: [], problem: "is a getter" } });
+    else if (descriptor.value !== undefined) snapshots.set(key, snapshot(descriptor.value));
   }
-  const seen = new Map<object, unknown>();
-  const copy = (current: unknown): unknown => {
-    if (typeof current !== "object" || current === null || types.isProxy(current)) return current;
-    const done = seen.get(current);
-    if (done !== undefined) return done;
-    const prototype: unknown = Object.getPrototypeOf(current);
-    if (Array.isArray(current) && prototype === Array.prototype) {
-      const out: unknown[] = [];
-      seen.set(current, out);
-      for (const item of current as unknown[]) out.push(copy(item));
-      return out;
-    }
-    if (prototype === Object.prototype || prototype === null) {
-      const out: Record<string, unknown> = {};
-      seen.set(current, out);
-      for (const key of Object.keys(current)) {
-        const descriptor = Object.getOwnPropertyDescriptor(current, key)!;
-        setOwn(out, key, "value" in descriptor ? copy(descriptor.value) : undefined);
-      }
-      return out;
-    }
-    try {
-      return structuredClone(current);
-    } catch {
-      return current;
-    }
-  };
-  return copy(value);
+  return snapshots;
+}
+
+/** A fresh copy of a value a snapshot already took, sharing no object with
+ * it or with any other copy. */
+export function copyOf(taken: { readonly value: unknown }): unknown {
+  const again = snapshot(taken.value);
+  // A snapshot's value is plain JSON within the depth limit, so taking one
+  // of it again always succeeds.
+  return "value" in again ? again.value : undefined;
+}
+
+/** A structured clone of one of `observe`'s inputs, or why none can be
+ * made (a Proxy, a function, a class instance that holds one). `observe`
+ * runs step code, so it receives copies only: nothing it does to an input
+ * reaches an earlier step's result, another reading, or a value a claim
+ * judges. The claims never read these copies (they read snapshots taken
+ * before), so an input that is not plain JSON but clones (a Date, a Map) is
+ * not refused here. */
+export function inputCopy(value: unknown): { readonly value: unknown } | { readonly problem: string } {
+  const found = uncloneable(value, [], new Set());
+  if (found !== null) return { problem: found.at.length === 0 ? `is ${found.what}` : `holds ${found.what} at ${found.at.join(".")}` };
+  try {
+    return { value: structuredClone(value) };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { problem: `is ${kindOf(value)}, which a structured clone cannot copy (${reason.split("\n")[0] ?? ""})` };
+  }
+}
+
+/** The first part a structured clone refuses that a reader can name: a
+ * Proxy (found before any trap runs), a function, or a symbol, walking own
+ * data properties only. */
+function uncloneable(value: unknown, at: readonly string[], seen: Set<object>): { readonly at: readonly string[]; readonly what: string } | null {
+  if (typeof value === "function") return { at, what: "a function" };
+  if (typeof value === "symbol") return { at, what: "a symbol" };
+  if (typeof value !== "object" || value === null) return null;
+  if (types.isProxy(value)) return { at, what: "a Proxy" };
+  if (seen.has(value)) return null;
+  seen.add(value);
+  for (const key of Object.keys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor)) continue;
+    const found = uncloneable(descriptor.value, [...at, key], seen);
+    if (found !== null) return found;
+  }
+  return null;
 }

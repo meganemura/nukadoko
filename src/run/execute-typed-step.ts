@@ -21,6 +21,7 @@ import {
   readingOf,
   readKey,
   takeReads,
+  unjudgedClaims,
   unobservedClaims,
   judgingBudget,
   type ArgSide,
@@ -34,7 +35,7 @@ import {
   type ReadingsLeftOut,
   type ReadingsLog,
 } from "../step/evaluate-claims.js";
-import { detachedCopy, readAt, type Read } from "../step/snapshot.js";
+import { inputCopy, readAt, snapshotKeys, type Read, type Refusal, type Snapshot } from "../step/snapshot.js";
 import { startPatternWorker, testPatternInWorker } from "./pattern-worker.js";
 import { stepFixtureNames } from "../step/step-fixture-names.js";
 import { strictArgsSchema } from "../step/strict-args.js";
@@ -61,7 +62,8 @@ export interface ClaimExecution {
   /** One entry per declared claim, in declaration order. */
   readonly judged: readonly JudgedClaim[];
   /** `unobserved` when the step read no values: `observe` threw or ran
-   * past the deadline, or a fixture it names could not be set up. */
+   * past the deadline, a fixture it names could not be set up, or an input
+   * `observe` would receive could not be copied. */
   readonly observation: "observed" | "unobserved";
   /** How many times `observe` ran; `1` for a step with no `observe`, which
    * reads its `from` values once. */
@@ -77,6 +79,10 @@ export type ValidatedStepOutcome =
   | {
       readonly status: "passed";
       readonly result: unknown;
+      /** A step that runs: the snapshot of each key of its result, taken
+       * the moment it returned (`snapshotKeys`), which every later `from`
+       * value is a fresh copy of. */
+      readonly snapshots?: ReadonlyMap<string, Snapshot>;
       readonly fixtureUsage: FixtureUsageEntry[];
       readonly claims?: ClaimExecution;
     }
@@ -132,10 +138,19 @@ function deadlineOf(step: Step, config: RunValidatedStepInput["config"]): { read
  * recorded it. A caller takes it before the args schema runs, so nothing
  * the schema does (a refine that writes, a default, a transform changed
  * after defineStep) reaches what the claims judge; `undefined` for a step
- * that runs. */
-export function snapshotClaimArgs(step: Step, rawArgs: unknown): ReadonlyMap<string, Read> | undefined {
+ * that runs. `refusedFrom` names each `from` key whose value the producing
+ * step's snapshot refused, with the refusal: the args hold that value as
+ * it was returned, for a step that runs, and a claim reading any part of
+ * it is not judged. */
+export function snapshotClaimArgs(step: Step, rawArgs: unknown, refusedFrom: ReadonlyMap<string, Refusal> = new Map()): ReadonlyMap<string, Read> | undefined {
   if (!isClaimStep(step)) return undefined;
-  return takeReads(rawArgs, claimReads(step.claims, new Set(Object.keys(step.from))).args);
+  const paths = claimReads(step.claims, new Set(Object.keys(step.from))).args;
+  const reads = new Map(takeReads(rawArgs, paths.filter((segments) => !refusedFrom.has(segments[0]!))));
+  for (const segments of paths) {
+    const refusal = refusedFrom.get(segments[0]!);
+    if (refusal !== undefined) reads.set(readKey(segments), { refused: { ...refusal, at: [segments[0]!, ...refusal.at] } });
+  }
+  return reads;
 }
 
 /** Which args values a claim reads came out of the args schema other than
@@ -191,7 +206,10 @@ async function runRunStep(input: RunValidatedStepInput, step: RunStep): Promise<
     if (!returnsResult.success) {
       return { status: "failed", error: { message: returnsResult.message, kind: "result_invalid" }, thrown: undefined, fixtureUsage };
     }
-    return { status: "passed", result: returnsResult.data, fixtureUsage };
+    // Taken before anything else runs, so a value the step keeps a
+    // reference to and changes later (on a timer, in a callback) is not
+    // what a later step receives.
+    return { status: "passed", result: returnsResult.data, snapshots: snapshotKeys(returnsResult.data), fixtureUsage };
   } catch (error) {
     // A deadline arrives as the timeout error and records as "timeout",
     // not as the step's own throw.
@@ -217,14 +235,32 @@ export function expectedKeys(claims: readonly Claim[]): ReadonlySet<string> {
   return keys;
 }
 
-/** What `observe` receives: a copy of the args without the expected keys,
- * new for each call, so nothing `observe` does to its inputs reaches an
- * earlier step's result or another reading. Reading an expected key
- * throws, so a JavaScript step file, which the `ObserveInputs` type does
- * not reach, cannot pick what to read by the value it will be compared
- * with either; the throw records the step as unobserved, naming the key. */
-function observeInputs(args: Readonly<Record<string, unknown>>, withheld: ReadonlySet<string>, stepName: string): Readonly<Record<string, unknown>> {
-  const visible = detachedCopy(Object.fromEntries(Object.entries(args).filter(([key]) => !withheld.has(key)))) as Record<string, unknown>;
+/** A copy of each args key `observe` receives (every key but an expected
+ * one), or the first key that cannot be copied and why. Made once per
+ * step; each call of `observe` gets a clone of it (`observeInputs`). */
+function observeInputCopies(
+  args: Readonly<Record<string, unknown>>,
+  withheld: ReadonlySet<string>,
+): { readonly copies: Readonly<Record<string, unknown>> } | { readonly key: string; readonly problem: string } {
+  const copies: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (withheld.has(key)) continue;
+    const copied = inputCopy(value);
+    if ("problem" in copied) return { key, problem: copied.problem };
+    Object.defineProperty(copies, key, { value: copied.value, enumerable: true, writable: true, configurable: true });
+  }
+  return { copies };
+}
+
+/** What `observe` receives: a clone of `copies`, new for each call, so
+ * nothing `observe` does to its inputs reaches an earlier step's result,
+ * another reading, or a value a claim judges. A clone of a clone always
+ * succeeds. Reading an expected key throws, so a JavaScript step file,
+ * which the `ObserveInputs` type does not reach, cannot pick what to read
+ * by the value it will be compared with either; the throw records the
+ * step as unobserved, naming the key. */
+function observeInputs(copies: Readonly<Record<string, unknown>>, withheld: ReadonlySet<string>, stepName: string): Readonly<Record<string, unknown>> {
+  const visible = structuredClone(copies) as Record<string, unknown>;
   return new Proxy(visible, {
     get(target, key, receiver) {
       if (typeof key === "string" && withheld.has(key)) {
@@ -340,13 +376,30 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   }
   const observe = step.observe;
   if (observe === undefined) return judge(noObservation);
+  const inputCopies = observeInputCopies(args, withheld);
+  if ("problem" in inputCopies) {
+    // observe would receive a reference into a value step code holds, so
+    // nothing it read could be trusted to be a reading of the world.
+    const reason =
+      `observe would receive args.${inputCopies.key}, which ${inputCopies.problem}, and observe receives only copies of its inputs, ` +
+      "so observe did not run and no claim was judged";
+    const judged = unjudgedClaims(step.claims, claimInputs(noObservation), reason);
+    return {
+      status: "failed",
+      error: { message: brokenClaimsMessage(judged.map((entry) => entry.record)), kind: "claim_unjudged" },
+      thrown: undefined,
+      fixtureUsage,
+      claims: { judged, observation: "unobserved", attempts: 0 },
+    };
+  }
+  const copies = inputCopies.copies;
   const takeObserved = (value: unknown): Reader => readerOf(takeReads(value, reads.observed));
   // The snapshot is taken the moment observe returns, before anything else
   // runs: a value it returned and changes later (on a timer, in a promise
   // callback, on the next reading) is not what the claims read.
   const callObserve = (): Reader | Promise<Reader> => {
     attempts += 1;
-    const returned: unknown = observe(fixtures, observeInputs(args, withheld, name));
+    const returned: unknown = observe(fixtures, observeInputs(copies, withheld, name));
     return isThenable(returned) ? Promise.resolve(returned).then(takeObserved) : takeObserved(returned);
   };
   const poll = step.poll;

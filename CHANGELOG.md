@@ -29,10 +29,14 @@ just until 0.1.
   args object itself): a claim names `expected_view` to read the line's
   text as `json`, `lines`, or `text` instead. Each side of a claim is
   judged as one plain JSON snapshot, taken where the value comes from:
-  when `observe` returns, at each poll reading, and before the args
-  schema runs for a sentence or `from` value. The record shows that
-  snapshot, `observe` receives a copy of its inputs, and an args schema
-  that still changes a value a claim reads breaks the claim. A `Date`, a
+  when `observe` returns, at each poll reading, when the producing step
+  returns for a `from` value (each later step receives a fresh copy of
+  it), and before the args schema runs for a sentence value. The record
+  shows that snapshot, and an args schema that still changes a value a
+  claim reads breaks the claim. `observe` receives a structured clone
+  of its inputs, made again for each call; an input that cannot be
+  cloned (a `Proxy`, a class instance that holds a function) leaves
+  every claim `unjudged`, naming the key, and `observe` does not run. A `Date`, a
   bigint, `NaN`, a `Proxy`, or a value nested deeper than 256 levels
   leaves the claim `unjudged`, and the reason names it. An expected
   value from `from` or `observe` gets `expected_measured`, the channel

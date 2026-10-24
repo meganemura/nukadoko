@@ -1457,15 +1457,20 @@ step のコードがまだ持っている値は、読んだあとで変わるこ
 
 - `observe` が返す値は、`observe` が返った瞬間か、その promise が落ち着いた瞬間にコピーします。
   タイマーやコールバックの中、または次の呼び出しで `observe` があとから変える値は、判定される値ではありません。
-- `from` の値は、claim step の args スキーマが動く前、`observe` が動く前に、args からコピーします。
+- `from` の値は、値を返す step が返った瞬間に、その結果のキーごとにコピーします。
+  それを受け取るあとの step は、どれもそのコピーの新しいコピーを受け取ります。
+  値を返す step があとから変える値も、間の step が自分の args の中で変える値も、判定される値ではありません。
+  素の JSON でない結果のキーは、返されたままの形で run する step に届き、その一部でも読む claim は、その場所を名指しして `unjudged` になります。
 - 文の値は、その parameter type が行を読んだあと、args スキーマが動く前にコピーします。
   `expected_view` はそのあとでコピーを読みます。
 - poll の各読み取りは、読んだときに取る、それぞれのコピーです。
 
-`observe` は入力を、呼び出しごとに作り直す深いコピーとして受け取ります。
+`observe` は入力を、呼び出しごとに作り直す structured clone として受け取ります。
 そのため `observe` が入力にすることは、claim が読むもの、前の step の結果、次の読み取りのどれにも届きません。
+structured clone がコピーできない入力(`Proxy`、関数、関数を持つクラスのインスタンス)があると、どの claim も `unjudged` になり、`observe` は動きません(`observe would receive args.client, which holds a function at send, and observe receives only copies of its inputs, so observe did not run and no claim was judged`)。
+エラーの種類は `claim_unjudged` です。
 
-args スキーマはいまも動き、`observe` が受け取るのはその出力です。
+args スキーマはいまも動き、`observe` が受け取るのはその出力のコピーです。
 スキーマが動いたあと、nukadoko は、claim が読むすべての場所で、その出力をコピーと比べます。
 2 つが違う場所では claim は成り立たず、理由がそのキーを名指しします(`the args schema changed args.cart at count from the value nukadoko read before it ran, so the claim judged nothing`)。
 import の時点の拒否は、よくある書き換えを先に名指しします。
@@ -1644,12 +1649,12 @@ claim step の record には、次の固有のフィールドがあります(「
 
 - `claims`: step が宣言した順の、各 claim です。
   比較は、`actual`(`view` と `at` を適用したあとの値で、その場所に何もなかったときやスナップショットを取れなかった値のときは無し)、`actual_from`、claim が名指しするときの `view` と `at`、`compare`、`expected`(同じ条件で無し)、`expected_from`、claim が名指しするときの `expected_view`、`expected_text`、`outcome`(`held`、`broken`、`unobserved`、`unjudged`)、`reason`、`measured`、そして期待値が `from` か `observe` から来たときは `expected_measured` を持ちます。
-  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、args スキーマが変えた値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子)にあります。
+  `reason` は、比較そのもの以外の理由(undefined の値、2 つの JSON の型、どの文字列も満たす期待するテキスト、適用できなかった view、自分自身と比べる辺、args スキーマが変えた値)で成り立たなかったときか、nukadoko が判定できなかったとき(素の JSON でない値、`Proxy`、深すぎる入れ子、`observe` がコピーとして受け取れなかった入力)にあります。
   `each` の claim は、`actual_from`、`each` の宣言(それぞれ同じ条件で `expected_measured` を持ちます)と数と要素の結果、同じ `outcome`、`reason`、`measured` を持ちます。
 - `observation`: step が値を読めたときは `observed`、読めなかったときは `unobserved` です。
   そのとき step の `error` が理由を述べます。
 - `attempts`: step が値を読んだ回数です。
-  `observe` の呼び出しを 1 回ずつ数え、`observe` のない step は `from` の値を一度だけ読みます。
+  `observe` の呼び出しを 1 回ずつ数え、`observe` のない step は `from` の値を一度だけ読み、`observe` が一度も動かなかった step は `0` を記録します。
 - `readings`: poll するときだけあり、step が残した読み取りです(「poll」を参照)。
   すべては残さなかったときは `readings_left_out` もあります。
 

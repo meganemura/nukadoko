@@ -3,7 +3,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { Generator } from "@hegeldev/hegel/generators";
 import { deepEqual } from "../src/step/evaluate-claims.js";
-import { detachedCopy, readAt, snapshot, SNAPSHOT_MAX_DEPTH } from "../src/step/snapshot.js";
+import { copyOf, inputCopy, readAt, snapshot, snapshotKeys, SNAPSHOT_MAX_DEPTH } from "../src/step/snapshot.js";
 
 // Responsibility: the one plain copy a claim judges and its record shows
 // (docs/spec.md "Claims"), as properties over drawn values: every JSON
@@ -186,15 +186,66 @@ describe("readAt", () => {
   });
 });
 
-describe("detachedCopy", () => {
-  it("copies a value so that changing the copy leaves the value as it was", () =>
+describe("snapshotKeys and copyOf", () => {
+  it("takes each key of a result so that nothing done to the result or to one copy reaches another copy", () =>
     hegel.test((tc) => {
-      const value = { v: tc.draw(jsonValues), when: new Date(0), fn: () => 1 };
-      const before = JSON.stringify(value);
-      const copy = detachedCopy(value) as Record<string, unknown>;
-      copy["v"] = "changed";
-      (copy["when"] as Date).setTime(5);
-      expect(JSON.stringify(value)).toBe(before);
-      expect(copy["fn"]).toBe(value.fn);
+      const value = tc.draw(jsonValues);
+      const result: Record<string, unknown> = { items: [value], other: value };
+      const before = JSON.stringify(result);
+      const taken = snapshotKeys(result);
+      (result["items"] as unknown[]).push("changed");
+      result["other"] = "changed";
+      const items = taken.get("items")!;
+      if (!("value" in items)) throw new Error("refused");
+      const first = copyOf(items) as unknown[];
+      first.push("changed too");
+      const second = copyOf(items);
+      expect(JSON.stringify(second)).toBe(JSON.stringify((JSON.parse(before) as Record<string, unknown>)["items"]));
+      expect(deepEqual(copyOf(taken.get("other") as { value: unknown }), value)).toBe(true);
     }));
+
+  it("leaves out a key whose value is undefined, refuses a getter without calling it, and has no keys for a result that is not an object", () => {
+    let called = false;
+    const result = Object.defineProperty({ gone: undefined, when: new Date(0) }, "lazy", {
+      get() {
+        called = true;
+        return 1;
+      },
+      enumerable: true,
+    });
+    const taken = snapshotKeys(result);
+    expect([...taken.keys()]).toEqual(["when", "lazy"]);
+    expect(taken.get("when")).toEqual({ refused: { at: [], problem: "is a Date" } });
+    expect(taken.get("lazy")).toEqual({ refused: { at: [], problem: "is a getter" } });
+    expect(called).toBe(false);
+    expect(snapshotKeys(3).size).toBe(0);
+    expect(snapshotKeys(new Proxy({ a: 1 }, {})).size).toBe(0);
+  });
+});
+
+describe("inputCopy", () => {
+  it("copies an input so that changing the copy leaves the value as it was", () =>
+    hegel.test((tc) => {
+      const value = { v: tc.draw(jsonValues), when: new Date(0), tags: new Set(["a"]) };
+      const before = JSON.stringify(value);
+      const copied = inputCopy(value);
+      if (!("value" in copied)) throw new Error(copied.problem);
+      const copy = copied.value as typeof value;
+      (copy as Record<string, unknown>)["v"] = "changed";
+      copy.when.setTime(5);
+      copy.tags.add("b");
+      expect(JSON.stringify(value)).toBe(before);
+      expect(value.tags.size).toBe(1);
+    }));
+
+  it("names a Proxy, a function, and a class instance that holds one as what cannot be copied", () => {
+    class Client {
+      send = (): number => 1;
+    }
+    expect(inputCopy(new Proxy({ a: 1 }, {}))).toEqual({ problem: "is a Proxy" });
+    expect(inputCopy(() => 1)).toEqual({ problem: "is a function" });
+    expect(inputCopy(new Client())).toEqual({ problem: "holds a function at send" });
+    expect(inputCopy({ list: [new Proxy([], {})] })).toEqual({ problem: "holds a Proxy at list.0" });
+    expect(inputCopy(new WeakMap())).toMatchObject({ problem: expect.stringMatching(/^is a WeakMap, which a structured clone cannot copy \(/) });
+  });
 });
