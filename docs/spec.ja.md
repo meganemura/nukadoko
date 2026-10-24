@@ -1553,6 +1553,8 @@ claim step が始まる前に前の step の値を保持していたプロジェ
 `observe` が受け取る `from` の値を、同じ step の期待値の `{ from }` も読んでいる claim step は、`nuka check` が拒否します(`claim-compares-itself`)。
 その値を含む値や、その値の中にある値を受け取る場合も同じです。
 `observe` が入力をそのまま返せば、claim は値をそれ自身と比べることになるからです。
+実行も同じ規則を当てはめるので、`--no-check` の run と `nuka do --use` も check と食い違いません。
+`observe` が受け取った args のキーが、期待値の読む値、それを含む値、その中にある値のどれかを読むとき、claim は成り立たず、理由がそのキーを名指しします。
 
 throw した `observe` は、その step をエラーとともに `unobserved` として記録し、claim を一つも判定しません。
 これは成り立たない claim とは別の結果です。

@@ -1888,7 +1888,11 @@ can see, and the label is `observe:` then too.
 `nuka check` refuses a claim step whose `observe` receives a `from` value
 that an expected `{ from }` of the same step reads, or one that holds that
 value or sits inside it (`claim-compares-itself`): `observe` could return
-its input, and the claim would compare a value with itself.
+its input, and the claim would compare a value with itself. The run
+applies the same rule, so a run under `--no-check` and `nuka do --use`
+agree with the check: when an args key `observe` received reads the
+value an expected side reads, one that holds it, or one inside it, the
+claim breaks, and its reason names the key.
 
 An `observe` that throws records the step as `unobserved`, with the error,
 and judges no claim. That is a different result from a broken claim: a

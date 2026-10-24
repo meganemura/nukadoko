@@ -265,11 +265,14 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   const argReads = input.claimArgs ?? takeReads(args, reads.args);
   const schemaChanged = changedBySchema(argReads, reads.args, args);
   const noObservation: Reader = readerOf(new Map());
+  const withheld = expectedKeys(step.claims);
+  const observeReceived = step.observe === undefined ? [] : Object.keys(args).filter((key) => !withheld.has(key));
   const claimInputs = (observed: Reader): ClaimInputs => ({
     args: readerOf(argReads),
     observed,
     schemaChanged,
     fromKeys,
+    observeReceived,
     argSide: input.argSide,
     sentenceText: input.sentenceText,
     patterns: step.patterns,
@@ -337,7 +340,6 @@ async function runClaimStep(input: RunValidatedStepInput, step: ClaimStep): Prom
   }
   const observe = step.observe;
   if (observe === undefined) return judge(noObservation);
-  const withheld = expectedKeys(step.claims);
   const takeObserved = (value: unknown): Reader => readerOf(takeReads(value, reads.observed));
   // The snapshot is taken the moment observe returns, before anything else
   // runs: a value it returned and changes later (on a timer, in a promise

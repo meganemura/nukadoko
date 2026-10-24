@@ -13,6 +13,7 @@ import {
   literalStatedByAll,
   pathSegments,
   placeAt,
+  placesOverlap,
   placeViewed,
   samePlace,
   type Claim,
@@ -304,6 +305,9 @@ export interface ClaimInputs {
    * earlier step gave. */
   readonly schemaChanged: (segments: readonly string[]) => boolean;
   readonly fromKeys: ReadonlySet<string>;
+  /** The args keys `observe` received: every key but an expected one for
+   * a step with `observe`, none for a step without it. */
+  readonly observeReceived: readonly string[];
   /** Where an args key's value starts: `sentence:<key>` for a value the
    * line states, `from:<step>@<line>.<returns key>` for a value an earlier
    * step returned. */
@@ -460,12 +464,33 @@ function stopOf(side: Side): Stop {
   return null;
 }
 
+/** Whether `observe` received the value an expected side reads, one that
+ * holds it, or one inside it: then `observe` could return the value the
+ * claim compares it with, and the claim holds whatever the behaviour is.
+ * `observe` never receives an expected key itself, so only a second key
+ * filled from the same earlier result can carry the value. `nuka check`
+ * refuses the step for it (`claim-compares-itself`); the run breaks the
+ * claim too, so a run under `--no-check` and `nuka do --use` judge it
+ * the same way. `whose` names the expected side in the reason. */
+function observeReceived(expected: ClaimPlace, inputs: ClaimInputs, whose: string): Stop {
+  for (const key of inputs.observeReceived) {
+    const input = argPlace(key, inputs);
+    if (!placesOverlap(input, expected)) continue;
+    return {
+      broken: `observe received args.${key}, which is ${input.label}, and ${whose} reads ${expected.label}, so observe could return the value the claim compares it with`,
+    };
+  }
+  return null;
+}
+
 function precondition(actual: Side, actualSegments: readonly string[] | null, expected: ExpectedSide, inputs: ClaimInputs): Stop {
   const stop = schemaChange(actualSegments, inputs) ?? schemaChange(expected.segments, inputs) ?? stopOf(actual) ?? stopOf(expected);
   if (stop !== null) return stop;
   if (samePlace(actual.place, expected.place)) {
     return { broken: `both sides read ${actual.place.label}, so the claim compares a value with itself` };
   }
+  const received = observeReceived(expected.place, inputs, "the expected value");
+  if (received !== null) return received;
   if (expected.fromObserve && "value" in expected && typeof expected.value === "boolean") {
     return { broken: `the expected value ${expected.place.label} is a boolean observe computed, which is a judgment made in code: return the thing measured and let the claim compare it` };
   }
@@ -556,7 +581,7 @@ async function judgeEach(claim: EachClaim, rawActual: Side, actualSegments: read
     outcome,
     reason,
   });
-  const stop = schemaChange(actualSegments, inputs) ?? stopOf(actual);
+  const stop = schemaChange(actualSegments, inputs) ?? stopOf(actual) ?? eachObserveReceived(claim, inputs);
   if (stop !== null) return "broken" in stop ? ended("broken", stop.broken) : ended("unjudged", stop.unjudged);
   const value = (actual as { value: unknown }).value;
   if (!Array.isArray(value)) return ended("broken", `each reads an array, and the value is ${article(jsonType(value))}`);
@@ -629,6 +654,20 @@ async function judgeEach(claim: EachClaim, rawActual: Side, actualSegments: read
     each: { ...declared, items: items.length, selected: selected.length, results: kept, ...truncated },
     outcome: outcomes.includes("broken") ? "broken" : outcomes.includes("unjudged") ? "unjudged" : "held",
   };
+}
+
+/** `observeReceived` for every declaration of an `each`, before any item:
+ * it does not depend on an item, and an empty array would hide it. */
+function eachObserveReceived(claim: EachClaim, inputs: ClaimInputs): Stop {
+  const entries: readonly (readonly [string, ItemClaim])[] = [
+    ...(claim.each.where ?? []).map((entry, index) => [`each.where[${index}]`, entry] as const),
+    ...claim.each.claims.map((entry, index) => [`each.claims[${index}]`, entry] as const),
+  ];
+  for (const [label, entry] of entries) {
+    const stop = observeReceived(expectedPlace(entry, inputs), inputs, `${label}'s expected value`);
+    if (stop !== null) return stop;
+  }
+  return null;
 }
 
 /** The item results the record keeps: the broken ones first, then the

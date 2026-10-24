@@ -877,6 +877,71 @@ export default defineStep({
     );
   });
 
+  it("breaks that claim at run time too, under --no-check and in nuka do --use, so no path holds it", async () => {
+    const rootDir = await project({
+      "features/steps/the-cart-still-holds.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart still holds what it held",
+  args: z.object({ before: answer.returns.shape.cart, now: answer.returns.shape.cart }),
+  from: { before: [answer, "cart"], now: [answer, "cart"] },
+  observe({}, { now }) {
+    return { count: now.count };
+  },
+  claims: [{ actual: "count", compare: "equal", expected: { from: "before.count" } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then the cart still holds what it held"),
+    });
+    const ran = await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    expect(ran.exitCode).toBe(1);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({
+      actual: 1,
+      expected: 1,
+      outcome: "broken",
+      reason:
+        "observe received args.now, which is from:the-app-answers@3.cart, and the expected value reads from:the-app-answers@3.cart.count, so observe could return the value the claim compares it with",
+    });
+
+    const answered = await cli(rootDir, ["do", "the-app-answers", "--args", "{}"]);
+    const producer = JSON.parse(answered.stdout).step_record_id as string;
+    const done = await cli(rootDir, ["do", "the-cart-still-holds", "--use", producer]);
+    expect(done.exitCode).toBe(1);
+    const record = JSON.parse(done.stdout);
+    expect(record.error.kind).toBe("claim_broken");
+    expect(record.claims[0]).toMatchObject({
+      outcome: "broken",
+      reason: `observe received args.now, which is from:the-app-answers@${producer}.cart, and the expected value reads from:the-app-answers@${producer}.cart.count, so observe could return the value the claim compares it with`,
+    });
+  });
+
+  it("breaks an each whose item claim reads, as its expected value, a value observe received", async () => {
+    const rootDir = await project({
+      "features/steps/every-item-is-as-before.ts": `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "every item is paid as before",
+  args: z.object({ before: answer.returns.shape.cart, now: answer.returns.shape.cart }),
+  from: { before: [answer, "cart"], now: [answer, "cart"] },
+  observe({}, { now }) {
+    return { items: [{ paid: now.items[0].paid }] };
+  },
+  claims: [{ actual: "items", each: { claims: [{ actual: "paid", compare: "equal", expected: { from: "before.items.0.paid" } }] } }],
+});
+`,
+      "features/t.feature": feature("When the app answers", "Then every item is paid as before"),
+    });
+    const checked = await cli(rootDir, ["check", "features/t.feature"]);
+    expect(checked.stdout).toContain("so observe could return the value the claim compares it with");
+    await cli(rootDir, ["run", "--no-check", "features/t.feature"]);
+    expect(lastClaimStep(rootDir).claims[0]).toMatchObject({
+      outcome: "broken",
+      reason:
+        "observe received args.now, which is from:the-app-answers@3.cart, and each.claims[0]'s expected value reads from:the-app-answers@3.cart.items.0.paid, so observe could return the value the claim compares it with",
+      each: { items: 0, selected: 0, results: [] },
+    });
+  });
+
   it("reports a path segment that names an Object.prototype member as unknown, and does not crash", async () => {
     const rootDir = await project({
       "features/steps/the-cart-kind-is.ts": `import { defineStep, z } from "nukadoko";

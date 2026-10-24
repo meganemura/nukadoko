@@ -109,6 +109,7 @@ function inputs(args: Record<string, unknown>, observation: unknown, fromKeys: r
     args: readerNow(args),
     observed: readerNow(observation),
     schemaChanged: () => false,
+    observeReceived: [],
     fromKeys: new Set(fromKeys),
     argSide: (key) =>
       fromKeys.includes(key)
@@ -391,6 +392,37 @@ describe("canonical places", () => {
       );
       expect(record.outcome).toBe("broken");
       expect(record.reason).toMatch(/^both sides read from:produce@3\.result.*, so the claim compares a value with itself$/);
+    }));
+});
+
+describe("an expected value observe received", () => {
+  it("breaks a claim exactly when observe received a key from the same earlier result as the expected value, and names the key", () =>
+    hegel.testAsync(async (tc) => {
+      // Each from key is filled from one returns key of one producer; two
+      // keys filled from "cart" read one value.
+      const source = { before: "cart", now: tc.draw(gs.sampledFrom(["cart", "out"])), other: tc.draw(gs.sampledFrom(["cart", "out"])) } as const;
+      const received = tc.draw(gs.sampledFrom<readonly ("now" | "other")[]>([[], ["now"], ["other"], ["now", "other"]]));
+      const path = tc.draw(gs.sampledFrom(["count", "items", "items.0"]));
+      const cart = { count: 1, items: [1] };
+      const claim: Claim = { actual: path, compare: "equal", expected: { from: `before.${path}` } };
+      const fromKeys = Object.keys(source);
+      const [judged] = await evaluateClaims([claim], {
+        ...inputs({ before: cart, now: cart, other: cart }, cart, fromKeys),
+        argSide: (key) => {
+          const returnsKey = source[key as keyof typeof source];
+          return { origin: "record:produce", segments: [returnsKey], label: `from:produce@3.${returnsKey}` };
+        },
+        observeReceived: received,
+      });
+      const carrier = received.find((key) => source[key] === "cart");
+      if (carrier === undefined) {
+        expect(judged!.record.outcome).toBe("held");
+        return;
+      }
+      expect(judged!.record).toMatchObject({
+        outcome: "broken",
+        reason: `observe received args.${carrier}, which is from:produce@3.cart, and the expected value reads from:produce@3.cart.${path}, so observe could return the value the claim compares it with`,
+      });
     }));
 });
 
@@ -830,6 +862,7 @@ describe("judging is bounded by one budget", () => {
 describe("the record of a claim", () => {
   const base: Omit<ClaimInputs, "args" | "observed"> = {
     schemaChanged: () => false,
+    observeReceived: [],
     fromKeys: new Set(["result"]),
     argSide: (key: string) =>
       key === "result"
