@@ -428,6 +428,21 @@
       "en": ["origin (of an argument)", "where an argument came from"],
       "ja": "出所",
       "note": "args の各キーの値がどこから来たか。フィールド `args_origin` とその値(`capture`、`docstring`、`table`、`from`、`command_line`、`schema`)はコードスパンで英語のまま"
+    },
+    {
+      "en": ["held", "holds"],
+      "ja": "成り立つ",
+      "note": "claim の比較が真だったこと。claim record の `outcome` の値 `held` はコードスパンで英語のまま。成否(outcome)は fixture の pass/fail を指す別語"
+    },
+    {
+      "en": ["broken", "breaks", "a broken claim"],
+      "ja": "成り立たない / 成り立たなかった claim",
+      "note": "claim の比較が偽だったこと、または比較できなかったこと(値が undefined、JSON の型が違う)。`outcome` の値 `broken` とエラー種別 `claim_broken` はコードスパンで英語のまま。失敗(failed)は step と scenario の status を指す語として残す"
+    },
+    {
+      "en": ["unobserved", "observed nothing"],
+      "ja": "観測できなかった",
+      "note": "claim step が値を読めず、claim を一つも判定しなかったこと(observe が throw した、fixture を用意できなかった)。`observation` の値 `unobserved` とエラー種別 `unobserved` はコードスパンで英語のまま。成り立たない claim とは別の結果として書き分ける"
     }
   ],
   "keep_english": [
@@ -548,6 +563,14 @@
     {
       "term": "redact",
       "why": "secret を `{{secret.NAME}}` に置き換える操作。spec.ja.md の地の文で「redact され」「redaction」と英語のまま使われてきた。訳すと runCommand の `redact` オプションとの対応が切れる"
+    },
+    {
+      "term": "claim",
+      "why": "`claims` フィールド、claim step、claim record に直接対応するドメイン語。不在の主張(absence claim)の 主張 は step record 上の値が何かを述べることを指す別の語で、訳すと両者が混ざる。claim step も step と同じく英語のまま"
+    },
+    {
+      "term": "observe",
+      "why": "claim step の `observe` 関数と、step record の `observation` に直接対応する API 名。散文の 読む / 計測 とは書き分ける(observe という API の話か、計測という行為の話かを読み手が区別できる必要がある)"
     }
   ],
   "identifiers": {
