@@ -137,3 +137,40 @@ describe("run-time emitters, removed", () => {
     expect(findings[0]!.fix).toBe("Remove allure and messages from nukadoko.config.ts.");
   });
 });
+
+describe("the program's keys, moved to nukadoko.program.ts", () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await createEmptyTempDir();
+  });
+
+  afterEach(async () => {
+    await removeTempDir(rootDir);
+  });
+
+  it("refuses a config that still sets baseURL and environments with config-key-removed, and the fix says where each goes", async () => {
+    await writeFile(
+      path.join(rootDir, "nukadoko.config.ts"),
+      'export default { baseURL: "http://localhost:4123", environments: { staging: { baseURL: "https://staging.example" } } };\n',
+    );
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check", "--json"], { rootDir, stdout, stderr });
+
+    expect(exitCode).toBe(2);
+    const findings = (JSON.parse(stdout.text()) as { findings: { code: string; message: string; fix: string }[] }).findings;
+    expect(findings.map((finding) => finding.code)).toEqual(["config-key-removed"]);
+    expect(findings[0]!.message).toBe(
+      `Invalid config at ${path.join(rootDir, "nukadoko.config.ts")}: baseURL was removed: the program under test is described in nukadoko.program.ts. ` +
+        'Write url there for a program nukadoko does not start (export default defineProgram({ url: "http://localhost:3000" })), or serve for one it starts; ' +
+        "the world's URL is the baseURL every page and request resolves against. " +
+        "environments was removed: write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, " +
+        "and --env starts that environment's world.",
+    );
+    expect(findings[0]!.fix).toBe(
+      "Remove baseURL and environments from nukadoko.config.ts: write baseURL as url in nukadoko.program.ts (or serve, for a program nukadoko starts), " +
+        "and write each environment under environments in nukadoko.program.ts.",
+    );
+  });
+});

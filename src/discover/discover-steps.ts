@@ -168,7 +168,7 @@ export interface DiscoveryResult {
    * already produces (src/feature/load-features.ts's `relativePath`,
    * src/check/feature-check.ts's `file`). `message` and `line` come from
    * src/discover/import-failure.ts. */
-  readonly importFailures: readonly { filePath: string; message: string; line?: number; missingPackage?: MissingPackage }[];
+  readonly importFailures: readonly { filePath: string; message: string; line?: number; missingPackage?: MissingPackage; fix?: string }[];
   /** rootDir-relative paths of every `.cjs` or `.cts` file this run's walk found
    * under `featuresDir` (skipping `node_modules` and any dot-directory, the
    * same walk every other file here goes through) and never attempted to
@@ -336,7 +336,7 @@ export async function discoverSteps(
   // DuplicateCompatStepError already applies to a colliding compat step.
   let declaredWorldSchemas: Readonly<Record<string, z.ZodTypeAny>> = {};
   let declaredWorldSchemasFilePath: string | undefined;
-  const importFailures: { filePath: string; message: string; line?: number; missingPackage?: MissingPackage }[] = [];
+  const importFailures: { filePath: string; message: string; line?: number; missingPackage?: MissingPackage; fix?: string }[] = [];
 
   for (const filePath of files) {
     // Node's type stripping removes only `import type` and inline `type`
@@ -366,14 +366,19 @@ export async function discoverSteps(
         // part of the message, and that sentence has to travel with it:
         // those commands never see `importFailures`. The sentence is empty
         // unless package.json says "type": "commonjs" and the file is `.ts`.
-        const { message, line, missingPackage } = describeImportFailure(error, filePath, rootDir);
+        const { message, line, missingPackage, fix } = describeImportFailure(error, filePath, rootDir);
         const relativePath = path.relative(rootDir, filePath) + (line === undefined ? "" : `:${line}`);
         const playwright = playwrightPackageMissing(missingPackage);
         if (playwright !== undefined) {
           throw new StepFileImportError(`${relativePath}: ${playwright.message}`, "playwright-missing", { do: playwright.do }, error);
         }
         const explanation = cjsTsMismatchExplanation(refusesEsmTs(rootDir), filePath);
-        throw new StepFileImportError(`${relativePath}: ${message}${explanation}`, "step-file-import-failed", { do: "nuka check" }, error);
+        throw new StepFileImportError(
+          `${relativePath}: ${message}${explanation}`,
+          "step-file-import-failed",
+          { do: "nuka check", ...(fix === undefined ? {} : { fix }) },
+          error,
+        );
       }
       // A file that dies partway through its own evaluation (CommonJS
       // `require()` inside an ESM file throws mid-evaluation, not at ESM's

@@ -324,6 +324,7 @@ async function reportFor(
       message,
       file: failure.filePath,
       line: failure.line,
+      ...(failure.fix === undefined ? {} : { fix: failure.fix }),
     });
   }
   errors.push(...importFindings);

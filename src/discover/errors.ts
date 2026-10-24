@@ -93,12 +93,14 @@ export class DuplicateWorldDefinitionError extends Error {
  * which has no command that is known to fix it. */
 export class StepFileImportError extends Error {
   readonly code: "step-file-import-failed" | "playwright-missing";
+  readonly fix?: string;
   readonly do?: string;
 
-  constructor(message: string, code: StepFileImportError["code"], hint: { readonly do?: string }, cause: unknown) {
+  constructor(message: string, code: StepFileImportError["code"], hint: { readonly fix?: string; readonly do?: string }, cause: unknown) {
     super(message, { cause });
     this.name = "StepFileImportError";
     this.code = code;
+    if (hint.fix !== undefined) this.fix = hint.fix;
     if (hint.do !== undefined) this.do = hint.do;
   }
 }

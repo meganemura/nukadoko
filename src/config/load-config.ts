@@ -127,6 +127,20 @@ const REMOVED_CONFIG_KEYS: Readonly<Record<string, string>> = {
     "and --env starts that environment's world.",
 };
 
+// Where a removed key's value goes now, for the refusal's `fix`: a key
+// that moved to another file is not fixed by deleting it alone, and the
+// `fix` line is what a reader acts on.
+const REMOVED_CONFIG_KEY_MOVES: Readonly<Record<string, string>> = {
+  baseURL: "write baseURL as url in nukadoko.program.ts (or serve, for a program nukadoko starts)",
+  environments: "write each environment under environments in nukadoko.program.ts",
+};
+
+/** The `fix` for a config that sets `removed`. */
+function removedKeysFix(removed: readonly string[], fileName: string): string {
+  const moves = removed.flatMap((key) => (Object.hasOwn(REMOVED_CONFIG_KEY_MOVES, key) ? [REMOVED_CONFIG_KEY_MOVES[key]!] : []));
+  return `Remove ${removed.join(" and ")} from ${fileName}${moves.length === 0 ? "" : `: ${moves.join(", and ")}`}.`;
+}
+
 function removedKeysIn(raw: unknown): string[] {
   if (raw === null || typeof raw !== "object") return [];
   return Object.keys(REMOVED_CONFIG_KEYS).filter((key) => Object.hasOwn(raw, key));
@@ -250,7 +264,9 @@ export function importFailureHint(
   fileName: string,
   missingPackage: { readonly name: string; readonly importedBy?: string } | undefined,
   explanation: string,
+  ownFix?: string,
 ): { readonly fix?: string; readonly do?: string } {
+  if (ownFix !== undefined) return { fix: ownFix };
   if (missingPackage?.name === "nukadoko" && missingPackage.importedBy === undefined) {
     return { do: "npm install -D -E nukadoko" };
   }
@@ -290,7 +306,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
       throw new ConfigError(
         `Could not import config at ${configPath}: ${cause.message}${explanation}`,
         configPath,
-        importFailureHint(resolved.fileName, cause.missingPackage, explanation),
+        importFailureHint(resolved.fileName, cause.missingPackage, explanation, cause.fix),
         { cause: error },
       );
     }
@@ -316,7 +332,7 @@ async function readConfig(rootDir: string): Promise<NukadokoConfig> {
     throw new ConfigError(
       `Invalid config at ${configPath}: ${removed.map((key) => `${key} was removed: ${REMOVED_CONFIG_KEYS[key]}`).join(" ")}`,
       configPath,
-      { fix: `Remove ${removed.join(" and ")} from ${resolved?.fileName ?? CONFIG_FILE_NAME}.` },
+      { fix: removedKeysFix(removed, resolved?.fileName ?? CONFIG_FILE_NAME) },
       { code: "config-key-removed" },
     );
   }

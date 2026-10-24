@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { removedExport } from "./removed-export.js";
 import { loaderUrl, withoutNamespace } from "./ts-loader.js";
 import { typeOnlyImportSentence } from "./type-only-export.js";
 
@@ -84,6 +85,9 @@ export interface ImportFailureDetail {
   /** The package Node could not find, when that is the error, and the
    * project file that imports it when that file is not `filePath`. */
   readonly missingPackage?: MissingPackage;
+  /** The finding's `fix`, when the error has one of its own: an export
+   * nukadoko removed names what replaced it (src/config/removed-export.ts). */
+  readonly fix?: string;
 }
 
 export interface MissingPackage {
@@ -136,18 +140,21 @@ export function describeImportFailure(
     (error instanceof Error && error.name === "SyntaxError" && code === undefined && framed === null
       ? locate(filePath)
       : undefined);
+  const removed = removedExport(message);
   const sentence =
     (code === UNSUPPORTED_TYPESCRIPT_SYNTAX || (framed !== null && STRIP_ONLY_REFUSAL.test(message)) ? STRIP_ONLY_SENTENCE : "") +
     (framedLocation === null ? FRAMED_ELSEWHERE_SENTENCE : "") +
-    typeOnlyImportSentence(message);
+    typeOnlyImportSentence(message) +
+    (removed?.sentence ?? "");
+  const fix = removed === undefined ? {} : { fix: removed.fix };
   const missingPackage = missingPackageOf(code, message, filePath, rootDir);
-  if (missingPackage !== undefined) return { message: message + sentence, missingPackage };
-  if (location === undefined) return { message: message + sentence };
+  if (missingPackage !== undefined) return { message: message + sentence, missingPackage, ...fix };
+  if (location === undefined) return { message: message + sentence, ...fix };
   // In the message even when it is this file: two step files that import
   // one broken module get the same error, and check groups them by text.
   const where = path.relative(rootDir, location.path).split(path.sep).join("/");
   const located = `${message} (${where}:${location.line})${sentence}`;
   return path.resolve(location.path) === path.resolve(filePath)
-    ? { message: located, line: location.line }
-    : { message: located };
+    ? { message: located, line: location.line, ...fix }
+    : { message: located, ...fix };
 }

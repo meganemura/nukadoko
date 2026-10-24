@@ -43,6 +43,7 @@ export interface RawImportFailure {
   readonly filePath: string;
   readonly message: string;
   readonly missingPackage?: { readonly name: string; readonly importedBy?: string };
+  readonly fix?: string;
 }
 
 /** Default `false`, same convention as `discoverSteps`' own
@@ -125,6 +126,7 @@ export interface ImportFailureSummary {
   readonly file: string;
   readonly message: string;
   readonly missingPackage?: { readonly name: string; readonly importedBy?: string };
+  readonly fix?: string;
 }
 
 export function toImportFailureSummaries(
@@ -134,6 +136,7 @@ export function toImportFailureSummaries(
     file: failure.filePath,
     message: failure.message,
     ...(failure.missingPackage !== undefined ? { missingPackage: failure.missingPackage } : {}),
+    ...(failure.fix !== undefined ? { fix: failure.fix } : {}),
   }));
 }
 
@@ -180,7 +183,7 @@ export function importFailureFindings(rootDir: string, failures: readonly Import
       code: "step-file-import-failed",
       file: failure.file,
       message: `${failure.message}${cjsTsMismatchExplanation(cjsProject, failure.file)}`,
-      fix: checkCodeFix("step-file-import-failed"),
+      fix: failure.fix ?? checkCodeFix("step-file-import-failed"),
     };
   });
 }

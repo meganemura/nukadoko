@@ -264,8 +264,23 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   どちらかの名前でファイルを添付していた step は、別の名前を選んでください。
 
 - **テスト対象のプログラムは `nukadoko.program.ts` に移り、`runServer` はなくなりました。**
-  `baseURL` か `environments` を持つ config、または `runServer` を import する step ファイルは読み込めなくなり、メッセージがプログラムのファイルを名指します。
-  config の隣にそのファイルを書き、config からそれらのキーを取り除いてください。
+  `runServer` を import する config と step ファイルは読み込めなくなりました。
+  config なら、`nuka run` と `nuka check` は次を出力します(`<project>` はプロジェクトの絶対パスの代わりです):
+
+  ```text
+  refused	config-invalid	-	Could not import config at <project>/nukadoko.config.ts: The requested module 'nukadoko' does not provide an export named 'runServer' (nukadoko.config.ts:1); runServer was removed from nukadoko: nukadoko.program.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after
+    fix: Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.
+  ```
+
+  step ファイルも、`step-file-import-failed` として同じ文と `fix:` の行を受け取ります。
+  `baseURL` か `environments` を持つ config は `config-key-removed` で拒否されます:
+
+  ```text
+  refused	config-key-removed	-	Invalid config at <project>/nukadoko.config.ts: baseURL was removed: the program under test is described in nukadoko.program.ts. Write url there for a program nukadoko does not start (export default defineProgram({ url: "http://localhost:3000" })), or serve for one it starts; the world's URL is the baseURL every page and request resolves against. environments was removed: write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, and --env starts that environment's world.
+    fix: Remove baseURL and environments from nukadoko.config.ts: write baseURL as url in nukadoko.program.ts (or serve, for a program nukadoko starts), and write each environment under environments in nukadoko.program.ts.
+  ```
+
+  config の隣にプログラムのファイルを書き、config からそれらのキーを取り除いてください。
   fixture が `runServer` で起動していたサーバの場合です:
 
   ```ts

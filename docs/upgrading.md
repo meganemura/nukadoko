@@ -311,11 +311,26 @@ This part does not change release to release.
   step that attached a file under either name picks another name.
 
 - **The program under test moves to `nukadoko.program.ts`, and
-  `runServer` is gone.** A config with `baseURL` or `environments`, or
-  a step file that imports `runServer`, now fails to load, and the
-  message names the program file. Write the file beside the config and
-  take those keys out of the config. A server a fixture started with
-  `runServer`:
+  `runServer` is gone.** A config or a step file that imports
+  `runServer` now fails to load. `nuka run` and `nuka check` print, for
+  a config (`<project>` stands for the project's absolute path):
+
+  ```text
+  refused	config-invalid	-	Could not import config at <project>/nukadoko.config.ts: The requested module 'nukadoko' does not provide an export named 'runServer' (nukadoko.config.ts:1); runServer was removed from nukadoko: nukadoko.program.ts describes the program under test now, and nukadoko starts it once per run with serve: { command, ready } and stops it after
+    fix: Remove runServer and the fixture that called it, and write the program's command in nukadoko.program.ts instead; docs/upgrading.md in the nukadoko package, under "The program under test moves to nukadoko.program.ts", shows the move.
+  ```
+
+  A step file gets the same sentence and `fix:` line, as
+  `step-file-import-failed`. A config with `baseURL` or `environments`
+  is refused with `config-key-removed`:
+
+  ```text
+  refused	config-key-removed	-	Invalid config at <project>/nukadoko.config.ts: baseURL was removed: the program under test is described in nukadoko.program.ts. Write url there for a program nukadoko does not start (export default defineProgram({ url: "http://localhost:3000" })), or serve for one it starts; the world's URL is the baseURL every page and request resolves against. environments was removed: write each environment in nukadoko.program.ts, with its policy, envFiles, and version; its baseURL is url there, and --env starts that environment's world.
+    fix: Remove baseURL and environments from nukadoko.config.ts: write baseURL as url in nukadoko.program.ts (or serve, for a program nukadoko starts), and write each environment under environments in nukadoko.program.ts.
+  ```
+
+  Write the program file beside the config and take those keys out of
+  the config. A server a fixture started with `runServer`:
 
   ```ts
   // nukadoko.config.ts, before

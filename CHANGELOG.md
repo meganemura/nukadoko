@@ -194,8 +194,9 @@ just until 0.1.
   start is `url` there; an environment is an `environments` entry there,
   with its `policy`, `envFiles` (after the config's), and `version`,
   and it can override any field of the program. `baseURL` or
-  `environments` in the config is refused with `config-invalid`, and the
-  message names what replaces it. `browserContext.baseURL` and
+  `environments` in the config is refused with `config-key-removed`: the
+  message names what replaces each, and the `fix:` line says where each
+  goes in `nukadoko.program.ts`. `browserContext.baseURL` and
   `requestContext.baseURL` stay refused, now naming the world's URL as
   the one source.
 
@@ -253,7 +254,10 @@ just until 0.1.
   rather than a port that accepts a connection, and the program's output
   in `program.log`. `nuka init --server` and `--server-url` refuse with
   `removed-flag` and name the program file; `runServer` is no longer
-  exported.
+  exported, and a config or a step file that still imports it is refused
+  with a sentence and a `fix:` line that name `nukadoko.program.ts` and
+  the entry of docs/upgrading.md that shows the move, where Node's own
+  message named only the missing export.
 
 ### Added
 
