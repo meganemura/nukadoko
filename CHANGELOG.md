@@ -282,8 +282,8 @@ just until 0.1.
 
 - **Each step record holds the program's log lines its own requests
   caused.** Every request a step sends to the world's origin carries a
-  W3C `traceparent`, one trace id per scenario execution and one span id
-  per step: through `fetch`, `node:http`, `node:https`, a Playwright
+  W3C `traceparent` with the step's own trace id and a span id per
+  request: through `fetch`, `node:http`, `node:https`, a Playwright
   request context, and a Chromium page's documents, fetches, XHRs, and
   EventSources. For a `localhost` world, a name below `localhost` at the
   same port counts as the world's origin. A request that sets its own
@@ -292,14 +292,23 @@ just until 0.1.
   since `setExtraHTTPHeaders` sent the header to other origins and broke
   a CORS request with a preflight, and `context.route` turned the HTTP
   cache off; Firefox and WebKit pages go unstamped. When nukadoko serves
-  the program, the lines of `program.log` that carry the step's span id
-  (or the scenario's trace id and no other step's span id) go to
-  `program-log.txt` beside the step record, and `observed.program_log`
-  counts them (`{ lines, file, stamped }`). http.jsonl names the value
-  nukadoko added as `traceparent`, run.json's `worlds` entries gain
-  `program_log: { stamped, lines }`, and the run summary says once per
-  world when the log carries no trace ids, or was not read because the
-  world runs at a `url` (there `observed.program_log` is `null`). The
+  the program, a line of `program.log` belongs to the step whose trace
+  id it carries, wherever and whenever it appears, so a server that logs
+  the trace id with a span id of its own is read correctly and a line
+  from an earlier step's request never lands in a later step. A step's
+  lines go to `program-log.txt` beside its record, and
+  `observed.program_log` counts them (`{ trace_id, lines, file, stamped }`).
+  A line that arrives after the step's record was written goes to its
+  `program-log-late.txt` when the world stops, run.json's step gains
+  `program_log_late`, and the run summary names it on the step's line;
+  `nuka do` names it in a `program-log-late` note. http.jsonl names the
+  value nukadoko added as `traceparent`, run.json's `worlds` entries
+  gain `program_log: { stamped, lines, late, tagged }`, and the run
+  summary says once per world, decided from the whole log, when the log
+  carries no trace ids, when the steps' lines all arrived after the steps
+  ended (output buffered on a pipe: `STDOUT.sync = true` in Ruby,
+  `PYTHONUNBUFFERED=1`), or when it was not read because the world runs
+  at a `url` (there `observed.program_log` is `null`). The
   program has to write the id into its lines: docs/spec.md shows the
   Rails `config.log_tags` and logger lines and the Node one-liner, and
   the todo and HTTP API examples' servers tag their lines that way. On a

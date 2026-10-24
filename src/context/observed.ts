@@ -20,7 +20,7 @@ import {
   type ScratchState,
   snapshotScratch,
 } from "./step-files.js";
-import { newSpanId, stampsUrl, traceparentOf } from "./trace-context.js";
+import { newSpanId, newTraceId, stampsUrl, traceparentOf } from "./trace-context.js";
 
 // Responsibility: what one step boundary reached outside its own code, the
 // step record's `observed` (docs/spec.md "Records"): the processes
@@ -56,12 +56,13 @@ import { newSpanId, stampsUrl, traceparentOf } from "./trace-context.js";
 // open after its boundary closed (no flush will ever wait for it) still
 // gets its line before run.json is written (`finalizeOpenRequests`).
 //
-// Each boundary also holds its span id when the run has a world
+// Each boundary also holds a trace id of its own when the run has a world
 // (trace-context.ts): a request the boundary's code sends to the world's
-// origin carries the scenario's trace id and this span id, and the
-// boundary counts it. A recorder held by a step that outlived its boundary
-// stamps with that boundary's span, for the same reason it records into
-// that boundary.
+// origin carries that trace id and a span id made for the request, and
+// the boundary counts it. A recorder held by a step that outlived its
+// boundary stamps with that boundary's trace id, for the same reason it
+// records into that boundary, so the program's lines for such a request
+// are that step's too.
 
 /** What a step's scope holds: the recorder runCommand and the channel
  * patches write into. */
@@ -71,9 +72,6 @@ export type StepRecorder = ProcessRecorder & ChannelRecorder;
  * log slice (program-log-slice.ts). */
 export interface BoundaryTrace {
   readonly traceId: string;
-  readonly spanId: string;
-  /** The span ids of every other boundary of this collector. */
-  readonly otherSpans: ReadonlySet<string>;
   /** How many requests the boundary sent to the world with a
    * `traceparent`. */
   readonly stamped: number;
@@ -141,17 +139,17 @@ interface Boundary {
   /** Each socket the step connected or wrote to, by how it first saw it. */
   readonly sockets: Map<SocketUse, "connect" | "write">;
   scratchBefore: ScratchState | undefined;
-  /** The span id requests to the world carry, `undefined` without a
+  /** The trace id requests to the world carry, `undefined` without a
    * world. */
-  readonly span: string | undefined;
+  readonly traceId: string | undefined;
   stamped: number;
   lastStampAt: number | undefined;
 }
 
-function newBoundary(dir: string | undefined, span: string | undefined): Boundary {
+function newBoundary(dir: string | undefined, traceId: string | undefined): Boundary {
   return {
     dir,
-    span,
+    traceId,
     stamped: 0,
     lastStampAt: undefined,
     closed: false,
@@ -212,22 +210,16 @@ export function createObservedCollector(
     readonly secrets?: SecretSet;
     /** Counts a request line that could not be appended to http.jsonl. */
     readonly httpLogFailed?: HttpLogFailedCollector;
-    /** The scenario's trace id and the world's origin: requests to that
-     * origin get a `traceparent`. Absent without a world URL. */
-    readonly trace?: { readonly traceId: string; readonly origin: string };
+    /** The prefix of the world's trace ids and the world's origin:
+     * requests to that origin get a `traceparent`. Absent without a world
+     * URL. */
+    readonly trace?: { readonly prefix: string; readonly origin: string };
   } = {},
 ): ObservedCollector {
   const unwatchedDirs = (options.unwatchedDirs ?? []).map((dir) => path.resolve(dir));
   const secrets = options.secrets ?? [];
   const trace = options.trace;
-  // Every span id this collector gave a boundary, so a step's slice can
-  // leave out a line another boundary's request caused.
-  const spans: string[] = [];
-  const openBoundary = (): Boundary => {
-    const span = trace === undefined ? undefined : newSpanId();
-    if (span !== undefined) spans.push(span);
-    return newBoundary(options.outputDir?.(), span);
-  };
+  const openBoundary = (): Boundary => newBoundary(options.outputDir?.(), trace === undefined ? undefined : newTraceId(trace.prefix));
   let boundary = openBoundary();
 
   function isOwnPath(target: string): boolean {
@@ -302,10 +294,10 @@ export function createObservedCollector(
       },
       traceparentFor(url: string, base?: string): string | undefined {
         const state = current();
-        if (trace === undefined || state.span === undefined || !stampsUrl(trace.origin, url, base)) return undefined;
+        if (trace === undefined || state.traceId === undefined || !stampsUrl(trace.origin, url, base)) return undefined;
         state.stamped += 1;
         state.lastStampAt = Date.now();
-        return traceparentOf(trace.traceId, state.span);
+        return traceparentOf(state.traceId, newSpanId());
       },
     };
   }
@@ -391,11 +383,9 @@ export function createObservedCollector(
     },
     boundaryTrace(): BoundaryTrace | undefined {
       const state = boundary;
-      if (trace === undefined || state.span === undefined) return undefined;
+      if (state.traceId === undefined) return undefined;
       return {
-        traceId: trace.traceId,
-        spanId: state.span,
-        otherSpans: new Set(spans.filter((span) => span !== state.span)),
+        traceId: state.traceId,
         stamped: state.stamped,
         lastStampAt: state.lastStampAt,
       };

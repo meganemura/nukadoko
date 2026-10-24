@@ -21,11 +21,11 @@ import {
 // tests/fixtures/trace-project, whose program tags each log line with the
 // request's traceparent (docs/spec.md "Program"). Each client a step can
 // send through (`fetch`, `node:http`, `request`, and a Chromium page)
-// carries one trace id per scenario and one span id per step, only to the
-// world's origin, and each step record holds the lines of the program's
-// log its own requests caused. A program that does not tag its lines, and
-// a world at a URL nukadoko did not start, each get one line in the run
-// summary that says why the slices are empty.
+// carries the step's own trace id, under the world's prefix, and a span id
+// per request, only to the world's origin, and each step record holds the
+// lines of the program's log that carry its trace id. A program that does
+// not tag its lines, and a world at a URL nukadoko did not start, each get
+// one line in the run summary that says why the slices are empty.
 
 const OWN_TRACEPARENT = "00-11111111111111111111111111111111-2222222222222222-01";
 const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-01$/;
@@ -39,7 +39,7 @@ async function cli(rootDir: string, args: string[]): Promise<{ exitCode: number;
 
 interface StepFacts {
   readonly step: string;
-  readonly observed: { program_log?: { lines: number; file: string | null; stamped: number } | null };
+  readonly observed: { program_log?: { trace_id: string; lines: number; file: string | null; stamped: number } | null };
   readonly dir: string;
 }
 
@@ -76,7 +76,7 @@ describe("trace context and the program's log", () => {
     await removeTempDir(rootDir);
   });
 
-  it("stamps each client's requests to the world and gives each step the log lines of its own span", async () => {
+  it("stamps each client's requests to the world with the step's trace id and gives each step the log lines that carry it", async () => {
     const { exitCode } = await cli(rootDir, ["run"]);
 
     expect(exitCode).toBe(0);
@@ -93,41 +93,42 @@ describe("trace context and the program's log", () => {
     expect([...byPath.keys()].sort()).toEqual(["/elsewhere", "/fetch", "/own"]);
     expect(byPath.get("/own")).toBeUndefined();
     expect(byPath.get("/elsewhere")).toBeUndefined();
-    const [, traceId, fetchSpan] = TRACEPARENT.exec(byPath.get("/fetch") ?? "") ?? [];
-    expect(traceId).toBeDefined();
+    const traceOf = (step: StepFacts): string => step.observed.program_log!.trace_id;
+    expect(TRACEPARENT.exec(byPath.get("/fetch") ?? "")?.[1]).toBe(traceOf(fetchStep));
 
-    const spanOf = (step: StepFacts): string => {
-      const traceparent = (httpLogLines(rootDir, path.basename(step.dir)) as { traceparent?: string }[]).find((line) => line.traceparent)?.traceparent;
-      const [, trace, span] = TRACEPARENT.exec(traceparent ?? "") ?? [];
-      expect(trace).toBe(traceId);
-      return span!;
-    };
-    const nodeSpan = spanOf(nodeStep);
-    const requestSpan = spanOf(requestStep);
-    expect(new Set([fetchSpan, nodeSpan, requestSpan]).size).toBe(3);
+    // Each step has a trace id of its own, and every id of the world starts
+    // with the same eight characters.
+    const ids = [fetchStep, nodeStep, requestStep, pageStep].map(traceOf);
+    expect(new Set(ids).size).toBe(4);
+    expect(new Set(ids.map((id) => id.slice(0, 8))).size).toBe(1);
+    for (const step of [nodeStep, requestStep]) {
+      for (const line of httpLogLines(rootDir, path.basename(step.dir)) as { traceparent?: string }[]) {
+        expect(TRACEPARENT.exec(line.traceparent ?? "")?.[1]).toBe(traceOf(step));
+      }
+    }
 
-    expect(fetchStep.observed.program_log).toEqual({ lines: 1, file: "program-log.txt", stamped: 1 });
-    expect(sliceOf(fetchStep)).toEqual([`[00-${traceId}-${fetchSpan}-01] GET /fetch`]);
-    expect(sliceOf(nodeStep)).toEqual([`[00-${traceId}-${nodeSpan}-01] GET /node`]);
-    // A line a program tags with the trace id alone belongs to the step it
-    // was written in.
-    expect(requestStep.observed.program_log).toEqual({ lines: 2, file: "program-log.txt", stamped: 2 });
-    expect(sliceOf(requestStep)).toEqual([`[00-${traceId}-${requestSpan}-01] GET /request`, `[trace=${traceId}] GET /trace-only`]);
-    // The page's document and its fetch carry the step's span; the page
-    // sends no request to another origin.
+    expect(fetchStep.observed.program_log).toEqual({ trace_id: traceOf(fetchStep), lines: 1, file: "program-log.txt", stamped: 1 });
+    expect(sliceOf(fetchStep)).toEqual([`[${byPath.get("/fetch")}] GET /fetch`]);
+    expect(sliceOf(nodeStep)).toEqual([expect.stringMatching(new RegExp(`^\\[00-${traceOf(nodeStep)}-[0-9a-f]{16}-01\\] GET /node$`))]);
+    // A line a program tags with the trace id alone is the step's too.
+    expect(requestStep.observed.program_log).toEqual({ trace_id: traceOf(requestStep), lines: 2, file: "program-log.txt", stamped: 2 });
+    expect(sliceOf(requestStep)).toEqual([
+      expect.stringMatching(new RegExp(`^\\[00-${traceOf(requestStep)}-[0-9a-f]{16}-01\\] GET /request$`)),
+      `[trace=${traceOf(requestStep)}] GET /trace-only`,
+    ]);
+    // The page's document and its fetch carry the step's trace id; the
+    // page sends no request to another origin.
     const pageSlice = sliceOf(pageStep);
     expect(pageSlice.map((line) => line.replace(/^\[[^\]]+\] /, ""))).toEqual(["GET /page", "GET /from-page"]);
-    const pageSpans = new Set(pageSlice.map((line) => TRACEPARENT.exec(line.slice(1, line.indexOf("]")))?.[2]));
-    expect(pageSpans.size).toBe(1);
-    expect([...pageSpans][0]).not.toBe(requestSpan);
-    expect(pageStep.observed.program_log).toEqual({ lines: 2, file: "program-log.txt", stamped: 2 });
+    for (const line of pageSlice) expect(TRACEPARENT.exec(line.slice(1, line.indexOf("]")))?.[1]).toBe(traceOf(pageStep));
+    expect(pageStep.observed.program_log).toEqual({ trace_id: traceOf(pageStep), lines: 2, file: "program-log.txt", stamped: 2 });
 
     // The caller's own traceparent reached the program as it was.
     const programLog = readFileSync(path.join(latestRunDir(rootDir), "worlds", "default", "program.log"), "utf8");
     expect(programLog).toContain(`[${OWN_TRACEPARENT}] GET /own`);
 
     const run = latestRunJson(rootDir);
-    expect(run.worlds[0].program_log).toEqual({ stamped: 6, lines: 6 });
+    expect(run.worlds[0].program_log).toEqual({ stamped: 6, lines: 6, late: 0, tagged: 6 });
     expect(run.scenarios[0].steps.map((step: { observed: { program_log: unknown } }) => step.observed.program_log)).toEqual([
       fetchStep.observed.program_log,
       nodeStep.observed.program_log,
@@ -138,7 +139,7 @@ describe("trace context and the program's log", () => {
     expect(summary).not.toContain("program log of world");
   });
 
-  it("gives each scenario a trace of its own under --concurrency, read from the log the parent writes", async () => {
+  it("gives each step a trace id of its own under --concurrency, read from the log the parent writes", async () => {
     await copyFile(path.join(rootDir, "features", "trace.feature"), path.join(rootDir, "features", "trace-again.feature"));
     const { exitCode } = await cli(rootDir, ["run", "--concurrency", "2"]);
 
@@ -152,7 +153,7 @@ describe("trace context and the program's log", () => {
       return TRACEPARENT.exec(slice[0]!.slice(1, slice[0]!.indexOf("]")))?.[1];
     });
     expect(new Set(traces).size).toBe(2);
-    expect(latestRunJson(rootDir).worlds[0].program_log).toEqual({ stamped: 12, lines: 12 });
+    expect(latestRunJson(rootDir).worlds[0].program_log).toEqual({ stamped: 12, lines: 12, late: 0, tagged: 12 });
   });
 
   it("leaves a step's slice empty when the program does not tag its lines", async () => {
@@ -160,11 +161,11 @@ describe("trace context and the program's log", () => {
 
     expect(exitCode).toBe(0);
     const fetchStep = only(stepsByName(rootDir).get("fetch-program"));
-    expect(fetchStep.observed.program_log).toEqual({ lines: 0, file: null, stamped: 1 });
+    expect(fetchStep.observed.program_log).toEqual({ trace_id: expect.stringMatching(/^[0-9a-f]{32}$/), lines: 0, file: null, stamped: 1 });
     expect(existsSync(path.join(fetchStep.dir, "program-log.txt"))).toBe(false);
     const run = latestRunJson(rootDir);
     // The trace-only line of the request step is still that step's.
-    expect(run.worlds[0].program_log).toEqual({ stamped: 6, lines: 1 });
+    expect(run.worlds[0].program_log).toEqual({ stamped: 6, lines: 1, late: 0, tagged: 1 });
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary).not.toContain("program log of world untagged");
   });
@@ -176,7 +177,7 @@ describe("trace context and the program's log", () => {
     const { exitCode } = await cli(rootDir, ["run", "--env", "untagged"]);
 
     expect(exitCode).toBe(0);
-    expect(latestRunJson(rootDir).worlds[0].program_log).toEqual({ stamped: 4, lines: 0 });
+    expect(latestRunJson(rootDir).worlds[0].program_log).toEqual({ stamped: 4, lines: 0, late: 0, tagged: 0 });
     const summary = readFileSync(path.join(latestRunDir(rootDir), "summary.md"), "utf8");
     expect(summary.split("\n").filter((line) => line.includes("program log of world"))).toEqual([
       "- program log of world untagged: carries no trace ids, so each step's slice of it is empty",
@@ -188,7 +189,7 @@ describe("trace context and the program's log", () => {
 
     expect(exitCode).toBe(0);
     const record = JSON.parse(stdout) as StepFacts & { step_record_id: string };
-    expect(record.observed.program_log).toEqual({ lines: 2, file: "program-log.txt", stamped: 2 });
+    expect(record.observed.program_log).toEqual({ trace_id: expect.stringMatching(/^[0-9a-f]{32}$/), lines: 2, file: "program-log.txt", stamped: 2 });
     const slice = sliceOf({ ...record, dir: stepRecordDir(rootDir, record.step_record_id) });
     expect(slice.map((line) => line.replace(/^\[[^\]]+\] /, ""))).toEqual(["GET /request", "GET /trace-only"]);
   });

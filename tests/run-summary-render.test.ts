@@ -3,7 +3,6 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import type { RunDocument, RunScenario, RunStep, RunWorld } from "../src/record/run-result.js";
 import type { UnmeasuredEntry } from "../src/record/types.js";
-import { withProgramLog } from "../src/run/run-document.js";
 import { renderRunSummary } from "../src/run/run-summary.js";
 import { foldVerdicts } from "../src/run/verdicts.js";
 
@@ -464,77 +463,83 @@ describe("renderRunSummary", () => {
     }));
 });
 
-// A world record as `nuka run` writes it, before `withProgramLog`.
+// A world record as `nuka run` writes it.
 function world(name: string, url: string | null): RunWorld {
   return { name, tree: "head", url, commands: [], timings: {}, log: null, error: null };
 }
 
+const NO_TRACE_IDS = "carries no trace ids";
+const CAME_LATE = "arrived after the steps ended";
+
 describe("the program log lines of the summary", () => {
-  it("says once per world that a log was not read, or carries no trace ids, and nothing for a log whose slices hold lines", () => {
+  it("says once per world that a log was not read, carries no trace ids, or tagged its lines late, and nothing for the others", () => {
     const markdown = renderRunSummary(
       run({
         environments: [
           { name: "default", target_version: null, base_url: "http://localhost:41873" },
           { name: "untagged", target_version: null, base_url: "http://localhost:41874" },
+          { name: "buffered", target_version: null, base_url: "http://localhost:41876" },
           { name: "staging", target_version: null, base_url: "https://staging.example.test" },
           { name: "quiet", target_version: null, base_url: "http://localhost:41875" },
         ],
         worlds: [
-          { ...world("default", "http://localhost:41873"), program_log: { stamped: 4, lines: 7 } },
-          { ...world("untagged", "http://localhost:41874"), program_log: { stamped: 4, lines: 0 } },
+          { ...world("default", "http://localhost:41873"), program_log: { stamped: 4, lines: 7, late: 2, tagged: 9 } },
+          { ...world("untagged", "http://localhost:41874"), program_log: { stamped: 4, lines: 0, late: 0, tagged: 0 } },
+          { ...world("buffered", "http://localhost:41876"), program_log: { stamped: 4, lines: 0, late: 8, tagged: 8 } },
           { ...world("staging", "https://staging.example.test"), program_log: null },
-          { ...world("quiet", "http://localhost:41875"), program_log: { stamped: 0, lines: 0 } },
+          { ...world("quiet", "http://localhost:41875"), program_log: { stamped: 0, lines: 0, late: 0, tagged: 0 } },
         ],
       }),
     );
-    expect(markdown.split("\n").slice(3, 12)).toEqual([
+    expect(markdown.split("\n").slice(3, 14)).toEqual([
       "- commit: `0123456`",
       "- environment: default at http://localhost:41873",
       "- environment: untagged at http://localhost:41874",
+      "- environment: buffered at http://localhost:41876",
       "- environment: staging at https://staging.example.test",
       "- environment: quiet at http://localhost:41875",
       "- program log of world untagged: carries no trace ids, so each step's slice of it is empty",
+      "- program log of world buffered: its lines for the steps arrived after the steps ended, so each step's slice of it is empty " +
+        "and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: " +
+        "set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
       "- program log of world staging: not read, since the program runs at https://staging.example.test, which nukadoko did not start",
       "- browser: none launched",
       "- selection: full",
     ]);
   });
-});
 
-describe("withProgramLog", () => {
-  const slice = gs.record({ lines: gs.integers({ minValue: 0, maxValue: 5 }), stamped: gs.integers({ minValue: 0, maxValue: 5 }) });
-
-  it("sums the slices of the world's own environment, and of no other", () =>
+  it("says a log carries no trace ids only when no line of it carries one, and that its lines came late only when every step's did", () =>
     hegel.test((tc) => {
-      const scenarios = tc.draw(
-        gs.arrays(
-          gs.tuples(gs.sampledFrom(["default", "other"]), gs.arrays(gs.optional(slice), { maxSize: 4 })),
-          { maxSize: 5 },
-        ),
-      ).map(([environment, slices], index) =>
-        scenario("features/a.feature", index + 1, `s${index}`, "passed", 1, {
-          environment,
-          steps: slices.map((entry) =>
-            step("a step", {
-              observed: {
-                processes: null,
-                http: null,
-                files: null,
-                unmeasured: [],
-                ...(entry === undefined || entry === null ? {} : { program_log: { ...entry, file: entry.lines === 0 ? null : "program-log.txt" } }),
-              },
-            }),
-          ),
-        }),
-      );
-      const own = scenarios.filter((entry) => entry.environment === "default").flatMap((entry) => entry.steps);
-      const sum = (key: "lines" | "stamped"): number => own.reduce((total, entry) => total + (entry.observed?.program_log?.[key] ?? 0), 0);
-      expect(withProgramLog(world("default", "http://localhost:1"), true, scenarios).program_log).toEqual({ stamped: sum("stamped"), lines: sum("lines") });
+      const lines = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
+      const late = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
+      // Hooks' lines carry the world's trace ids too.
+      const tagged = lines + late + tc.draw(gs.integers({ minValue: 0, maxValue: 2 }));
+      const stamped = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
+      const markdown = renderRunSummary(run({ worlds: [{ ...world("default", "http://localhost:1"), program_log: { stamped, lines, late, tagged } }] }));
+      expect(markdown.includes(NO_TRACE_IDS)).toBe(stamped > 0 && tagged === 0);
+      expect(markdown.includes(CAME_LATE)).toBe(stamped > 0 && lines === 0 && late > 0);
     }));
 
-  it("says null for a log nukadoko did not read, and leaves a world with no URL or that did not start as it was", () => {
-    expect(withProgramLog(world("staging", "https://staging.example.test"), false, []).program_log).toBeNull();
-    expect(withProgramLog(world("tool", null), true, [])).toEqual(world("tool", null));
-    expect(withProgramLog(world("broken", "http://localhost:1"), undefined, [])).toEqual(world("broken", "http://localhost:1"));
+  it("names a step's late lines once under that step, and says when they could not be written", () => {
+    const observed = { processes: null, http: 1, files: null, unmeasured: [] };
+    const markdown = renderRunSummary(
+      run({
+        scenarios: [
+          scenario("features/a.feature", 3, "slow", "passed", 1, {
+            steps: [
+              step("the step calls slow", { line: 4, record: "steps/step-1", observed, program_log_late: { lines: 2, file: "program-log-late.txt" } }),
+              step("the step calls slow again", { line: 5, record: "steps/step-2", observed, program_log_late: { lines: 1, file: null } }),
+              step("the step waits", { line: 6, record: "steps/step-3", observed }),
+            ],
+          }),
+        ],
+      }),
+    );
+    const section = markdown.slice(markdown.indexOf("## Unmeasured actions"));
+    expect(section.split("\n").filter((line) => line.startsWith("- ") || line.includes("program-log-late"))).toEqual([
+      "A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record.",
+      "- `features/a.feature:4` the step calls slow: 2 lines of the program's log after the step ended, in `program-log-late.txt`; record `steps/step-1`",
+      "- `features/a.feature:5` the step calls slow again: 1 line of the program's log after the step ended, which could not be written; record `steps/step-2`",
+    ]);
   });
 });

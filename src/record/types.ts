@@ -276,17 +276,21 @@ export interface ObservedCounts {
 /** A step's slice of the program's log (docs/spec.md "Trace context and
  * the program's log"). */
 export interface ProgramLogSlice {
-  /** How many lines the program wrote while the step ran that carry the
-   * step's span id, or the scenario's trace id and no other step's span
-   * id. 0 when the program does not tag its lines with either. */
+  /** The step's trace id: every request it sent to the world carries it
+   * in its `traceparent`, and so does every line of the program's log
+   * that belongs to the step. */
+  readonly trace_id: string;
+  /** How many lines of `program.log` carried the step's trace id when its
+   * record was written. 0 when the program does not tag its lines, or
+   * wrote them later (`program-log-late.txt`). */
   readonly lines: number;
   /** The file beside the step record that holds those lines, redacted;
    * `null` when there are none. */
   readonly file: string | null;
   /** How many requests the step sent to the world with a `traceparent`. */
   readonly stamped: number;
-  /** The program wrote more while the step ran than one slice reads, so
-   * the lines come from the first part of it. */
+  /** The step's lines came to more than 16 MiB, so the file holds the
+   * lines up to that size and `lines` counts them all. */
   readonly truncated?: true;
 }
 

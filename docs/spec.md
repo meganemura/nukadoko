@@ -2683,7 +2683,7 @@ them:
     "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
     "log": "worlds/default/program.log",
     "error": null,
-    "program_log": { "stamped": 12, "lines": 31 }
+    "program_log": { "stamped": 12, "lines": 31, "late": 2, "tagged": 33 }
   }
 ]
 ```
@@ -2697,10 +2697,12 @@ them:
 - `log` is relative to the run directory, `null` when the world ran no
   command.
 - `error` is why the program did not start, `null` when it did.
-- `program_log` sums what the world's steps found of their requests in
-  the program's log: `stamped`, the requests that carried a
-  `traceparent` to the world, and `lines`, the lines that went into a
-  step's slice (see "Trace context and the program's log").
+- `program_log` is counted when the world stops (see "Trace context and
+  the program's log"): `stamped`, the requests the steps sent to the
+  world with a `traceparent`; `lines`, the lines that went into a
+  step's slice; `late`, the lines that carry a step's trace id and
+  arrived after its record was written; and `tagged`, every line of the
+  log that carries a trace id of the world, a hook's included.
   It is `null` for a world at a `url`, and absent for a world with no
   URL or one that did not start.
 
@@ -2774,9 +2776,11 @@ holds data someone else needs.
 
 Every HTTP request a step sends to the world carries a W3C `traceparent`
 header, so the program's own log can say which step sent it.
-The value is `00-<trace id>-<span id>-01`: one trace id for each scenario
-execution (one for a `nuka do` call), and one span id for each step.
-A hook gets a span id of its own, which no step's slice includes.
+The value is `00-<trace id>-<span id>-01`: one trace id for each step,
+and a span id for each request.
+Every trace id of one world starts with the same eight hexadecimal
+characters, made for that world.
+A hook gets a trace id of its own, so its lines belong to no step.
 
 - The header goes on requests through `fetch`, `node:http`,
   `node:https`, the `request` fixture, `page.request`, and
@@ -2827,43 +2831,78 @@ It costs 2 to 3 ms for each request it stamps, which is why it leaves
 images, scripts, and stylesheets alone.
 
 When nukadoko serves the program, each step record gets the lines of
-`program.log` that its requests caused: the lines the program wrote while
-the step ran that carry the step's span id, or that carry the scenario's
-trace id and no other step's span id.
-The second rule is for a program that tags a line with the trace id
-alone.
+`program.log` that carry the step's trace id.
+A line belongs to the step whose trace id it carries, wherever and
+whenever it appears in the log.
+The trace id a line carries is the first place in it, in either case,
+where the world's eight characters begin 32 hexadecimal ones, so a line
+belongs to one step at most.
+When the line was written or read decides nothing, so a server that logs
+the trace id with a span id of its own, as an OpenTelemetry log bridge
+does, is read the same as one that logs the whole `traceparent`, and a
+line from an earlier step's request never goes to a later step.
 The lines go to `program-log.txt` beside the step record, redacted, and
 `observed.program_log` counts them:
 
 ```json
-"program_log": { "lines": 33, "file": "program-log.txt", "stamped": 3 }
+"program_log": { "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "lines": 33, "file": "program-log.txt", "stamped": 3 }
 ```
 
-- `lines` is how many lines the slice holds, 0 when no line carries the
-  step's ids.
+- `trace_id` is the step's trace id: every request the step sent to the
+  world carries it.
+- `lines` is how many lines carried it when the step's record was
+  written, 0 when none did.
 - `file` is `null` when `lines` is 0.
 - `stamped` is how many requests the step sent to the world with a
   `traceparent`.
-- `truncated: true` appears when the program wrote more than 16 MiB while
-  the step ran; the slice then comes from the first 16 MiB.
+- `truncated: true` appears when the step's lines came to more than
+  16 MiB; the file then holds the lines up to that size, and `lines`
+  counts them all.
 
-A step reads only what the program wrote while it ran: its window starts
-at the log's size when the step began.
-Under `--concurrency` the parent writes the log and each worker reads it,
-and the trace id keeps one scenario's lines apart from another's.
 A line can reach the log after the step read its response, since the
 program writes it around the time it answers and it comes through a
 pipe.
 So a step that stamped a request waits until the log has been quiet for
 30 ms after the later of its last stamped request and the log's last
-write, and no longer than 300 ms in all.
+write, and no longer than 300 ms in all, then writes its slice from the
+lines that carry its trace id so far.
 A step that stamped nothing does not wait.
+Under `--concurrency` the parent writes the log, and each worker reads
+it for its own steps.
 
-A program that tags no line gives every step an empty slice, and the run
-summary says so once for the world, so a reader knows why:
+A line that carries a step's trace id and arrives after the step's slice
+was written is still that step's: a server that logs a request's last
+line after it streamed the body, or work the request left running.
+The step's record is final and is not rewritten, the same rule as a
+request that starts after its step ended (see "Records").
+When the world stops, after the program has, one pass over the whole
+`program.log` finds those lines and writes them to
+`program-log-late.txt` beside the step record, redacted.
+The step in `run.json` carries `"program_log_late": { "lines", "file" }`,
+with `"truncated": true` past 16 MiB, and the run summary names the
+lines once, on the step's line under "Unmeasured actions".
+`nuka do` writes the same file and names it in a `program-log-late`
+note on stderr.
+
+The world's stop also decides the run summary's line for the world, from
+the whole log.
+A log in which no line carries a trace id of the world does not tag its
+lines, and the summary says so once, so a reader knows why each slice is
+empty:
 
 ```text
 - program log of world default: carries no trace ids, so each step's slice of it is empty
+```
+
+A log whose steps' lines all arrived after the steps ended tags its lines
+late.
+The usual cause is output buffered on a pipe: Ruby and Python buffer
+standard output when it is not a terminal, and write it in blocks, or
+when the program stops.
+The summary says:
+
+```text
+- program log of world default: its lines for the steps arrived after the steps ended, so each step's slice of it is empty and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
 ```
 
 A world at a `url` has no log nukadoko can read.
@@ -3430,7 +3469,8 @@ to act on the run without opening another file:
   producer's step, record, and the result it read. A claim step has its
   `claims`, `observation`, and `attempts`, the same values its step
   record holds (see "Claims"), so a broken claim is read without opening
-  the step record. A result whose JSON is
+  the step record. A step with lines of the program's log that arrived
+  after its record was written has `program_log_late` (see "Program"). A result whose JSON is
   over 4096 bytes is a preview instead, with `truncated: true` and
   `result_bytes`, the whole value's size: an object keeps its top-level
   numbers, booleans, and nulls and the first 1024 characters of each
@@ -3953,7 +3993,7 @@ its scenario record's id, so either record leads to the other.
   is still written to that step's http.jsonl, with `"after_step_end":
   true`.
 - `observed.program_log` is the step's slice of the program's log, `{
-  "lines", "file", "stamped" }`, or `null` for a world at a `url`, whose
+  "trace_id", "lines", "file", "stamped" }`, or `null` for a world at a `url`, whose
   log nukadoko does not read; it is absent when the run has no world URL
   (see "Program", "Trace context and the program's log").
 - `observed.files` (`null` when the execution changed none) lists the
@@ -4431,8 +4471,9 @@ holds:
   failure was outside every scenario) and its scenario counts;
 - the condition: the short commit sha and whether the tree had uncommitted
   changes (from `commit`, or "unknown" without one), each environment and its
-  target version, a line for each world whose program log was not read or
-  carries no trace ids (see "Program"), every browser a scenario launched or "none launched", the
+  target version, a line for each world whose program log was not read,
+  carries no trace ids, or tagged the steps' lines only after they ended
+  (see "Program"), every browser a scenario launched or "none launched", the
   `selection` (`partial` says a line target left out other scenarios of its
   file), `check: skipped` under `nuka run --no-check` (nothing when the check
   ran), the nukadoko version, the run id, and the start and finish times;
@@ -4463,12 +4504,16 @@ holds:
   `judged_by`: its location, its name, and what judged it (only a compat
   step, or nothing);
 - "Unmeasured actions", when a step did something the tool saw but could
-  not measure (`observed.unmeasured`), or started a request or a
-  `runCommand` process after its record was written (`after_step_end`):
+  not measure (`observed.unmeasured`), started a request or a
+  `runCommand` process after its record was written (`after_step_end`),
+  or has lines of the program's log that arrived after it
+  (`program_log_late`):
   one line per step, with its location, its text, its environment when
   the run had more than one, up to three of its actions and how many
   more, `started after the step ended: <n> request(s) in http.jsonl, <n>
-  process(es)` when it did, the advice to start a process with `runCommand` when one
+  process(es)` when it did, `<n> line(s) of the program's log after the
+  step ended, in program-log-late.txt` when the world's stop found any
+  (see "Program"), the advice to start a process with `runCommand` when one
   of its actions is a `child_process`, and its record's path. A step
   with neither adds nothing, and under `--repeat` the same step with the
   same line is one line;

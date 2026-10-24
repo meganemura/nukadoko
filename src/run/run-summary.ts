@@ -115,12 +115,22 @@ function renderCondition(document: RunDocument): string[] {
       : `- environment: ${environment.name}${at} (target version ${environment.target_version})`;
   });
   // Once per world, so a reader of an empty slice knows why it is empty.
+  // Decided from the whole log when the world stopped: a log with no line
+  // that carries a trace id of the world does not tag its lines, and one
+  // whose steps' lines all came after the steps ended tags them late.
   const programLogs = (document.worlds ?? []).flatMap((world) => {
-    if (world.program_log === null) {
+    const log = world.program_log;
+    if (log === null) {
       return [`- program log of world ${world.name}: not read, since the program runs at ${world.url ?? "a URL"}, which nukadoko did not start`];
     }
-    if (world.program_log !== undefined && world.program_log.stamped > 0 && world.program_log.lines === 0) {
-      return [`- program log of world ${world.name}: carries no trace ids, so each step's slice of it is empty`];
+    if (log === undefined || log.stamped === 0) return [];
+    if (log.tagged === 0) return [`- program log of world ${world.name}: carries no trace ids, so each step's slice of it is empty`];
+    if (log.lines === 0 && log.late > 0) {
+      return [
+        `- program log of world ${world.name}: its lines for the steps arrived after the steps ended, so each step's slice of it is empty ` +
+          "and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: " +
+          "set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.",
+      ];
     }
     return [];
   });
@@ -359,6 +369,19 @@ function afterStepEndItem(step: RunScenario["steps"][number]): string | undefine
   return parts.length === 0 ? undefined : `started after the step ended: ${parts.join(", ")}`;
 }
 
+// The item that names a step's lines of the program's log that arrived
+// after its record was written (docs/spec.md "Trace context and the
+// program's log"): the world's stop found them, and the record was
+// already final.
+function programLogLateItem(step: RunScenario["steps"][number]): string | undefined {
+  const late = step.program_log_late;
+  if (late === undefined) return undefined;
+  const lines = countOf(late.lines, "line", "lines");
+  return late.file === null
+    ? `${lines} of the program's log after the step ended, which could not be written`
+    : `${lines} of the program's log after the step ended, in ${cellCode(late.file)}`;
+}
+
 // One line per step that did something nukadoko could not measure (the
 // step record's `observed.unmeasured`), or that started an action after
 // its record was written: a reader approving the run needs to know which
@@ -370,14 +393,18 @@ function afterStepEndItem(step: RunScenario["steps"][number]): string | undefine
 function renderUnmeasured(document: RunDocument): string[] {
   const named = document.environments.length > 1;
   const lines = new Map<string, { readonly sortKey: [string, number]; readonly text: string }>();
+  let anyLateLog = false;
   for (const scenario of document.scenarios) {
     for (const step of scenario.steps) {
       const unmeasured = step.observed?.unmeasured ?? [];
       const late = afterStepEndItem(step);
-      if (unmeasured.length === 0 && late === undefined) continue;
+      const lateLog = programLogLateItem(step);
+      if (lateLog !== undefined) anyLateLog = true;
+      if (unmeasured.length === 0 && late === undefined && lateLog === undefined) continue;
       const shown = unmeasured.slice(0, UNMEASURED_SHOWN).map((entry) => `${entry.kind.replace("_", " ")} ${cellCode(entry.detail)}`);
       if (unmeasured.length > UNMEASURED_SHOWN) shown.push(`and ${unmeasured.length - UNMEASURED_SHOWN} more`);
       if (late !== undefined) shown.push(late);
+      if (lateLog !== undefined) shown.push(lateLog);
       const where = `${scenario.feature}:${step.line ?? scenario.line}`;
       const environment = named ? ` (${cellText(scenario.environment)})` : "";
       const hint = unmeasured.some((entry) => entry.kind === "child_process") ? "; start a process with `runCommand` to record it" : "";
@@ -397,6 +424,9 @@ function renderUnmeasured(document: RunDocument): string[] {
     "",
     "Each step below did something nukadoko records but cannot measure, so its record has no evidence of what that action did.",
     "An action a step started after its record was written is in that step's own files, marked `after_step_end`, and not in its record.",
+    ...(anyLateLog
+      ? ["A line of the program's log that carries a step's trace id and arrived after its record was written is in that step's `program-log-late.txt`, and not in its record."]
+      : []),
     "",
     ...sorted.map((line) => line.text),
   ];

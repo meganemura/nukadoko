@@ -104,7 +104,7 @@ describe.skipIf(!chromiumAvailable)("a page's requests to the world", () => {
     await rm(evidenceDir, { recursive: true, force: true });
   });
 
-  it("stamps the page's document and fetch with the boundary's span, and keeps the cache, CORS, and cookies as they were", async () => {
+  it("stamps the page's document and fetch with the boundary's trace id, and keeps the cache, CORS, and cookies as they were", async () => {
     const handle = createStepContext({ config: config(), baseURL: world.origin, evidenceDir, env: {}, stepTitle: "page step" });
     try {
       await handle.beginStep(path.join(evidenceDir, "one"), "one");
@@ -119,9 +119,12 @@ describe.skipIf(!chromiumAvailable)("a page's requests to the world", () => {
 
       // The image loaded once: the second navigation took it from the cache.
       expect(first.map((hit) => hit.path)).toEqual(["/page", "/image.svg", "/api", "/page", "/api"]);
-      const spans = new Set(first.filter((hit) => hit.path !== "/image.svg").map((hit) => TRACEPARENT.exec(hit.traceparent ?? "")?.[2]));
-      expect(spans.size).toBe(1);
-      expect([...spans][0]).toEqual(expect.stringMatching(/^[0-9a-f]{16}$/));
+      const stamped = first.filter((hit) => hit.path !== "/image.svg").map((hit) => TRACEPARENT.exec(hit.traceparent ?? ""));
+      const traces = new Set(stamped.map((match) => match?.[1]));
+      expect(traces.size).toBe(1);
+      expect([...traces][0]).toEqual(expect.stringMatching(/^[0-9a-f]{32}$/));
+      // A span id per request.
+      expect(new Set(stamped.map((match) => match?.[2])).size).toBe(stamped.length);
       // An image is not stamped (module header), and every request after
       // the first navigation still carried the cookie it set.
       expect(first.find((hit) => hit.path === "/image.svg")?.traceparent).toBeUndefined();
@@ -133,14 +136,15 @@ describe.skipIf(!chromiumAvailable)("a page's requests to the world", () => {
       expect(await page.title()).toBe("from-world");
       const second = hits.splice(0);
       // The other origin got no header, and the cross-origin request to the
-      // world went with no preflight, under the new step's span.
+      // world went with no preflight, under the new step's trace id, which
+      // starts with the same prefix as the first step's.
       expect(second.map((hit) => [hit.method, hit.path, hit.traceparent === undefined])).toEqual([
         ["GET", "other/", true],
         ["GET", "/cross", false],
       ]);
-      const [, trace, span] = TRACEPARENT.exec(second[1]!.traceparent!) ?? [];
-      expect(span).not.toBe([...spans][0]);
-      expect(TRACEPARENT.exec(first[0]!.traceparent!)?.[1]).toBe(trace);
+      const [, trace] = TRACEPARENT.exec(second[1]!.traceparent!) ?? [];
+      expect(trace).not.toBe([...traces][0]);
+      expect(trace?.slice(0, 8)).toBe([...traces][0]?.slice(0, 8));
     } finally {
       await handle.dispose();
     }

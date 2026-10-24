@@ -114,7 +114,10 @@ const observed = z.looseObject({
     .array(z.looseObject({ path: z.string(), change: z.enum(["added", "changed", "removed"]), bytes: z.number().int().optional() }))
     .nullable(),
   unmeasured: z.array(z.looseObject({ kind: z.enum(["child_process", "worker_thread", "socket", "files"]), detail: z.string() })),
-  program_log: z.looseObject({ lines: z.number().int(), file: z.string().nullable(), stamped: z.number().int() }).nullable().optional(),
+  program_log: z
+    .looseObject({ trace_id: z.string(), lines: z.number().int(), file: z.string().nullable(), stamped: z.number().int(), truncated: z.literal(true).optional() })
+    .nullable()
+    .optional(),
 });
 
 const step = z.looseObject({
@@ -130,6 +133,7 @@ const step = z.looseObject({
   error: z.looseObject({ kind: errorKind.nullable(), message: z.string() }).optional(),
   used: z.array(z.looseObject({ step: z.string(), record: z.string(), result: z.unknown() })).optional(),
   after_step_end: z.looseObject({ requests: z.number().int(), processes: z.number().int(), http: z.literal("http.jsonl").optional() }).optional(),
+  program_log_late: z.looseObject({ lines: z.number().int(), file: z.string().nullable(), truncated: z.literal(true).optional() }).optional(),
   claims: z.array(z.union([eachClaim, comparisonClaim])).optional(),
   observation: z.enum(["observed", "unobserved"]).optional(),
   attempts: z.number().int().optional(),
@@ -216,7 +220,10 @@ const document = z.looseObject({
       z.looseObject({
         name: z.string(),
         url: z.string().nullable(),
-        program_log: z.looseObject({ stamped: z.number().int(), lines: z.number().int() }).nullable().optional(),
+        program_log: z
+          .looseObject({ stamped: z.number().int(), lines: z.number().int(), late: z.number().int(), tagged: z.number().int() })
+          .nullable()
+          .optional(),
       }),
     )
     .optional(),

@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { copyExamplesToTempDir, httpLogLines, removeTempDir, repoRoot, stepRecordDir, stripRunProgressLines } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
+/** A step's trace id: 32 hexadecimal characters, made for each run. */
+const TRACE_ID = expect.stringMatching(/^[0-9a-f]{32}$/);
 
 // Responsibility: anti-rot proof for examples/migration/README.md -- the
 // shipped, deliberately
@@ -112,7 +114,7 @@ describe("examples/migration", () => {
       http: 2,
       files: null,
       unmeasured: [],
-      program_log: { lines: 2, file: "program-log.txt", stamped: 2 },
+      program_log: { trace_id: TRACE_ID, lines: 2, file: "program-log.txt", stamped: 2 },
     });
     expect(httpLogLines(rootDir, seedStep.step_record_id).map((line) => line.method)).toEqual(["POST", "POST"]);
     expect(seedStepRecord.world).toEqual({ reads: [], writes: ["seededCount"] });
@@ -124,7 +126,7 @@ describe("examples/migration", () => {
       http: 1,
       files: null,
       unmeasured: [],
-      program_log: { lines: 1, file: "program-log.txt", stamped: 1 },
+      program_log: { trace_id: TRACE_ID, lines: 1, file: "program-log.txt", stamped: 1 },
     });
     expect(countStepRecord.world).toBeUndefined();
 
@@ -150,7 +152,7 @@ describe("examples/migration", () => {
       http: 1,
       files: null,
       unmeasured: [],
-      program_log: { lines: 1, file: "program-log.txt", stamped: 1 },
+      program_log: { trace_id: TRACE_ID, lines: 1, file: "program-log.txt", stamped: 1 },
     });
     expect(createStepRecord.world).toBeUndefined();
 
@@ -177,7 +179,7 @@ describe("examples/migration", () => {
       http: null,
       files: null,
       unmeasured: [],
-      program_log: { lines: 0, file: null, stamped: 0 },
+      program_log: { trace_id: TRACE_ID, lines: 0, file: null, stamped: 0 },
     });
     expect(consumerStepRecord.world).toBeUndefined();
   });

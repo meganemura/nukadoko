@@ -35,6 +35,12 @@ const RUN_CODES = {
     description: "The program a world served exited while the scenarios still ran, so the requests after that found nothing listening.",
     fix: "Read the world's program.log, which the message names, for why the program exited.",
   },
+  "program-log-late": {
+    severity: "note",
+    description:
+      "nuka do found lines of the program's log that carry the step's trace id and arrived after the step ended, when the world stopped. They are in program-log-late.txt beside the step record, and are not in its observed.program_log.",
+    fix: "No change is necessary. When it happens on every call, the program buffers its output: set STDOUT.sync = true in Ruby, or PYTHONUNBUFFERED=1 for Python.",
+  },
   "program-start-failed": {
     severity: "failed",
     description: "The program in nukadoko.program.ts did not start for a world: a build or prepare command failed, the server did not answer its ready path in time, or setup threw. The world's scenarios did not run.",

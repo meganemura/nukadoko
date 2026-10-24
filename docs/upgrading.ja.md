@@ -352,11 +352,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **world へのリクエストは `traceparent` を運び、run に world の URL があるとき `observed` は `program_log` を持ちます。**
   step が world のオリジンへ送るリクエストは、W3C の `traceparent` ヘッダを運ぶようになりました。
   自分で設定したリクエストは、それを保ちます。
-  `observed` を丸ごと比べていた読み手は、`program_log`(`{ "lines", "file", "stamped" }`、`url` の world では `null`)を加えます。
+  `observed` を丸ごと比べていた読み手は、`program_log`(`{ "trace_id", "lines", "file", "stamped" }`、`url` の world では `null`)を加えます。
   http.jsonl の行を丸ごと比べていた読み手は、nukadoko がヘッダを付けたリクエストの行に `traceparent` を加えます。
-  step ごとにプログラムのログの行を得るには、プログラムがリクエストの `traceparent` をログの行に書くようにします。
+  step ごとにプログラムのログの行を得るには、プログラムがリクエストの trace id をログの行に書き、バッファせずに書くようにします。
   Rails と Node の書き方は docs/spec.ja.md の「trace context とプログラムのログ」にあります。
-  それまでは、run サマリが world ごとに一度、ログが trace id を持たないと言います。
+  それまでは、run サマリが world ごとに一度、ログが trace id を持たないこと、またはその行が step が終わったあとに届いたことを言います。
 
 ## 0.20.0 から 0.21.0 へ
 

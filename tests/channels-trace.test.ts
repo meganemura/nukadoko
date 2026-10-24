@@ -14,11 +14,12 @@ import { createEmptyTempDir, removeTempDir } from "./helpers/fixtures.js";
 // step sends to the world (src/context/channels.ts, observed.ts): through
 // `fetch` and `node:http`, only to the world's origin, never over the
 // caller's own header, never by rebuilding what the caller passed, one
-// trace id for the collector and one span id per boundary, counted only
-// when the header was added.
+// trace id per boundary under the world's prefix and one span id per
+// request, counted only when the header was added.
 
 const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-01$/;
 const OWN = "00-11111111111111111111111111111111-2222222222222222-01";
+const PREFIX = "4bf92f35";
 
 let server: http.Server;
 let base: string;
@@ -49,7 +50,7 @@ beforeEach(async () => {
   dir = await createEmptyTempDir();
   observed = createObservedCollector({
     outputDir: () => path.join(dir, "record"),
-    trace: { traceId: "4bf92f3577b34da6a3ce929d0e0e4736", origin: base },
+    trace: { prefix: PREFIX, origin: base },
   });
 });
 
@@ -86,10 +87,11 @@ describe("fetch", () => {
     });
     await observed.flush();
     const trace = observed.boundaryTrace()!;
-    const expected = `00-${trace.traceId}-${trace.spanId}-01`;
-    expect(received.get("/a")).toBe(expected);
-    expect(received.get("/b")).toBe(expected);
-    expect(httpLines().map((line) => line.traceparent)).toEqual([expected, expected]);
+    const [a, b] = [TRACEPARENT.exec(received.get("/a") ?? ""), TRACEPARENT.exec(received.get("/b") ?? "")];
+    expect(trace.traceId.startsWith(PREFIX)).toBe(true);
+    expect([a?.[1], b?.[1]]).toEqual([trace.traceId, trace.traceId]);
+    expect(a?.[2]).not.toBe(b?.[2]);
+    expect(httpLines().map((line) => line.traceparent)).toEqual([received.get("/a"), received.get("/b")]);
     expect(trace.stamped).toBe(2);
     expect(trace.lastStampAt).toEqual(expect.any(Number));
   });
@@ -114,7 +116,7 @@ describe("fetch", () => {
     expect(observed.boundaryTrace()!.stamped).toBe(0);
   });
 
-  it("gives each boundary a span of its own under one trace id, and a step that outlives its boundary keeps its span", async () => {
+  it("gives each boundary a trace id of its own under the world's prefix, and a step that outlives its boundary keeps its trace id", async () => {
     const firstRun = observed.openRun([]);
     await withProcessRecording(firstRun, async () => (await fetch(`${base}/first`)).text());
     const first = observed.boundaryTrace()!;
@@ -124,11 +126,11 @@ describe("fetch", () => {
     await withProcessRecording(firstRun, async () => (await fetch(`${base}/late`)).text());
     await inStep(async () => (await fetch(`${base}/second`)).text());
     const second = observed.boundaryTrace()!;
-    expect(second.traceId).toBe(first.traceId);
-    expect(second.spanId).not.toBe(first.spanId);
-    expect([...second.otherSpans]).toEqual([first.spanId]);
-    expect(TRACEPARENT.exec(received.get("/late") ?? "")?.[2]).toBe(first.spanId);
-    expect(TRACEPARENT.exec(received.get("/second") ?? "")?.[2]).toBe(second.spanId);
+    expect(second.traceId).not.toBe(first.traceId);
+    expect([first.traceId.slice(0, 8), second.traceId.slice(0, 8)]).toEqual([PREFIX, PREFIX]);
+    expect(TRACEPARENT.exec(received.get("/first") ?? "")?.[1]).toBe(first.traceId);
+    expect(TRACEPARENT.exec(received.get("/late") ?? "")?.[1]).toBe(first.traceId);
+    expect(TRACEPARENT.exec(received.get("/second") ?? "")?.[1]).toBe(second.traceId);
     expect(second.stamped).toBe(1);
   });
 
@@ -202,12 +204,12 @@ describe("node:http", () => {
     });
     await observed.flush();
     const trace = observed.boundaryTrace()!;
-    expect(received.get("/plain")).toBe(`00-${trace.traceId}-${trace.spanId}-01`);
+    expect(TRACEPARENT.exec(received.get("/plain") ?? "")?.[1]).toBe(trace.traceId);
     expect(received.get("/own")).toBe(OWN);
     expect(received.get("/array")).toBeUndefined();
     expect(trace.stamped).toBe(1);
     expect(httpLines().map((line) => [new URL(line.url).pathname, line.traceparent])).toEqual([
-      ["/plain", `00-${trace.traceId}-${trace.spanId}-01`],
+      ["/plain", received.get("/plain")],
       ["/own", undefined],
       ["/array", undefined],
     ]);

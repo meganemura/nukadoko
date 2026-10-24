@@ -76,6 +76,10 @@ export interface RunStep {
   /** The step record's scenario entry's `after_step_end`: actions the step
    * started after its record was written. */
   readonly after_step_end?: AfterStepEndCounts;
+  /** The lines of the program's log that carry the step's trace id and
+   * arrived after its record was written, found when the world stopped.
+   * Present only when there is one. */
+  readonly program_log_late?: RunProgramLogLate;
   /** A claim step's claims, as its step record holds them, with each value
    * whose JSON is longer than `CLAIM_VALUE_MAX_BYTES` cut (`RunClaim`). */
   readonly claims?: readonly RunClaim[];
@@ -83,6 +87,17 @@ export interface RunStep {
   readonly observation?: "observed" | "unobserved";
   /** A claim step's `attempts`, copied from its step record. */
   readonly attempts?: number;
+}
+
+/** A step's late lines of the program's log. */
+export interface RunProgramLogLate {
+  readonly lines: number;
+  /** `program-log-late.txt` in the step record's directory, or `null`
+   * when it could not be written. */
+  readonly file: string | null;
+  /** The lines came to more than 16 MiB, so the file holds the first of
+   * them. */
+  readonly truncated?: true;
 }
 
 /** A claim as run.json carries it. A value whose JSON is longer than
@@ -249,13 +264,26 @@ export interface RunWorld {
   readonly log: string | null;
   /** Why the program did not start, or `null` when it did. */
   readonly error: string | null;
-  /** What the steps found of their requests in the program's log
-   * (docs/spec.md "Program"): `stamped`, the requests that carried a
-   * `traceparent` to the world, and `lines`, the log lines that went into
-   * a step's slice. `null` for a world at a `url`, whose log nukadoko
-   * does not read. Absent for a world with no URL, one that did not start,
-   * and in a run.json an earlier build wrote. */
-  readonly program_log?: { readonly stamped: number; readonly lines: number } | null;
+  /** What the program's log held of the steps' requests (docs/spec.md
+   * "Trace context and the program's log"). `null` for a world at a
+   * `url`, whose log nukadoko does not read. Absent for a world with no
+   * URL, one that did not start, and in a run.json an earlier build
+   * wrote. */
+  readonly program_log?: RunWorldProgramLog | null;
+}
+
+/** A served world's program log, counted when the world stopped. */
+export interface RunWorldProgramLog {
+  /** The requests the steps sent to the world with a `traceparent`. */
+  readonly stamped: number;
+  /** The lines that went into a step's slice. */
+  readonly lines: number;
+  /** The lines that carry a step's trace id and arrived after its record
+   * was written: each step's `program-log-late.txt`. */
+  readonly late: number;
+  /** Every line that carries a trace id of the world, whichever step or
+   * hook it belongs to. 0 when the program does not tag its lines. */
+  readonly tagged: number;
 }
 
 /** The fields `nuka run` puts beside the envelope's `findings`. */

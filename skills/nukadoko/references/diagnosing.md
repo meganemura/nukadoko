@@ -56,8 +56,9 @@ need more than a glance.
    uncaught page error, or a failed request recorded there can explain a
    failure nothing else on the step record mentions.
 4. `program-log.txt` beside the record, when `observed.program_log`
-   names it: the lines the program under test wrote for this step's own
-   requests, such as the error behind a 500 (`program.md`).
+   names it, and `program-log-late.txt` when the run summary names one:
+   the lines the program under test wrote for this step's own requests,
+   such as the error behind a 500 (`program.md`).
 5. `nuka do <step> --use <upstream-step-record-id>` when the record
    sharpens a hypothesis rather than confirming it ("Testing a hypothesis
    without a full re-run").

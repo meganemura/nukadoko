@@ -87,7 +87,7 @@ describe("a world nukadoko serves", () => {
       new RegExp(`^world default: serve \\d+\\.\\ds, http://localhost:${port} {2}\\(log ${path.relative(rootDir, dir).split(path.sep).join("\\/").replaceAll(".", "\\.")}/program\\.log\\)\\n$`),
     );
 
-    expect(await world.stop()).toBeNull();
+    expect(await world.stop()).toEqual({ exitedEarly: null, late: new Map() });
     expect(await answers(port)).toBe(false);
     expect(readFileSync(path.join(dir, "program.log"), "utf8")).toBe("$ node server.mjs\nlistening with token {{secret.WORLD_TOKEN}}\n");
     expect(world.record()).toEqual({
@@ -132,7 +132,7 @@ describe("a world nukadoko serves", () => {
     writeFileSync(path.join(rootDir, "brief.mjs"), `${SERVER}setTimeout(() => process.exit(7), 300);\n`);
     const world = await startOk(await starter().start("default", recipe({ ...SERVE, serve: { command: "node brief.mjs" } }), []));
     await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(await world.stop()).toBe("the program exited with code 7 during the pass; see worlds/default/program.log");
+    expect((await world.stop()).exitedEarly).toBe("the program exited with code 7 during the pass; see worlds/default/program.log");
   });
 });
 
@@ -215,7 +215,14 @@ describe("a world nukadoko does not serve", () => {
     const world = await startOk(
       await starter(progress).start("pr-12", recipe({ environments: { "pr-12": { url: ({ name }) => `https://${name}.preview.example` } } }, "pr-12"), []),
     );
-    expect(world.view).toEqual({ name: "pr-12", url: "https://pr-12.preview.example", env: {}, secrets: [{ name: "WORLD_TOKEN", value: expect.any(String) }], log: null });
+    expect(world.view).toEqual({
+      name: "pr-12",
+      url: "https://pr-12.preview.example",
+      env: {},
+      secrets: [{ name: "WORLD_TOKEN", value: expect.any(String) }],
+      log: null,
+      tracePrefix: expect.stringMatching(/^[0-9a-f]{8}$/),
+    });
     expect(progress.text()).toBe("");
     await world.stop();
     expect(world.record()).toEqual({
@@ -226,6 +233,8 @@ describe("a world nukadoko does not serve", () => {
       timings: { stop_ms: expect.any(Number) },
       log: null,
       error: null,
+      // nukadoko does not read the log of a program it did not start.
+      program_log: null,
     });
     expect(existsSync(path.join(runDir, "worlds", "pr-12", "program.log"))).toBe(false);
   });

@@ -3,7 +3,8 @@ import type { SecretSet } from "../secrets/types.js";
 // Responsibility: what the steps of a world see of it, as one plain value
 // that crosses to a `--concurrency` worker as JSON: its name, its base
 // URL, the env its processes got, the values made for it that every record
-// redacts, and its program log when nukadoko serves the program. Boundary:
+// redacts, the prefix of its trace ids, and its program log when nukadoko
+// serves the program. Boundary:
 // no process; starting and stopping the program is src/program/world.ts's.
 
 export interface WorldView {
@@ -22,6 +23,10 @@ export interface WorldView {
    * and writes what it prints there; `null` for a world it does not serve,
    * whose program's log nukadoko cannot read. */
   readonly log: string | null;
+  /** The eight hexadecimal characters every trace id of the world starts
+   * with (src/context/trace-context.ts), so every process that reads the
+   * program's log finds the same trace id in a line. */
+  readonly tracePrefix: string;
 }
 
 export function serializeWorldView(view: WorldView): string {
@@ -32,10 +37,17 @@ export function serializeWorldView(view: WorldView): string {
  * ago, so a value that does not read is a bug and throws. */
 export function parseWorldView(text: string): WorldView {
   const value = JSON.parse(text) as Partial<WorldView>;
-  if (typeof value.name !== "string" || typeof value.env !== "object" || !Array.isArray(value.secrets)) {
+  if (typeof value.name !== "string" || typeof value.env !== "object" || !Array.isArray(value.secrets) || typeof value.tracePrefix !== "string") {
     throw new Error(`not a world view: ${text.slice(0, 200)}`);
   }
-  return { name: value.name, url: value.url ?? undefined, env: value.env ?? {}, secrets: value.secrets, log: value.log ?? null };
+  return {
+    name: value.name,
+    url: value.url ?? undefined,
+    env: value.env ?? {},
+    secrets: value.secrets,
+    log: value.log ?? null,
+    tracePrefix: value.tracePrefix,
+  };
 }
 
 /** Sets the world's env on this process, for the steps and every child

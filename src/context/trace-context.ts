@@ -2,11 +2,23 @@ import { randomBytes } from "node:crypto";
 
 // Responsibility: the W3C trace context nukadoko puts on the requests a
 // step sends to the world (docs/spec.md "Trace context and the program's
-// log"): one trace id per scenario, one span id per step boundary, the
-// `traceparent` value they make, which URLs get one, and which lines of
-// the program's log belong to a step. Pure: no I/O and no state. observed.ts holds each boundary's
-// ids; channels.ts, http-log.ts, and browser-trace.ts put the header on a
-// request; program-log-slice.ts reads the log.
+// log"): one trace id per step boundary, a span id per request, the
+// `traceparent` value they make, which URLs get one, and which trace id a
+// line of the program's log carries. Pure: no I/O and no state.
+// observed.ts holds each boundary's trace id; channels.ts, http-log.ts,
+// and browser-trace.ts put the header on a request; program-log-slice.ts
+// reads the log.
+//
+// A line belongs to the step whose trace id it carries, wherever and
+// whenever it appears in the log: nothing about when the line was written
+// or read decides it, so a line that arrives after its step ended is still
+// that step's, and never the next step's. Every trace id of one world
+// starts with the same eight characters, made for that world, so the trace
+// id a line carries is the first place in it where those characters begin
+// 32 hexadecimal ones. That rule needs no list of the ids: a worker that
+// knows only its own steps' ids and the parent that knows them all read
+// the same id from the same line, so a line is never one step's in a
+// slice and another step's afterwards.
 //
 // Only the world's own origin gets the header. A request to another
 // origin is a third party's (a CDN, a payment provider), and a header it
@@ -22,21 +34,36 @@ import { randomBytes } from "node:crypto";
 /** The header's name, as W3C Trace Context writes it. */
 export const TRACEPARENT = "traceparent";
 
-/** A trace id is 32 lowercase hexadecimal characters, a span id 16, and
- * neither is all zeros, which W3C Trace Context reserves as invalid. */
-function nonZeroHex(bytes: number, random: (size: number) => Buffer): string {
+/** How many hexadecimal characters a world's trace id prefix holds. */
+export const TRACE_PREFIX_LENGTH = 8;
+
+const TRACE_ID_LENGTH = 32;
+
+function isHex(code: number): boolean {
+  return (code >= 48 && code <= 57) || (code >= 97 && code <= 102);
+}
+
+/** `bytes` random bytes as hexadecimal, drawn again while `whole(hex)` is
+ * all zeros, which W3C Trace Context reserves as an invalid id. */
+function nonZeroHex(bytes: number, random: (size: number) => Buffer, whole: (hex: string) => string = (hex) => hex): string {
   for (;;) {
     const hex = random(bytes).toString("hex");
-    if (!/^0+$/.test(hex)) return hex;
+    if (!/^0+$/.test(whole(hex))) return hex;
   }
 }
 
-/** A new trace id: one per scenario execution. */
-export function newTraceId(random: (size: number) => Buffer = randomBytes): string {
-  return nonZeroHex(16, random);
+/** A new world's trace id prefix: eight hexadecimal characters. */
+export function newTracePrefix(random: (size: number) => Buffer = randomBytes): string {
+  return random(TRACE_PREFIX_LENGTH / 2).toString("hex");
 }
 
-/** A new span id: one per step boundary. */
+/** A new trace id, one per step boundary: the world's prefix, then random
+ * hexadecimal characters to make 32. */
+export function newTraceId(prefix: string, random: (size: number) => Buffer = randomBytes): string {
+  return prefix + nonZeroHex((TRACE_ID_LENGTH - prefix.length) / 2, random, (hex) => prefix + hex);
+}
+
+/** A new span id: one per request a boundary stamps. */
 export function newSpanId(random: (size: number) => Buffer = randomBytes): string {
   return nonZeroHex(8, random);
 }
@@ -45,6 +72,21 @@ export function newSpanId(random: (size: number) => Buffer = randomBytes): strin
  * program that records traces records this one. */
 export function traceparentOf(traceId: string, spanId: string): string {
   return `00-${traceId}-${spanId}-01`;
+}
+
+/** The trace id `line` carries for the world whose ids start with
+ * `prefix`, in lowercase: the first place in the line, in either case,
+ * where the prefix begins 32 hexadecimal characters. `undefined` when no
+ * such place exists (module header). */
+export function traceIdIn(line: string, prefix: string): string | undefined {
+  const text = line.toLowerCase();
+  for (let at = text.indexOf(prefix); at !== -1; at = text.indexOf(prefix, at + 1)) {
+    if (at + TRACE_ID_LENGTH > text.length) return undefined;
+    let hex = true;
+    for (let index = at + prefix.length; index < at + TRACE_ID_LENGTH && hex; index += 1) hex = isHex(text.charCodeAt(index));
+    if (hex) return text.slice(at, at + TRACE_ID_LENGTH);
+  }
+  return undefined;
 }
 
 /** The origin of `url` (`http://localhost:41873`), or `undefined` for a
@@ -77,34 +119,12 @@ export function stampsUrl(origin: string, target: string, base?: string): boolea
   return world.hostname === "localhost" && url.hostname.endsWith(".localhost") && url.protocol === world.protocol && url.port === world.port;
 }
 
-/** The ids `sliceProgramLog` selects a step's lines by. */
-export interface SliceIds {
-  readonly traceId: string;
-  readonly spanId: string;
-  /** Every other span id this trace gave a boundary: the scenario's other
-   * steps and its hooks. */
-  readonly otherSpans: ReadonlySet<string>;
-}
-
-/** The lines of `lines` that belong to the step `ids` names, in order:
- * each line that carries its span id, and each line that carries the
- * trace id and no other span id of the trace. The second rule is for a
- * program that tags a line with the trace id alone; the caller passes
- * only the lines the program wrote while the step ran, so such a line is
- * this step's. A line with neither id is no step's: the program wrote it
- * for no request nukadoko sent, or it does not tag its lines. */
-export function sliceProgramLog(lines: readonly string[], ids: SliceIds): string[] {
-  return lines.filter((line) => {
-    if (line.includes(ids.spanId)) return true;
-    if (!line.includes(ids.traceId)) return false;
-    for (const other of ids.otherSpans) if (line.includes(other)) return false;
-    return true;
-  });
-}
-
-/** The complete lines of `text`. A last line with no line end was still
- * being written when the text was read, so it is no line yet. */
-export function completeLines(text: string): string[] {
-  const end = text.lastIndexOf("\n");
-  return end === -1 ? [] : text.slice(0, end).split("\n");
+/** The complete lines in `bytes`, decoded as UTF-8, and how many bytes
+ * they took. What follows the last line end is a line still being
+ * written, so it is left for the next read. A line end never falls inside
+ * a multi-byte character, so cutting there never splits one. */
+export function completeLines(bytes: Uint8Array): { readonly lines: string[]; readonly consumed: number } {
+  const end = bytes.lastIndexOf(0x0a);
+  if (end === -1) return { lines: [], consumed: 0 };
+  return { lines: Buffer.from(bytes.buffer, bytes.byteOffset, end).toString("utf8").split("\n"), consumed: end + 1 };
 }

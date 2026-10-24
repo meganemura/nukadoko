@@ -4,6 +4,8 @@ import { mkdirSync } from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { commandWords, type Command, type ProgramRecipe, type ProgramWorld } from "../config/program-schema.js";
+import { collectLateLines, type LateSlice, type TracedStep } from "../context/program-log-slice.js";
+import { newTracePrefix } from "../context/trace-context.js";
 import { windowsSpawnPlan } from "../context/windows-command.js";
 import type { RunWorld, RunWorldCommand } from "../record/run-result.js";
 import { redactString } from "../secrets/redact.js";
@@ -39,6 +41,12 @@ import type { WorldView } from "./world-view.js";
 // `taskkill /t /f`, the way `runCommand` already starts programs there
 // (src/context/windows-command.ts).
 //
+// When the world stops, after the program has, one pass over its log finds
+// the lines of each step that arrived after the step's record was written
+// (src/context/program-log-slice.ts), and counts the lines that carry any
+// trace id of the world, which is how the run tells a program that does
+// not tag its lines from one whose lines all came late.
+//
 // A program nukadoko started must not outlive nukadoko, however nukadoko
 // ends: a signal that arrives while a world is still starting, a step that
 // calls process.exit, or a crash. Every child this module starts is listed
@@ -47,13 +55,28 @@ import type { WorldView } from "./world-view.js";
 // (SIGKILL to the group, or a synchronous taskkill) instead of the stop's
 // SIGTERM and grace period: nothing would be left to wait out the grace.
 
+/** A step of the world's pass, as its record states it. */
+export interface WorldStep extends TracedStep {
+  /** How many requests it sent to the world with a `traceparent`. */
+  readonly stamped: number;
+}
+
+export interface WorldStop {
+  /** A sentence when the program had already exited during the pass,
+   * which explains a pass whose requests found nothing listening; `null`
+   * otherwise. */
+  readonly exitedEarly: string | null;
+  /** Each step's lines of the program's log that arrived after its record
+   * was written, by trace id. Empty when nukadoko did not read the log. */
+  readonly late: ReadonlyMap<string, LateSlice>;
+}
+
 export interface StartedWorld {
   readonly ok: true;
   readonly view: WorldView;
-  /** Stops the program and closes the log. Resolves with a sentence when
-   * the program had already exited during the pass, which explains a pass
-   * whose requests found nothing listening; `null` otherwise. */
-  stop(): Promise<string | null>;
+  /** Stops the program and closes the log, then finds the late lines of
+   * `steps`, the pass's steps (module header). */
+  stop(steps?: readonly WorldStep[]): Promise<WorldStop>;
   /** The world's run.json entry, as of now. */
   record(): RunWorld;
 }
@@ -122,6 +145,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       const dir = options.worldDir(name);
       mkdirSync(dir, { recursive: true });
       const token = randomBytes(16).toString("hex");
+      const tracePrefix = newTracePrefix();
       const worldSecrets: SecretSet = [{ name: "WORLD_TOKEN", value: token }];
       const allSecrets: SecretSet = [...secrets, ...worldSecrets];
       const log = openProgramLog(path.join(dir, "program.log"), allSecrets);
@@ -129,6 +153,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
       const timings: Partial<Record<"build_ms" | "prepare_ms" | "serve_ms" | "setup_ms" | "stop_ms", number>> = {};
       let url: string | undefined;
       let server: ServeProcess | undefined;
+      let programLog: RunWorld["program_log"];
 
       const record = (error: string | null): RunWorld => ({
         name,
@@ -138,6 +163,7 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         timings: { ...timings },
         log: log.written ? options.recordPath(log.path) : null,
         error: error === null ? null : redactString(error, allSecrets),
+        ...(programLog === undefined ? {} : { program_log: programLog }),
       });
       const run = (phase: RunWorldCommand["phase"], argv: readonly string[], env: NodeJS.ProcessEnv): Promise<void> => {
         commands.push({ phase, argv });
@@ -218,18 +244,36 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
         if (commands.length > 0 || recipe.setup !== undefined) {
           options.progress.write(`${readyLine(name, timings, url, log.written ? path.relative(options.rootDir, log.path) : null)}\n`);
         }
-        const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path };
+        const view: WorldView = { name, url, env: worldEnv, secrets: worldSecrets, log: server === undefined ? null : log.path, tracePrefix };
         const running = server;
+        // A world at a URL has a log nukadoko cannot read; a world with no
+        // URL sends nothing to stamp.
+        if (url !== undefined && running === undefined) programLog = null;
         return {
           ok: true,
           view,
-          async stop() {
+          async stop(steps) {
             const started = Date.now();
             const exitedEarly = running === undefined || running.exit === null ? null : `the program ${describeExit(running)} during the pass`;
             await running?.stop();
             log.close();
             timings.stop_ms = Date.now() - started;
-            return exitedEarly === null ? null : redactString(`${exitedEarly}; see ${options.recordPath(log.path)}`, allSecrets);
+            let late: ReadonlyMap<string, LateSlice> = new Map();
+            if (running !== undefined && steps !== undefined) {
+              const found = collectLateLines(log.path, tracePrefix, steps, allSecrets);
+              late = found.late;
+              const sum = (count: (step: WorldStep) => number): number => steps.reduce((total, step) => total + count(step), 0);
+              programLog = {
+                stamped: sum((step) => step.stamped),
+                lines: sum((step) => step.lines),
+                late: [...late.values()].reduce((total, slice) => total + slice.lines, 0),
+                tagged: found.tagged,
+              };
+            }
+            return {
+              exitedEarly: exitedEarly === null ? null : redactString(`${exitedEarly}; see ${options.recordPath(log.path)}`, allSecrets),
+              late,
+            };
           },
           record: () => record(null),
         };

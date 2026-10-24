@@ -63,17 +63,24 @@ and its log; each step record names its world in `world_name`.
 ## Each step's lines of the program's log
 
 Every request a step sends to the world's origin (through `fetch`,
-`node:http`, `request`, and a Chromium page) carries a W3C `traceparent`:
-one trace id per scenario, one span id per step. A request that sets its
-own keeps it. When the program writes that value into its log lines,
-each step record gets the lines its own requests caused in
-`program-log.txt` beside it, counted in `observed.program_log`
-(`{ lines, file, stamped }`). Read that file first when a step against
-the program fails: it holds what the server did for that step.
+`node:http`, `request`, and a Chromium page) carries a W3C `traceparent`
+with the step's own trace id. A request that sets its own keeps it. When
+the program writes the trace id into its log lines, each step record
+gets the lines that carry its trace id in `program-log.txt` beside it,
+counted in `observed.program_log` (`{ trace_id, lines, file, stamped }`).
+Read that file first when a step against the program fails: it holds
+what the server did for that step. A line that arrived after the step
+ended is still that step's, in `program-log-late.txt` beside the record;
+the run summary names it on the step's line.
 
-`lines: 0` with `stamped` above 0 means the program does not tag its
-lines, and the run summary says so once per world. For Rails, send the
-test log to stdout and tag it, in `config/environments/test.rb`:
+`lines: 0` with `stamped` above 0 says only that no line carried the
+step's trace id by the time its record was written. Read the run
+summary's line for the world, decided from the whole log once the world
+stopped: "carries no trace ids" means the program does not tag its
+lines; "arrived after the steps ended" means it tags them but its output
+is buffered on a pipe, which `STDOUT.sync = true` fixes in Ruby and
+`PYTHONUNBUFFERED=1` in Python. For Rails, send the test log to stdout
+and tag it, in `config/environments/test.rb`:
 
 ```ruby
 config.logger = ActiveSupport::TaggedLogging.logger($stdout) if ENV["RAILS_LOG_TO_STDOUT"].present?

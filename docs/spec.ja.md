@@ -2218,7 +2218,7 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
     "timings": { "build_ms": 2104, "prepare_ms": 412, "serve_ms": 1893, "stop_ms": 37 },
     "log": "worlds/default/program.log",
     "error": null,
-    "program_log": { "stamped": 12, "lines": 31 }
+    "program_log": { "stamped": 12, "lines": 31, "late": 2, "tagged": 33 }
   }
 ]
 ```
@@ -2230,8 +2230,11 @@ world の URL は `page`、`context`、`pageAs`、`request` の base URL であ�
   `build_ms`、`prepare_ms`、`serve_ms`、`setup_ms`、`stop_ms` です。
 - `log` は run ディレクトリからの相対パスで、world が何のコマンドも実行しなかったときは `null` です。
 - `error` はプログラムが起動しなかった理由で、起動したときは `null` です。
-- `program_log` は、world の step たちがプログラムのログの中に見つけた自分のリクエストの分を合計します。
-  `stamped` は `traceparent` を運んで world へ送られたリクエストの数で、`lines` は step の切り出しに入った行の数です(「trace context とプログラムのログ」を参照)。
+- `program_log` は、world が止まるときに数えます(「trace context とプログラムのログ」を参照)。
+  `stamped` は step たちが `traceparent` を付けて world へ送ったリクエストの数です。
+  `lines` は step の切り出しに入った行の数です。
+  `late` は、step の trace id を持ち、その record を書いたあとに届いた行の数です。
+  `tagged` は、hook の分も含めて、world の trace id を持つログの行すべての数です。
   `url` の world では `null` で、URL の無い world と起動しなかった world には現れません。
 
 各 step record は、自分の world を `world_name` で名指します。
@@ -2293,8 +2296,9 @@ nukadoko は自分が動かしていないプログラムのログを読めな�
 
 step が world へ送るすべての HTTP リクエストは W3C の `traceparent` ヘッダを運ぶので、プログラム自身のログが、どの step がそれを送ったかを言えます。
 値は `00-<trace id>-<span id>-01` です。
-trace id は scenario の実行 1 回につき 1 つ(`nuka do` の呼び出し 1 回につき 1 つ)で、span id は step 1 つにつき 1 つです。
-hook は専用の span id を持ち、どの step の切り出しもそれを含みません。
+trace id は step 1 つにつき 1 つで、span id はリクエスト 1 つにつき 1 つです。
+1 つの world の trace id はどれも、その world のために作った同じ 16 進数 8 文字で始まります。
+hook は専用の trace id を持つので、その行はどの step のものにもなりません。
 
 - ヘッダは、`fetch`、`node:http`、`node:https`、`request` fixture、`page.request`、`context.request` を通るリクエストと、Chromium の page のドキュメント、`fetch` の呼び出し、XMLHttpRequest、EventSource に付きます。
 - 付くのは、world のオリジン、つまり URL のスキーム、ホスト、ポートへのリクエストだけです。
@@ -2326,36 +2330,58 @@ world は単純な CORS リクエストにだけ答えます。
 代わりに nukadoko が使う DevTools Protocol の接続は、画像を 1 回だけ読み込み、クロスオリジンの fetch をプリフライトなしで送り、page の cookie を保ち、step 自身が足した route を動かしたままにしました。
 ヘッダを付けるリクエスト 1 つにつき 2 から 3 ms かかるので、画像、スクリプト、スタイルシートには付けません。
 
-nukadoko がプログラムを serve するとき、各 step record は、自分のリクエストが生んだ `program.log` の行を受け取ります。
-step の実行中にプログラムが書いた行のうち、step の span id を持つ行と、scenario の trace id を持ちほかの step の span id を持たない行です。
-2 つ目の規則は、行に trace id だけを付けるプログラムのためのものです。
+nukadoko がプログラムを serve するとき、各 step record は、step の trace id を持つ `program.log` の行を受け取ります。
+行は、ログのどこにいつ現れても、その行が持つ trace id の step のものです。
+行が持つ trace id は、world の 8 文字が 16 進数 32 文字を始める、行の中で最初の場所です(大文字と小文字は区別しません)。
+そのため、行は多くとも 1 つの step のものです。
+行をいつ書いたか、いつ読んだかは何も決めません。
+そのため、OpenTelemetry のログブリッジのように trace id を自分の span id と一緒にログに書くサーバも、`traceparent` を丸ごと書くサーバと同じように読めます。
+前の step のリクエストの行が、あとの step に入ることもありません。
 行は redact されて step record の隣の `program-log.txt` に入り、`observed.program_log` がそれを数えます:
 
 ```json
-"program_log": { "lines": 33, "file": "program-log.txt", "stamped": 3 }
+"program_log": { "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "lines": 33, "file": "program-log.txt", "stamped": 3 }
 ```
 
-- `lines` は切り出しが持つ行の数で、step の id を持つ行が無いときは 0 です。
+- `trace_id` は step の trace id です。
+  step が world へ送ったリクエストはどれもこれを運びます。
+- `lines` は、step の record を書いたときにそれを持っていた行の数で、無ければ 0 です。
 - `file` は、`lines` が 0 のとき `null` です。
 - `stamped` は、step が `traceparent` を付けて world へ送ったリクエストの数です。
-- `truncated: true` は、step の実行中にプログラムが 16 MiB を超えて書いたときに現れます。
-  そのとき切り出しは、最初の 16 MiB から取ります。
+- `truncated: true` は、step の行が 16 MiB を超えたときに現れます。
+  そのときファイルはその大きさまでの行を持ち、`lines` はすべてを数えます。
 
-step は、自分の実行中にプログラムが書いたものだけを読みます。
-読む範囲は、step が始まったときのログのサイズから始まります。
-`--concurrency` のもとでは親がログを書き、各 worker がそれを読みます。
-scenario ごとの行は trace id が分けます。
 行は、step がレスポンスを読んだあとにログに届くことがあります。
 プログラムはその行を答えるころに書き、行はパイプを通って来るからです。
 そのため、リクエストに `traceparent` を付けた step は、最後に付けたリクエストとログの最後の書き込みのうち遅いほうから、ログが 30 ms 静かになるまで待ちます。
-待つのは全部で 300 ms までです。
+待つのは全部で 300 ms までで、そのあと、それまでに step の trace id を持つ行から切り出しを書きます。
 何にも付けなかった step は待ちません。
+`--concurrency` のもとでは親がログを書き、各 worker が自分の step のためにそれを読みます。
 
-行に何も付けないプログラムでは、どの step の切り出しも空になります。
-run サマリは world ごとに一度そう言うので、読み手は理由がわかります:
+step の trace id を持ち、step の切り出しを書いたあとに届いた行も、その step のものです。
+ボディをストリームしたあとにリクエストの最後の行を書くサーバや、リクエストが動かしたままにした仕事の行です。
+step の record は確定していて書き直しません。
+step が終わったあとに始まったリクエストと同じ規則です(「Records」を参照)。
+world が止まるとき、プログラムが止まったあとに、`program.log` 全体を 1 回読んでそうした行を見つけ、redact して step record の隣の `program-log-late.txt` に書きます。
+`run.json` の step は `"program_log_late": { "lines", "file" }` を持ち、16 MiB を超えたときは `"truncated": true` も持ちます。
+run サマリは、「Unmeasured actions」の step の行で、その行たちを一度名指します。
+`nuka do` は同じファイルを書き、stderr の `program-log-late` の注記でそれを名指します。
+
+world が止まるときには、run サマリの world の行も、ログ全体から決めます。
+world の trace id を持つ行が 1 つも無いログは、行に何も付けていません。
+サマリは一度そう言うので、読み手はどの切り出しも空である理由がわかります:
 
 ```text
 - program log of world default: carries no trace ids, so each step's slice of it is empty
+```
+
+step たちの行がすべて step が終わったあとに届いたログは、行に遅れて id を付けています。
+よくある原因は、パイプの上でバッファされた出力です。
+Ruby と Python は、標準出力が端末でないときにそれをバッファし、ブロックごとに、あるいはプログラムが止まるときに書きます。
+サマリはこう言います:
+
+```text
+- program log of world default: its lines for the steps arrived after the steps ended, so each step's slice of it is empty and the lines are in each step's `program-log-late.txt`. The usual cause is output buffered on a pipe: set `STDOUT.sync = true` in Ruby, or `PYTHONUNBUFFERED=1` for Python.
 ```
 
 `url` の world には、nukadoko が読めるログがありません。
@@ -2817,6 +2843,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   `from` で前の結果を読んで失敗した step は `used` を持ち、各 producer の step、record、読んだ結果を載せます。
   claim step は、その step record と同じ `claims`、`observation`、`attempts` を持ちます(「Claims」を参照)。
   そのため、成り立たない claim は step record を開かずに読めます。
+  record を書いたあとに届いたプログラムのログの行を持つ step は、`program_log_late` を持ちます(「テスト対象のプログラム」を参照)。
   JSON が 4096 バイトを超える結果は、代わりにプレビューになり、`truncated: true` と、値全体の大きさである `result_bytes` を持ちます。
   object のプレビューは、収まるかぎり、最上位の数、真偽値、null と、最上位の各文字列の先頭 1024 文字を残すので、process の `exitCode` と `stderr` の始まりは残ります。
   値全体は producer の `record` にあります。
@@ -3197,7 +3224,7 @@ scenario record は独立したファイルではなく、その run の `run.js
   step のコードが自分で作った request context(`playwright` の `request.newContext()` で、compat の World が作ることがあります)は step 自身のプロセスから送るので、そのリクエストは `via: "node:http"` か `"node:https"` の行です。
   step の record を書いたあとに step のコードが始めたリクエストは、ここでは数えません。
   その行は、`"after_step_end": true` を付けて、その step の http.jsonl に書かれます。
-- `observed.program_log` は、プログラムのログのうち step の切り出しで、`{ "lines", "file", "stamped" }` です。
+- `observed.program_log` は、プログラムのログのうち step の切り出しで、`{ "trace_id", "lines", "file", "stamped" }` です。
   `url` の world では、nukadoko がそのログを読まないので `null` です。
   run に world の URL が無いときは現れません(「テスト対象のプログラム」、「trace context とプログラムのログ」を参照)。
 - `observed.files`(実行が何も変えなかったときは `null`)は、step が変えたパスを並べ替えて並べます。
@@ -3518,7 +3545,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
   断定は終了コードのものです。
   そのため、すべての scenario が green でも AfterAll が失敗すれば `failed` と読め、失敗がどの scenario の外で起きたかを述べる 1 文が付きます。
 - 条件。
-  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world と、ログが trace id を持たなかった world ごとの 1 行(「テスト対象のプログラム」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
+  短いコミット sha と未コミットの変更があったかどうか(`commit` から読み、無ければ unknown)、各 environment とその target version、プログラムのログを読まなかった world、ログが trace id を持たなかった world、step たちの行に step が終わったあとにだけ id を付けた world ごとの 1 行(「テスト対象のプログラム」を参照)、scenario が起動したすべてのブラウザ(無ければ none launched)、`selection`(`partial` は、行の対象がそのファイルの他の scenario を外したことを言います)、`nuka run --no-check` のときの `check: skipped`(check が動いたときは何もなし)、nukadoko のバージョン、run id、開始と終了の時刻です。
 - `--since` のときは「Criteria since `<ref>`」。
   unchanged、changed、new の scenario の数、消えた受け入れ基準の数(ambiguous か比べられなかったものがあればその数も)、比べた対象と step ファイル、変わった step ファイル、unchanged ではない各 scenario と消えた各受け入れ基準の行を `gherkin` のブロックで、そして変わった各 step ファイルの下にそれを名指すすべての scenario を載せます。
 - feature ファイルごとの表(パス順)。
@@ -3530,8 +3557,8 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 - 「Scenarios with no claim」。
   要素が `judged_by` を持つ scenario ごとに 1 行で、その場所、名前、何が判定したか(compat step だけか、何もないか)を載せます。
 - 「Unmeasured actions」。
-  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、または record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、step ごとに 1 行を載せます。
-  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es)`、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
+  step がツールには見えたが計測できないこと(`observed.unmeasured`)をしたとき、record を書いたあとにリクエストか `runCommand` のプロセスを始めたとき(`after_step_end`)、または step のあとに届いたプログラムのログの行があるとき(`program_log_late`)、step ごとに 1 行を載せます。
+  行は、その場所、テキスト、run に environment が 2 つ以上あればその environment、最大 3 つの操作と残りの数、始めたときは `started after the step ended: <n> request(s) in http.jsonl, <n> process(es)`、world の停止がそうした行を見つけたときは `<n> line(s) of the program's log after the step ended, in program-log-late.txt`(「テスト対象のプログラム」を参照)、操作に `child_process` があれば `runCommand` でプロセスを起動するようにという助言、そして record のパスを持ちます。
   どちらもない step は何も加えず、`--repeat` のときは同じ行を持つ同じ step が 1 行になります。
 - 「Findings」。
   失敗した scenario 以外の所見(書けなかったファイルや失敗した teardown などの警告)を run が出したとき、重大度、code、場所、メッセージを 1 件 1 行で載せます。

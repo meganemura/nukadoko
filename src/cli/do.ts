@@ -12,7 +12,7 @@ import {
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { loadProgram } from "../config/load-program.js";
-import { createWorldStarter, type StartedWorld } from "../program/world.js";
+import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { createStepContext, finalizeOpenRequests, installChannelPatches, type DisposeResult } from "../context/create-context.js";
 import { EnvFileUnreadableError, loadEnvFiles } from "../context/env.js";
@@ -182,6 +182,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
   // Set once the head world runs, so the `finally` below stops it on every
   // path out, a throw included.
   let stopWorld: (() => Promise<void>) | undefined;
+  // The step's slice of the program's log, once its record's `observed`
+  // is read, so the world's stop can find its lines that came later. A
+  // signal before then stops the world with no step to look for.
+  let tracedSteps: WorldStep[] = [];
 
   try {
     let vocabulary;
@@ -424,8 +428,13 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       // The program outlives the fixtures, whose teardown may still talk
       // to it, on the signal path as on the normal one.
       stopWorld = runOnce(async () => {
-        const exitedEarly = await started.stop();
+        const { exitedEarly, late } = await started.stop(tracedSteps);
         if (exitedEarly !== null) warnings("program-exited").write(`world ${started.view.name}: ${exitedEarly}\n`);
+        for (const slice of late.values()) {
+          const where = slice.file === null ? "they could not be written beside the record" : `see ${path.relative(rootDir, path.join(evidenceDir, slice.file))}`;
+          const message = `world ${started.view.name}: ${slice.lines} line(s) of the program's log carry the step's trace id and arrived after the step ended; ${where}`;
+          stderr.write(formatFinding(withHint({ severity: "note", code: "program-log-late", message })));
+        }
       });
     }
     const restoreEnv = world === null ? () => {} : applyWorldEnv(world.view.env);
@@ -436,6 +445,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       config,
       baseURL: world?.view.url,
       programLog: world?.view.log,
+      tracePrefix: world?.view.tracePrefix,
       evidenceDir,
       rootDir,
       env: stepEnv,
@@ -590,6 +600,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     // `observed` below still records what actually happened, for a report
     // to catch a wrong declaration after the fact.
     const observed = await contextHandle.observedSnapshot();
+    if (observed.program_log !== undefined && observed.program_log !== null) {
+      const slice = observed.program_log;
+      tracedSteps = [{ traceId: slice.trace_id, lines: slice.lines, stamped: slice.stamped, dir: evidenceDir }];
+    }
     // `ctx.section` works the same under `nuka do` as under `nuka run` —
     // there is no scenario/pickle
     // concept here to special-case, so this is read the same way

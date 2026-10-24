@@ -9,7 +9,7 @@ import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig, resolveConfigFileName } from "../config/load-config.js";
 import { loadProgram } from "../config/load-program.js";
-import { createWorldStarter, type StartedWorld } from "../program/world.js";
+import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
 import { loadEnvFiles } from "../context/env.js";
 import { createTraceVersionWarner } from "../context/trace-actions.js";
@@ -46,7 +46,7 @@ import { exitCodeForSignal, installProcessSignalHandlers, runOnce, type ProcessS
 import { generateRunId } from "../run/run-id.js";
 import { findRepeatedScenarioPrefixes } from "../run/repeated-prefix.js";
 import { renderRunSummary, writeRunSummaryFiles } from "../run/run-summary.js";
-import { buildRunScenario, gherkinStepLines, pickleStepLines, withProgramLog } from "../run/run-document.js";
+import { buildRunScenario, gherkinStepLines, pickleStepLines } from "../run/run-document.js";
 import { RUN_FILE_DIRS, relativeToRun, runRelativeDir, stepRecordRelativeDir } from "../record/state-layout.js";
 import { readStepRecordsForScenario } from "../report/step-records.js";
 import { readOwnVersion } from "../version.js";
@@ -661,26 +661,45 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       progress,
     });
     const worlds: RunWorld[] = [];
-    // Whether nukadoko read each started world's program log, by name: a
-    // world it serves, not one at a `url`.
-    const readsProgramLog = new Map<string, boolean>();
     // Starts the pass's world, or reports why it did not start. `null`
     // when the tree has no program file: the pass runs with no world.
     const startWorld = async (condition: Condition): Promise<StartedWorld | "failed" | null> => {
       if (condition.resolvedEnv.program === null) return null;
       const started = await worldStarter.start(condition.resolvedEnv.name, condition.resolvedEnv.program, condition.secrets);
-      if (started.ok) {
-        readsProgramLog.set(started.view.name, started.view.log !== null);
-        return started;
-      }
+      if (started.ok) return started;
       worlds.push(started.record());
       warn({ severity: "failed", code: "program-start-failed", message: started.message });
       return "failed";
     };
+    // Stops the pass's world. Every scenario of the pass has its entry by
+    // now, so the stop can find each step's lines of the program's log that
+    // arrived after its record was written, and those entries say so.
     const stopWorld = async (world: StartedWorld): Promise<void> => {
-      const exitedEarly = await world.stop();
+      const name = world.view.name;
+      const steps: WorldStep[] = runScenarios
+        .filter((scenario) => scenario.environment === name)
+        .flatMap((scenario) =>
+          scenario.steps.flatMap((step) => {
+            const slice = step.observed?.program_log;
+            if (slice === undefined || slice === null || step.record === null) return [];
+            return [{ traceId: slice.trace_id, lines: slice.lines, stamped: slice.stamped, dir: path.join(runDirAbsolute, step.record) }];
+          }),
+        );
+      const { exitedEarly, late } = await world.stop(steps);
       worlds.push(world.record());
-      if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${world.view.name}: ${exitedEarly}` });
+      if (late.size > 0) {
+        for (const [index, scenario] of runScenarios.entries()) {
+          if (scenario.environment !== name) continue;
+          runScenarios[index] = {
+            ...scenario,
+            steps: scenario.steps.map((step) => {
+              const found = step.observed?.program_log ? late.get(step.observed.program_log.trace_id) : undefined;
+              return found === undefined ? step : { ...step, program_log_late: found };
+            }),
+          };
+        }
+      }
+      if (exitedEarly !== null) warn({ severity: "warning", code: "program-exited", message: `world ${name}: ${exitedEarly}` });
     };
     const git = await probeGitState(rootDir);
     // Under `--since`, each selected scenario's criteria and each step
@@ -870,7 +889,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           base_url: worlds.find((world) => world.name === condition.resolvedEnv.name)?.url ?? null,
         })),
         // Each world's record is redacted with its own values already.
-        worlds: worlds.map((world) => withProgramLog(world, readsProgramLog.get(world.name), runScenarios)),
+        worlds,
         selection,
         check: options.check ? "ran" : "skipped",
         counts: countScenarios(runScenarios, verdicts),

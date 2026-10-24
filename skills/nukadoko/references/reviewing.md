@@ -55,11 +55,12 @@ What each part of `observed` says:
   its file. A body marked `incomplete` was still arriving when nukadoko
   stopped waiting; one with an `error` failed on its own. A line with a
   `traceparent` went to the world, and names the ids its log lines carry.
-- `program_log` counts the lines of the program's log that the step's
-  own requests caused, in `program-log.txt` beside the record: what the
-  server did for this step. `lines: 0` with `stamped` above 0 means the
-  program does not tag its lines with the request's `traceparent`
-  (`program.md`); `null` means the world runs at a `url`.
+- `program_log` counts the lines of the program's log that carry the
+  step's trace id, in `program-log.txt` beside the record: what the
+  server did for this step. Lines that arrived after the step ended are
+  in `program-log-late.txt`, and the run summary names them. `lines: 0`
+  with `stamped` above 0 is explained by the run summary's line for the
+  world (`program.md`); `null` means the world runs at a `url`.
 - `files` lists the paths the step changed in a scratch directory or
   wrote through `node:fs`, each with its content after the step. A file
   the step asked Playwright to write (a screenshot saved to a path, a

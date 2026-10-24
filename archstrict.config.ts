@@ -196,6 +196,8 @@ export default {
         "run-command.ts",
         "windows-command.ts",
         "trace-actions.ts",
+        "program-log-slice.ts",
+        "trace-context.ts",
         "used.ts",
       ],
     },
