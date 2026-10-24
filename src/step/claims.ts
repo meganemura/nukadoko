@@ -186,7 +186,10 @@ class InvalidClaimError extends Error {}
 // A value from the table is compared with `equal` alone. "no item is
 // unpaid" read as `at-least 0`, or "the cart is empty" read as
 // `not-equal []`, would hold for nearly anything, and the word gives
-// the reader no way to see that.
+// the reader no way to see that. The one exception is the fixed word
+// `not` right before the table word: "the list is not empty" says
+// `not-equal []`, and then `not-equal` is the only compare, since
+// `equal []` would claim the opposite of the line.
 
 /** The values a word fixes, compared case-insensitively. */
 export const LITERAL_WORDS: Readonly<Record<string, readonly ClaimLiteral[]>> = {
@@ -202,16 +205,32 @@ function normalizedWord(word: string): string {
   return word.replace(EDGE_PUNCTUATION, "");
 }
 
+/** One word of a pattern: its text with edge punctuation removed, and
+ * whether a matching sentence always contains it. */
+interface PatternWord {
+  readonly text: string;
+  readonly fixed: boolean;
+}
+
 /** The words of `pattern` a matching sentence always contains, in order,
  * with edge punctuation removed. A word that holds a capture, an optional
  * group, or an alternation is left out. Pure. */
 export function fixedWords(pattern: string): readonly string[] {
-  const words: string[] = [];
+  return patternWords(pattern)
+    .filter((word) => word.fixed)
+    .map((word) => word.text);
+}
+
+/** Every word of `pattern` in order, a word that is not fixed included
+ * (its text may be empty: a capture alone), so a caller can tell two fixed
+ * words that sit side by side from two with a capture between them. */
+function patternWords(pattern: string): readonly PatternWord[] {
+  const words: PatternWord[] = [];
   let word = "";
   let fixed = true;
   const end = (): void => {
     const normalized = normalizedWord(word);
-    if (fixed && normalized.length > 0) words.push(normalized);
+    if (!fixed || normalized.length > 0) words.push({ text: normalized, fixed });
     word = "";
     fixed = true;
   };
@@ -276,21 +295,30 @@ function isRunOf(words: readonly string[], text: string): boolean {
 }
 
 /** How a pattern states a literal: `words` as the record names them
- * (`literal:<words>`), and `byTable` when a word of the table fixes the
- * value rather than the literal's own text being the words. */
+ * (`literal:<words>`), `byTable` when a word of the table fixes the
+ * value rather than the literal's own text being the words, and, for a
+ * value the table fixes, the one compare it takes: `not-equal` when the
+ * fixed word right before the table word is `not`, `equal` otherwise.
+ * `compare` is `null` for a literal the pattern's own words are. */
 export interface LiteralStatement {
   readonly words: string;
   readonly byTable: boolean;
+  readonly compare: "equal" | "not-equal" | null;
 }
 
 /** How `pattern` states `literal`, or `null` when it does not. Pure. */
 export function literalStatement(pattern: string, literal: unknown): LiteralStatement | null {
-  const words = fixedWords(pattern);
+  const all = patternWords(pattern);
+  const words = all.filter((word) => word.fixed).map((word) => word.text);
   const text = literalText(literal);
-  if (text !== null && text.length > 0 && isRunOf(words, text)) return { words: text, byTable: false };
-  for (const word of words) {
-    const values = LITERAL_WORDS[word.toLowerCase()];
-    if (values?.some((value) => sameLiteral(literal, value))) return { words: word, byTable: true };
+  if (text !== null && text.length > 0 && isRunOf(words, text)) return { words: text, byTable: false, compare: null };
+  for (const [index, word] of all.entries()) {
+    if (!word.fixed) continue;
+    const values = LITERAL_WORDS[word.text.toLowerCase()];
+    if (!values?.some((value) => sameLiteral(literal, value))) continue;
+    const before = index > 0 ? all[index - 1]! : null;
+    const negated = before !== null && before.fixed && before.text.toLowerCase() === "not";
+    return { words: word.text, byTable: true, compare: negated ? "not-equal" : "equal" };
   }
   return null;
 }
@@ -307,7 +335,7 @@ export function literalStatementOfAll(patterns: readonly string[], literal: unkn
   if (patterns.length === 0) return null;
   const stated = patterns.map((pattern) => literalStatement(pattern, literal));
   if (!stated.every((statement) => statement !== null)) return null;
-  return { words: stated[0]!.words, byTable: stated.some((statement) => statement!.byTable) };
+  return { words: stated[0]!.words, byTable: stated.some((statement) => statement!.byTable), compare: stated[0]!.compare };
 }
 
 /** The words that state `literal` in every pattern, or `null`. Pure. */
@@ -466,6 +494,7 @@ function checkExpected(label: string, expected: unknown, compare: unknown, shape
         `${label}.expected is the boolean ${String(literal)}, and its actual comes from observe. A boolean computed by observe is a judgment made in code: return the thing measured (a count, a text, a list) and let the claim compare it`,
       );
     }
+    const statements = shape.patterns.map((pattern) => literalStatement(pattern, literal));
     const statement = literalStatementOfAll(shape.patterns, literal);
     if (statement === null) {
       const where =
@@ -476,9 +505,13 @@ function checkExpected(label: string, expected: unknown, compare: unknown, shape
         `${label}.expected is the literal ${describe(literal)}, and ${where}. Put the value in the sentence, as fixed words or as a capture the claim names`,
       );
     }
-    if (statement.byTable && compare !== "equal") {
+    // Every pattern a line may bind has to allow the compare: a step whose
+    // patterns say "is empty" and "is not empty" can claim neither.
+    for (const stated of statements) {
+      if (stated === null || stated.compare === null || stated.compare === compare) continue;
+      const words = stated.compare === "not-equal" ? `words "not ${stated.words}" rule out` : `word "${stated.words}" fixes`;
       throw new InvalidClaimError(
-        `${label}.expected is the literal ${describe(literal)}, which the word "${statement.words}" fixes, and ${label}.compare is ${describe(compare)}. A value a word fixes is compared with equal alone: another compare against it holds for nearly anything, and the word does not show it`,
+        `${label}.expected is the literal ${describe(literal)}, which the ${words}, and ${label}.compare is ${describe(compare)}. A value a word fixes is compared with equal alone, or with not-equal alone right after the word "not" ("is not empty"): another compare against it holds for nearly anything, and the word does not show it`,
       );
     }
     return;

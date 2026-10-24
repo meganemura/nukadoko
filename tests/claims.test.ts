@@ -538,18 +538,31 @@ describe("the literal rule, exactly", () => {
       expect(literalStatedBy(pattern, run.join(" "))).toBe(run.join(" "));
     }));
 
-  it("accepts a value the word table fixes with equal, and refuses it with every other compare", () =>
+  it("accepts a value the word table fixes with equal alone, and with not-equal alone when the fixed word right before it is not", () =>
     hegel.test((tc) => {
       const [word, values] = tc.draw(gs.sampledFrom(Object.entries(LITERAL_WORDS)));
       const literal = tc.draw(gs.sampledFrom(values));
-      const pattern = tc.draw(gs.sampledFrom([`${word} item is left`, `the list is ${word}`]));
+      // A "not" that a capture or an optional group separates or makes
+      // optional is not the line saying "not": those patterns take equal.
+      const negated = tc.draw(gs.booleans());
+      const pattern = negated
+        ? tc.draw(gs.sampledFrom([`the list is not ${word}`, `NOT ${word} is left`, `it is not, ${word}`]))
+        : tc.draw(gs.sampledFrom([`${word} item is left`, `the list is ${word}`, `the list is not {x:string} ${word}`, `the list is (not) ${word}`, `not one is ${word}`]));
+      const allowed = negated ? "not-equal" : "equal";
       const compare = tc.draw(gs.sampledFrom(ALL_COMPARES));
       const problem = claimsProblem([{ actual: "result", compare, expected: { literal } }], literalShape(pattern));
-      if (compare === "equal") expect(problem).toBeNull();
+      if (compare === allowed) expect(problem).toBeNull();
       else expect(problem).toBe(
-        `claims[0].expected is the literal ${JSON.stringify(literal)}, which the word "${word}" fixes, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone: another compare against it holds for nearly anything, and the word does not show it`,
+        `claims[0].expected is the literal ${JSON.stringify(literal)}, which the ${negated ? `words "not ${word}" rule out` : `word "${word}" fixes`}, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it`,
       );
     }));
+
+  it("refuses a table literal under every compare when one pattern says the word and another says not the word", () => {
+    const shape = { ...literalShape("the list is empty"), patterns: ["the list is empty", "the list is not empty"] };
+    for (const compare of ["equal", "not-equal"] as const) {
+      expect(claimsProblem([{ actual: "result", compare, expected: { literal: [] } }], shape)).not.toBeNull();
+    }
+  });
 });
 
 describe("where", () => {

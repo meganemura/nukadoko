@@ -20,7 +20,8 @@ just until 0.1.
   fixed words state (`{ literal }`), or a second reading (`{ observe }`).
   A literal that is not exactly a run of the pattern's own words, or `0`,
   `""`, or `[]` for `no`, `none`, `nothing`, or `empty` (compared with
-  `equal` only), is refused at import, and so is a boolean literal
+  `equal` only, or with `not-equal` only right after the fixed word
+  `not`, as in "the list is not empty"), is refused at import, and so is a boolean literal
   against a value `observe` computed. So is an args schema that rewrites
   a value a claim reads (`z.coerce`, a transform, a preprocess, a pipe,
   `trim` and the other overwrite checks, `catch`, a default or a

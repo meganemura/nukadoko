@@ -1689,7 +1689,11 @@ ones nothing validated.
   value from the table is compared with `equal` alone: "no item is
   unpaid" read as `at-least 0`, or "the cart is empty" read as
   `not-equal []`, holds for nearly anything, and the word does not show
-  it. A word inside a capture, an optional group,
+  it. The one exception is the fixed word `not` right before the table
+  word: "the list is not empty" claims `not-equal []`, and then
+  `not-equal` is the only compare, since `equal []` would claim the
+  opposite of the line. A `not` with a capture between it and the word,
+  or inside an optional group, does not count. A word inside a capture, an optional group,
   or an alternation is not fixed, since a line may not say it, and a step
   with several patterns needs every pattern to state the literal. Anything
   else is refused at import, naming the pattern. `Then the command

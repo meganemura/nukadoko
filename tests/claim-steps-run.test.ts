@@ -806,7 +806,29 @@ export default defineStep({
     });
     const checked = await cli(rootDir, ["check", "features/t.feature"]);
     expect(checked.stdout + checked.stderr).toContain(
-      `defineStep claims[0].expected is the literal ${literal}, which the word "${word}" fixes, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone: another compare against it holds for nearly anything, and the word does not show it.`,
+      `defineStep claims[0].expected is the literal ${literal}, which the word "${word}" fixes, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it.`,
+    );
+  });
+
+  it("claims \"the cart is not empty\" with not-equal, and refuses equal against it", async () => {
+    const step = (compare: string) => `import { defineStep, z } from "nukadoko";
+import answer from "./the-app-answers.ts";
+export default defineStep({
+  pattern: "the cart is not empty",
+  args: z.object({ cart: answer.returns.shape.cart }),
+  from: { cart: [answer, "cart"] },
+  claims: [{ actual: "cart.items", compare: "${compare}", expected: { literal: [] } }],
+});
+`;
+    const lines = feature("When the app answers", "Then the cart is not empty");
+    const held = await project({ "features/steps/the-cart-is-not-empty.ts": step("not-equal"), "features/t.feature": lines });
+    expect((await cli(held, ["run", "features/t.feature"])).exitCode).toBe(0);
+    expect(lastClaimStep(held).claims[0]).toMatchObject({ compare: "not-equal", expected: [], expected_from: "literal:empty", outcome: "held" });
+    const refused = await project({ "features/steps/the-cart-is-not-empty.ts": step("equal"), "features/t.feature": lines });
+    const checked = await cli(refused, ["check", "features/t.feature"]);
+    expect(checked.exitCode).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain(
+      `defineStep claims[0].expected is the literal [], which the words "not empty" rule out, and claims[0].compare is "equal". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it.`,
     );
   });
 });

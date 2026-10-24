@@ -53,9 +53,9 @@ Pick the source from the sentence; the record names it in `expected_from`.
 - **The pattern's fixed words state it** ("is refused", "exits 0", "holds
   no items"): `expected: { literal: "refused" }`. The literal is exactly
   the pattern's own words, or `0`, `""`, or `[]` for `no`, `none`, or
-  `nothing` (`""` or `[]` for `empty`), and a value one of those words
-  fixes takes `compare: "equal"` only; any other literal is refused at
-  import. `Then the command succeeds` cannot claim `0`: write `exits 0`.
+  `nothing` (`""` or `[]` for `empty`) with `compare: "equal"` only, or
+  `"not-equal"` only right after the fixed word `not` ("is not empty").
+  Any other literal is refused: `Then the command succeeds` cannot claim `0`.
 - **A second reading** ("A is listed before B"): `expected: { observe:
   "<path>" }`, a value `observe` returned beside the actual one.
 
