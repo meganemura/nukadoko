@@ -69,7 +69,7 @@ describe("nuka run: run.json", () => {
       // The fixture has no program file, so the run started no world.
       worlds: [],
       selection: "full",
-      counts: { scenarios: 2, passed: 1, failed: 1, controls: 0, not_run: 0 },
+      counts: { scenarios: 2, passed: 1, failed: 1, not_run: 0, controls: 0, controls_not_run: 0 },
       scenarios: [
         {
           scenario_record_id: expect.stringMatching(/^scn-/),
@@ -198,7 +198,7 @@ describe("nuka run: run.json", () => {
       const printed = JSON.parse(stdout.text());
       // The envelope carries run.json's fields beside its own five.
       expect(printed).toEqual({ ...readRunJson(rootDir, onlyRunId(rootDir)), schema_version: 4, command: "run", findings: [] });
-      expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0, controls: 0, not_run: 0 }]);
+      expect([printed.verdict, printed.counts]).toEqual(["passed", { scenarios: 2, passed: 2, failed: 0, not_run: 0, controls: 0, controls_not_run: 0 }]);
       expect(printed.scenarios.map((s: { feature: string }) => s.feature).sort()).toEqual([
         "features/basic/a.feature",
         "features/basic/b.feature",
@@ -216,32 +216,36 @@ describe("nuka run: run.json", () => {
       expect(stderr.text()).toBe("");
       expect(exitCode).toBe(1);
       const printed = JSON.parse(stdout.text());
-      expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1, controls: 0, not_run: 0 }]);
+      expect([printed.verdict, printed.counts]).toEqual(["failed", { scenarios: 2, passed: 1, failed: 1, not_run: 0, controls: 0, controls_not_run: 0 }]);
       expect(printed.scenarios.find((s: { status: string }) => s.status === "failed").do).toBe(
         "nuka run features/failure/a.feature:3",
       );
     }
   });
 
-  it("counts the required executions, the controls apart, and the cells that never ran, for any mix of outcomes", () =>
+  it("counts the required executions and cells that never ran, and the controls' apart, for any mix of outcomes", () =>
     hegel.test((tc) => {
       const executions = tc.draw(
         gs.arrays(gs.tuples(gs.sampledFrom(["passed", "failed"] as const), gs.sampledFrom(["required", "control", undefined] as const)), { maxSize: 12 }),
       );
-      const rows = tc.draw(gs.arrays(gs.arrays(gs.sampledFrom(["pass", "fail", "not-run"] as const), { maxSize: 3 }), { maxSize: 4 }));
+      const rows = tc.draw(
+        gs.arrays(gs.arrays(gs.tuples(gs.sampledFrom(["pass", "fail", "not-run"] as const), gs.sampledFrom(["required", "control"] as const)), { maxSize: 3 }), { maxSize: 4 }),
+      );
+      const notRun = (role: string) => rows.flat().filter(([outcome, cellRole]) => outcome === "not-run" && cellRole === role).length;
       const required = executions.filter(([, role]) => role !== "control");
       const failed = required.filter(([status]) => status === "failed").length;
       expect(
         countScenarios(
           executions.map(([status, role]) => (role === undefined ? { status } : { status, role })),
-          { rows: rows.map((outcomes) => ({ cells: outcomes.map((outcome) => ({ outcome })) })) as never },
+          { rows: rows.map((cells) => ({ cells: cells.map(([outcome, role]) => ({ outcome, role })) })) as never },
         ),
       ).toEqual({
         scenarios: required.length,
         passed: required.length - failed,
         failed,
+        not_run: notRun("required"),
         controls: executions.length - required.length,
-        not_run: rows.flat().filter((outcome) => outcome === "not-run").length,
+        controls_not_run: notRun("control"),
       });
     }));
 });

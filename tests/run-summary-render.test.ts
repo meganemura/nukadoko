@@ -27,7 +27,7 @@ const base: RunDocument = {
   commit: { sha: "0123456789abcdef0123456789abcdef01234567", dirty: false },
   environments: [{ name: "default", target_version: null }],
   selection: "full",
-  counts: { scenarios: 0, passed: 0, failed: 0, controls: 0, not_run: 0 },
+  counts: { scenarios: 0, passed: 0, failed: 0, not_run: 0, controls: 0, controls_not_run: 0 },
   scenarios: [],
   table: { base: null, mapping_changed: null, worlds: [{ world: "head", environment: "default" }], rows: [], left_out: 0 },
 };
@@ -424,7 +424,7 @@ describe("renderRunSummary", () => {
       verdict: "failed",
       commit: null,
       findings: [{ severity: "failed", code: "hook-failed", message: 'BeforeAll failed in environment "default": boom', do: "nuka run" }],
-      counts: { scenarios: 0, passed: 0, failed: 0, controls: 0, not_run: 1 },
+      counts: { scenarios: 0, passed: 0, failed: 0, not_run: 1, controls: 0, controls_not_run: 0 },
       table: buildTable({
         criteria: [{ feature: "features/a.feature", line: 2, name: "s", tags: [] }],
         environments: [{ name: "default", conditions: undefined }],

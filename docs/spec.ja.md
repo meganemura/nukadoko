@@ -2991,7 +2991,7 @@ run が終わったとき、最後の step record と run サマリの後に、�
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
-  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "controls": 0, "not_run": 0 },
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "not_run": 0, "controls": 0, "controls_not_run": 0 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
@@ -3143,7 +3143,8 @@ run が終わったとき、最後の step record と run サマリの後に、�
   セルは `world`、`environment`、`role`、その役割のもとになった `conditions`(行の tag が名指す各 condition と、environment が宣言する値、宣言しないものは `null`)、`outcome`(`pass`、`fail`、`broke`、`flaky`、`not-run`)、後ろの 3 つが名指す `line`、持っている実行の数 `runs`、そして `not-run` のときは `reason` を持ちます。
   `left_out` は、`--env` がその condition を満たす environment を名指さなかったために run が外した、選んだ受け入れ基準の数で、`--env` が無ければ 0 です。
   run サマリが描く表はこれです。
-- `counts` は、必須のセルの実行を数える `scenarios`、`passed`、`failed` と、証明の実行を含めて対照の実行を数える `controls` と、`not-run` のセルを数える `not_run` を持ちます。
+- `counts` は、必須のセルの実行を数える `scenarios`、`passed`、`failed` と、`not-run` の必須のセルを数える `not_run` と、証明の実行を含めて対照の実行を数える `controls` と、`not-run` の対照のセルを数える `controls_not_run` を持ちます。
+  対照はゲートするテストではなく証拠なので、別に数えます。
 - BeforeAll や AfterAll の失敗は、その environment を名指す `hook-failed` の所見になり、その `do` は同じ対象をその environment で走らせます。
 - `verdict` は終了コードの断定です。
   どの scenario も持たない BeforeAll や AfterAll の失敗と、必須のセルを持たない行も数えるので、`counts.failed` が 0 でも `failed` になることがあります。
@@ -3319,7 +3320,10 @@ environment の回で失敗した `BeforeAll` や `AfterAll` は、どの `--con
 `held` と `proven` はどちらも green です。
 対照が通った `held` の行は、読むべき行です。
 スイッチが Then の確かめるものに届いていないか、Then がスイッチの変えるものを確かめていないかのどちらかです。
-stderr の件数の行は必須のセルの実行を数え、対照のある run は、その後ろに `criteria: <held> held, <proven> proven, <failed> failed` の行を加えます。
+stderr の件数の行は必須のセルだけを数えます。
+その実行と、走らなかったセルです。
+対照のある run は、その後ろに 2 行を加えます。
+対照を同じように数える `<n> control runs, <k> not run` と、`criteria: <held> held, <proven> proven, <failed> failed` です。
 
 表は `run.json` の `table` で、run サマリはそれで始まります。
 受け入れ基準ごとに 1 行、world と environment ごとに 1 列(見出しにはその environment が宣言する condition が続きます)で、その下に赤い行ごとに理由を述べる 1 行と、その実行が止まった場所が載ります。

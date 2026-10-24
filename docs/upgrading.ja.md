@@ -394,8 +394,9 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   セルの `conditions` は、その役割のもとになった condition を名指します。
   `passed` は無いので、それが要る読み手は `scenarios` の通ったエントリを数えます。
   condition の tag が無い run は必須(`required`)のセルだけを持ち、その行は、以前のセルが `passed` か `failed` だったとおりに `held` か `failed` になります。
-  各 scenario のエントリは `role` を持ち、`counts` は `controls` を持ちます。
-  `scenarios`、`passed`、`failed` は必須のセルの実行だけを数え、失敗した対照は `do` を持ちません。
+  各 scenario のエントリは `role` を持ち、`counts` は `controls` と `controls_not_run` を持ちます。
+  `scenarios`、`passed`、`failed` は必須のセルの実行だけを数え、`not_run` は走らなかった必須のセルを数え、失敗した対照は `do` を持ちません。
+  stderr の件数の行も必須のセルだけを数え、対照のある run はその下に `<n> control runs` の行を加えます。
 
 - **run サマリは断定の表で始まります。**
   feature ファイルごとの表と、実行ごとの所要時間はなくなりました。

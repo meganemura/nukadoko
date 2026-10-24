@@ -461,9 +461,12 @@ This part does not change release to release.
   the passed entries in `scenarios`. A run with no condition tag has
   only `required` cells, and its rows are `held` or `failed` as the
   old cells were `passed` or `failed`. Each scenario entry has `role`,
-  and `counts` has `controls`: `scenarios`, `passed`, and `failed`
-  count the executions of required cells only, and a control that
-  failed has no `do`.
+  and `counts` has `controls` and `controls_not_run`: `scenarios`,
+  `passed`, and `failed` count the executions of required cells only,
+  `not_run` counts the required cells that did not run, and a control
+  that failed has no `do`. The stderr count line counts required cells
+  alone too, and a run with a control adds a `<n> control runs` line
+  under it.
 
 - **The run summary opens with the verdict table.** The per-feature
   tables and the per-execution durations are gone; the title counts

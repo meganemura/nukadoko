@@ -38,9 +38,11 @@ import {
   writeScenarioBoundary,
   writeProofRunBoundary,
   writeCriteriaCounts,
+  writeControlCounts,
   writeRepeatTallies,
   createRepeatTally,
   formatRerunCommand,
+  type ControlCounts,
   type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
@@ -943,6 +945,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       runResultWritten: boolean;
       exitCode: number;
       notRun: number;
+      controls: ControlCounts;
       notes: readonly Finding[];
       criteria: CriteriaCounts | null;
       rows: readonly Finding[];
@@ -1099,7 +1102,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             failed: table.rows.filter((row) => row.verdict === "failed").length,
           }
         : null;
-      return { summaryPath, retention, runResultWritten, exitCode, notRun: fields.counts.not_run, notes, criteria, rows };
+      return {
+        summaryPath,
+        retention,
+        runResultWritten,
+        exitCode,
+        notRun: fields.counts.not_run,
+        controls: { runs: fields.counts.controls, notRun: fields.counts.controls_not_run },
+        notes,
+        criteria,
+        rows,
+      };
     };
     // The text a person reads at the end, after the files are written: where
     // they are, the count, each failed scenario, the repeat tallies, and
@@ -1114,6 +1127,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         retention: string | null;
         runResultWritten: boolean;
         notRun?: number;
+        controls?: ControlCounts;
         notes?: readonly Finding[];
         criteria?: CriteriaCounts | null;
         rows?: readonly Finding[];
@@ -1127,6 +1141,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         ...(end.notRun !== undefined ? { notRun: end.notRun } : {}),
         durationMs: Date.now() - invocationStartedAt.getTime(),
       });
+      if (end.controls !== undefined) writeControlCounts(progress, end.controls);
       if (end.criteria !== undefined && end.criteria !== null) writeCriteriaCounts(progress, end.criteria);
       if (leftOut > 0) progress.write(`${leftOutText(leftOut)}\n`);
       for (const finding of [...failedScenarioFindings(failedScenarios, conditionsOf), ...(end.rows ?? []), ...(end.notes ?? [])]) {

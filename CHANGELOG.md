@@ -231,7 +231,10 @@ just until 0.1.
   why. The exit code is 1 when a row is `failed`. run.json's `table`
   holds it, with `base: null` until a run compares two trees, each
   scenario entry names its cell's `role`, and `counts` gains
-  `controls`. The run summary opens with the table and one line per red
+  `controls` and `controls_not_run`, while `scenarios`, `passed`,
+  `failed`, and `not_run` count required cells alone, as the stderr count
+  line does; a run with a control adds a `<n> control runs` line under
+  it. The run summary opens with the table and one line per red
   row, and its per-feature tables and durations are gone. A passing
   scenario says the code does what it says, not that the scenario would
   notice otherwise; a control that fails is the run that shows it would.

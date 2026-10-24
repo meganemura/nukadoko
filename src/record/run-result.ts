@@ -378,15 +378,17 @@ export type RunFields = {
    * wrote. */
   readonly check?: "ran" | "skipped";
   /** `scenarios`, `passed`, and `failed` count the executions of
-   * required cells; `controls` counts the executions of control cells,
-   * whatever they ended in; `not_run` counts the table's cells that never
-   * ran. */
+   * required cells, and `not_run` the required cells that never ran;
+   * `controls` counts the executions of control cells, whatever they
+   * ended in, and `controls_not_run` the control cells that never ran.
+   * A control is evidence, not a test that gates, so it is counted apart. */
   readonly counts: {
     readonly scenarios: number;
     readonly passed: number;
     readonly failed: number;
-    readonly controls: number;
     readonly not_run: number;
+    readonly controls: number;
+    readonly controls_not_run: number;
   };
   /** One entry per scenario execution, in the order they finished. */
   readonly scenarios: readonly RunScenario[];
@@ -417,9 +419,14 @@ export function countScenarios(scenarios: readonly Pick<RunScenario, "status" | 
     scenarios: required.length,
     passed,
     failed: required.length - passed,
+    not_run: notRunCells(table, "required"),
     controls: scenarios.length - required.length,
-    not_run: table.rows.reduce((total, row) => total + row.cells.filter((cell) => cell.outcome === "not-run").length, 0),
+    controls_not_run: notRunCells(table, "control"),
   };
+}
+
+function notRunCells(table: Pick<RunTable, "rows">, role: RunTableCell["role"]): number {
+  return table.rows.reduce((total, row) => total + row.cells.filter((cell) => cell.role === role && cell.outcome === "not-run").length, 0);
 }
 
 export function runResultPath(rootDir: string, stateDir: string, runId: string): string {

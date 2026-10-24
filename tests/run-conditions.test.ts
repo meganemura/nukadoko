@@ -44,7 +44,7 @@ describe("nuka run over several environments", () => {
       { name: "flag-off", target_version: null, base_url: null },
     ]);
     expect(document.verdict).toBe("failed");
-    expect(document.counts).toEqual({ scenarios: 6, passed: 5, failed: 1, controls: 0, not_run: 0 });
+    expect(document.counts).toEqual({ scenarios: 6, passed: 5, failed: 1, not_run: 0, controls: 0, controls_not_run: 0 });
     expect(new Set(document.scenarios.map((scenario: { environment: string }) => scenario.environment))).toEqual(
       new Set(["flag-on", "flag-off"]),
     );

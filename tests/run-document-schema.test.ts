@@ -19,7 +19,7 @@ const VALID = {
   commit: null,
   environments: [{ name: "default", target_version: null }],
   selection: "full",
-  counts: { scenarios: 1, passed: 1, failed: 0, controls: 0, not_run: 0 },
+  counts: { scenarios: 1, passed: 1, failed: 0, not_run: 0, controls: 0, controls_not_run: 0 },
   scenarios: [
     {
       scenario_record_id: "scn-1",

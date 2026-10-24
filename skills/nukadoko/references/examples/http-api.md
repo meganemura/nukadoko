@@ -285,6 +285,7 @@ scenario 16/16  features/items.feature:57  counting the items
   step 4/4  passed  0.0s  the response body has a count of at least 1
 ...
 15 scenarios: 15 passed, 0 failed  (2s)
+2 control runs
 criteria: 7 held, 1 proven, 0 failed
 ```
 
@@ -301,8 +302,8 @@ is not there: a control. Its Then broke at line 60, so the run ran it
 once more (`proof run 2/2`), and it broke at the same line again. That
 is what `proven` means: the scenario fails where the count does not
 exist, so its pass in `count-on` is the count's doing. The count line
-counts the 15 executions of required cells, and the summary opens with
-the table:
+counts the 15 executions of required cells, the line under it the
+control's 2 runs, and the summary opens with the table:
 
 ```text
 # nukadoko run passed: 8 criteria in 2 environments, 7 held, 1 proven

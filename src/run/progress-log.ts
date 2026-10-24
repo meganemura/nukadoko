@@ -348,8 +348,8 @@ export interface RunSummary {
   readonly total: number;
   readonly passed: number;
   readonly failed: number;
-  /** Scenario and environment cells that never ran, as run.json's
-   * `counts.not_run` counts them (a BeforeAll that failed first). */
+  /** Required cells that never ran, as run.json's `counts.not_run`
+   * counts them (a BeforeAll that failed first). */
   readonly notRun?: number;
   readonly durationMs: number;
 }
@@ -422,6 +422,21 @@ export function writeRunSummary(stderr: WritableSink, summary: RunSummary): void
     `${summary.total} scenario${summary.total === 1 ? "" : "s"}: ${summary.passed} passed, ` +
       `${summary.failed} failed${(summary.notRun ?? 0) > 0 ? `, ${summary.notRun} not run` : ""}  (${formatSummaryDuration(summary.durationMs)})\n`,
   );
+}
+
+/** The executions of control cells, and the control cells that never
+ * ran, as run.json's `counts.controls` and `counts.controls_not_run`
+ * count them. */
+export interface ControlCounts {
+  readonly runs: number;
+  readonly notRun: number;
+}
+
+/** The line a run with a control writes under the count line, so a
+ * control's run, which may fail by design, is never read as a scenario's. */
+export function writeControlCounts(stderr: WritableSink, counts: ControlCounts): void {
+  if (counts.runs === 0 && counts.notRun === 0) return;
+  stderr.write(`${counts.runs} control run${counts.runs === 1 ? "" : "s"}${counts.notRun > 0 ? `, ${counts.notRun} not run` : ""}\n`);
 }
 
 /** How many criteria the table calls each word. */

@@ -282,6 +282,7 @@ const document = z.looseObject({
     failed: z.number().int(),
     controls: z.number().int(),
     not_run: z.number().int(),
+    controls_not_run: z.number().int(),
   }),
   scenarios: z.array(scenario),
   table,

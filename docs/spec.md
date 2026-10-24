@@ -3735,7 +3735,7 @@ to act on the run without opening another file:
   "environments": [{ "name": "default", "target_version": null, "base_url": "http://localhost:3000" }],
   "worlds": [],
   "selection": "full",
-  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "controls": 0, "not_run": 0 },
+  "counts": { "scenarios": 1, "passed": 0, "failed": 1, "not_run": 0, "controls": 0, "controls_not_run": 0 },
   "scenarios": [
     {
       "scenario_record_id": "scn-20260801-143023-c3d4",
@@ -3920,9 +3920,11 @@ to act on the run without opening another file:
   because `--env` named no environment that meets their conditions, 0
   without `--env`. It is the table the run summary draws.
 - `counts` holds `scenarios`, `passed`, and `failed`, which count the
-  executions of required cells, `controls`, which counts the executions
-  of controls, proof runs included, and `not_run`, which counts the
-  `not-run` cells.
+  executions of required cells, and `not_run`, which counts the required
+  cells that are `not-run`; `controls` counts the executions of
+  controls, proof runs included, and `controls_not_run` the control
+  cells that are `not-run`. A control is evidence, not a test that
+  gates, so it is counted apart.
 - A BeforeAll or AfterAll failure is a `hook-failed` finding that names
   its environment, with a `do` that runs the same targets in it.
 - `verdict` is the exit code's: it also counts a BeforeAll or AfterAll
@@ -4145,9 +4147,11 @@ that fails in an environment's pass fails the run at any `--concurrency`,
 and one that fails in a proof round's worker does not. `held` and
 `proven` are both green. A `held` row whose control passed is the one to read: the switch
 does not reach what the Then checks, or the Then does not check what the
-switch changes. The stderr count line counts the executions of required
-cells, and a run with a control adds a `criteria: <held> held, <proven>
-proven, <failed> failed` line after it.
+switch changes. The stderr count line counts the required cells alone:
+their executions, and the cells that did not run. A run with a control
+adds two lines after it: `<n> control runs, <k> not run`, which counts
+the controls the same way, and `criteria: <held> held, <proven> proven,
+<failed> failed`.
 
 The table is `run.json`'s `table`, and the run summary opens with it: a
 row per criterion, a column per world and environment, headed with the
