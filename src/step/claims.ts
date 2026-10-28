@@ -16,6 +16,8 @@ export const CLAIM_COMPARES = [
   "equal",
   "not-equal",
   "contains-text",
+  "starts-with-text",
+  "ends-with-text",
   "has-item",
   "matches",
   "greater-than",
@@ -646,7 +648,8 @@ function validateClaims(claims: unknown, shape: ClaimStepShape): void {
     }
     // A where clause whose place overlaps an item claim's, and whose
     // compare decides the value there (equal), or selects by a part of it
-    // no claim can be told apart from (contains-text, matches, has-item),
+    // no claim can be told apart from (contains-text, starts-with-text,
+    // ends-with-text, matches, has-item),
     // selects the items by the value the claim then judges: "every item
     // that is done is done". An order compare or not-equal leaves a range
     // the claim can still break on ("every item over 10 costs at most
@@ -716,7 +719,7 @@ export function claimArgKeysRead(claims: readonly Claim[]): ReadonlySet<string> 
 /** The compares a `where` clause may not use on a place that overlaps an
  * item claim's: each decides the value there, or selects by a part of it
  * that the claim cannot be told apart from. */
-const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "contains-text", "matches", "has-item"]);
+const WHERE_DECIDES: ReadonlySet<string> = new Set(["equal", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"]);
 
 /** Whether two places inside one item overlap: one path is the start of
  * the other, after `actual` and `at` are joined (`itemPath`). Pure. */

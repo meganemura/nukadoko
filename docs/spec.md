@@ -1843,7 +1843,8 @@ and 256 keeps a margin of six times; the reason names the limit
 #### The compares
 
 `equal`, `not-equal`, `contains-text` (the expected text is a substring),
-`has-item` (the array has an item equal to the expected value), `matches`
+`starts-with-text` and `ends-with-text` (the text starts or ends with the
+expected text), `has-item` (the array has an item equal to the expected value), `matches`
 (the expected text, as a regular expression, matches), `greater-than`,
 `at-least`, `less-than`, and `at-most`. Equality is structural over JSON
 values: object key order does not count, and `0` equals `-0`. The order
@@ -1865,7 +1866,8 @@ nothing is known about the criterion.
 A comparison across two JSON types breaks and names both types, because a
 string is never equal to a number for the reason the claim states. An
 expected text that nearly every string holds breaks, wherever it came
-from: under `contains-text`, a text of only whitespace or nothing; under
+from: under `contains-text`, `starts-with-text`, or `ends-with-text`, a
+text of only whitespace or nothing; under
 `matches`, a pattern that matches the empty string.
 
 `matches` tests the regular expression on a worker thread, which nukadoko
@@ -1901,7 +1903,7 @@ followed by `at`, so `{ actual: "a.b" }`, `{ actual: "a", at: "b" }`,
 and `{ at: "a.b" }` read one path, and a `view` on either side does not
 separate them: it reads the same value another way. A `where` claim
 that overlaps an item claim and compares with `equal`, `contains-text`,
-`matches`, or `has-item` is refused at import. It selects the items by
+`starts-with-text`, `ends-with-text`, `matches`, or `has-item` is refused at import. It selects the items by
 the value the item claim then judges, or by a part of it the claim cannot
 be told apart from, so "every item" would read as "every item that
 holds".

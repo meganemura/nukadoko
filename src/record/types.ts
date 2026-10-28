@@ -672,6 +672,8 @@ export type ClaimCompare =
   | "equal"
   | "not-equal"
   | "contains-text"
+  | "starts-with-text"
+  | "ends-with-text"
   | "has-item"
   | "matches"
   | "greater-than"

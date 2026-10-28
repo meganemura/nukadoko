@@ -176,14 +176,17 @@ export async function compareValues(
       return { holds: compare === "equal" ? same : !same };
     }
     case "contains-text":
+    case "starts-with-text":
+    case "ends-with-text":
     case "matches": {
       if (actualType !== "string" || expectedType !== "string") {
         return { reason: `${compare} reads two strings, and compares ${article(actualType)} with ${article(expectedType)}` };
       }
       const text = expected as string;
-      if (compare === "contains-text") {
-        if (text.trim() === "") return { reason: "contains-text has an expected text of only whitespace or nothing, which almost every string holds" };
-        return { holds: (actual as string).includes(text) };
+      if (compare !== "matches") {
+        if (text.trim() === "") return { reason: `${compare} has an expected text of only whitespace or nothing, which almost every string holds` };
+        const value = actual as string;
+        return { holds: compare === "contains-text" ? value.includes(text) : compare === "starts-with-text" ? value.startsWith(text) : value.endsWith(text) };
       }
       if (text === "") return { reason: "matches has an empty expected value, which every string holds" };
       const tested = await testPattern(text, actual as string);

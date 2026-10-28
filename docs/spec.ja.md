@@ -1516,7 +1516,7 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 
 #### 比較
 
-`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`has-item`(配列に期待値と等しい要素がある)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
+`equal`、`not-equal`、`contains-text`(期待するテキストが部分文字列である)、`starts-with-text` と `ends-with-text`(テキストが期待するテキストで始まる、または終わる)、`has-item`(配列に期待値と等しい要素がある)、`matches`(期待するテキストを正規表現として一致する)、`greater-than`、`at-least`、`less-than`、`at-most` です。
 等しさは JSON の値の構造で判断します。
 オブジェクトのキーの順序は数えず、`0` と `-0` は等しくなります。
 大小の比較は、2 つの number を読みます。
@@ -1529,7 +1529,7 @@ Node 22 では、1650 段の深さの値で、step record を書く途中にス�
 JSON の型が違う 2 つの値の比較では、claim は成り立たず、両方の型を名指しします。
 文字列が数値と等しくなることは、claim が述べる理由ではありえないからです。
 ほとんどどの文字列も満たす期待するテキストでは、それがどこから来たかにかかわらず claim は成り立ちません。
-`contains-text` では空白だけか空のテキスト、`matches` では空文字列に一致する pattern です。
+`contains-text`、`starts-with-text`、`ends-with-text` では空白だけか空のテキスト、`matches` では空文字列に一致する pattern です。
 
 `matches` は正規表現を worker スレッドで試します。
 nukadoko はこのスレッドを step の記録される操作の外で起動します。
@@ -1556,7 +1556,7 @@ pattern には残り時間を与え、残りが無いときに与えることは
 読むパスは `actual` に `at` を続けたものです。
 したがって、`{ actual: "a.b" }`、`{ actual: "a", at: "b" }`、`{ at: "a.b" }` は同じパスを読みます。
 どちらかの側の `view` は、同じ値を別の形で読むだけなので、2 つを分けません。
-要素の claim と重なり、`equal`、`contains-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
+要素の claim と重なり、`equal`、`contains-text`、`starts-with-text`、`ends-with-text`、`matches`、`has-item` で比べる `where` の claim は、import の時点で拒否されます。
 要素の claim がこれから判定する値、またはその claim が見分けられないその一部で要素を選ぶので、「すべての要素」が「成り立つすべての要素」と読まれてしまうからです。
 
 重なる `where` の claim が `greater-than`、`at-least`、`less-than`、`at-most`、`not-equal` で比べるときは、手元の期待値から実行時に判定します。

@@ -7,6 +7,16 @@ just until 0.1.
 
 ## Unreleased
 
+### Added
+
+- **A claim can compare a prefix or a suffix.** `starts-with-text` and
+  `ends-with-text` hold when the actual text starts or ends with the
+  expected text. A Then whose old code checked `startsWith("--- a/")`
+  keeps that strength, where `contains-text` was one step weaker. Like
+  `contains-text`, an expected text of only whitespace or nothing breaks
+  the claim, and a `where` claim that overlaps an item claim cannot use
+  either compare.
+
 ## 0.22.0 — 2026-10-28
 
 ### Changed

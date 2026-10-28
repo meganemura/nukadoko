@@ -148,6 +148,8 @@ const ALL_COMPARES: readonly ClaimCompare[] = [
   "equal",
   "not-equal",
   "contains-text",
+  "starts-with-text",
+  "ends-with-text",
   "has-item",
   "matches",
   "greater-than",
@@ -195,6 +197,35 @@ describe("compares", () => {
       const blank = tc.draw(gs.text({ alphabet: " \t\n", maxSize: 3 }));
       expect(await compare("contains-text", actual, blank)).toEqual({
         reason: "contains-text has an expected text of only whitespace or nothing, which almost every string holds",
+      });
+    }));
+
+  it("starts-with-text and ends-with-text hold when the text starts or ends with the expected value, and break when it holds it only further in", () =>
+    hegel.testAsync(async (tc) => {
+      const before = tc.draw(gs.text({ alphabet: "ab", maxSize: 4 }));
+      const after = tc.draw(gs.text({ alphabet: "ab", maxSize: 4 }));
+      const needle = tc.draw(gs.text({ alphabet: "ab", minSize: 1, maxSize: 3 }));
+      expect(holds(await compare("starts-with-text", `${needle}${after}`, needle))).toBe(true);
+      expect(holds(await compare("ends-with-text", `${before}${needle}`, needle))).toBe(true);
+      expect(holds(await compare("starts-with-text", `c${needle}${after}`, needle))).toBe(false);
+      expect(holds(await compare("ends-with-text", `${before}${needle}c`, needle))).toBe(false);
+    }));
+
+  it("starts-with-text and ends-with-text agree with contains-text whenever they hold", () =>
+    hegel.testAsync(async (tc) => {
+      const actual = tc.draw(gs.text({ alphabet: "ab", maxSize: 6 }));
+      const expected = tc.draw(gs.text({ alphabet: "ab", minSize: 1, maxSize: 3 }));
+      const name = tc.draw(gs.sampledFrom(["starts-with-text", "ends-with-text"] as const));
+      if (holds(await compare(name, actual, expected))) expect(holds(await compare("contains-text", actual, expected))).toBe(true);
+    }));
+
+  it("starts-with-text and ends-with-text with an expected text of only whitespace break, whatever the actual text", () =>
+    hegel.testAsync(async (tc) => {
+      const actual = tc.draw(gs.text({ alphabet: "ab \n", maxSize: 6 }));
+      const blank = tc.draw(gs.text({ alphabet: " \t\n", maxSize: 3 }));
+      const name = tc.draw(gs.sampledFrom(["starts-with-text", "ends-with-text"] as const));
+      expect(await compare(name, actual, blank)).toEqual({
+        reason: `${name} has an expected text of only whitespace or nothing, which almost every string holds`,
       });
     }));
 
@@ -675,10 +706,10 @@ describe("where", () => {
     return { ...(actual === "" ? {} : { actual }), ...(at === "" ? {} : { at }), ...(view === undefined ? {} : { view }), compare, expected };
   }
 
-  const decides = ["equal", "contains-text", "matches", "has-item"] as const;
+  const decides = ["equal", "contains-text", "starts-with-text", "ends-with-text", "matches", "has-item"] as const;
   const leaves = ["greater-than", "at-least", "less-than", "at-most", "not-equal"] as const;
 
-  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, contains-text, matches, or has-item, however actual, at, and view spell the places", () =>
+  it("refuses a where clause whose place overlaps an item claim's when it compares with equal, a text compare, matches, or has-item, however actual, at, and view spell the places", () =>
     hegel.test((tc) => {
       const wherePath = tc.draw(segmentsGen);
       const itemPath = tc.draw(gs.booleans()) ? [...wherePath, ...tc.draw(segmentsGen)].slice(0, tc.draw(gs.integers({ minValue: 0, maxValue: 4 }))) : tc.draw(segmentsGen);
