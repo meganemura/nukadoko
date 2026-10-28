@@ -1155,8 +1155,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         )?.[0];
       });
       // An unproven or moved row has no failed execution either, so it gets
-      // one too, whose `do:` judges it again against the same base.
-      if (base !== undefined) rows.push(...judgedRowFindings(table, base.ref, rerunFlags, base.obstacles));
+      // one too, whose `do:` judges it again against the same base: the
+      // commit the ref resolved to, since a branch or `HEAD` can move
+      // before the line runs.
+      if (base !== undefined) rows.push(...judgedRowFindings(table, base.commit, rerunFlags, base.obstacles));
       runFindings.push(...rows);
       const fields: RunFields = {
         run_id: runId,

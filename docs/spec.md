@@ -4321,8 +4321,11 @@ Three are red:
 An `unproven` row has a `criterion-unproven` finding and a `moved` row a
 `criterion-moved` finding, on stderr after the count line and in
 `run.json`'s findings, each with the row's reason. Their `do:` line is
-`nuka run <file>:<line> --base <ref>`, with the run's `--env` flags, which
-judges the row again against the same base.
+`nuka run <file>:<line> --base <commit>`, with the run's `--env` flags, which
+judges the row again against the same base. It names the full hash of the
+commit the ref resolved to, not the ref as given, since a branch or `HEAD`
+can move before the line runs, and the line would then compare the row
+with another commit, or with itself.
 
 **What `--base` does not support yet.** Some shapes keep a tree from
 holding the mix its world names. They are read from both sides before

@@ -370,7 +370,8 @@ export function rowsWithoutRequiredCell(
 
 /** A finding for each `unproven` and `moved` row, which has no failed
  * execution to carry one: the row's reason, and a `do:` line that judges
- * the row again against the same base, in the environments the run named.
+ * the row again against `base`, the commit the run compared with, in the
+ * environments the run named.
  * Where an obstacle kept the world the verdict reads (the base world for
  * `unproven`, the old world for `moved`) from being built
  * (src/run/world-obstacles.ts), `--base` cannot judge the row until it

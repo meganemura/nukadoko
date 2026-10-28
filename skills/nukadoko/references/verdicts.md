@@ -112,7 +112,8 @@ the reason and a `proof-run-incomplete` warning: correct the hook.
 
 Each `unproven` and `moved` row is also a `criterion-unproven` or
 `criterion-moved` finding with the reason; its `do:` line judges that row
-again against the same base. A reason that says `--base` does not support
+again against the same base, named by its commit hash, so it still
+compares with that commit after you commit or the base branch moves. A reason that says `--base` does not support
 a shape yet (a symbolic link, a feature file outside the features
 directory, a workspace package, a submodule) means that world was not
 built: make the `fix:` edit when the finding has one, or run its `do:`

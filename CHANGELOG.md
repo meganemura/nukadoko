@@ -374,7 +374,9 @@ just until 0.1.
   that does not parse is the warning `base-feature-unparsed`. Each
   `unproven` or `moved` row is a `criterion-unproven` or `criterion-moved`
   finding with its reason, whose `do:` line, `nuka run <file>:<line>
-  --base <ref>`, judges the row again; a removed row, which has no cells,
+  --base <commit>`, judges the row again against the commit the ref
+  resolved to, by its full hash, so a branch that moves on does not
+  change what it compares with; a removed row, which has no cells,
   is not a `criterion-without-required-cell` finding. `--base` does not
   support yet a symbolic link at, above, or under the features directory
   or at the config file, a feature file outside the features directory

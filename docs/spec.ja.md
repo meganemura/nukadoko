@@ -3440,7 +3440,9 @@ run を赤にすることはありません。
 
 `unproven` の行は `criterion-unproven` の finding を、`moved` の行は `criterion-moved` の finding を持ちます。
 どちらも stderr の数の行のあとと `run.json` の findings に出て、行の理由を述べます。
-その `do:` 行は、run の `--env` を付けた `nuka run <file>:<line> --base <ref>` で、同じ基点に対してその行をもう一度断定します。
+その `do:` 行は、run の `--env` を付けた `nuka run <file>:<line> --base <commit>` で、同じ基点に対してその行をもう一度断定します。
+与えられたままの ref ではなく、ref が解決したコミットの完全なハッシュを名指します。
+ブランチや `HEAD` は行が走る前に動くことがあり、そのとき行は別のコミットと、あるいはその行自身と比べることになるからです。
 
 **`--base` がまだ扱わないもの。**
 いくつかの形は、tree がその world の名指す組み合わせを持つことを妨げます。
