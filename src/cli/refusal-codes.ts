@@ -81,6 +81,10 @@ const REFUSAL_CODES = {
     description: "--fail-on names a code that a nuka check report never contains.",
     fix: "Name an error, warning, or note code that nuka check --codes lists.",
   },
+  "fail-on-note-with-targets": {
+    description: "nuka check with targets was given a --fail-on note code, and a check with targets computes no notes, so the gate could never fire.",
+    fix: "Run nuka check without targets to gate on a note, or leave the note out of --fail-on.",
+  },
   "file-edited": {
     description: "The file nuka scaffold would replace is not what scaffold wrote, so --replace leaves it.",
     fix: "Edit the file by hand, or delete it and run nuka scaffold again.",

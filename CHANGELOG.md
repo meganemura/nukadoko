@@ -672,6 +672,12 @@ just until 0.1.
 
 ### Fixed
 
+- **`--fail-on` refuses a note code with targets.** A check with
+  targets computes no notes, so `nuka check features --fail-on
+  pattern-unbound` accepted a gate that could never fire and exited 0.
+  It is refused now with `fail-on-note-with-targets` (exit 2), and its
+  `do:` line is the whole-project check with the same `--fail-on`.
+
 - **A feature path after `--fail-on` is a target.** `--fail-on` took
   every word after it, so `nuka check --fail-on pattern-unbound
   features/a.feature` refused the path as an unknown code. Each

@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 import { analyzeProject, analyzeRunSelection } from "../check/analyze.js";
-import { isCheckCode, listCheckCodes } from "../check/codes.js";
+import { checkCodeInfo, isCheckCode, listCheckCodes } from "../check/codes.js";
 import type { CheckFinding, CheckIssue, CheckReport } from "../check/types.js";
 import { loadConfig } from "../config/load-config.js";
 import { describeFailedFeatureRead, type FeatureArgCommand } from "../feature/feature-arg-read.js";
@@ -212,6 +212,20 @@ export async function runCheck(options: RunCheckOptions): Promise<number> {
   const unknown = failOn.filter((code) => !isCheckCode(code));
   if (unknown.length > 0) {
     return refuse(sinks, failOnRefusal(unknown), "fail-on-unknown-code", { do: "nuka check --codes" }, notices);
+  }
+  // A check with targets computes no notes (notes are a fact about the
+  // whole project), so a note code there is the same gate that never
+  // fires.
+  const notes = targets.length === 0 ? [] : failOn.filter((code) => isCheckCode(code) && checkCodeInfo(code).severity === "note");
+  if (notes.length > 0) {
+    const wholeProject = ["nuka", "check", "--fail-on", failOn.join(","), ...envs.flatMap((name) => ["--env", name])].map(shellWord).join(" ");
+    return refuse(
+      sinks,
+      `--fail-on: ${quoted(notes)} ${notes.length === 1 ? "is a note" : "are notes"}, and a nuka check with targets computes no notes, since a note is a fact about the whole project`,
+      "fail-on-note-with-targets",
+      { do: wholeProject },
+      notices,
+    );
   }
 
   let report;

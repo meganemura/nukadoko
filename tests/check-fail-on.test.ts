@@ -119,6 +119,22 @@ describe("nuka check --fail-on", () => {
     expect(stderr.text()).toBe("fail-on: scenario-without-then reported 2 findings\n");
   });
 
+  it("refuses a note code with targets, which compute no notes, and its do: line gates the whole project", async () => {
+    const stdout = createCaptureSink();
+    const stderr = createCaptureSink();
+    const exitCode = await runCli(["check", "features", "--fail-on", "scenario-without-then,schema-field-undescribed"], { rootDir, stdout, stderr });
+    expect(exitCode).toBe(2);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toBe(
+      "refused\tfail-on-note-with-targets\t-\t--fail-on: \"schema-field-undescribed\" is a note, and a nuka check with targets computes no notes, since a note is a fact about the whole project\n" +
+        "  fix: Run nuka check without targets to gate on a note, or leave the note out of --fail-on.\n" +
+        "  do: nuka check --fail-on scenario-without-then,schema-field-undescribed\n",
+    );
+    const whole = createCaptureSink();
+    expect(await runCli(["check", "--fail-on", "scenario-without-then,schema-field-undescribed"], { rootDir, stdout: createCaptureSink(), stderr: whole })).toBe(1);
+    expect(whole.text()).toBe("fail-on: scenario-without-then reported 3 findings\nfail-on: schema-field-undescribed reported 2 findings\n");
+  });
+
   it("keeps --json output parseable while the exit code turns to 1, and names each hit in fail_on_hits", async () => {
     const stdout = createCaptureSink();
     const exitCode = await runCli(["check", "--json", "--fail-on", "schema-field-undescribed,fixture-unused"], {

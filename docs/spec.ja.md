@@ -4998,6 +4998,8 @@ nukadoko を使う 11 のプロジェクトを調べたところ、その 14 の
 変わったのはそのジョブに対するプロジェクトの方針であって、所見の性質ではないからです。
 check の報告に決して含まれない code は、何も分析する前に拒否されるので、打ち間違いが「決して発火しないゲート」になることはありません。
 その拒否は `nuka check --codes` を案内します。
+対象を指定した check は注記を計算しないので、そこでの注記の code も `fail-on-note-with-targets` で拒否されます。
+その `do:` 行は、同じ `--fail-on` を付けたプロジェクト全体の check です。
 これが、他の全員にとってその注記を赤くせずに、pull request のジョブが `pattern-unbound` でゲートを掛ける方法です。
 
 フラグの陰に控えさせる注記はありません。
@@ -5606,7 +5608,7 @@ stderr は、コマンドが何をしているかを人が見るためのもの�
 | --- | --- | --- |
 | 0 | コマンドは求められたことをし、その報告または run は green です。 | warning だけの `nuka check`、通った `nuka run` |
 | 1 | コマンドは実行され、その報告または run が red であるか、実行中に失敗しました。 | `nuka check` のエラー、失敗した scenario、run の一部を書かなかった `nuka report`、失敗した `nuka do` の step、`nuka steps` や `nuka describe` で import できなかった step ファイル、`nuka check` が報告した `--fail-on` の code |
-| 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
+| 2 | コマンドは拒否しました。何も実行されず、何も報告されていません(「拒否」を参照)。 | 知らないフラグやコマンド、読み込めない config、存在しない対象、`nuka check` への `:line`、不正な `--repeat` や `--concurrency`、入っていない peer dependency、書き込みを拒否した `nuka init` や `nuka scaffold`、知らない `--fail-on` の code や対象を指定したときの注記の code、`nuka do` や `nuka describe` での知らない step、`nuka check` が報告するエラーで止まった `nuka run` |
 | 128 + n | `nuka run` または `nuka do` が、シグナル n を受けて teardown のあと止まりました。 | SIGINT なら 130 |
 
 | コマンド | stdout | stderr |

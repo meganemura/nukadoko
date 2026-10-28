@@ -6255,7 +6255,8 @@ The finding keeps its
 severity in the output: what changed is the project's policy for that job,
 not the finding's nature. A code that a check report never contains is
 refused before anything is analyzed, so a typo cannot become a gate that
-never fires; the refusal points at `nuka check --codes`. This is how a pull
+never fires; the refusal points at `nuka check --codes`.
+A check with targets computes no notes, so a note code there is refused too, with `fail-on-note-with-targets`, and its `do:` line is the whole-project check with the same `--fail-on`. This is how a pull
 request job gates on `pattern-unbound` without the note turning red for
 everyone else.
 
@@ -6879,7 +6880,7 @@ reading either stream.
 | --- | --- | --- |
 | 0 | The command did what it was asked, and its report or run is green. | `nuka check` with warnings only, a passed `nuka run` |
 | 1 | The command ran, and its report or run is red, or it failed while it ran. | an error from `nuka check`, a failed scenario, a `nuka report` that left out part of the run, a failed `nuka do` step, a step file that did not import on `nuka steps` or `nuka describe`, a `--fail-on` code `nuka check` reported |
-| 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
+| 2 | The command refused: nothing ran and nothing was reported (see "Refusals"). | an unknown flag or command, a config it cannot load, a target that does not exist, a `:line` on `nuka check`, a bad `--repeat` or `--concurrency`, a missing peer dependency, `nuka init` or `nuka scaffold` refusing to write, an unknown `--fail-on` code or a note code with targets, an unknown step on `nuka do` or `nuka describe`, `nuka run` stopped by the errors `nuka check` reports |
 | 128 + n | `nuka run` or `nuka do` stopped on signal n after its teardown. | 130 for SIGINT |
 
 | Command | stdout | stderr |

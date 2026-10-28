@@ -37,7 +37,8 @@ A note is something a project is allowed to carry rather than something
 blocking, so notes alone exit 0. A job that must block on one passes
 `nuka check --fail-on <code>` (for instance `pattern-unbound`); the finding
 stays a note in the output, and only that invocation's exit code turns to
-1. The code to pass is the one printed beside each note, or one from
+1. Notes come from a check with no target, and a note code with targets
+is refused (`fail-on-note-with-targets`). The code to pass is the one printed beside each note, or one from
 `nuka check --codes`, which lists every code with its severity and a
 one-line meaning before any of them has fired. Each note also names a file
 and a `fix:` line: what to open, and the change to make if the note calls
