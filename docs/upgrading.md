@@ -489,9 +489,15 @@ This part does not change release to release.
 - **`nuka run --since` is removed; `nuka run --base <ref>` judges what
   `--since` reported.** `nuka run --since` is refused with
   `removed-flag`. Replace it with `--base` and the same ref: `npx nuka
-  run --base origin/main` in place of `npx nuka run --since "$(git
-  merge-base HEAD origin/main)"`; the refusal's `do` line is `nuka run
-  --base` with the ref `--since` was given. `--since` only reported and never
+  run --base "$(git merge-base HEAD origin/main)"` in place of `npx nuka
+  run --since "$(git merge-base HEAD origin/main)"`; the refusal's `do`
+  line is `nuka run --base` with the ref `--since` was given. Keep the
+  merge base rather than `origin/main`: once main has moved on since the
+  branch began, its tip holds criteria the branch never had, which read as
+  `removed`, and changes the branch never made, which read as the
+  branch's. Only a merge commit of the branch and main's tip, such as the
+  checkout of a GitHub `pull_request` event, compares with
+  `origin/main` as it is (docs/ci.md). `--since` only reported and never
   failed a run; `--base` runs a new or changed criterion against the
   base's code and an unchanged one under the base's steps when the
   mapping changed, and exits 1 on an `unproven` or `moved` row

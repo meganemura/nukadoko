@@ -141,6 +141,12 @@ jobs:
 On a `pull_request` event the checkout is the merge commit GitHub made of
 the branch and the base branch's tip, so comparing it with
 `origin/<base branch>` compares exactly what the pull request changes. A
+checkout that is not such a merge commit (a branch checked out as it is,
+on a local machine or a `push` event) compares with the merge base
+instead: `nuka run --base "$(git merge-base HEAD origin/main)"`. Against
+the tip of a base branch that moved on since the branch began, a
+criterion added there reads as `removed`, and one changed there reads as
+changed by the branch, although the branch never touched either. A
 new or changed criterion also runs against the base's code, which the run
 builds from the base's own `nukadoko.program.ts` in a tree under the run
 directory, and an unchanged one runs under the base's steps when they

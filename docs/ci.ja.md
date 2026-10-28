@@ -128,6 +128,10 @@ jobs:
 
 `pull_request` イベントでは、checkout はブランチと基点のブランチの先端から GitHub が作った merge コミットです。
 そのため `origin/<base branch>` と比べると、pull request が変えたものをちょうど比べます。
+そのような merge コミットではない checkout(手元のマシンや `push` イベントで、ブランチをそのまま checkout したもの)は、代わりに merge base と比べます。
+`nuka run --base "$(git merge-base HEAD origin/main)"` です。
+ブランチを始めてから先へ進んだ基点のブランチの先端と比べると、そこで足された受け入れ基準は `removed` と読まれ、そこで変わった受け入れ基準はブランチが変えたものと読まれます。
+ブランチがどちらにも触れていなくても、そう読まれます。
 新しいか変わった受け入れ基準は基点のコードに対しても走り、run はそれを基点自身の `nukadoko.program.ts` から、run ディレクトリの下の tree で build します。
 変わっていない受け入れ基準は、step が変わったとき基点の step のもとで走ります。
 そのため job には基点の build に要るものが必要で、基点はこの checkout の `node_modules` からパッケージを解決します。
