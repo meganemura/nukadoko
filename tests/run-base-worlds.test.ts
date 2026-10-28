@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CART_STEP, cartModule, feature, makeBaseProject, rowSummary, scenario, totalStep, type BaseProject, type TableRow } from "./helpers/base-project.js";
@@ -144,6 +144,24 @@ describe("a url function", () => {
     expect(result.exitCode).toBe(0);
     const [, five] = rows(project.root);
     expect(rowSummary([five!])).toEqual([["five items", "new", "proven", ["head:default:pass", "base:default:fail"]]]);
+  }, 60_000);
+});
+
+describe("the steps line", () => {
+  it("counts the step records of every world in the directory it names", async () => {
+    project = await makeBaseProject();
+    project.write({ "lib/cart.mjs": cartModule("return count;"), "features/cart.feature": "Feature: Cart\n" });
+    project.commit("base");
+    project.write({ "lib/cart.mjs": cartModule(), "features/cart.feature": feature(scenario("three items", 3, 6)) });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "HEAD~1"]);
+    // Head runs the row once, and the base proves it in two runs: two
+    // steps each.
+    expect(rowSummary(rows(project.root))).toEqual([["three items", "new", "proven", ["head:default:pass", "base:default:fail"]]]);
+    const line = result.stderr.split("\n").find((entry) => entry.startsWith("steps "))!;
+    const [, dir, count] = /^steps +(\S+) +(\d+)$/.exec(line)!;
+    expect(Number(count)).toBe(6);
+    expect(readdirSync(path.join(project.root, dir!))).toHaveLength(6);
   }, 60_000);
 });
 

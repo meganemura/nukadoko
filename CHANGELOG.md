@@ -363,7 +363,8 @@ just until 0.1.
   where the base is deployed (one that answers the base with head's URL
   leaves the base world's cells not run, with the reason), and neither
   tree installs anything: both
-  resolve packages from head's project. A tree's worker redacts what it
+  resolve packages from head's project. The stderr `steps` line counts
+  the step records of every world, since a tree's are in its directory too. A tree's worker redacts what it
   writes with head's secret set as well as its own, so a ref whose config
   marks a value public never prints head's secret. A signal stops a tree's workers
   (SIGTERM, the 5 seconds a world gets, then SIGKILL) before its world

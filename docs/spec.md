@@ -5381,7 +5381,9 @@ exist. A `sources.json` that cannot be written fails the run the same
 way, with `run-sources-not-written`: without it `nuka report` cannot
 render the run. It is written first, so its finding is in the summary,
 in `run.json`, and in the `--json` document. The `run` location line is
-printed only for a `run.json` that was written. A setup failure, which writes no record, writes no summary.
+printed only for a `run.json` that was written. The `steps` location
+line counts the step records its directory holds, a tree world's under
+`--base` among them. A setup failure, which writes no record, writes no summary.
 
 ## Environments and secrets
 

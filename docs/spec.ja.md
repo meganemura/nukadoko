@@ -4165,6 +4165,7 @@ pickle を 1 つ以上実行した `nuka run` は、run 全体を 1 つにまと
 それがないと、`nuka report` は run を描き出せないからです。
 `sources.json` は最初に書くので、その所見はサマリにも、`run.json` にも、`--json` の文書にも載ります。
 `run` の場所の行は、書けた `run.json` についてだけ出ます。
+`steps` の場所の行は、そのディレクトリが持つ step record を数え、`--base` のもとでは tree の world のものも含めます。
 record を何も書かない setup の失敗は、サマリも書きません。
 
 ## Environment、secret

@@ -1,5 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { rmdirSync } from "node:fs";
+import { readdirSync, rmdirSync } from "node:fs";
 import path from "node:path";
 import { PickleStepType } from "@cucumber/messages";
 import { analyzeRunSelectionKeepingSteps } from "../check/analyze.js";
@@ -325,16 +325,24 @@ export interface RunRunOptions {
 /** The step records row, when the run wrote a scenario. Scenarios have no
  * directory of their own to name: run.json holds them. */
 function stepsLocation(
+  rootDir: string,
   stateDir: string,
   runId: string,
   scenariosWritten: number,
-  stepRecordsWritten: number,
 ): Array<{ label: string; relativePath: string; kind: "dir" | "file"; count?: number }> {
-  return [
-    ...(scenariosWritten > 0
-      ? [{ label: "steps", relativePath: path.join(runRelativeDir(stateDir, runId), RUN_FILE_DIRS.steps), kind: "dir" as const, count: stepRecordsWritten }]
-      : []),
-  ];
+  const relativePath = path.join(runRelativeDir(stateDir, runId), RUN_FILE_DIRS.steps);
+  return [...(scenariosWritten > 0 ? [{ label: "steps", relativePath, kind: "dir" as const, count: stepRecordsIn(path.join(rootDir, relativePath)) }] : [])];
+}
+
+// The step records the directory holds, read from it: a tree world's
+// worker writes its records there too, so a tally of head's passes alone
+// would print a count of a directory that holds more.
+function stepRecordsIn(dir: string): number {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length;
+  } catch {
+    return 0;
+  }
 }
 
 /** The `nuka check` that reports the errors a run stopped over, as check
@@ -1592,7 +1600,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         allPassed,
         scenariosWritten,
         scenariosPassed,
-        stepRecordsWritten,
         failedScenarios,
         repeatTallies,
         interruptedBy,
@@ -1633,13 +1640,13 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // An interrupted run prunes nothing and writes no run.json, as at
       // `--concurrency 1`, where the signal handler exits first.
       if (interruptedBy !== null) {
-        writeRunEnd(stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null, runResultWritten: false });
+        writeRunEnd(stepsLocation(rootDir, config.stateDir, runId, scenariosWritten), { total: scenariosWritten, passed: scenariosPassed }, failedScenarios, repeatTallies, { summaryPath: null, retention: null, runResultWritten: false });
         return exitCodeForSignal(interruptedBy);
       }
       await runOtherWorlds();
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
-        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten),
+        stepsLocation(rootDir, config.stateDir, runId, scenariosWritten),
         { total: scenariosWritten, passed: scenariosPassed },
         failedScenarios,
         repeatTallies,
@@ -1660,11 +1667,9 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // count actual `stdout.write`s below, never `flatPickles.length`:
       // a BeforeAll failure can leave this run with fewer scenario records than pickles selected,
       // and the summary line must say what actually happened, not what was
-      // asked for. `stepRecordsWritten` sums every step across every one of
-      // those records whose own `record` is non-null.
+      // asked for.
       let scenariosWritten = 0;
       let scenariosPassed = 0;
-      let stepRecordsWritten = 0;
       const failedScenarios: FailedScenario[] = [];
 
       // Skipped entirely for a run that selects zero pickles: no pickle
@@ -1791,7 +1796,6 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           // finishes; everything else about
           // this run goes to stderr, never stdout.
           noteRecord(record);
-          stepRecordsWritten += record.steps.filter((step) => step.step_record_id !== null).length;
           // A `"scenario"`-scope fixture's own teardown failure, already
           // recorded on `record.teardown_
           // errors` (src/run/run-scenario.ts); announced here too, on
@@ -1898,7 +1902,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       await runOtherWorlds();
       const end = await finishRun(allPassed ? "passed" : "failed", failedScenarios);
       writeRunEnd(
-        stepsLocation(config.stateDir, runId, scenariosWritten, stepRecordsWritten),
+        stepsLocation(rootDir, config.stateDir, runId, scenariosWritten),
         { total: scenariosWritten, passed: scenariosPassed },
         failedScenarios,
         repeatTally.list(),
