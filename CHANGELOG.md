@@ -672,6 +672,13 @@ just until 0.1.
 
 ### Fixed
 
+- **A `{condition.<name>}` refusal in the default world names an
+  environment that declares it.** Its fix told the user to declare the
+  condition under conditions of world default, which the program file
+  refuses at the top level. The fix now names the environments that
+  declare the condition, and `nuka do` adds a `do:` line that runs the
+  same call with `--env` and the first of them.
+
 - **A finding that quotes a worker's output is redacted in run.json.**
   A line a `--concurrency` worker or a tree of `--base` wrote on its
   stdout that was not an envelope, such as what a child process with

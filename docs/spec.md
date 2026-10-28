@@ -2812,6 +2812,8 @@ The fix names only what the world lacks: `{root}` alone, or a move to
 `prepare`, for a `build` command, `serve` or `url` for a world with
 neither, and the condition under the environment's `conditions` for
 `{condition.<name>}`.
+A world that is no environment of the file, the default world when `environments` has no `default` entry, has no `conditions` to declare one in, so its fix names the environments that declare the condition instead.
+`nuka do` there also prints a `do:` line, the same call with `--env` and the first of them.
 The recipe alone says which placeholders a world has, so the refusal does
 not wait for the world.
 `nuka check` reports `program-placeholder-unfilled`, an error, for each

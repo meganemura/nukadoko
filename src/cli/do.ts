@@ -12,7 +12,8 @@ import {
 import path from "node:path";
 import { loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
-import { placeholderRefusal } from "../program/placeholders.js";
+import { conditionOutsideEnvironmentsFix, placeholderRefusal } from "../program/placeholders.js";
+import { shellWord } from "../shell/shell-word.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { projectRelativeText } from "../run/base-run.js";
 import { applyWorldEnv } from "../program/world-view.js";
@@ -189,9 +190,19 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     return refuse(sinks, error, "unexpected-error");
   }
   // Refused before anything runs, as `nuka run` refuses it (src/cli/run.ts).
+  const environments = program?.environments ?? {};
   const unfilled =
-    resolvedEnv.program === null ? undefined : placeholderRefusal([{ name: resolvedEnv.name, recipe: resolvedEnv.program }], programFile);
-  if (unfilled !== undefined) return refuse(sinks, new Error(unfilled.message), "program-placeholder-unfilled", { fix: unfilled.fix });
+    resolvedEnv.program === null ? undefined : placeholderRefusal([{ name: resolvedEnv.name, recipe: resolvedEnv.program }], programFile, environments);
+  if (unfilled !== undefined) {
+    // The default world declares no conditions, so a step that needs one
+    // runs in an environment that declares it.
+    const elsewhere = Object.hasOwn(environments, resolvedEnv.name) ? undefined : conditionOutsideEnvironmentsFix(unfilled.first.gap, environments, programFile)?.environment;
+    const rerun =
+      elsewhere === undefined
+        ? undefined
+        : ["nuka", "do", name, ...(argsJson === null ? [] : ["--args", argsJson]), ...use.flatMap((id) => ["--use", id]), "--env", elsewhere].map(shellWord).join(" ");
+    return refuse(sinks, new Error(unfilled.message), "program-placeholder-unfilled", { fix: unfilled.fix, ...(rerun === undefined ? {} : { do: rerun }) });
+  }
 
   // Installed once this execution's fixture caches exist. `stop()` in the
   // `finally` below removes it on a normal return.

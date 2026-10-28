@@ -784,6 +784,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const unfilled = placeholderRefusal(
       resolvedEnvs.flatMap((resolvedEnv) => (resolvedEnv.program === null ? [] : [{ name: resolvedEnv.name, recipe: resolvedEnv.program }])),
       programFile,
+      program?.environments ?? {},
     );
     if (unfilled !== undefined) return refused(new Error(unfilled.message), "program-placeholder-unfilled", { fix: unfilled.fix });
 

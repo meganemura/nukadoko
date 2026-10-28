@@ -82,6 +82,20 @@ describe("{condition.<name>}", () => {
       );
     }));
 
+  it("names, for nuka do in the default world, the environments that declare the condition, and its do: line runs", () =>
+    withProject(async (rootDir) => {
+      const refused = await cli(rootDir, ["do", "banner-reads", "--args", "{\"state\":\"false\"}"]);
+      expect(refused.exitCode).toBe(2);
+      expect(refused.stderr).toBe(
+        "refused\tprogram-placeholder-unfilled\t-\tworld default: env.BANNER names {condition.banner}, which has no value here: its environment declares no condition \"banner\" under conditions; nothing ran\n" +
+          "  fix: The default world declares no conditions, and only an environment can: flag-off, flag-on declare banner. Name one with --env, or remove {condition.banner} from env.BANNER.\n" +
+          "  do: nuka do banner-reads --args '{\"state\":\"false\"}' --env flag-off\n",
+      );
+      const ran = await cli(rootDir, ["do", "banner-reads", "--args", "{\"state\":\"false\"}", "--env", "flag-off"]);
+      expect(ran.exitCode).toBe(0);
+      expect((JSON.parse(ran.stdout) as { status: string }).status).toBe("passed");
+    }));
+
   it("is checked for the worlds a run with the same --env flags would start, and no other", () =>
     withProject(async (rootDir) => {
       // Without --env a run starts flag-off and flag-on, the environments

@@ -145,22 +145,63 @@ export function describePlaceholderGap(gap: PlaceholderGap): string {
 export function placeholderRefusal(
   worlds: readonly { readonly name: string; readonly recipe: Parameters<typeof placeholderGaps>[0] }[],
   programFile: string,
-): { readonly message: string; readonly fix: string } | undefined {
+  environments: ProgramEnvironments,
+): { readonly message: string; readonly fix: string; readonly first: { readonly world: string; readonly gap: PlaceholderGap } } | undefined {
   const gaps = worlds.flatMap((world) => placeholderGaps(world.recipe).map((gap) => ({ world: world.name, gap })));
   const first = gaps[0];
   if (first === undefined) return undefined;
   return {
     message: `${gaps.map(({ world, gap }) => `world ${world}: ${describePlaceholderGap(gap)}`).join("; ")}; nothing ran`,
-    fix: placeholderGapFix(first.gap, first.world, programFile),
+    fix: placeholderGapFix(first.gap, first.world, programFile, environments),
+    first,
   };
 }
+
+/** The edit for a `{condition.<name>}` gap in a world that is no
+ * environment of the program file: the default world when `environments`
+ * has no `default` entry. Such a world declares no conditions, and the
+ * file has no place to declare one for it, so the edit is to run in an
+ * environment that declares the condition. `environment` is the first of
+ * them, for a command to name; `undefined` when none does. `undefined` as
+ * a whole for any other gap, which `placeholderGapFix` covers. */
+export function conditionOutsideEnvironmentsFix(
+  gap: PlaceholderGap,
+  environments: ProgramEnvironments,
+  programFile: string,
+): { readonly fix: string; readonly environment: string | undefined } | undefined {
+  if (!gap.name.startsWith(CONDITION_PLACEHOLDER_PREFIX) || gap.where.startsWith("build")) return undefined;
+  const condition = gap.name.slice(CONDITION_PLACEHOLDER_PREFIX.length);
+  const declaring = Object.entries(environments)
+    .filter(([, environment]) => environment.conditions !== undefined && Object.hasOwn(environment.conditions, condition))
+    .map(([name]) => name);
+  const outside = "The default world declares no conditions, and only an environment can";
+  if (declaring.length === 0) {
+    return {
+      fix: `${outside}; none in ${programFile} declares ${condition}. Declare it under conditions of an environment, or remove {${gap.name}} from ${gap.where}.`,
+      environment: undefined,
+    };
+  }
+  return {
+    fix: `${outside}: ${declaring.join(", ")} ${declaring.length === 1 ? "declares" : "declare"} ${condition}. Name one with --env, or remove {${gap.name}} from ${gap.where}.`,
+    environment: declaring[0],
+  };
+}
+
+/** The program file's `environments`, as far as a fix reads them. */
+export type ProgramEnvironments = Readonly<Record<string, { readonly conditions?: Conditions | undefined }>>;
 
 /** The edit that closes `gap` in world `world` of `programFile`: it names
  * only what the world lacks. Outside a build, only a world with neither
  * `serve` nor `url` lacks a value (`placeholderAbsence`), so the edit
  * offers either one; a world that has one of them is never told to add
- * the other, which the file refuses beside it. */
-export function placeholderGapFix(gap: PlaceholderGap, world: string, programFile: string): string {
+ * the other, which the file refuses beside it. A condition is declared on
+ * the world's environment, and a world that is no entry of `environments`
+ * is sent to one that declares it. */
+export function placeholderGapFix(gap: PlaceholderGap, world: string, programFile: string, environments: ProgramEnvironments): string {
+  if (!Object.hasOwn(environments, world)) {
+    const outside = conditionOutsideEnvironmentsFix(gap, environments, programFile);
+    if (outside !== undefined) return outside.fix;
+  }
   if (gap.name.startsWith(CONDITION_PLACEHOLDER_PREFIX) && !gap.where.startsWith("build")) {
     const condition = gap.name.slice(CONDITION_PLACEHOLDER_PREFIX.length);
     return `Declare ${condition} under conditions of world ${world} in ${programFile}, or remove {${gap.name}} from ${gap.where}.`;

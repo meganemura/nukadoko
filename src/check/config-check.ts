@@ -175,7 +175,7 @@ export async function checkConfig(
           code: "program-placeholder-unfilled",
           message: `world ${world.name}: ${describePlaceholderGap(gap)}`,
           file: programFile,
-          fix: placeholderGapFix(gap, world.name, programFile),
+          fix: placeholderGapFix(gap, world.name, programFile, program.program.environments ?? {}),
         });
       }
     }

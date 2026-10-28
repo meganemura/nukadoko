@@ -2291,6 +2291,9 @@ world が値を持たないプレースホルダーは、何かを実行する�
 default の world は condition を 1 つも宣言しないので、これに含まれます。
 fix は world に欠けているものだけを挙げます。
 `build` のコマンドには `{root}` だけにするか `prepare` に移すことを、どちらも無い world には `serve` か `url` を、`{condition.<name>}` にはその condition を environment の `conditions` に宣言することを挙げます。
+ファイルの environment ではない world(`environments` に `default` の項目が無いときの default の world)には condition を宣言する `conditions` が無いので、その fix は代わりにその condition を宣言する environment を挙げます。
+`nuka do` はそのとき `do:` 行も出力します。
+それは同じ呼び出しに `--env` とそのうち最初の environment を付けたものです。
 world がどのプレースホルダーを持つかはレシピだけで決まるので、この拒否は world を待ちません。
 `nuka check` は、同じ `--env` フラグの `nuka run` が起動する各 world のそれぞれの欠けについて、error `program-placeholder-unfilled` を報告します。
 その world とは、`--env` があるときは `--env` が名指す各 environment、無いときは `--env` の無い run が選ぶ environment(`conditions` を宣言する各 environment、どれも宣言しないときは default の world)です。
