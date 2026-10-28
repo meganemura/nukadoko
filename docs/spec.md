@@ -5432,6 +5432,8 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   redacted, from the moment the env files are read. A value split across
   two writes is not found.
   A finding of `nuka run` that quotes such output, such as `worker-output-unreadable`, holds the same redacted text in run.json and the summary.
+  In a serial `nuka run` and in `nuka do`, a child process that project code starts with inherited stdio (`stdio: "inherit"`) writes to file descriptors 1 and 2 directly, so nothing it prints is redacted on either.
+  To keep it redacted, run with `--concurrency`, where the parent reads each worker's streams through pipes, or start the child with `stdio: "pipe"` and print its output from the step.
   A step's `run` cannot control this process.   Each loaded value is removed
   in every spelling below, and each spelling is replaced by the same
   `{{secret.NAME}}` token. The spellings are the value itself, the

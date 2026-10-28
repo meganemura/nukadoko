@@ -4214,6 +4214,8 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   `nuka run`(worker を含む)と `nuka do` の間にプロジェクトのコードが stdout や stderr に出力したものも、env ファイルを読んだ時点から、同じ値を redact して stderr に届きます。
   2 回の書き込みに分かれた値は見つかりません。
   そのような出力を引用する `nuka run` の finding(`worker-output-unreadable` など)は、run.json とサマリでも同じく redact された文を持ちます。
+  直列の `nuka run` と `nuka do` では、プロジェクトのコードが stdio を継承させて(`stdio: "inherit"`)起動した子プロセスは file descriptor 1 と 2 に直接書くので、その出力はどちらでも redact されません。
+  redact したままにするには、親が各 worker のストリームをパイプで読む `--concurrency` で走らせるか、子を `stdio: "pipe"` で起動してその出力を step から出力します。
   これは書き込み時に executor によって適用され、step の `run` から制御することは決してできません。
   読み込んだ値は、次のどの綴りで現れても、同じ `{{secret.NAME}}` に置き換わります。
   綴りは、値そのもの、`encodeURIComponent` が返すパーセントエンコードされた形、その形の `'` をそれぞれ `%27` にしたもの、`URLSearchParams` が返す `application/x-www-form-urlencoded` の形、そして `JSON.stringify` が文字列の中に書く JSON エスケープされた形です。
