@@ -5376,6 +5376,10 @@ Nukadoko provides execution infrastructure that Cucumber did not provide:
   give opposite instructions. Nukadoko reports this conflict as a config error.
   The executor redacts secret values from either origin when it writes a step
   record surface: `record.json`, the stdout copy from `do`, or http.jsonl.
+  What project code prints on stdout or stderr during `nuka run` (a
+  worker's included) and `nuka do` reaches stderr with the same values
+  redacted, from the moment the env files are read. A value split across
+  two writes is not found.
   A step's `run` cannot control this process.   Each loaded value is removed
   in every spelling below, and each spelling is replaced by the same
   `{{secret.NAME}}` token. The spellings are the value itself, the

@@ -569,6 +569,11 @@ This part does not change release to release.
   each targeted file once, so `nuka check` runs it; nothing changes in a
   project. A script that ran the old line got `line-not-supported`.
 
+- **What a step prints is redacted on stderr.** A loaded secret that a
+  step, hook, or fixture prints reads `{{secret.NAME}}` on stderr, as in
+  its record. A script that read the value back from nukadoko's stderr
+  reads it from the env file instead.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

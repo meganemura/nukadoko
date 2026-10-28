@@ -8,6 +8,7 @@ import type { Arguments, Argv, CommandModule } from "yargs";
 import { readOwnVersion } from "../version.js";
 import { AGENT_ENTRY_POINT, HELP_WIDTH, type HelpGroup, helpLines, renderCommandGroups, withoutFlatListing } from "./help-groups.js";
 import { commandTookTheName, VALID_STEP_NAME } from "./option-defaults.js";
+import type { SecretSet } from "../secrets/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 import { shellWord } from "../shell/shell-word.js";
 import { DEFAULT_PROOF_RUNS } from "../condition/condition.js";
@@ -256,11 +257,14 @@ export async function runCli(
   const rootDir = options.rootDir ?? process.cwd();
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
-  // Only a command that runs project code takes the process stdout over:
+  // Only a command that runs project code takes the process output over:
   // yargs prints help and the version through console.log. An injected
   // sink is not the process stream, so there is nothing to protect.
-  const recordStdout = async (): Promise<WritableSink> =>
-    options.stdout ?? (await import("../run/step-stdout.js")).divertProcessStdoutToStderr();
+  const projectOutput = async (): Promise<{ stdout: WritableSink; redactProjectOutput?: (secrets: SecretSet) => void }> => {
+    if (options.stdout !== undefined) return { stdout: options.stdout };
+    const output = (await import("../run/step-stdout.js")).takeOverProcessOutput();
+    return { stdout: output.records, redactProjectOutput: output.redact };
+  };
 
   let ownVersion: string;
   try {
@@ -543,7 +547,7 @@ export async function runCli(
         argsJson: args.args ?? null,
         env: args.env ?? null,
         use: args.use ?? [],
-        stdout: await recordStdout(),
+        ...(await projectOutput()),
         stderr,
       });
     },
@@ -663,7 +667,7 @@ export async function runCli(
         // GitHub Actions sets this for every step; an empty value means no
         // file to append to.
         stepSummaryPath: process.env.GITHUB_STEP_SUMMARY || undefined,
-        stdout: await recordStdout(),
+        ...(await projectOutput()),
         stderr,
       });
     },

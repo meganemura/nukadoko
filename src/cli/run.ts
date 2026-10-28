@@ -316,6 +316,10 @@ export interface RunRunOptions {
   stepSummaryPath: string | undefined;
   stdout: WritableSink;
   stderr: WritableSink;
+  /** Redacts these secrets from what project code prints on the process
+   * stdout and stderr, a worker's lines the parent relays included;
+   * absent when the streams are not the process's. */
+  redactProjectOutput?: (secrets: SecretSet) => void;
 }
 
 /** The step records row, when the run wrote a scenario. Scenarios have no
@@ -763,6 +767,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         return refused(error);
       }
       const { envVars, secrets } = read;
+      options.redactProjectOutput?.(secrets);
       const probeResult = await probeVersion(resolvedEnv.version);
       let targetVersion: string | undefined;
       if (probeResult !== undefined) {
@@ -806,6 +811,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       if (pass.resolvedEnv.program === null) return null;
       const started = await worldStarter.start(pass.resolvedEnv.name, pass.resolvedEnv.program, pass.secrets, abort);
       if (started.ok) {
+        options.redactProjectOutput?.(started.view.secrets);
         if (started.view.url !== undefined) headUrls.set(pass.resolvedEnv.name, started.view.url);
         return started;
       }

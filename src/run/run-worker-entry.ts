@@ -30,7 +30,7 @@ import {
 } from "./run-scenario.js";
 import { installProcessSignalHandlers, runOnce, type ProcessSignal } from "./process-signal.js";
 import { selectPickles } from "./select-pickles.js";
-import { divertProcessStdoutToStderr } from "./step-stdout.js";
+import { takeOverProcessOutput } from "./step-stdout.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
 import { fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
@@ -149,7 +149,8 @@ async function inTree<T>(what: string, work: () => Promise<T> | T): Promise<T> {
   }
 }
 
-const envelopeStdout = divertProcessStdoutToStderr();
+const processOutput = takeOverProcessOutput();
+const envelopeStdout = processOutput.records;
 const parentPid = process.ppid;
 const ignoreStreamError = (): void => {};
 const CHANNEL_CLOSED_FROM_INSIDE =
@@ -244,6 +245,7 @@ async function main(): Promise<void> {
   });
   // The world's token is redacted wherever the env files' secrets are.
   const secrets = world === null ? envSecrets : [...envSecrets, ...world.secrets];
+  processOutput.redact(secrets);
 
   const probeResult = await probeVersion(resolvedEnv.version);
   let targetVersion: string | undefined;

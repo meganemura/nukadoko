@@ -4173,6 +4173,8 @@ nukadoko は、Cucumber が提供しなかった実行インフラを提供し�
   それは config エラーです。
   2 つのリストは、1 つのキーについて正反対の指示を与えるからです。
   secret の値は、出自にかかわらず、step record が出力されるあらゆる場所(`record.json`、`do` の stdout コピー、http.jsonl)で `{{secret.NAME}}` として redact されます。
+  `nuka run`(worker を含む)と `nuka do` の間にプロジェクトのコードが stdout や stderr に出力したものも、env ファイルを読んだ時点から、同じ値を redact して stderr に届きます。
+  2 回の書き込みに分かれた値は見つかりません。
   これは書き込み時に executor によって適用され、step の `run` から制御することは決してできません。
   読み込んだ値は、次のどの綴りで現れても、同じ `{{secret.NAME}}` に置き換わります。
   綴りは、値そのもの、`encodeURIComponent` が返すパーセントエンコードされた形、その形の `'` をそれぞれ `%27` にしたもの、`URLSearchParams` が返す `application/x-www-form-urlencoded` の形、そして `JSON.stringify` が文字列の中に書く JSON エスケープされた形です。

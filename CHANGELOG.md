@@ -652,6 +652,14 @@ just until 0.1.
 
 ### Fixed
 
+- **What a step prints reaches stderr with its secrets redacted.** A
+  step, hook, or fixture that printed a loaded secret through
+  `console.log`, `console.error`, or `process.stdout.write` put the value
+  on stderr as it was, in `nuka run`, its workers under `--concurrency`,
+  and `nuka do`, while every record held `{{secret.NAME}}`. Each write to
+  the process stdout and stderr now passes through the same redaction
+  once the env files are read.
+
 - **A step that timed out no longer hangs `--concurrency`.** A step
   whose request never got an answer failed with its timeout, and its
   worker then waited on the open socket forever, so the parent never

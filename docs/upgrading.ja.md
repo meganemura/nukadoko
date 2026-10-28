@@ -473,6 +473,10 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   プロジェクトで変えることはありません。
   以前の行を走らせたスクリプトは `line-not-supported` を受け取っていました。
 
+- **step が出力したものは stderr で redact されます。**
+  step、hook、fixture が出力した読み込み済みの secret は、record と同じく stderr でも `{{secret.NAME}}` になります。
+  その値を nukadoko の stderr から読み戻していたスクリプトは、env ファイルから読みます。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

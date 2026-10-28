@@ -37,6 +37,7 @@ import { retentionNote } from "../record/retention.js";
 import type { ArgOrigin, ErrorKind, StepRecord } from "../record/types.js";
 import { writeStepRecord } from "../record/write-step-record.js";
 import { buildSecretSet } from "../secrets/build-secret-set.js";
+import type { SecretSet } from "../secrets/types.js";
 import { classifyEnvFiles } from "../secrets/classify-env-files.js";
 import { redact, fixtureTeardownWarning, versionProbeWarning } from "../secrets/redact.js";
 import type { Step } from "../step/define-step.js";
@@ -144,6 +145,9 @@ export interface RunDoOptions {
   use: readonly string[];
   stdout: WritableSink;
   stderr: WritableSink;
+  /** Redacts these secrets from what project code prints on the process
+   * stdout and stderr; absent when the streams are not the process's. */
+  redactProjectOutput?: (secrets: SecretSet) => void;
 }
 
 export async function runDo(options: RunDoOptions): Promise<number> {
@@ -407,6 +411,7 @@ export async function runDo(options: RunDoOptions): Promise<number> {
       if (error instanceof EnvFileUnreadableError) return refuse(sinks, error, "env-file-unreadable");
       throw error;
     }
+    options.redactProjectOutput?.(secrets);
 
     // The version probe is metadata about the target the tool records
     // for itself, never something a step's own `run` can see or trigger. A
@@ -467,7 +472,10 @@ export async function runDo(options: RunDoOptions): Promise<number> {
     }
     const restoreEnv = world === null ? () => {} : applyWorldEnv(world.view.env);
     const stepEnv = world === null ? envVars : { ...envVars, ...world.view.env };
-    if (world !== null) secrets = [...secrets, ...world.view.secrets];
+    if (world !== null) {
+      secrets = [...secrets, ...world.view.secrets];
+      options.redactProjectOutput?.(world.view.secrets);
+    }
 
     const contextHandle = createStepContext({
       config,
