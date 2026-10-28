@@ -1693,6 +1693,12 @@ ones nothing validated.
 - **A literal**: `{ literal: v }`, only when the sentence itself states
   the value. Its text is exactly a run of the pattern's fixed words,
   joined by one space (the pattern `the command exits 0` may claim `0`).
+  A whole number from zero to twelve is also stated by the fixed word that
+  spells it, under any compare, as its digits would be: `at least three
+  routed points` may claim `3` with `at-least`, and `one relation line`
+  may claim `1`. Only a fixed word counts. A capture's text reaches a
+  claim through its parameter type, and `{int}` reads digits alone, so a number word
+  in a line is a fixed word or nothing.
   Only the pattern's words lose their edge punctuation, so a literal with
   other spacing or punctuation is a text the sentence does not state. Or
   it is the fixed value of a word in a short table: `no`, `none`,

@@ -9,6 +9,7 @@ import {
   claimsProblem,
   LITERAL_WORDS,
   literalStatedBy,
+  NUMBER_WORDS,
   itemPathsOverlap,
   placeAt,
   placesOverlap,
@@ -683,6 +684,34 @@ describe("the literal rule, exactly", () => {
         `claims[0].expected is the literal ${JSON.stringify(literal)}, which the ${negated ? `words "not ${word}" rule out` : `word "${word}" fixes`}, and claims[0].compare is "${compare}". A value a word fixes is compared with equal alone, or with not-equal alone right after the word \"not\" (\"is not empty\"): another compare against it holds for nearly anything, and the word does not show it`,
       );
     }));
+
+  it("a fixed number word states its number under any compare, and states no other number", () =>
+    hegel.test((tc) => {
+      const words = tc.draw(patternWords);
+      const value = tc.draw(gs.integers({ minValue: 0, maxValue: NUMBER_WORDS.length - 1 }));
+      const spelled = tc.draw(gs.sampledFrom([NUMBER_WORDS[value]!, NUMBER_WORDS[value]!.toUpperCase(), `${NUMBER_WORDS[value]!},`]));
+      const at = tc.draw(gs.integers({ minValue: 0, maxValue: words.length }));
+      const pattern = [...words.slice(0, at), spelled, ...words.slice(at)].join(" ");
+      const compare = tc.draw(gs.sampledFrom(["equal", "not-equal", "greater-than", "at-least", "less-than", "at-most"] as const));
+      expect(claimsProblem([{ actual: "result", compare, expected: { literal: value } }], literalShape(pattern))).toBeNull();
+      expect(literalStatedBy(pattern, value)?.toLowerCase()).toBe(NUMBER_WORDS[value]);
+      const other = tc.draw(gs.integers({ minValue: -3, maxValue: 20 }));
+      tc.assume(other !== value);
+      expect(literalStatedBy(pattern, other)).toBeNull();
+      expect(literalStatedBy(pattern, String(value))).toBeNull();
+    }));
+
+  it("a number word inside a capture, an optional group, or an alternation states nothing", () => {
+    for (const pattern of ["at least {three} points", "at least (three) points", "at least two/three points"]) {
+      expect(literalStatedBy(pattern, 3)).toBeNull();
+    }
+  });
+
+  it("the adopters' sentences state their numbers in words", () => {
+    expect(literalStatedBy("a relationship path follows at least three routed points", 3)).toBe("three");
+    expect(literalStatedBy("one relation line was drawn throughout and none faded", 1)).toBe("one");
+    expect(literalStatedBy("one relation line was drawn throughout and none faded", 0)).toBe("none");
+  });
 
   it("neither fixes the values no fixes, so a line about two hosts can state an empty list", () => {
     const pattern = "neither host path links to it any more";

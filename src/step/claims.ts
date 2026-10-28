@@ -189,8 +189,9 @@ class InvalidClaimError extends Error {}
 // data nor an earlier step's result, so it would let step code carry the
 // criterion again ("the command succeeds" claiming 0). It is allowed only
 // when the sentence itself states it: its text is exactly a run of the
-// pattern's fixed words, joined by one space, or it is the fixed value of
-// a fixed word in the table below. A word inside a capture, an optional
+// pattern's fixed words, joined by one space, a whole number from zero to
+// twelve that a fixed word spells, or it is the fixed value of a fixed
+// word in the table below. A word inside a capture, an optional
 // group, or an alternation is not fixed, because the sentence a line binds
 // may not say it. Only the pattern side is normalized (edge punctuation
 // taken off its words): a literal with other spacing or punctuation is a
@@ -212,6 +213,26 @@ export const LITERAL_WORDS: Readonly<Record<string, readonly ClaimLiteral[]>> = 
   neither: [0, "", []],
   empty: ["", []],
 };
+
+/** The words that write a whole number in a sentence, by value: a fixed
+ * word here states its number as the digits would ("at least three
+ * routed points" states 3), under any compare. Twelve is where English
+ * prose usually turns to digits. */
+export const NUMBER_WORDS: readonly string[] = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+];
 
 const EDGE_PUNCTUATION = /^[.,;:!?"'`]+|[.,;:!?"'`]+$/g;
 
@@ -326,6 +347,9 @@ export function literalStatement(pattern: string, literal: unknown): LiteralStat
   const words = all.filter((word) => word.fixed).map((word) => word.text);
   const text = literalText(literal);
   if (text !== null && text.length > 0 && isRunOf(words, text)) return { words: text, byTable: false, compare: null };
+  const numberWord = typeof literal === "number" ? NUMBER_WORDS[literal] : undefined;
+  const spelled = numberWord === undefined ? undefined : words.find((word) => word.toLowerCase() === numberWord);
+  if (spelled !== undefined) return { words: spelled, byTable: false, compare: null };
   for (const [index, word] of all.entries()) {
     if (!word.fixed) continue;
     const values = LITERAL_WORDS[word.text.toLowerCase()];

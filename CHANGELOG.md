@@ -20,6 +20,13 @@ just until 0.1.
   links to it any more" may claim `{ literal: [] }` (or `0` or `""`),
   compared with `equal`, where only `no`, `none`, `nothing`, and
   `empty` could before.
+- **A number word in a pattern states its number.** A fixed word from
+  `zero` to `twelve` states that whole number as its digits would,
+  under any compare: "a relationship path follows at least three routed
+  points" may claim `{ literal: 3 }` with `at-least`, and "one relation
+  line was drawn" may claim `1`. A word inside a capture, an optional
+  group, or an alternation still states nothing, and `{int}` still reads
+  digits alone.
 
 ## 0.22.0 — 2026-10-28
 
