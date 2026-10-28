@@ -370,7 +370,9 @@ just until 0.1.
   (SIGTERM, the 5 seconds a world gets, then SIGKILL) before its world
   and the trees, and a worker's files are written in the run directory;
   a signal while the trees are made waits for the checkout, then removes
-  the trees and the worktree registration.
+  the trees and the worktree registration. Either way the run exits with
+  128 plus the signal's number and writes no run.json, however soon a
+  stopped worker closes.
   git runs against a tree with the
   repository's hooks off, and the next `nuka run --base` and `nuka clean`
   remove a worktree registration a killed run left under `runs/` once its

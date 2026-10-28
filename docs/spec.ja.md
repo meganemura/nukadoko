@@ -3367,6 +3367,8 @@ step の中で手が離せない worker は、自分のハンドラを走らせ�
 そのあと、head の world を止めるのと同じように tree の world を止めます。
 起動中ならすぐに止め、動いている world には SIGTERM と 5 秒を与えます(「テスト対象のプログラム」を参照)。
 tree は nukadoko が終了する前に取り除かれます。
+nukadoko は、head の pass でのシグナルと同じく、worker がどれほど早く従っても、128 にシグナルの番号を足した値で終了し、`run.json` を書きません。
+止められた worker が残したセルはシグナルのもので、worker の失敗ではないからです。
 
 nukadoko が tree に対して走らせる git のコマンドは、どれもリポジトリの hook を止めて(`core.hooksPath=/dev/null`)走るので、`post-checkout` の hook が base の tree に手を出すことはありません。
 Git LFS や `.gitattributes` のフィルタのようなチェックアウトのフィルタは止めません。

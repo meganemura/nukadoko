@@ -4225,7 +4225,10 @@ tree's workers: SIGTERM, the same 5 seconds a world gets, then SIGKILL,
 since a worker busy in a step cannot run its own handler. Then it stops
 the tree's world as it stops head's: it stops a start at once, and gives a
 running world SIGTERM and its 5 seconds (see "Program"), and the trees
-are removed before nukadoko exits.
+are removed before nukadoko exits. It exits with 128 plus the signal's
+number and writes no `run.json`, as a signal during head's pass does,
+however soon a worker obeys: the cells a stopped worker left are the
+signal's, not a worker's failure.
 
 Every git command nukadoko runs against a tree runs with the repository's
 hooks off (`core.hooksPath=/dev/null`), so a `post-checkout` hook never

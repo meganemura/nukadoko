@@ -1529,6 +1529,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             treeStart = { abort, starting };
             const result = await starting;
             treeStart = null;
+            if (signals.interrupted) await signals.untilExit();
             if (!result.ok) {
               if (result.unavailable === true) {
                 leaveNotRun(world, environment, `the ${world} world has no URL to reach: ${result.message}`);
@@ -1589,6 +1590,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
             live,
             runDir: runDirAbsolute,
           });
+          // The handler's SIGTERM stopped the pass's workers, so a cell
+          // they left is the signal's and not a worker's failure, and the
+          // handler exits once the trees are gone, with no run.json.
+          if (signals.interrupted) await signals.untilExit();
           if (result.notRun !== null) leaveNotRun(world, environment, result.notRun);
           if (started !== null) await stopWorld(started, world);
           treeWorld = null;
