@@ -2719,6 +2719,12 @@ The launcher's exit is the program's exit: before `ready` answers it
 fails the world, and after that the stop reports `program-exited`.
 A child that a `build` or `prepare` command leaves running on Windows
 is out of reach the same way.
+On every platform `serve.command` stays in the foreground. A command
+that daemonizes, as `rails server -d` does, exits before `ready`
+answers, which fails the world, and the daemon it started runs in a
+session of its own, out of reach of the stop, so it keeps running and
+holds its port after nukadoko exits. Run the server without its daemon
+flag.
 A program nukadoko started does not outlive nukadoko: when the process
 exits by any path it can handle, a signal or a crash included, every
 world's process group still running is killed.

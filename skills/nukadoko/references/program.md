@@ -69,6 +69,9 @@ keeps. Each phase prints `world <name>: <phase> started` on stderr, so a long
 wait names what it waits on. A `build` or `prepare` command's process
 group is killed when the command exits: a service that has to outlive
 `prepare`, such as a database, starts with `setsid`, as a daemon does.
+`serve.command` stays in the foreground: one that daemonizes, as `rails
+server -d` does, exits before `ready` answers and fails the world, and
+the daemon keeps running, out of nukadoko's reach.
 
 ## When it does not start
 
