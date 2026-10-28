@@ -257,12 +257,15 @@ export async function runCli(
   const rootDir = options.rootDir ?? process.cwd();
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
-  // Only a command that runs project code takes the process output over:
-  // yargs prints help and the version through console.log. An injected
-  // sink is not the process stream, so there is nothing to protect.
+  // Only a command that runs project code takes the process output and
+  // `process.exit` over: yargs prints help and the version through
+  // console.log. An injected sink means a host such as a test runner owns
+  // the process, so there is nothing to protect.
   const projectOutput = async (): Promise<{ stdout: WritableSink; redactProjectOutput?: (secrets: SecretSet) => void }> => {
     if (options.stdout !== undefined) return { stdout: options.stdout };
-    const output = (await import("../run/step-stdout.js")).takeOverProcessOutput();
+    const takeover = await import("../run/step-stdout.js");
+    takeover.holdProcessExit();
+    const output = takeover.takeOverProcessOutput();
     return { stdout: output.records, redactProjectOutput: output.redact };
   };
 

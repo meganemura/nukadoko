@@ -1,4 +1,5 @@
 import { constants } from "node:os";
+import { exitProcess } from "./project-exit.js";
 
 // Responsibility: SIGINT, SIGTERM, and SIGHUP handling for the process that owns
 // fixture caches. Node's default action for those signals exits the
@@ -64,7 +65,7 @@ export function installProcessSignalHandlers(): ProcessSignal {
 
   const onSignal = (signal: NodeJS.Signals): void => {
     if (exiting) {
-      process.exit(exitCodeForSignal(signal));
+      exitProcess(exitCodeForSignal(signal));
     }
     exiting = true;
     interrupted = true;
@@ -82,7 +83,7 @@ export function installProcessSignalHandlers(): ProcessSignal {
         // else still has to reach the exit below, or the process would stay
         // up with the default action already removed.
       } finally {
-        process.exit(exitCodeForSignal(signal));
+        exitProcess(exitCodeForSignal(signal));
       }
     })();
   };

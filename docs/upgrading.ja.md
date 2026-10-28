@@ -481,6 +481,11 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   コマンドの `{dir}` や `{root}` は、stderr では `.nukadoko/runs/<run_id>/worlds/<environment>` や `.` になります。
   run.json の `worlds[].commands` は、プログラムが受け取った語のままです。
 
+- **`process.exit` を呼ぶ step は失敗します。**
+  `nuka run` と `nuka do` は、step が渡したコードで終わっていました。
+  今は step が呼び出しを名指すエラーで失敗し、run は自身のコードで終わります。
+  わざと run を終わらせていた step は、代わりにエラーを投げます。
+
 ## 0.20.0 から 0.21.0 へ
 
 - **skill の名前が変わりました。**

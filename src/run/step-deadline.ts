@@ -1,5 +1,6 @@
 import { CompatTimeoutError, isWorldWriteValidationError } from "../compat/errors.js";
 import type { ErrorKind } from "../record/types.js";
+import { takeEscapedExit } from "./project-exit.js";
 
 // Responsibility: the deadline a step or a hook runs under, and how a
 // value it threw is classified into the record's `error.kind`. Shared by
@@ -71,6 +72,27 @@ export async function runWithTimeout<T>(
   kind: "Step" | "Hook",
   name: string,
   source: TimeoutSource = "registered",
+): Promise<T> {
+  // A process.exit no project code caught (project-exit.ts) fails the step
+  // or hook that finishes next, before what it threw itself: its own error
+  // is most likely what the exit call cut short.
+  let value: T;
+  try {
+    value = await raceDeadline(run, timeoutMs, kind, name, source);
+  } catch (error) {
+    throw takeEscapedExit() ?? error;
+  }
+  const exited = takeEscapedExit();
+  if (exited !== undefined) throw exited;
+  return value;
+}
+
+async function raceDeadline<T>(
+  run: () => Promise<T>,
+  timeoutMs: number | undefined,
+  kind: "Step" | "Hook",
+  name: string,
+  source: TimeoutSource,
 ): Promise<T> {
   const limit =
     source === "registered" && timeoutMs !== undefined && timeoutMs < 0 ? undefined : timeoutMs;

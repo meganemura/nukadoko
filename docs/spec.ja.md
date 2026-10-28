@@ -2913,6 +2913,12 @@ stdout はスクリプトのためのもので、求められたものだけを�
 `nuka do` でも同じであり、その stdout は 1 件の step record です。
 `--concurrency` の worker プロセスでも同じです。
 worker の stdout は、親プロセスが読む envelope の列です。
+プロジェクトのコードは `process.exit` で `nuka run` や `nuka do` を終わらせられません。
+`nuka run` と `nuka do` では、その呼び出しは呼び出しとコードを名指すエラーを投げるので、呼んだ step、hook、fixture、World のコンストラクタが失敗し、run は自身の判定と exit code まで進みます。
+timer や誰も await しない promise からの呼び出しはどこにも捕まらずに投げられ、次に終わる step か hook がそのエラーで失敗します。
+エラーを自分で捕まえた step はそのまま進みます。
+`--concurrency` の worker は呼び出しを止めません。
+worker は終わり、run は `run-incomplete` で失敗します。
 run を見守る人向けの出力は stderr に置きます: 各 pickle の前の境界、各 step の後の 1 行、run が書いたパス、1 行のサマリです。
 step の行は、その成否を step record と同じ語で示します: `passed`、`failed`、`skipped` のいずれかです。
 失敗した step の行の後には、字下げした 2 行が続きます。

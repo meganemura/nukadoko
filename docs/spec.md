@@ -3635,6 +3635,11 @@ process that project code spawns with `stdio: "inherit"` writes to file
 descriptor 1 directly, so its output still lands on stdout. The same split holds for `nuka do`,
 whose stdout is the one step record, and for a worker process under
 `--concurrency`, whose own stdout is the envelope stream the parent parses.
+Project code cannot end `nuka run` or `nuka do` with `process.exit`.
+In `nuka run` and `nuka do`, a call to it throws an error that names the call and its code, so the step, hook, fixture, or World constructor that made it fails, and the run goes on to its own verdict and exit code.
+A call from a timer or a promise that nothing awaited throws where nothing catches it, and the next step or hook to finish fails with it.
+A step that catches the error itself goes on.
+A `--concurrency` worker does not hold the call: the worker ends, and the run fails with `run-incomplete`.
 stderr contains the
 output for a person who watches the run: a boundary before each pickle, one
 line after each step, the paths written by the run, and a one-line summary.

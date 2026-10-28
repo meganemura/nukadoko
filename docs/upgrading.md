@@ -579,6 +579,11 @@ This part does not change release to release.
   or `.` on stderr; run.json's `worlds[].commands` keeps the words the
   program received.
 
+- **A step that calls `process.exit` fails.** `nuka run` and `nuka do`
+  ended with the code the step passed; now the step fails with an error
+  that names the call, and the run exits with its own code. A step that
+  ended the run on purpose throws an error instead.
+
 ## 0.20.0 to 0.21.0
 
 - **The skills have new names.** `acceptance` is `nukadoko`, and

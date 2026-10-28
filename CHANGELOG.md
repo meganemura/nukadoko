@@ -672,6 +672,16 @@ just until 0.1.
 
 ### Fixed
 
+- **A step that calls `process.exit` no longer ends the run.** A
+  `process.exit(0)` in a step, hook, or fixture ended `nuka run` with
+  exit code 0 after an earlier scenario had failed, with no run.json and
+  no finding, and ended `nuka do` with exit code 0 and no record. In
+  `nuka run` and `nuka do`, `process.exit` now throws an error that
+  names the call and its code, so the step fails and the run ends with
+  its own verdict. A call from a timer or a promise that nothing awaited
+  fails the next step or hook to finish. `--concurrency` already failed
+  such a run with `run-incomplete`.
+
 - **A world's progress lines name `{dir}` from the project root.** The
   line a world of `nuka run` or `nuka do` prints as a phase starts held
   the command as filled, so a `{dir}` or `{root}` in it was an absolute

@@ -23,6 +23,7 @@ import type { SelectedFeature, SelectedScenarios } from "./select-pickles.js";
 import { spawnRunWorker } from "./spawn-run-worker.js";
 import { createLineBuffer } from "../sink/line-buffer.js";
 import { exitCodeForSignal, HANDLED_SIGNALS } from "./process-signal.js";
+import { exitProcess } from "./project-exit.js";
 import { parseWorkerEnvelope, type WorkerEnvelope } from "./worker-protocol.js";
 import { serializeWorldView, type WorldView } from "../program/world-view.js";
 
@@ -496,7 +497,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
     if (process.platform !== "win32") {
       for (const child of liveWorkers) child.kill(signal);
     }
-    if (interruptedBy !== null) process.exit(exitCodeForSignal(signal));
+    if (interruptedBy !== null) exitProcess(exitCodeForSignal(signal));
     interruptedBy = signal;
     startAbort.abort();
   };

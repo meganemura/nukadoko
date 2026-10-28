@@ -2,6 +2,10 @@ import { redactString } from "../secrets/redact.js";
 import type { SecretSet } from "../secrets/types.js";
 import type { WritableSink } from "../sink/writable-sink.js";
 
+// The hold on `process.exit` is taken at the same moment as the output, for
+// the same invocations, so it reaches the CLI through this surface.
+export { holdProcessExit } from "./project-exit.js";
+
 // Responsibility: keep the process stdout for records only, for a whole
 // invocation that runs project code, and keep the secrets a record
 // redacts out of what project code prints.

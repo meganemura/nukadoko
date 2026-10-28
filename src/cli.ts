@@ -10,6 +10,9 @@ import { runCli } from "./cli/run-cli.js";
 // real stdout.
 const stdoutWrite = process.stdout.write.bind(process.stdout);
 const stderrWrite = process.stderr.write.bind(process.stderr);
+// Saved for the same reason: `run` and `do` make `process.exit` throw
+// for project code (src/run/project-exit.ts).
+const exit = process.exit.bind(process);
 // A reader that stops early (`nuka check --codes | head -3`) closes the
 // pipe, and every later write fails with EPIPE. With no listener, Node
 // turns that into an uncaught error and prints its stack. The exit code
@@ -25,7 +28,7 @@ const exitCode = await runCli(process.argv.slice(2));
 // exit code 0. An empty write is ordered after every chunk already queued,
 // so its callback runs only once those chunks have reached the pipe.
 await Promise.all([flushed(stdoutWrite), flushed(stderrWrite)]);
-process.exit(exitCode);
+exit(exitCode);
 
 function ignoreBrokenPipe(error: NodeJS.ErrnoException): void {
   if (error.code !== "EPIPE") throw error;
