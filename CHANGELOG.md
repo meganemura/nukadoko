@@ -7,6 +7,8 @@ just until 0.1.
 
 ## Unreleased
 
+## 0.22.0 — 2026-10-28
+
 ### Changed
 
 - **A typed Then declares claims instead of running code.** A step
@@ -787,6 +789,34 @@ just until 0.1.
   --command`'s entry point refusal printed an absolute path; they name
   the path from the project root now, as every other path nukadoko
   prints does. `ConfigError.configPath` still holds the absolute path.
+
+### Skill eval
+
+One run of one model, as `docs/releasing.md` describes: the `http-api`
+example, Claude Sonnet, without `http-api.md` in the installed skill.
+`nuka check` and `nuka run` passed (7 criteria over two environments, 13
+scenario runs and 2 control runs: 6 held, 1 proven).
+
+| Rule | Result | Reason |
+| --- | --- | --- |
+| S1 | met | Each Then claims a status code, a name, an id, a list item, or a count. The 404 Then claims that an error text is present, because the ticket gives no text. |
+| S2 | met | Every scenario ends with its Then lines after its When. |
+| S3 | met | The ticket gives no data, so the agent chose the names, the unknown id, and the bad bodies, and listed each under `Feature:` as an assumption. |
+| S4 | met | The sentences name the route, the body, the status, and the answer, never a handler or the store. |
+| S5 | met | Names, the unknown id, and the bodies are in the sentence or the docstring. |
+| S6 | not met | The 404, 400, and 422 paths are their own scenarios, but none claims the exact refusal: the ticket gives no error text, and the agent listed that as a question instead of stopping before those scenarios. |
+| S7 | not applicable | The feature has no Scenario Outline. |
+| S8 | met | Each scenario that reads an item creates it with a Given, and the count scenario claims growth from a reading it took itself, since the server serves every scenario. |
+| S9 | met | One When per scenario, and the status and the body are claimed on separate Then lines. |
+| S10 | met | The Givens create items, and the request under test is always the When. |
+| S11 | met | A Given that cannot create its item names the status and the first 200 characters of the answer. |
+| S12 | met | The ticket's sentences sit under `Feature:` word for word, one per line, and every scenario traces to one of them. The count criterion is proven by its control: with `ITEM_COUNT` off the status Then fails. |
+
+The agent wrote its HTTP steps with the `baseURL` fixture and `fetch`,
+because `nuka scaffold --request` and the `request` fixture need
+Playwright, which the project did not have. A step that declares
+`returns` and no `args` failed to load with "defineStep args must be a
+zod schema", which did not name the missing key.
 
 ## 0.21.0 — 2026-10-23
 

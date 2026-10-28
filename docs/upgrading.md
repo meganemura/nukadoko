@@ -43,7 +43,7 @@ This part does not change release to release.
   whose range ends above your version: a project on 0.13.0, 0.13.1, or
   0.14.0 starts at "0.14.0 to 0.14.1".
 
-## 0.21.0 to the next release
+## 0.21.0 to 0.22.0
 
 - **A typed Then declares claims, and a Then that runs code is an
   error.** `nuka check` reports each typed step that runs and is bound in

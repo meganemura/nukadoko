@@ -1,6 +1,6 @@
 {
   "name": "nukadoko",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "description": "Typed step contracts for Gherkin, so a scenario can be told wrong before it runs. Every execution leaves a step record the tool measured rather than the agent reported, and every run a Markdown summary that is the run's evidence.",
   "type": "module",
   "bin": {
