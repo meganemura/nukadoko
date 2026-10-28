@@ -68,7 +68,9 @@ that failed at a Then line runs again until it has broken the same claim
 there `--proof-runs` times (2 by default), each a `proof run <k>/<n>` line on
 stderr. Under `--concurrency`, a proof round whose worker could not
 finish (its BeforeAll or AfterAll failed) leaves the control `broke` with
-the reason and a `proof-run-incomplete` warning: correct the hook.
+the reason and a `proof-run-incomplete` warning: the row reads as one
+no control proves (under `--base`, its base cell decides), so correct
+the hook.
 
 ## What to do for each verdict
 

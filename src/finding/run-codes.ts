@@ -80,7 +80,7 @@ const RUN_CODES = {
   "proof-run-incomplete": {
     severity: "warning",
     description:
-      "Under --concurrency, a proof round could not record a control's run: a BeforeAll or AfterAll hook failed in the worker the round started, or the worker exited without a record. Each control cell the round was given reads broke with the reason, and the run's verdict does not change.",
+      "Under --concurrency, a proof round could not record a control's run: a BeforeAll or AfterAll hook failed in the worker the round started, or the worker exited without a record. Each control cell the round was given reads broke with the reason and proves nothing, so its row reads as one no control proves: held without --base, and under --base the base world runs for it.",
     fix: "Correct what the message names, such as the hook; the control proves on the next run.",
   },
   "record-unmatched": {

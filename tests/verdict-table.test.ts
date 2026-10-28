@@ -8,6 +8,7 @@ import {
   buildTable,
   executionOutcome,
   foldCell,
+  foldHeadCell,
   hasRequiredCell,
   judgeRow,
   judgedRowFindings,
@@ -83,6 +84,25 @@ describe("foldCell", () => {
   it("is not-run with no execution", () => {
     expect(foldCell([])).toEqual({ outcome: "not-run", runs: 0 });
   });
+});
+
+describe("foldHeadCell", () => {
+  it("never lets a control whose proof round did not finish prove, so a green new row still plans its base cell", () =>
+    hegel.test((tc) => {
+      const outcomes = tc.draw(gs.arrays(outcome, { maxSize: 4 }));
+      const runs = tc.draw(proofRuns);
+      const control = foldHeadCell(outcomes, "control", 3, "the worker of its proof run failed");
+      expect(control).toEqual({ outcome: "broke", line: 3, runs: outcomes.length, reason: "the worker of its proof run failed" });
+      const head = [{ environment: "on", role: "required" as const, outcome: "pass" as const, runs: 1 }, { environment: "off", role: "control" as const, ...control }];
+      expect(plannedWorldCells(head, runs, { change: "new", held: false, mappingChanged: false, retagged: false, renamed: false }).base).toEqual(["on"]);
+    }));
+
+  it("folds a required cell, and a control whose proof rounds finished, as foldCell does", () =>
+    hegel.test((tc) => {
+      const outcomes = tc.draw(gs.arrays(outcome, { maxSize: 4 }));
+      expect(foldHeadCell(outcomes, "control", 3, undefined)).toEqual(foldCell(outcomes));
+      expect(foldHeadCell(outcomes, "required", 3, "the worker of its proof run failed")).toEqual(foldCell(outcomes));
+    }));
 });
 
 describe("judgeRow", () => {

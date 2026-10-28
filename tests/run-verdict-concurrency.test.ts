@@ -76,7 +76,7 @@ describe("nuka run --concurrency 2: a failed run hook", () => {
       expect(document.table.rows.find((row) => row.line === 8)!.verdict).toBe("proven");
       expect(stderr).toContain(
         `warning\tproof-run-incomplete\t-\tA proof round in environment "flag-off" did not finish: ${reason}. ` +
-          "The control cell it was given (features/banner.feature:4) reads broke, and the run's verdict does not change\n",
+          "The control cell it was given (features/banner.feature:4) reads broke and proves nothing, so a row it would have proven reads as one no control proves\n",
       );
       expect(stderr).not.toContain("run-incomplete\t-\tA worker");
     });

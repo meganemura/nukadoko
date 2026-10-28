@@ -4298,8 +4298,10 @@ which runs `BeforeAll` and `AfterAll` again. What goes wrong in a round
 cell it was given) is its cells' and not the run's: each control cell of
 the round is `broke` at the scenario's line, with the reason, the rounds
 in that environment stop, and a `proof-run-incomplete` warning says what
-happened. It never turns the run red, and a proof that could not finish
-proves nothing, so the row is `held`.
+happened. A proof that could not finish proves nothing, so the row reads
+as one no control proves: `held` without `--base`, and under `--base`
+a `new` or `changed` row runs in the base world, as any row no
+control proves does. The warning itself never turns the run red.
 
 **Verdicts.** A row is one of six words. Three are green:
 

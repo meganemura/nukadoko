@@ -414,7 +414,8 @@ just until 0.1.
   `--concurrency`, a proof round runs in a worker of its own, which runs
   BeforeAll and AfterAll again; what goes wrong there makes the round's
   control cells `broke` with the reason and a `proof-run-incomplete`
-  warning, never the run red. `nuka check`
+  warning, and the row reads as one no control proves, so under
+  `nuka run --base` the base world runs for a new or changed row. `nuka check`
   reports `condition-tag-malformed` (`@with:x=true` among them, which
   names the boolean as text), `condition-unknown` (a condition no
   environment declares, with what to do once its switch is removed), and

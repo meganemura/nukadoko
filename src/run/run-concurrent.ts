@@ -602,7 +602,7 @@ export async function runConcurrentPickles(options: RunConcurrentOptions): Promi
         code: "proof-run-incomplete",
         message:
           `A proof round in environment "${pass.environment}" did not finish: ${reason}. ` +
-          `The control ${round.cells.length === 1 ? "cell" : "cells"} it was given (${named}) ${round.cells.length === 1 ? "reads" : "read"} broke, and the run's verdict does not change`,
+          `The control ${round.cells.length === 1 ? "cell" : "cells"} it was given (${named}) ${round.cells.length === 1 ? "reads" : "read"} broke and proves nothing, so a row it would have proven reads as one no control proves`,
       });
       return;
     }

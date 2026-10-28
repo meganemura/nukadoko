@@ -113,6 +113,24 @@ export function foldCell(outcomes: readonly ExecutionOutcome[]): Pick<RunTableCe
   return { outcome: "flaky", line: failing.line, runs: outcomes.length };
 }
 
+/** A head cell's executions folded as the table judges them: a control
+ * whose proof round could not finish (`proofProblem`,
+ * src/run/run-concurrent.ts) is `broke` at the scenario's `line` with
+ * that reason, whatever its earlier runs came to, since a proof that
+ * could not finish proves nothing. The plan of the base and the old world
+ * reads this same cell, or it would skip a base cell for a proof the
+ * table does not count. Pure. */
+export function foldHeadCell(
+  outcomes: readonly ExecutionOutcome[],
+  role: CellRole,
+  line: number,
+  proofProblem: string | undefined,
+): Pick<RunTableCell, "outcome" | "line" | "runs" | "claim" | "actuals" | "reason"> {
+  const folded = foldCell(outcomes);
+  if (role !== "control" || proofProblem === undefined) return folded;
+  return { outcome: "broke", line, runs: folded.runs, reason: proofProblem };
+}
+
 /** Whether a cell stands where the criterion's behaviour is absent, so
  * that a Then failing there is proof: a head control, or a base cell. */
 function absentHere(role: CellRole, world: RunWorldName): boolean {
@@ -486,15 +504,16 @@ export function buildTable(input: TableInput): RunTable {
   // A base cell names the conditions of head's environment it stands
   // under, as its role does, and an old cell the ref's (module header).
   const cellOf = (criterion: SelectedCriterion, environment: TableEnvironment, role: CellRole, world: RunWorldName): RunTableCell => {
-    const folded = foldCell(input.outcomes(criterion.feature, criterion.line, environment.name, world));
-    const problem = world === "head" && role === "control" ? input.proofProblem?.(criterion.feature, criterion.line, environment.name) : undefined;
+    const outcomes = input.outcomes(criterion.feature, criterion.line, environment.name, world);
+    const folded =
+      world === "head" ? foldHeadCell(outcomes, role, criterion.line, input.proofProblem?.(criterion.feature, criterion.line, environment.name)) : foldCell(outcomes);
     return {
       world,
       environment: environment.name,
       role,
       conditions: conditionsOfCell(criterion.tags, environment.conditions),
-      ...(problem === undefined ? folded : { outcome: "broke" as const, line: criterion.line, runs: folded.runs, reason: problem }),
-      ...(problem === undefined && folded.outcome === "not-run" ? { reason: input.notRunReason(environment.name, world) ?? "no execution of it was recorded" } : {}),
+      ...folded,
+      ...(folded.outcome === "not-run" ? { reason: input.notRunReason(environment.name, world) ?? "no execution of it was recorded" } : {}),
     };
   };
   const rows: RunTableRow[] = input.criteria.map((criterion) => {

@@ -47,7 +47,7 @@ import {
   type CriteriaCounts,
   type RunConditions,
 } from "../run/progress-log.js";
-import { buildTable, executionOutcome, foldCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
+import { buildTable, executionOutcome, foldHeadCell, hasRequiredCell, judgedRowFindings, leftOutText, needsProofRun, plannedWorldCells, rolesOf, rowsWithoutRequiredCell, type ExecutionOutcome, type TableEnvironment } from "../run/verdict-table.js";
 import { readCriterionTags, roleIn, type CellRole } from "../condition/condition.js";
 import { BaseSetupError, criterionKey, GitRefError, oldPlaces, prepareBase, projectRelativeText, resolveRef, type PreparedBase } from "../run/base-run.js";
 import { runTreePass, stopTreeWorkers, type TreeTarget } from "../run/tree-pass.js";
@@ -1395,11 +1395,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         const key = criterionKey(feature.relativePath, line);
         const compared = base.criteria.changes.get(key);
         const change = compared?.change ?? "new";
-        const headCells = tableEnvironments.map((environment) => ({
-          environment: environment.name,
-          role: roleOf(feature.relativePath, line, environment.name),
-          ...foldCell(cellOutcomes.get(cellKey(feature.relativePath, line, environment.name)) ?? []),
-        }));
+        const headCells = tableEnvironments.map((environment) => {
+          const role = roleOf(feature.relativePath, line, environment.name);
+          const at = cellKey(feature.relativePath, line, environment.name);
+          return { environment: environment.name, role, ...foldHeadCell(cellOutcomes.get(at) ?? [], role, line, proofProblems.get(at)) };
+        });
         const context = {
           change,
           held: readCriterionTags(pickle.tags.map((tag) => tag.name)).held,

@@ -147,6 +147,62 @@ describe("a url function", () => {
   }, 60_000);
 });
 
+describe("a proof round that did not finish", () => {
+  it("leaves the base world to prove a new row, since the control it ran proves nothing", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "nukadoko.program.ts": `import { defineProgram } from "nukadoko";
+export default defineProgram({
+  environments: {
+    on: { conditions: { double: true }, env: { DOUBLE: "{condition.double}" } },
+    off: { conditions: { double: false }, env: { DOUBLE: "{condition.double}" } },
+  },
+});
+`,
+      "lib/cart.mjs": cartModule("return count;"),
+      "features/cart.feature": feature(scenario("one item", 1, 1, "@without:double")),
+      "features/other.feature": "Feature: Other\n\n" + scenario("zero items", 0, 0),
+    });
+    project.commit("base");
+    // Head doubles behind the switch, adds the row that needs it, and an
+    // AfterAll that fails in its third call in off: each of off's two
+    // workers calls it once, and the third is the worker of off's proof
+    // round, after the control's second run was recorded.
+    project.write({
+      "lib/cart.mjs": cartModule('return process.env.DOUBLE === "true" ? count * 2 : count;'),
+      "features/cart.feature": feature(scenario("one item", 1, 1, "@without:double"), scenario("three items", 3, 6, "@with:double")),
+      "features/support/hooks.ts": `import { AfterAll } from "nukadoko/compat";
+import { mkdirSync } from "node:fs";
+AfterAll(function () {
+  if (process.env.DOUBLE !== "false") return;
+  for (let call = 1; ; call += 1) {
+    try {
+      mkdirSync(new URL(\`../../.calls/\${call}\`, import.meta.url), { recursive: false });
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") continue;
+      throw error;
+    }
+    if (call >= 3) throw new Error("the proof round's AfterAll fails");
+    return;
+  }
+});
+`,
+    });
+    mkdirSync(path.join(project.root, ".calls"));
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "HEAD~1", "--concurrency", "2"]);
+    expect(result.stderr).toContain("proof-run-incomplete");
+    const row = rows(project.root).find((entry) => entry.name === "three items")!;
+    expect(row.cells.map((cell) => `${cell.world}:${cell.environment}:${cell.role}:${cell.outcome}:${cell.runs}`)).toEqual([
+      "head:on:required:pass:1",
+      "head:off:control:broke:2",
+      "base:on:required:fail:2",
+    ]);
+    expect(row.verdict).toBe("proven");
+    expect(result.exitCode).toBe(0);
+  }, 60_000);
+});
+
 describe("the old world's environments", () => {
   const environments = (entries: Readonly<Record<string, string>>, defaults?: readonly string[]): string =>
     `import { defineProgram } from "nukadoko";\nexport default defineProgram({\n${defaults === undefined ? "" : `  defaultEnvironments: ${JSON.stringify(defaults)},\n`}  environments: {\n${Object.entries(

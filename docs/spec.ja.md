@@ -3421,8 +3421,10 @@ old のセルの行は、old の world が走らせる基点の feature ファ�
 `--concurrency` のもとでは、各証明の回は自分の worker で走り、その worker は `BeforeAll` と `AfterAll` をもう一度実行します。
 回の中でうまくいかなかったこと(それらの hook の失敗、または与えられたセルの record を書かずに worker が終了したこと)は、その回のセルが負い、run は負いません。
 その回の対照のセルはそれぞれ、理由とともに scenario の行で `broke` になり、その environment の証明の回は止まり、`proof-run-incomplete` の warning が何が起きたかを言います。
-run を赤にすることはありません。
-終わらなかった証明は何も証明しないので、行は `held` です。
+終わらなかった証明は何も証明しないので、行はそれを証明する対照がない行として読まれます。
+`--base` が無ければ `held` です。
+`--base` のもとでは、`new` か `changed` の行は、それを証明する対照がないどの行とも同じく base の world で走ります。
+この warning そのものが run を赤にすることはありません。
 
 **断定。**
 行は 6 つの語のどれかです。
