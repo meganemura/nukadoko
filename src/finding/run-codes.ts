@@ -58,7 +58,7 @@ const RUN_CODES = {
     severity: "failed",
     description:
       "nuka run selected no scenario: its targets hold none, or --env leaves out every one they hold, so nothing ran and nothing was checked. The run writes no run directory.",
-    fix: "Name a target that holds a scenario, or run without the --env that leaves every scenario out.",
+    fix: "Name a target that holds a scenario, or run in an environment that meets the scenarios' tags.",
   },
   "program-exited": {
     severity: "warning",

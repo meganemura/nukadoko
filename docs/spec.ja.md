@@ -3276,7 +3276,9 @@ program ファイルは、プログラムの設定を condition から導くこ�
 `<n> criteria not run: their conditions hold in no selected environment` です。
 environment を 1 つ名指せばそこに当てはまるものが走るので、environment を 1 つ名指す hook の失敗の `do:` 行は、出力されたとおりに走ります。
 `--env` が選んだすべての scenario を外すと何も走らず、run は `nothing-selected` で失敗します。
-その `do:` 行は、`--env` を除いた同じ run です。
+その fix は、このプロジェクトで `--env` の無い run がどの environment を選ぶかを言います。
+その environment が選んだすべての scenario を満たすとき、`do:` 行は `--env` を除いた同じ run です。
+そうでないときは、プログラムファイルの environment のうちすべてを満たす最初のもの、無ければいくつかを満たすものを `--env` で名指し、どの environment もどれも満たさないときは `do:` 行はありません。
 `nuka check` は、run が選ぶ environment(`nuka check --env` が名指すもの、または `--env` の無い run が選ぶもの)に照らして tag を読み、3 つのエラーを報告します:
 
 - `condition-tag-malformed`: `@with:` か `@without:` で始まり、3 つの形のどれでもない tag。

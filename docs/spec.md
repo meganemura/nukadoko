@@ -4102,8 +4102,10 @@ table, and stderr, after the count line, say so in one line: `<n> criteria
 not run: their conditions hold in no selected environment`. Naming one
 environment runs what applies there, so a hook failure's `do:` line,
 which names one, runs as printed. When `--env` leaves out every selected
-scenario, nothing runs and the run fails with `nothing-selected`, whose
-`do:` line is the same run without `--env`. `nuka check` reads the tags against
+scenario, nothing runs and the run fails with `nothing-selected`.
+Its fix says which environments a run without `--env` selects in this project.
+Its `do:` line is the same run without `--env` when those environments meet every selected scenario; otherwise it names `--env` with the first environment of the program file that meets every one, or else one that meets some, and there is no `do:` line when no environment meets any.
+`nuka check` reads the tags against
 the environments a run would select (the ones `nuka check --env` names,
 or the ones a run without `--env` selects), and reports three errors:
 

@@ -562,8 +562,9 @@ This part does not change release to release.
   `nuka run` on a target with no scenario yet, or with an `--env` that
   meets the conditions of none of the selected scenarios, went green
   and now fails with `nothing-selected`. Add the scenario, name a target
-  that holds one, or drop the `--env`; the finding's `do:` line is that
-  run when `--env` left every scenario out.
+  that holds one, or name an environment that meets the scenarios; when
+  `--env` left every scenario out, the finding's `do:` line is the run
+  that does, with or without `--env`.
 
 - **The `check-errors` refusal's `do:` line has no `:line`.** It names
   each targeted file once, so `nuka check` runs it; nothing changes in a

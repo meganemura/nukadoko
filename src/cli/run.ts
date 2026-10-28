@@ -10,6 +10,7 @@ import { registerAllureRuntime } from "../compat/allure-runtime.js";
 import { validateTagExpression } from "../compat/tag-expression.js";
 import { loadConfig } from "../config/load-config.js";
 import { loadProgram, PROGRAM_FILE_NAME } from "../config/load-program.js";
+import type { Program } from "../config/program-schema.js";
 import { placeholderRefusal } from "../program/placeholders.js";
 import { createWorldStarter, type StartedWorld, type WorldStep } from "../program/world.js";
 import { applyWorldEnv } from "../program/world-view.js";
@@ -354,10 +355,22 @@ export function checkCommandFor(targets: readonly string[], envs: readonly strin
 }
 
 /** Why a run selected no scenario. When `--env` left every scenario out,
- * the `do:` line is the same run without it, which selects the
- * environments that declare conditions; when the targets hold none, only
- * an edit gets past it. */
-function nothingSelectedFinding(targets: readonly string[], givenTargets: readonly string[], envs: readonly string[], leftOut: number): Finding {
+ * the fix says what a run without `--env` selects in this project, and
+ * the `do:` line is that run only when those environments meet every
+ * targeted scenario, since `nuka check` refuses one they do not
+ * (`condition-unmet`). Otherwise it names the first environment of the
+ * program file that meets every scenario, or else one that meets some,
+ * and there is none when no environment meets any. When the targets hold
+ * no scenario, only an edit gets past it. Pure. */
+export function nothingSelectedFinding(
+  targets: readonly string[],
+  givenTargets: readonly string[],
+  envs: readonly string[],
+  leftOutTags: readonly (readonly string[])[],
+  program: Pick<Program, "environments" | "defaultEnvironments"> | null,
+  programFile: string,
+): Finding {
+  const leftOut = leftOutTags.length;
   if (leftOut === 0) {
     return {
       severity: "failed",
@@ -366,12 +379,40 @@ function nothingSelectedFinding(targets: readonly string[], givenTargets: readon
       fix: "Add a scenario to the feature files the targets name, or name a target that holds one.",
     };
   }
+  const environments = program?.environments ?? {};
+  const tableEnvironment = (name: string): TableEnvironment => ({ name, conditions: Object.hasOwn(environments, name) ? environments[name]?.conditions : undefined });
+  const meetsEach = (names: readonly string[]): boolean => leftOutTags.every((tags) => hasRequiredCell(tags, names.map(tableEnvironment)));
+  const meetsAny = (name: string): boolean => leftOutTags.some((tags) => hasRequiredCell(tags, [tableEnvironment(name)]));
+  const defaults = defaultEnvironmentNames(program);
+  const chosenBy =
+    program?.defaultEnvironments !== undefined
+      ? `defaultEnvironments in ${programFile}`
+      : defaults[0] === DEFAULT_ENVIRONMENT_NAME
+        ? "no environment declares conditions"
+        : "the environments that declare conditions";
+  const without = `A run without --env selects ${defaults.join(", ")} (${chosenBy})`;
+  const run = (env: readonly string[]): string => ["nuka run", ...givenTargets.map(shellWord), ...env.map(shellWord)].join(" ");
+  const message = `no scenario to run: the conditions of the ${leftOut} selected ${leftOut === 1 ? "scenario" : "scenarios"} hold in no environment --env names (${envs.join(", ")}), so nothing was checked`;
+  const them = leftOut === 1 ? "it" : "them";
+  if (meetsEach(defaults)) {
+    return { severity: "failed", code: "nothing-selected", message, fix: `${without}, which meets ${them}.`, do: run([]) };
+  }
+  const candidates = [...Object.keys(environments), ...(Object.hasOwn(environments, DEFAULT_ENVIRONMENT_NAME) ? [] : [DEFAULT_ENVIRONMENT_NAME])].filter((name) => !envs.includes(name));
+  const other = candidates.find((name) => meetsEach([name])) ?? candidates.find(meetsAny);
+  if (other === undefined) {
+    return {
+      severity: "failed",
+      code: "nothing-selected",
+      message,
+      fix: `${without}, which does not meet ${them} either, and no environment of ${programFile} meets ${them}. Declare the conditions ${leftOut === 1 ? "it needs" : "they need"} on an environment, or change ${leftOut === 1 ? "its" : "their"} tags.`,
+    };
+  }
   return {
     severity: "failed",
     code: "nothing-selected",
-    message: `no scenario to run: the conditions of the ${leftOut} selected ${leftOut === 1 ? "scenario" : "scenarios"} hold in no environment --env names (${envs.join(", ")}), so nothing was checked`,
-    fix: "Run without --env, which selects the environments that declare conditions, or name an environment that meets the scenario's tags.",
-    do: ["nuka run", ...givenTargets.map(shellWord)].join(" "),
+    message,
+    fix: `${without}, which does not meet ${them} either. ${other} meets ${meetsEach([other]) ? them : "some of them"}.`,
+    do: run(["--env", other]),
   };
 }
 
@@ -753,7 +794,17 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     if (flatPickles.length === 0) {
       return writeStopped(
         { json: options.json, stdout: options.stdout, stderr, command: "run" },
-        [...notices, nothingSelectedFinding(featureArgs, options.featureArgs, options.envs, leftOut)],
+        [
+          ...notices,
+          nothingSelectedFinding(
+            featureArgs,
+            options.featureArgs,
+            options.envs,
+            targetedPickles.filter(({ pickle }) => !runsHere(pickle)).map(({ pickle }) => pickle.tags.map((tag) => tag.name)),
+            program,
+            programFile,
+          ),
+        ],
         FAILED_EXIT_CODE,
       );
     }

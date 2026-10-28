@@ -465,8 +465,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
 - **scenario を 1 つも選ばない run は exit 1 で終わります。**
   まだ scenario の無い対象や、選んだどの scenario の condition も満たさない `--env` で `nuka run` を走らせる CI のジョブは、これまで緑でした。
   今は `nothing-selected` で失敗します。
-  scenario を足すか、scenario を持つ対象を名指すか、`--env` を外します。
-  `--env` がすべての scenario を外したときは、finding の `do:` 行がその run です。
+  scenario を足すか、scenario を持つ対象を名指すか、scenario を満たす environment を名指します。
+  `--env` がすべての scenario を外したときは、finding の `do:` 行が、`--env` の有無にかかわらず、それを満たす run です。
 
 - **`check-errors` の拒否の `do:` 行は `:line` を持ちません。**
   対象の各ファイルを 1 回ずつ名指すので、`nuka check` がそのまま走らせます。

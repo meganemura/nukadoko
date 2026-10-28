@@ -721,7 +721,10 @@ just until 0.1.
   hold, ran nothing and exited 0, which read as criteria that hold. It
   exits 1 now with a `nothing-selected` finding that says what selected
   nothing, and still writes no run directory. When `--env` left every
-  scenario out, the finding's `do:` line is the same run without `--env`.
+  scenario out, the fix says which environments a run without `--env`
+  selects (`defaultEnvironments` included), and the `do:` line is that
+  run when they meet every scenario, a run with `--env` naming one
+  environment that meets them otherwise, and absent when none does.
 
 - **A record keeps a JSON object's own `__proto__` key.** Redaction
   rebuilt each object by assignment, and assigning `__proto__` sets the
