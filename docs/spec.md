@@ -4233,7 +4233,9 @@ acts on the base tree. Checkout filters, such as Git LFS or a
 `.gitattributes` filter, stay on: they are how the repository makes the
 files its code is. The base tree is a worktree git keeps registered while
 the run lasts; the run removes it when it ends, when it fails, and on a
-signal. A run killed with SIGKILL cannot, so the next `nuka run --base`
+signal, one that comes while the trees are made included: the run waits
+for git to finish the checkout, removes the trees and the registration,
+and exits with 128 plus the signal's number. A run killed with SIGKILL cannot, so the next `nuka run --base`
 and `nuka clean` remove each registration whose directory is under the
 state directory's `runs/` and no longer exists, and touch no other.
 

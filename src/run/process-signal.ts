@@ -27,6 +27,10 @@ export interface ProcessSignal {
   /** Acts as if `signal` had arrived. A `nuka run --concurrency` worker
    * calls it when its parent is gone. */
   trigger(signal: NodeJS.Signals): void;
+  /** Never settles. A caller that finds `interrupted` awaits it so that it
+   * does no more, such as writing the record of a run a signal ended, while
+   * the handler finishes its cleanup and exits. */
+  untilExit(): Promise<never>;
   stop(): void;
 }
 
@@ -98,6 +102,7 @@ export function installProcessSignalHandlers(): ProcessSignal {
       processCleanup = cleanup;
     },
     trigger: onSignal,
+    untilExit: () => new Promise<never>(() => {}),
     stop() {
       // Leave the listener in place once a signal has started teardown.
       // Removing it would restore the default action and race the exit

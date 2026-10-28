@@ -368,7 +368,9 @@ just until 0.1.
   writes with head's secret set as well as its own, so a ref whose config
   marks a value public never prints head's secret. A signal stops a tree's workers
   (SIGTERM, the 5 seconds a world gets, then SIGKILL) before its world
-  and the trees, and a worker's files are written in the run directory.
+  and the trees, and a worker's files are written in the run directory;
+  a signal while the trees are made waits for the checkout, then removes
+  the trees and the worktree registration.
   git runs against a tree with the
   repository's hooks off, and the next `nuka run --base` and `nuka clean`
   remove a worktree registration a killed run left under `runs/` once its

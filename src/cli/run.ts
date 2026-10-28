@@ -487,10 +487,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     return refused(error);
   }
 
-  // Installed only for the serial execution path, once that path's process
-  // cache exists. A signal before that still takes the default action:
-  // nothing has been built. `stop()` in the `finally` below removes it
-  // on a normal return.
+  // Installed for the serial execution path, once that path's process
+  // cache exists, and under `--base` before the trees are made, which a
+  // signal must remove. A signal before either still takes the default
+  // action: nothing has been built. `stop()` in the `finally` below
+  // removes it on a normal return.
   let processSignal: ProcessSignal | undefined;
   // The trees of `--base`, removed on every way out of the run.
   let prepared: PreparedBase | undefined;
@@ -866,26 +867,36 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     // header). A failure here still writes nothing: no scenario ran.
     const projectRelative = (filePath: string): string => path.relative(rootDir, path.resolve(rootDir, filePath));
     if (baseRef !== undefined) {
+      // A signal while the trees are made waits for them, then removes them
+      // and the worktree registration: the default action would exit past
+      // every listener that could.
+      const signals = installProcessSignalHandlers();
+      processSignal = signals;
+      const preparing = prepareBase({
+        rootDir,
+        envs: options.envs,
+        config,
+        headProgram: program,
+        ref: baseRef.ref,
+        commit: baseRef.commit,
+        runDir: runDirAbsolute,
+        // Every targeted file, the left out included: a file the run
+        // left out entirely is still in the ref's comparison, and its
+        // criteria are not removed.
+        features: targetedFeatures.map((feature) => ({ relativePath: feature.relativePath, source: feature.source })),
+        selected: new Set(flatPickles.map(({ feature, pickle }) => criterionKey(feature.relativePath, pickle.location?.line ?? 0))),
+        targets:
+          options.featureArgs.length === 0
+            ? null
+            : [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
+      });
+      signals.setProcessCleanup(async () => {
+        await (await preparing.catch(() => undefined))?.cleanup();
+      });
       try {
-        prepared = await prepareBase({
-          rootDir,
-          envs: options.envs,
-          config,
-          headProgram: program,
-          ref: baseRef.ref,
-          commit: baseRef.commit,
-          runDir: runDirAbsolute,
-          // Every targeted file, the left out included: a file the run
-          // left out entirely is still in the ref's comparison, and its
-          // criteria are not removed.
-          features: targetedFeatures.map((feature) => ({ relativePath: feature.relativePath, source: feature.source })),
-          selected: new Set(flatPickles.map(({ feature, pickle }) => criterionKey(feature.relativePath, pickle.location?.line ?? 0))),
-          targets:
-            options.featureArgs.length === 0
-              ? null
-              : [...new Set(featureArgs.map((featureArg) => projectRelative(parseFeatureTarget(featureArg).relativePath)))],
-        });
+        prepared = await preparing;
       } catch (error) {
+        if (signals.interrupted) await signals.untilExit();
         try {
           rmdirSync(runDirAbsolute);
         } catch {
@@ -899,6 +910,8 @@ export async function runRun(options: RunRunOptions): Promise<number> {
         }
         throw error;
       }
+      if (signals.interrupted) await signals.untilExit();
+      signals.setProcessCleanup(null);
       for (const entry of prepared.unparsed) {
         warn({
           severity: "warning",
@@ -1596,6 +1609,11 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     }
 
     if (effectiveConcurrency > 1) {
+      // The concurrent path forwards a signal to its workers with handlers
+      // of its own, which a second listener's exit would cut short. Its
+      // trees still go: the base run removes them on the process's exit.
+      processSignal?.stop();
+      processSignal = undefined;
       const {
         allPassed,
         scenariosWritten,
@@ -1677,7 +1695,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       // `hasPickles` gates every step below, including AfterAll.
       const hasPickles = flatPickles.length > 0;
 
-      processSignal = installProcessSignalHandlers();
+      processSignal ??= installProcessSignalHandlers();
 
       const beforeAllHooks = compatRunHooks.filter((hook) => hook.type === "beforeAll");
       // Same LIFO convention as src/run/run-scenario.ts's own After-hook

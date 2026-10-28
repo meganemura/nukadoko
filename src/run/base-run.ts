@@ -300,8 +300,10 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
   };
   process.on("exit", removeTreesNow);
   try {
-    await addWorktree(top, baseTop, input.commit);
+    // Before the add returns: an add a signal cut short (Ctrl-C reaches git
+    // too) leaves a locked registration, which only a forced remove takes.
     worktree = true;
+    await addWorktree(top, baseTop, input.commit);
     const baseProject = path.join(baseTop, prefix);
 
     // The ref's own config and program file, read from its pristine
