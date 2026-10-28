@@ -366,12 +366,15 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
     const blocked = (world: WorldObstacle["world"]): boolean => found.obstacles.some((obstacle) => obstacle.world === world);
     const headSnapshot: MappingSnapshot = {
       files: mappingFiles(headEntries, headSide.featuresDir, top),
-      config: { text: configMappingText(config) },
+      config: { text: configMappingText(config), file: headConfigFile === null ? null : hashOf(path.join(rootDir, headConfigFile)) },
       program: programMappingOf(input.headProgram),
     };
     const refSnapshot: MappingSnapshot = {
       files: mappingFiles(refEntries, refSide.featuresDir, baseTop),
-      config: "problem" in refConfig ? { problem: refConfig.problem } : { text: configMappingText(refConfig) },
+      config:
+        "problem" in refConfig
+          ? { problem: refConfig.problem }
+          : { text: configMappingText(refConfig), file: refConfigFile === null ? null : hashOf(path.join(baseProject, refConfigFile)) },
       program: refProgram !== null && "problem" in refProgram ? { problem: refProgram.problem } : programMappingOf(refProgram),
     };
     const compared = compareMapping(refSnapshot, headSnapshot);

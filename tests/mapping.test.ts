@@ -29,9 +29,10 @@ const program = gs
       ...(defaultEnvironments === undefined ? {} : { defaultEnvironments }),
     }),
   );
-const snapshot = gs
-  .tuples(files, gs.sampledFrom([{ text: configText({ secrets: { public: ["TOKEN"], redact: [] } }) }, { text: configText({ worldParameters: { a: 1 } }) }]), program)
-  .map(([fileMap, config, programMapping]): MappingSnapshot => ({ files: fileMap, config, program: programMapping }));
+const config = gs
+  .tuples(gs.sampledFrom([configText({ secrets: { public: ["TOKEN"], redact: [] } }), configText({ worldParameters: { a: 1 } })]), gs.sampledFrom([null, "h1", "h2"]))
+  .map(([text, file]) => ({ text, file }));
+const snapshot = gs.tuples(files, config, program).map(([fileMap, configPart, programMapping]): MappingSnapshot => ({ files: fileMap, config: configPart, program: programMapping }));
 
 describe("compareMapping", () => {
   it("finds no change between a mapping and itself", () =>
@@ -50,7 +51,7 @@ describe("compareMapping", () => {
       expect(forward.changed).toBe(forward.files.length > 0 || forward.config || forward.conditions.length > 0 || forward.defaultEnvironments);
     }));
 
-  const plain: MappingSnapshot = { files: new Map(), config: { text: "{}" }, program: programMappingOf(null) };
+  const plain: MappingSnapshot = { files: new Map(), config: { text: "{}", file: "h1" }, program: programMappingOf(null) };
 
   it("names an environment whose conditions changed, and a new default selection", () => {
     const before = { ...plain, program: programMappingOf({ environments: { "flag-on": { conditions: { banner: true } }, "flag-off": { conditions: { banner: false } } } }) };
@@ -76,9 +77,18 @@ describe("compareMapping", () => {
   it("compares a function in the config's mapping part by its source", () => {
     const one = configText({ parameterTypes: [{ name: "n", regexp: /\d+/, transformer: (value: string) => Number(value) }] });
     const two = configText({ parameterTypes: [{ name: "n", regexp: /\d+/, transformer: (value: string) => Number(value) + 1 }] });
-    expect(compareMapping({ ...plain, config: { text: one } }, { ...plain, config: { text: two } }).config).toBe(true);
-    expect(compareMapping({ ...plain, config: { text: one } }, { ...plain, config: { text: one } }).config).toBe(false);
+    expect(compareMapping({ ...plain, config: { text: one, file: "h1" } }, { ...plain, config: { text: two, file: "h1" } }).config).toBe(true);
+    expect(compareMapping({ ...plain, config: { text: one, file: "h1" } }, { ...plain, config: { text: one, file: "h1" } }).config).toBe(false);
   });
+
+  it("counts the config as changed exactly when its mapping part or its file's bytes differ", () =>
+    hegel.test((tc) => {
+      const before = tc.draw(config);
+      const after = tc.draw(config);
+      const changed = compareMapping({ ...plain, config: before }, { ...plain, config: after });
+      expect(changed.config).toBe(before.text !== after.text || before.file !== after.file);
+      expect(changed.changed).toBe(changed.config);
+    }));
 });
 
 describe("configMappingText", () => {

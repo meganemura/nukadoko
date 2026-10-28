@@ -20,7 +20,16 @@ import type { NukadokoConfig } from "../config/schema.js";
 // request context, the timeouts, and `envFiles`, each of which can change
 // what a step sees, so an unchanged sentence over a changed one read as
 // held. A function in the config is compared by its source text, the one
-// thing a config written in TypeScript says about it.
+// thing a config written in TypeScript says about it, and the config
+// file's own bytes are compared too: a function closes over what the file
+// declares beside it (a constant, a factory's argument), which neither its
+// source text nor the loaded value shows, so the config is mapping as the
+// file the user wrote. A module the config file imports is not followed,
+// as a step file's import out of the features directory is not. A change
+// to `stateDir` or `retention` alone changes the bytes too and reads as a
+// mapping change: the old world runs the unchanged rows, which costs a
+// pass and at worst a row it cannot run reads `moved`, never a false
+// `held`.
 //
 // The program file's `conditions` on each environment and its
 // `defaultEnvironments` are part of the mapping too, though the program file
@@ -33,8 +42,10 @@ export interface MappingSnapshot {
   /** Each file under the features directory except `.feature` files, by its
    * path relative to that directory, with a hash of its bytes. */
   readonly files: ReadonlyMap<string, string>;
-  /** `configMappingText` of the tree's config, or why it did not load. */
-  readonly config: { readonly text: string } | { readonly problem: string };
+  /** `configMappingText` of the tree's config and a hash of its config
+   * file's bytes, `null` for a tree with no config file; or why the config
+   * did not load. */
+  readonly config: { readonly text: string; readonly file: string | null } | { readonly problem: string };
   /** `programMappingOf` the tree's program file, or why it did not
    * load. */
   readonly program: ProgramMapping | { readonly problem: string };
@@ -53,8 +64,8 @@ export interface MappingComparison {
   /** Each file added, removed, or edited, relative to the features
    * directory, sorted. */
   readonly files: readonly string[];
-  /** Whether the config's mapping part differs, or could not be read at
-   * the ref. */
+  /** Whether the config's mapping part or its file's bytes differ, or the
+   * config could not be read at the ref. */
   readonly config: boolean;
   /** Each environment whose `conditions` differ, sorted; every
    * environment when the program file could not be read at the ref. */
@@ -115,7 +126,7 @@ export function programMappingOf(program: { readonly environments?: Readonly<Rec
 export function compareMapping(base: MappingSnapshot, head: MappingSnapshot): MappingComparison {
   const paths = new Set([...base.files.keys(), ...head.files.keys()]);
   const files = [...paths].filter((file) => base.files.get(file) !== head.files.get(file)).sort();
-  const config = !("text" in base.config) || !("text" in head.config) || base.config.text !== head.config.text;
+  const config = !("text" in base.config) || !("text" in head.config) || base.config.text !== head.config.text || base.config.file !== head.config.file;
   let conditions: string[];
   let defaultEnvironments: boolean;
   if ("problem" in base.program || "problem" in head.program) {

@@ -53,6 +53,31 @@ After({ tags: "@strict" }, function () {
   }, 60_000);
 });
 
+describe("the config file", () => {
+  const configWith = (factor: number): string =>
+    `import { defineConfig } from "nukadoko";\nconst FACTOR = ${factor};\nexport default defineConfig({\n  fixtures: {\n    factor: async ({}, use) => { await use(FACTOR); },\n  },\n});\n`;
+
+  it("is mapping as the file reads, so a constant a fixture closes over sends an unchanged row to the old world", async () => {
+    project = await makeBaseProject();
+    project.write({
+      "nukadoko.config.ts": configWith(2),
+      "lib/cart.mjs": "export function total(count, factor) {\n  return count * factor;\n}\n",
+      "features/steps/a-cart.ts": CART_STEP.replace("async run({}, { count }) {\n    return { total: total(count) };", "async run({ factor }, { count }) {\n    return { total: total(count, factor) };"),
+      "features/cart.feature": feature(scenario("three items", 3, 6)),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    // Head's code adds 3 and its constant drops to 1, so three items still
+    // total 6 at head, and 9 under the base's config on head's code.
+    project.write({ "nukadoko.config.ts": configWith(1), "lib/cart.mjs": "export function total(count, factor) {\n  return count * factor + 3;\n}\n" });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(1);
+    expect((latestRunJson(project.root) as { table: { mapping_changes: { config: boolean } } }).table.mapping_changes.config).toBe(true);
+    expect(rowSummary(rows(project.root))).toEqual([["three items", "unchanged", "moved", ["head:default:pass", "old:default:fail"]]]);
+  }, 60_000);
+});
+
 describe("a url function", () => {
   const program = (url: string): string => `import { defineProgram } from "nukadoko";\nexport default defineProgram({ url: ${url} });\n`;
 

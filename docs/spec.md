@@ -4156,7 +4156,16 @@ criterion are required. The two config fields left out cannot change what
 a step sends or sees: one says where the records are written, the other
 how many runs of them are kept. Every other field, the browser, the
 timeouts, and the env files among them, can, so a field the config gains
-later is mapping too. It is compared as one
+later is mapping too. The config is mapping as the file the user wrote:
+its loaded value, with a function compared by its source text, and the
+config file's own bytes, since a function closes over what the file
+declares beside it (a constant, a factory's argument), which neither its
+source text nor the value shows. A module the config file imports is not
+followed, as a step file's import out of the features directory is not.
+So an edit to `stateDir` or `retention` alone reads as a mapping change
+too: the old world runs the unchanged rows, which costs a pass, and at
+worst a row the old world cannot run reads `moved`, never a false
+`held`. The mapping is compared as one
 unit: the run knows only that the mapping changed or that it did not,
 never which criterion a changed helper reaches. A config or program file
 that does not load at the ref counts as changed. Code outside the features

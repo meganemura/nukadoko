@@ -336,8 +336,9 @@ just until 0.1.
   or `removed`. The mapping (the files under the features
   directory other than `.feature` files, the whole config but
   `stateDir` and `retention`, which cannot change what a step sends or
-  sees, and each environment's `conditions` and the
-  `defaultEnvironments` list) is
+  sees, compared by its loaded value and by the config file's own bytes,
+  so a constant a config function closes over counts, and each
+  environment's `conditions` and the `defaultEnvironments` list) is
   compared as one unit. Two more worlds run where a row needs them, each
   in a tree under the run directory that the run removes: `base`, the
   ref's code under head's criteria and mapping, runs a new or changed row,
