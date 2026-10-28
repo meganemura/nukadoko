@@ -16,7 +16,9 @@ import { HELD_TAG, isConditionShaped } from "../condition/condition.js";
 // change what runs (a hook selected by tag, a World that reads the tags),
 // so a criterion whose tags changed keeps its identity and its change and
 // is marked `retagged`, which runs it in the old world as a changed
-// mapping does. A name and a
+// mapping does. A name or a file can too (a hook or a World that reads the
+// pickle's name or its document), so a criterion matched under another
+// identity (`renamedFrom`) runs there as well. A name and a
 // line are what a person reads, so the lines a row carries are rebuilt from
 // the document, and only the content is compared, as JSON, so a table cell
 // that holds `|` cannot collide with two cells.

@@ -40,10 +40,11 @@ import { shellWord } from "../shell/shell-word.js";
 // tagged `@held` always runs there, since `@held` says the base has the
 // behaviour and only the base can show that. The old world (head's code
 // under the ref's criteria and mapping) runs an unchanged row when the
-// mapping changed or the row was retagged, and head passed, where it shows
-// the approved sentence still means what it meant. A retag is judged as a
-// mapping change because a tag can select a hook or steer a World: the
-// sentence is the same, and what runs it may not be. Which environments
+// mapping changed or the row was retagged or renamed, and head passed,
+// where it shows the approved sentence still means what it meant. A retag
+// or a rename is judged as a mapping change because a tag, a name, or a
+// file can select a hook or steer a World: the sentence is the same, and
+// what runs it may not be. Which environments
 // the old world runs a row in is mapping too: the ref's environments, and
 // the row's role in each from the conditions the ref gives them, since an
 // unchanged row's condition tags are the ref's.
@@ -141,25 +142,30 @@ function runsText(runs: number): string {
 
 /** What `nuka run --base` knows of one criterion: how it compares with the
  * ref, whether it carries `@held`, whether the mapping changed, and
- * whether its own tags changed. `mappingUnseen`: the mapping counts as
- * changed only because the comparison could not see all of it
- * (src/run/world-obstacles.ts), so a reason must not say it changed. */
+ * whether its own tags, or its name or file (`renamed_from`), changed.
+ * `mappingUnseen`: the mapping counts as changed only because the
+ * comparison could not see all of it (src/run/world-obstacles.ts), so a
+ * reason must not say it changed. */
 export interface RowContext {
   readonly change: "unchanged" | "changed" | "new";
   readonly held: boolean;
   readonly mappingChanged: boolean;
   readonly mappingUnseen?: boolean;
   readonly retagged: boolean;
+  readonly renamed: boolean;
+}
+
+function listed(parts: readonly string[]): string {
+  return parts.length <= 2 ? parts.join(" and ") : `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
 
 // What changed under an unchanged row since the base, as the clause of its
 // reason, or `null` when nothing did.
 function underneathChange(context: RowContext): string | null {
-  if (context.mappingUnseen === true) return `the mapping could not be compared with the base's${context.retagged ? ", and its tags changed since the base" : ""}`;
-  if (context.mappingChanged && context.retagged) return "the mapping and its tags changed since the base";
-  if (context.mappingChanged) return "the mapping changed since the base";
-  if (context.retagged) return "its tags changed since the base";
-  return null;
+  const own = [...(context.retagged ? ["its tags"] : []), ...(context.renamed ? ["its name or its file"] : [])];
+  if (context.mappingUnseen === true) return `the mapping could not be compared with the base's${own.length === 0 ? "" : `, and ${listed(own)} changed since the base`}`;
+  const changed = [...(context.mappingChanged ? ["the mapping"] : []), ...own];
+  return changed.length === 0 ? null : `${listed(changed)} changed since the base`;
 }
 
 /** The environments a row needs a base cell and an old cell in, from its
@@ -494,6 +500,7 @@ export function buildTable(input: TableInput): RunTable {
             mappingChanged: input.base.mappingChanged,
             ...(input.base.mapping.unseen.length === 0 ? {} : { mappingUnseen: true }),
             retagged: compared.retagged === true,
+            renamed: compared.renamedFrom !== undefined,
           };
     const oldEnvironments = input.base?.oldEnvironments ?? [];
     const oldRoles = rolesOf(criterion.tags, oldEnvironments).map((role, index) => ({ environment: oldEnvironments[index]!.name, role }));

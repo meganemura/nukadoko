@@ -3293,6 +3293,8 @@ step の並び(Background の step が先で、各 step は実効の keyword、�
 それでも tag は走るものを変えることがあります(tag で選ばれる hook、tag を読む World)。
 そのため、tag が基点と違う `unchanged` の受け入れ基準は `retagged` です。
 同一性と変化はそのまま保ち、行は `retagged: true` を持ち、対応づけが変わった行と同じように old の world で走ります。
+名前とファイルも走るものを変えることがあります(scenario の名前やその文書を読む hook や World)。
+そのため `renamed_from` を持つ `unchanged` の受け入れ基準も、同じように old の world で走ります。
 基点と比べて、受け入れ基準は次のどれかです:
 
 - `unchanged`: 同一性と中身が同じもの、または別の同一性のもとで中身が同じもの。
@@ -3375,7 +3377,7 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 - `new` か `changed` の行は、head のセルが必須で通った各 environment で、base の world で走ります。
   ただし head の対照がすでに証明しているときは走りません。
   `@held` の付いた行は、基点がその振る舞いを持つことを示せるのは基点だけなので、常にそこで走ります。
-- `unchanged` の行は、対応づけが変わったとき、または行が `retagged` のとき、基点の feature ファイルが与える行で、old の world で走ります。
+- `unchanged` の行は、対応づけが変わったとき、または行が `retagged` か名前を変えたもの(`renamed_from`)のとき、基点の feature ファイルが与える行で、old の world で走ります。
   どの environment で走るかも基点の対応づけです。
   基点のプログラムのファイルが選ぶ environment(その `defaultEnvironments`、`conditions` を宣言するすべての environment、または run の `--env` の名前)のうち、基点がそれに与える condition で行が必須になるところで、同じ名前の environment の head の手順を使って走ります。
   基点が必須とする environment を head のプログラムのファイルがもう持たないとき、その old のセルは理由とともに `·` で、行は `moved` です。
@@ -3444,7 +3446,7 @@ run を赤にすることはありません。
 - `unproven`: `new` か `changed` の行が head で通り、その振る舞いが無いところで Then が失敗したことを示すものが無いとき。
   base のセルが通った、`broke` になった、食い違った、`--proof-runs` 回より少なくしか失敗しなかった、または走らなかったときで、それを証明する対照も無いときです。
   base のセルが `pass` でない `@held` の行も、振る舞いが無いところのセルがそれを証明しない限り `unproven` です。
-- `moved`: `unchanged` の行が head で通り、対応づけが変わったか行が `retagged` で、old の world で通らなかったとき。
+- `moved`: `unchanged` の行が head で通り、対応づけが変わったか行が `retagged` か名前を変えたもので、old の world で通らなかったとき。
   承認された文を、承認された step で読むと、もう head のコードに対して成り立たず、その意味がその下で動いたということです。
   基点の対応づけが head に対して読み込めないか check を通らないために走らなかった old のセルも、その理由を添えて行を `moved` にします。
   文が今も同じ意味であることを示すものが無いからです。

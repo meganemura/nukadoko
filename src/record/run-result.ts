@@ -229,7 +229,8 @@ export interface RunTableRow {
    * one. */
   readonly change: RunRowChange | null;
   /** For an `unchanged` criterion the ref holds under another name or in
-   * another file: where. */
+   * another file: where. Its row runs in the old world, as a retagged
+   * one does. */
   readonly renamed_from?: { readonly feature: string; readonly name: string };
   /** For an `unchanged` criterion whose tags differ from the ref's: `true`.
    * Its row runs in the old world, as one under a changed mapping does. */

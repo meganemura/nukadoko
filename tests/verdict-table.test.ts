@@ -523,8 +523,14 @@ describe("judgeRow under --base", () => {
       }),
     );
   const context = gs
-    .tuples(gs.sampledFrom(["unchanged", "changed", "new"] as const), gs.booleans(), gs.booleans(), gs.booleans())
-    .map(([change, held, mappingChanged, retagged]): RowContext => ({ change, held, mappingChanged, retagged: change === "unchanged" && retagged }));
+    .tuples(gs.sampledFrom(["unchanged", "changed", "new"] as const), gs.booleans(), gs.booleans(), gs.booleans(), gs.booleans())
+    .map(([change, held, mappingChanged, retagged, renamed]): RowContext => ({
+      change,
+      held,
+      mappingChanged,
+      retagged: change === "unchanged" && retagged,
+      renamed: change === "unchanged" && renamed,
+    }));
   const row = gs
     .tuples(cells, gs.arrays(worldCell("base"), { maxSize: 3 }), gs.arrays(worldCell("old"), { maxSize: 3 }))
     .map(([head, base, old]) => [...head, ...base, ...old]);
@@ -536,7 +542,7 @@ describe("judgeRow under --base", () => {
     const required = head.filter((cell) => cell.role === "required");
     if (required.length === 0 || required.some((cell) => cell.outcome !== "pass")) return "failed";
     if (given.change === "unchanged") {
-      if (!given.mappingChanged && !given.retagged) return "held";
+      if (!given.mappingChanged && !given.retagged && !given.renamed) return "held";
       const old = all.filter((cell) => cell.world === "old");
       return old.length > 0 && old.every((cell) => cell.outcome === "pass") ? "held" : "moved";
     }
@@ -589,7 +595,7 @@ describe("judgeRow under --base", () => {
       const green = required.length > 0 && required.every((cell) => cell.outcome === "pass");
       const passedIn = required.map((cell) => cell.environment);
       const controlProves = head.some((cell) => cell.role === "control" && proof(cell, runs));
-      expect(planned.old).toEqual(green && given.change === "unchanged" && (given.mappingChanged || given.retagged) ? passedIn : []);
+      expect(planned.old).toEqual(green && given.change === "unchanged" && (given.mappingChanged || given.retagged || given.renamed) ? passedIn : []);
       expect(planned.base).toEqual(green && given.change !== "unchanged" && (given.held || !controlProves) ? passedIn : []);
       expect(plannedWorldCells(head, runs, undefined)).toEqual({ base: [], old: [] });
     }));
@@ -606,13 +612,14 @@ describe("judgeRow under --base", () => {
       const required = head.filter((cell) => cell.role === "required");
       const green = required.length > 0 && required.every((cell) => cell.outcome === "pass");
       const oldRequired = oldRoles.filter((cell) => cell.role === "required").map((cell) => cell.environment);
-      expect(planned).toEqual({ base: [], old: green && (given.mappingChanged || given.retagged) ? oldRequired : [] });
+      expect(planned).toEqual({ base: [], old: green && (given.mappingChanged || given.retagged || given.renamed) ? oldRequired : [] });
     }));
 
-  it("never calls a retagged row held without an old cell that passed", () =>
+  it("never calls a retagged or renamed row held without an old cell that passed", () =>
     hegel.test((tc) => {
       const all = tc.draw(row);
-      const given: RowContext = { ...tc.draw(context), change: "unchanged", retagged: true };
+      const renamed = tc.draw(gs.booleans());
+      const given: RowContext = { ...tc.draw(context), change: "unchanged", retagged: !renamed, renamed };
       const { verdict } = judgeRow(all, tc.draw(proofRuns), given);
       const old = all.filter((cell) => cell.world === "old");
       if (verdict === "held") expect(old.length > 0 && old.every((cell) => cell.outcome === "pass")).toBe(true);
@@ -633,51 +640,59 @@ describe("judgeRow under --base", () => {
   it("says why in one sentence for each word", () => {
     const head: RunTableCell = { world: "head", environment: "default", role: "required", conditions: {}, outcome: "pass", runs: 1 };
     const at = (world: "base" | "old", outcomeOf: RunCellOutcome, extra: Partial<RunTableCell> = {}): RunTableCell => ({ world, environment: "default", role: "required", conditions: {}, outcome: outcomeOf, runs: 1, ...extra });
-    expect(judgeRow([head], 2, { change: "unchanged", held: false, mappingChanged: false, retagged: false })).toEqual({
+    expect(judgeRow([head], 2, { change: "unchanged", held: false, mappingChanged: false, retagged: false, renamed: false })).toEqual({
       verdict: "held",
       reason: "passes in default, and neither it nor the mapping changed since the base",
     });
-    expect(judgeRow([head, at("old", "pass")], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false })).toEqual({
+    expect(judgeRow([head, at("old", "pass")], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false })).toEqual({
       verdict: "held",
       reason: "passes in default, and in the old world, where the base's mapping runs head's code",
     });
-    expect(judgeRow([head, at("old", "broke", { line: 4 })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false })).toEqual({
+    expect(judgeRow([head, at("old", "broke", { line: 4 })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false })).toEqual({
       verdict: "moved",
       reason: "passes in default, but the mapping changed since the base, and it stopped at line 4 of the base's feature file in the old world in default before a claim there was judged",
     });
-    expect(judgeRow([head, at("old", "not-run", { runs: 0, reason: "its step files did not load" })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false })).toEqual({
+    expect(judgeRow([head, at("old", "not-run", { runs: 0, reason: "its step files did not load" })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false })).toEqual({
       verdict: "moved",
       reason: "passes in default, but the mapping changed since the base, and it did not run in the old world in default: its step files did not load",
     });
-    expect(judgeRow([head, at("old", "fail", { line: 6, runs: 1, claim: 0, actuals: [] })], 2, { change: "unchanged", held: false, mappingChanged: false, retagged: true })).toEqual({
+    expect(judgeRow([head, at("old", "fail", { line: 6, runs: 1, claim: 0, actuals: [] })], 2, { change: "unchanged", held: false, mappingChanged: false, retagged: true, renamed: false })).toEqual({
       verdict: "moved",
       reason: "passes in default, but its tags changed since the base, and a claim broke at line 6 of the base's feature file in the old world in default",
     });
-    expect(judgeRow([head], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: true })).toEqual({
+    expect(judgeRow([head], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: true, renamed: false })).toEqual({
       verdict: "moved",
       reason: "passes in default, but the mapping and its tags changed since the base and the old world did not run it",
     });
-    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 2 })], 2, { change: "changed", held: false, mappingChanged: false, retagged: false })).toEqual({
+    expect(judgeRow([head, at("old", "fail", { line: 6, runs: 1, claim: 0, actuals: [] })], 2, { change: "unchanged", held: false, mappingChanged: false, retagged: false, renamed: true })).toEqual({
+      verdict: "moved",
+      reason: "passes in default, but its name or its file changed since the base, and a claim broke at line 6 of the base's feature file in the old world in default",
+    });
+    expect(judgeRow([head], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: true, renamed: true })).toEqual({
+      verdict: "moved",
+      reason: "passes in default, but the mapping, its tags, and its name or its file changed since the base and the old world did not run it",
+    });
+    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 2 })], 2, { change: "changed", held: false, mappingChanged: false, retagged: false, renamed: false })).toEqual({
       verdict: "proven",
       reason: "passes in default, and a claim broke at line 9 at the base in default in each of 2 runs",
     });
-    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 2 })], 2, { change: "new", held: true, mappingChanged: false, retagged: false })).toEqual({
+    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 2 })], 2, { change: "new", held: true, mappingChanged: false, retagged: false, renamed: false })).toEqual({
       verdict: "proven",
       reason: "passes in default, and a claim broke at line 9 at the base in default in each of 2 runs, so the base does not have this behaviour and @held is not needed",
     });
-    expect(judgeRow([head, at("base", "pass")], 2, { change: "new", held: true, mappingChanged: false, retagged: false })).toEqual({
+    expect(judgeRow([head, at("base", "pass")], 2, { change: "new", held: true, mappingChanged: false, retagged: false, renamed: false })).toEqual({
       verdict: "held",
       reason: "passes in default and at the base, as @held says",
     });
-    expect(judgeRow([head, at("base", "broke", { line: 7 })], 2, { change: "new", held: true, mappingChanged: false, retagged: false })).toEqual({
+    expect(judgeRow([head, at("base", "broke", { line: 7 })], 2, { change: "new", held: true, mappingChanged: false, retagged: false, renamed: false })).toEqual({
       verdict: "unproven",
       reason: "passes in default, and @held says the base has this behaviour, but it stopped at line 7 at the base in default before a claim there was judged",
     });
-    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 1 })], 2, { change: "new", held: false, mappingChanged: false, retagged: false })).toEqual({
+    expect(judgeRow([head, at("base", "fail", { line: 9, runs: 1 })], 2, { change: "new", held: false, mappingChanged: false, retagged: false, renamed: false })).toEqual({
       verdict: "unproven",
       reason: "passes in default, and nothing shows a Then failing where its behaviour is absent (base default: fail@9)",
     });
-    expect(judgeRow([head], 2, { change: "new", held: false, mappingChanged: false, retagged: false })).toEqual({
+    expect(judgeRow([head], 2, { change: "new", held: false, mappingChanged: false, retagged: false, renamed: false })).toEqual({
       verdict: "unproven",
       reason: "passes in default, and no world where its behaviour is absent ran it, so nothing shows a Then failing without the change",
     });

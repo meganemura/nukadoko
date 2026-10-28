@@ -4126,7 +4126,10 @@ not content, so a scenario renamed, moved to another file, or tagged
 hook selected by a tag, a World that reads the tags), so an `unchanged`
 criterion whose tags differ from the ref's is `retagged`: it keeps its
 identity and its change, the row says `retagged: true`, and it runs in
-the old world as a row under a changed mapping does. Against the ref, a
+the old world as a row under a changed mapping does. A name and a file
+can change what runs too (a hook or a World that reads the scenario's
+name or its document), so an `unchanged` criterion with `renamed_from`
+runs in the old world the same way. Against the ref, a
 criterion is:
 
 - `unchanged`: the same identity and content, or the same content under
@@ -4237,7 +4240,7 @@ head passed:
   already proves it. A row tagged `@held` always runs there, since only
   the base can show the base has the behaviour.
 - An `unchanged` row runs in the old world when the mapping changed or
-  the row is retagged, at the line the ref's feature file gives it. Which
+  the row is retagged or renamed, at the line the ref's feature file gives it. Which
   environments is the ref's mapping too: the ones the ref's program file
   selects (its `defaultEnvironments`, or every environment that declares
   `conditions`, or the run's `--env` names), and in each the role the
@@ -4328,7 +4331,7 @@ Three are red:
   not `pass` is `unproven` too, unless a cell where its behaviour is
   absent proves it.
 - `moved`: an `unchanged` row passes at head, the mapping changed or the
-  row is retagged, and the old world did not pass it: the approved sentence, read through the
+  row is retagged or renamed, and the old world did not pass it: the approved sentence, read through the
   approved steps, no longer holds against head's code, so its meaning
   moved under it. An old cell that did not run, because the ref's mapping
   does not load or check against head, makes the row `moved` with that

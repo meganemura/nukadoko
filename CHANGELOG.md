@@ -331,7 +331,8 @@ just until 0.1.
   taken only where one candidate matches, the same file first, so the
   answer never depends on the order the files are read in; a criterion
   whose other tags changed is marked `retagged` and runs in the old
-  world, since a tag can select a hook; both sides are read whole,
+  world, since a tag can select a hook, and so does a renamed or moved
+  one, since a hook can read the name; both sides are read whole,
   whatever the targets, and a run given targets calls removed only a
   criterion of a file they name, so a `do:` line that targets one row
   makes the same comparison), and any
@@ -347,7 +348,8 @@ just until 0.1.
   ref's code under head's criteria and mapping, runs a new or changed row,
   and its Then has to fail there in `--proof-runs` runs for the row to
   be `proven`; `old`, head's code under the ref's criteria and mapping,
-  runs an unchanged row when the mapping changed or the row is retagged,
+  runs an unchanged row when the mapping changed or the row is retagged
+  or renamed,
   in each environment the ref's program file requires it in, with head's
   recipe of that name, and it has to pass
   there. The rows are `held`, `proven`, `removed`, `failed`,

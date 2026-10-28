@@ -1405,6 +1405,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           held: readCriterionTags(pickle.tags.map((tag) => tag.name)).held,
           mappingChanged: base.mapping.changed,
           retagged: compared?.change === "unchanged" && compared.retagged === true,
+          renamed: compared?.change === "unchanged" && compared.renamedFrom !== undefined,
         };
         planned.set(key, plannedWorldCells(headCells, proofRuns, context, oldRolesOf(pickle.tags.map((tag) => tag.name))));
       }

@@ -53,6 +53,39 @@ After({ tags: "@strict" }, function () {
   }, 60_000);
 });
 
+describe("a rename", () => {
+  it("runs an unchanged row in the old world, under the ref's name and head's code", async () => {
+    project = await makeBaseProject();
+    // A hook reads the scenario's name, as one may read its tags.
+    project.write({
+      "features/support/factor.ts": `import { Before } from "nukadoko/compat";
+
+Before(function ({ pickle }) {
+  process.env.FACTOR = pickle.name.includes("[triple]") ? "3" : "2";
+});
+`,
+      "lib/cart.mjs": cartModule("return count * Number(process.env.FACTOR);"),
+      "features/cart.feature": feature(scenario("three items", 3, 6)),
+    });
+    project.commit("base");
+    project.git("branch", "base-branch");
+    // Head subtracts 3 and renames the scenario so the hook triples, so
+    // three items still total 6 at head, and 3 under the base's name.
+    project.write({
+      "lib/cart.mjs": cartModule("return count * Number(process.env.FACTOR) - 3;"),
+      "features/cart.feature": feature(scenario("three items [triple]", 3, 6)),
+    });
+    project.commit("head");
+    const result = await project.cli(["run", "--base", "base-branch"]);
+    expect(result.exitCode).toBe(1);
+    const [row] = rows(project.root);
+    expect(rowSummary([row!])).toEqual([["three items [triple]", "unchanged", "moved", ["head:default:pass", "old:default:fail"]]]);
+    expect(row!.reason).toBe(
+      "passes in default, but its name or its file changed since the base, and a claim broke at line 5 of the base's feature file in the old world in default",
+    );
+  }, 60_000);
+});
+
 describe("the config file", () => {
   const configWith = (factor: number): string =>
     `import { defineConfig } from "nukadoko";\nconst FACTOR = ${factor};\nexport default defineConfig({\n  fixtures: {\n    factor: async ({}, use) => { await use(FACTOR); },\n  },\n});\n`;

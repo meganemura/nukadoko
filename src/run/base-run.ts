@@ -105,7 +105,7 @@ export interface PreparedBase {
    * an obstacle. */
   readonly base: (PreparedTree & { readonly programFromHead: boolean }) | null;
   /** `null` unless a selected row is unchanged and the mapping changed or
-   * the row was retagged, and the old world has no obstacle. */
+   * the row was retagged or renamed, and the old world has no obstacle. */
   readonly old: PreparedTree | null;
   /** What keeps the base or the old world from being made, sorted by
    * world: each world named here is `null` above. */
@@ -412,7 +412,8 @@ export async function prepareBase(input: PrepareBaseInput): Promise<PreparedBase
 
     const changes = [...input.selected].map((key) => criteria.changes.get(key));
     const baseNeeded = !blocked("base") && changes.some((change) => change?.change === "changed" || change?.change === "new");
-    const oldNeeded = !blocked("old") && changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true));
+    const oldNeeded =
+      !blocked("old") && changes.some((change) => change?.change === "unchanged" && (mapping.changed || change.retagged === true || change.renamedFrom !== undefined));
     const treeInput: TreeInput = { headFiles, refFiles, head: headSide, ref: refSide, stateDir: inRepo(config.stateDir) };
     const roots = { head: top, ref: baseTop };
     if (oldNeeded) writeOldTree(treeInput, roots, oldTop);
