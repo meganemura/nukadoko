@@ -2486,6 +2486,8 @@ environments: {
 そのとき base の world は何も起動せず、そのセルは届く URL が無いと述べます。
 固定の `url` は head のコードが動いている場所なので、base の world はそこへ届きません。
 そのセルも同じことを述べ、何も build しません。
+同じ environment の head の world が届いた URL を base にも返す関数は `tree` で分岐していないので、base の world はそのときも何も起動しません。
+そのセルは `` the url function returned head's URL for the base tree; branch on `tree` `` と述べます。
 head では、何も返さない関数は world を `program-start-failed` で失敗させます。
 
 `url` は、ユーザーもパスワードも含まない `http:` か `https:` の URL です。

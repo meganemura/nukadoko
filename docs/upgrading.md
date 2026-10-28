@@ -553,6 +553,10 @@ This part does not change release to release.
   function that returns nothing for head fails the world with
   `program-start-failed`, as it did. A base world whose environment
   writes a fixed `url` runs no cell either, since that URL is head's.
+  An existing `url` function has to branch on `tree` before `--base`
+  can use it: one that returns head's URL for the base too leaves the
+  base world's cells not run, with the reason `` the url function returned
+  head's URL for the base tree; branch on `tree` ``.
 
 ## 0.20.0 to 0.21.0
 

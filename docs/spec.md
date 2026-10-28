@@ -3059,6 +3059,10 @@ and one that does not returns nothing (`undefined`, `null`, or `""`): the
 base world then starts nothing, and its cells say it has no URL to reach.
 A fixed `url` is where head's code runs, so a base world never reaches
 it: its cells say the same, and nothing is built.
+A function that answers the base with the URL head's world of the same
+environment reached does not branch on `tree`, so the base world starts
+nothing there either, and its cells say `` the url function returned head's
+URL for the base tree; branch on `tree` ``.
 For head, a function that returns nothing fails the world with
 `program-start-failed`.
 

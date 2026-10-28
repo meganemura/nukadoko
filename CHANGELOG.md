@@ -350,7 +350,9 @@ just until 0.1.
   `moved` (an approved sentence no longer holds under the steps it was
   approved with), and the gate is red on the last three. The base world
   builds the ref's program file, a `url` function receives `tree` to say
-  where the base is deployed, and neither tree installs anything: both
+  where the base is deployed (one that answers the base with head's URL
+  leaves the base world's cells not run, with the reason), and neither
+  tree installs anything: both
   resolve packages from head's project. A signal stops a tree's workers
   (SIGTERM, the 5 seconds a world gets, then SIGKILL) before its world
   and the trees, and a worker's files are written in the run directory.

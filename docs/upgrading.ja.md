@@ -459,6 +459,8 @@ cucumber-js のスイートから来た場合は、代わりに [docs/migration.
   基点の URL を持たない関数は `undefined`、`null`、`""` を返し、base の world はどのセルも走らせません。
   head に何も返さない関数は、これまでどおり world を `program-start-failed` で失敗させます。
   environment に固定の `url` を書いた base の world も、その URL は head のものなので、どのセルも走らせません。
+  既存の `url` の関数は、`--base` で使う前に `tree` で分岐させます。
+  base にも head の URL を返す関数では base の world のセルは走らず、その理由は `` the url function returned head's URL for the base tree; branch on `tree` `` です。
 
 ## 0.20.0 から 0.21.0 へ
 

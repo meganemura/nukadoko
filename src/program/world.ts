@@ -72,7 +72,9 @@ import type { WorldView } from "./world-view.js";
 // not start can run the base's code only where a `url` function says
 // where it is: a fixed `url` is where head's code runs, so a base world
 // with one is `unavailable`, as is one whose function gives nothing back
-// for the base, and its cells say why instead of measuring head's code.
+// for the base, or gives back the URL head's world of the same environment
+// reached, which a function that ignores `tree` does. Its cells say why
+// instead of measuring head's code.
 //
 // `setup` and a `url` function run in nukadoko's own process, so what
 // they print would reach the terminal unredacted, a `{token}` included.
@@ -150,6 +152,10 @@ export interface WorldStarterOptions {
   /** `true` for a base tree whose ref has no program file, built and
    * started from head's. */
   readonly programFromHead?: boolean;
+  /** The URL head's world of each environment reached, by name: a base
+   * world whose `url` function answers with it is `unavailable` (module
+   * header). */
+  readonly headUrls?: ReadonlyMap<string, string>;
 }
 
 export interface WorldStarter {
@@ -378,6 +384,10 @@ export function createWorldStarter(options: WorldStarterOptions): WorldStarter {
             // is checked here, by the same rule, without quoting it.
             const problem = programUrlProblem(String(url));
             if (problem !== undefined) throw new WorldStartError(`the url function's answer ${problem}`);
+            const headUrl = options.headUrls?.get(name);
+            if (tree === "base" && headUrl !== undefined && new URL(url).href === new URL(headUrl).href) {
+              throw new WorldUnavailable("the url function returned head's URL for the base tree; branch on `tree`");
+            }
           }
           // Every world with a URL has a port (src/program/placeholders.ts).
           port = urlPort(url);

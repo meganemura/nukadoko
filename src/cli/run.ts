@@ -747,6 +747,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
       progress,
     });
     const worlds: RunWorld[] = [];
+    // The URL each of head's worlds reached, unredacted, so the base world
+    // can tell a `url` function that answers the same for both trees
+    // (src/program/world.ts).
+    const headUrls = new Map<string, string>();
     // Starts the pass's world, or reports why it did not start. `null`
     // when the tree has no program file: the pass runs with no world.
     // A start a signal aborted is no failure of the program's, and the
@@ -754,7 +758,10 @@ export async function runRun(options: RunRunOptions): Promise<number> {
     const startWorld = async (pass: EnvironmentPass, abort?: AbortSignal): Promise<StartedWorld | "failed" | null> => {
       if (pass.resolvedEnv.program === null) return null;
       const started = await worldStarter.start(pass.resolvedEnv.name, pass.resolvedEnv.program, pass.secrets, abort);
-      if (started.ok) return started;
+      if (started.ok) {
+        if (started.view.url !== undefined) headUrls.set(pass.resolvedEnv.name, started.view.url);
+        return started;
+      }
       worlds.push(started.record());
       if (!started.aborted) warn({ severity: "failed", code: "program-start-failed", message: started.message });
       return "failed";
@@ -1360,6 +1367,7 @@ export async function runRun(options: RunRunOptions): Promise<number> {
           progress: { write: (chunk: string) => progress.write(projectRelativeText(chunk, rootDir)) },
           tree: world,
           programFromHead: world === "base" && base.base?.programFromHead === true,
+          headUrls,
         });
         for (const pass of passes) {
           // A signal ends the run, so no tree world starts after it.
