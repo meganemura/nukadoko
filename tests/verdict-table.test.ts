@@ -38,12 +38,18 @@ const outcome: Generator<ExecutionOutcome> = gs.oneOf(
   gs
     .tuples(line, gs.integers({ minValue: 0, maxValue: 1 }), gs.integers({ minValue: 400, maxValue: 503 }))
     .map(([at, claim, value]): ExecutionOutcome => ({ kind: "fail", line: at, claim, actual: { value } })),
-  line.map((at): ExecutionOutcome => ({ kind: "broke", line: at })),
+  gs
+    .tuples(line, gs.sampledFrom([undefined, "a Before hook failed before its steps ran", "an After hook failed after its steps passed"]))
+    .map(([at, reason]): ExecutionOutcome => (reason === undefined ? { kind: "broke", line: at } : { kind: "broke", line: at, reason })),
 );
-/** Two executions agree: the same kind at the same line, and for a fail
- * the same claim, whatever value each saw. */
+/** Two executions agree: the same kind at the same line, for a fail the
+ * same claim, whatever value each saw, and for a broke the same hook. */
 const agrees = (a: ExecutionOutcome, b: ExecutionOutcome): boolean =>
-  a.kind === b.kind && (a.kind === "pass" || (a.line === (b as { line: number }).line && (a.kind !== "fail" || a.claim === (b as { claim: number }).claim)));
+  a.kind === b.kind &&
+  (a.kind === "pass" ||
+    (a.line === (b as { line: number }).line &&
+      (a.kind !== "fail" || a.claim === (b as { claim: number }).claim) &&
+      (a.kind !== "broke" || a.reason === (b as { reason?: string }).reason)));
 
 const cellOutcome = gs.sampledFrom<RunCellOutcome>(["pass", "fail", "broke", "flaky", "not-run"]);
 const cell = gs
@@ -75,6 +81,8 @@ describe("foldCell", () => {
         // A fail keeps the claim, and each run's value in run order.
         expect(folded.claim).toBe(first.kind === "fail" ? first.claim : undefined);
         expect(folded.actuals).toEqual(first.kind === "fail" ? outcomes.map((entry) => (entry as { actual: unknown }).actual) : undefined);
+        // A broke keeps the hook every run failed in.
+        expect(folded.reason).toBe(first.kind === "broke" ? first.reason : undefined);
       } else {
         expect(folded.outcome).toBe("flaky");
         expect(folded.line).toBe((outcomes.find((entry) => entry.kind !== "pass") as { line: number }).line);
@@ -147,6 +155,10 @@ describe("judgeRow", () => {
       verdict: "failed",
       reason: "stopped at line 5 in flag-on before a claim there was judged",
     });
+    expect(judgeRow([{ ...pass("flag-on", "required"), outcome: "broke", line: 3, reason: "an After hook failed after its steps passed" }], 2)).toEqual({
+      verdict: "failed",
+      reason: "in flag-on, an After hook failed after its steps passed",
+    });
     expect(judgeRow([{ ...pass("flag-on", "required"), outcome: "flaky", line: 7, runs: 3 }], 2)).toEqual({
       verdict: "failed",
       reason: "its 3 runs in flag-on disagree, the first that did not pass at line 7",
@@ -218,7 +230,7 @@ describe("executionOutcome", () => {
   });
   const held = { actual: 200, actual_from: "observe:status", compare: "equal", expected: 200, expected_from: "sentence:status", expected_text: "200", outcome: "held", measured: null };
   const broken = (actual: unknown) => ({ ...held, actual, outcome: "broken" });
-  const execution = (steps: ReturnType<typeof step>[], hooks: { status: string }[] = []) =>
+  const execution = (steps: ReturnType<typeof step>[], hooks: { type?: string; status: string; step_index?: number }[] = []) =>
     ({ status: steps.every((entry) => entry.status === "passed") && hooks.every((hook) => hook.status === "passed") ? "passed" : "failed", line: 2, steps, hooks }) as never;
   const inThen = (index: number): boolean => index === 2;
 
@@ -236,7 +248,27 @@ describe("executionOutcome", () => {
     expect(executionOutcome(execution([step("passed"), step("failed", "claim_broken", 8), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 8 });
     expect(executionOutcome(execution([step("failed", "step_error", 7), step("skipped"), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 7 });
     expect(executionOutcome(execution([step("undefined", undefined, 7), step("skipped"), step("skipped")]), inThen)).toEqual({ kind: "broke", line: 7 });
-    expect(executionOutcome(execution([step("passed"), step("passed"), step("passed")], [{ status: "failed" }]), inThen)).toEqual({ kind: "broke", line: 2 });
+  });
+
+  it("names the hook that failed an execution none of whose steps failed, and when it ran", () => {
+    const passed = [step("passed", undefined, 3), step("passed", undefined, 4), step("passed", undefined, 5)];
+    expect(executionOutcome(execution(passed, [{ type: "before", status: "passed" }, { type: "after", status: "failed" }]), inThen)).toEqual({
+      kind: "broke",
+      line: 2,
+      reason: "an After hook failed after its steps passed",
+    });
+    expect(executionOutcome(execution([step("passed", undefined, 3), step("skipped"), step("skipped")], [{ type: "after_step", status: "failed", step_index: 0 }, { type: "after", status: "failed" }]), inThen)).toEqual({
+      kind: "broke",
+      line: 2,
+      reason: "an AfterStep hook failed after the step at line 3 passed",
+    });
+    expect(executionOutcome(execution([step("skipped"), step("skipped"), step("skipped")], [{ type: "before", status: "failed" }, { type: "after", status: "failed" }]), inThen)).toEqual({
+      kind: "broke",
+      line: 2,
+      reason: "a Before hook failed before its steps ran",
+    });
+    // A step that failed is the stop, whatever a hook did after it.
+    expect(executionOutcome(execution([step("passed"), step("failed", "step_error", 4), step("skipped")], [{ type: "after", status: "failed" }]), inThen)).toEqual({ kind: "broke", line: 4 });
   });
 
   it("names the broken claim's value as run.json holds it: whole, cut to the start of its JSON, missing, or an item's", () => {
@@ -440,7 +472,7 @@ describe("buildTable", () => {
         expect(table.rows[0]!.verdict).not.toBe("proven");
       } else {
         expect(cell).toMatchObject(foldCell(executions));
-        expect(cell.reason).toBeUndefined();
+        expect(cell.reason).toBe(foldCell(executions).reason);
       }
     }));
 
@@ -688,6 +720,10 @@ describe("judgeRow under --base", () => {
     expect(judgeRow([head, at("old", "broke", { line: 4 })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false })).toEqual({
       verdict: "moved",
       reason: "passes in default, but the mapping changed since the base, and it stopped at line 4 of the base's feature file in the old world in default before a claim there was judged",
+    });
+    expect(judgeRow([head, at("old", "broke", { line: 3, reason: "an After hook failed after its steps passed" })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false })).toEqual({
+      verdict: "moved",
+      reason: "passes in default, but the mapping changed since the base, and in the old world in default, an After hook failed after its steps passed",
     });
     expect(judgeRow([head, at("old", "not-run", { runs: 0, reason: "its step files did not load" })], 2, { change: "unchanged", held: false, mappingChanged: true, retagged: false, renamed: false })).toEqual({
       verdict: "moved",

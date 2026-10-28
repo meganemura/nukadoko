@@ -3391,8 +3391,8 @@ SIGKILL で止められた run はそれができないので、次の `nuka run
 | --- | --- |
 | `pass` | すべて通った |
 | `fail@<line>` | すべて、Then の位置のその行で成り立たなかった同じ claim で止まった |
-| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim、または scenario の行では hook |
-| `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も食い違いです)。行は通らなかった最初の実行のもの |
+| `broke@<line>` | すべて、その行で claim が判定される前に止まった。throw した Given や When、Then の位置でアサーションが失敗した compat の step や `run` を持つ step、どの step にも一致しない行、nukadoko が判定できなかった claim。または scenario の行で、すべての実行で同じ hook が失敗した。その hook と走った時を `reason` が言います。After hook は claim が判定された後で失敗するからです |
+| `flaky@<line>` | 食い違った(1 つの行の 2 つの claim が成り立たなかった 2 回も、2 つの hook が失敗した 2 回も食い違いです)。行は通らなかった最初の実行のもの |
 | `·` | 1 つも走らなかった。理由は `reason` にある(その world でプログラムが起動しなかった、BeforeAll が失敗した、tree のファイルが読み込めなかった、または `--base` がその world を作らなかった(後述)) |
 
 証明するのは Then だけです。

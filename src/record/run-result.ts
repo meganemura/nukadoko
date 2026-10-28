@@ -206,7 +206,9 @@ export interface RunTableCell {
   /** For `fail`: the actual value the broken claim saw in each run, in
    * run order, as a polled reading names a value. */
   readonly actuals?: readonly ClaimReadingValue[];
-  /** Why a `not-run` cell did not run. */
+  /** Why a `not-run` cell did not run; for a `broke` cell at the
+   * scenario's line, the hook every run failed in; for a control `broke`
+   * whose proof round could not finish, why it could not. */
   readonly reason?: string;
 }
 

@@ -243,7 +243,7 @@ describe("renderRunSummary", () => {
         "",
         "- `features/login.feature:9` a wrong password \\| is refused: stopped at line 4 in staging before a claim there was judged",
         '  - step "the error &lt;b>Locked&lt;/b> is shown": `` expected `Locked` | got `Open` ``; used the-seed-ran exit 2: `seed: no database`; ran `npm run seed`; record `steps/stp-1`',
-        "- `features/login.feature:15` a session expires: stopped at line 15 in staging before a claim there was judged",
+        "- `features/login.feature:15` a session expires: in staging, a Before hook failed before its steps ran",
         "  - Before hook: `(no message)`; record `scenarios/scn-2`",
         "",
         "- commit: `fedcba9` with uncommitted changes",

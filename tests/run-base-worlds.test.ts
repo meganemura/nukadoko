@@ -47,7 +47,7 @@ After({ tags: "@strict" }, function () {
     const [row] = rows(project.root);
     expect(rowSummary([row!])).toEqual([["three items", "unchanged", "moved", ["head:default:pass", "old:default:broke"]]]);
     expect(row!.retagged).toBe(true);
-    expect(row!.reason).toMatch(/^passes in default, but its tags changed since the base, and it stopped at line 4 of the base's feature file in the old world in default/);
+    expect(row!.reason).toBe("passes in default, but its tags changed since the base, and in the old world in default, an After hook failed after its steps passed");
     const document = latestRunJson(project.root) as { run_dir: string };
     expect(readFileSync(path.join(project.root, document.run_dir, "summary.md"), "utf8")).toContain("| unchanged, retagged |");
   }, 60_000);

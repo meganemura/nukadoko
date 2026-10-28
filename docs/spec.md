@@ -4258,8 +4258,8 @@ head passed:
 | --- | --- |
 | `pass` | every one passed |
 | `fail@<line>` | every one stopped at the same claim, broken at that line in Then position |
-| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, a claim nukadoko could not judge, or, at the scenario's line, a hook |
-| `flaky@<line>` | they disagree (two that broke two claims of one line disagree too); the line is the first one's that did not pass |
+| `broke@<line>` | every one stopped at that line before a claim there was judged: a Given or When that threw, a compat step or a step with `run` in Then position whose assertion failed, a line no step matches, or a claim nukadoko could not judge; or, at the scenario's line, the same hook failed in every one, and `reason` names it and when it ran, since an After hook fails after the claims were judged |
+| `flaky@<line>` | they disagree (two that broke two claims of one line disagree too, as do two that two hooks failed); the line is the first one's that did not pass |
 | `·` | none ran, and `reason` says why: the program did not start for its world, a BeforeAll failed, a tree's files did not load, or `--base` did not build the world (below) |
 
 Only a Then proves. A When that errors where the behaviour is absent says

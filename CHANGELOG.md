@@ -225,7 +225,8 @@ just until 0.1.
 - **A run ends in a verdict table, which replaces run.json's
   `verdicts`.** A row is a criterion and a column an environment; a
   cell reads `pass`, `fail@<line>` (a claim broke at a Then line),
-  `broke@<line>` (it stopped before a claim was judged), `flaky@<line>`
+  `broke@<line>` (it stopped before a claim was judged, or a hook failed,
+  which its reason names with when it ran), `flaky@<line>`
   (its runs disagree), or `·` (it did not run, with the reason), and each
   row is `held`, `proven`, or `failed` (and under `nuka run --base`,
   below, `removed`, `unproven`, or `moved`), with one sentence that

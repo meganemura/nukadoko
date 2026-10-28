@@ -50,11 +50,12 @@ import { shellWord } from "../shell/shell-word.js";
 // unchanged row's condition tags are the ref's.
 
 /** One execution, read for the table. A `fail` names the claim that broke,
- * by its position among its step's claims, and the actual value it saw. */
+ * by its position among its step's claims, and the actual value it saw. A
+ * `broke` a hook caused names the hook in `reason`. */
 export type ExecutionOutcome =
   | { readonly kind: "pass" }
   | { readonly kind: "fail"; readonly line: number; readonly claim: number; readonly actual: ClaimReadingValue }
-  | { readonly kind: "broke"; readonly line: number };
+  | { readonly kind: "broke"; readonly line: number; readonly reason?: string };
 
 type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks">;
 
@@ -63,7 +64,10 @@ type Execution = Pick<RunScenario, "status" | "line" | "steps" | "hooks">;
 export function executionOutcome(execution: Execution, inThen: (index: number) => boolean): ExecutionOutcome {
   if (execution.status === "passed") return { kind: "pass" };
   const index = execution.steps.findIndex((step) => step.status !== "passed" && step.status !== "skipped");
-  if (index === -1) return { kind: "broke", line: execution.line };
+  if (index === -1) {
+    const reason = hookFailure(execution);
+    return reason === undefined ? { kind: "broke", line: execution.line } : { kind: "broke", line: execution.line, reason };
+  }
   const step = execution.steps[index]!;
   const line = step.line ?? execution.line;
   const claimBroken = step.status === "failed" && step.error?.kind === "claim_broken" && inThen(index);
@@ -73,6 +77,20 @@ export function executionOutcome(execution: Execution, inThen: (index: number) =
   // to point at, the run has no claim to agree on, so it cannot prove.
   if (!claimBroken || claim === -1) return { kind: "broke", line };
   return { kind: "fail", line, claim, actual: brokenActual(claims[claim]!) };
+}
+
+// Which hook failed an execution none of whose steps failed. Its cell
+// then stands at the scenario's line, which names no step, and an After
+// hook that failed after every claim was judged stopped nothing before a
+// claim, so the reason says which hook it was and when it ran.
+function hookFailure(execution: Execution): string | undefined {
+  const hook = execution.hooks.find((entry) => entry.status === "failed");
+  if (hook === undefined) return undefined;
+  if (hook.type === "before") return "a Before hook failed before its steps ran";
+  if (hook.type === "after") return "an After hook failed after its steps passed";
+  if (hook.type !== "after_step") return undefined;
+  const step = hook.step_index === undefined ? undefined : execution.steps[hook.step_index];
+  return `an AfterStep hook failed after the step at line ${step?.line ?? execution.line} passed`;
 }
 
 /** The actual value a broken claim saw, as run.json carries it: whole, as
@@ -93,19 +111,21 @@ function brokenActual(claim: RunClaim): ClaimReadingValue {
 function sameOutcome(a: ExecutionOutcome, b: ExecutionOutcome): boolean {
   if (a.kind === "pass" || b.kind === "pass") return a.kind === b.kind;
   if (a.kind === "fail" && b.kind === "fail") return a.line === b.line && a.claim === b.claim;
-  return a.kind === b.kind && a.line === b.line;
+  if (a.kind === "broke" && b.kind === "broke") return a.line === b.line && a.reason === b.reason;
+  return false;
 }
 
 /** A cell's executions folded: what every one came to when they agree,
  * `flaky` at the first one that did not pass when they do not. A `fail`
  * keeps the claim every run broke and the actual value each run saw, in
- * run order. Pure. */
-export function foldCell(outcomes: readonly ExecutionOutcome[]): Pick<RunTableCell, "outcome" | "line" | "runs" | "claim" | "actuals"> {
+ * run order, and a `broke` the hook every run failed in. Runs a different
+ * hook stopped at one line disagree. Pure. */
+export function foldCell(outcomes: readonly ExecutionOutcome[]): Pick<RunTableCell, "outcome" | "line" | "runs" | "claim" | "actuals" | "reason"> {
   const first = outcomes[0];
   if (first === undefined) return { outcome: "not-run", runs: 0 };
   if (outcomes.every((outcome) => sameOutcome(outcome, first))) {
     if (first.kind === "pass") return { outcome: "pass", runs: outcomes.length };
-    if (first.kind === "broke") return { outcome: "broke", line: first.line, runs: outcomes.length };
+    if (first.kind === "broke") return { outcome: "broke", line: first.line, runs: outcomes.length, ...(first.reason === undefined ? {} : { reason: first.reason }) };
     const actuals = outcomes.map((outcome) => (outcome as Extract<ExecutionOutcome, { kind: "fail" }>).actual);
     return { outcome: "fail", line: first.line, runs: outcomes.length, claim: first.claim, actuals };
   }
@@ -213,7 +233,7 @@ function failedReason(red: RunTableCell): string {
   const where = `in ${red.environment}`;
   if (red.outcome === "not-run") return `did not run ${where}: ${red.reason ?? "no execution was recorded"}`;
   if (red.outcome === "fail") return `a claim broke at line ${red.line} ${where}`;
-  if (red.outcome === "broke") return `stopped at line ${red.line} ${where} before a claim there was judged`;
+  if (red.outcome === "broke") return red.reason === undefined ? `stopped at line ${red.line} ${where} before a claim there was judged` : `${where}, ${red.reason}`;
   return `its ${runsText(red.runs)} ${where} disagree, the first that did not pass at line ${red.line}`;
 }
 
@@ -225,7 +245,7 @@ function worldCellClause(cell: RunTableCell, proofRuns: number): string {
   const line = cell.world === "old" ? `line ${cell.line} of the base's feature file` : `line ${cell.line}`;
   if (cell.outcome === "not-run") return `it did not run ${where}: ${cell.reason ?? "no execution was recorded"}`;
   if (cell.outcome === "pass") return `it passed ${where}`;
-  if (cell.outcome === "broke") return `it stopped at ${line} ${where} before a claim there was judged`;
+  if (cell.outcome === "broke") return cell.reason === undefined ? `it stopped at ${line} ${where} before a claim there was judged` : `${where}, ${cell.reason}`;
   if (cell.outcome === "flaky") return `its ${runsText(cell.runs)} ${where} disagree, the first that did not pass at ${line}`;
   return cell.world === "base" && cell.runs < proofRuns
     ? `a claim broke at ${line} ${where} in only ${runsText(cell.runs)}, and proof needs ${proofRuns}`
